@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "model-router"
+version = "0.1.0"
+description = "Multi-provider LLM router with auto-detection, alternate chains, and local inference management"
+requires-python = ">=3.10"
+dependencies = [
+    "psutil",
+    "aiohttp",
+]
+
+[project.optional-dependencies]
+anthropic = ["anthropic>=0.30"]
+openai = ["openai>=1.0"]
+vertex = ["google-cloud-aiplatform>=1.38", "anthropic[vertex]>=0.30"]
+local = ["mlx-lm; sys_platform == 'darwin'"]
+all = [
+    "anthropic>=0.30",
+    "openai>=1.0",
+    "google-cloud-aiplatform>=1.38",
+    "anthropic[vertex]>=0.30",
+]
+
+[tool.setuptools.packages.find]
+include = ["model_router*"]
