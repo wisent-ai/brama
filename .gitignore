@@ -6,3 +6,8 @@ build/
 .eggs/
 *.env
 .venv/
+
+
+# Added by cargo
+
+/target
