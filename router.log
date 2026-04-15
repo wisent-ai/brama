@@ -1,0 +1,10 @@
+[2m2026-04-15T23:53:16.011685Z[0m [32m INFO[0m [2mmodel_router[0m[2m:[0m Starting server on port 8080
+[2m2026-04-15T23:53:16.012061Z[0m [32m INFO[0m [2mmodel_router::core::server[0m[2m:[0m Starting model-router server on 0.0.0.0:8080
+[2m2026-04-15T23:53:31.892944Z[0m [32m INFO[0m [2mmodel_router::core::router[0m[2m:[0m Routing qwen-72b to provider huggingface
+[2m2026-04-15T23:53:33.764535Z[0m [32m INFO[0m [2mmodel_router::core::router[0m[2m:[0m Routing qwen-72b to provider huggingface
+[2m2026-04-15T23:53:35.318294Z[0m [32m INFO[0m [2mmodel_router::core::router[0m[2m:[0m Routing qwen-72b to provider huggingface
+[2m2026-04-15T23:53:36.914277Z[0m [32m INFO[0m [2mmodel_router::core::router[0m[2m:[0m Routing qwen-72b to provider huggingface
+[2m2026-04-15T23:53:41.489525Z[0m [32m INFO[0m [2mmodel_router::core::router[0m[2m:[0m Routing qwen-72b to provider huggingface
+[2m2026-04-15T23:53:43.706987Z[0m [32m INFO[0m [2mmodel_router::core::router[0m[2m:[0m Routing qwen-72b to provider huggingface
+[2m2026-04-15T23:53:50.405572Z[0m [32m INFO[0m [2mmodel_router::core::router[0m[2m:[0m Routing qwen-72b to provider huggingface
+[2m2026-04-15T23:53:58.099508Z[0m [32m INFO[0m [2mmodel_router::core::router[0m[2m:[0m Routing qwen-72b to provider huggingface

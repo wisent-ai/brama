@@ -7,7 +7,9 @@ use serde_json::{json, Value};
 use tracing::{debug, error};
 
 use crate::provider::ModelProvider;
-use crate::types::{ModelRequest, ModelResponse};
+use crate::types::{
+    ModelRequest, ModelResponse, ToolCall, ToolCallFunction,
+};
 
 const API_URL: &str = "https://api.anthropic.com/v1/messages";
 const API_VERSION: &str = "2023-06-01";
@@ -79,6 +81,34 @@ impl ModelProvider for AnthropicProvider {
             body["system"] = json!(system);
         }
 
+        if let Some(tools) = &request.tools {
+            if !tools.is_empty() {
+                let anthropic_tools: Vec<Value> = tools
+                    .iter()
+                    .map(|t| {
+                        let mut tool = json!({
+                            "name": t.function.name,
+                            "description":
+                                t.function.description,
+                        });
+                        if let Some(params) =
+                            &t.function.parameters
+                        {
+                            tool["input_schema"] =
+                                params.clone();
+                        } else {
+                            tool["input_schema"] = json!({
+                                "type": "object",
+                                "properties": {},
+                            });
+                        }
+                        tool
+                    })
+                    .collect();
+                body["tools"] = json!(anthropic_tools);
+            }
+        }
+
         debug!("Anthropic request to model {}", request.model);
         let start = Instant::now();
 
@@ -135,12 +165,47 @@ impl ModelProvider for AnthropicProvider {
             }
         };
 
-        let content = parsed["content"]
-            .as_array()
-            .and_then(|arr| arr.first())
+        let content_blocks =
+            parsed["content"].as_array();
+
+        let content = content_blocks
+            .and_then(|arr| {
+                arr.iter().find(|b| {
+                    b["type"].as_str() == Some("text")
+                })
+            })
             .and_then(|block| block["text"].as_str())
             .unwrap_or("")
             .to_string();
+
+        let tool_calls = content_blocks
+            .map(|arr| {
+                arr.iter()
+                    .filter(|b| {
+                        b["type"].as_str()
+                            == Some("tool_use")
+                    })
+                    .filter_map(|b| {
+                        let id =
+                            b["id"].as_str()?.to_string();
+                        let name =
+                            b["name"].as_str()?.to_string();
+                        let input = &b["input"];
+                        let arguments =
+                            serde_json::to_string(input)
+                                .ok()?;
+                        Some(ToolCall {
+                            id,
+                            call_type: "function".into(),
+                            function: ToolCallFunction {
+                                name,
+                                arguments,
+                            },
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .filter(|v| !v.is_empty());
 
         let input_tokens = parsed["usage"]["input_tokens"]
             .as_u64()
@@ -161,6 +226,7 @@ impl ModelProvider for AnthropicProvider {
             cost,
             success: true,
             error: None,
+            tool_calls,
         }
     }
 

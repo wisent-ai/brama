@@ -5,7 +5,9 @@ use std::sync::Arc;
 use tracing::{error, info, warn};
 
 use crate::provider::ModelProvider;
-use crate::types::{Message, ModelRequest, ModelResponse};
+use crate::types::{
+    Message, ModelRequest, ModelResponse, Tool,
+};
 
 pub struct RouterStats {
     pub total_requests: AtomicU64,
@@ -81,6 +83,7 @@ impl ModelRouter {
         max_tokens: u32,
         temperature: f64,
         system: Option<String>,
+        tools: Option<Vec<Tool>>,
     ) -> ModelResponse {
         let request = ModelRequest {
             messages,
@@ -88,6 +91,7 @@ impl ModelRouter {
             max_tokens,
             temperature,
             system,
+            tools,
         };
 
         // Try the primary provider for this model
@@ -140,6 +144,7 @@ impl ModelRouter {
                     max_tokens: request.max_tokens,
                     temperature: request.temperature,
                     system: request.system.clone(),
+                    tools: request.tools.clone(),
                 };
 
                 let resp =

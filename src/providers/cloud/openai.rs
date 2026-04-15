@@ -7,7 +7,9 @@ use serde_json::{json, Value};
 use tracing::{debug, error};
 
 use crate::provider::ModelProvider;
-use crate::types::{ModelRequest, ModelResponse};
+use crate::types::{
+    ModelRequest, ModelResponse, ToolCall, ToolCallFunction,
+};
 
 const API_URL: &str =
     "https://api.openai.com/v1/chat/completions";
@@ -60,18 +62,32 @@ impl ModelProvider for OpenAIProvider {
             }));
         }
         for m in &request.messages {
-            messages.push(json!({
-                "role": m.role,
-                "content": m.content,
-            }));
+            let mut msg = json!({"role": m.role, "content": m.content});
+            if let Some(ref tc_id) = m.tool_call_id {
+                msg["tool_call_id"] = json!(tc_id);
+            }
+            if let Some(ref name) = m.name {
+                msg["name"] = json!(name);
+            }
+            if let Some(ref tcs) = m.tool_calls {
+                msg["tool_calls"] = json!(tcs);
+            }
+            messages.push(msg);
         }
 
-        let body = json!({
+        let mut body = json!({
             "model": request.model,
             "max_tokens": request.max_tokens,
             "temperature": request.temperature,
             "messages": messages,
         });
+
+        if let Some(tools) = &request.tools {
+            if !tools.is_empty() {
+                body["tools"] =
+                    serde_json::to_value(tools).unwrap();
+            }
+        }
 
         debug!("OpenAI request to model {}", request.model);
         let start = Instant::now();
@@ -131,12 +147,39 @@ impl ModelProvider for OpenAIProvider {
             }
         };
 
-        let content = parsed["choices"]
+        let choice = parsed["choices"]
             .as_array()
-            .and_then(|arr| arr.first())
+            .and_then(|arr| arr.first());
+
+        let content = choice
             .and_then(|c| c["message"]["content"].as_str())
             .unwrap_or("")
             .to_string();
+
+        let tool_calls = choice
+            .and_then(|c| c["message"]["tool_calls"].as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|tc| {
+                        Some(ToolCall {
+                            id: tc["id"]
+                                .as_str()?
+                                .to_string(),
+                            call_type: "function".into(),
+                            function: ToolCallFunction {
+                                name: tc["function"]["name"]
+                                    .as_str()?
+                                    .to_string(),
+                                arguments: tc["function"]
+                                    ["arguments"]
+                                    .as_str()?
+                                    .to_string(),
+                            },
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .filter(|v| !v.is_empty());
 
         let input_tokens = parsed["usage"]["prompt_tokens"]
             .as_u64()
@@ -158,6 +201,7 @@ impl ModelProvider for OpenAIProvider {
             cost,
             success: true,
             error: None,
+            tool_calls,
         }
     }
 

@@ -14,5 +14,6 @@ pub use crate::detection::{
 pub use crate::provider::ModelProvider;
 pub use crate::types::{
     ComputeResources, Message, ModelRequest, ModelResponse,
-    RouterError,
+    RouterError, Tool, ToolCall, ToolCallFunction,
+    ToolFunction,
 };

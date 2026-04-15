@@ -12,7 +12,7 @@ use tokio::sync::RwLock;
 use tracing::info;
 
 use super::router::ModelRouter;
-use crate::types::Message;
+use crate::types::{Message, Tool, ToolCall};
 
 type SharedRouter = Arc<RwLock<ModelRouter>>;
 
@@ -24,6 +24,8 @@ struct ChatCompletionRequest {
     max_tokens: u32,
     #[serde(default = "default_temperature")]
     temperature: f64,
+    #[serde(default)]
+    tools: Option<Vec<Tool>>,
 }
 
 fn default_max_tokens() -> u32 {
@@ -36,7 +38,14 @@ fn default_temperature() -> f64 {
 #[derive(Debug, Deserialize)]
 struct ChatMessage {
     role: String,
-    content: String,
+    #[serde(default)]
+    content: Option<String>,
+    #[serde(default)]
+    tool_call_id: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    tool_calls: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -59,6 +68,8 @@ struct Choice {
 struct ChoiceMessage {
     role: String,
     content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_calls: Option<Vec<ToolCall>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -77,7 +88,10 @@ async fn chat_completions(
         .into_iter()
         .map(|m| Message {
             role: m.role,
-            content: m.content,
+            content: m.content.unwrap_or_default(),
+            tool_call_id: m.tool_call_id,
+            name: m.name,
+            tool_calls: m.tool_calls,
         })
         .collect();
 
@@ -89,6 +103,7 @@ async fn chat_completions(
             req.max_tokens,
             req.temperature,
             None,
+            req.tools,
         )
         .await;
 
@@ -102,6 +117,16 @@ async fn chat_completions(
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(body));
     }
 
+    let has_tool_calls = resp
+        .tool_calls
+        .as_ref()
+        .map_or(false, |tc| !tc.is_empty());
+    let finish_reason = if has_tool_calls {
+        "tool_calls"
+    } else {
+        "stop"
+    };
+
     let body = serde_json::to_value(ChatCompletionResponse {
         id: format!("chatcmpl-{}", uuid_v4()),
         object: "chat.completion".into(),
@@ -111,8 +136,9 @@ async fn chat_completions(
             message: ChoiceMessage {
                 role: "assistant".into(),
                 content: resp.content,
+                tool_calls: resp.tool_calls,
             },
-            finish_reason: "stop".into(),
+            finish_reason: finish_reason.into(),
         }],
         usage: Usage {
             prompt_tokens: resp.input_tokens,

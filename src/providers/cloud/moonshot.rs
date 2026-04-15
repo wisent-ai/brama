@@ -158,6 +158,7 @@ impl ModelProvider for MoonshotProvider {
             cost,
             success: true,
             error: None,
+            tool_calls: None,
         }
     }
 

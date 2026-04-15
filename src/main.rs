@@ -57,10 +57,14 @@ async fn main() {
                 role: "user".into(),
                 content: "Say hello in one sentence."
                     .into(),
+                tool_call_id: None,
+                name: None,
+                tool_calls: None,
             }];
             let resp = router
                 .complete(
                     messages, &model, 256, 0.7, None,
+                    None,
                 )
                 .await;
             if resp.success {
