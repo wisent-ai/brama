@@ -242,25 +242,54 @@ pub fn build_default_router() -> ModelRouter {
     router.register_provider(Arc::new(
         FeatherlessProvider::new(),
     ));
+    router.register_provider(Arc::new(
+        GroqProvider::new(),
+    ));
+    router.register_provider(Arc::new(
+        GoogleAiProvider::new(),
+    ));
+    router.register_provider(Arc::new(
+        OpenRouterProvider::new(),
+    ));
+    router.register_provider(Arc::new(
+        CloudflareProvider::new(),
+    ));
 
-    // Retry chains: if primary fails, try alternatives
+    // Retry chains: if primary fails, try alternatives.
+    // Order: Featherless Cydonia first (already served today), then paid
+    // cloud providers if their keys are set, then free tiers.
+    let free_tier_chain = [
+        "cydonia-24b".to_string(),
+        "groq-llama-3.3-70b".to_string(),
+        "gemini-2.0-flash".to_string(),
+        "deepseek-r1-free".to_string(),
+        "cf-llama-3.1-8b".to_string(),
+    ];
+
     router.set_retry_chain(
         "claude-sonnet-4",
-        vec!["gpt-4o".into(), "llama-70b".into()],
+        std::iter::once("gpt-4o".to_string())
+            .chain(free_tier_chain.iter().cloned())
+            .collect(),
     );
     router.set_retry_chain(
         "gpt-4o",
-        vec![
-            "claude-sonnet-4".into(),
-            "llama-70b".into(),
-        ],
+        std::iter::once("claude-sonnet-4".to_string())
+            .chain(free_tier_chain.iter().cloned())
+            .collect(),
     );
     router.set_retry_chain(
         "gpt-4o-mini",
         vec![
             "claude-haiku-3.5".into(),
             "kimi-2.5".into(),
+            "groq-llama-3.1-8b".into(),
+            "gemini-1.5-flash".into(),
         ],
+    );
+    router.set_retry_chain(
+        "cydonia-24b",
+        free_tier_chain[1..].to_vec(),
     );
 
     router

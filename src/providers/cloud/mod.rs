@@ -1,11 +1,19 @@
 pub mod anthropic;
+pub mod cloudflare;
 pub mod featherless;
+pub mod google_ai;
+pub mod groq;
 pub mod huggingface;
 pub mod moonshot;
 pub mod openai;
+pub mod openrouter;
 
 pub use anthropic::AnthropicProvider;
+pub use cloudflare::CloudflareProvider;
 pub use featherless::FeatherlessProvider;
+pub use google_ai::GoogleAiProvider;
+pub use groq::GroqProvider;
 pub use huggingface::HuggingFaceProvider;
 pub use moonshot::MoonshotProvider;
 pub use openai::OpenAIProvider;
+pub use openrouter::OpenRouterProvider;
