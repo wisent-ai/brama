@@ -4,6 +4,7 @@ pub mod detection;
 pub mod gateway;
 pub mod provider;
 pub mod providers;
+pub mod subscription_dispatch;
 pub mod types;
 
 pub use crate::core::router::{

@@ -12,7 +12,10 @@ use tokio::sync::RwLock;
 use tracing::info;
 
 use super::router::ModelRouter;
-use crate::types::{Message, Tool, ToolCall};
+use crate::subscription_dispatch::{
+    dispatch_subscription, is_subscription_model,
+};
+use crate::types::{Message, ModelRequest, Tool, ToolCall};
 
 type SharedRouter = Arc<RwLock<ModelRouter>>;
 
@@ -81,8 +84,24 @@ struct Usage {
 
 async fn chat_completions(
     State(router): State<SharedRouter>,
-    Json(req): Json<ChatCompletionRequest>,
+    headers: axum::http::HeaderMap,
+    body: axum::body::Bytes,
 ) -> impl IntoResponse {
+    let req: ChatCompletionRequest = match serde_json::from_slice(&body) {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "error": {
+                        "message": format!("invalid JSON: {e}"),
+                        "type": "bad_request",
+                    }
+                })),
+            );
+        }
+    };
+
     let messages: Vec<Message> = req
         .messages
         .into_iter()
@@ -95,9 +114,19 @@ async fn chat_completions(
         })
         .collect();
 
-    let r = router.read().await;
-    let resp = r
-        .complete(
+    let resp = if is_subscription_model(&req.model) {
+        let dispatch_req = ModelRequest {
+            messages,
+            model: req.model.clone(),
+            max_tokens: req.max_tokens,
+            temperature: req.temperature,
+            system: None,
+            tools: req.tools,
+        };
+        dispatch_subscription(&headers, &dispatch_req, &body).await
+    } else {
+        let r = router.read().await;
+        r.complete(
             messages,
             &req.model,
             req.max_tokens,
@@ -105,7 +134,8 @@ async fn chat_completions(
             None,
             req.tools,
         )
-        .await;
+        .await
+    };
 
     if !resp.success {
         let body = json!({
