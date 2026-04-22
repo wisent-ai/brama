@@ -42,7 +42,7 @@ fn default_temperature() -> f64 {
 struct ChatMessage {
     role: String,
     #[serde(default)]
-    content: Option<String>,
+    content: Option<serde_json::Value>,
     #[serde(default)]
     tool_call_id: Option<String>,
     #[serde(default)]
@@ -107,7 +107,9 @@ async fn chat_completions(
         .into_iter()
         .map(|m| Message {
             role: m.role,
-            content: m.content.unwrap_or_default(),
+            content: m
+                .content
+                .unwrap_or_else(|| serde_json::Value::String(String::new())),
             tool_call_id: m.tool_call_id,
             name: m.name,
             tool_calls: m.tool_calls,

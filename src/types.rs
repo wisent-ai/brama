@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -41,8 +42,11 @@ pub struct ComputeResources {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
     pub role: String,
-    #[serde(default)]
-    pub content: String,
+    /// Either a plain string (text) or an OpenAI-style content array with
+    /// `{"type":"text"|"image_url", ...}` parts. Typed as Value so multimodal
+    /// callers (e.g. vision models on Featherless) pass through unchanged.
+    #[serde(default = "Message::default_content")]
+    pub content: Value,
     /// For tool role messages: the ID of the tool call being responded to.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
@@ -52,6 +56,33 @@ pub struct Message {
     /// For assistant messages with tool calls.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<serde_json::Value>>,
+}
+
+impl Message {
+    fn default_content() -> Value {
+        Value::String(String::new())
+    }
+
+    /// Best-effort extraction of the human-readable text. For plain string
+    /// content returns it verbatim; for OpenAI array-shape content returns
+    /// the concatenation of each `{type:"text",text:...}` part's text.
+    pub fn content_text(&self) -> String {
+        match &self.content {
+            Value::String(s) => s.clone(),
+            Value::Array(parts) => parts
+                .iter()
+                .filter_map(|p| {
+                    if p.get("type").and_then(|v| v.as_str()) == Some("text") {
+                        p.get("text").and_then(|v| v.as_str()).map(String::from)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(""),
+            _ => String::new(),
+        }
+    }
 }
 
 /// Tool definition following OpenAI function calling spec.

@@ -152,9 +152,15 @@ mod rand_iv {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    // Serialize tests that mutate process-wide env so `cargo test` (which
+    // runs in parallel by default) doesn't race on ENCRYPTION_KEY.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn roundtrip_hex_key() {
+        let _g = ENV_LOCK.lock().unwrap();
         std::env::set_var(
             "ENCRYPTION_KEY",
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -168,6 +174,7 @@ mod tests {
 
     #[test]
     fn roundtrip_scrypt_key() {
+        let _g = ENV_LOCK.lock().unwrap();
         std::env::set_var("ENCRYPTION_KEY", "short-passphrase");
         std::env::remove_var("CARD_ENCRYPTION_KEY");
         let ct = encrypt("sensitive").unwrap();

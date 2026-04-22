@@ -59,7 +59,7 @@ pub fn build_prompt_from(
             if !out.is_empty() {
                 out.push('\n');
             }
-            out.push_str(&format!("{}: {}", m.role, m.content));
+            out.push_str(&format!("{}: {}", m.role, m.content_text()));
         }
     }
     out
