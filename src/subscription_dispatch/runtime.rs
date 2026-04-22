@@ -86,6 +86,8 @@ pub async fn run_cli(
     }
     cmd.current_dir(&sandbox.home);
 
+    let argv_joined = argv.join(" ");
+    tracing::info!(target: "subscription_dispatch", "exec: {}", argv_joined);
     let output = match cmd.output().await {
         Ok(o) => o,
         Err(e) => {
@@ -95,13 +97,23 @@ pub async fn run_cli(
     let elapsed = start.elapsed().as_secs_f64() * 1000.0;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        tracing::error!(
+            target: "subscription_dispatch",
+            "cli exit {}: argv={:?} stdout={:?} stderr={:?}",
+            output.status.code().unwrap_or(-1),
+            argv,
+            stdout.chars().take(4000).collect::<String>(),
+            stderr.chars().take(4000).collect::<String>(),
+        );
+        let merged = format!(
+            "stderr: {} | stdout: {}",
+            stderr.trim().chars().take(1500).collect::<String>(),
+            strip_ansi(&stdout).chars().take(1500).collect::<String>(),
+        );
         return ModelResponse::failure(
             model,
-            format!(
-                "exit {}: {}",
-                output.status.code().unwrap_or(-1),
-                stderr.chars().take(2000).collect::<String>()
-            ),
+            format!("exit {}: {}", output.status.code().unwrap_or(-1), merged),
         );
     }
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
