@@ -254,9 +254,6 @@ pub fn build_default_router() -> ModelRouter {
     router.register_provider(Arc::new(
         CloudflareProvider::new(),
     ));
-    router.register_provider(Arc::new(
-        ClaudeOAuthProvider::new(),
-    ));
 
     // Retry chains: if primary fails, try alternatives.
     // Order: Featherless Cydonia first (already served today), then paid
