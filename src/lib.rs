@@ -1,4 +1,5 @@
 pub mod core;
+pub mod crypto;
 pub mod detection;
 pub mod provider;
 pub mod providers;
