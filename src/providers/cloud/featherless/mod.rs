@@ -19,6 +19,14 @@ const DEFAULT_FEATHERLESS_MODEL: &str =
 
 const ALIAS: &str = "cydonia-24b";
 
+/// Alias → upstream HF path for all Featherless-registered models beyond
+/// the env-configurable primary alias.
+fn extra_aliases() -> &'static [(&'static str, &'static str)] {
+    &[
+        ("gemma-3-27b-abliterated", "mlabonne/gemma-3-27b-it-abliterated"),
+    ]
+}
+
 pub struct FeatherlessProvider {
     client: Client,
     api_key: Option<String>,
@@ -37,7 +45,9 @@ impl FeatherlessProvider {
     }
 
     fn supported_models() -> Vec<String> {
-        vec![ALIAS.into()]
+        let mut v = vec![ALIAS.into()];
+        v.extend(extra_aliases().iter().map(|(a, _)| (*a).into()));
+        v
     }
 }
 
@@ -84,8 +94,12 @@ impl ModelProvider for FeatherlessProvider {
             messages.push(msg);
         }
 
-        let upstream = if request.model == ALIAS {
+        let upstream: &str = if request.model == ALIAS {
             self.upstream_model.as_str()
+        } else if let Some((_, up)) =
+            extra_aliases().iter().find(|(a, _)| *a == request.model)
+        {
+            up
         } else {
             request.model.as_str()
         };
