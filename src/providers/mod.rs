@@ -1,7 +1,9 @@
+pub mod cli_env;
 pub mod cloud;
 pub mod self_hosted;
 pub mod stub;
 
+pub use cli_env::ClaudeOAuthProvider;
 pub use cloud::AnthropicProvider;
 pub use cloud::CloudflareProvider;
 pub use cloud::FeatherlessProvider;
