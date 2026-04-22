@@ -239,6 +239,9 @@ pub fn build_default_router() -> ModelRouter {
     router.register_provider(Arc::new(
         VertexProvider::new(),
     ));
+    router.register_provider(Arc::new(
+        FeatherlessProvider::new(),
+    ));
 
     // Retry chains: if primary fails, try alternatives
     router.set_retry_chain(

@@ -3,6 +3,7 @@ pub mod self_hosted;
 pub mod stub;
 
 pub use cloud::AnthropicProvider;
+pub use cloud::FeatherlessProvider;
 pub use cloud::HuggingFaceProvider;
 pub use cloud::MoonshotProvider;
 pub use cloud::OpenAIProvider;
