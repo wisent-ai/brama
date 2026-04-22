@@ -26,6 +26,23 @@ pub async fn run_claude_code(
         Ok(s) => s,
         Err(e) => return ModelResponse::failure(&request.model, e.to_string()),
     };
+    // Claude Code 2.x authenticates from $HOME/.claude/.credentials.json. It
+    // does NOT read CLAUDE_CODE_OAUTH_TOKEN on its own for the inference API
+    // call, even though older docs suggest it — you get a bare 401 if that's
+    // all you provide. `token` is either (a) a JSON blob matching the
+    // claudeAiOauth structure (preferred — the donor's full OAuth record) or
+    // (b) a plain "sk-ant-oat01-..." access token string which we wrap into
+    // the minimum shape v2 accepts.
+    let creds_json = materialize_credentials(token);
+    let claude_dir = sandbox.home.join(".claude");
+    if let Err(e) = fs::create_dir_all(&claude_dir).await {
+        return ModelResponse::failure(&request.model, format!("mkdir .claude: {e}"));
+    }
+    let creds_path = claude_dir.join(".credentials.json");
+    if let Err(e) = fs::write(&creds_path, creds_json).await {
+        return ModelResponse::failure(&request.model, format!("write creds: {e}"));
+    }
+    let _ = chmod_private(&creds_path).await;
     let prompt = build_prompt_from(&request.system, &request.messages);
     let mut env = HashMap::new();
     env.insert("CLAUDE_CODE_OAUTH_TOKEN".into(), token.to_string());
@@ -36,6 +53,35 @@ pub async fn run_claude_code(
         env,
     )
     .await
+}
+
+fn materialize_credentials(token: &str) -> String {
+    // If caller already stored the full {"claudeAiOauth":{...}} blob, pass it
+    // through verbatim. Otherwise wrap a bare access token in the minimum
+    // structure v2 accepts: scopes including user:inference + an expiresAt
+    // 24h in the future so the CLI's local check passes (a token that's
+    // actually expired will still get rejected at the API).
+    let trimmed = token.trim();
+    if trimmed.starts_with('{') {
+        return trimmed.to_string();
+    }
+    let expires_ms = chrono::Utc::now().timestamp_millis() + 24 * 60 * 60 * 1000;
+    serde_json::json!({
+        "claudeAiOauth": {
+            "accessToken": trimmed,
+            "refreshToken": "",
+            "expiresAt": expires_ms,
+            "scopes": [
+                "user:file_upload",
+                "user:inference",
+                "user:mcp_servers",
+                "user:profile",
+                "user:sessions:claude_code"
+            ],
+            "subscriptionType": "max"
+        }
+    })
+    .to_string()
 }
 
 pub async fn run_codex(
