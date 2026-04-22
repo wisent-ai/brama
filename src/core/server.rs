@@ -205,7 +205,7 @@ pub async fn start_server(
     let shared: SharedRouter =
         Arc::new(RwLock::new(router));
 
-    let app = Router::new()
+    let chat_app = Router::new()
         .route(
             "/v1/chat/completions",
             post(chat_completions),
@@ -214,6 +214,20 @@ pub async fn start_server(
         .route("/health", get(health))
         .route("/stats", get(get_stats))
         .with_state(shared);
+
+    let gateway_app = Router::new()
+        .route(
+            "/v1/subscriptions/:instance_id",
+            get(crate::gateway::subscriptions_get)
+                .post(crate::gateway::subscriptions_post)
+                .delete(crate::gateway::subscriptions_delete),
+        )
+        .route(
+            "/v1/donate",
+            post(crate::gateway::donate_wisent),
+        );
+
+    let app = chat_app.merge(gateway_app);
 
     let addr = format!("0.0.0.0:{port}");
     info!("Starting model-router server on {addr}");

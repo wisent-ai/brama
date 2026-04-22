@@ -1,6 +1,7 @@
 pub mod core;
 pub mod crypto;
 pub mod detection;
+pub mod gateway;
 pub mod provider;
 pub mod providers;
 pub mod types;
