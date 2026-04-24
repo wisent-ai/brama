@@ -117,12 +117,30 @@ async fn chat_completions(
         .collect();
 
     let resp = if is_subscription_model(&req.model) {
+        // OpenAI-compat callers send the system prompt as a system-role
+        // message in `messages`. The subscription engines (claude_code,
+        // codex, kimi, opencode) read `request.system` as a separate
+        // field and `build_prompt_from` drops system-role messages on the
+        // floor. Pull the first system-role message's text out and set
+        // it on `system` so it actually reaches the CLI.
+        let (system, non_system_messages): (Option<String>, Vec<Message>) = {
+            let mut sys: Option<String> = None;
+            let mut rest: Vec<Message> = Vec::with_capacity(messages.len());
+            for m in messages {
+                if m.role == "system" && sys.is_none() {
+                    sys = m.content.as_str().map(|s| s.to_string());
+                    continue;
+                }
+                rest.push(m);
+            }
+            (sys, rest)
+        };
         let dispatch_req = ModelRequest {
-            messages,
+            messages: non_system_messages,
             model: req.model.clone(),
             max_tokens: req.max_tokens,
             temperature: req.temperature,
-            system: None,
+            system,
             tools: req.tools,
         };
         dispatch_subscription(&headers, &dispatch_req, &body).await
