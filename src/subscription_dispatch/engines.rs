@@ -13,13 +13,72 @@ use std::path::Path;
 
 use tokio::fs;
 
+use crate::crypto;
+use crate::gateway::supabase;
 use crate::subscription_dispatch::runtime::{
     build_prompt_from, run_cli, Sandbox,
 };
 use crate::types::{ModelRequest, ModelResponse};
 
+/// If the CLI run rotated the donated OAuth blob in-sandbox, re-encrypt
+/// and push it back to `trade_agent_subscriptions` so the next dispatch
+/// starts from the refreshed state. Best-effort: persistence failures
+/// do NOT fail the caller's request.
+async fn persist_refreshed_token(
+    agent_id: &str,
+    provider: &str,
+    original: &str,
+    creds_path: &Path,
+) {
+    let after = match fs::read_to_string(creds_path).await {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    if after.trim() == original.trim() {
+        return;
+    }
+    let client = match supabase::client() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("[router] refresh persist: supabase client: {e}");
+            return;
+        }
+    };
+    let encrypted = match crypto::encrypt(&after) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("[router] refresh persist: encrypt: {e}");
+            return;
+        }
+    };
+    let body = serde_json::json!({ "key_encrypted": encrypted }).to_string();
+    let resp = client
+        .from("trade_agent_subscriptions")
+        .eq("instance_id", agent_id)
+        .eq("provider", provider)
+        .eq("status", "active")
+        .update(body)
+        .execute()
+        .await;
+    match resp {
+        Ok(r) if r.status().is_success() => {
+            eprintln!(
+                "[router] refresh persist: rotated {provider} token for agent {agent_id}"
+            );
+        }
+        Ok(r) => {
+            let t = r.text().await.unwrap_or_default();
+            eprintln!("[router] refresh persist: update non-2xx: {t}");
+        }
+        Err(e) => {
+            eprintln!("[router] refresh persist: update: {e}");
+        }
+    }
+}
+
 pub async fn run_claude_code(
     request: &ModelRequest,
+    agent_id: &str,
     token: &str,
 ) -> ModelResponse {
     let sandbox = match Sandbox::new() {
@@ -39,20 +98,28 @@ pub async fn run_claude_code(
         return ModelResponse::failure(&request.model, format!("mkdir .claude: {e}"));
     }
     let creds_path = claude_dir.join(".credentials.json");
-    if let Err(e) = fs::write(&creds_path, creds_json).await {
+    if let Err(e) = fs::write(&creds_path, &creds_json).await {
         return ModelResponse::failure(&request.model, format!("write creds: {e}"));
     }
     let _ = chmod_private(&creds_path).await;
     let prompt = build_prompt_from(&request.system, &request.messages);
     let mut env = HashMap::new();
     env.insert("CLAUDE_CODE_OAUTH_TOKEN".into(), token.to_string());
-    run_cli(
+    let response = run_cli(
         &request.model,
         &["claude", "-p", &prompt],
         &sandbox,
         env,
     )
-    .await
+    .await;
+    // Claude CLI auto-refreshes the OAuth token in-place when the access
+    // token is expired but the refresh token is still valid. Capture any
+    // rotation and push it back to the DB so the next dispatch doesn't
+    // start from a stale blob. Compare against what we wrote (creds_json)
+    // rather than the bare `token` the dispatcher decrypted — the sandbox
+    // file is always in the wrapped format.
+    persist_refreshed_token(agent_id, "claude_code", &creds_json, &creds_path).await;
+    response
 }
 
 fn materialize_credentials(token: &str) -> String {
@@ -86,6 +153,7 @@ fn materialize_credentials(token: &str) -> String {
 
 pub async fn run_codex(
     request: &ModelRequest,
+    agent_id: &str,
     token_json: &str,
 ) -> ModelResponse {
     let sandbox = match Sandbox::new() {
@@ -101,7 +169,7 @@ pub async fn run_codex(
         return ModelResponse::failure(&request.model, format!("write auth.json: {e}"));
     }
     let prompt = build_prompt_from(&request.system, &request.messages);
-    run_cli(
+    let response = run_cli(
         &request.model,
         &[
             "codex",
@@ -114,11 +182,14 @@ pub async fn run_codex(
         &sandbox,
         HashMap::new(),
     )
-    .await
+    .await;
+    persist_refreshed_token(agent_id, "codex", token_json, &auth_path).await;
+    response
 }
 
 pub async fn run_kimi(
     request: &ModelRequest,
+    agent_id: &str,
     token_json: &str,
 ) -> ModelResponse {
     let sandbox = match Sandbox::new() {
@@ -135,7 +206,7 @@ pub async fn run_kimi(
     }
     let _ = chmod_private(&creds_path).await;
     let prompt = build_prompt_from(&request.system, &request.messages);
-    run_cli(
+    let response = run_cli(
         &request.model,
         &[
             "kimi",
@@ -149,11 +220,14 @@ pub async fn run_kimi(
         &sandbox,
         HashMap::new(),
     )
-    .await
+    .await;
+    persist_refreshed_token(agent_id, "kimi", token_json, &creds_path).await;
+    response
 }
 
 pub async fn run_opencode(
     request: &ModelRequest,
+    _agent_id: &str,
     token: &str,
 ) -> ModelResponse {
     let sandbox = match Sandbox::new() {

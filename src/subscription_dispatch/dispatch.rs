@@ -117,10 +117,10 @@ pub async fn dispatch_subscription(
     };
 
     match provider {
-        "claude_code" => engines::run_claude_code(request, &token).await,
-        "codex" => engines::run_codex(request, &token).await,
-        "kimi" => engines::run_kimi(request, &token).await,
-        "opencode" => engines::run_opencode(request, &token).await,
+        "claude_code" => engines::run_claude_code(request, agent_id, &token).await,
+        "codex" => engines::run_codex(request, agent_id, &token).await,
+        "kimi" => engines::run_kimi(request, agent_id, &token).await,
+        "opencode" => engines::run_opencode(request, agent_id, &token).await,
         _ => ModelResponse::failure(&request.model, "unreachable".into()),
     }
 }
