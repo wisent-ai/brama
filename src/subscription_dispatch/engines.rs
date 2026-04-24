@@ -102,16 +102,23 @@ pub async fn run_claude_code(
         return ModelResponse::failure(&request.model, format!("write creds: {e}"));
     }
     let _ = chmod_private(&creds_path).await;
-    let prompt = build_prompt_from(&request.system, &request.messages);
+    // Claude Code CLI has its own built-in software-engineering system
+    // prompt. If we fold our caller's system prompt into the `claude -p`
+    // text, Claude's default persona overrides ours and it refuses
+    // non-coding tasks ("I'm a software engineering assistant..."). Use
+    // --append-system-prompt so the caller's instructions sit alongside
+    // Claude's default and actually get respected.
+    let user_prompt = build_prompt_from(&None, &request.messages);
+    let system_prompt = request.system.clone().unwrap_or_default();
     let mut env = HashMap::new();
     env.insert("CLAUDE_CODE_OAUTH_TOKEN".into(), token.to_string());
-    let response = run_cli(
-        &request.model,
-        &["claude", "-p", &prompt],
-        &sandbox,
-        env,
-    )
-    .await;
+    let mut argv: Vec<&str> = vec!["claude", "-p"];
+    if !system_prompt.is_empty() {
+        argv.push("--append-system-prompt");
+        argv.push(&system_prompt);
+    }
+    argv.push(&user_prompt);
+    let response = run_cli(&request.model, &argv, &sandbox, env).await;
     // Claude CLI auto-refreshes the OAuth token in-place when the access
     // token is expired but the refresh token is still valid. Capture any
     // rotation and push it back to the DB so the next dispatch doesn't
