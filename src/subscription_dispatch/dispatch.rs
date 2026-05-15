@@ -85,13 +85,17 @@ pub async fn dispatch_subscription(
         return ModelResponse::failure(&request.model, format!("auth: {e}"));
     }
 
-    // Look up the donated subscription for this agent + provider.
+    // Look up ALL active donated subscriptions for this agent + provider.
+    // Order by created_at ascending so the rotation is deterministic and the
+    // oldest sub gets first crack — a freshly-donated sub is held in reserve
+    // until older ones have burnt their per-window quota.
     let resp = client
         .from("trade_agent_subscriptions")
-        .select("key_encrypted,status")
+        .select("id,key_encrypted,status,created_at")
         .eq("instance_id", agent_id)
         .eq("provider", provider)
         .eq("status", "active")
+        .order("created_at.asc")
         .execute()
         .await;
     let rows: Vec<Value> = match resp {
@@ -101,26 +105,70 @@ pub async fn dispatch_subscription(
         }
         Err(e) => return ModelResponse::failure(&request.model, format!("supabase: {e}")),
     };
-    let encrypted = match rows.first().and_then(|r| r.get("key_encrypted")).and_then(|v: &Value| v.as_str())
-    {
-        Some(s) => s.to_string(),
-        None => {
-            return ModelResponse::failure(
-                &request.model,
-                format!("no active '{provider}' subscription for agent"),
-            );
-        }
-    };
-    let token = match crypto::decrypt(&encrypted) {
-        Ok(t) => t,
-        Err(e) => return ModelResponse::failure(&request.model, format!("decrypt: {e}")),
-    };
-
-    match provider {
-        "claude_code" => engines::run_claude_code(request, agent_id, &token).await,
-        "codex" => engines::run_codex(request, agent_id, &token).await,
-        "kimi" => engines::run_kimi(request, agent_id, &token).await,
-        "opencode" => engines::run_opencode(request, agent_id, &token).await,
-        _ => ModelResponse::failure(&request.model, "unreachable".into()),
+    if rows.is_empty() {
+        return ModelResponse::failure(
+            &request.model,
+            format!("no active '{provider}' subscription for agent"),
+        );
     }
+
+    // Try each subscription in turn. If a call returns a per-subscription
+    // exhaustion signal (per-window quota, auth-expired OAuth, 401), rotate
+    // to the next sub. Anything else surfaces immediately so we don't mask
+    // upstream API breakage as exhaustion.
+    let mut last_failure: Option<ModelResponse> = None;
+    for (idx, row) in rows.iter().enumerate() {
+        let encrypted = match row.get("key_encrypted").and_then(|v: &Value| v.as_str()) {
+            Some(s) => s.to_string(),
+            None => continue,
+        };
+        let sub_id = row
+            .get("id")
+            .and_then(|v: &Value| v.as_str())
+            .unwrap_or("?")
+            .to_string();
+        let token = match crypto::decrypt(&encrypted) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!(
+                    "[router] sub {sub_id} decrypt failed (skipping): {e}"
+                );
+                continue;
+            }
+        };
+        let result = match provider {
+            "claude_code" => engines::run_claude_code(request, agent_id, &token).await,
+            "codex" => engines::run_codex(request, agent_id, &token).await,
+            "kimi" => engines::run_kimi(request, agent_id, &token).await,
+            "opencode" => engines::run_opencode(request, agent_id, &token).await,
+            _ => ModelResponse::failure(&request.model, "unreachable".into()),
+        };
+        if result.success {
+            if idx > 0 {
+                eprintln!(
+                    "[router] rotated to sub {sub_id} (idx={idx}) for {provider} after prior burnouts"
+                );
+            }
+            return result;
+        }
+        let err = result.error.clone().unwrap_or_default();
+        let is_subscription_burnout = err.contains("hit your limit")
+            || err.contains("authentication_error")
+            || err.contains("Invalid authentication credentials")
+            || err.contains("401")
+            || err.contains("rate_limit");
+        if !is_subscription_burnout {
+            return result;
+        }
+        eprintln!(
+            "[router] sub {sub_id} burnt out ({err}); rotating to next"
+        );
+        last_failure = Some(result);
+    }
+    last_failure.unwrap_or_else(|| {
+        ModelResponse::failure(
+            &request.model,
+            format!("all '{provider}' subs burnt out for agent"),
+        )
+    })
 }
