@@ -21,12 +21,17 @@ use crate::subscription_dispatch::runtime::{
 use crate::types::{ModelRequest, ModelResponse};
 
 /// If the CLI run rotated the donated OAuth blob in-sandbox, re-encrypt
-/// and push it back to `trade_agent_subscriptions` so the next dispatch
-/// starts from the refreshed state. Best-effort: persistence failures
-/// do NOT fail the caller's request.
+/// and push it back to the specific `trade_agent_subscriptions` row that
+/// the dispatcher selected for this request. Scoping the UPDATE by
+/// subscription_id is critical now that the dispatcher iterates a pool
+/// of multiple active rows per (instance_id, provider) — an unscoped
+/// update would smear sub A's refreshed key onto sub B and C, collapsing
+/// the pool to a single value. Best-effort: persistence failures do NOT
+/// fail the caller's request.
 async fn persist_refreshed_token(
-    agent_id: &str,
+    subscription_id: &str,
     provider: &str,
+    agent_id: &str,
     original: &str,
     creds_path: &Path,
 ) {
@@ -54,16 +59,14 @@ async fn persist_refreshed_token(
     let body = serde_json::json!({ "key_encrypted": encrypted }).to_string();
     let resp = client
         .from("trade_agent_subscriptions")
-        .eq("instance_id", agent_id)
-        .eq("provider", provider)
-        .eq("status", "active")
+        .eq("id", subscription_id)
         .update(body)
         .execute()
         .await;
     match resp {
         Ok(r) if r.status().is_success() => {
             eprintln!(
-                "[router] refresh persist: rotated {provider} token for agent {agent_id}"
+                "[router] refresh persist: rotated {provider} token for sub {subscription_id} (agent {agent_id})"
             );
         }
         Ok(r) => {
@@ -79,6 +82,7 @@ async fn persist_refreshed_token(
 pub async fn run_claude_code(
     request: &ModelRequest,
     agent_id: &str,
+    subscription_id: &str,
     token: &str,
 ) -> ModelResponse {
     let sandbox = match Sandbox::new() {
@@ -125,7 +129,7 @@ pub async fn run_claude_code(
     // start from a stale blob. Compare against what we wrote (creds_json)
     // rather than the bare `token` the dispatcher decrypted — the sandbox
     // file is always in the wrapped format.
-    persist_refreshed_token(agent_id, "claude_code", &creds_json, &creds_path).await;
+    persist_refreshed_token(subscription_id, "claude_code", agent_id, &creds_json, &creds_path).await;
     response
 }
 
@@ -161,6 +165,7 @@ fn materialize_credentials(token: &str) -> String {
 pub async fn run_codex(
     request: &ModelRequest,
     agent_id: &str,
+    subscription_id: &str,
     token_json: &str,
 ) -> ModelResponse {
     let sandbox = match Sandbox::new() {
@@ -190,13 +195,14 @@ pub async fn run_codex(
         HashMap::new(),
     )
     .await;
-    persist_refreshed_token(agent_id, "codex", token_json, &auth_path).await;
+    persist_refreshed_token(subscription_id, "codex", agent_id, token_json, &auth_path).await;
     response
 }
 
 pub async fn run_kimi(
     request: &ModelRequest,
     agent_id: &str,
+    subscription_id: &str,
     token_json: &str,
 ) -> ModelResponse {
     let sandbox = match Sandbox::new() {
@@ -228,13 +234,14 @@ pub async fn run_kimi(
         HashMap::new(),
     )
     .await;
-    persist_refreshed_token(agent_id, "kimi", token_json, &creds_path).await;
+    persist_refreshed_token(subscription_id, "kimi", agent_id, token_json, &creds_path).await;
     response
 }
 
 pub async fn run_opencode(
     request: &ModelRequest,
     _agent_id: &str,
+    _subscription_id: &str,
     token: &str,
 ) -> ModelResponse {
     let sandbox = match Sandbox::new() {
