@@ -127,7 +127,7 @@ pub async fn run_claude_code(
     // same effect, with no root check.
     let mut argv: Vec<&str> = vec![
         "claude", "-p",
-        "--permission-mode", "bypassPermissions",
+        "--permission-mode", "dontAsk",
     ];
     if !system_prompt.is_empty() {
         argv.push("--append-system-prompt");
