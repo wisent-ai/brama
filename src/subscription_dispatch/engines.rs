@@ -117,12 +117,17 @@ pub async fn run_claude_code(
     let mut env = HashMap::new();
     env.insert("CLAUDE_CODE_OAUTH_TOKEN".into(), token.to_string());
     // The router runs in an ephemeral per-request sandbox with no human
-    // operator to approve tool prompts. Without --dangerously-skip-permissions,
-    // every Read / WebFetch returns "I wasn't granted permission" and any
-    // image / file / URL reference in the prompt is dropped silently.
-    // The sandbox itself bounds the blast radius — the flag only loosens
-    // the per-tool consent gate within that sandbox.
-    let mut argv: Vec<&str> = vec!["claude", "-p", "--dangerously-skip-permissions"];
+    // operator to approve tool prompts. Without an allow-list, every
+    // Read / WebFetch returns "I wasn't granted permission" and any image
+    // / file / URL reference in the prompt is dropped silently. We can't
+    // use --dangerously-skip-permissions here because Claude CLI refuses
+    // it under root, which is what the Cloud Run sandbox runs as. Use
+    // explicit --allowed-tools instead — same effect for our use case
+    // (Read+WebFetch for vision/URL inputs) with no root check.
+    let mut argv: Vec<&str> = vec![
+        "claude", "-p",
+        "--allowed-tools", "Read,WebFetch",
+    ];
     if !system_prompt.is_empty() {
         argv.push("--append-system-prompt");
         argv.push(&system_prompt);
