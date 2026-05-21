@@ -116,7 +116,13 @@ pub async fn run_claude_code(
     let system_prompt = request.system.clone().unwrap_or_default();
     let mut env = HashMap::new();
     env.insert("CLAUDE_CODE_OAUTH_TOKEN".into(), token.to_string());
-    let mut argv: Vec<&str> = vec!["claude", "-p"];
+    // The router runs in an ephemeral per-request sandbox with no human
+    // operator to approve tool prompts. Without --dangerously-skip-permissions,
+    // every Read / WebFetch returns "I wasn't granted permission" and any
+    // image / file / URL reference in the prompt is dropped silently.
+    // The sandbox itself bounds the blast radius — the flag only loosens
+    // the per-tool consent gate within that sandbox.
+    let mut argv: Vec<&str> = vec!["claude", "-p", "--dangerously-skip-permissions"];
     if !system_prompt.is_empty() {
         argv.push("--append-system-prompt");
         argv.push(&system_prompt);
