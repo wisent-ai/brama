@@ -125,9 +125,19 @@ pub async fn run_claude_code(
     // variadic --allowed-tools (it consumes the prompt that follows it).
     // --permission-mode bypassPermissions is a single-value flag with the
     // same effect, with no root check.
+    // Pre-approve Read + WebFetch via a --settings JSON blob. Other
+    // approaches we tried + why they failed:
+    //   --dangerously-skip-permissions  → blocked under root (Cloud Run)
+    //   --permission-mode bypassPermissions → same root block (it internally
+    //                                          enables the dangerous flag)
+    //   --allowed-tools <tools...>     → variadic, ate the prompt
+    //   --permission-mode dontAsk      → don't prompt AND don't allow → denied
+    // --settings with permissions.allow is the only path that pre-approves
+    // tools, doesn't trigger the root guard, and doesn't eat the prompt.
+    let settings_json = r#"{"permissions":{"allow":["Read","WebFetch"]}}"#;
     let mut argv: Vec<&str> = vec![
         "claude", "-p",
-        "--permission-mode", "dontAsk",
+        "--settings", settings_json,
     ];
     if !system_prompt.is_empty() {
         argv.push("--append-system-prompt");
