@@ -35,10 +35,46 @@ pub fn client() -> Result<Postgrest, SupabaseError> {
         .insert_header("Authorization", format!("Bearer {key}")))
 }
 
-/// Look up the HMAC `auth_secret` for a given agent `instance_id` in
-/// `trade_agent_secrets`. Returns None when the row is absent so the
-/// caller can fall back to the master `AGENT_AUTH_SECRET` env.
-pub async fn get_agent_auth_secret(
+/// Look up the HMAC `auth_secret` for a non-trade-agent service client
+/// (wisent-app, wisent-compute, growth-tactics, etc.) in the canonical
+/// `model_router_clients` table. Returns None when the row is absent.
+/// Schema:
+///     agent_id        text primary key
+///     auth_secret     text not null
+///     created_at      timestamptz default now()
+///     description     text
+/// Separated from `trade_agent_secrets` which carries trading-autonomy
+/// trade agent identities with their semantic fields (ticker, mode).
+async fn get_model_router_client_secret(
+    supabase: &Postgrest,
+    agent_id: &str,
+) -> Result<Option<String>, SupabaseError> {
+    let resp = supabase
+        .from("model_router_clients")
+        .select("auth_secret")
+        .eq("agent_id", agent_id)
+        .single()
+        .execute()
+        .await
+        .map_err(|e| SupabaseError::Http(e.to_string()))?;
+    let status = resp.status();
+    if status == 406 || status == 404 {
+        return Ok(None);
+    }
+    let text = resp
+        .text()
+        .await
+        .map_err(|e| SupabaseError::BodyRead(e.to_string()))?;
+    let v: Value = serde_json::from_str(&text)?;
+    Ok(v.get("auth_secret").and_then(|s| s.as_str()).map(String::from))
+}
+
+/// Legacy lookup against `trade_agent_secrets`. Kept while existing
+/// wisent-app callers (and any other service still in the
+/// `mode='service'` shoehorn pattern) are migrated to
+/// `model_router_clients`. Drop once non-trade-agent rows are all
+/// moved over.
+async fn get_trade_agent_secret_legacy(
     supabase: &Postgrest,
     instance_id: &str,
 ) -> Result<Option<String>, SupabaseError> {
@@ -60,6 +96,21 @@ pub async fn get_agent_auth_secret(
         .map_err(|e| SupabaseError::BodyRead(e.to_string()))?;
     let v: Value = serde_json::from_str(&text)?;
     Ok(v.get("auth_secret").and_then(|s| s.as_str()).map(String::from))
+}
+
+/// Look up the HMAC `auth_secret` for `agent_id`. Tries the canonical
+/// `model_router_clients` table first, then the legacy
+/// `trade_agent_secrets` table for backwards compatibility.
+/// Returns None when neither table has a row so the caller can use
+/// the master `AGENT_AUTH_SECRET` env as a last-resort path.
+pub async fn get_agent_auth_secret(
+    supabase: &Postgrest,
+    instance_id: &str,
+) -> Result<Option<String>, SupabaseError> {
+    if let Some(secret) = get_model_router_client_secret(supabase, instance_id).await? {
+        return Ok(Some(secret));
+    }
+    get_trade_agent_secret_legacy(supabase, instance_id).await
 }
 
 /// Invoke the `debit_user_balance` Postgres RPC. Returns the RPC's
