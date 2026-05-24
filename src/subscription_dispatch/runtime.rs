@@ -5,13 +5,65 @@
 //! escape codes are stripped from stdout before returning.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use base64::Engine as _;
 use thiserror::Error;
 use tokio::process::Command;
 
 use crate::types::ModelResponse;
+
+/// Extract image_url parts from multimodal messages, base64-decode them,
+/// write each to `sandbox_home/img_<n>.<ext>`, and return the list of
+/// filenames (relative to sandbox_home). Lets the claude CLI Read tool
+/// (pre-approved via --settings) pick them up via @file references.
+pub async fn materialize_images(
+    messages: &[crate::types::Message],
+    sandbox_home: &Path,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut n = 0;
+    for m in messages {
+        let parts = match m.content.as_array() {
+            Some(a) => a,
+            None => continue,
+        };
+        for part in parts {
+            if part.get("type").and_then(|v| v.as_str()) != Some("image_url") {
+                continue;
+            }
+            let url = match part.get("image_url").and_then(|iu| iu.get("url")).and_then(|u| u.as_str()) {
+                Some(s) => s,
+                None => continue,
+            };
+            let (ext, payload) = match url.strip_prefix("data:") {
+                Some(rest) => {
+                    let comma = match rest.find(',') {
+                        Some(i) => i,
+                        None => continue,
+                    };
+                    let (meta, b64_with_comma) = rest.split_at(comma);
+                    let ext = meta.split(';').next().unwrap_or("image/png")
+                        .strip_prefix("image/").unwrap_or("png").to_string();
+                    (ext, b64_with_comma.trim_start_matches(','))
+                }
+                None => continue,
+            };
+            let bytes = match base64::engine::general_purpose::STANDARD.decode(payload) {
+                Ok(b) => b,
+                Err(_) => continue,
+            };
+            let filename = format!("img_{n}.{ext}");
+            let path = sandbox_home.join(&filename);
+            if tokio::fs::write(&path, &bytes).await.is_ok() {
+                out.push(filename);
+                n += 1;
+            }
+        }
+    }
+    out
+}
 
 #[derive(Debug, Error)]
 pub enum RuntimeError {

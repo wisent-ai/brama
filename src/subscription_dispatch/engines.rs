@@ -112,33 +112,32 @@ pub async fn run_claude_code(
     // non-coding tasks ("I'm a software engineering assistant..."). Use
     // --append-system-prompt so the caller's instructions sit alongside
     // Claude's default and actually get respected.
-    let user_prompt = build_prompt_from(&None, &request.messages);
+    let mut user_prompt = build_prompt_from(&None, &request.messages);
+    let img_files = crate::subscription_dispatch::runtime::materialize_images(
+        &request.messages, &sandbox.home,
+    ).await;
+    if !img_files.is_empty() {
+        let refs = img_files.iter().map(|f| format!("@{f}")).collect::<Vec<_>>().join(" ");
+        user_prompt = format!("{user_prompt}\n\nRead these attached images first: {refs}");
+    }
     let system_prompt = request.system.clone().unwrap_or_default();
     let mut env = HashMap::new();
     env.insert("CLAUDE_CODE_OAUTH_TOKEN".into(), token.to_string());
-    // The router runs in an ephemeral per-request sandbox with no human
-    // operator to approve tool prompts. Without bypass, every Read /
-    // WebFetch returns "I wasn't granted permission" and any image / file
-    // / URL reference in the prompt is dropped silently. We can't use
-    // --dangerously-skip-permissions (Claude CLI refuses it under root,
-    // which the Cloud Run container runs as) and we can't use the
-    // variadic --allowed-tools (it consumes the prompt that follows it).
-    // --permission-mode bypassPermissions is a single-value flag with the
-    // same effect, with no root check.
-    // Pre-approve Read + WebFetch via a --settings JSON blob. Other
-    // approaches we tried + why they failed:
-    //   --dangerously-skip-permissions  → blocked under root (Cloud Run)
-    //   --permission-mode bypassPermissions → same root block (it internally
-    //                                          enables the dangerous flag)
-    //   --allowed-tools <tools...>     → variadic, ate the prompt
-    //   --permission-mode dontAsk      → don't prompt AND don't allow → denied
-    // --settings with permissions.allow is the only path that pre-approves
-    // tools, doesn't trigger the root guard, and doesn't eat the prompt.
+    // Pre-approve Read + WebFetch via --settings JSON blob (the only flag
+    // path that doesn't trigger the root guard, doesn't eat the prompt,
+    // and doesn't get denied). --dangerously-skip-permissions and
+    // --permission-mode bypassPermissions both fail under root (Cloud
+    // Run); --allowed-tools is variadic and consumes the prompt;
+    // --permission-mode dontAsk denies instead of allowing.
     let settings_json = r#"{"permissions":{"allow":["Read","WebFetch"]}}"#;
     let mut argv: Vec<&str> = vec![
         "claude", "-p",
         "--settings", settings_json,
     ];
+    if request.model.starts_with("claude-") && request.model != "claude-code-subscription" {
+        argv.push("--model");
+        argv.push(&request.model);
+    }
     if !system_prompt.is_empty() {
         argv.push("--append-system-prompt");
         argv.push(&system_prompt);

@@ -12,6 +12,7 @@ use crate::types::{ModelRequest, ModelResponse};
 
 pub const SUBSCRIPTION_MODELS: &[(&str, &str)] = &[
     ("claude-code-subscription", "claude_code"),
+    ("claude-opus-4-7", "claude_code"),
     ("codex-subscription", "codex"),
     ("kimi-subscription", "kimi"),
     ("opencode-subscription", "opencode"),
@@ -153,6 +154,8 @@ pub async fn dispatch_subscription(
         }
         let err = result.error.clone().unwrap_or_default();
         let is_subscription_burnout = err.contains("hit your limit")
+            || err.contains("hit your session limit")
+            || err.contains("session limit")
             || err.contains("authentication_error")
             || err.contains("Invalid authentication credentials")
             || err.contains("401")
