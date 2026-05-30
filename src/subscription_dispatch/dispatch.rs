@@ -1,6 +1,7 @@
 //! Route `"*-subscription"` chat completions requests to the matching CLI.
 
 use std::env;
+use std::sync::atomic::{AtomicI64, Ordering};
 
 use axum::http::HeaderMap;
 use serde_json::Value;
@@ -9,6 +10,49 @@ use crate::crypto;
 use crate::gateway::supabase;
 use crate::subscription_dispatch::engines;
 use crate::types::{ModelRequest, ModelResponse};
+
+// Unix-seconds of the last CLI self-heal, to debounce concurrent triggers.
+static LAST_CLI_SELF_HEAL: AtomicI64 = AtomicI64::new(0);
+
+// When every donated subscription for a provider fails specifically with an
+// AUTH error (not a rate/quota limit), the most likely cause is a stale,
+// build-time-baked CLI whose auth broke after an upstream update (as Anthropic's
+// did 2026-05-27). Reactively re-pull the latest CLI in the background so the
+// NEXT request uses a current binary — no manual rebuild, no waiting on the
+// periodic refresh. Debounced to at most once per 10 minutes.
+fn maybe_self_heal_cli(provider: &str, err: &str) {
+    let is_auth_failure = err.contains("Invalid authentication")
+        || err.contains("authentication_error")
+        || err.contains("invalid_grant")
+        || err.contains("OAuth");
+    if !is_auth_failure {
+        return;
+    }
+    let pkg = match provider {
+        "claude_code" => "@anthropic-ai/claude-code@latest",
+        "codex" => "@openai/codex@latest",
+        "opencode" => "opencode-ai@latest",
+        _ => return,
+    };
+    let now = chrono::Utc::now().timestamp();
+    let last = LAST_CLI_SELF_HEAL.load(Ordering::Relaxed);
+    if now - last < 600 {
+        return;
+    }
+    if LAST_CLI_SELF_HEAL
+        .compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
+        return; // another request already kicked the heal
+    }
+    eprintln!("[router] all '{provider}' subs failed auth; self-healing CLI: npm install -g {pkg}");
+    std::thread::spawn(move || {
+        let status = std::process::Command::new("npm")
+            .args(["install", "-g", pkg, "--no-fund", "--no-audit"])
+            .status();
+        eprintln!("[router] CLI self-heal for {pkg} finished: {status:?}");
+    });
+}
 
 pub const SUBSCRIPTION_MODELS: &[(&str, &str)] = &[
     ("claude-code-subscription", "claude_code"),
@@ -167,6 +211,14 @@ pub async fn dispatch_subscription(
             "[router] sub {sub_id} burnt out ({err}); rotating to next"
         );
         last_failure = Some(result);
+    }
+    // Every active sub failed. If the failures are auth errors (not quota), the
+    // CLI itself is likely stale — kick a reactive background refresh so the next
+    // request recovers automatically.
+    if let Some(ref resp) = last_failure {
+        if let Some(err) = resp.error.as_deref() {
+            maybe_self_heal_cli(provider, err);
+        }
     }
     last_failure.unwrap_or_else(|| {
         ModelResponse::failure(
