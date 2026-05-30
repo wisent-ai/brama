@@ -33,4 +33,13 @@ COPY --from=builder /build/target/release/model-router /usr/local/bin/model-rout
 ENV RUST_LOG=info
 ENV PORT=8080
 EXPOSE 8080
-CMD ["sh", "-c", "exec model-router serve --port ${PORT}"]
+# Keep the subscription CLIs current at runtime. The claude-code / codex /
+# opencode CLIs are installed unpinned at build time, so an image baked weeks
+# ago carries a stale CLI. When the upstream provider changes its auth (as
+# Anthropic did 2026-05-27), that stale CLI starts returning 401 for every
+# token and the pool burns until someone manually rebuilds. A background loop
+# re-pulls the latest CLIs on startup and every 6h (best-effort: failures keep
+# the current version), so every running instance self-heals to the newest CLI
+# without a manual rebuild. The server starts immediately via exec; the refresh
+# never blocks startup or the TCP health probe.
+CMD ["sh", "-c", "(while true; do npm install -g @anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai@latest --no-fund --no-audit >/dev/null 2>&1 || true; sleep 21600; done) & exec model-router serve --port ${PORT}"]
