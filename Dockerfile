@@ -30,6 +30,8 @@ RUN curl -fsSL https://astral.sh/uv/install.sh | sh \
     && chmod -R a+rX /opt/uv-tools /opt/uv-python
 
 COPY --from=builder /build/target/release/model-router /usr/local/bin/model-router
+COPY scripts/refresh-clis.sh /usr/local/bin/refresh-clis.sh
+RUN chmod +x /usr/local/bin/refresh-clis.sh
 ENV RUST_LOG=info
 ENV PORT=8080
 EXPOSE 8080
@@ -42,4 +44,9 @@ EXPOSE 8080
 # the current version), so every running instance self-heals to the newest CLI
 # without a manual rebuild. The server starts immediately via exec; the refresh
 # never blocks startup or the TCP health probe.
-CMD ["sh", "-c", "(while true; do npm install -g @anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai@latest --no-fund --no-audit >/dev/null 2>&1 || true; sleep 21600; done) & exec model-router serve --port ${PORT}"]
+#
+# refresh-clis.sh stages each update into an inactive slot and atomically flips
+# the symlinks, so the live /usr/local/bin/claude the dispatcher spawns is
+# NEVER unlinked mid-update (the old in-place `npm install -g @latest` caused
+# `spawn ENOENT` on cold containers serving traffic during the reinstall).
+CMD ["sh", "-c", "(while true; do /usr/local/bin/refresh-clis.sh || true; sleep 21600; done) & exec model-router serve --port ${PORT}"]
