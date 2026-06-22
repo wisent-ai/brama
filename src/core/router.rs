@@ -186,15 +186,9 @@ impl ModelRouter {
             "qwen3-4b",
             "qwen3-8b",
             "deepseek-r1-qwen3-8b",
-            "gpt-4o-mini",
             "kimi-2.5",
             "qwen-72b",
             "llama-70b",
-            "gpt-4o",
-            "claude-haiku-3.5",
-            "claude-sonnet-4",
-            "claude-opus-4",
-            "claude-opus-4-5",
         ];
 
         for m in &ranked {
@@ -222,12 +216,6 @@ pub fn build_default_router() -> ModelRouter {
     let mut router = ModelRouter::new();
 
     router.register_provider(Arc::new(
-        AnthropicProvider::new(),
-    ));
-    router.register_provider(Arc::new(
-        OpenAIProvider::new(),
-    ));
-    router.register_provider(Arc::new(
         HuggingFaceProvider::new(),
     ));
     router.register_provider(Arc::new(
@@ -246,9 +234,6 @@ pub fn build_default_router() -> ModelRouter {
         GroqProvider::new(),
     ));
     router.register_provider(Arc::new(
-        GoogleAiProvider::new(),
-    ));
-    router.register_provider(Arc::new(
         OpenRouterProvider::new(),
     ));
     router.register_provider(Arc::new(
@@ -256,37 +241,15 @@ pub fn build_default_router() -> ModelRouter {
     ));
 
     // Retry chains: if primary fails, try alternatives.
-    // Order: Featherless Cydonia first (already served today), then paid
-    // cloud providers if their keys are set, then free tiers.
+    // Only providers with configured credentials are registered; these chains
+    // reference the remaining free/back-up models.
     let free_tier_chain = [
         "cydonia-24b".to_string(),
         "groq-llama-3.3-70b".to_string(),
-        "gemini-2.0-flash".to_string(),
         "deepseek-r1-free".to_string(),
         "cf-llama-3.1-8b".to_string(),
     ];
 
-    router.set_retry_chain(
-        "claude-sonnet-4",
-        std::iter::once("gpt-4o".to_string())
-            .chain(free_tier_chain.iter().cloned())
-            .collect(),
-    );
-    router.set_retry_chain(
-        "gpt-4o",
-        std::iter::once("claude-sonnet-4".to_string())
-            .chain(free_tier_chain.iter().cloned())
-            .collect(),
-    );
-    router.set_retry_chain(
-        "gpt-4o-mini",
-        vec![
-            "claude-haiku-3.5".into(),
-            "kimi-2.5".into(),
-            "groq-llama-3.1-8b".into(),
-            "gemini-1.5-flash".into(),
-        ],
-    );
     router.set_retry_chain(
         "cydonia-24b",
         free_tier_chain[1..].to_vec(),

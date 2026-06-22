@@ -158,6 +158,6 @@ pub fn select_model_for_resources(
     if resources.has_cuda && resources.vram_gb >= 8.0 {
         return ("qwen3-4b".into(), "local".into());
     }
-    // No local GPU capacity: fall back to cloud
-    ("gpt-4o-mini".into(), "openai".into())
+    // No local GPU capacity: fall back to the configured cloud provider.
+    ("cydonia-24b".into(), "featherless".into())
 }

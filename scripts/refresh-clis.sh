@@ -21,8 +21,8 @@ set -e
 
 SLOT_A=/opt/cli-a
 SLOT_B=/opt/cli-b
-PKGS="@anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai@latest"
-BINS="claude codex opencode"
+PKGS="@anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai@latest @moonshot-ai/kimi-code@latest"
+BINS="claude codex opencode kimi"
 
 # Pick the inactive slot: whichever the live `claude` symlink does NOT
 # currently resolve into. On first run the live binary is the build-time

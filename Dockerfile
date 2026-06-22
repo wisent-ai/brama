@@ -19,15 +19,8 @@ RUN npm install -g \
       @anthropic-ai/claude-code \
       @openai/codex \
       opencode-ai \
+      @moonshot-ai/kimi-code \
     && npm cache clean --force
-
-# uv + kimi-cli (kimi-cli is a Python package, not npm)
-ENV UV_TOOL_DIR=/opt/uv-tools
-ENV UV_TOOL_BIN_DIR=/usr/local/bin
-ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python
-RUN curl -fsSL https://astral.sh/uv/install.sh | sh \
-    && /root/.local/bin/uv tool install --python 3.13 kimi-cli \
-    && chmod -R a+rX /opt/uv-tools /opt/uv-python
 
 COPY --from=builder /build/target/release/model-router /usr/local/bin/model-router
 COPY scripts/refresh-clis.sh /usr/local/bin/refresh-clis.sh

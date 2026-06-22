@@ -4,7 +4,9 @@
 //!
 //! - `claude_code`: `CLAUDE_CODE_OAUTH_TOKEN` env var (no file needed).
 //! - `codex`: `$HOME/.codex/auth.json` containing the JSON auth blob.
-//! - `kimi`: `$HOME/.kimi/credentials/kimi-code.json` with the token JSON.
+//! - `kimi`: `$HOME/.kimi-code/credentials/kimi-code.json` with the OAuth token
+//!   JSON and a matching `$HOME/.kimi-code/config.toml` that selects the
+//!   `kimi-for-coding` model via the official Kimi provider.
 //! - `opencode`: reads `CLAUDE_CODE_OAUTH_TOKEN` in practice when backed by
 //!   a Claude subscription; we pass it through as env.
 
@@ -202,12 +204,13 @@ pub async fn run_codex(
         return ModelResponse::failure(&request.model, format!("write auth.json: {e}"));
     }
     let prompt = build_prompt_from(&request.system, &request.messages);
-    let response = run_cli(
+    let raw = run_cli(
         &request.model,
         &[
             "codex",
             "exec",
             "--dangerously-bypass-approvals-and-sandbox",
+            "--json",
             "-C",
             sandbox.home.to_str().unwrap_or("."),
             &prompt,
@@ -216,6 +219,14 @@ pub async fn run_codex(
         HashMap::new(),
     )
     .await;
+    let response = if let Some(text) = extract_codex_jsonl(&raw.content) {
+        ModelResponse {
+            content: text,
+            ..raw
+        }
+    } else {
+        raw
+    };
     persist_refreshed_token(subscription_id, "codex", agent_id, token_json, &auth_path).await;
     response
 }
@@ -230,33 +241,130 @@ pub async fn run_kimi(
         Ok(s) => s,
         Err(e) => return ModelResponse::failure(&request.model, e.to_string()),
     };
-    let kimi_dir = sandbox.home.join(".kimi").join("credentials");
-    if let Err(e) = fs::create_dir_all(&kimi_dir).await {
-        return ModelResponse::failure(&request.model, format!("mkdir: {e}"));
+
+    // The current Kimi Code CLI (TypeScript, @moonshot-ai/kimi-code) keeps its
+    // config under ~/.kimi-code and expects a config.toml that selects the
+    // official Kimi provider plus a credentials JSON with the OAuth tokens.
+    let kimi_home = sandbox.home.join(".kimi-code");
+    let creds_dir = kimi_home.join("credentials");
+    let oauth_dir = kimi_home.join("oauth");
+    if let Err(e) = fs::create_dir_all(&creds_dir).await {
+        return ModelResponse::failure(&request.model, format!("mkdir creds: {e}"));
     }
-    let creds_path = kimi_dir.join("kimi-code.json");
+    if let Err(e) = fs::create_dir_all(&oauth_dir).await {
+        return ModelResponse::failure(&request.model, format!("mkdir oauth: {e}"));
+    }
+
+    let creds_path = creds_dir.join("kimi-code.json");
     if let Err(e) = fs::write(&creds_path, token_json).await {
         return ModelResponse::failure(&request.model, format!("write kimi creds: {e}"));
     }
     let _ = chmod_private(&creds_path).await;
+
+    // The CLI's OAuth provider references this file; it can remain empty —
+    // the actual tokens live in credentials/kimi-code.json.
+    let oauth_path = oauth_dir.join("kimi-code");
+    let _ = fs::write(&oauth_path, "").await;
+    let _ = chmod_private(&oauth_path).await;
+
+    let config_path = kimi_home.join("config.toml");
+    let config_toml = r#"default_model = "kimi-code/kimi-for-coding"
+default_thinking = true
+
+[providers."managed:kimi-code"]
+type = "kimi"
+api_key = ""
+base_url = "https://api.kimi.com/coding/v1"
+
+[providers."managed:kimi-code".oauth]
+storage = "file"
+key = "oauth/kimi-code"
+
+[models."kimi-code/kimi-for-coding"]
+provider = "managed:kimi-code"
+model = "kimi-for-coding"
+max_context_size = 262144
+capabilities = [ "thinking", "always_thinking", "image_in", "video_in", "tool_use" ]
+display_name = "K2.7 Code"
+"#;
+    if let Err(e) = fs::write(&config_path, config_toml).await {
+        return ModelResponse::failure(&request.model, format!("write kimi config: {e}"));
+    }
+    let _ = chmod_private(&config_path).await;
+
     let prompt = build_prompt_from(&request.system, &request.messages);
-    let response = run_cli(
+    let raw = run_cli(
         &request.model,
         &[
             "kimi",
-            "--print",
-            "--yolo",
-            "--work-dir",
-            sandbox.home.to_str().unwrap_or("."),
             "-p",
             &prompt,
+            "--output-format",
+            "stream-json",
         ],
         &sandbox,
         HashMap::new(),
     )
     .await;
+
+    // stream-json emits one JSON object per line. We extract assistant content
+    // and drop meta / resume-hint lines.
+    let response = if let Some(text) = extract_kimi_stream_json(&raw.content) {
+        ModelResponse {
+            content: text,
+            ..raw
+        }
+    } else {
+        raw
+    };
+
     persist_refreshed_token(subscription_id, "kimi", agent_id, token_json, &creds_path).await;
     response
+}
+
+fn extract_codex_jsonl(stdout: &str) -> Option<String> {
+    // `codex exec --json` emits JSONL events. The assistant's final answer is in
+    // the last `item.completed` event whose item type is `agent_message`.
+    let mut last_text: Option<String> = None;
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let value: serde_json::Value = serde_json::from_str(line).ok()?;
+        if value.get("type")?.as_str()? != "item.completed" {
+            continue;
+        }
+        let item = value.get("item")?;
+        if item.get("type")?.as_str()? != "agent_message" {
+            continue;
+        }
+        if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+            last_text = Some(text.to_string());
+        }
+    }
+    last_text
+}
+
+fn extract_kimi_stream_json(stdout: &str) -> Option<String> {
+    let mut parts = Vec::new();
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let value: serde_json::Value = serde_json::from_str(line).ok()?;
+        if value.get("role")?.as_str()? == "assistant" {
+            if let Some(content) = value.get("content").and_then(|c| c.as_str()) {
+                parts.push(content.to_string());
+            }
+        }
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join(""))
+    }
 }
 
 pub async fn run_opencode(

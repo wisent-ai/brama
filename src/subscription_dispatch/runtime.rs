@@ -86,8 +86,35 @@ pub struct Sandbox {
 
 impl Sandbox {
     pub fn new() -> Result<Self, RuntimeError> {
-        let td = tempfile::tempdir()
-            .map_err(|e| RuntimeError::TempDir(e.to_string()))?;
+        // Cloud Run and some sandboxed environments allow writing under /tmp but
+        // refuse to execute helper binaries from there (e.g. Codex CLI validates
+        // that its home directory is not a world-writable tmpfs). Prefer
+        // /var/tmp when available and fall back to the default temp dir.
+        let candidates = ["/var/tmp", "/tmp"];
+        let mut last_err = None;
+        for base in &candidates {
+            let base_path = Path::new(base);
+            if base_path.exists() && base_path.is_dir() {
+                match tempfile::Builder::new()
+                    .prefix("router-sandbox-")
+                    .tempdir_in(base_path)
+                {
+                    Ok(td) => {
+                        return Ok(Self {
+                            home: td.path().to_path_buf(),
+                            _guard: td,
+                        });
+                    }
+                    Err(e) => last_err = Some(e),
+                }
+            }
+        }
+        let td = tempfile::tempdir().map_err(|e| {
+            RuntimeError::TempDir(match last_err {
+                Some(le) => format!("{}; fallback: {}", le, e),
+                None => e.to_string(),
+            })
+        })?;
         Ok(Self {
             home: td.path().to_path_buf(),
             _guard: td,
