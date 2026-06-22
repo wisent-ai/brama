@@ -14,6 +14,27 @@ use crate::types::{ModelRequest, ModelResponse};
 // Unix-seconds of the last CLI self-heal, to debounce concurrent triggers.
 static LAST_CLI_SELF_HEAL: AtomicI64 = AtomicI64::new(0);
 
+fn is_permanent_auth_failure(err: &str) -> bool {
+    let e = err.to_lowercase();
+    e.contains("refresh token was revoked")
+        || e.contains("access token could not be refreshed")
+        || e.contains("invalid_grant")
+}
+
+async fn mark_subscription_revoked(sub_id: &str) {
+    let Ok(client) = supabase::client() else { return };
+    let body = serde_json::json!({
+        "status": "revoked",
+        "updated_at": chrono::Utc::now().to_rfc3339(),
+    });
+    let _ = client
+        .from("trade_agent_subscriptions")
+        .eq("id", sub_id)
+        .update(body.to_string())
+        .execute()
+        .await;
+}
+
 // When every donated subscription for a provider fails specifically with an
 // AUTH error (not a rate/quota limit), the most likely cause is a stale,
 // build-time-baked CLI whose auth broke after an upstream update (as Anthropic's
@@ -197,13 +218,18 @@ pub async fn dispatch_subscription(
             return result;
         }
         let err = result.error.clone().unwrap_or_default();
+        if is_permanent_auth_failure(&err) {
+            eprintln!("[router] sub {sub_id} permanent auth failure; revoking");
+            mark_subscription_revoked(&sub_id).await;
+        }
         let is_subscription_burnout = err.contains("hit your limit")
             || err.contains("hit your session limit")
             || err.contains("session limit")
             || err.contains("authentication_error")
             || err.contains("Invalid authentication credentials")
             || err.contains("401")
-            || err.contains("rate_limit");
+            || err.contains("rate_limit")
+            || is_permanent_auth_failure(&err);
         if !is_subscription_burnout {
             return result;
         }
