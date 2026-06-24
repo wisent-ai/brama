@@ -267,6 +267,10 @@ pub async fn start_server(
 
     let gateway_app = Router::new()
         .route(
+            "/v1/subscription-router/:instance_id",
+            get(crate::gateway::subscription_router_get),
+        )
+        .route(
             "/v1/subscriptions/:instance_id",
             get(crate::gateway::subscriptions_get)
                 .post(crate::gateway::subscriptions_post)

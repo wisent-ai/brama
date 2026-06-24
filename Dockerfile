@@ -15,8 +15,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # npm-installed coding CLIs
+# The @openai/codex package is a JS wrapper that requires a platform-specific
+# optional dependency (e.g. @openai/codex-linux-x64). npm sometimes skips it in
+# global installs, so install the native binary explicitly via npm alias.
 RUN npm install -g \
       @anthropic-ai/claude-code \
+      "@openai/codex-linux-x64@npm:@openai/codex@linux-x64" \
       @openai/codex \
       opencode-ai \
       @moonshot-ai/kimi-code \
@@ -24,7 +28,8 @@ RUN npm install -g \
 
 COPY --from=builder /build/target/release/model-router /usr/local/bin/model-router
 COPY scripts/refresh-clis.sh /usr/local/bin/refresh-clis.sh
-RUN chmod +x /usr/local/bin/refresh-clis.sh
+COPY scripts/sync-subscription-catalog.mjs /usr/local/bin/sync-subscription-catalog.mjs
+RUN chmod +x /usr/local/bin/refresh-clis.sh /usr/local/bin/sync-subscription-catalog.mjs
 ENV RUST_LOG=info
 ENV PORT=8080
 EXPOSE 8080
@@ -42,4 +47,4 @@ EXPOSE 8080
 # the symlinks, so the live /usr/local/bin/claude the dispatcher spawns is
 # NEVER unlinked mid-update (the old in-place `npm install -g @latest` caused
 # `spawn ENOENT` on cold containers serving traffic during the reinstall).
-CMD ["sh", "-c", "(while true; do /usr/local/bin/refresh-clis.sh || true; sleep 21600; done) & exec model-router serve --port ${PORT}"]
+CMD ["sh", "-c", "(while true; do /usr/local/bin/refresh-clis.sh || true; sleep 21600; done) & (while true; do /usr/local/bin/sync-subscription-catalog.mjs || true; sleep 21600; done) & exec model-router serve --port ${PORT}"]

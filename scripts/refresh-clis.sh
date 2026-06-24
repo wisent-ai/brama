@@ -21,8 +21,12 @@ set -e
 
 SLOT_A=/opt/cli-a
 SLOT_B=/opt/cli-b
-PKGS="@anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai@latest @moonshot-ai/kimi-code@latest"
-BINS="claude codex opencode kimi"
+PKGS="@anthropic-ai/claude-code@latest opencode-ai@latest @moonshot-ai/kimi-code@latest"
+BINS="claude opencode kimi"
+# NOTE: codex is intentionally excluded from runtime refresh. The npm alias
+# needed for its platform-specific binary does not reliably resolve inside the
+# Cloud Run container's staged-prefix install, so we keep the build-time
+# install in /usr/local/bin/codex live. Rebuild the image to update Codex.
 
 # Pick the inactive slot: whichever the live `claude` symlink does NOT
 # currently resolve into. On first run the live binary is the build-time
@@ -45,3 +49,7 @@ if npm install -g --prefix "$next" $PKGS --no-fund --no-audit >/dev/null 2>&1; t
     fi
   done
 fi
+
+# codex is kept on the build-time install because the staged-prefix install
+# does not reliably pull the platform-specific optional dependency.
+ln -sfn /usr/local/lib/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex

@@ -22,7 +22,9 @@ fn is_permanent_auth_failure(err: &str) -> bool {
 }
 
 async fn mark_subscription_revoked(sub_id: &str) {
-    let Ok(client) = supabase::client() else { return };
+    let Ok(client) = supabase::client() else {
+        return;
+    };
     let body = serde_json::json!({
         "status": "revoked",
         "updated_at": chrono::Utc::now().to_rfc3339(),
@@ -47,6 +49,12 @@ fn maybe_self_heal_cli(provider: &str, err: &str) {
         || err.contains("invalid_grant")
         || err.contains("OAuth");
     if !is_auth_failure {
+        return;
+    }
+    if provider == "codex" {
+        // Codex is pinned to the build-time global install because it needs a
+        // matching platform-native package. Runtime refresh can break that
+        // pairing, so Codex updates must go through an image rebuild.
         return;
     }
     let pkg = match provider {
@@ -145,9 +153,7 @@ pub async fn dispatch_subscription(
         timestamp: ts,
         signature: sig,
     };
-    if let Err(e) =
-        crypto::verify_agent_hmac(&headers_for_check, raw_body, secret.as_bytes())
-    {
+    if let Err(e) = crypto::verify_agent_hmac(&headers_for_check, raw_body, secret.as_bytes()) {
         return ModelResponse::failure(&request.model, format!("auth: {e}"));
     }
 
@@ -196,9 +202,7 @@ pub async fn dispatch_subscription(
         let token = match crypto::decrypt(&encrypted) {
             Ok(t) => t,
             Err(e) => {
-                eprintln!(
-                    "[router] sub {sub_id} decrypt failed (skipping): {e}"
-                );
+                eprintln!("[router] sub {sub_id} decrypt failed (skipping): {e}");
                 continue;
             }
         };
@@ -233,9 +237,7 @@ pub async fn dispatch_subscription(
         if !is_subscription_burnout {
             return result;
         }
-        eprintln!(
-            "[router] sub {sub_id} burnt out ({err}); rotating to next"
-        );
+        eprintln!("[router] sub {sub_id} burnt out ({err}); rotating to next");
         last_failure = Some(result);
     }
     // Every active sub failed. If the failures are auth errors (not quota), the

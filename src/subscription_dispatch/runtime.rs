@@ -33,7 +33,11 @@ pub async fn materialize_images(
             if part.get("type").and_then(|v| v.as_str()) != Some("image_url") {
                 continue;
             }
-            let url = match part.get("image_url").and_then(|iu| iu.get("url")).and_then(|u| u.as_str()) {
+            let url = match part
+                .get("image_url")
+                .and_then(|iu| iu.get("url"))
+                .and_then(|u| u.as_str())
+            {
                 Some(s) => s,
                 None => continue,
             };
@@ -44,8 +48,13 @@ pub async fn materialize_images(
                         None => continue,
                     };
                     let (meta, b64_with_comma) = rest.split_at(comma);
-                    let ext = meta.split(';').next().unwrap_or("image/png")
-                        .strip_prefix("image/").unwrap_or("png").to_string();
+                    let ext = meta
+                        .split(';')
+                        .next()
+                        .unwrap_or("image/png")
+                        .strip_prefix("image/")
+                        .unwrap_or("png")
+                        .to_string();
                     (ext, b64_with_comma.trim_start_matches(','))
                 }
                 None => continue,
@@ -124,10 +133,7 @@ impl Sandbox {
 
 /// Extract the last user message's content as the prompt string passed to
 /// the CLI. System message (if any) is prepended.
-pub fn build_prompt_from(
-    system: &Option<String>,
-    messages: &[crate::types::Message],
-) -> String {
+pub fn build_prompt_from(system: &Option<String>, messages: &[crate::types::Message]) -> String {
     let mut out = String::new();
     if let Some(s) = system {
         out.push_str(s);
@@ -241,13 +247,7 @@ mod tests {
     #[test]
     fn strip_ansi_removes_csi() {
         assert_eq!(strip_ansi("\x1b[31mred\x1b[0m"), "red");
-        assert_eq!(
-            strip_ansi("plain text"),
-            "plain text"
-        );
-        assert_eq!(
-            strip_ansi("\x1b[1;32mok\x1b[0m  "),
-            "ok"
-        );
+        assert_eq!(strip_ansi("plain text"), "plain text");
+        assert_eq!(strip_ansi("\x1b[1;32mok\x1b[0m  "), "ok");
     }
 }

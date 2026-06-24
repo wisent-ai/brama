@@ -17,9 +17,7 @@ use tokio::fs;
 
 use crate::crypto;
 use crate::gateway::supabase;
-use crate::subscription_dispatch::runtime::{
-    build_prompt_from, run_cli, Sandbox,
-};
+use crate::subscription_dispatch::runtime::{build_prompt_from, run_cli, Sandbox};
 use crate::types::{ModelRequest, ModelResponse};
 
 /// If the CLI run rotated the donated OAuth blob in-sandbox, re-encrypt
@@ -115,11 +113,15 @@ pub async fn run_claude_code(
     // --append-system-prompt so the caller's instructions sit alongside
     // Claude's default and actually get respected.
     let mut user_prompt = build_prompt_from(&None, &request.messages);
-    let img_files = crate::subscription_dispatch::runtime::materialize_images(
-        &request.messages, &sandbox.home,
-    ).await;
+    let img_files =
+        crate::subscription_dispatch::runtime::materialize_images(&request.messages, &sandbox.home)
+            .await;
     if !img_files.is_empty() {
-        let refs = img_files.iter().map(|f| format!("@{f}")).collect::<Vec<_>>().join(" ");
+        let refs = img_files
+            .iter()
+            .map(|f| format!("@{f}"))
+            .collect::<Vec<_>>()
+            .join(" ");
         user_prompt = format!("{user_prompt}\n\nRead these attached images first: {refs}");
     }
     let system_prompt = request.system.clone().unwrap_or_default();
@@ -132,10 +134,7 @@ pub async fn run_claude_code(
     // Run); --allowed-tools is variadic and consumes the prompt;
     // --permission-mode dontAsk denies instead of allowing.
     let settings_json = r#"{"permissions":{"allow":["Read","WebFetch"]}}"#;
-    let mut argv: Vec<&str> = vec![
-        "claude", "-p",
-        "--settings", settings_json,
-    ];
+    let mut argv: Vec<&str> = vec!["claude", "-p", "--settings", settings_json];
     if request.model.starts_with("claude-") && request.model != "claude-code-subscription" {
         argv.push("--model");
         argv.push(&request.model);
@@ -152,7 +151,14 @@ pub async fn run_claude_code(
     // start from a stale blob. Compare against what we wrote (creds_json)
     // rather than the bare `token` the dispatcher decrypted — the sandbox
     // file is always in the wrapped format.
-    persist_refreshed_token(subscription_id, "claude_code", agent_id, &creds_json, &creds_path).await;
+    persist_refreshed_token(
+        subscription_id,
+        "claude_code",
+        agent_id,
+        &creds_json,
+        &creds_path,
+    )
+    .await;
     response
 }
 
@@ -204,10 +210,19 @@ pub async fn run_codex(
         return ModelResponse::failure(&request.model, format!("write auth.json: {e}"));
     }
     let prompt = build_prompt_from(&request.system, &request.messages);
+    // The build-time global install has the platform-specific optional
+    // dependency; runtime staged installs under /opt/cli-* do not reliably
+    // pull it, so invoke the JS wrapper directly.
+    const CODEX_BIN: &str = "/usr/local/lib/node_modules/@openai/codex/bin/codex.js";
+    let mut env = HashMap::new();
+    env.insert(
+        "CODEX_HOME".to_string(),
+        codex_dir.to_str().unwrap_or("").to_string(),
+    );
     let raw = run_cli(
         &request.model,
         &[
-            "codex",
+            CODEX_BIN,
             "exec",
             "--dangerously-bypass-approvals-and-sandbox",
             "--json",
@@ -216,7 +231,7 @@ pub async fn run_codex(
             &prompt,
         ],
         &sandbox,
-        HashMap::new(),
+        env,
     )
     .await;
     let response = if let Some(text) = extract_codex_jsonl(&raw.content) {
@@ -295,13 +310,7 @@ display_name = "K2.7 Code"
     let prompt = build_prompt_from(&request.system, &request.messages);
     let raw = run_cli(
         &request.model,
-        &[
-            "kimi",
-            "-p",
-            &prompt,
-            "--output-format",
-            "stream-json",
-        ],
+        &["kimi", "-p", &prompt, "--output-format", "stream-json"],
         &sandbox,
         HashMap::new(),
     )
@@ -380,13 +389,7 @@ pub async fn run_opencode(
     let prompt = build_prompt_from(&request.system, &request.messages);
     let mut env = HashMap::new();
     env.insert("CLAUDE_CODE_OAUTH_TOKEN".into(), token.to_string());
-    run_cli(
-        &request.model,
-        &["opencode", "run", &prompt],
-        &sandbox,
-        env,
-    )
-    .await
+    run_cli(&request.model, &["opencode", "run", &prompt], &sandbox, env).await
 }
 
 async fn chmod_private(path: &Path) -> std::io::Result<()> {
