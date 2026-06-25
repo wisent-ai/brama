@@ -1,7 +1,7 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
@@ -14,6 +14,7 @@ use tracing::info;
 use super::router::ModelRouter;
 use crate::subscription_dispatch::{
     dispatch_subscription, is_subscription_model,
+    SUBSCRIPTION_MODELS,
 };
 use crate::types::{Message, ModelRequest, Tool, ToolCall};
 
@@ -206,26 +207,63 @@ async fn health() -> impl IntoResponse {
     Json(json!({"status": "ok"}))
 }
 
+fn model_object(id: &str) -> Value {
+    json!({
+        "id": id,
+        "object": "model",
+        "owned_by": "model-router",
+    })
+}
+
+fn available_model_ids(router: &ModelRouter) -> Vec<String> {
+    let mut models = router.all_models();
+    models.extend(
+        SUBSCRIPTION_MODELS
+            .iter()
+            .map(|(model, _)| (*model).to_string()),
+    );
+    models.sort();
+    models.dedup();
+    models
+}
+
 async fn list_models(
     State(router): State<SharedRouter>,
 ) -> impl IntoResponse {
     let r = router.read().await;
-    let models: Vec<Value> = r
-        .all_models()
+    let models: Vec<Value> = available_model_ids(&r)
         .into_iter()
-        .map(|id| {
-            json!({
-                "id": id,
-                "object": "model",
-                "owned_by": "model-router",
-            })
-        })
+        .map(|id| model_object(&id))
         .collect();
 
     Json(json!({
         "object": "list",
         "data": models,
     }))
+}
+
+async fn get_model(
+    Path(model_id): Path<String>,
+    State(router): State<SharedRouter>,
+) -> impl IntoResponse {
+    let r = router.read().await;
+    let exists = available_model_ids(&r)
+        .iter()
+        .any(|id| id == &model_id);
+
+    if exists {
+        return (StatusCode::OK, Json(model_object(&model_id)));
+    }
+
+    (
+        StatusCode::NOT_FOUND,
+        Json(json!({
+            "error": {
+                "message": format!("model '{model_id}' not found"),
+                "type": "not_found",
+            }
+        })),
+    )
 }
 
 async fn get_stats(
@@ -261,6 +299,7 @@ pub async fn start_server(
             post(chat_completions),
         )
         .route("/v1/models", get(list_models))
+        .route("/v1/models/:model_id", get(get_model))
         .route("/health", get(health))
         .route("/stats", get(get_stats))
         .with_state(shared);
@@ -299,4 +338,78 @@ fn uuid_v4() -> String {
         .unwrap_or_default()
         .as_nanos();
     format!("{t:032x}")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+
+    use super::*;
+    use crate::provider::ModelProvider;
+    use crate::types::{ModelRequest, ModelResponse};
+
+    struct TestProvider;
+
+    #[async_trait]
+    impl ModelProvider for TestProvider {
+        async fn complete(
+            &self,
+            request: &ModelRequest,
+        ) -> ModelResponse {
+            ModelResponse::failure(
+                &request.model,
+                "test provider".into(),
+            )
+        }
+
+        fn estimate_cost(
+            &self,
+            _input_tokens: u32,
+            _output_tokens: u32,
+        ) -> f64 {
+            0.0
+        }
+
+        async fn is_available(&self) -> bool {
+            true
+        }
+
+        fn name(&self) -> &str {
+            "test"
+        }
+
+        fn models(&self) -> Vec<String> {
+            vec![
+                "qwen3-4b".into(),
+                "codex-subscription".into(),
+            ]
+        }
+    }
+
+    #[test]
+    fn available_models_include_subscription_models_once() {
+        let mut router = ModelRouter::new();
+        router.register_provider(Arc::new(TestProvider));
+
+        let models = available_model_ids(&router);
+        let mut sorted = models.clone();
+        sorted.sort();
+
+        assert_eq!(models, sorted);
+        assert!(models.contains(&"qwen3-4b".to_string()));
+        assert!(models.contains(
+            &"claude-code-subscription".to_string()
+        ));
+        assert_eq!(
+            models
+                .iter()
+                .filter(|model| {
+                    model.as_str() == "codex-subscription"
+                })
+                .count(),
+            1
+        );
+    }
 }
