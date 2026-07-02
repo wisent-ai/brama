@@ -1,7 +1,9 @@
 use clap::{Parser, Subcommand};
 use tracing::info;
 
-use model_router::subscription_dispatch::{collect_subscription_checks, CollectOptions};
+use model_router::subscription_dispatch::{
+    collect_subscription_checks, collect_task_quality, CollectOptions, TaskQualityOptions,
+};
 use model_router::{
     build_default_router, detect_compute_resources, select_model_for_resources, start_server,
     Message,
@@ -42,6 +44,27 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         deep: bool,
         /// Write results to subscription_router_checks cache table
+        #[arg(long, default_value_t = false)]
+        persist: bool,
+    },
+    /// Collect deterministic task-quality checks for active subscription models
+    CollectTaskQuality {
+        /// Model-router agent/client id whose runtime credentials should be checked
+        #[arg(long)]
+        agent_id: String,
+        /// Task key used later as model="task:<task>"
+        #[arg(long)]
+        task: String,
+        /// Prompt sent to each active subscription model
+        #[arg(long)]
+        prompt: String,
+        /// Exact expected response for score=1
+        #[arg(long)]
+        expected_exact: Option<String>,
+        /// Expected substring for score=1
+        #[arg(long)]
+        expected_contains: Option<String>,
+        /// Write results into subscription_router_checks
         #[arg(long, default_value_t = false)]
         persist: bool,
     },
@@ -112,6 +135,36 @@ async fn main() {
                 agent_id,
                 provider,
                 deep,
+                persist,
+            })
+            .await
+            {
+                Ok(value) => {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".into())
+                    );
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+        Commands::CollectTaskQuality {
+            agent_id,
+            task,
+            prompt,
+            expected_exact,
+            expected_contains,
+            persist,
+        } => {
+            match collect_task_quality(TaskQualityOptions {
+                agent_id,
+                task,
+                prompt,
+                expected_exact,
+                expected_contains,
                 persist,
             })
             .await

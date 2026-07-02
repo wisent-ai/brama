@@ -13,7 +13,8 @@ use tracing::info;
 
 use super::router::ModelRouter;
 use crate::subscription_dispatch::{
-    dispatch_subscription, is_subscription_model,
+    dispatch_any_subscription, dispatch_any_vision_capable_subscription, dispatch_subscription,
+    dispatch_task_subscription, is_subscription_model,
 };
 use crate::types::{Message, ModelRequest, Tool, ToolCall};
 
@@ -21,7 +22,8 @@ type SharedRouter = Arc<RwLock<ModelRouter>>;
 
 #[derive(Debug, Deserialize)]
 struct ChatCompletionRequest {
-    model: String,
+    #[serde(default)]
+    model: Option<String>,
     messages: Vec<ChatMessage>,
     #[serde(default = "default_max_tokens")]
     max_tokens: u32,
@@ -36,6 +38,23 @@ fn default_max_tokens() -> u32 {
 }
 fn default_temperature() -> f64 {
     0.7
+}
+
+fn is_any_subscription_selector(model: &str) -> bool {
+    model.trim().eq_ignore_ascii_case("any")
+}
+
+fn is_any_vision_capable_subscription_selector(model: &str) -> bool {
+    model.trim().eq_ignore_ascii_case("any-vision-capable")
+}
+
+fn task_subscription_selector(model: &str) -> Option<String> {
+    model
+        .trim()
+        .strip_prefix("task:")
+        .map(str::trim)
+        .filter(|task| !task.is_empty())
+        .map(String::from)
 }
 
 #[derive(Debug, Deserialize)]
@@ -116,7 +135,29 @@ async fn chat_completions(
         })
         .collect();
 
-    let resp = if is_subscription_model(&req.model) {
+    let requested_model = req.model.as_deref().unwrap_or("").trim();
+    if requested_model.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": {
+                    "message": "missing field `model`",
+                    "type": "bad_request",
+                }
+            })),
+        );
+    }
+    let any_subscription = is_any_subscription_selector(requested_model);
+    let any_vision_capable_subscription =
+        is_any_vision_capable_subscription_selector(requested_model);
+    let task_subscription = task_subscription_selector(requested_model);
+    let selected_model = requested_model.to_string();
+
+    let resp = if any_subscription
+        || any_vision_capable_subscription
+        || task_subscription.is_some()
+        || is_subscription_model(&selected_model)
+    {
         // OpenAI-compat callers send the system prompt as a system-role
         // message in `messages`. The subscription engines (claude_code,
         // codex, kimi, opencode) read `request.system` as a separate
@@ -137,18 +178,26 @@ async fn chat_completions(
         };
         let dispatch_req = ModelRequest {
             messages: non_system_messages,
-            model: req.model.clone(),
+            model: selected_model.clone(),
             max_tokens: req.max_tokens,
             temperature: req.temperature,
             system,
             tools: req.tools,
         };
-        dispatch_subscription(&headers, &dispatch_req, &body).await
+        if let Some(task) = task_subscription.as_deref() {
+            dispatch_task_subscription(&headers, &dispatch_req, &body, task).await
+        } else if any_vision_capable_subscription {
+            dispatch_any_vision_capable_subscription(&headers, &dispatch_req, &body).await
+        } else if any_subscription {
+            dispatch_any_subscription(&headers, &dispatch_req, &body).await
+        } else {
+            dispatch_subscription(&headers, &dispatch_req, &body).await
+        }
     } else {
         let r = router.read().await;
         r.complete(
             messages,
-            &req.model,
+            &selected_model,
             req.max_tokens,
             req.temperature,
             None,

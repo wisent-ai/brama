@@ -221,17 +221,17 @@ async fn check_claude(
         "observed",
         checked_at,
     )
-        .with_account(string_field(&parsed, "email"))
-        .with_auth_method(string_field(&parsed, "authMethod"))
-        .with_plan(string_field(&parsed, "subscriptionType"))
-        .with_metadata(json!({
-            "collector": SOURCE,
-            "cli": "claude auth status --json",
-            "apiProvider": string_field(&parsed, "apiProvider"),
-            "orgId": string_field(&parsed, "orgId"),
-            "orgName": string_field(&parsed, "orgName"),
-            "exitStatus": output.status,
-        }));
+    .with_account(string_field(&parsed, "email"))
+    .with_auth_method(string_field(&parsed, "authMethod"))
+    .with_plan(string_field(&parsed, "subscriptionType"))
+    .with_metadata(json!({
+        "collector": SOURCE,
+        "cli": "claude auth status --json",
+        "apiProvider": string_field(&parsed, "apiProvider"),
+        "orgId": string_field(&parsed, "orgId"),
+        "orgName": string_field(&parsed, "orgName"),
+        "exitStatus": output.status,
+    }));
     if !logged_in || !deep {
         return base;
     }
@@ -239,12 +239,7 @@ async fn check_claude(
     let deep_out = run_status_command(
         &sandbox.home,
         "claude",
-        &[
-            "-p",
-            "Reply with exactly OK.",
-            "--output-format",
-            "json",
-        ],
+        &["-p", "Reply with exactly OK.", "--output-format", "json"],
         &[("CLAUDE_CODE_OAUTH_TOKEN", token)],
     )
     .await;

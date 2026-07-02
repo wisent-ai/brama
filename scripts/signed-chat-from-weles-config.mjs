@@ -14,15 +14,17 @@ function die(message) {
 function parseArgs() {
   const out = {
     model: '',
+    omitModel: false,
     prompt: 'Reply with exactly OK.',
   };
   for (let i = 2; i < process.argv.length; i += 1) {
     const arg = process.argv[i];
     if (arg === '--model') out.model = process.argv[++i] || '';
+    else if (arg === '--omit-model') out.omitModel = true;
     else if (arg === '--prompt') out.prompt = process.argv[++i] || '';
     else throw new Error(`unknown arg: ${arg}`);
   }
-  if (!out.model) throw new Error('missing --model');
+  if (!out.omitModel && !out.model) throw new Error('missing --model');
   return out;
 }
 
@@ -48,7 +50,7 @@ async function loadConfig() {
     if (!meta[key]) throw new Error(`config missing ${key}`);
   }
   return {
-    routerUrl: String(meta.MODEL_ROUTER_URL).replace(/\/+$/, ''),
+    routerUrl: String(process.env.MODEL_ROUTER_URL || meta.MODEL_ROUTER_URL).replace(/\/+$/, ''),
     agentId: String(meta.WISENT_APP_AGENT_ID),
     hmacSecret: String(meta.WISENT_APP_AGENT_AUTH_SECRET),
   };
@@ -70,12 +72,13 @@ function sign(cfg, body) {
 async function main() {
   const args = parseArgs();
   const cfg = await loadConfig();
-  const body = JSON.stringify({
-    model: args.model,
+  const request = {
     messages: [{ role: 'user', content: args.prompt }],
     max_tokens: 8,
     temperature: 0,
-  });
+  };
+  if (!args.omitModel) request.model = args.model;
+  const body = JSON.stringify(request);
   const res = await fetch(`${cfg.routerUrl}/v1/chat/completions`, {
     method: 'POST',
     headers: sign(cfg, body),
@@ -88,7 +91,8 @@ async function main() {
   console.log(JSON.stringify({
     ok: res.ok,
     status: res.status,
-    model: args.model,
+    requested_model: args.omitModel ? null : args.model,
+    response_model: data?.model || null,
     content: String(choice).slice(0, 300),
     error: data?.error?.message || data?.error || null,
   }, null, 2));

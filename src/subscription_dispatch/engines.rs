@@ -327,7 +327,12 @@ display_name = "K2.7 Code"
         raw
     };
 
-    persist_refreshed_token(subscription_id, "kimi", agent_id, token_json, &creds_path).await;
+    // Kimi Code 0.19.x rewrites credentials/kimi-code.json to an empty
+    // token object when OAuth is no longer usable. Do not persist that as a
+    // "refresh", or one failed runtime call will poison the shared pool row.
+    if response.success && kimi_credentials_have_tokens(&creds_path).await {
+        persist_refreshed_token(subscription_id, "kimi", agent_id, token_json, &creds_path).await;
+    }
     response
 }
 
@@ -374,6 +379,28 @@ fn extract_kimi_stream_json(stdout: &str) -> Option<String> {
     } else {
         Some(parts.join(""))
     }
+}
+
+async fn kimi_credentials_have_tokens(path: &Path) -> bool {
+    let text = match fs::read_to_string(path).await {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let value: serde_json::Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    let access_len = value
+        .get("access_token")
+        .and_then(|v| v.as_str())
+        .map(|s| s.len())
+        .unwrap_or(0);
+    let refresh_len = value
+        .get("refresh_token")
+        .and_then(|v| v.as_str())
+        .map(|s| s.len())
+        .unwrap_or(0);
+    access_len > 32 && refresh_len > 32
 }
 
 pub async fn run_opencode(
