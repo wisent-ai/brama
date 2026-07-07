@@ -175,6 +175,19 @@ pub async fn subscriptions_post(
         Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     };
 
+    // Purge this provider's already-revoked rows for this agent. donate always
+    // INSERTs a fresh active row and revoke only soft-marks status='revoked',
+    // so without this the table grows unbounded (observed: 230 dead rows).
+    // Best-effort: a purge failure must never fail the donate.
+    let _ = supabase_client
+        .from("trade_agent_subscriptions")
+        .eq("instance_id", &instance_id)
+        .eq("provider", &body.provider)
+        .eq("status", "revoked")
+        .delete()
+        .execute()
+        .await;
+
     supabase::log_activity(
         &supabase_client,
         &instance_id,
