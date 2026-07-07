@@ -683,6 +683,8 @@ async fn dispatch_subscription_attempt(
         let is_subscription_burnout = err.contains("hit your limit")
             || err.contains("hit your session limit")
             || err.contains("session limit")
+            || err.contains("usage limit")
+            || err.contains("weekly limit")
             || err.contains("authentication_error")
             || err.contains("Invalid authentication credentials")
             || err.contains("401")
