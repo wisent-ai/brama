@@ -498,8 +498,28 @@ pub async fn dispatch_subscription(
             return attempt.response;
         }
 
-        let Some(candidate) = attempt.reauth_candidate else {
-            return attempt.response;
+        // Prefer the classified auth-failure candidate. But a stale/expired
+        // subscription can also surface as an UNCLASSIFIED failure — e.g. the
+        // codex CLI exits 1 with no "401"/"oauth" token in stderr. For providers
+        // Weles can reauth on the host, attempt one broker-driven reauth on any
+        // failure instead of returning a hard error and letting the token die
+        // silently (the exact gap that stranded codex). Skip when already tried
+        // or the caller opted out.
+        let candidate = match attempt.reauth_candidate {
+            Some(c) => c,
+            None => {
+                if tried_weles_reauth || skip_weles_reauth || !reauth::provider_is_reauthable(provider) {
+                    return attempt.response;
+                }
+                ReauthCandidate {
+                    subscription_id: String::new(),
+                    error: attempt
+                        .response
+                        .error
+                        .clone()
+                        .unwrap_or_else(|| "unclassified subscription failure".to_string()),
+                }
+            }
         };
 
         if skip_weles_reauth {

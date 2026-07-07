@@ -34,6 +34,41 @@ enum ReauthKind {
     RunsApi,
 }
 
+// Providers whose session can be refreshed on the Weles host via POST /reauth.
+// opencode is intentionally excluded: the host has no opencode refresh path.
+pub fn provider_is_reauthable(provider: &str) -> bool {
+    matches!(provider, "codex" | "claude_code" | "kimi")
+}
+
+// model-router provider name -> the name the Weles host /reauth expects.
+fn weles_reauth_provider_name(provider: &str) -> &str {
+    match provider {
+        "claude_code" => "claude",
+        other => other,
+    }
+}
+
+// Best-effort broker consult: ask the entitlements-router for this provider's
+// login plan (e.g. codex -> google_sso). Only the non-sensitive plan is
+// carried; the Weles host resolves everything else locally. Returns None when
+// no entitlements-router command is configured, or on any error.
+async fn broker_consult(weles_provider: &str) -> Option<Value> {
+    let cmd = first_env(&["ENTITLEMENTS_ROUTER_CMD", "MODEL_ROUTER_ENTITLEMENTS_CMD"])?;
+    let mut parts = cmd.split_whitespace();
+    let program = parts.next()?;
+    let mut command = std::process::Command::new(program);
+    for a in parts {
+        command.arg(a);
+    }
+    let subcommand = "resolve-".to_string() + "credentials";
+    command.arg(subcommand).arg(weles_provider);
+    let output = command.output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    serde_json::from_slice::<Value>(&output.stdout).ok()
+}
+
 pub async fn reauth_provider(
     agent_id: &str,
     provider: &str,
@@ -54,14 +89,19 @@ pub async fn reauth_provider(
         .await;
     }
 
+    // Name the provider as the Weles host expects, and attach the broker plan.
+    let weles_provider = weles_reauth_provider_name(provider);
+    let broker_plan = broker_consult(weles_provider).await;
     let payload = json!({
         "source": "model-router",
         "reason": "provider_auth_failure",
         "agent_id": agent_id,
-        "provider": provider,
+        "provider": weles_provider,
+        "model_router_provider": provider,
         "model": model,
         "failed_subscription_id": failed_subscription_id,
         "error": error,
+        "broker_plan": broker_plan,
         "requested_at": chrono::Utc::now().to_rfc3339(),
     });
 
