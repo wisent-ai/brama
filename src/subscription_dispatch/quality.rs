@@ -1,13 +1,11 @@
-use postgrest::Postgrest;
 use serde_json::{json, Value};
 
-use crate::gateway::supabase;
 use crate::subscription_dispatch::dispatch::{
     active_supported_models_for_agent, dispatch_subscription_for_agent, provider_for,
 };
 use crate::types::{Message, ModelRequest};
 
-const SOURCE: &str = "model-router-task-quality";
+const SOURCE: &str = "brama-task-quality";
 
 #[derive(Debug, Clone)]
 pub struct TaskQualityOptions {
@@ -37,8 +35,7 @@ pub async fn collect_task_quality(opts: TaskQualityOptions) -> Result<Value, Str
     }
 
     if opts.persist {
-        let client = supabase::client().map_err(|e| e.to_string())?;
-        persist_quality_rows(&client, &opts, &rows).await?;
+        persist_quality_rows(&opts, &rows);
     }
 
     let top_score = rows
@@ -141,49 +138,28 @@ fn expected_matches(opts: &TaskQualityOptions, content: &str) -> bool {
     false
 }
 
-async fn persist_quality_rows(
-    client: &Postgrest,
-    opts: &TaskQualityOptions,
-    rows: &[Value],
-) -> Result<(), String> {
-    let delete = client
-        .from("subscription_router_checks")
-        .eq("agent_id", &opts.agent_id)
-        .eq("source", SOURCE)
-        .eq("account_identifier", &opts.task);
-    let resp = delete
-        .delete()
-        .execute()
-        .await
-        .map_err(|e| format!("delete old task quality checks: {e}"))?;
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let text = resp.text().await.unwrap_or_default();
-        return Err(format!(
-            "delete old task quality checks: http_{} {text}",
-            status.as_u16()
-        ));
+fn persist_quality_rows(opts: &TaskQualityOptions, rows: &[Value]) {
+    for row in rows {
+        let model = row
+            .get("metadata")
+            .and_then(|m| m.get("model"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let score = row
+            .get("metadata")
+            .and_then(|m| m.get("score"))
+            .and_then(Value::as_f64);
+        crate::journal::record_check(
+            &opts.agent_id,
+            &string_field(row, "provider"),
+            model,
+            &opts.task,
+            SOURCE,
+            &string_field(row, "status"),
+            score,
+            &string_field(row, "checked_at"),
+        );
     }
-
-    if rows.is_empty() {
-        return Ok(());
-    }
-    let body = serde_json::to_string(rows).map_err(|e| format!("serialize checks: {e}"))?;
-    let resp = client
-        .from("subscription_router_checks")
-        .insert(body)
-        .execute()
-        .await
-        .map_err(|e| format!("insert task quality checks: {e}"))?;
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let text = resp.text().await.unwrap_or_default();
-        return Err(format!(
-            "insert task quality checks: http_{} {text}",
-            status.as_u16()
-        ));
-    }
-    Ok(())
 }
 
 fn score_field(row: &Value) -> f64 {

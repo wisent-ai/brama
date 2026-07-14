@@ -16,12 +16,14 @@ function parseArgs() {
     model: '',
     omitModel: false,
     prompt: 'Reply with exactly OK.',
+    raw: false,
   };
   for (let i = 2; i < process.argv.length; i += 1) {
     const arg = process.argv[i];
     if (arg === '--model') out.model = process.argv[++i] || '';
     else if (arg === '--omit-model') out.omitModel = true;
     else if (arg === '--prompt') out.prompt = process.argv[++i] || '';
+    else if (arg === '--raw') out.raw = true;
     else throw new Error(`unknown arg: ${arg}`);
   }
   if (!out.omitModel && !out.model) throw new Error('missing --model');
@@ -88,14 +90,18 @@ async function main() {
   let data;
   try { data = JSON.parse(text); } catch { data = { raw: text }; }
   const choice = data?.choices?.[0]?.message?.content || data?.content || '';
-  console.log(JSON.stringify({
-    ok: res.ok,
-    status: res.status,
-    requested_model: args.omitModel ? null : args.model,
-    response_model: data?.model || null,
-    content: String(choice).slice(0, 300),
-    error: data?.error?.message || data?.error || null,
-  }, null, 2));
+  if (args.raw) {
+    console.log(JSON.stringify({ ok: res.ok, status: res.status, data }, null, 2));
+  } else {
+    console.log(JSON.stringify({
+      ok: res.ok,
+      status: res.status,
+      requested_model: args.omitModel ? null : args.model,
+      response_model: data?.model || null,
+      content: String(choice).slice(0, 300),
+      error: data?.error?.message || data?.error || null,
+    }, null, 2));
+  }
   if (!res.ok) process.exit(1);
 }
 

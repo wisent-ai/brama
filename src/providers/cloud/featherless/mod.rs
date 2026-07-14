@@ -6,40 +6,36 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use tracing::{debug, error};
 
+use crate::gateway::broker::{provider_capability_configured, provider_credential};
 use crate::provider::ModelProvider;
-use crate::types::{
-    ModelRequest, ModelResponse, ToolCall, ToolCallFunction,
-};
+use crate::types::{ModelRequest, ModelResponse, ToolCall, ToolCallFunction};
 
-const API_URL: &str =
-    "https://api.featherless.ai/v1/chat/completions";
+const API_URL: &str = "https://api.featherless.ai/v1/chat/completions";
 
-const DEFAULT_FEATHERLESS_MODEL: &str =
-    "TheDrummer/Cydonia-24B-v4.3";
+const DEFAULT_FEATHERLESS_MODEL: &str = "TheDrummer/Cydonia-24B-v4.3";
 
 const ALIAS: &str = "cydonia-24b";
 
 /// Alias → upstream HF path for all Featherless-registered models beyond
 /// the env-configurable primary alias.
 fn extra_aliases() -> &'static [(&'static str, &'static str)] {
-    &[
-        ("gemma-3-27b-abliterated", "mlabonne/gemma-3-27b-it-abliterated"),
-    ]
+    &[(
+        "gemma-3-27b-abliterated",
+        "mlabonne/gemma-3-27b-it-abliterated",
+    )]
 }
 
 pub struct FeatherlessProvider {
     client: Client,
-    api_key: Option<String>,
     upstream_model: String,
 }
 
 impl FeatherlessProvider {
     pub fn new() -> Self {
-        let upstream_model = env::var("FEATHERLESS_MODEL")
-            .unwrap_or_else(|_| DEFAULT_FEATHERLESS_MODEL.into());
+        let upstream_model =
+            env::var("FEATHERLESS_MODEL").unwrap_or_else(|_| DEFAULT_FEATHERLESS_MODEL.into());
         Self {
             client: Client::new(),
-            api_key: env::var("FEATHERLESS_API_KEY").ok(),
             upstream_model,
         }
     }
@@ -59,20 +55,7 @@ impl Default for FeatherlessProvider {
 
 #[async_trait]
 impl ModelProvider for FeatherlessProvider {
-    async fn complete(
-        &self,
-        request: &ModelRequest,
-    ) -> ModelResponse {
-        let api_key = match &self.api_key {
-            Some(key) => key,
-            None => {
-                return ModelResponse::failure(
-                    &request.model,
-                    "FEATHERLESS_API_KEY not set".into(),
-                );
-            }
-        };
-
+    async fn complete(&self, request: &ModelRequest) -> ModelResponse {
         let mut messages: Vec<Value> = Vec::new();
         if let Some(system) = &request.system {
             messages.push(json!({
@@ -96,9 +79,7 @@ impl ModelProvider for FeatherlessProvider {
 
         let upstream: &str = if request.model == ALIAS {
             self.upstream_model.as_str()
-        } else if let Some((_, up)) =
-            extra_aliases().iter().find(|(a, _)| *a == request.model)
-        {
+        } else if let Some((_, up)) = extra_aliases().iter().find(|(a, _)| *a == request.model) {
             up
         } else {
             request.model.as_str()
@@ -113,21 +94,35 @@ impl ModelProvider for FeatherlessProvider {
 
         if let Some(tools) = &request.tools {
             if !tools.is_empty() {
-                body["tools"] =
-                    serde_json::to_value(tools).unwrap();
+                body["tools"] = serde_json::to_value(tools).unwrap();
             }
         }
 
         debug!("Featherless request to model {}", upstream);
         let start = Instant::now();
+        let credential = match provider_credential(self.name()).await {
+            Some(credential) => credential,
+            None => {
+                return ModelResponse::failure(
+                    &request.model,
+                    "Provider credential unavailable".into(),
+                );
+            }
+        };
+        let api_key = match credential.expose_utf8() {
+            Ok(api_key) => api_key,
+            Err(_) => {
+                return ModelResponse::failure(
+                    &request.model,
+                    "Provider credential unavailable".into(),
+                );
+            }
+        };
 
         let resp = self
             .client
             .post(API_URL)
-            .header(
-                "authorization",
-                format!("Bearer {api_key}"),
-            )
+            .bearer_auth(api_key)
             .header("content-type", "application/json")
             .json(&body)
             .send()
@@ -139,10 +134,7 @@ impl ModelProvider for FeatherlessProvider {
             Ok(r) => r,
             Err(e) => {
                 error!("Featherless HTTP error: {e}");
-                return ModelResponse::failure(
-                    &request.model,
-                    format!("HTTP error: {e}"),
-                );
+                return ModelResponse::failure(&request.model, format!("HTTP error: {e}"));
             }
         };
 
@@ -150,10 +142,7 @@ impl ModelProvider for FeatherlessProvider {
         let body_text = match resp.text().await {
             Ok(t) => t,
             Err(e) => {
-                return ModelResponse::failure(
-                    &request.model,
-                    format!("read body failed: {e}"),
-                );
+                return ModelResponse::failure(&request.model, format!("read body failed: {e}"));
             }
         };
 
@@ -165,20 +154,14 @@ impl ModelProvider for FeatherlessProvider {
             );
         }
 
-        let parsed: Value = match serde_json::from_str(&body_text)
-        {
+        let parsed: Value = match serde_json::from_str(&body_text) {
             Ok(v) => v,
             Err(e) => {
-                return ModelResponse::failure(
-                    &request.model,
-                    format!("JSON parse error: {e}"),
-                );
+                return ModelResponse::failure(&request.model, format!("JSON parse error: {e}"));
             }
         };
 
-        let choice = parsed["choices"]
-            .as_array()
-            .and_then(|arr| arr.first());
+        let choice = parsed["choices"].as_array().and_then(|arr| arr.first());
 
         let content = choice
             .and_then(|c| c["message"]["content"].as_str())
@@ -194,13 +177,8 @@ impl ModelProvider for FeatherlessProvider {
                             id: tc["id"].as_str()?.to_string(),
                             call_type: "function".into(),
                             function: ToolCallFunction {
-                                name: tc["function"]["name"]
-                                    .as_str()?
-                                    .to_string(),
-                                arguments: tc["function"]
-                                    ["arguments"]
-                                    .as_str()?
-                                    .to_string(),
+                                name: tc["function"]["name"].as_str()?.to_string(),
+                                arguments: tc["function"]["arguments"].as_str()?.to_string(),
                             },
                         })
                     })
@@ -208,16 +186,10 @@ impl ModelProvider for FeatherlessProvider {
             })
             .filter(|v| !v.is_empty());
 
-        let input_tokens = parsed["usage"]["prompt_tokens"]
-            .as_u64()
-            .unwrap_or(0) as u32;
-        let output_tokens =
-            parsed["usage"]["completion_tokens"]
-                .as_u64()
-                .unwrap_or(0) as u32;
+        let input_tokens = parsed["usage"]["prompt_tokens"].as_u64().unwrap_or(0) as u32;
+        let output_tokens = parsed["usage"]["completion_tokens"].as_u64().unwrap_or(0) as u32;
 
-        let cost =
-            self.estimate_cost(input_tokens, output_tokens);
+        let cost = self.estimate_cost(input_tokens, output_tokens);
 
         ModelResponse {
             content,
@@ -232,16 +204,12 @@ impl ModelProvider for FeatherlessProvider {
         }
     }
 
-    fn estimate_cost(
-        &self,
-        _input_tokens: u32,
-        _output_tokens: u32,
-    ) -> f64 {
+    fn estimate_cost(&self, _input_tokens: u32, _output_tokens: u32) -> f64 {
         0.0
     }
 
     async fn is_available(&self) -> bool {
-        self.api_key.is_some()
+        provider_capability_configured(self.name())
     }
 
     fn name(&self) -> &str {

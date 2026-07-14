@@ -15,74 +15,17 @@ use std::path::Path;
 
 use tokio::fs;
 
-use crate::crypto;
-use crate::gateway::supabase;
-use crate::subscription_dispatch::runtime::{build_prompt_from, run_cli, Sandbox};
+use crate::subscription_dispatch::runtime::{
+    build_prompt_from, codex_coverage_hooks_enabled, materialize_codex_coverage_hooks, run_cli,
+    Sandbox, CODEX_HOOK_COVERAGE_LOG,
+};
 use crate::types::{ModelRequest, ModelResponse};
 
-/// If the CLI run rotated the donated OAuth blob in-sandbox, re-encrypt
-/// and push it back to the specific `trade_agent_subscriptions` row that
-/// the dispatcher selected for this request. Scoping the UPDATE by
-/// subscription_id is critical now that the dispatcher iterates a pool
-/// of multiple active rows per (instance_id, provider) — an unscoped
-/// update would smear sub A's refreshed key onto sub B and C, collapsing
-/// the pool to a single value. Best-effort: persistence failures do NOT
-/// fail the caller's request.
-async fn persist_refreshed_token(
-    subscription_id: &str,
-    provider: &str,
-    agent_id: &str,
-    original: &str,
-    creds_path: &Path,
-) {
-    let after = match fs::read_to_string(creds_path).await {
-        Ok(s) => s,
-        Err(_) => return,
-    };
-    if after.trim() == original.trim() {
-        return;
-    }
-    let client = match supabase::client() {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("[router] refresh persist: supabase client: {e}");
-            return;
-        }
-    };
-    let encrypted = match crypto::encrypt(&after) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("[router] refresh persist: encrypt: {e}");
-            return;
-        }
-    };
-    let body = serde_json::json!({ "key_encrypted": encrypted }).to_string();
-    let resp = client
-        .from("trade_agent_subscriptions")
-        .eq("id", subscription_id)
-        .update(body)
-        .execute()
-        .await;
-    match resp {
-        Ok(r) if r.status().is_success() => {
-            eprintln!(
-                "[router] refresh persist: rotated {provider} token for sub {subscription_id} (agent {agent_id})"
-            );
-        }
-        Ok(r) => {
-            let t = r.text().await.unwrap_or_default();
-            eprintln!("[router] refresh persist: update non-2xx: {t}");
-        }
-        Err(e) => {
-            eprintln!("[router] refresh persist: update: {e}");
-        }
-    }
-}
 
 pub async fn run_claude_code(
     request: &ModelRequest,
-    agent_id: &str,
-    subscription_id: &str,
+    _agent_id: &str,
+    _subscription_id: &str,
     token: &str,
 ) -> ModelResponse {
     let sandbox = match Sandbox::new() {
@@ -145,20 +88,6 @@ pub async fn run_claude_code(
     }
     argv.push(&user_prompt);
     let response = run_cli(&request.model, &argv, &sandbox, env).await;
-    // Claude CLI auto-refreshes the OAuth token in-place when the access
-    // token is expired but the refresh token is still valid. Capture any
-    // rotation and push it back to the DB so the next dispatch doesn't
-    // start from a stale blob. Compare against what we wrote (creds_json)
-    // rather than the bare `token` the dispatcher decrypted — the sandbox
-    // file is always in the wrapped format.
-    persist_refreshed_token(
-        subscription_id,
-        "claude_code",
-        agent_id,
-        &creds_json,
-        &creds_path,
-    )
-    .await;
     response
 }
 
@@ -193,8 +122,8 @@ fn materialize_credentials(token: &str) -> String {
 
 pub async fn run_codex(
     request: &ModelRequest,
-    agent_id: &str,
-    subscription_id: &str,
+    _agent_id: &str,
+    _subscription_id: &str,
     token_json: &str,
 ) -> ModelResponse {
     let sandbox = match Sandbox::new() {
@@ -209,11 +138,25 @@ pub async fn run_codex(
     if let Err(e) = fs::write(&auth_path, token_json).await {
         return ModelResponse::failure(&request.model, format!("write auth.json: {e}"));
     }
+    if codex_coverage_hooks_enabled() {
+        if let Err(e) = materialize_codex_coverage_hooks(&codex_dir).await {
+            return ModelResponse::failure(&request.model, format!("materialize codex hooks: {e}"));
+        }
+    }
     let prompt = build_prompt_from(&request.system, &request.messages);
-    // The build-time global install has the platform-specific optional
+    // Cloud Run's npm global install has the platform-specific optional
     // dependency; runtime staged installs under /opt/cli-* do not reliably
-    // pull it, so invoke the JS wrapper directly.
-    const CODEX_BIN: &str = "/usr/local/lib/node_modules/@openai/codex/bin/codex.js";
+    // pull it, so prefer the JS wrapper in the image. Local cargo-run smoke
+    // tests don't have that image path, so allow an override and finally fall
+    // back to the PATH-resolved `codex` binary.
+    const DOCKER_CODEX_BIN: &str = "/usr/local/lib/node_modules/@openai/codex/bin/codex.js";
+    let codex_bin = std::env::var("BRAMA_CODEX_BIN").unwrap_or_else(|_| {
+        if Path::new(DOCKER_CODEX_BIN).exists() {
+            DOCKER_CODEX_BIN.to_string()
+        } else {
+            "codex".to_string()
+        }
+    });
     let mut env = HashMap::new();
     env.insert(
         "CODEX_HOME".to_string(),
@@ -222,10 +165,11 @@ pub async fn run_codex(
     let raw = run_cli(
         &request.model,
         &[
-            CODEX_BIN,
+            codex_bin.as_str(),
             "exec",
             "--dangerously-bypass-approvals-and-sandbox",
             "--json",
+            "--dangerously-bypass-hook-trust",
             "-C",
             sandbox.home.to_str().unwrap_or("."),
             &prompt,
@@ -234,7 +178,7 @@ pub async fn run_codex(
         env,
     )
     .await;
-    let response = if let Some(text) = extract_codex_jsonl(&raw.content) {
+    let mut response = if let Some(text) = extract_codex_jsonl(&raw.content) {
         ModelResponse {
             content: text,
             ..raw
@@ -242,14 +186,24 @@ pub async fn run_codex(
     } else {
         raw
     };
-    persist_refreshed_token(subscription_id, "codex", agent_id, token_json, &auth_path).await;
+    if codex_coverage_hooks_enabled() {
+        let coverage_path = codex_dir.join(CODEX_HOOK_COVERAGE_LOG);
+        if let Ok(coverage) = fs::read_to_string(&coverage_path).await {
+            if !coverage.trim().is_empty() {
+                response
+                    .content
+                    .push_str("\n\n[brama-codex-hook-coverage]\n");
+                response.content.push_str(&coverage);
+            }
+        }
+    }
     response
 }
 
 pub async fn run_kimi(
     request: &ModelRequest,
-    agent_id: &str,
-    subscription_id: &str,
+    _agent_id: &str,
+    _subscription_id: &str,
     token_json: &str,
 ) -> ModelResponse {
     let sandbox = match Sandbox::new() {
@@ -327,12 +281,6 @@ display_name = "K2.7 Code"
         raw
     };
 
-    // Kimi Code 0.19.x rewrites credentials/kimi-code.json to an empty
-    // token object when OAuth is no longer usable. Do not persist that as a
-    // "refresh", or one failed runtime call will poison the shared pool row.
-    if response.success && kimi_credentials_have_tokens(&creds_path).await {
-        persist_refreshed_token(subscription_id, "kimi", agent_id, token_json, &creds_path).await;
-    }
     response
 }
 
@@ -381,27 +329,6 @@ fn extract_kimi_stream_json(stdout: &str) -> Option<String> {
     }
 }
 
-async fn kimi_credentials_have_tokens(path: &Path) -> bool {
-    let text = match fs::read_to_string(path).await {
-        Ok(s) => s,
-        Err(_) => return false,
-    };
-    let value: serde_json::Value = match serde_json::from_str(&text) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-    let access_len = value
-        .get("access_token")
-        .and_then(|v| v.as_str())
-        .map(|s| s.len())
-        .unwrap_or(0);
-    let refresh_len = value
-        .get("refresh_token")
-        .and_then(|v| v.as_str())
-        .map(|s| s.len())
-        .unwrap_or(0);
-    access_len > 32 && refresh_len > 32
-}
 
 pub async fn run_opencode(
     request: &ModelRequest,

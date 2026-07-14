@@ -12,7 +12,7 @@ function parseEnv(text) {
   return out;
 }
 
-const contentEnv = parseEnv(await readFile('../content-platform/.env.local', 'utf8'));
+const contentEnv = parseEnv(await readFile('../echo/.env.local', 'utf8'));
 const webEnv = parseEnv(await readFile('../backends/weles-web/.env.local', 'utf8'));
 
 const baseUrl = contentEnv.WELES_SUPABASE_URL;

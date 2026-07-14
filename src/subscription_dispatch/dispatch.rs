@@ -1,7 +1,6 @@
 //! Route `"*-subscription"` chat completions requests to the matching CLI.
 
 use std::collections::HashMap;
-use std::env;
 use std::sync::atomic::{AtomicI64, Ordering};
 
 use aes_gcm::aead::rand_core::{OsRng, RngCore};
@@ -9,7 +8,7 @@ use axum::http::HeaderMap;
 use serde_json::Value;
 
 use crate::crypto;
-use crate::gateway::supabase;
+use crate::gateway::broker;
 use crate::subscription_dispatch::{engines, reauth};
 use crate::types::{ModelRequest, ModelResponse};
 
@@ -34,19 +33,7 @@ fn is_auth_failure(err: &str) -> bool {
 }
 
 async fn mark_subscription_revoked(sub_id: &str) {
-    let Ok(client) = supabase::client() else {
-        return;
-    };
-    let body = serde_json::json!({
-        "status": "revoked",
-        "updated_at": chrono::Utc::now().to_rfc3339(),
-    });
-    let _ = client
-        .from("trade_agent_subscriptions")
-        .eq("id", sub_id)
-        .update(body.to_string())
-        .execute()
-        .await;
+    crate::journal::retire(sub_id);
 }
 
 // When every donated subscription for a provider fails specifically with an
@@ -141,28 +128,16 @@ async fn authenticate_agent(headers: &HeaderMap, raw_body: &[u8]) -> Result<Stri
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    let client = supabase::client().map_err(|e| e.to_string())?;
-
-    // Per-agent auth secret, with the master AGENT_AUTH_SECRET env as the
-    // shared-secret path the TS impl also uses.
-    let secret = match supabase::get_agent_auth_secret(&client, &agent_id).await {
-        Ok(Some(s)) => s,
-        Ok(None) | Err(_) => match env::var("AGENT_AUTH_SECRET") {
-            Ok(s) => s,
-            Err(_) => {
-                return Err(
-                    "no auth secret for agent, and AGENT_AUTH_SECRET unset".into(),
-                );
-            }
-        },
-    };
+    let secret = broker::get_agent_auth_secret(&agent_id)
+        .await
+        .ok_or_else(|| "no auth secret for agent".to_string())?;
 
     let headers_for_check = crypto::HmacHeaders {
         agent_id: &agent_id,
         timestamp: ts,
         signature: sig,
     };
-    crypto::verify_agent_hmac(&headers_for_check, raw_body, secret.as_bytes())
+    crypto::verify_agent_hmac(&headers_for_check, raw_body, secret.expose())
         .map_err(|e| format!("auth: {e}"))?;
     Ok(agent_id)
 }
@@ -194,32 +169,13 @@ async fn any_vision_capable_subscription_models(
 }
 
 pub async fn active_supported_models_for_agent(agent_id: &str) -> Result<Vec<String>, String> {
-    let client = supabase::client().map_err(|e| e.to_string())?;
-    let resp = client
-        .from("trade_agent_subscriptions")
-        .select("provider")
-        .eq("instance_id", &agent_id)
-        .eq("status", "active")
-        .execute()
-        .await
-        .map_err(|e| format!("supabase: {e}"))?;
-    let status = resp.status();
-    let text = resp.text().await.unwrap_or_default();
-    if !status.is_success() {
-        return Err(format!(
-            "supabase returned HTTP {} while loading active subscriptions",
-            status.as_u16()
-        ));
-    }
-
-    let rows: Vec<Value> = serde_json::from_str(&text).unwrap_or_default();
-    if rows.is_empty() {
-        return Err("no active subscription for signed agent".into());
-    }
+    let entries = broker::list_subscriptions(agent_id).await;
     let mut models = Vec::new();
-    for row in rows {
-        let provider = string_field(&row, "provider");
-        let Some(model) = canonical_model_for_provider(&provider) else {
+    for entry in entries {
+        if entry.status != "active" || crate::journal::is_retired(&entry.id) {
+            continue;
+        }
+        let Some(model) = canonical_model_for_provider(&entry.provider) else {
             continue;
         };
         if !models.iter().any(|existing| existing == model) {
@@ -247,14 +203,11 @@ pub async fn active_vision_capable_models_for_agent(agent_id: &str) -> Result<Ve
 }
 
 fn score_field(row: &Value) -> Option<f64> {
-    row.get("metadata")
-        .and_then(|metadata| metadata.get("score"))
-        .and_then(|score| score.as_f64())
+    row.get("score").and_then(|score| score.as_f64())
 }
 
 fn model_field(row: &Value) -> Option<String> {
-    row.get("metadata")
-        .and_then(|metadata| metadata.get("model"))
+    row.get("model")
         .and_then(|model| model.as_str())
         .map(|model| model.trim().to_string())
         .filter(|model| !model.is_empty())
@@ -267,34 +220,12 @@ fn checked_at_field(row: &Value) -> i64 {
         .unwrap_or(0)
 }
 
-async fn task_quality_models(
-    agent_id: &str,
-    task: &str,
-) -> Result<Vec<String>, String> {
+async fn task_quality_models(agent_id: &str, task: &str) -> Result<Vec<String>, String> {
     let active_models = active_supported_models_for_agent(agent_id).await?;
-    let client = supabase::client().map_err(|e| e.to_string())?;
-    let resp = client
-        .from("subscription_router_checks")
-        .select("status,metadata,checked_at")
-        .eq("agent_id", agent_id)
-        .eq("source", "model-router-task-quality")
-        .eq("account_identifier", task)
-        .execute()
-        .await
-        .map_err(|e| format!("load task quality checks: {e}"))?;
-    let status = resp.status();
-    let text = resp.text().await.unwrap_or_default();
-    if status.as_u16() == 404 || text.contains("subscription_router_checks") {
+    let rows = crate::journal::checks_for_task(agent_id, task);
+    if rows.is_empty() {
         return Err(format!("no quality checks configured for task '{task}'"));
     }
-    if !status.is_success() {
-        return Err(format!(
-            "load task quality checks: http_{} {text}",
-            status.as_u16()
-        ));
-    }
-    let rows = serde_json::from_str::<Vec<Value>>(&text)
-        .map_err(|e| format!("parse task quality checks: {e}"))?;
     let mut latest_by_model: HashMap<String, (f64, i64)> = HashMap::new();
     for row in rows
         .iter()
@@ -486,7 +417,7 @@ pub async fn dispatch_subscription(
         Err(e) => return ModelResponse::failure(&request.model, e),
     };
     let skip_weles_reauth = headers
-        .get("x-model-router-skip-weles-reauth")
+        .get("x-brama-skip-weles-reauth")
         .and_then(|v| v.to_str().ok())
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
@@ -578,46 +509,36 @@ struct AttemptOutcome {
     reauth_candidate: Option<ReauthCandidate>,
 }
 
+async fn run_provider_with_token(
+    provider: &str,
+    request: &ModelRequest,
+    agent_id: &str,
+    subscription_id: &str,
+    token: &str,
+) -> ModelResponse {
+    match provider {
+        "claude_code" => engines::run_claude_code(request, agent_id, subscription_id, token).await,
+        "codex" => engines::run_codex(request, agent_id, subscription_id, token).await,
+        "kimi" => engines::run_kimi(request, agent_id, subscription_id, token).await,
+        "opencode" => engines::run_opencode(request, agent_id, subscription_id, token).await,
+        _ => ModelResponse::failure(&request.model, "unreachable".into()),
+    }
+}
+
 async fn dispatch_subscription_attempt(
     provider: &str,
     agent_id: &str,
     request: &ModelRequest,
 ) -> AttemptOutcome {
-    let client = match supabase::client() {
-        Ok(c) => c,
-        Err(e) => {
-            return AttemptOutcome {
-                response: ModelResponse::failure(&request.model, e.to_string()),
-                reauth_candidate: None,
-            }
-        }
-    };
-
-    // Look up ALL active donated subscriptions for this agent + provider.
-    // Order by created_at ascending so the rotation is deterministic and the
-    // oldest sub gets first crack — a freshly-donated sub is held in reserve
-    // until older ones have burnt their per-window quota.
-    let resp = client
-        .from("trade_agent_subscriptions")
-        .select("id,key_encrypted,status,created_at")
-        .eq("instance_id", agent_id)
-        .eq("provider", provider)
-        .eq("status", "active")
-        .order("created_at.asc")
-        .execute()
-        .await;
-    let rows: Vec<Value> = match resp {
-        Ok(r) => {
-            let t = r.text().await.unwrap_or_default();
-            serde_json::from_str(&t).unwrap_or_default()
-        }
-        Err(e) => {
-            return AttemptOutcome {
-                response: ModelResponse::failure(&request.model, format!("supabase: {e}")),
-                reauth_candidate: None,
-            }
-        }
-    };
+    let rows: Vec<broker::SubscriptionEntry> = broker::list_subscriptions(agent_id)
+        .await
+        .into_iter()
+        .filter(|entry| {
+            entry.provider == provider
+                && entry.status == "active"
+                && !crate::journal::is_retired(&entry.id)
+        })
+        .collect();
     if rows.is_empty() {
         return AttemptOutcome {
             response: ModelResponse::failure(
@@ -634,30 +555,23 @@ async fn dispatch_subscription_attempt(
     // upstream API breakage as exhaustion.
     let mut last_failure: Option<ModelResponse> = None;
     let mut last_auth_failure: Option<ReauthCandidate> = None;
-    for (idx, row) in rows.iter().enumerate() {
-        let encrypted = match row.get("key_encrypted").and_then(|v: &Value| v.as_str()) {
-            Some(s) => s.to_string(),
-            None => continue,
-        };
-        let sub_id = row
-            .get("id")
-            .and_then(|v: &Value| v.as_str())
-            .unwrap_or("?")
-            .to_string();
-        let token = match crypto::decrypt(&encrypted) {
-            Ok(t) => t,
-            Err(e) => {
-                eprintln!("[router] sub {sub_id} decrypt failed (skipping): {e}");
+    for (idx, entry) in rows.iter().enumerate() {
+        let sub_id = entry.id.clone();
+        let token = match broker::subscription_credential(&sub_id, provider).await {
+            Some(token) => token,
+            None => {
+                eprintln!("[router] sub {sub_id} has no capability credential (skipping)");
                 continue;
             }
         };
-        let result = match provider {
-            "claude_code" => engines::run_claude_code(request, agent_id, &sub_id, &token).await,
-            "codex" => engines::run_codex(request, agent_id, &sub_id, &token).await,
-            "kimi" => engines::run_kimi(request, agent_id, &sub_id, &token).await,
-            "opencode" => engines::run_opencode(request, agent_id, &sub_id, &token).await,
-            _ => ModelResponse::failure(&request.model, "unreachable".into()),
+        let token = match token.expose_utf8() {
+            Ok(token) => token,
+            Err(_) => {
+                eprintln!("[router] sub {sub_id} capability credential is invalid (skipping)");
+                continue;
+            }
         };
+        let result = run_provider_with_token(provider, request, agent_id, &sub_id, token).await;
         if result.success {
             if idx > 0 {
                 eprintln!(

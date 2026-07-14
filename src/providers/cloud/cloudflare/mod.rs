@@ -7,6 +7,7 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use tracing::{debug, error};
 
+use crate::gateway::broker::{provider_capability_configured, provider_credential};
 use crate::provider::ModelProvider;
 use crate::types::{ModelRequest, ModelResponse};
 
@@ -20,7 +21,6 @@ fn alias_map() -> HashMap<&'static str, &'static str> {
 pub struct CloudflareProvider {
     client: Client,
     account_id: Option<String>,
-    api_token: Option<String>,
 }
 
 impl CloudflareProvider {
@@ -28,7 +28,6 @@ impl CloudflareProvider {
         Self {
             client: Client::new(),
             account_id: env::var("CLOUDFLARE_ACCOUNT_ID").ok(),
-            api_token: env::var("CLOUDFLARE_API_TOKEN").ok(),
         }
     }
 
@@ -46,12 +45,12 @@ impl Default for CloudflareProvider {
 #[async_trait]
 impl ModelProvider for CloudflareProvider {
     async fn complete(&self, request: &ModelRequest) -> ModelResponse {
-        let (account_id, api_token) = match (&self.account_id, &self.api_token) {
-            (Some(a), Some(t)) => (a, t),
-            _ => {
+        let account_id = match &self.account_id {
+            Some(account_id) => account_id,
+            None => {
                 return ModelResponse::failure(
                     &request.model,
-                    "CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN required".into(),
+                    "CLOUDFLARE_ACCOUNT_ID required".into(),
                 );
             }
         };
@@ -69,9 +68,8 @@ impl ModelProvider for CloudflareProvider {
             .copied()
             .unwrap_or(request.model.as_str());
 
-        let url = format!(
-            "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{upstream}"
-        );
+        let url =
+            format!("https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{upstream}");
 
         let body = json!({
             "messages": messages,
@@ -81,10 +79,29 @@ impl ModelProvider for CloudflareProvider {
         debug!("Cloudflare request to model {}", upstream);
         let start = Instant::now();
 
+        let credential = match provider_credential(self.name()).await {
+            Some(credential) => credential,
+            None => {
+                return ModelResponse::failure(
+                    &request.model,
+                    "Provider credential unavailable".into(),
+                );
+            }
+        };
+        let api_token = match credential.expose_utf8() {
+            Ok(api_token) => api_token,
+            Err(_) => {
+                return ModelResponse::failure(
+                    &request.model,
+                    "Provider credential unavailable".into(),
+                );
+            }
+        };
+
         let resp = self
             .client
             .post(&url)
-            .header("authorization", format!("Bearer {api_token}"))
+            .bearer_auth(api_token)
             .header("content-type", "application/json")
             .json(&body)
             .send()
@@ -96,10 +113,7 @@ impl ModelProvider for CloudflareProvider {
             Ok(r) => r,
             Err(e) => {
                 error!("Cloudflare HTTP error: {e}");
-                return ModelResponse::failure(
-                    &request.model,
-                    format!("HTTP error: {e}"),
-                );
+                return ModelResponse::failure(&request.model, format!("HTTP error: {e}"));
             }
         };
 
@@ -107,10 +121,7 @@ impl ModelProvider for CloudflareProvider {
         let body_text = match resp.text().await {
             Ok(t) => t,
             Err(e) => {
-                return ModelResponse::failure(
-                    &request.model,
-                    format!("read body failed: {e}"),
-                );
+                return ModelResponse::failure(&request.model, format!("read body failed: {e}"));
             }
         };
 
@@ -125,10 +136,7 @@ impl ModelProvider for CloudflareProvider {
         let parsed: Value = match serde_json::from_str(&body_text) {
             Ok(v) => v,
             Err(e) => {
-                return ModelResponse::failure(
-                    &request.model,
-                    format!("JSON parse error: {e}"),
-                );
+                return ModelResponse::failure(&request.model, format!("JSON parse error: {e}"));
             }
         };
 
@@ -155,7 +163,7 @@ impl ModelProvider for CloudflareProvider {
     }
 
     async fn is_available(&self) -> bool {
-        self.account_id.is_some() && self.api_token.is_some()
+        self.account_id.is_some() && provider_capability_configured(self.name())
     }
 
     fn name(&self) -> &str {

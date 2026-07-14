@@ -7,23 +7,25 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use tracing::{debug, error};
 
+use crate::gateway::broker::{provider_capability_configured, provider_credential};
 use crate::provider::ModelProvider;
 use crate::types::{ModelRequest, ModelResponse};
 
-const API_URL: &str =
-    "https://openrouter.ai/api/v1/chat/completions";
+const API_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
 
 fn alias_map() -> HashMap<&'static str, &'static str> {
     HashMap::from([
         ("deepseek-r1-free", "deepseek/deepseek-r1:free"),
-        ("llama-3.3-70b-free", "meta-llama/llama-3.3-70b-instruct:free"),
+        (
+            "llama-3.3-70b-free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+        ),
         ("qwen-2.5-72b-free", "qwen/qwen-2.5-72b-instruct:free"),
     ])
 }
 
 pub struct OpenRouterProvider {
     client: Client,
-    api_key: Option<String>,
     referer: String,
 }
 
@@ -31,7 +33,6 @@ impl OpenRouterProvider {
     pub fn new() -> Self {
         Self {
             client: Client::new(),
-            api_key: env::var("OPENROUTER_API_KEY").ok(),
             referer: env::var("NEXT_PUBLIC_APP_URL")
                 .unwrap_or_else(|_| "https://singularity.wisent.ai".into()),
         }
@@ -51,16 +52,6 @@ impl Default for OpenRouterProvider {
 #[async_trait]
 impl ModelProvider for OpenRouterProvider {
     async fn complete(&self, request: &ModelRequest) -> ModelResponse {
-        let api_key = match &self.api_key {
-            Some(key) => key,
-            None => {
-                return ModelResponse::failure(
-                    &request.model,
-                    "OPENROUTER_API_KEY not set".into(),
-                );
-            }
-        };
-
         let mut messages: Vec<Value> = Vec::new();
         if let Some(system) = &request.system {
             messages.push(json!({"role": "system", "content": system}));
@@ -82,6 +73,25 @@ impl ModelProvider for OpenRouterProvider {
         });
 
         debug!("OpenRouter request to model {}", upstream);
+
+        let credential = match provider_credential(self.name()).await {
+            Some(credential) => credential,
+            None => {
+                return ModelResponse::failure(
+                    &request.model,
+                    "Provider credential unavailable".into(),
+                );
+            }
+        };
+        let api_key = match credential.expose_utf8() {
+            Ok(api_key) => api_key,
+            Err(_) => {
+                return ModelResponse::failure(
+                    &request.model,
+                    "Provider credential unavailable".into(),
+                );
+            }
+        };
         let start = Instant::now();
 
         let resp = self
@@ -100,10 +110,7 @@ impl ModelProvider for OpenRouterProvider {
             Ok(r) => r,
             Err(e) => {
                 error!("OpenRouter HTTP error: {e}");
-                return ModelResponse::failure(
-                    &request.model,
-                    format!("HTTP error: {e}"),
-                );
+                return ModelResponse::failure(&request.model, format!("HTTP error: {e}"));
             }
         };
 
@@ -111,10 +118,7 @@ impl ModelProvider for OpenRouterProvider {
         let body_text = match resp.text().await {
             Ok(t) => t,
             Err(e) => {
-                return ModelResponse::failure(
-                    &request.model,
-                    format!("read body failed: {e}"),
-                );
+                return ModelResponse::failure(&request.model, format!("read body failed: {e}"));
             }
         };
 
@@ -129,10 +133,7 @@ impl ModelProvider for OpenRouterProvider {
         let parsed: Value = match serde_json::from_str(&body_text) {
             Ok(v) => v,
             Err(e) => {
-                return ModelResponse::failure(
-                    &request.model,
-                    format!("JSON parse error: {e}"),
-                );
+                return ModelResponse::failure(&request.model, format!("JSON parse error: {e}"));
             }
         };
 
@@ -140,11 +141,8 @@ impl ModelProvider for OpenRouterProvider {
             .as_str()
             .unwrap_or("")
             .to_string();
-        let input_tokens =
-            parsed["usage"]["prompt_tokens"].as_u64().unwrap_or(0) as u32;
-        let output_tokens = parsed["usage"]["completion_tokens"]
-            .as_u64()
-            .unwrap_or(0) as u32;
+        let input_tokens = parsed["usage"]["prompt_tokens"].as_u64().unwrap_or(0) as u32;
+        let output_tokens = parsed["usage"]["completion_tokens"].as_u64().unwrap_or(0) as u32;
 
         ModelResponse {
             content,
@@ -164,7 +162,7 @@ impl ModelProvider for OpenRouterProvider {
     }
 
     async fn is_available(&self) -> bool {
-        self.api_key.is_some()
+        provider_capability_configured(self.name())
     }
 
     fn name(&self) -> &str {

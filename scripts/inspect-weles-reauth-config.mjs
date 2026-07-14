@@ -27,7 +27,7 @@ function interestingKeys(metadata) {
     .map(([key, value]) => [key, typeof value === 'string' ? redacted(key, value) : value]);
 }
 
-const envPath = resolve('../content-platform/.env.local');
+const envPath = resolve('../echo/.env.local');
 const env = parseEnv(await readFile(envPath, 'utf8'));
 const baseUrl = env.WELES_SUPABASE_URL;
 const serviceRole = env.WELES_SUPABASE_SERVICE_ROLE_KEY;

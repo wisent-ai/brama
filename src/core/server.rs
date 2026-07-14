@@ -216,15 +216,8 @@ async fn chat_completions(
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(body));
     }
 
-    let has_tool_calls = resp
-        .tool_calls
-        .as_ref()
-        .map_or(false, |tc| !tc.is_empty());
-    let finish_reason = if has_tool_calls {
-        "tool_calls"
-    } else {
-        "stop"
-    };
+    let has_tool_calls = resp.tool_calls.as_ref().map_or(false, |tc| !tc.is_empty());
+    let finish_reason = if has_tool_calls { "tool_calls" } else { "stop" };
 
     let body = serde_json::to_value(ChatCompletionResponse {
         id: format!("chatcmpl-{}", uuid_v4()),
@@ -242,8 +235,7 @@ async fn chat_completions(
         usage: Usage {
             prompt_tokens: resp.input_tokens,
             completion_tokens: resp.output_tokens,
-            total_tokens: resp.input_tokens
-                + resp.output_tokens,
+            total_tokens: resp.input_tokens + resp.output_tokens,
         },
     })
     .unwrap_or_default();
@@ -255,9 +247,7 @@ async fn health() -> impl IntoResponse {
     Json(json!({"status": "ok"}))
 }
 
-async fn list_models(
-    State(router): State<SharedRouter>,
-) -> impl IntoResponse {
+async fn list_models(State(router): State<SharedRouter>) -> impl IntoResponse {
     let r = router.read().await;
     let models: Vec<Value> = r
         .all_models()
@@ -266,7 +256,7 @@ async fn list_models(
             json!({
                 "id": id,
                 "object": "model",
-                "owned_by": "model-router",
+                "owned_by": "brama",
             })
         })
         .collect();
@@ -277,18 +267,11 @@ async fn list_models(
     }))
 }
 
-async fn get_stats(
-    State(router): State<SharedRouter>,
-) -> impl IntoResponse {
+async fn get_stats(State(router): State<SharedRouter>) -> impl IntoResponse {
     let r = router.read().await;
-    let reqs =
-        r.stats.total_requests.load(Ordering::Relaxed);
-    let inp =
-        r.stats.total_input_tokens.load(Ordering::Relaxed);
-    let out = r
-        .stats
-        .total_output_tokens
-        .load(Ordering::Relaxed);
+    let reqs = r.stats.total_requests.load(Ordering::Relaxed);
+    let inp = r.stats.total_input_tokens.load(Ordering::Relaxed);
+    let out = r.stats.total_output_tokens.load(Ordering::Relaxed);
 
     Json(json!({
         "total_requests": reqs,
@@ -297,46 +280,22 @@ async fn get_stats(
     }))
 }
 
-pub async fn start_server(
-    router: ModelRouter,
-    port: u16,
-) -> Result<(), std::io::Error> {
-    let shared: SharedRouter =
-        Arc::new(RwLock::new(router));
+pub async fn start_server(router: ModelRouter, port: u16) -> Result<(), std::io::Error> {
+    let shared: SharedRouter = Arc::new(RwLock::new(router));
 
     let chat_app = Router::new()
-        .route(
-            "/v1/chat/completions",
-            post(chat_completions),
-        )
+        .route("/v1/chat/completions", post(chat_completions))
         .route("/v1/models", get(list_models))
         .route("/health", get(health))
         .route("/stats", get(get_stats))
         .with_state(shared);
 
-    let gateway_app = Router::new()
-        .route(
-            "/v1/subscription-router/:instance_id",
-            get(crate::gateway::subscription_router_get),
-        )
-        .route(
-            "/v1/subscriptions/:instance_id",
-            get(crate::gateway::subscriptions_get)
-                .post(crate::gateway::subscriptions_post)
-                .delete(crate::gateway::subscriptions_delete),
-        )
-        .route(
-            "/v1/donate",
-            post(crate::gateway::donate_wisent),
-        );
-
-    let app = chat_app.merge(gateway_app);
+    let app = chat_app;
 
     let addr = format!("0.0.0.0:{port}");
-    info!("Starting model-router server on {addr}");
+    info!("Starting brama server on {addr}");
 
-    let listener =
-        tokio::net::TcpListener::bind(&addr).await?;
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
     Ok(())
 }

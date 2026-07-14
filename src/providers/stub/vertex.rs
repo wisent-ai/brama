@@ -24,21 +24,14 @@ impl Default for VertexProvider {
 
 #[async_trait]
 impl ModelProvider for VertexProvider {
-    async fn complete(
-        &self,
-        request: &ModelRequest,
-    ) -> ModelResponse {
+    async fn complete(&self, request: &ModelRequest) -> ModelResponse {
         ModelResponse::failure(
             &request.model,
             "Vertex AI provider not yet implemented".into(),
         )
     }
 
-    fn estimate_cost(
-        &self,
-        _input_tokens: u32,
-        _output_tokens: u32,
-    ) -> f64 {
+    fn estimate_cost(&self, _input_tokens: u32, _output_tokens: u32) -> f64 {
         0.0
     }
 

@@ -8,11 +8,11 @@
 
 use std::env;
 
+use aes_gcm::aead::consts::U16;
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::aes::Aes256;
 use aes_gcm::AesGcm;
 use aes_gcm::{Key, Nonce};
-use aes_gcm::aead::consts::U16;
 
 // Node's createCipheriv('aes-256-gcm', key, iv) with a 16-byte IV runs GHASH
 // over the nonce per NIST SP 800-38D §7.2. Match that by using the 16-byte
@@ -69,8 +69,7 @@ fn get_key() -> Result<[u8; 32], CryptoError> {
         }
     }
     // Non-hex non-base64 strings: derive via scrypt (Node defaults N=16384, r=8, p=1).
-    let params = Params::new(14, 8, 1, 32)
-        .map_err(|e| CryptoError::ScryptParams(e.to_string()))?;
+    let params = Params::new(14, 8, 1, 32).map_err(|e| CryptoError::ScryptParams(e.to_string()))?;
     let mut out = [0u8; 32];
     scrypt(key_str.as_bytes(), SCRYPT_SALT, &params, &mut out)
         .map_err(|e| CryptoError::ScryptDerive(e.to_string()))?;

@@ -7,16 +7,15 @@
 use std::path::Path;
 use std::time::Duration;
 
-use postgrest::Postgrest;
 use serde_json::{json, Value};
 use tokio::fs;
 use tokio::process::Command;
 
-use crate::crypto;
-use crate::gateway::supabase;
+use crate::gateway::broker;
 use crate::subscription_dispatch::runtime::{strip_ansi, Sandbox};
 
-const SOURCE: &str = "model-router-native";
+const SOURCE: &str = "brama-native";
+
 
 #[derive(Debug, Clone)]
 pub struct CollectOptions {
@@ -32,8 +31,7 @@ pub async fn collect_subscription_checks(opts: CollectOptions) -> Result<Value, 
             .await?;
 
     if opts.persist {
-        let client = supabase::client().map_err(|e| e.to_string())?;
-        persist_checks(&client, &opts.agent_id, opts.provider.as_deref(), &checks).await?;
+        persist_checks(&opts.agent_id, opts.provider.as_deref(), &checks);
     }
 
     Ok(check_result(&opts, checks))
@@ -44,8 +42,7 @@ pub async fn collect_subscription_check_rows(
     provider_filter: Option<&str>,
     deep: bool,
 ) -> Result<Vec<Value>, String> {
-    let client = supabase::client().map_err(|e| e.to_string())?;
-    let runtime_rows = load_active_runtime_rows(&client, agent_id).await?;
+    let runtime_rows = load_active_runtime_rows(agent_id).await;
     let mut checks = Vec::new();
 
     for row in runtime_rows {
@@ -82,49 +79,25 @@ fn check_result(opts: &CollectOptions, checks: Vec<Value>) -> Value {
     })
 }
 
-async fn load_active_runtime_rows(
-    client: &Postgrest,
-    agent_id: &str,
-) -> Result<Vec<Value>, String> {
-    let resp = client
-        .from("trade_agent_subscriptions")
-        .select("id,instance_id,provider,key_encrypted,key_label,status,created_at,updated_at")
-        .eq("instance_id", agent_id)
-        .eq("status", "active")
-        .order("created_at.asc")
-        .execute()
-        .await
-        .map_err(|e| format!("load runtime rows: {e}"))?;
-    let status = resp.status();
-    let text = resp.text().await.unwrap_or_default();
-    if !status.is_success() {
-        return Err(format!(
-            "load runtime rows: http_{} {text}",
-            status.as_u16()
-        ));
+async fn load_active_runtime_rows(agent_id: &str) -> Vec<Value> {
+    let mut rows = Vec::new();
+    for entry in broker::list_subscriptions(agent_id).await {
+        if entry.status != "active" || crate::journal::is_retired(&entry.id) {
+            continue;
+        }
+        rows.push(json!({
+            "id": entry.id,
+            "provider": entry.provider,
+            "status": entry.status,
+        }));
     }
-    serde_json::from_str::<Vec<Value>>(&text).map_err(|e| format!("parse runtime rows: {e}"))
+    rows
 }
 
 async fn collect_row(agent_id: &str, row: &Value, deep: bool) -> Value {
     let provider = string_field(row, "provider");
     let subscription_id = string_field(row, "id");
-    let key_encrypted = string_field(row, "key_encrypted");
     let checked_at = chrono::Utc::now().to_rfc3339();
-    let token = match crypto::decrypt(&key_encrypted) {
-        Ok(t) => t,
-        Err(e) => {
-            return base_check(
-                agent_id,
-                row,
-                "failed",
-                "auth_status",
-                "failed",
-                &checked_at,
-            )
-            .with_error(&format!("decrypt: {e}"));
-        }
-    };
 
     let sandbox = match Sandbox::new() {
         Ok(s) => s,
@@ -140,11 +113,19 @@ async fn collect_row(agent_id: &str, row: &Value, deep: bool) -> Value {
             .with_error(&format!("sandbox: {e}"));
         }
     };
+    let Some(credential) = broker::subscription_credential(&subscription_id, &provider).await else {
+        return base_check(agent_id, row, "failed", "auth_status", "failed", &checked_at)
+            .with_error("no capability credential");
+    };
+    let Ok(token) = credential.expose_utf8() else {
+        return base_check(agent_id, row, "failed", "auth_status", "failed", &checked_at)
+            .with_error("invalid capability credential");
+    };
 
     let result = match provider.as_str() {
-        "claude_code" => check_claude(agent_id, row, &token, &sandbox, &checked_at, deep).await,
-        "codex" => check_codex(agent_id, row, &token, &sandbox, &checked_at).await,
-        "kimi" => check_kimi(agent_id, row, &token, &sandbox, &checked_at, deep).await,
+        "claude_code" => check_claude(agent_id, row, token, &sandbox, &checked_at, deep).await,
+        "codex" => check_codex(agent_id, row, token, &sandbox, &checked_at).await,
+        "kimi" => check_kimi(agent_id, row, token, &sandbox, &checked_at, deep).await,
         "opencode" => base_check(
             agent_id,
             row,
@@ -544,49 +525,20 @@ async fn run_status_command(
     })
 }
 
-async fn persist_checks(
-    client: &Postgrest,
-    agent_id: &str,
-    provider: Option<&str>,
-    rows: &[Value],
-) -> Result<(), String> {
-    let mut delete = client
-        .from("subscription_router_checks")
-        .eq("agent_id", agent_id)
-        .eq("source", SOURCE);
-    if let Some(provider) = provider {
-        delete = delete.eq("provider", provider);
+fn persist_checks(agent_id: &str, provider: Option<&str>, rows: &[Value]) {
+    let _ = provider;
+    for row in rows {
+        crate::journal::record_check(
+            agent_id,
+            &string_field(row, "provider"),
+            &string_field(row, "model"),
+            "",
+            SOURCE,
+            &string_field(row, "status"),
+            None,
+            &string_field(row, "checked_at"),
+        );
     }
-    let resp = delete
-        .delete()
-        .execute()
-        .await
-        .map_err(|e| format!("delete old checks: {e}"))?;
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let text = resp.text().await.unwrap_or_default();
-        return Err(format!(
-            "delete old checks: http_{} {text}",
-            status.as_u16()
-        ));
-    }
-
-    if rows.is_empty() {
-        return Ok(());
-    }
-    let body = serde_json::to_string(rows).map_err(|e| format!("serialize checks: {e}"))?;
-    let resp = client
-        .from("subscription_router_checks")
-        .insert(body)
-        .execute()
-        .await
-        .map_err(|e| format!("insert checks: {e}"))?;
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let text = resp.text().await.unwrap_or_default();
-        return Err(format!("insert checks: http_{} {text}", status.as_u16()));
-    }
-    Ok(())
 }
 
 fn base_check(

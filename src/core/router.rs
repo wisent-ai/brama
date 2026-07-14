@@ -5,9 +5,7 @@ use std::sync::Arc;
 use tracing::{error, info, warn};
 
 use crate::provider::ModelProvider;
-use crate::types::{
-    Message, ModelRequest, ModelResponse, Tool,
-};
+use crate::types::{Message, ModelRequest, ModelResponse, Tool};
 
 pub struct RouterStats {
     pub total_requests: AtomicU64,
@@ -25,16 +23,11 @@ impl RouterStats {
     }
 
     fn record(&self, resp: &ModelResponse) {
-        self.total_requests
-            .fetch_add(1, Ordering::Relaxed);
-        self.total_input_tokens.fetch_add(
-            resp.input_tokens as u64,
-            Ordering::Relaxed,
-        );
-        self.total_output_tokens.fetch_add(
-            resp.output_tokens as u64,
-            Ordering::Relaxed,
-        );
+        self.total_requests.fetch_add(1, Ordering::Relaxed);
+        self.total_input_tokens
+            .fetch_add(resp.input_tokens as u64, Ordering::Relaxed);
+        self.total_output_tokens
+            .fetch_add(resp.output_tokens as u64, Ordering::Relaxed);
     }
 }
 
@@ -55,25 +48,16 @@ impl ModelRouter {
         }
     }
 
-    pub fn register_provider(
-        &mut self,
-        provider: Arc<dyn ModelProvider>,
-    ) {
+    pub fn register_provider(&mut self, provider: Arc<dyn ModelProvider>) {
         let name = provider.name().to_string();
         for model in provider.models() {
-            self.model_to_provider
-                .insert(model, name.clone());
+            self.model_to_provider.insert(model, name.clone());
         }
         self.providers.insert(name, provider);
     }
 
-    pub fn set_retry_chain(
-        &mut self,
-        model: &str,
-        chain: Vec<String>,
-    ) {
-        self.retry_chains
-            .insert(model.to_string(), chain);
+    pub fn set_retry_chain(&mut self, model: &str, chain: Vec<String>) {
+        self.retry_chains.insert(model.to_string(), chain);
     }
 
     pub async fn complete(
@@ -95,48 +79,31 @@ impl ModelRouter {
         };
 
         // Try the primary provider for this model
-        if let Some(pname) =
-            self.model_to_provider.get(model)
-        {
-            if let Some(provider) = self.providers.get(pname)
-            {
-                info!(
-                    "Routing {} to provider {}",
-                    model, pname
-                );
-                let resp =
-                    provider.complete(&request).await;
+        if let Some(pname) = self.model_to_provider.get(model) {
+            if let Some(provider) = self.providers.get(pname) {
+                info!("Routing {} to provider {}", model, pname);
+                let resp = provider.complete(&request).await;
                 if resp.success {
                     self.stats.record(&resp);
                     return resp;
                 }
-                warn!(
-                    "Primary {} failed for {}: {:?}",
-                    pname, model, resp.error
-                );
+                warn!("Primary {} failed for {}: {:?}", pname, model, resp.error);
             }
         }
 
         // Walk the retry chain to find an alternative
         if let Some(chain) = self.retry_chains.get(model) {
             for alt_model in chain {
-                let pname = match self
-                    .model_to_provider
-                    .get(alt_model)
-                {
+                let pname = match self.model_to_provider.get(alt_model) {
                     Some(n) => n,
                     None => continue,
                 };
-                let provider =
-                    match self.providers.get(pname) {
-                        Some(p) => p,
-                        None => continue,
-                    };
+                let provider = match self.providers.get(pname) {
+                    Some(p) => p,
+                    None => continue,
+                };
 
-                info!(
-                    "Retry with {} via {}",
-                    alt_model, pname
-                );
+                info!("Retry with {} via {}", alt_model, pname);
 
                 let alt_req = ModelRequest {
                     messages: request.messages.clone(),
@@ -147,29 +114,20 @@ impl ModelRouter {
                     tools: request.tools.clone(),
                 };
 
-                let resp =
-                    provider.complete(&alt_req).await;
+                let resp = provider.complete(&alt_req).await;
                 if resp.success {
                     self.stats.record(&resp);
                     return resp;
                 }
-                warn!(
-                    "Retry {} failed: {:?}",
-                    alt_model, resp.error
-                );
+                warn!("Retry {} failed: {:?}", alt_model, resp.error);
             }
         }
 
         error!("All providers failed for {}", model);
-        ModelResponse::failure(
-            model,
-            format!("all providers failed for {model}"),
-        )
+        ModelResponse::failure(model, format!("all providers failed for {model}"))
     }
 
-    pub async fn get_available_providers(
-        &self,
-    ) -> HashMap<String, bool> {
+    pub async fn get_available_providers(&self) -> HashMap<String, bool> {
         let mut result = HashMap::new();
         for (name, provider) in &self.providers {
             let avail = provider.is_available().await;
@@ -178,10 +136,7 @@ impl ModelRouter {
         result
     }
 
-    pub fn get_cheapest_model(
-        &self,
-        _min_quality: f64,
-    ) -> Option<String> {
+    pub fn get_cheapest_model(&self, _min_quality: f64) -> Option<String> {
         let ranked = [
             "qwen3-4b",
             "qwen3-8b",
@@ -215,30 +170,14 @@ pub fn build_default_router() -> ModelRouter {
 
     let mut router = ModelRouter::new();
 
-    router.register_provider(Arc::new(
-        HuggingFaceProvider::new(),
-    ));
-    router.register_provider(Arc::new(
-        MoonshotProvider::new(),
-    ));
-    router.register_provider(Arc::new(
-        LocalProvider::new(),
-    ));
-    router.register_provider(Arc::new(
-        VertexProvider::new(),
-    ));
-    router.register_provider(Arc::new(
-        FeatherlessProvider::new(),
-    ));
-    router.register_provider(Arc::new(
-        GroqProvider::new(),
-    ));
-    router.register_provider(Arc::new(
-        OpenRouterProvider::new(),
-    ));
-    router.register_provider(Arc::new(
-        CloudflareProvider::new(),
-    ));
+    router.register_provider(Arc::new(HuggingFaceProvider::new()));
+    router.register_provider(Arc::new(MoonshotProvider::new()));
+    router.register_provider(Arc::new(LocalProvider::new()));
+    router.register_provider(Arc::new(VertexProvider::new()));
+    router.register_provider(Arc::new(FeatherlessProvider::new()));
+    router.register_provider(Arc::new(GroqProvider::new()));
+    router.register_provider(Arc::new(OpenRouterProvider::new()));
+    router.register_provider(Arc::new(CloudflareProvider::new()));
 
     // Retry chains: if primary fails, try alternatives.
     // Only providers with configured credentials are registered; these chains
@@ -250,10 +189,7 @@ pub fn build_default_router() -> ModelRouter {
         "cf-llama-3.1-8b".to_string(),
     ];
 
-    router.set_retry_chain(
-        "cydonia-24b",
-        free_tier_chain[1..].to_vec(),
-    );
+    router.set_retry_chain("cydonia-24b", free_tier_chain[1..].to_vec());
 
     router
 }

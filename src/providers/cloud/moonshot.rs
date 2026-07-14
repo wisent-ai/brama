@@ -1,4 +1,3 @@
-use std::env;
 use std::time::Instant;
 
 use async_trait::async_trait;
@@ -6,22 +5,20 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use tracing::{debug, error};
 
+use crate::gateway::broker::{provider_capability_configured, provider_credential};
 use crate::provider::ModelProvider;
 use crate::types::{ModelRequest, ModelResponse};
 
-const API_URL: &str =
-    "https://api.moonshot.cn/v1/chat/completions";
+const API_URL: &str = "https://api.moonshot.cn/v1/chat/completions";
 
 pub struct MoonshotProvider {
     client: Client,
-    api_key: Option<String>,
 }
 
 impl MoonshotProvider {
     pub fn new() -> Self {
         Self {
             client: Client::new(),
-            api_key: env::var("MOONSHOT_API_KEY").ok(),
         }
     }
 
@@ -38,20 +35,7 @@ impl Default for MoonshotProvider {
 
 #[async_trait]
 impl ModelProvider for MoonshotProvider {
-    async fn complete(
-        &self,
-        request: &ModelRequest,
-    ) -> ModelResponse {
-        let api_key = match &self.api_key {
-            Some(key) => key,
-            None => {
-                return ModelResponse::failure(
-                    &request.model,
-                    "MOONSHOT_API_KEY not set".into(),
-                );
-            }
-        };
-
+    async fn complete(&self, request: &ModelRequest) -> ModelResponse {
         let mut messages: Vec<Value> = Vec::new();
         if let Some(system) = &request.system {
             messages.push(json!({
@@ -76,13 +60,29 @@ impl ModelProvider for MoonshotProvider {
         debug!("Moonshot request to model {}", request.model);
         let start = Instant::now();
 
+        let credential = match provider_credential(self.name()).await {
+            Some(credential) => credential,
+            None => {
+                return ModelResponse::failure(
+                    &request.model,
+                    "Provider credential unavailable".into(),
+                );
+            }
+        };
+        let api_key = match credential.expose_utf8() {
+            Ok(api_key) => api_key,
+            Err(_) => {
+                return ModelResponse::failure(
+                    &request.model,
+                    "Provider credential unavailable".into(),
+                );
+            }
+        };
+
         let resp = self
             .client
             .post(API_URL)
-            .header(
-                "authorization",
-                format!("Bearer {api_key}"),
-            )
+            .header("authorization", format!("Bearer {api_key}"))
             .header("content-type", "application/json")
             .json(&body)
             .send()
@@ -94,10 +94,7 @@ impl ModelProvider for MoonshotProvider {
             Ok(r) => r,
             Err(e) => {
                 error!("Moonshot HTTP error: {e}");
-                return ModelResponse::failure(
-                    &request.model,
-                    format!("HTTP error: {e}"),
-                );
+                return ModelResponse::failure(&request.model, format!("HTTP error: {e}"));
             }
         };
 
@@ -105,10 +102,7 @@ impl ModelProvider for MoonshotProvider {
         let body_text = match resp.text().await {
             Ok(t) => t,
             Err(e) => {
-                return ModelResponse::failure(
-                    &request.model,
-                    format!("read body failed: {e}"),
-                );
+                return ModelResponse::failure(&request.model, format!("read body failed: {e}"));
             }
         };
 
@@ -120,14 +114,10 @@ impl ModelProvider for MoonshotProvider {
             );
         }
 
-        let parsed: Value = match serde_json::from_str(&body_text)
-        {
+        let parsed: Value = match serde_json::from_str(&body_text) {
             Ok(v) => v,
             Err(e) => {
-                return ModelResponse::failure(
-                    &request.model,
-                    format!("JSON parse error: {e}"),
-                );
+                return ModelResponse::failure(&request.model, format!("JSON parse error: {e}"));
             }
         };
 
@@ -138,16 +128,10 @@ impl ModelProvider for MoonshotProvider {
             .unwrap_or("")
             .to_string();
 
-        let input_tokens = parsed["usage"]["prompt_tokens"]
-            .as_u64()
-            .unwrap_or(0) as u32;
-        let output_tokens =
-            parsed["usage"]["completion_tokens"]
-                .as_u64()
-                .unwrap_or(0) as u32;
+        let input_tokens = parsed["usage"]["prompt_tokens"].as_u64().unwrap_or(0) as u32;
+        let output_tokens = parsed["usage"]["completion_tokens"].as_u64().unwrap_or(0) as u32;
 
-        let cost =
-            self.estimate_cost(input_tokens, output_tokens);
+        let cost = self.estimate_cost(input_tokens, output_tokens);
 
         ModelResponse {
             content,
@@ -162,19 +146,14 @@ impl ModelProvider for MoonshotProvider {
         }
     }
 
-    fn estimate_cost(
-        &self,
-        input_tokens: u32,
-        output_tokens: u32,
-    ) -> f64 {
+    fn estimate_cost(&self, input_tokens: u32, output_tokens: u32) -> f64 {
         let inp = 1.0;
         let out = 2.0;
-        (input_tokens as f64 / 1_000_000.0) * inp
-            + (output_tokens as f64 / 1_000_000.0) * out
+        (input_tokens as f64 / 1_000_000.0) * inp + (output_tokens as f64 / 1_000_000.0) * out
     }
 
     async fn is_available(&self) -> bool {
-        self.api_key.is_some()
+        provider_capability_configured(self.name())
     }
 
     fn name(&self) -> &str {

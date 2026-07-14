@@ -1,16 +1,16 @@
 use clap::{Parser, Subcommand};
 use tracing::info;
 
-use model_router::subscription_dispatch::{
+use brama::subscription_dispatch::{
     collect_subscription_checks, collect_task_quality, CollectOptions, TaskQualityOptions,
 };
-use model_router::{
+use brama::{
     build_default_router, detect_compute_resources, select_model_for_resources, start_server,
     Message,
 };
 
 #[derive(Parser)]
-#[command(name = "model-router", about = "Multi-provider LLM router")]
+#[command(name = "brama", about = "Multi-provider LLM router")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -32,6 +32,8 @@ enum Commands {
     },
     /// Detect local hardware capabilities
     Detect,
+    /// Serve the read-only stdio MCP server (agent surface)
+    Mcp,
     /// Collect native CLI subscription/auth checks into subscription-router
     CollectSubscriptionChecks {
         /// Model-router agent/client id whose runtime credentials should be checked
@@ -72,7 +74,9 @@ enum Commands {
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
 
     let cli = Cli::parse();
 
@@ -124,6 +128,9 @@ async fn main() {
             let (model, backend) = select_model_for_resources(&res);
             println!("\nRecommended model: {model}");
             println!("Recommended backend: {backend}");
+        }
+        Commands::Mcp => {
+            brama::mcp::serve();
         }
         Commands::CollectSubscriptionChecks {
             agent_id,

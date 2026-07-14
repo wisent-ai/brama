@@ -13,9 +13,7 @@ pub enum RouterError {
     #[error("JSON parsing failed: {0}")]
     JsonError(#[from] serde_json::Error),
 
-    #[error(
-        "missing API key: env var '{0}' is not set"
-    )]
+    #[error("missing API key: env var '{0}' is not set")]
     MissingApiKey(String),
 
     #[error("no provider registered for model '{0}'")]
@@ -97,10 +95,7 @@ pub struct Tool {
 pub struct ToolFunction {
     pub name: String,
     pub description: String,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parameters: Option<serde_json::Value>,
 }
 

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::env;
 use std::time::Instant;
 
 use async_trait::async_trait;
@@ -7,11 +6,11 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use tracing::{debug, error};
 
+use crate::gateway::broker::{provider_capability_configured, provider_credential};
 use crate::provider::ModelProvider;
 use crate::types::{ModelRequest, ModelResponse};
 
-const API_URL: &str =
-    "https://api.groq.com/openai/v1/chat/completions";
+const API_URL: &str = "https://api.groq.com/openai/v1/chat/completions";
 
 fn alias_map() -> HashMap<&'static str, &'static str> {
     HashMap::from([
@@ -23,14 +22,12 @@ fn alias_map() -> HashMap<&'static str, &'static str> {
 
 pub struct GroqProvider {
     client: Client,
-    api_key: Option<String>,
 }
 
 impl GroqProvider {
     pub fn new() -> Self {
         Self {
             client: Client::new(),
-            api_key: env::var("GROQ_API_KEY").ok(),
         }
     }
 
@@ -48,15 +45,6 @@ impl Default for GroqProvider {
 #[async_trait]
 impl ModelProvider for GroqProvider {
     async fn complete(&self, request: &ModelRequest) -> ModelResponse {
-        let api_key = match &self.api_key {
-            Some(key) => key,
-            None => {
-                return ModelResponse::failure(
-                    &request.model,
-                    "GROQ_API_KEY not set".into(),
-                );
-            }
-        };
 
         let mut messages: Vec<Value> = Vec::new();
         if let Some(system) = &request.system {
@@ -81,6 +69,25 @@ impl ModelProvider for GroqProvider {
         debug!("Groq request to model {}", upstream);
         let start = Instant::now();
 
+        let credential = match provider_credential(self.name()).await {
+            Some(credential) => credential,
+            None => {
+                return ModelResponse::failure(
+                    &request.model,
+                    "Provider credential unavailable".into(),
+                );
+            }
+        };
+        let api_key = match credential.expose_utf8() {
+            Ok(api_key) => api_key,
+            Err(_) => {
+                return ModelResponse::failure(
+                    &request.model,
+                    "Provider credential unavailable".into(),
+                );
+            }
+        };
+
         let resp = self
             .client
             .post(API_URL)
@@ -96,10 +103,7 @@ impl ModelProvider for GroqProvider {
             Ok(r) => r,
             Err(e) => {
                 error!("Groq HTTP error: {e}");
-                return ModelResponse::failure(
-                    &request.model,
-                    format!("HTTP error: {e}"),
-                );
+                return ModelResponse::failure(&request.model, format!("HTTP error: {e}"));
             }
         };
 
@@ -107,10 +111,7 @@ impl ModelProvider for GroqProvider {
         let body_text = match resp.text().await {
             Ok(t) => t,
             Err(e) => {
-                return ModelResponse::failure(
-                    &request.model,
-                    format!("read body failed: {e}"),
-                );
+                return ModelResponse::failure(&request.model, format!("read body failed: {e}"));
             }
         };
 
@@ -125,10 +126,7 @@ impl ModelProvider for GroqProvider {
         let parsed: Value = match serde_json::from_str(&body_text) {
             Ok(v) => v,
             Err(e) => {
-                return ModelResponse::failure(
-                    &request.model,
-                    format!("JSON parse error: {e}"),
-                );
+                return ModelResponse::failure(&request.model, format!("JSON parse error: {e}"));
             }
         };
 
@@ -136,11 +134,8 @@ impl ModelProvider for GroqProvider {
             .as_str()
             .unwrap_or("")
             .to_string();
-        let input_tokens =
-            parsed["usage"]["prompt_tokens"].as_u64().unwrap_or(0) as u32;
-        let output_tokens = parsed["usage"]["completion_tokens"]
-            .as_u64()
-            .unwrap_or(0) as u32;
+        let input_tokens = parsed["usage"]["prompt_tokens"].as_u64().unwrap_or(0) as u32;
+        let output_tokens = parsed["usage"]["completion_tokens"].as_u64().unwrap_or(0) as u32;
 
         ModelResponse {
             content,
@@ -160,7 +155,7 @@ impl ModelProvider for GroqProvider {
     }
 
     async fn is_available(&self) -> bool {
-        self.api_key.is_some()
+        provider_capability_configured(self.name())
     }
 
     fn name(&self) -> &str {

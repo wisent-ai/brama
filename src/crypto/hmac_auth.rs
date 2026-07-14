@@ -62,9 +62,7 @@ pub fn verify_agent_hmac(
     let ts: i64 = headers
         .timestamp
         .parse()
-        .map_err(|e: std::num::ParseIntError| {
-            HmacAuthError::InvalidTimestamp(e.to_string())
-        })?;
+        .map_err(|e: std::num::ParseIntError| HmacAuthError::InvalidTimestamp(e.to_string()))?;
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
@@ -80,11 +78,13 @@ pub fn verify_agent_hmac(
         h.update(body);
         hex::encode(h.finalize())
     };
-    let message =
-        format!("{}:{}:{}", headers.agent_id, headers.timestamp, body_hash_hex);
+    let message = format!(
+        "{}:{}:{}",
+        headers.agent_id, headers.timestamp, body_hash_hex
+    );
 
-    let mut mac = HmacSha256::new_from_slice(secret)
-        .map_err(|e| HmacAuthError::HmacInit(e.to_string()))?;
+    let mut mac =
+        HmacSha256::new_from_slice(secret).map_err(|e| HmacAuthError::HmacInit(e.to_string()))?;
     mac.update(message.as_bytes());
     let expected = mac.finalize().into_bytes();
     let expected_hex = hex::encode(expected);
@@ -117,8 +117,8 @@ pub fn compute_signature(
         hex::encode(h.finalize())
     };
     let message = format!("{agent_id}:{timestamp}:{body_hash_hex}");
-    let mut mac = HmacSha256::new_from_slice(secret)
-        .map_err(|e| HmacAuthError::HmacInit(e.to_string()))?;
+    let mut mac =
+        HmacSha256::new_from_slice(secret).map_err(|e| HmacAuthError::HmacInit(e.to_string()))?;
     mac.update(message.as_bytes());
     Ok(hex::encode(mac.finalize().into_bytes()))
 }
