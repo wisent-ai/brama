@@ -12,9 +12,11 @@ use tokio::sync::RwLock;
 use tracing::info;
 
 use super::router::ModelRouter;
+use crate::gateway::broker;
 use crate::subscription_dispatch::{
     authenticate_agent, dispatch_any_subscription, dispatch_any_vision_capable_subscription,
     dispatch_subscription, dispatch_task_subscription, is_subscription_model,
+    subscription_model_for_provider,
 };
 use crate::types::{BillingTarget, Message, ModelRequest, Tool, ToolCall};
 
@@ -307,23 +309,34 @@ async fn list_models(
     State(router): State<SharedRouter>,
     headers: axum::http::HeaderMap,
 ) -> impl IntoResponse {
-    let r = router.read().await;
-    let mut model_ids = r.all_models();
+    let mut model_ids = {
+        let r = router.read().await;
+        r.all_models()
+    };
+    let catalog_agent =
+        std::env::var("BRAMA_CATALOG_AGENT_ID").unwrap_or_else(|_| "wisent-app".into());
+    for subscription in broker::list_subscriptions(&catalog_agent).await {
+        if subscription.status == "active" {
+            if let Some(model) = subscription_model_for_provider(&subscription.provider) {
+                model_ids.push(model.to_owned());
+            }
+        }
+    }
     model_ids.sort();
+    model_ids.dedup();
     if headers.contains_key("x-jeden-schema-min") {
         let models = model_ids
             .into_iter()
             .map(|id| {
-                let openai = id == "openai-primary";
                 json!({
                     "id": id,
                     "available": true,
-                    "contextWindow": if openai { 1_000_000 } else { 128_000 },
-                    "maxOutputTokens": if openai { 128_000 } else { 16_384 },
-                    "inputModalities": if openai { vec!["text", "image"] } else { vec!["text"] },
+                    "contextWindow": 200_000,
+                    "maxOutputTokens": 32_000,
+                    "inputModalities": ["text"],
                     "outputModalities": ["text"],
-                    "tools": openai,
-                    "reasoning": openai,
+                    "tools": false,
+                    "reasoning": false,
                     "price": {
                         "input": 0.0,
                         "output": 0.0,

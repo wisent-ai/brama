@@ -122,6 +122,10 @@ fn canonical_provider_id(provider: &str) -> Option<&'static str> {
     }
 }
 
+pub(crate) fn subscription_model_for_provider(provider: &str) -> Option<&'static str> {
+    canonical_provider_id(provider).and_then(canonical_model_for_provider)
+}
+
 fn eligible_subscription_entries(
     entries: Vec<broker::SubscriptionEntry>,
     provider: &str,
