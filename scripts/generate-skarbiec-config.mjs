@@ -11,11 +11,7 @@ const workloadUid = 10001;
 const workloadGid = 10001;
 const maxTtlSeconds = 315_360_000;
 const maxUses = 10_000_000;
-const subscriptionIds = [
-  'brama-sub-wisent-app-claude-1',
-  'brama-sub-wisent-app-claude-2',
-  'brama-sub-wisent-app-claude-3',
-];
+const subscriptionIds = ['brama-sub-wisent-app-claude-primary'];
 const now = Math.floor(Date.now() / 1000);
 const expiresAt = now + maxTtlSeconds;
 const policyDomain = Buffer.from('SKARBIEC-AGENT-POLICY\0v1\0', 'utf8');

@@ -47,30 +47,14 @@ export SKARBIEC_WORKLOAD_ID=brama-cloudrun
 export SKARBIEC_WORKLOAD_SIGNING_KEY_FILE="$config_dir/brama-proof.key"
 export ENTITLEMENTS_ROUTER_BIN=/usr/local/bin/skarbiec-entitlements-router
 
-subscription_1_issue="$($ENTITLEMENTS_ROUTER_BIN capability-issue \
+subscription_issue="$($ENTITLEMENTS_ROUTER_BIN capability-issue \
   --agent brama-runtime \
   --purpose brama.provider.authenticate \
-  --resource provider:claude-code:brama-sub-wisent-app-claude-1 \
+  --resource provider:claude-code:brama-sub-wisent-app-claude-primary \
   --target brama \
   --ttl 2592000 \
   --max-uses 1000000)"
-subscription_1_capability="$(printf '%s' "$subscription_1_issue" | python3 -c 'import json,sys; print(json.load(sys.stdin)["capability_id"])')"
-subscription_2_issue="$($ENTITLEMENTS_ROUTER_BIN capability-issue \
-  --agent brama-runtime \
-  --purpose brama.provider.authenticate \
-  --resource provider:claude-code:brama-sub-wisent-app-claude-2 \
-  --target brama \
-  --ttl 2592000 \
-  --max-uses 1000000)"
-subscription_2_capability="$(printf '%s' "$subscription_2_issue" | python3 -c 'import json,sys; print(json.load(sys.stdin)["capability_id"])')"
-subscription_3_issue="$($ENTITLEMENTS_ROUTER_BIN capability-issue \
-  --agent brama-runtime \
-  --purpose brama.provider.authenticate \
-  --resource provider:claude-code:brama-sub-wisent-app-claude-3 \
-  --target brama \
-  --ttl 2592000 \
-  --max-uses 1000000)"
-subscription_3_capability="$(printf '%s' "$subscription_3_issue" | python3 -c 'import json,sys; print(json.load(sys.stdin)["capability_id"])')"
+subscription_capability="$(printf '%s' "$subscription_issue" | python3 -c 'import json,sys; print(json.load(sys.stdin)["capability_id"])')"
 request_issue="$($ENTITLEMENTS_ROUTER_BIN capability-issue \
   --agent brama-runtime \
   --purpose brama.request.sign \
@@ -79,13 +63,10 @@ request_issue="$($ENTITLEMENTS_ROUTER_BIN capability-issue \
   --ttl 2592000 \
   --max-uses 1000000)"
 request_capability="$(printf '%s' "$request_issue" | python3 -c 'import json,sys; print(json.load(sys.stdin)["capability_id"])')"
-export BRAMA_PROVIDER_CAPABILITY_IDS="{\"brama-sub-wisent-app-claude-1\":\"$subscription_1_capability\",\"brama-sub-wisent-app-claude-2\":\"$subscription_2_capability\",\"brama-sub-wisent-app-claude-3\":\"$subscription_3_capability\"}"
+export BRAMA_PROVIDER_CAPABILITY_IDS="{\"brama-sub-wisent-app-claude-primary\":\"$subscription_capability\"}"
 export BRAMA_REQUEST_SIGN_CAPABILITY_IDS="{\"wisent-app\":\"$request_capability\"}"
-export BRAMA_SUBSCRIPTION_CATALOG='{"items":[{"id":"brama-sub-wisent-app-claude-1","provider":"claude_code","agent_id":"wisent-app","status":"active"},{"id":"brama-sub-wisent-app-claude-2","provider":"claude_code","agent_id":"wisent-app","status":"active"},{"id":"brama-sub-wisent-app-claude-3","provider":"claude_code","agent_id":"wisent-app","status":"active"}]}'
-unset subscription_1_issue subscription_1_capability
-unset subscription_2_issue subscription_2_capability
-unset subscription_3_issue subscription_3_capability
-unset request_issue request_capability
+export BRAMA_SUBSCRIPTION_CATALOG='{"items":[{"id":"brama-sub-wisent-app-claude-primary","provider":"claude_code","agent_id":"wisent-app","status":"active"}]}'
+unset subscription_issue subscription_capability request_issue request_capability
 
 $ENTITLEMENTS_ROUTER_BIN capability-serve &
 broker_pid=$!
