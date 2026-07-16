@@ -7,16 +7,16 @@ use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use tokio::sync::RwLock;
 use tracing::info;
 
 use super::router::ModelRouter;
 use crate::subscription_dispatch::{
-    dispatch_any_subscription, dispatch_any_vision_capable_subscription, dispatch_subscription,
-    dispatch_task_subscription, is_subscription_model,
+    authenticate_agent, dispatch_any_subscription, dispatch_any_vision_capable_subscription,
+    dispatch_subscription, dispatch_task_subscription, is_subscription_model,
 };
-use crate::types::{Message, ModelRequest, Tool, ToolCall};
+use crate::types::{BillingTarget, Message, ModelRequest, Tool, ToolCall};
 
 type SharedRouter = Arc<RwLock<ModelRouter>>;
 
@@ -31,6 +31,10 @@ struct ChatCompletionRequest {
     temperature: f64,
     #[serde(default)]
     tools: Option<Vec<Tool>>,
+    #[serde(default, rename = "billingTarget")]
+    billing_target: Option<BillingTarget>,
+    #[serde(default, rename = "subscriptionDecisionId")]
+    subscription_decision_id: Option<String>,
 }
 
 fn default_max_tokens() -> u32 {
@@ -97,8 +101,39 @@ struct ChoiceMessage {
 #[derive(Debug, Serialize)]
 struct Usage {
     prompt_tokens: u32,
+
     completion_tokens: u32,
     total_tokens: u32,
+}
+
+fn model_error_status(message: &str) -> StatusCode {
+    let normalized = message.to_ascii_lowercase();
+    if normalized.starts_with("auth:")
+        || normalized.contains("missing x-agent-")
+        || normalized.contains("no auth secret for agent")
+    {
+        return StatusCode::UNAUTHORIZED;
+    }
+    if [
+        "selected subscription",
+        "all '",
+        "hit your limit",
+        "session limit",
+        "usage limit",
+        "weekly limit",
+        "rate_limit",
+        "authentication_error",
+        "invalid authentication",
+        "refresh token was revoked",
+        "access token could not be refreshed",
+        "invalid_grant",
+    ]
+    .iter()
+    .any(|marker| normalized.contains(marker))
+    {
+        return StatusCode::TOO_MANY_REQUESTS;
+    }
+    StatusCode::INTERNAL_SERVER_ERROR
 }
 
 async fn chat_completions(
@@ -152,12 +187,25 @@ async fn chat_completions(
         is_any_vision_capable_subscription_selector(requested_model);
     let task_subscription = task_subscription_selector(requested_model);
     let selected_model = requested_model.to_string();
-
-    let resp = if any_subscription
+    let subscription_request = any_subscription
         || any_vision_capable_subscription
         || task_subscription.is_some()
-        || is_subscription_model(&selected_model)
-    {
+        || is_subscription_model(&selected_model);
+    if !subscription_request {
+        if let Err(error) = authenticate_agent(&headers, &body).await {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({
+                    "error": {
+                        "message": error,
+                        "type": "authentication_error",
+                    }
+                })),
+            );
+        }
+    }
+
+    let resp = if subscription_request {
         // OpenAI-compat callers send the system prompt as a system-role
         // message in `messages`. The subscription engines (claude_code,
         // codex, kimi, opencode) read `request.system` as a separate
@@ -183,6 +231,8 @@ async fn chat_completions(
             temperature: req.temperature,
             system,
             tools: req.tools,
+            billing_target: req.billing_target,
+            subscription_decision_id: req.subscription_decision_id,
         };
         if let Some(task) = task_subscription.as_deref() {
             dispatch_task_subscription(&headers, &dispatch_req, &body, task).await
@@ -207,13 +257,19 @@ async fn chat_completions(
     };
 
     if !resp.success {
+        let message = resp.error.unwrap_or_default();
+        let status = model_error_status(&message);
         let body = json!({
             "error": {
-                "message": resp.error.unwrap_or_default(),
-                "type": "server_error",
+                "message": message,
+                "type": if status == StatusCode::TOO_MANY_REQUESTS {
+                    "subscription_unavailable"
+                } else {
+                    "server_error"
+                },
             }
         });
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(body));
+        return (status, Json(body));
     }
 
     let has_tool_calls = resp.tool_calls.as_ref().map_or(false, |tc| !tc.is_empty());
@@ -247,10 +303,47 @@ async fn health() -> impl IntoResponse {
     Json(json!({"status": "ok"}))
 }
 
-async fn list_models(State(router): State<SharedRouter>) -> impl IntoResponse {
+async fn list_models(
+    State(router): State<SharedRouter>,
+    headers: axum::http::HeaderMap,
+) -> impl IntoResponse {
     let r = router.read().await;
-    let models: Vec<Value> = r
-        .all_models()
+    let mut model_ids = r.all_models();
+    model_ids.sort();
+    if headers.contains_key("x-jeden-schema-min") {
+        let models = model_ids
+            .into_iter()
+            .map(|id| {
+                let openai = id == "openai-primary";
+                json!({
+                    "id": id,
+                    "available": true,
+                    "contextWindow": if openai { 1_000_000 } else { 128_000 },
+                    "maxOutputTokens": if openai { 128_000 } else { 16_384 },
+                    "inputModalities": if openai { vec!["text", "image"] } else { vec!["text"] },
+                    "outputModalities": ["text"],
+                    "tools": openai,
+                    "reasoning": openai,
+                    "price": {
+                        "input": 0.0,
+                        "output": 0.0,
+                        "cacheRead": 0.0,
+                        "cacheWrite": 0.0,
+                    },
+                    "fallback": [],
+                    "promotion": [],
+                })
+            })
+            .collect::<Vec<_>>();
+        return Json(json!({
+            "catalogRevision": std::env::var("BRAMA_CATALOG_REVISION")
+                .unwrap_or_else(|_| "brama-v1".into()),
+            "version": "v1",
+            "models": models,
+            "degraded": false,
+        }));
+    }
+    let models = model_ids
         .into_iter()
         .map(|id| {
             json!({
@@ -259,8 +352,7 @@ async fn list_models(State(router): State<SharedRouter>) -> impl IntoResponse {
                 "owned_by": "brama",
             })
         })
-        .collect();
-
+        .collect::<Vec<_>>();
     Json(json!({
         "object": "list",
         "data": models,
@@ -307,4 +399,51 @@ fn uuid_v4() -> String {
         .unwrap_or_default()
         .as_nanos();
     format!("{t:032x}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deserializes_camel_case_subscription_routing_fields() {
+        let request: ChatCompletionRequest = serde_json::from_value(json!({
+            "model": "claude-code-subscription",
+            "messages": [{"role": "user", "content": "hello"}],
+            "billingTarget": {
+                "providerId": "claude_code",
+                "accountId": "acct-1",
+                "subscriptionId": "sub-2",
+                "quotaBucket": "chat"
+            },
+            "subscriptionDecisionId": "decision-3"
+        }))
+        .expect("request must deserialize");
+
+        assert_eq!(
+            request.billing_target,
+            Some(BillingTarget {
+                provider_id: "claude_code".into(),
+                account_id: "acct-1".into(),
+                subscription_id: "sub-2".into(),
+            })
+        );
+        assert_eq!(
+            request.subscription_decision_id.as_deref(),
+            Some("decision-3")
+        );
+
+    }
+
+    #[test]
+    fn maps_subscription_burnout_to_rotation_signal() {
+        assert_eq!(
+            model_error_status("selected subscription 'sub-2' is not active"),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+        assert_eq!(
+            model_error_status("auth: invalid request signature"),
+            StatusCode::UNAUTHORIZED
+        );
+    }
 }

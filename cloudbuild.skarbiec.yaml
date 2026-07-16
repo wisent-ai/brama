@@ -1,0 +1,15 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file
+      - brama/Dockerfile.skarbiec
+      - --tag
+      - ${_IMAGE}
+      - .
+images:
+  - ${_IMAGE}
+options:
+  machineType: E2_HIGHCPU_8
+substitutions:
+  _IMAGE: us-central1-docker.pkg.dev/wisent-480400/cloud-run-source-deploy/model-router-skarbiec:latest

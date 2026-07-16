@@ -112,7 +112,47 @@ fn canonical_model_for_provider(provider: &str) -> Option<&'static str> {
         .map(|(m, _)| *m)
 }
 
-async fn authenticate_agent(headers: &HeaderMap, raw_body: &[u8]) -> Result<String, String> {
+fn canonical_provider_id(provider: &str) -> Option<&'static str> {
+    match provider.trim().to_ascii_lowercase().replace('-', "_").as_str() {
+        "anthropic" | "claude" | "claude_code" => Some("claude_code"),
+        "chatgpt" | "codex" | "openai" => Some("codex"),
+        "kimi" | "kimi_code" | "moonshot" => Some("kimi"),
+        "opencode" => Some("opencode"),
+        _ => None,
+    }
+}
+
+fn eligible_subscription_entries(
+    entries: Vec<broker::SubscriptionEntry>,
+    provider: &str,
+    target: Option<&crate::types::BillingTarget>,
+) -> Result<Vec<broker::SubscriptionEntry>, String> {
+    if let Some(target) = target {
+        if target.account_id.trim().is_empty() || target.subscription_id.trim().is_empty() {
+            return Err("billingTarget accountId and subscriptionId are required".into());
+        }
+        if canonical_provider_id(&target.provider_id) != Some(provider) {
+            return Err(format!(
+                "billingTarget provider '{}' does not match model provider '{provider}'",
+                target.provider_id
+            ));
+        }
+    }
+    Ok(entries
+        .into_iter()
+        .filter(|entry| {
+            canonical_provider_id(&entry.provider) == Some(provider)
+                && entry.status == "active"
+                && !crate::journal::is_retired(&entry.id)
+                && target.is_none_or(|target| entry.id == target.subscription_id)
+        })
+        .collect())
+}
+
+pub(crate) async fn authenticate_agent(
+    headers: &HeaderMap,
+    raw_body: &[u8],
+) -> Result<String, String> {
     let agent_id = headers
         .get("x-agent-id")
         .and_then(|v| v.to_str().ok())
@@ -530,20 +570,32 @@ async fn dispatch_subscription_attempt(
     agent_id: &str,
     request: &ModelRequest,
 ) -> AttemptOutcome {
-    let rows: Vec<broker::SubscriptionEntry> = broker::list_subscriptions(agent_id)
-        .await
-        .into_iter()
-        .filter(|entry| {
-            entry.provider == provider
-                && entry.status == "active"
-                && !crate::journal::is_retired(&entry.id)
-        })
-        .collect();
+    let rows = match eligible_subscription_entries(
+        broker::list_subscriptions(agent_id).await,
+        provider,
+        request.billing_target.as_ref(),
+    ) {
+        Ok(rows) => rows,
+        Err(error) => {
+            return AttemptOutcome {
+                response: ModelResponse::failure(&request.model, error),
+                reauth_candidate: None,
+            }
+        }
+    };
     if rows.is_empty() {
         return AttemptOutcome {
             response: ModelResponse::failure(
                 &request.model,
-                format!("no active '{provider}' subscription for agent"),
+                request.billing_target.as_ref().map_or_else(
+                    || format!("no active '{provider}' subscription for agent"),
+                    |target| {
+                        format!(
+                            "selected subscription '{}' is not active for provider '{provider}' and agent",
+                            target.subscription_id
+                        )
+                    },
+                ),
             ),
             reauth_candidate: None,
         };
@@ -634,5 +686,43 @@ fn string_field(row: &Value, key: &str) -> String {
         Some(Value::Number(value)) => value.to_string(),
         Some(Value::Bool(value)) => value.to_string(),
         _ => String::new(),
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::BillingTarget;
+
+    #[test]
+    fn selects_exact_subscription_after_provider_canonicalization() {
+        let entries = vec![
+            broker::SubscriptionEntry {
+                id: "sub-1".into(),
+                provider: "anthropic".into(),
+                status: "active".into(),
+            },
+            broker::SubscriptionEntry {
+                id: "sub-2".into(),
+                provider: "claude-code".into(),
+                status: "active".into(),
+            },
+        ];
+        let target = BillingTarget {
+            provider_id: "claude-code".into(),
+            account_id: "acct-1".into(),
+            subscription_id: "sub-2".into(),
+        };
+
+        let selected = eligible_subscription_entries(entries, "claude_code", Some(&target))
+            .expect("target must be accepted");
+        assert_eq!(
+            selected
+                .iter()
+                .map(|entry| entry.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["sub-2"]
+        );
     }
 }

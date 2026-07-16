@@ -76,6 +76,8 @@ impl ModelRouter {
             temperature,
             system,
             tools,
+            billing_target: None,
+            subscription_decision_id: None,
         };
 
         // Try the primary provider for this model
@@ -112,6 +114,8 @@ impl ModelRouter {
                     temperature: request.temperature,
                     system: request.system.clone(),
                     tools: request.tools.clone(),
+                    billing_target: request.billing_target.clone(),
+                    subscription_decision_id: request.subscription_decision_id.clone(),
                 };
 
                 let resp = provider.complete(&alt_req).await;

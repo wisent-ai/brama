@@ -1,0 +1,38 @@
+FROM rust:1.86-slim AS brama-builder
+WORKDIR /build/brama
+RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY brama/Cargo.toml brama/Cargo.lock ./
+COPY brama/src ./src
+RUN cargo build --release --bin brama
+
+FROM rust:1.86-slim AS skarbiec-builder
+WORKDIR /build/skarbiec
+COPY entitlements-rotator/Cargo.toml entitlements-rotator/Cargo.lock ./
+COPY entitlements-rotator/src ./src
+RUN cargo build --release --bin skarbiec-entitlements-router
+
+FROM node:22-slim AS capability-config
+COPY --from=brama-builder /build/brama/target/release/brama /usr/local/bin/brama
+COPY brama/scripts/generate-skarbiec-config.mjs /usr/local/lib/brama/generate-skarbiec-config.mjs
+RUN node /usr/local/lib/brama/generate-skarbiec-config.mjs /usr/local/bin/brama /etc/brama-skarbiec
+
+FROM node:22-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl gnupg python3 \
+    && npm install -g @anthropic-ai/claude-code \
+    && groupadd --gid 10001 skarbiec-capability-clients \
+    && useradd --uid 10001 --gid 10001 --home-dir /nonexistent --no-create-home brama \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=brama-builder --chown=10001:10001 /build/brama/target/release/brama /usr/local/bin/brama
+COPY --from=skarbiec-builder --chown=10001:10001 /build/skarbiec/target/release/skarbiec-entitlements-router /usr/local/bin/skarbiec-entitlements-router
+COPY --from=capability-config --chown=10001:10001 /etc/brama-skarbiec /etc/brama-skarbiec
+COPY --chown=10001:10001 brama/scripts/start-with-skarbiec.sh /usr/local/bin/start-with-skarbiec
+RUN chmod 0755 /usr/local/bin/brama /usr/local/bin/skarbiec-entitlements-router /usr/local/bin/start-with-skarbiec \
+    && chmod 0700 /etc/brama-skarbiec \
+    && chmod 0600 /etc/brama-skarbiec/*.json /etc/brama-skarbiec/*.sig /etc/brama-skarbiec/*.key \
+    && chmod 0700 /etc/brama-skarbiec/worm-receipt
+ENV RUST_LOG=info
+ENV PORT=8080
+USER 10001:10001
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/start-with-skarbiec"]

@@ -114,16 +114,28 @@ pub struct ToolCallFunction {
     pub arguments: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BillingTarget {
+    pub provider_id: String,
+    pub account_id: String,
+    pub subscription_id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelRequest {
     pub messages: Vec<Message>,
     pub model: String,
     pub max_tokens: u32,
     pub temperature: f64,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<Tool>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub billing_target: Option<BillingTarget>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subscription_decision_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -93,6 +93,8 @@ async fn check_model(opts: &TaskQualityOptions, model: &str) -> Value {
         temperature: 0.0,
         system: None,
         tools: None,
+        billing_target: None,
+        subscription_decision_id: None,
     };
     let resp = dispatch_subscription_for_agent(&opts.agent_id, &request).await;
     let content = resp.content.trim().to_string();

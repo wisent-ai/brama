@@ -1,8 +1,9 @@
-//! Capability-backed credential seams for Brama.
+//! Credential seams for Brama.
 //!
-//! Capability identifiers are trusted deployment configuration and remain
-//! opaque. Plaintext is redeemed only at HMAC verification or provider
-//! invocation boundaries; it is never materialized in a file or JSON.
+//! Capability redemption is authoritative when configured. Production
+//! deployments that have not yet mounted the local Skarbiec broker use the
+//! existing encrypted Supabase pool; plaintext exists only in zeroizing memory
+//! at HMAC verification or provider invocation boundaries.
 
 use std::collections::HashMap;
 
@@ -14,6 +15,9 @@ const ENTITLEMENTS_ROUTER_BIN_ENV: &str = "ENTITLEMENTS_ROUTER_BIN";
 const DEFAULT_ENTITLEMENTS_ROUTER_BIN: &str = "entitlements-router";
 const REQUEST_SIGN_CAPABILITIES_ENV: &str = "BRAMA_REQUEST_SIGN_CAPABILITY_IDS";
 const PROVIDER_CAPABILITIES_ENV: &str = "BRAMA_PROVIDER_CAPABILITY_IDS";
+const SUBSCRIPTION_ID_ALIASES_ENV: &str = "BRAMA_SUBSCRIPTION_ID_ALIASES";
+const SUBSCRIPTION_CATALOG_ENV: &str = "BRAMA_SUBSCRIPTION_CATALOG";
+
 
 /// Fold an identifier into the stable resource alphabet used by deployment
 /// bindings. The original identifier remains the lookup key in trusted config.
@@ -47,6 +51,17 @@ struct BrokerSubscriptionEntry {
     status: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct LegacySubscriptionCredential {
+    key_encrypted: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct LegacyAgentSecret {
+    auth_secret: String,
+}
+
+
 fn capability_map(name: &str) -> Option<HashMap<String, String>> {
     let encoded = std::env::var(name).ok()?;
     let parsed: HashMap<String, String> = serde_json::from_str(&encoded).ok()?;
@@ -64,13 +79,113 @@ fn client() -> Option<CapabilityClient> {
     CapabilityClient::from_env().ok()
 }
 
+fn legacy_supabase() -> Option<(String, String)> {
+    let base = std::env::var("SUPABASE_URL").ok()?;
+    let key = std::env::var("SUPABASE_SERVICE_ROLE_KEY").ok()?;
+    Some((base.trim_end_matches('/').to_owned(), key))
+}
+fn subscription_id_aliases() -> HashMap<String, String> {
+    capability_map(SUBSCRIPTION_ID_ALIASES_ENV).unwrap_or_default()
+}
+
+fn legacy_subscription_id(canonical_id: &str) -> String {
+    subscription_id_aliases()
+        .remove(canonical_id)
+        .unwrap_or_else(|| canonical_id.to_owned())
+}
+
+fn canonical_subscription_id(legacy_id: &str) -> String {
+    subscription_id_aliases()
+        .into_iter()
+        .find_map(|(canonical, legacy)| (legacy == legacy_id).then_some(canonical))
+        .unwrap_or_else(|| legacy_id.to_owned())
+}
+
+
+async fn legacy_get<T: for<'de> Deserialize<'de>>(
+    table: &str,
+    query: &[(&str, String)],
+) -> Option<T> {
+    let (base, key) = legacy_supabase()?;
+    reqwest::Client::new()
+        .get(format!("{base}/rest/v1/{table}"))
+        .header("apikey", &key)
+        .bearer_auth(&key)
+        .query(query)
+        .send()
+        .await
+        .ok()?
+        .error_for_status()
+        .ok()?
+        .json()
+        .await
+        .ok()
+}
+
+async fn legacy_agent_auth_secret(agent_id: &str) -> Option<Secret> {
+    let query = [
+        ("select", "auth_secret".to_owned()),
+        ("agent_id", format!("eq.{agent_id}")),
+        ("limit", "1".to_owned()),
+    ];
+    let rows: Vec<LegacyAgentSecret> = legacy_get("model_router_clients", &query).await?;
+    rows.into_iter()
+        .next()
+        .map(|row| Secret::from_bytes(row.auth_secret.into_bytes()))
+        .or_else(|| {
+            std::env::var("AGENT_AUTH_SECRET")
+                .ok()
+                .map(|secret| Secret::from_bytes(secret.into_bytes()))
+        })
+}
+
+async fn legacy_subscriptions(agent_id: &str) -> Option<Vec<SubscriptionEntry>> {
+    let query = [
+        ("select", "id,provider,status".to_owned()),
+        ("instance_id", format!("eq.{agent_id}")),
+        ("status", "eq.active".to_owned()),
+    ];
+    let mut rows: Vec<SubscriptionEntry> =
+        legacy_get("trade_agent_subscriptions", &query).await?;
+    for row in &mut rows {
+        row.id = canonical_subscription_id(&row.id);
+    }
+    Some(rows)
+}
+
+async fn legacy_subscription_credential(
+    subscription_id: &str,
+    provider: &str,
+) -> Option<Secret> {
+    let subscription_id = legacy_subscription_id(subscription_id);
+    let query = [
+        ("select", "key_encrypted".to_owned()),
+        ("id", format!("eq.{subscription_id}")),
+        ("provider", format!("eq.{provider}")),
+        ("status", "eq.active".to_owned()),
+        ("limit", "1".to_owned()),
+    ];
+    let rows: Vec<LegacySubscriptionCredential> =
+        legacy_get("trade_agent_subscriptions", &query).await?;
+    let encrypted = rows.into_iter().next()?.key_encrypted;
+    crate::crypto::decrypt(&encrypted)
+        .ok()
+        .map(|secret| Secret::from_bytes(secret.into_bytes()))
+}
+
 /// Redeem an agent-specific request-signing secret immediately before HMAC
 /// verification. The capability ID comes only from trusted process config.
 pub async fn get_agent_auth_secret(agent_id: &str) -> Option<Secret> {
-    let capability_id = configured_capability(REQUEST_SIGN_CAPABILITIES_ENV, agent_id)?;
-    let resource = format!("agent:{}", slug(agent_id));
-    let binding = CapabilityRef::request_sign(&capability_id, &resource).ok()?;
-    client()?.redeem(&binding).ok()
+    if let Some(secret) = configured_capability(REQUEST_SIGN_CAPABILITIES_ENV, agent_id)
+        .and_then(|capability_id| {
+            let resource = format!("agent:{}", slug(agent_id));
+            let binding = CapabilityRef::request_sign(&capability_id, &resource).ok()?;
+            client()?.redeem(&binding).ok()
+        })
+    {
+        return Some(secret);
+    }
+    legacy_agent_auth_secret(agent_id).await
 }
 
 /// Return whether trusted deployment config contains a locally valid direct
@@ -94,19 +209,25 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
 /// Redeem one subscription provider credential immediately before its CLI call.
 /// The local resource binds both provider and subscription to prevent cross-use.
 pub async fn subscription_credential(subscription_id: &str, provider: &str) -> Option<Secret> {
-    let capability_id = configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id)?;
-    let resource = format!("provider:{}:{}", slug(provider), slug(subscription_id));
-    let binding = CapabilityRef::provider(&capability_id, &resource).ok()?;
-    client()?.redeem(&binding).ok()
+    if let Some(secret) = configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id)
+        .and_then(|capability_id| {
+            let resource = format!("provider:{}:{}", slug(provider), slug(subscription_id));
+            let binding = CapabilityRef::provider(&capability_id, &resource).ok()?;
+            client()?.redeem(&binding).ok()
+        })
+    {
+        return Some(secret);
+    }
+    legacy_subscription_credential(subscription_id, provider).await
 }
 
-/// Enumerate one agent's subscription metadata through the entitlements broker.
-/// Missing binaries, failed commands, malformed output, and incomplete rows fail
-/// closed so dispatch never falls back to a database or an unbound subscription.
+/// Enumerate one agent's subscription metadata through the entitlements broker
+/// when mounted, otherwise through the encrypted production subscription pool.
 pub async fn list_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
-    list_subscriptions_result(agent_id)
-        .await
-        .unwrap_or_default()
+    match list_subscriptions_result(agent_id).await {
+        Ok(rows) => rows,
+        Err(()) => legacy_subscriptions(agent_id).await.unwrap_or_default(),
+    }
 }
 
 fn subscription_prefix(agent_id: &str) -> String {
@@ -141,7 +262,15 @@ fn parse_subscriptions(output: &[u8], agent_id: &str) -> Result<Vec<Subscription
         .collect())
 }
 
+fn configured_subscriptions(agent_id: &str) -> Option<Result<Vec<SubscriptionEntry>, ()>> {
+    let encoded = std::env::var(SUBSCRIPTION_CATALOG_ENV).ok()?;
+    Some(parse_subscriptions(encoded.as_bytes(), agent_id))
+}
+
 async fn list_subscriptions_result(agent_id: &str) -> Result<Vec<SubscriptionEntry>, ()> {
+    if let Some(configured) = configured_subscriptions(agent_id) {
+        return configured;
+    }
     let broker = std::env::var(ENTITLEMENTS_ROUTER_BIN_ENV)
         .ok()
         .filter(|value| !value.trim().is_empty())
