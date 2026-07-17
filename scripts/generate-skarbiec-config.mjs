@@ -2,19 +2,30 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { join } from 'node:path';
 
-const [binaryPath, outputDir] = process.argv.slice(2);
-if (!binaryPath || !outputDir) {
-  throw new Error('usage: generate-skarbiec-config.mjs <brama-binary> <output-dir>');
+const [binaryPath, outputDir, subscriptionsPath] = process.argv.slice(2);
+if (!binaryPath || !outputDir || !subscriptionsPath) {
+  throw new Error('usage: generate-skarbiec-config.mjs <brama-binary> <output-dir> <subscriptions-json>');
 }
 
 const workloadUid = 10001;
 const workloadGid = 10001;
 const maxTtlSeconds = 315_360_000;
 const maxUses = 10_000_000;
-const subscriptions = [
-  { id: 'brama-sub-wisent-app-claude-primary', provider: 'claude-code' },
-  { id: 'brama-sub-wisent-app-codex-primary', provider: 'codex' },
-];
+const subscriptions = JSON.parse(readFileSync(subscriptionsPath, 'utf8'));
+if (!Array.isArray(subscriptions) || subscriptions.length === 0) {
+  throw new Error('subscriptions manifest must be a non-empty array');
+}
+for (const subscription of subscriptions) {
+  if (
+    !subscription ||
+    typeof subscription.id !== 'string' ||
+    typeof subscription.provider !== 'string' ||
+    !/^brama-sub-wisent-app-[a-z0-9-]+$/.test(subscription.id) ||
+    !/^[a-z0-9-]+$/.test(subscription.provider)
+  ) {
+    throw new Error('subscriptions manifest contains an invalid entry');
+  }
+}
 const now = Math.floor(Date.now() / 1000);
 const expiresAt = now + maxTtlSeconds;
 const policyDomain = Buffer.from('SKARBIEC-AGENT-POLICY\0v1\0', 'utf8');

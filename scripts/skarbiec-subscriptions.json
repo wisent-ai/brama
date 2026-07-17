@@ -1,0 +1,90 @@
+[
+  {
+    "id": "brama-sub-wisent-app-claude-primary",
+    "provider": "claude-code"
+  },
+  {
+    "id": "brama-sub-wisent-app-codex-primary",
+    "provider": "codex"
+  },
+  {
+    "id": "brama-sub-wisent-app-kimi-primary",
+    "provider": "kimi"
+  },
+  {
+    "id": "brama-sub-wisent-app-opencode-primary",
+    "provider": "opencode"
+  },
+  {
+    "id": "brama-sub-wisent-app-anthropic-primary",
+    "provider": "anthropic"
+  },
+  {
+    "id": "brama-sub-wisent-app-openai-primary",
+    "provider": "openai"
+  },
+  {
+    "id": "brama-sub-wisent-app-openrouter-primary",
+    "provider": "openrouter"
+  },
+  {
+    "id": "brama-sub-wisent-app-groq-primary",
+    "provider": "groq"
+  },
+  {
+    "id": "brama-sub-wisent-app-mistral-primary",
+    "provider": "mistral"
+  },
+  {
+    "id": "brama-sub-wisent-app-xai-primary",
+    "provider": "xai"
+  },
+  {
+    "id": "brama-sub-wisent-app-deepseek-primary",
+    "provider": "deepseek"
+  },
+  {
+    "id": "brama-sub-wisent-app-cerebras-primary",
+    "provider": "cerebras"
+  },
+  {
+    "id": "brama-sub-wisent-app-fireworks-primary",
+    "provider": "fireworks"
+  },
+  {
+    "id": "brama-sub-wisent-app-together-primary",
+    "provider": "together"
+  },
+  {
+    "id": "brama-sub-wisent-app-nvidia-primary",
+    "provider": "nvidia"
+  },
+  {
+    "id": "brama-sub-wisent-app-moonshot-primary",
+    "provider": "moonshot"
+  },
+  {
+    "id": "brama-sub-wisent-app-zai-primary",
+    "provider": "zai"
+  },
+  {
+    "id": "brama-sub-wisent-app-qwen-primary",
+    "provider": "qwen"
+  },
+  {
+    "id": "brama-sub-wisent-app-huggingface-primary",
+    "provider": "huggingface"
+  },
+  {
+    "id": "brama-sub-wisent-app-venice-primary",
+    "provider": "venice"
+  },
+  {
+    "id": "brama-sub-wisent-app-novita-primary",
+    "provider": "novita"
+  },
+  {
+    "id": "brama-sub-wisent-app-synthetic-primary",
+    "provider": "synthetic"
+  }
+]

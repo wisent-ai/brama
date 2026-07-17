@@ -47,25 +47,68 @@ export SKARBIEC_WORKLOAD_ID=brama-cloudrun
 export SKARBIEC_WORKLOAD_SIGNING_KEY_FILE="$config_dir/brama-proof.key"
 export ENTITLEMENTS_ROUTER_BIN=/usr/local/bin/skarbiec-entitlements-router
 
-claude_subscription_id=brama-sub-wisent-app-claude-primary
-codex_subscription_id=brama-sub-wisent-app-codex-primary
-claude_issue="$($ENTITLEMENTS_ROUTER_BIN capability-issue \
-  --agent brama-runtime \
-  --purpose brama.provider.authenticate \
-  --resource "provider:claude-code:$claude_subscription_id" \
-  --target brama \
-  --ttl 2592000 \
-  --max-uses 1000000)"
-claude_capability="$(printf '%s' "$claude_issue" | python3 -c 'import json,sys; print(json.load(sys.stdin)["capability_id"])')"
-codex_issue="$($ENTITLEMENTS_ROUTER_BIN capability-issue \
-  --agent brama-runtime \
-  --purpose brama.provider.authenticate \
-  --resource "provider:codex:$codex_subscription_id" \
-  --target brama \
-  --ttl 2592000 \
-  --max-uses 1000000)"
-codex_capability="$(printf '%s' "$codex_issue" | python3 -c 'import json,sys; print(json.load(sys.stdin)["capability_id"])')"
-request_issue="$($ENTITLEMENTS_ROUTER_BIN capability-issue \
+subscriptions_file="$runtime_dir/subscriptions.json"
+capabilities_file="$runtime_dir/provider-capabilities.json"
+catalog_file="$runtime_dir/subscription-catalog.json"
+"$ENTITLEMENTS_ROUTER_BIN" list-items brama-sub-wisent-app- >"$subscriptions_file"
+python3 - "$ENTITLEMENTS_ROUTER_BIN" "$config_dir/subscriptions.json" "$subscriptions_file" "$capabilities_file" "$catalog_file" <<'PY'
+import json
+import subprocess
+import sys
+
+router, manifest_path, available_path, capabilities_path, catalog_path = sys.argv[1:]
+with open(manifest_path, encoding="utf-8") as source:
+    manifest = json.load(source)
+with open(available_path, encoding="utf-8") as source:
+    available = json.load(source).get("items", [])
+
+normalize = lambda value: value.strip().lower().replace("_", "-")
+allowed = {(entry["id"], normalize(entry["provider"])) for entry in manifest}
+capabilities = {}
+catalog = []
+for item in available:
+    item_id = item.get("id")
+    provider = item.get("provider")
+    agent_id = item.get("agent_id")
+    status = item.get("status")
+    if (
+        not isinstance(item_id, str)
+        or not isinstance(provider, str)
+        or agent_id != "wisent-app"
+        or status != "active"
+        or (item_id, normalize(provider)) not in allowed
+    ):
+        continue
+    issued = subprocess.run(
+        [
+            router,
+            "capability-issue",
+            "--agent", "brama-runtime",
+            "--purpose", "brama.provider.authenticate",
+            "--resource", f"provider:{normalize(provider)}:{item_id}",
+            "--target", "brama",
+            "--ttl", "2592000",
+            "--max-uses", "1000000",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    capabilities[item_id] = json.loads(issued.stdout)["capability_id"]
+    catalog.append({
+        "id": item_id,
+        "provider": provider,
+        "agent_id": agent_id,
+        "status": status,
+    })
+
+with open(capabilities_path, "w", encoding="utf-8") as target:
+    json.dump(capabilities, target, separators=(",", ":"))
+with open(catalog_path, "w", encoding="utf-8") as target:
+    json.dump({"items": catalog}, target, separators=(",", ":"))
+PY
+
+request_issue="$("$ENTITLEMENTS_ROUTER_BIN" capability-issue \
   --agent brama-runtime \
   --purpose brama.request.sign \
   --resource agent:wisent-app \
@@ -73,10 +116,10 @@ request_issue="$($ENTITLEMENTS_ROUTER_BIN capability-issue \
   --ttl 2592000 \
   --max-uses 1000000)"
 request_capability="$(printf '%s' "$request_issue" | python3 -c 'import json,sys; print(json.load(sys.stdin)["capability_id"])')"
-export BRAMA_PROVIDER_CAPABILITY_IDS="{\"$claude_subscription_id\":\"$claude_capability\",\"$codex_subscription_id\":\"$codex_capability\"}"
+export BRAMA_PROVIDER_CAPABILITY_IDS="$(cat "$capabilities_file")"
 export BRAMA_REQUEST_SIGN_CAPABILITY_IDS="{\"wisent-app\":\"$request_capability\"}"
-export BRAMA_SUBSCRIPTION_CATALOG="{\"items\":[{\"id\":\"$claude_subscription_id\",\"provider\":\"claude_code\",\"agent_id\":\"wisent-app\",\"status\":\"active\"},{\"id\":\"$codex_subscription_id\",\"provider\":\"codex\",\"agent_id\":\"wisent-app\",\"status\":\"active\"}]}"
-unset claude_issue claude_capability codex_issue codex_capability request_issue request_capability
+export BRAMA_SUBSCRIPTION_CATALOG="$(cat "$catalog_file")"
+unset request_issue request_capability
 
 $ENTITLEMENTS_ROUTER_BIN capability-serve &
 broker_pid=$!
