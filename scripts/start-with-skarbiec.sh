@@ -50,7 +50,7 @@ export ENTITLEMENTS_ROUTER_BIN=/usr/local/bin/skarbiec-entitlements-router
 subscriptions_file="$runtime_dir/subscriptions.json"
 capabilities_file="$runtime_dir/provider-capabilities.json"
 catalog_file="$runtime_dir/subscription-catalog.json"
-"$ENTITLEMENTS_ROUTER_BIN" list-items brama-sub-wisent-app- >"$subscriptions_file"
+"$ENTITLEMENTS_ROUTER_BIN" list >"$subscriptions_file"
 python3 - "$ENTITLEMENTS_ROUTER_BIN" "$config_dir/subscriptions.json" "$subscriptions_file" "$capabilities_file" "$catalog_file" <<'PY'
 import json
 import subprocess
@@ -60,24 +60,22 @@ router, manifest_path, available_path, capabilities_path, catalog_path = sys.arg
 with open(manifest_path, encoding="utf-8") as source:
     manifest = json.load(source)
 with open(available_path, encoding="utf-8") as source:
-    available = json.load(source).get("items", [])
+    available_resources = {
+        item["id"]
+        for item in json.load(source)
+        if isinstance(item, dict)
+        and isinstance(item.get("id"), str)
+        and not item.get("deleted", False)
+    }
 
 normalize = lambda value: value.strip().lower().replace("_", "-")
-allowed = {(entry["id"], normalize(entry["provider"])) for entry in manifest}
 capabilities = {}
 catalog = []
-for item in available:
-    item_id = item.get("id")
-    provider = item.get("provider")
-    agent_id = item.get("agent_id")
-    status = item.get("status")
-    if (
-        not isinstance(item_id, str)
-        or not isinstance(provider, str)
-        or agent_id != "wisent-app"
-        or status != "active"
-        or (item_id, normalize(provider)) not in allowed
-    ):
+for entry in manifest:
+    item_id = entry["id"]
+    provider = normalize(entry["provider"])
+    resource = f"provider:{provider}:{item_id}"
+    if resource not in available_resources:
         continue
     issued = subprocess.run(
         [
@@ -85,7 +83,7 @@ for item in available:
             "capability-issue",
             "--agent", "brama-runtime",
             "--purpose", "brama.provider.authenticate",
-            "--resource", f"provider:{normalize(provider)}:{item_id}",
+            "--resource", resource,
             "--target", "brama",
             "--ttl", "2592000",
             "--max-uses", "1000000",
@@ -98,8 +96,8 @@ for item in available:
     catalog.append({
         "id": item_id,
         "provider": provider,
-        "agent_id": agent_id,
-        "status": status,
+        "agent_id": "wisent-app",
+        "status": "active",
     })
 
 with open(capabilities_path, "w", encoding="utf-8") as target:
