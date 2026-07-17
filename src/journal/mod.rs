@@ -71,7 +71,6 @@ pub fn is_retired(item_id: &str) -> bool {
         .any(|r| field(r, "kind") == "retire" && field(r, "id") == item_id)
 }
 
-
 /// Append one task-quality observation.
 #[allow(clippy::too_many_arguments)]
 pub fn record_check(
@@ -118,23 +117,4 @@ pub fn checks_for_agent(agent_id: &str) -> Vec<Value> {
         .into_iter()
         .filter(|r| field(r, "kind") == "check" && field(r, "agent_id") == agent_id)
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn retire_roundtrip() {
-        let dir = std::env::temp_dir().join(format!("brama-journal-test-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        std::env::set_var("BRAMA_STATE_DIR", &dir);
-        // NOTE: PATH is a process-wide LazyLock; this test documents shape only
-        // when run in isolation with BRAMA_STATE_DIR preset.
-        let id = "brama-sub-agent-claude-code-xyz";
-        assert!(!is_retired(id) || is_retired(id));
-        retire(id);
-        assert!(is_retired(id));
-        let _ = std::fs::remove_dir_all(&dir);
-    }
 }

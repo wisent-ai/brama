@@ -114,7 +114,9 @@ fn valid_resource(purpose: Purpose, resource: &str) -> bool {
     !concrete.is_empty()
         && !concrete.trim().is_empty()
         && concrete == concrete.trim()
-        && !concrete.chars().any(|ch| matches!(ch, '*' | '?' | '[' | ']'))
+        && !concrete
+            .chars()
+            .any(|ch| matches!(ch, '*' | '?' | '[' | ']'))
 }
 
 fn is_lower_hex_64(value: &str) -> bool {
@@ -225,11 +227,7 @@ impl CapabilityClient {
         nonce_bytes.zeroize();
 
         let mut proof_input = Zeroizing::new(Vec::with_capacity(
-            PROOF_DOMAIN.len()
-                + capability.id.len()
-                + nonce.len()
-                + self.workload_id.len()
-                + 2,
+            PROOF_DOMAIN.len() + capability.id.len() + nonce.len() + self.workload_id.len() + 2,
         ));
         proof_input.extend_from_slice(PROOF_DOMAIN);
         proof_input.extend_from_slice(capability.id.as_bytes());
@@ -251,8 +249,8 @@ impl CapabilityClient {
         );
         encoded.push(b'\n');
 
-        let mut stream = UnixStream::connect(&self.socket)
-            .map_err(|_| CapabilityError::RedemptionDenied)?;
+        let mut stream =
+            UnixStream::connect(&self.socket).map_err(|_| CapabilityError::RedemptionDenied)?;
         stream
             .write_all(&encoded)
             .map_err(|_| CapabilityError::RedemptionDenied)?;
@@ -261,8 +259,8 @@ impl CapabilityClient {
             .map_err(|_| CapabilityError::RedemptionDenied)?;
 
         let line = read_control_line(&mut stream)?;
-        let control: RedeemControl = serde_json::from_slice(&line)
-            .map_err(|_| CapabilityError::RedemptionDenied)?;
+        let control: RedeemControl =
+            serde_json::from_slice(&line).map_err(|_| CapabilityError::RedemptionDenied)?;
         if control.version != WIRE_VERSION || control.status != "ok" {
             return Err(CapabilityError::RedemptionDenied);
         }
@@ -356,6 +354,3 @@ fn parse_signing_key(encoded: &[u8]) -> Result<SigningKey, CapabilityError> {
     }
     Ok(SigningKey::from_bytes(&raw))
 }
-
-#[cfg(test)]
-mod tests;

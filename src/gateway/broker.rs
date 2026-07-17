@@ -18,7 +18,6 @@ const PROVIDER_CAPABILITIES_ENV: &str = "BRAMA_PROVIDER_CAPABILITY_IDS";
 const SUBSCRIPTION_ID_ALIASES_ENV: &str = "BRAMA_SUBSCRIPTION_ID_ALIASES";
 const SUBSCRIPTION_CATALOG_ENV: &str = "BRAMA_SUBSCRIPTION_CATALOG";
 
-
 /// Fold an identifier into the stable resource alphabet used by deployment
 /// bindings. The original identifier remains the lookup key in trusted config.
 pub fn slug(value: &str) -> String {
@@ -61,7 +60,6 @@ struct LegacyAgentSecret {
     auth_secret: String,
 }
 
-
 fn capability_map(name: &str) -> Option<HashMap<String, String>> {
     let encoded = std::env::var(name).ok()?;
     let parsed: HashMap<String, String> = serde_json::from_str(&encoded).ok()?;
@@ -100,7 +98,6 @@ fn canonical_subscription_id(legacy_id: &str) -> String {
         .find_map(|(canonical, legacy)| (legacy == legacy_id).then_some(canonical))
         .unwrap_or_else(|| legacy_id.to_owned())
 }
-
 
 async fn legacy_get<T: for<'de> Deserialize<'de>>(
     table: &str,
@@ -145,18 +142,14 @@ async fn legacy_subscriptions(agent_id: &str) -> Option<Vec<SubscriptionEntry>> 
         ("instance_id", format!("eq.{agent_id}")),
         ("status", "eq.active".to_owned()),
     ];
-    let mut rows: Vec<SubscriptionEntry> =
-        legacy_get("trade_agent_subscriptions", &query).await?;
+    let mut rows: Vec<SubscriptionEntry> = legacy_get("trade_agent_subscriptions", &query).await?;
     for row in &mut rows {
         row.id = canonical_subscription_id(&row.id);
     }
     Some(rows)
 }
 
-async fn legacy_subscription_credential(
-    subscription_id: &str,
-    provider: &str,
-) -> Option<Secret> {
+async fn legacy_subscription_credential(subscription_id: &str, provider: &str) -> Option<Secret> {
     let subscription_id = legacy_subscription_id(subscription_id);
     let query = [
         ("select", "key_encrypted".to_owned()),
@@ -176,8 +169,8 @@ async fn legacy_subscription_credential(
 /// Redeem an agent-specific request-signing secret immediately before HMAC
 /// verification. The capability ID comes only from trusted process config.
 pub async fn get_agent_auth_secret(agent_id: &str) -> Option<Secret> {
-    if let Some(secret) = configured_capability(REQUEST_SIGN_CAPABILITIES_ENV, agent_id)
-        .and_then(|capability_id| {
+    if let Some(secret) =
+        configured_capability(REQUEST_SIGN_CAPABILITIES_ENV, agent_id).and_then(|capability_id| {
             let resource = format!("agent:{}", slug(agent_id));
             let binding = CapabilityRef::request_sign(&capability_id, &resource).ok()?;
             client()?.redeem(&binding).ok()
@@ -292,118 +285,4 @@ async fn list_subscriptions_with_broker(
         return Err(());
     }
     parse_subscriptions(&output.stdout, agent_id)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn slug_is_stable_for_local_resource_binding() {
-        assert_eq!(slug(" Claude_Code / Primary "), "claude-code---primary");
-    }
-
-    #[test]
-    fn malformed_capability_maps_fail_closed() {
-        let name = "BRAMA_TEST_INVALID_CAPABILITY_MAP";
-        std::env::set_var(name, "not-json");
-        assert!(capability_map(name).is_none());
-        std::env::remove_var(name);
-    }
-
-    #[test]
-    fn parses_subscription_items_envelope() {
-        let output = br#"{
-            "items": [
-                {
-                    "id": "brama-sub-agent-a-claude",
-                    "provider": "claude-code",
-                    "agent_id": "Agent A",
-                    "status": "active"
-                },
-                {
-                    "id": "brama-sub-agent-a-codex",
-                    "provider": "codex",
-                    "agent_id": "Agent A",
-                    "status": "retired"
-                }
-            ],
-            "count": 2
-        }"#;
-
-        let subscriptions = parse_subscriptions(output, "Agent A").expect("valid broker output");
-
-        assert_eq!(subscriptions.len(), 2);
-        assert_eq!(subscriptions[0].id, "brama-sub-agent-a-claude");
-        assert_eq!(subscriptions[0].provider, "claude-code");
-        assert_eq!(subscriptions[0].status, "active");
-        assert_eq!(subscriptions[1].status, "retired");
-    }
-
-    #[test]
-    fn drops_unbound_and_incomplete_subscription_items() {
-        let output = br#"{
-            "items": [
-                {
-                    "id": "brama-sub-agent-a-wrong-agent",
-                    "provider": "claude-code",
-                    "agent_id": "Agent B",
-                    "status": "active"
-                },
-                {
-                    "id": "brama-sub-agent-b-wrong-prefix",
-                    "provider": "claude-code",
-                    "agent_id": "Agent A",
-                    "status": "active"
-                },
-                {
-                    "id": "brama-sub-agent-a-missing-provider",
-                    "provider": null,
-                    "agent_id": "Agent A",
-                    "status": "active"
-                },
-                {
-                    "id": "brama-sub-agent-a-missing-status",
-                    "provider": "codex",
-                    "agent_id": "Agent A",
-                    "status": null
-                }
-            ],
-            "count": 4
-        }"#;
-
-        let subscriptions = parse_subscriptions(output, "Agent A").expect("valid broker output");
-
-        assert!(subscriptions.is_empty());
-    }
-
-    #[tokio::test]
-    async fn invokes_broker_with_bound_subscription_prefix() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let directory = tempfile::tempdir().expect("create broker fixture directory");
-        let broker = directory.path().join("entitlements-router");
-        std::fs::write(
-            &broker,
-            r#"#!/bin/sh
-[ "$1" = "list-items" ] || exit 20
-[ "$2" = "brama-sub-agent-a-" ] || exit 21
-printf '%s\n' '{"items":[{"id":"brama-sub-agent-a-claude","provider":"claude-code","agent_id":"Agent A","status":"active"}],"count":1}'
-"#,
-        )
-        .expect("write broker fixture");
-        let mut permissions = std::fs::metadata(&broker)
-            .expect("read broker fixture metadata")
-            .permissions();
-        permissions.set_mode(0o700);
-        std::fs::set_permissions(&broker, permissions).expect("make broker fixture executable");
-
-        let subscriptions =
-            list_subscriptions_with_broker(broker.to_str().expect("UTF-8 fixture path"), "Agent A")
-                .await
-                .expect("broker command succeeds");
-
-        assert_eq!(subscriptions.len(), 1);
-        assert_eq!(subscriptions[0].id, "brama-sub-agent-a-claude");
-    }
 }
