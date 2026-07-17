@@ -95,6 +95,14 @@ static CODEX_MODEL_CACHE: LazyLock<Mutex<HashMap<String, CachedCodexModels>>> =
 static DISCOVERED_CODEX_MODELS: LazyLock<RwLock<HashSet<String>>> =
     LazyLock::new(|| RwLock::new(HashSet::new()));
 
+struct CachedRegistryModels {
+    fetched: Instant,
+    models: Vec<crate::subscription_dispatch::provider_registry::RegistryModel>,
+}
+
+static REGISTRY_MODEL_CACHE: LazyLock<Mutex<HashMap<String, CachedRegistryModels>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
 pub const SUBSCRIPTION_MODELS: &[(&str, &str)] = &[
     ("claude-code-subscription", "claude_code"),
     ("claude-opus-4-7", "claude_code"),
@@ -129,6 +137,10 @@ pub(crate) fn provider_for(model: &str) -> Option<&'static str> {
         .find(|(candidate, _)| *candidate == model)
         .map(|(_, provider)| *provider)
         .or_else(|| is_codex_model(model).then_some("codex"))
+        .or_else(|| {
+            crate::subscription_dispatch::provider_registry::route(model)
+                .map(|(provider, _)| provider.id)
+        })
 }
 
 fn canonical_model_for_provider(provider: &str) -> Option<&'static str> {
@@ -232,6 +244,97 @@ pub async fn codex_models_for_agent(agent_id: &str) -> Result<Vec<engines::Codex
     Ok(models)
 }
 
+pub async fn registry_models_for_agent(
+    agent_id: &str,
+) -> Result<Vec<crate::subscription_dispatch::provider_registry::RegistryModel>, String> {
+    let entries = broker::list_subscriptions(agent_id)
+        .await
+        .into_iter()
+        .filter(|entry| {
+            entry.status == "active"
+                && crate::subscription_dispatch::provider_registry::provider(entry.provider.trim())
+                    .is_some()
+                && !crate::journal::is_retired(&entry.id)
+        })
+        .collect::<Vec<_>>();
+    if entries.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut models_by_route = HashMap::new();
+    let mut failures = Vec::new();
+    for entry in entries {
+        let provider = entry.provider.trim();
+        let cache_key = format!("{provider}:{}", entry.id);
+        let cached = REGISTRY_MODEL_CACHE.lock().ok().and_then(|cache| {
+            cache
+                .get(&cache_key)
+                .filter(|item| item.fetched.elapsed() < CODEX_MODEL_CACHE_TTL)
+                .map(|item| item.models.clone())
+        });
+        let models = if let Some(cached) = cached {
+            cached
+        } else {
+            let secret = match broker::subscription_credential(&entry.id, provider).await {
+                Some(secret) => secret,
+                None => {
+                    failures.push(format!("{}: credential unavailable", entry.id));
+                    continue;
+                }
+            };
+            let secret = match secret.expose_utf8() {
+                Ok(secret) => secret,
+                Err(_) => {
+                    failures.push(format!("{}: credential is not UTF-8", entry.id));
+                    continue;
+                }
+            };
+            let discovered = match crate::subscription_dispatch::provider_registry::discover_models(
+                provider, secret,
+            )
+            .await
+            {
+                Ok(models) => models,
+                Err(error) => {
+                    failures.push(format!("{}: {error}", entry.id));
+                    continue;
+                }
+            };
+            if let Ok(mut cache) = REGISTRY_MODEL_CACHE.lock() {
+                cache.insert(
+                    cache_key,
+                    CachedRegistryModels {
+                        fetched: Instant::now(),
+                        models: discovered.clone(),
+                    },
+                );
+            }
+            discovered
+        };
+        for model in models {
+            models_by_route
+                .entry(model.route_id.clone())
+                .or_insert(model);
+        }
+    }
+    if models_by_route.is_empty() && !failures.is_empty() {
+        return Err(format!(
+            "could not discover native provider models: {}",
+            failures.join("; ")
+        ));
+    }
+    let mut models = models_by_route.into_values().collect::<Vec<_>>();
+    models.sort_by(|left, right| left.route_id.cmp(&right.route_id));
+    Ok(models)
+}
+
+fn provider_matches(candidate: &str, requested: &str) -> bool {
+    if crate::subscription_dispatch::provider_registry::provider(requested).is_some() {
+        return candidate.trim().eq_ignore_ascii_case(requested);
+    }
+    canonical_provider_id(candidate) == Some(requested)
+}
+
 fn eligible_subscription_entries(
     entries: Vec<broker::SubscriptionEntry>,
     provider: &str,
@@ -241,7 +344,7 @@ fn eligible_subscription_entries(
         if target.account_id.trim().is_empty() || target.subscription_id.trim().is_empty() {
             return Err("billingTarget accountId and subscriptionId are required".into());
         }
-        if canonical_provider_id(&target.provider_id) != Some(provider) {
+        if !provider_matches(&target.provider_id, provider) {
             return Err(format!(
                 "billingTarget provider '{}' does not match model provider '{provider}'",
                 target.provider_id
@@ -251,7 +354,7 @@ fn eligible_subscription_entries(
     Ok(entries
         .into_iter()
         .filter(|entry| {
-            canonical_provider_id(&entry.provider) == Some(provider)
+            provider_matches(&entry.provider, provider)
                 && entry.status == "active"
                 && !crate::journal::is_retired(&entry.id)
                 && target.is_none_or(|target| entry.id == target.subscription_id)
@@ -674,6 +777,11 @@ async fn run_provider_with_token(
         "codex" => engines::run_codex(request, agent_id, subscription_id, token).await,
         "kimi" => engines::run_kimi(request, agent_id, subscription_id, token).await,
         "opencode" => engines::run_opencode(request, agent_id, subscription_id, token).await,
+        provider
+            if crate::subscription_dispatch::provider_registry::provider(provider).is_some() =>
+        {
+            crate::subscription_dispatch::provider_registry::dispatch(request, token).await
+        }
         _ => ModelResponse::failure(&request.model, "unreachable".into()),
     }
 }

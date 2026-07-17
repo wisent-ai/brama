@@ -17,7 +17,7 @@ use crate::gateway::broker;
 use crate::subscription_dispatch::{
     authenticate_agent, codex_models_for_agent, dispatch_any_subscription,
     dispatch_any_vision_capable_subscription, dispatch_subscription, dispatch_task_subscription,
-    is_subscription_model, subscription_model_for_provider,
+    is_subscription_model, registry_models_for_agent, subscription_model_for_provider,
 };
 use crate::types::{BillingTarget, Message, ModelRequest, Tool, ToolCall};
 
@@ -342,6 +342,19 @@ async fn list_models(
             }
         }
     }
+    let mut registry_metadata = HashMap::new();
+    match registry_models_for_agent(&catalog_agent).await {
+        Ok(models) => {
+            for model in models {
+                model_ids.push(model.route_id.clone());
+                registry_metadata.insert(model.route_id.clone(), model);
+            }
+        }
+        Err(error) => {
+            degraded = true;
+            warn!(%error, "native provider model discovery failed");
+        }
+    }
     model_ids.sort();
     model_ids.dedup();
 
@@ -350,19 +363,25 @@ async fn list_models(
             .into_iter()
             .map(|id| {
                 let codex = codex_metadata.get(&id);
-                let input_modalities = codex
+                let registry = registry_metadata.get(&id);
+                let input_modalities = registry
                     .map(|model| model.input_modalities.clone())
+                    .or_else(|| codex.map(|model| model.input_modalities.clone()))
                     .filter(|modalities| !modalities.is_empty())
                     .unwrap_or_else(|| vec!["text".to_string()]);
-                let reasoning = codex.is_some_and(|model| model.reasoning);
+                let context_window = registry.map_or(200_000, |model| model.context_window);
+                let max_output_tokens = registry.map_or(32_000, |model| model.max_output_tokens);
+                let tools = registry.is_some_and(|model| model.tools);
+                let reasoning = registry.is_some_and(|model| model.reasoning)
+                    || codex.is_some_and(|model| model.reasoning);
                 json!({
                     "id": id,
                     "available": true,
-                    "contextWindow": 200_000,
-                    "maxOutputTokens": 32_000,
+                    "contextWindow": context_window,
+                    "maxOutputTokens": max_output_tokens,
                     "inputModalities": input_modalities,
                     "outputModalities": ["text"],
-                    "tools": false,
+                    "tools": tools,
                     "reasoning": reasoning,
                     "price": {
                         "input": 0.0,
@@ -386,10 +405,14 @@ async fn list_models(
     let models = model_ids
         .into_iter()
         .map(|id| {
+            let owner = registry_metadata
+                .get(&id)
+                .map(|model| model.provider_id.as_str())
+                .unwrap_or("brama");
             json!({
                 "id": id,
                 "object": "model",
-                "owned_by": "brama",
+                "owned_by": owner,
             })
         })
         .collect::<Vec<_>>();
