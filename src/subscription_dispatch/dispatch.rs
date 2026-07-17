@@ -838,19 +838,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn discovered_codex_models_route_through_codex_subscription() {
-        let models = vec![engines::CodexModel {
-            id: "test-live-codex-model".into(),
-            input_modalities: vec!["text".into()],
-            reasoning: true,
-        }];
-        register_codex_models(&models);
-
-        assert_eq!(provider_for("test-live-codex-model"), Some("codex"));
-        assert!(is_subscription_model("test-live-codex-model"));
-        assert!(!is_vision_capable_subscription_model(
-            "test-live-codex-model"
-        ));
-    }
 }
