@@ -11,7 +11,10 @@ const workloadUid = 10001;
 const workloadGid = 10001;
 const maxTtlSeconds = 315_360_000;
 const maxUses = 10_000_000;
-const subscriptionIds = ['brama-sub-wisent-app-claude-primary'];
+const subscriptions = [
+  { id: 'brama-sub-wisent-app-claude-primary', provider: 'claude-code' },
+  { id: 'brama-sub-wisent-app-codex-primary', provider: 'codex' },
+];
 const now = Math.floor(Date.now() / 1000);
 const expiresAt = now + maxTtlSeconds;
 const policyDomain = Buffer.from('SKARBIEC-AGENT-POLICY\0v1\0', 'utf8');
@@ -41,9 +44,9 @@ function writeSigned(name, document, domain, key) {
   writeFileSync(join(outputDir, `${name}.sig`), `${signature.toString('base64')}\n`, { mode: 0o600 });
 }
 
-const subscriptionRules = subscriptionIds.map((id) => ({
+const subscriptionRules = subscriptions.map(({ id, provider }) => ({
   purpose: 'brama.provider.authenticate',
-  resource: `provider:claude-code:${id}`,
+  resource: `provider:${provider}:${id}`,
   target: 'brama',
   max_ttl_seconds: maxTtlSeconds,
   max_uses: maxUses,

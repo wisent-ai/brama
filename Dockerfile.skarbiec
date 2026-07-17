@@ -19,7 +19,10 @@ RUN node /usr/local/lib/brama/generate-skarbiec-config.mjs /usr/local/bin/brama 
 FROM node:22-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl gnupg python3 \
-    && npm install -g @anthropic-ai/claude-code \
+    && npm install -g \
+      @anthropic-ai/claude-code \
+      "@openai/codex-linux-x64@npm:@openai/codex@linux-x64" \
+      @openai/codex \
     && groupadd --gid 10001 skarbiec-capability-clients \
     && useradd --uid 10001 --gid 10001 --home-dir /nonexistent --no-create-home brama \
     && rm -rf /var/lib/apt/lists/*
