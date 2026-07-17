@@ -1,11 +1,12 @@
 //! Route `"*-subscription"` chat completions requests to the matching CLI.
 
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicI64, Ordering};
-
 use aes_gcm::aead::rand_core::{OsRng, RngCore};
 use axum::http::HeaderMap;
 use serde_json::Value;
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::{LazyLock, Mutex, RwLock};
+use std::time::{Duration, Instant};
 
 use crate::crypto;
 use crate::gateway::broker;
@@ -82,6 +83,18 @@ fn maybe_self_heal_cli(provider: &str, err: &str) {
     });
 }
 
+const CODEX_MODEL_CACHE_TTL: Duration = Duration::from_secs(300);
+
+struct CachedCodexModels {
+    fetched: Instant,
+    models: Vec<engines::CodexModel>,
+}
+
+static CODEX_MODEL_CACHE: LazyLock<Mutex<HashMap<String, CachedCodexModels>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+static DISCOVERED_CODEX_MODELS: LazyLock<RwLock<HashSet<String>>> =
+    LazyLock::new(|| RwLock::new(HashSet::new()));
+
 pub const SUBSCRIPTION_MODELS: &[(&str, &str)] = &[
     ("claude-code-subscription", "claude_code"),
     ("claude-opus-4-7", "claude_code"),
@@ -91,18 +104,31 @@ pub const SUBSCRIPTION_MODELS: &[(&str, &str)] = &[
 ];
 
 pub fn is_subscription_model(model: &str) -> bool {
-    SUBSCRIPTION_MODELS.iter().any(|(m, _)| *m == model)
+    provider_for(model).is_some()
 }
 
 pub fn is_vision_capable_subscription_model(model: &str) -> bool {
     matches!(provider_for(model), Some("claude_code"))
 }
 
+fn is_codex_model(model: &str) -> bool {
+    DISCOVERED_CODEX_MODELS
+        .read()
+        .is_ok_and(|models| models.contains(model))
+}
+
+fn register_codex_models(models: &[engines::CodexModel]) {
+    if let Ok(mut discovered) = DISCOVERED_CODEX_MODELS.write() {
+        discovered.extend(models.iter().map(|model| model.id.clone()));
+    }
+}
+
 pub(crate) fn provider_for(model: &str) -> Option<&'static str> {
     SUBSCRIPTION_MODELS
         .iter()
-        .find(|(m, _)| *m == model)
-        .map(|(_, p)| *p)
+        .find(|(candidate, _)| *candidate == model)
+        .map(|(_, provider)| *provider)
+        .or_else(|| is_codex_model(model).then_some("codex"))
 }
 
 fn canonical_model_for_provider(provider: &str) -> Option<&'static str> {
@@ -113,7 +139,12 @@ fn canonical_model_for_provider(provider: &str) -> Option<&'static str> {
 }
 
 fn canonical_provider_id(provider: &str) -> Option<&'static str> {
-    match provider.trim().to_ascii_lowercase().replace('-', "_").as_str() {
+    match provider
+        .trim()
+        .to_ascii_lowercase()
+        .replace('-', "_")
+        .as_str()
+    {
         "anthropic" | "claude" | "claude_code" => Some("claude_code"),
         "chatgpt" | "codex" | "openai" => Some("codex"),
         "kimi" | "kimi_code" | "moonshot" => Some("kimi"),
@@ -124,6 +155,81 @@ fn canonical_provider_id(provider: &str) -> Option<&'static str> {
 
 pub(crate) fn subscription_model_for_provider(provider: &str) -> Option<&'static str> {
     canonical_provider_id(provider).and_then(canonical_model_for_provider)
+}
+
+pub async fn codex_models_for_agent(agent_id: &str) -> Result<Vec<engines::CodexModel>, String> {
+    let entries = broker::list_subscriptions(agent_id)
+        .await
+        .into_iter()
+        .filter(|entry| {
+            canonical_provider_id(&entry.provider) == Some("codex")
+                && entry.status == "active"
+                && !crate::journal::is_retired(&entry.id)
+        })
+        .collect::<Vec<_>>();
+    if entries.is_empty() {
+        return Err("no active Codex subscription for catalog agent".into());
+    }
+
+    let mut models_by_id = HashMap::new();
+    let mut failures = Vec::new();
+    for entry in entries {
+        let cached = CODEX_MODEL_CACHE.lock().ok().and_then(|cache| {
+            cache
+                .get(&entry.id)
+                .filter(|item| item.fetched.elapsed() < CODEX_MODEL_CACHE_TTL)
+                .map(|item| item.models.clone())
+        });
+        let models = if let Some(cached) = cached {
+            cached
+        } else {
+            let secret = match broker::subscription_credential(&entry.id, "codex").await {
+                Some(secret) => secret,
+                None => {
+                    failures.push(format!("{}: credential unavailable", entry.id));
+                    continue;
+                }
+            };
+            let token_json = match secret.expose_utf8() {
+                Ok(token_json) => token_json,
+                Err(_) => {
+                    failures.push(format!("{}: credential is not UTF-8", entry.id));
+                    continue;
+                }
+            };
+            let discovered = match engines::list_codex_models(token_json).await {
+                Ok(models) => models,
+                Err(error) => {
+                    failures.push(format!("{}: {error}", entry.id));
+                    continue;
+                }
+            };
+            if let Ok(mut cache) = CODEX_MODEL_CACHE.lock() {
+                cache.insert(
+                    entry.id.clone(),
+                    CachedCodexModels {
+                        fetched: Instant::now(),
+                        models: discovered.clone(),
+                    },
+                );
+            }
+            discovered
+        };
+        register_codex_models(&models);
+        for model in models {
+            models_by_id.entry(model.id.clone()).or_insert(model);
+        }
+    }
+
+    if models_by_id.is_empty() {
+        return Err(format!(
+            "could not discover Codex subscription models: {}",
+            failures.join("; ")
+        ));
+    }
+    let mut models = models_by_id.into_values().collect::<Vec<_>>();
+    models.sort_by(|left, right| left.id.cmp(&right.id));
+    Ok(models)
 }
 
 fn eligible_subscription_entries(
@@ -483,7 +589,10 @@ pub async fn dispatch_subscription(
         let candidate = match attempt.reauth_candidate {
             Some(c) => c,
             None => {
-                if tried_weles_reauth || skip_weles_reauth || !reauth::provider_is_reauthable(provider) {
+                if tried_weles_reauth
+                    || skip_weles_reauth
+                    || !reauth::provider_is_reauthable(provider)
+                {
                     return attempt.response;
                 }
                 ReauthCandidate {
@@ -693,7 +802,6 @@ fn string_field(row: &Value, key: &str) -> String {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -728,5 +836,21 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["sub-2"]
         );
+    }
+
+    #[test]
+    fn discovered_codex_models_route_through_codex_subscription() {
+        let models = vec![engines::CodexModel {
+            id: "test-live-codex-model".into(),
+            input_modalities: vec!["text".into()],
+            reasoning: true,
+        }];
+        register_codex_models(&models);
+
+        assert_eq!(provider_for("test-live-codex-model"), Some("codex"));
+        assert!(is_subscription_model("test-live-codex-model"));
+        assert!(!is_vision_capable_subscription_model(
+            "test-live-codex-model"
+        ));
     }
 }

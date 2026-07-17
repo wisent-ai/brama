@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -9,14 +10,14 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::RwLock;
-use tracing::info;
+use tracing::{info, warn};
 
 use super::router::ModelRouter;
 use crate::gateway::broker;
 use crate::subscription_dispatch::{
-    authenticate_agent, dispatch_any_subscription, dispatch_any_vision_capable_subscription,
-    dispatch_subscription, dispatch_task_subscription, is_subscription_model,
-    subscription_model_for_provider,
+    authenticate_agent, codex_models_for_agent, dispatch_any_subscription,
+    dispatch_any_vision_capable_subscription, dispatch_subscription, dispatch_task_subscription,
+    is_subscription_model, subscription_model_for_provider,
 };
 use crate::types::{BillingTarget, Message, ModelRequest, Tool, ToolCall};
 
@@ -310,33 +311,59 @@ async fn list_models(
     headers: axum::http::HeaderMap,
 ) -> impl IntoResponse {
     let mut model_ids = {
-        let r = router.read().await;
-        r.all_models()
+        let router = router.read().await;
+        router.all_models()
     };
     let catalog_agent =
         std::env::var("BRAMA_CATALOG_AGENT_ID").unwrap_or_else(|_| "wisent-app".into());
+    let mut has_codex_subscription = false;
     for subscription in broker::list_subscriptions(&catalog_agent).await {
         if subscription.status == "active" {
             if let Some(model) = subscription_model_for_provider(&subscription.provider) {
+                has_codex_subscription |= model == "codex-subscription";
                 model_ids.push(model.to_owned());
+            }
+        }
+    }
+
+    let mut codex_metadata = HashMap::new();
+    let mut degraded = false;
+    if has_codex_subscription {
+        match codex_models_for_agent(&catalog_agent).await {
+            Ok(models) => {
+                for model in models {
+                    model_ids.push(model.id.clone());
+                    codex_metadata.insert(model.id.clone(), model);
+                }
+            }
+            Err(error) => {
+                degraded = true;
+                warn!(%error, "Codex model discovery failed");
             }
         }
     }
     model_ids.sort();
     model_ids.dedup();
+
     if headers.contains_key("x-jeden-schema-min") {
         let models = model_ids
             .into_iter()
             .map(|id| {
+                let codex = codex_metadata.get(&id);
+                let input_modalities = codex
+                    .map(|model| model.input_modalities.clone())
+                    .filter(|modalities| !modalities.is_empty())
+                    .unwrap_or_else(|| vec!["text".to_string()]);
+                let reasoning = codex.is_some_and(|model| model.reasoning);
                 json!({
                     "id": id,
                     "available": true,
                     "contextWindow": 200_000,
                     "maxOutputTokens": 32_000,
-                    "inputModalities": ["text"],
+                    "inputModalities": input_modalities,
                     "outputModalities": ["text"],
                     "tools": false,
-                    "reasoning": false,
+                    "reasoning": reasoning,
                     "price": {
                         "input": 0.0,
                         "output": 0.0,
@@ -353,7 +380,7 @@ async fn list_models(
                 .unwrap_or_else(|_| "brama-v1".into()),
             "version": "v1",
             "models": models,
-            "degraded": false,
+            "degraded": degraded,
         }));
     }
     let models = model_ids
@@ -445,7 +472,6 @@ mod tests {
             request.subscription_decision_id.as_deref(),
             Some("decision-3")
         );
-
     }
 
     #[test]
