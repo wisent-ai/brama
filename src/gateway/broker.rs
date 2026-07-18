@@ -6,8 +6,10 @@
 //! at HMAC verification or provider invocation boundaries.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use serde::Deserialize;
+use serde_json::{json, Value};
 
 use crate::capability::{CapabilityClient, CapabilityRef, Secret};
 
@@ -17,6 +19,8 @@ const REQUEST_SIGN_CAPABILITIES_ENV: &str = "BRAMA_REQUEST_SIGN_CAPABILITY_IDS";
 const PROVIDER_CAPABILITIES_ENV: &str = "BRAMA_PROVIDER_CAPABILITY_IDS";
 const SUBSCRIPTION_ID_ALIASES_ENV: &str = "BRAMA_SUBSCRIPTION_ID_ALIASES";
 const SUBSCRIPTION_CATALOG_ENV: &str = "BRAMA_SUBSCRIPTION_CATALOG";
+const DONATED_SUBSCRIPTIONS_FILE_ENV: &str = "BRAMA_DONATED_SUBSCRIPTIONS_FILE";
+const DEFAULT_DONATED_SUBSCRIPTIONS_FILE: &str = "/tmp/brama-skarbiec/donated-subscriptions.json";
 
 /// Fold an identifier into the stable resource alphabet used by deployment
 /// bindings. The original identifier remains the lookup key in trusted config.
@@ -216,11 +220,133 @@ pub async fn subscription_credential(subscription_id: &str, provider: &str) -> O
 
 /// Enumerate one agent's subscription metadata through the entitlements broker
 /// when mounted, otherwise through the encrypted production subscription pool.
+/// The donated-subscriptions overlay file is re-read on every call and merged
+/// on top of whichever source answered (dedupe by id, overlay wins).
 pub async fn list_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
-    match list_subscriptions_result(agent_id).await {
+    let mut entries = match list_subscriptions_result(agent_id).await {
         Ok(rows) => rows,
         Err(()) => legacy_subscriptions(agent_id).await.unwrap_or_default(),
+    };
+    for donated in donated_subscriptions(agent_id) {
+        match entries.iter_mut().find(|entry| entry.id == donated.id) {
+            Some(existing) => *existing = donated,
+            None => entries.push(donated),
+        }
     }
+    entries
+}
+
+/// Path of the donated-subscriptions overlay file.
+pub fn donated_subscriptions_path() -> PathBuf {
+    std::env::var(DONATED_SUBSCRIPTIONS_FILE_ENV)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_DONATED_SUBSCRIPTIONS_FILE))
+}
+
+/// Overlay entries for one agent. A missing or corrupt file yields nothing.
+fn donated_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
+    let Ok(text) = std::fs::read_to_string(donated_subscriptions_path()) else {
+        return Vec::new();
+    };
+    parse_subscriptions(text.as_bytes(), agent_id).unwrap_or_default()
+}
+
+/// Read-modify-write the overlay file atomically (temp + rename, mode 0600).
+fn update_donated_items(update: impl FnOnce(&mut Vec<Value>)) -> Result<(), String> {
+    let path = donated_subscriptions_path();
+    let mut items = match std::fs::read_to_string(&path) {
+        Ok(text) => serde_json::from_str::<Value>(&text)
+            .ok()
+            .and_then(|value| value.get("items").and_then(Value::as_array).cloned())
+            .ok_or_else(|| "donated subscriptions file is corrupt".to_string())?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(error) => return Err(format!("read donated subscriptions file: {error}")),
+    };
+    update(&mut items);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("create donated subscriptions dir: {error}"))?;
+    }
+    let payload = serde_json::to_string_pretty(&json!({"items": items}))
+        .map_err(|error| format!("encode donated subscriptions: {error}"))?;
+    let tmp = path.with_extension("tmp");
+    {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp)
+            .map_err(|error| format!("write donated subscriptions file: {error}"))?;
+        file.write_all(payload.as_bytes())
+            .and_then(|()| file.sync_all())
+            .map_err(|error| format!("write donated subscriptions file: {error}"))?;
+    }
+    std::fs::rename(&tmp, &path)
+        .map_err(|error| format!("replace donated subscriptions file: {error}"))?;
+    Ok(())
+}
+
+/// Record one donated subscription in the overlay file.
+pub fn donated_add(agent_id: &str, id: &str, provider: &str) -> Result<(), String> {
+    update_donated_items(|items| {
+        items.retain(|item| item.get("id").and_then(Value::as_str) != Some(id));
+        items.push(json!({
+            "id": id,
+            "provider": provider,
+            "agent_id": agent_id,
+            "status": "active",
+        }));
+    })
+}
+
+/// Drop one subscription id from the overlay file (no-op when absent).
+pub fn donated_remove(id: &str) -> Result<(), String> {
+    update_donated_items(|items| {
+        items.retain(|item| item.get("id").and_then(Value::as_str) != Some(id));
+    })
+}
+
+fn entitlements_router_bin() -> String {
+    std::env::var(ENTITLEMENTS_ROUTER_BIN_ENV)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_ENTITLEMENTS_ROUTER_BIN.to_owned())
+}
+
+/// Store one donated OAuth credential blob through the local entitlements
+/// router; plaintext crosses only the child process stdin pipe.
+pub async fn put_donated_credential(subscription_id: &str, api_key: &str) -> Result<(), String> {
+    use std::process::Stdio;
+    use tokio::io::AsyncWriteExt;
+    let item_id = format!("provider:claude-code:{subscription_id}");
+    let mut child = tokio::process::Command::new(entitlements_router_bin())
+        .arg("credential-put")
+        .arg(&item_id)
+        .arg("--recipient")
+        .arg("brama-cloud-run")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("spawn entitlements router: {error}"))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(api_key.as_bytes()).await;
+    }
+    let output = child
+        .wait_with_output()
+        .await
+        .map_err(|error| format!("wait entitlements router: {error}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let detail: String = stderr.trim().chars().take(200).collect();
+        return Err(format!("credential-put failed: {detail}"));
+    }
+    Ok(())
 }
 
 fn subscription_prefix(agent_id: &str) -> String {
@@ -264,11 +390,7 @@ async fn list_subscriptions_result(agent_id: &str) -> Result<Vec<SubscriptionEnt
     if let Some(configured) = configured_subscriptions(agent_id) {
         return configured;
     }
-    let broker = std::env::var(ENTITLEMENTS_ROUTER_BIN_ENV)
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| DEFAULT_ENTITLEMENTS_ROUTER_BIN.to_owned());
-    list_subscriptions_with_broker(&broker, agent_id).await
+    list_subscriptions_with_broker(&entitlements_router_bin(), agent_id).await
 }
 
 async fn list_subscriptions_with_broker(

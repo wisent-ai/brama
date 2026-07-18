@@ -13,7 +13,7 @@ use std::io::{BufRead, Write};
 
 use serde_json::{json, Value};
 
-use crate::{build_default_router, detect_compute_resources, select_model_for_resources};
+use crate::{detect_compute_resources, select_model_for_resources};
 
 // Spec-mandated JSON-RPC 2.0 / MCP wire values (not tunables); kept as strings
 // and parsed so no numeric literal appears (matches the crate style).
@@ -35,9 +35,6 @@ fn tools() -> Value {
     json!([
         {"name": "brama_detect",
          "description": "Detect local compute resources (GPU type/name, VRAM, RAM, CPU cores, CUDA/Metal) and the model + backend brama would recommend for this host. Local only; no network, no credentials, no cost.",
-         "inputSchema": schema(json!({}), vec![])},
-        {"name": "brama_models",
-         "description": "List the model ids brama can route to (the default router's known models). Read-only; no network, no credentials, no cost.",
          "inputSchema": schema(json!({}), vec![])},
     ])
 }
@@ -66,16 +63,9 @@ fn detect_tool() -> Value {
     })
 }
 
-fn models_tool() -> Value {
-    let mut models = build_default_router().all_models();
-    models.sort();
-    json!({"models": models, "count": models.len()})
-}
-
 fn call_tool(name: &str, _args: &Value) -> Result<Value, String> {
     match name {
         "brama_detect" => Ok(text_result(&detect_tool())),
-        "brama_models" => Ok(text_result(&models_tool())),
         other => Err(format!("unknown tool: {other}")),
     }
 }

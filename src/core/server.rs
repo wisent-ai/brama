@@ -1,27 +1,24 @@
-use std::collections::HashMap;
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use axum::extract::State;
+use axum::extract::Path;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tokio::sync::RwLock;
 use tracing::{info, warn};
 
-use super::router::ModelRouter;
-use crate::gateway::broker;
 use crate::subscription_dispatch::{
-    authenticate_agent, codex_models_for_agent, dispatch_any_subscription,
-    dispatch_any_vision_capable_subscription, dispatch_subscription, dispatch_task_subscription,
-    is_subscription_model, registry_models_for_agent, subscription_model_for_provider,
+    dispatch_any_subscription, dispatch_any_vision_capable_subscription, dispatch_subscription,
+    dispatch_task_subscription, is_subscription_model, registry_models_for_agent,
 };
 use crate::types::{BillingTarget, Message, ModelRequest, Tool, ToolCall};
 
-type SharedRouter = Arc<RwLock<ModelRouter>>;
+static TOTAL_REQUESTS: AtomicU64 = AtomicU64::new(0);
+static TOTAL_INPUT_TOKENS: AtomicU64 = AtomicU64::new(0);
+static TOTAL_OUTPUT_TOKENS: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Deserialize)]
 struct ChatCompletionRequest {
@@ -140,7 +137,6 @@ fn model_error_status(message: &str) -> StatusCode {
 }
 
 async fn chat_completions(
-    State(router): State<SharedRouter>,
     headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
 ) -> impl IntoResponse {
@@ -185,6 +181,13 @@ async fn chat_completions(
             })),
         );
     }
+    // Legacy alias used by external reauth probes: ride the canonical
+    // claude-code subscription rotation for the agent's donated credentials.
+    let requested_model = if requested_model == "claude-code-subscription" {
+        "claude-code/claude-sonnet-4-6"
+    } else {
+        requested_model
+    };
     let any_subscription = is_any_subscription_selector(requested_model);
     let any_vision_capable_subscription =
         is_any_vision_capable_subscription_selector(requested_model);
@@ -195,26 +198,20 @@ async fn chat_completions(
         || task_subscription.is_some()
         || is_subscription_model(&selected_model);
     if !subscription_request {
-        if let Err(error) = authenticate_agent(&headers, &body).await {
-            return (
-                StatusCode::UNAUTHORIZED,
-                Json(json!({
-                    "error": {
-                        "message": error,
-                        "type": "authentication_error",
-                    }
-                })),
-            );
-        }
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": {
+                    "message": "model must be a canonical provider/model route or a supported selector",
+                    "type": "bad_request",
+                }
+            })),
+        );
     }
 
-    let resp = if subscription_request {
-        // OpenAI-compat callers send the system prompt as a system-role
-        // message in `messages`. The subscription engines (claude_code,
-        // codex, kimi, opencode) read `request.system` as a separate
-        // field and `build_prompt_from` drops system-role messages on the
-        // floor. Pull the first system-role message's text out and set
-        // it on `system` so it actually reaches the CLI.
+    let resp = {
+        // Preserve the OpenAI system-role message as ModelRequest.system while
+        // the stateless provider adapter receives the remaining conversation.
         let (system, non_system_messages): (Option<String>, Vec<Message>) = {
             let mut sys: Option<String> = None;
             let mut rest: Vec<Message> = Vec::with_capacity(messages.len());
@@ -246,19 +243,11 @@ async fn chat_completions(
         } else {
             dispatch_subscription(&headers, &dispatch_req, &body).await
         }
-    } else {
-        let r = router.read().await;
-        r.complete(
-            messages,
-            &selected_model,
-            req.max_tokens,
-            req.temperature,
-            None,
-            req.tools,
-        )
-        .await
     };
 
+    TOTAL_REQUESTS.fetch_add(1, Ordering::Relaxed);
+    TOTAL_INPUT_TOKENS.fetch_add(resp.input_tokens as u64, Ordering::Relaxed);
+    TOTAL_OUTPUT_TOKENS.fetch_add(resp.output_tokens as u64, Ordering::Relaxed);
     if !resp.success {
         let message = resp.error.unwrap_or_default();
         let status = model_error_status(&message);
@@ -306,46 +295,33 @@ async fn health() -> impl IntoResponse {
     Json(json!({"status": "ok"}))
 }
 
-async fn list_models(
-    State(router): State<SharedRouter>,
-    headers: axum::http::HeaderMap,
-) -> impl IntoResponse {
-    let mut model_ids = {
-        let router = router.read().await;
-        router.all_models()
-    };
+async fn list_models(headers: axum::http::HeaderMap) -> impl IntoResponse {
+    let mut model_ids = Vec::new();
+    let mut available = HashSet::new();
     let catalog_agent =
         std::env::var("BRAMA_CATALOG_AGENT_ID").unwrap_or_else(|_| "wisent-app".into());
-    let mut has_codex_subscription = false;
-    for subscription in broker::list_subscriptions(&catalog_agent).await {
-        if subscription.status == "active" {
-            if let Some(model) = subscription_model_for_provider(&subscription.provider) {
-                has_codex_subscription |= model == "codex-subscription";
-                model_ids.push(model.to_owned());
-            }
-        }
-    }
 
-    let mut codex_metadata = HashMap::new();
+    let mut registry_metadata = HashMap::new();
+    let mut catalog_revision =
+        std::env::var("BRAMA_CATALOG_REVISION").unwrap_or_else(|_| "brama-v1".into());
     let mut degraded = false;
-    if has_codex_subscription {
-        match codex_models_for_agent(&catalog_agent).await {
-            Ok(models) => {
-                for model in models {
-                    model_ids.push(model.id.clone());
-                    codex_metadata.insert(model.id.clone(), model);
-                }
-            }
-            Err(error) => {
-                degraded = true;
-                warn!(%error, "Codex model discovery failed");
+    match crate::subscription_dispatch::model_catalog::snapshot().await {
+        Ok(catalog) => {
+            catalog_revision = catalog.revision.clone();
+            for model in &catalog.models {
+                model_ids.push(model.route_id.clone());
+                registry_metadata.insert(model.route_id.clone(), model.clone());
             }
         }
+        Err(error) => {
+            degraded = true;
+            warn!(%error, "public model catalog unavailable");
+        }
     }
-    let mut registry_metadata = HashMap::new();
     match registry_models_for_agent(&catalog_agent).await {
         Ok(models) => {
             for model in models {
+                available.insert(model.route_id.clone());
                 model_ids.push(model.route_id.clone());
                 registry_metadata.insert(model.route_id.clone(), model);
             }
@@ -362,21 +338,26 @@ async fn list_models(
         let models = model_ids
             .into_iter()
             .map(|id| {
-                let codex = codex_metadata.get(&id);
                 let registry = registry_metadata.get(&id);
                 let input_modalities = registry
                     .map(|model| model.input_modalities.clone())
-                    .or_else(|| codex.map(|model| model.input_modalities.clone()))
                     .filter(|modalities| !modalities.is_empty())
                     .unwrap_or_else(|| vec!["text".to_string()]);
                 let context_window = registry.map_or(200_000, |model| model.context_window);
                 let max_output_tokens = registry.map_or(32_000, |model| model.max_output_tokens);
                 let tools = registry.is_some_and(|model| model.tools);
-                let reasoning = registry.is_some_and(|model| model.reasoning)
-                    || codex.is_some_and(|model| model.reasoning);
+                let reasoning = registry.is_some_and(|model| model.reasoning);
+                let price = registry.map_or((0.0, 0.0, 0.0, 0.0), |model| {
+                    (
+                        model.input_price,
+                        model.output_price,
+                        model.cache_read_price,
+                        model.cache_write_price,
+                    )
+                });
                 json!({
                     "id": id,
-                    "available": true,
+                    "available": available.contains(&id),
                     "contextWindow": context_window,
                     "maxOutputTokens": max_output_tokens,
                     "inputModalities": input_modalities,
@@ -384,10 +365,10 @@ async fn list_models(
                     "tools": tools,
                     "reasoning": reasoning,
                     "price": {
-                        "input": 0.0,
-                        "output": 0.0,
-                        "cacheRead": 0.0,
-                        "cacheWrite": 0.0,
+                        "input": price.0,
+                        "output": price.1,
+                        "cacheRead": price.2,
+                        "cacheWrite": price.3,
                     },
                     "fallback": [],
                     "promotion": [],
@@ -395,8 +376,7 @@ async fn list_models(
             })
             .collect::<Vec<_>>();
         return Json(json!({
-            "catalogRevision": std::env::var("BRAMA_CATALOG_REVISION")
-                .unwrap_or_else(|_| "brama-v1".into()),
+            "catalogRevision": catalog_revision,
             "version": "v1",
             "models": models,
             "degraded": degraded,
@@ -422,30 +402,180 @@ async fn list_models(
     }))
 }
 
-async fn get_stats(State(router): State<SharedRouter>) -> impl IntoResponse {
-    let r = router.read().await;
-    let reqs = r.stats.total_requests.load(Ordering::Relaxed);
-    let inp = r.stats.total_input_tokens.load(Ordering::Relaxed);
-    let out = r.stats.total_output_tokens.load(Ordering::Relaxed);
-
+async fn get_stats() -> impl IntoResponse {
     Json(json!({
-        "total_requests": reqs,
-        "total_input_tokens": inp,
-        "total_output_tokens": out,
+        "total_requests": TOTAL_REQUESTS.load(Ordering::Relaxed),
+        "total_input_tokens": TOTAL_INPUT_TOKENS.load(Ordering::Relaxed),
+        "total_output_tokens": TOTAL_OUTPUT_TOKENS.load(Ordering::Relaxed),
     }))
 }
 
-pub async fn start_server(router: ModelRouter, port: u16) -> Result<(), std::io::Error> {
-    let shared: SharedRouter = Arc::new(RwLock::new(router));
+#[derive(Debug, Deserialize)]
+struct DonateSubscriptionRequest {
+    user_id: Option<String>,
+    provider: Option<String>,
+    label: Option<String>,
+    api_key: Option<String>,
+}
 
-    let chat_app = Router::new()
+#[derive(Debug, Deserialize)]
+struct RetireSubscriptionRequest {
+    user_id: Option<String>,
+    subscription_id: Option<String>,
+}
+
+type ApiError = (StatusCode, Json<serde_json::Value>);
+
+fn api_error(status: StatusCode, message: &str) -> ApiError {
+    (
+        status,
+        Json(json!({
+            "error": {
+                "message": message,
+                "type": "bad_request",
+            }
+        })),
+    )
+}
+
+/// Mutating subscription endpoints accept any donor identity unless
+/// BRAMA_DONOR_USER_ID opts into an exact-match check (legacy-service parity).
+fn donor_authorized(user_id: Option<&str>) -> Result<(), ApiError> {
+    let expected = std::env::var("BRAMA_DONOR_USER_ID")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    let Some(expected) = expected else {
+        eprintln!(
+            "[subscriptions] donation accepted without donor check (BRAMA_DONOR_USER_ID unset), user_id={}",
+            user_id.unwrap_or("")
+        );
+        return Ok(());
+    };
+    if user_id != Some(expected.as_str()) {
+        return Err(api_error(StatusCode::FORBIDDEN, "forbidden"));
+    }
+    Ok(())
+}
+
+async fn list_agent_subscriptions(Path(agent_id): Path<String>) -> impl IntoResponse {
+    let subscriptions = crate::gateway::broker::list_subscriptions(&agent_id)
+        .await
+        .into_iter()
+        .map(|entry| {
+            json!({
+                "id": entry.id,
+                "provider": entry.provider,
+                "status": entry.status,
+            })
+        })
+        .collect::<Vec<_>>();
+    Json(json!({"subscriptions": subscriptions}))
+}
+
+async fn donate_subscription(
+    Path(agent_id): Path<String>,
+    Json(req): Json<DonateSubscriptionRequest>,
+) -> ApiError {
+    if let Err(error) = donor_authorized(req.user_id.as_deref()) {
+        return error;
+    }
+    let provider = match req.provider.as_deref().map(str::trim) {
+        Some("claude_code" | "claude-code") => "claude-code",
+        _ => return api_error(StatusCode::BAD_REQUEST, "provider must be claude_code"),
+    };
+    let api_key = req.api_key.as_deref().unwrap_or("");
+    if api_key.is_empty() || api_key.chars().count() > 8000 {
+        return api_error(
+            StatusCode::BAD_REQUEST,
+            "api_key must contain 1..8000 characters",
+        );
+    }
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let subscription_id = format!(
+        "brama-sub-{}-claude-{millis}",
+        crate::gateway::broker::slug(&agent_id)
+    );
+    if let Err(message) =
+        crate::gateway::broker::put_donated_credential(&subscription_id, api_key).await
+    {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "error": {
+                    "message": message,
+                    "type": "server_error",
+                }
+            })),
+        );
+    }
+    if let Err(message) =
+        crate::gateway::broker::donated_add(&agent_id, &subscription_id, provider)
+    {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "error": {
+                    "message": message,
+                    "type": "server_error",
+                }
+            })),
+        );
+    }
+    (
+        StatusCode::OK,
+        Json(json!({
+            "subscription": {
+                "id": subscription_id,
+                "provider": provider,
+                "agent_id": agent_id,
+                "status": "active",
+                "label": req.label,
+            }
+        })),
+    )
+}
+
+async fn retire_subscription(
+    Path(_agent_id): Path<String>,
+    Json(req): Json<RetireSubscriptionRequest>,
+) -> ApiError {
+    if let Err(error) = donor_authorized(req.user_id.as_deref()) {
+        return error;
+    }
+    let subscription_id = req.subscription_id.as_deref().map(str::trim).unwrap_or("");
+    if subscription_id.is_empty() {
+        return api_error(StatusCode::BAD_REQUEST, "subscription_id is required");
+    }
+    crate::journal::retire(subscription_id);
+    if let Err(message) = crate::gateway::broker::donated_remove(subscription_id) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "error": {
+                    "message": message,
+                    "type": "server_error",
+                }
+            })),
+        );
+    }
+    (StatusCode::OK, Json(json!({"ok": true})))
+}
+
+pub async fn start_server(port: u16) -> Result<(), std::io::Error> {
+    let app = Router::new()
         .route("/v1/chat/completions", post(chat_completions))
         .route("/v1/models", get(list_models))
+        .route(
+            "/v1/subscriptions/:agent_id",
+            get(list_agent_subscriptions)
+                .post(donate_subscription)
+                .delete(retire_subscription),
+        )
         .route("/health", get(health))
-        .route("/stats", get(get_stats))
-        .with_state(shared);
-
-    let app = chat_app;
+        .route("/stats", get(get_stats));
 
     let addr = format!("0.0.0.0:{port}");
     info!("Starting brama server on {addr}");

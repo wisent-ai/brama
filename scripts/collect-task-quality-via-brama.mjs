@@ -1,18 +1,7 @@
-// Collect task-quality evidence through the deployed model-router HTTP API.
-// This avoids local CLI/path differences when the evidence is meant to drive
-// production routing.
+// Collect task-quality evidence through Brama's stateless provider routes.
+// Jeden remains the only agent runtime.
 
 import crypto from 'node:crypto';
-
-const WELLES_SUPABASE_URL = process.env.SUPABASE_URL;
-const WELLES_SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-const PROVIDER_MODELS = {
-  claude_code: 'claude-code-subscription',
-  codex: 'codex-subscription',
-  kimi: 'kimi-subscription',
-  opencode: 'opencode-subscription',
-};
 
 function die(message) {
   console.error(message);
@@ -44,34 +33,18 @@ function parseArgs() {
   return out;
 }
 
-async function loadConfig() {
-  if (!WELLES_SUPABASE_URL || !WELLES_SUPABASE_KEY) {
-    die('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY for Weles');
-  }
-  const headers = {
-    apikey: WELLES_SUPABASE_KEY,
-    Authorization: `Bearer ${WELLES_SUPABASE_KEY}`,
+function loadConfig() {
+  const config = {
+    MODEL_ROUTER_URL: process.env.BRAMA_URL || process.env.MODEL_ROUTER_URL,
+    WISENT_APP_AGENT_ID: process.env.WISENT_APP_AGENT_ID,
+    WISENT_APP_AGENT_AUTH_SECRET: process.env.WISENT_APP_AGENT_AUTH_SECRET,
+    MR_SUPABASE_URL: process.env.MR_SUPABASE_URL,
+    MR_SUPABASE_SERVICE_ROLE_KEY: process.env.MR_SUPABASE_SERVICE_ROLE_KEY,
   };
-  const res = await fetch(
-    `${WELLES_SUPABASE_URL}/rest/v1/service_credentials?id=in.(codex-reauth-config,claude-reauth-config)&select=id,metadata`,
-    { headers }
-  );
-  const text = await res.text();
-  if (!res.ok) throw new Error(`read Weles config -> ${res.status} ${text}`);
-  const rows = JSON.parse(text);
-  const configs = new Map(rows.map((row) => [row.id, row.metadata || {}]));
-  const meta = configs.get('codex-reauth-config') || configs.get('claude-reauth-config');
-  if (!meta) throw new Error('missing codex-reauth-config / claude-reauth-config');
-  for (const key of [
-    'MODEL_ROUTER_URL',
-    'WISENT_APP_AGENT_ID',
-    'WISENT_APP_AGENT_AUTH_SECRET',
-    'MR_SUPABASE_URL',
-    'MR_SUPABASE_SERVICE_ROLE_KEY',
-  ]) {
-    if (!meta[key]) throw new Error(`config missing ${key}`);
+  for (const [key, value] of Object.entries(config)) {
+    if (!value) throw new Error(`missing environment variable ${key}`);
   }
-  return meta;
+  return config;
 }
 
 function sign(cfg, body) {
@@ -88,21 +61,16 @@ function sign(cfg, body) {
 }
 
 async function activeModels(cfg) {
-  const headers = {
-    apikey: cfg.MR_SUPABASE_SERVICE_ROLE_KEY,
-    Authorization: `Bearer ${cfg.MR_SUPABASE_SERVICE_ROLE_KEY}`,
-  };
-  const url = `${cfg.MR_SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/trade_agent_subscriptions?select=provider&instance_id=eq.${encodeURIComponent(cfg.WISENT_APP_AGENT_ID)}&status=eq.active`;
-  const res = await fetch(url, { headers });
+  const res = await fetch(
+    `${cfg.MODEL_ROUTER_URL.replace(/\/+$/, '')}/v1/models`,
+    { headers: { 'x-jeden-schema-min': '1' } }
+  );
   const text = await res.text();
-  if (!res.ok) throw new Error(`read active subscriptions -> ${res.status} ${text}`);
-  const rows = JSON.parse(text);
-  const models = [];
-  for (const row of rows) {
-    const model = PROVIDER_MODELS[row.provider];
-    if (model && !models.includes(model)) models.push(model);
-  }
-  return models;
+  if (!res.ok) throw new Error(`read Brama catalog -> ${res.status} ${text}`);
+  const catalog = JSON.parse(text);
+  return (catalog.models || [])
+    .filter((model) => model.available && String(model.id || '').includes('/'))
+    .map((model) => String(model.id));
 }
 
 async function callModel(cfg, model, args) {
@@ -129,7 +97,7 @@ async function callModel(cfg, model, args) {
   const passed = res.ok && expectedOk;
   return {
     model,
-    provider: Object.entries(PROVIDER_MODELS).find(([, value]) => value === model)?.[0] || 'unknown',
+    provider: model.split('/', 1)[0] || 'unknown',
     status: passed ? 'active' : 'failed',
     score: passed ? 1.0 : 0.0,
     ok: res.ok,
@@ -193,10 +161,6 @@ async function persistRows(cfg, args, rows) {
 }
 
 function serviceName(provider) {
-  if (provider === 'claude_code') return 'Claude Code';
-  if (provider === 'codex') return 'Codex';
-  if (provider === 'kimi') return 'Kimi Code';
-  if (provider === 'opencode') return 'OpenCode';
   return provider;
 }
 

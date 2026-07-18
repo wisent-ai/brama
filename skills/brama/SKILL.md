@@ -19,9 +19,9 @@ The source of truth is the `brama` Rust crate (axum HTTP server + provider
 router). Do not reimplement its routing, auth, or provider logic.
 
 - `core/` — the router and the HTTP server (`/v1/chat/completions`, `/v1/models`,
-  `/health`, `/stats`, subscription-router snapshot).
+  `/health`, `/stats`).
 - `detection.rs` — local compute detection and the model recommendation.
-- `subscription_dispatch/` — provider selection, task-quality checks, reauth.
+- `subscription_dispatch/` — stateless provider selection and task-quality routing.
 
 Build with `cargo build --bin brama`.
 
@@ -31,7 +31,6 @@ Build with `cargo build --bin brama`.
 brama serve --port <port>            # start the OpenAI-compatible HTTP server
 brama test --model <model>           # run one inference through the router
 brama detect                         # print local hardware + recommended model
-brama collect-subscription-checks …  # persist native-CLI subscription checks
 brama collect-task-quality …         # persist deterministic task-quality checks
 brama mcp                            # the read-only stdio MCP server (below)
 ```
@@ -57,10 +56,9 @@ network-free, and zero-cost. Exposed tools:
   models).
 
 The token-spending path — `/v1/chat/completions` and the `test` inference — and
-the collecting/persisting commands (`collect-subscription-checks`,
-`collect-task-quality`) are deliberately not exposed over MCP. They cost money or
-change stored evidence, so they stay in the CLI and HTTP server, off the agent
-surface.
+the collecting/persisting `collect-task-quality` command are deliberately not
+exposed over MCP. They cost money or change stored evidence, so they stay in the
+CLI and HTTP server, off the agent surface.
 
 ## Operational rules
 

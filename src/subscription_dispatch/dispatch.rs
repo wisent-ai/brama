@@ -1,99 +1,37 @@
-//! Route `"*-subscription"` chat completions requests to the matching CLI.
+//! Route canonical `provider/model` requests through stateless provider APIs.
 
 use aes_gcm::aead::rand_core::{OsRng, RngCore};
 use axum::http::HeaderMap;
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicI64, Ordering};
-use std::sync::{LazyLock, Mutex, RwLock};
+use std::collections::HashMap;
+use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::crypto;
 use crate::gateway::broker;
-use crate::subscription_dispatch::{engines, reauth};
+use crate::subscription_dispatch::provider_registry;
 use crate::types::{ModelRequest, ModelResponse};
-
-// Unix-seconds of the last CLI self-heal, to debounce concurrent triggers.
-static LAST_CLI_SELF_HEAL: AtomicI64 = AtomicI64::new(0);
-
-fn is_permanent_auth_failure(err: &str) -> bool {
-    let e = err.to_lowercase();
-    e.contains("refresh token was revoked")
-        || e.contains("access token could not be refreshed")
-        || e.contains("invalid_grant")
+const MODEL_CACHE_TTL: Duration = Duration::from_secs(300);
+fn is_permanent_auth_failure(error: &str) -> bool {
+    let error = error.to_ascii_lowercase();
+    error.contains("refresh token was revoked")
+        || error.contains("access token could not be refreshed")
+        || error.contains("invalid_grant")
 }
 
-fn is_auth_failure(err: &str) -> bool {
-    let e = err.to_lowercase();
-    e.contains("invalid authentication")
-        || e.contains("authentication_error")
-        || e.contains("failed to authenticate")
-        || e.contains("401")
-        || e.contains("oauth")
-        || is_permanent_auth_failure(err)
+fn is_auth_failure(error: &str) -> bool {
+    let error = error.to_ascii_lowercase();
+    error.contains("invalid authentication")
+        || error.contains("authentication_error")
+        || error.contains("failed to authenticate")
+        || error.contains("401")
+        || error.contains("oauth")
+        || is_permanent_auth_failure(&error)
 }
 
-async fn mark_subscription_revoked(sub_id: &str) {
-    crate::journal::retire(sub_id);
+async fn mark_credential_revoked(credential_id: &str) {
+    crate::journal::retire(credential_id);
 }
-
-// When every donated subscription for a provider fails specifically with an
-// AUTH error (not a rate/quota limit), the most likely cause is a stale,
-// build-time-baked CLI whose auth broke after an upstream update (as Anthropic's
-// did 2026-05-27). Reactively re-pull the latest CLI in the background so the
-// NEXT request uses a current binary — no manual rebuild, no waiting on the
-// periodic refresh. Debounced to at most once per 10 minutes.
-fn maybe_self_heal_cli(provider: &str, err: &str) {
-    let is_auth_failure = err.contains("Invalid authentication")
-        || err.contains("authentication_error")
-        || err.contains("invalid_grant")
-        || err.contains("OAuth");
-    if !is_auth_failure {
-        return;
-    }
-    if provider == "codex" {
-        // Codex is pinned to the build-time global install because it needs a
-        // matching platform-native package. Runtime refresh can break that
-        // pairing, so Codex updates must go through an image rebuild.
-        return;
-    }
-    let pkg = match provider {
-        "claude_code" => "@anthropic-ai/claude-code@latest",
-        "codex" => "@openai/codex@latest",
-        "opencode" => "opencode-ai@latest",
-        _ => return,
-    };
-    let now = chrono::Utc::now().timestamp();
-    let last = LAST_CLI_SELF_HEAL.load(Ordering::Relaxed);
-    if now - last < 600 {
-        return;
-    }
-    if LAST_CLI_SELF_HEAL
-        .compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed)
-        .is_err()
-    {
-        return; // another request already kicked the heal
-    }
-    eprintln!("[router] all '{provider}' subs failed auth; self-healing CLI: npm install -g {pkg}");
-    std::thread::spawn(move || {
-        let status = std::process::Command::new("npm")
-            .args(["install", "-g", pkg, "--no-fund", "--no-audit"])
-            .status();
-        eprintln!("[router] CLI self-heal for {pkg} finished: {status:?}");
-    });
-}
-
-const CODEX_MODEL_CACHE_TTL: Duration = Duration::from_secs(300);
-
-struct CachedCodexModels {
-    fetched: Instant,
-    models: Vec<engines::CodexModel>,
-}
-
-static CODEX_MODEL_CACHE: LazyLock<Mutex<HashMap<String, CachedCodexModels>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-static DISCOVERED_CODEX_MODELS: LazyLock<RwLock<HashSet<String>>> =
-    LazyLock::new(|| RwLock::new(HashSet::new()));
 
 struct CachedRegistryModels {
     fetched: Instant,
@@ -103,145 +41,12 @@ struct CachedRegistryModels {
 static REGISTRY_MODEL_CACHE: LazyLock<Mutex<HashMap<String, CachedRegistryModels>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-pub const SUBSCRIPTION_MODELS: &[(&str, &str)] = &[
-    ("claude-code-subscription", "claude_code"),
-    ("claude-opus-4-7", "claude_code"),
-    ("codex-subscription", "codex"),
-    ("kimi-subscription", "kimi"),
-    ("opencode-subscription", "opencode"),
-];
-
 pub fn is_subscription_model(model: &str) -> bool {
     provider_for(model).is_some()
 }
 
-pub fn is_vision_capable_subscription_model(model: &str) -> bool {
-    matches!(provider_for(model), Some("claude_code"))
-}
-
-fn is_codex_model(model: &str) -> bool {
-    DISCOVERED_CODEX_MODELS
-        .read()
-        .is_ok_and(|models| models.contains(model))
-}
-
-fn register_codex_models(models: &[engines::CodexModel]) {
-    if let Ok(mut discovered) = DISCOVERED_CODEX_MODELS.write() {
-        discovered.extend(models.iter().map(|model| model.id.clone()));
-    }
-}
-
-pub(crate) fn provider_for(model: &str) -> Option<&'static str> {
-    SUBSCRIPTION_MODELS
-        .iter()
-        .find(|(candidate, _)| *candidate == model)
-        .map(|(_, provider)| *provider)
-        .or_else(|| is_codex_model(model).then_some("codex"))
-        .or_else(|| {
-            crate::subscription_dispatch::provider_registry::route(model)
-                .map(|(provider, _)| provider.id)
-        })
-}
-
-fn canonical_model_for_provider(provider: &str) -> Option<&'static str> {
-    SUBSCRIPTION_MODELS
-        .iter()
-        .find(|(_, p)| *p == provider)
-        .map(|(m, _)| *m)
-}
-
-fn canonical_provider_id(provider: &str) -> Option<&'static str> {
-    match provider
-        .trim()
-        .to_ascii_lowercase()
-        .replace('-', "_")
-        .as_str()
-    {
-        "anthropic" | "claude" | "claude_code" => Some("claude_code"),
-        "chatgpt" | "codex" | "openai" => Some("codex"),
-        "kimi" | "kimi_code" | "moonshot" => Some("kimi"),
-        "opencode" => Some("opencode"),
-        _ => None,
-    }
-}
-
-pub(crate) fn subscription_model_for_provider(provider: &str) -> Option<&'static str> {
-    canonical_provider_id(provider).and_then(canonical_model_for_provider)
-}
-
-pub async fn codex_models_for_agent(agent_id: &str) -> Result<Vec<engines::CodexModel>, String> {
-    let entries = broker::list_subscriptions(agent_id)
-        .await
-        .into_iter()
-        .filter(|entry| {
-            canonical_provider_id(&entry.provider) == Some("codex")
-                && entry.status == "active"
-                && !crate::journal::is_retired(&entry.id)
-        })
-        .collect::<Vec<_>>();
-    if entries.is_empty() {
-        return Err("no active Codex subscription for catalog agent".into());
-    }
-
-    let mut models_by_id = HashMap::new();
-    let mut failures = Vec::new();
-    for entry in entries {
-        let cached = CODEX_MODEL_CACHE.lock().ok().and_then(|cache| {
-            cache
-                .get(&entry.id)
-                .filter(|item| item.fetched.elapsed() < CODEX_MODEL_CACHE_TTL)
-                .map(|item| item.models.clone())
-        });
-        let models = if let Some(cached) = cached {
-            cached
-        } else {
-            let secret = match broker::subscription_credential(&entry.id, "codex").await {
-                Some(secret) => secret,
-                None => {
-                    failures.push(format!("{}: credential unavailable", entry.id));
-                    continue;
-                }
-            };
-            let token_json = match secret.expose_utf8() {
-                Ok(token_json) => token_json,
-                Err(_) => {
-                    failures.push(format!("{}: credential is not UTF-8", entry.id));
-                    continue;
-                }
-            };
-            let discovered = match engines::list_codex_models(token_json).await {
-                Ok(models) => models,
-                Err(error) => {
-                    failures.push(format!("{}: {error}", entry.id));
-                    continue;
-                }
-            };
-            if let Ok(mut cache) = CODEX_MODEL_CACHE.lock() {
-                cache.insert(
-                    entry.id.clone(),
-                    CachedCodexModels {
-                        fetched: Instant::now(),
-                        models: discovered.clone(),
-                    },
-                );
-            }
-            discovered
-        };
-        register_codex_models(&models);
-        for model in models {
-            models_by_id.entry(model.id.clone()).or_insert(model);
-        }
-    }
-
-    if models_by_id.is_empty() {
-        return Err(format!(
-            "could not discover Codex subscription models: {}",
-            failures.join("; ")
-        ));
-    }
-    let mut models = models_by_id.into_values().collect::<Vec<_>>();
-    models.sort_by(|left, right| left.id.cmp(&right.id));
-    Ok(models)
+pub(crate) fn provider_for(model: &str) -> Option<&str> {
+    provider_registry::provider_id_from_route(model)
 }
 
 pub async fn registry_models_for_agent(
@@ -250,12 +55,7 @@ pub async fn registry_models_for_agent(
     let entries = broker::list_subscriptions(agent_id)
         .await
         .into_iter()
-        .filter(|entry| {
-            entry.status == "active"
-                && crate::subscription_dispatch::provider_registry::provider(entry.provider.trim())
-                    .is_some()
-                && !crate::journal::is_retired(&entry.id)
-        })
+        .filter(|entry| entry.status == "active" && !crate::journal::is_retired(&entry.id))
         .collect::<Vec<_>>();
     if entries.is_empty() {
         return Ok(Vec::new());
@@ -269,7 +69,7 @@ pub async fn registry_models_for_agent(
         let cached = REGISTRY_MODEL_CACHE.lock().ok().and_then(|cache| {
             cache
                 .get(&cache_key)
-                .filter(|item| item.fetched.elapsed() < CODEX_MODEL_CACHE_TTL)
+                .filter(|item| item.fetched.elapsed() < MODEL_CACHE_TTL)
                 .map(|item| item.models.clone())
         });
         let models = if let Some(cached) = cached {
@@ -329,10 +129,7 @@ pub async fn registry_models_for_agent(
 }
 
 fn provider_matches(candidate: &str, requested: &str) -> bool {
-    if crate::subscription_dispatch::provider_registry::provider(requested).is_some() {
-        return candidate.trim().eq_ignore_ascii_case(requested);
-    }
-    canonical_provider_id(candidate) == Some(requested)
+    candidate.trim().eq_ignore_ascii_case(requested)
 }
 
 fn eligible_subscription_entries(
@@ -422,37 +219,30 @@ async fn any_vision_capable_subscription_models(
 }
 
 pub async fn active_supported_models_for_agent(agent_id: &str) -> Result<Vec<String>, String> {
-    let entries = broker::list_subscriptions(agent_id).await;
-    let mut models = Vec::new();
-    for entry in entries {
-        if entry.status != "active" || crate::journal::is_retired(&entry.id) {
-            continue;
-        }
-        let Some(model) = canonical_model_for_provider(&entry.provider) else {
-            continue;
-        };
-        if !models.iter().any(|existing| existing == model) {
-            models.push(model.to_string());
-        }
-    }
+    let mut models = registry_models_for_agent(agent_id)
+        .await?
+        .into_iter()
+        .map(|model| model.route_id)
+        .collect::<Vec<_>>();
     if models.is_empty() {
-        return Err("no active supported CLI subscription for signed agent".into());
+        return Err("no active stateless provider models for signed agent".into());
     }
     shuffle_models(&mut models);
     Ok(models)
 }
 
 pub async fn active_vision_capable_models_for_agent(agent_id: &str) -> Result<Vec<String>, String> {
-    let models = active_supported_models_for_agent(agent_id).await?;
-    let mut vision_models = models
+    let mut models = registry_models_for_agent(agent_id)
+        .await?
         .into_iter()
-        .filter(|model| is_vision_capable_subscription_model(model))
+        .filter(|model| model.input_modalities.iter().any(|value| value == "image"))
+        .map(|model| model.route_id)
         .collect::<Vec<_>>();
-    if vision_models.is_empty() {
-        return Err("no active vision-capable subscription model for signed agent".into());
+    if models.is_empty() {
+        return Err("no active vision-capable stateless provider model for signed agent".into());
     }
-    shuffle_models(&mut vision_models);
-    Ok(vision_models)
+    shuffle_models(&mut models);
+    Ok(models)
 }
 
 fn score_field(row: &Value) -> Option<f64> {
@@ -530,9 +320,8 @@ async fn task_quality_models(agent_id: &str, task: &str) -> Result<Vec<String>, 
     Ok(ordered)
 }
 
-/// `model: "any"` means: pick a random supported subscription model for the
-/// signed agent, try it, and continue through the randomized candidate list
-/// until one actually returns a successful response.
+/// `model: "any"` selects among active stateless provider routes for the
+/// signed agent and rotates across credentials on provider exhaustion.
 pub async fn dispatch_any_subscription(
     headers: &HeaderMap,
     request: &ModelRequest,
@@ -565,8 +354,8 @@ pub async fn dispatch_any_subscription(
     )
 }
 
-/// `model: "any-vision-capable"` means: pick a random active subscription
-/// model that can read image references through the router's current CLI path.
+/// `model: "any-vision-capable"` selects an active stateless provider route
+/// whose catalog metadata advertises image input.
 pub async fn dispatch_any_vision_capable_subscription(
     headers: &HeaderMap,
     request: &ModelRequest,
@@ -644,261 +433,116 @@ pub async fn dispatch_subscription_for_agent(
     request: &ModelRequest,
 ) -> ModelResponse {
     let provider = match provider_for(&request.model) {
-        Some(p) => p,
-        None => return ModelResponse::failure(&request.model, "unknown subscription model".into()),
+        Some(provider) => provider,
+        None => {
+            return ModelResponse::failure(&request.model, "unknown provider/model route".into())
+        }
     };
-    dispatch_subscription_attempt(provider, agent_id, request)
-        .await
-        .response
+    dispatch_subscription_attempt(provider, agent_id, request).await
 }
 
-/// Handle a chat completions request whose model name is a CLI-backed
-/// subscription. The caller (agent) must supply the HMAC header trio so
-/// we can scope decryption to the agent that donated the subscription.
+/// Authenticate the Jeden caller, redeem the selected provider credential at
+/// the final-use boundary, and execute one stateless provider API request.
 pub async fn dispatch_subscription(
     headers: &HeaderMap,
     request: &ModelRequest,
     raw_body: &[u8],
 ) -> ModelResponse {
     let provider = match provider_for(&request.model) {
-        Some(p) => p,
-        None => return ModelResponse::failure(&request.model, "unknown subscription model".into()),
+        Some(provider) => provider,
+        None => {
+            return ModelResponse::failure(&request.model, "unknown provider/model route".into())
+        }
     };
-
     let agent_id = match authenticate_agent(headers, raw_body).await {
-        Ok(id) => id,
-        Err(e) => return ModelResponse::failure(&request.model, e),
+        Ok(agent_id) => agent_id,
+        Err(error) => return ModelResponse::failure(&request.model, error),
     };
-    let skip_weles_reauth = headers
-        .get("x-brama-skip-weles-reauth")
-        .and_then(|v| v.to_str().ok())
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
-
-    let mut tried_weles_reauth = false;
-    loop {
-        let attempt = dispatch_subscription_attempt(provider, &agent_id, request).await;
-        if attempt.response.success {
-            return attempt.response;
-        }
-
-        // Prefer the classified auth-failure candidate. But a stale/expired
-        // subscription can also surface as an UNCLASSIFIED failure — e.g. the
-        // codex CLI exits 1 with no "401"/"oauth" token in stderr. For providers
-        // Weles can reauth on the host, attempt one broker-driven reauth on any
-        // failure instead of returning a hard error and letting the token die
-        // silently (the exact gap that stranded codex). Skip when already tried
-        // or the caller opted out.
-        let candidate = match attempt.reauth_candidate {
-            Some(c) => c,
-            None => {
-                if tried_weles_reauth
-                    || skip_weles_reauth
-                    || !reauth::provider_is_reauthable(provider)
-                {
-                    return attempt.response;
-                }
-                ReauthCandidate {
-                    subscription_id: String::new(),
-                    error: attempt
-                        .response
-                        .error
-                        .clone()
-                        .unwrap_or_else(|| "unclassified subscription failure".to_string()),
-                }
-            }
-        };
-
-        if skip_weles_reauth {
-            return attempt.response;
-        }
-        if tried_weles_reauth {
-            maybe_self_heal_cli(provider, &candidate.error);
-            return attempt.response;
-        }
-        tried_weles_reauth = true;
-
-        eprintln!(
-            "[router] auth failure for {provider} sub {}; requesting Weles reauth",
-            candidate.subscription_id
-        );
-        match reauth::reauth_provider(
-            &agent_id,
-            provider,
-            &candidate.subscription_id,
-            &request.model,
-            &candidate.error,
-        )
-        .await
-        {
-            Ok(result) if result.refreshed => {
-                eprintln!(
-                    "[router] Weles reauth refreshed {provider} via {}; retrying dispatch",
-                    result.source
-                );
-                continue;
-            }
-            Ok(result) => {
-                eprintln!(
-                    "[router] Weles reauth for {provider} returned refreshed=false via {}",
-                    result.source
-                );
-                maybe_self_heal_cli(provider, &candidate.error);
-                return attempt.response;
-            }
-            Err(e) => {
-                eprintln!("[router] Weles reauth for {provider} failed: {e}");
-                maybe_self_heal_cli(provider, &candidate.error);
-                return attempt.response;
-            }
-        }
-    }
-}
-
-struct ReauthCandidate {
-    subscription_id: String,
-    error: String,
-}
-
-struct AttemptOutcome {
-    response: ModelResponse,
-    reauth_candidate: Option<ReauthCandidate>,
-}
-
-async fn run_provider_with_token(
-    provider: &str,
-    request: &ModelRequest,
-    agent_id: &str,
-    subscription_id: &str,
-    token: &str,
-) -> ModelResponse {
-    match provider {
-        "claude_code" => engines::run_claude_code(request, agent_id, subscription_id, token).await,
-        "codex" => engines::run_codex(request, agent_id, subscription_id, token).await,
-        "kimi" => engines::run_kimi(request, agent_id, subscription_id, token).await,
-        "opencode" => engines::run_opencode(request, agent_id, subscription_id, token).await,
-        provider
-            if crate::subscription_dispatch::provider_registry::provider(provider).is_some() =>
-        {
-            crate::subscription_dispatch::provider_registry::dispatch(request, token).await
-        }
-        _ => ModelResponse::failure(&request.model, "unreachable".into()),
-    }
+    dispatch_subscription_attempt(provider, &agent_id, request).await
 }
 
 async fn dispatch_subscription_attempt(
     provider: &str,
     agent_id: &str,
     request: &ModelRequest,
-) -> AttemptOutcome {
+) -> ModelResponse {
     let rows = match eligible_subscription_entries(
         broker::list_subscriptions(agent_id).await,
         provider,
         request.billing_target.as_ref(),
     ) {
         Ok(rows) => rows,
-        Err(error) => {
-            return AttemptOutcome {
-                response: ModelResponse::failure(&request.model, error),
-                reauth_candidate: None,
-            }
-        }
+        Err(error) => return ModelResponse::failure(&request.model, error),
     };
     if rows.is_empty() {
-        return AttemptOutcome {
-            response: ModelResponse::failure(
-                &request.model,
-                request.billing_target.as_ref().map_or_else(
-                    || format!("no active '{provider}' subscription for agent"),
-                    |target| {
-                        format!(
-                            "selected subscription '{}' is not active for provider '{provider}' and agent",
-                            target.subscription_id
-                        )
-                    },
-                ),
+        return ModelResponse::failure(
+            &request.model,
+            request.billing_target.as_ref().map_or_else(
+                || format!("no active '{provider}' credential for agent"),
+                |target| {
+                    format!(
+                        "selected credential '{}' is not active for provider '{provider}' and agent",
+                        target.subscription_id
+                    )
+                },
             ),
-            reauth_candidate: None,
-        };
+        );
     }
 
-    // Try each subscription in turn. If a call returns a per-subscription
-    // exhaustion signal (per-window quota, auth-expired OAuth, 401), rotate
-    // to the next sub. Anything else surfaces immediately so we don't mask
-    // upstream API breakage as exhaustion.
-    let mut last_failure: Option<ModelResponse> = None;
-    let mut last_auth_failure: Option<ReauthCandidate> = None;
-    for (idx, entry) in rows.iter().enumerate() {
-        let sub_id = entry.id.clone();
-        let token = match broker::subscription_credential(&sub_id, provider).await {
+    let mut last_failure = None;
+    for (index, entry) in rows.iter().enumerate() {
+        let credential_id = &entry.id;
+        let token = match broker::subscription_credential(credential_id, provider).await {
             Some(token) => token,
             None => {
-                eprintln!("[router] sub {sub_id} has no capability credential (skipping)");
+                eprintln!(
+                    "[router] credential {credential_id} is unavailable for provider {provider}"
+                );
                 continue;
             }
         };
         let token = match token.expose_utf8() {
             Ok(token) => token,
             Err(_) => {
-                eprintln!("[router] sub {sub_id} capability credential is invalid (skipping)");
+                eprintln!(
+                    "[router] credential {credential_id} is not valid UTF-8 for provider {provider}"
+                );
                 continue;
             }
         };
-        let result = run_provider_with_token(provider, request, agent_id, &sub_id, token).await;
+        let result = provider_registry::dispatch(request, token).await;
         if result.success {
-            if idx > 0 {
+            if index > 0 {
                 eprintln!(
-                    "[router] rotated to sub {sub_id} (idx={idx}) for {provider} after prior burnouts"
+                    "[router] rotated to credential {credential_id} (idx={index}) for {provider}"
                 );
             }
-            return AttemptOutcome {
-                response: result,
-                reauth_candidate: None,
-            };
+            return result;
         }
-        let err = result.error.clone().unwrap_or_default();
-        if is_permanent_auth_failure(&err) {
-            eprintln!("[router] sub {sub_id} permanent auth failure; revoking");
-            mark_subscription_revoked(&sub_id).await;
+        let error = result.error.clone().unwrap_or_default();
+        if is_permanent_auth_failure(&error) {
+            eprintln!("[router] credential {credential_id} permanently rejected; retiring");
+            mark_credential_revoked(credential_id).await;
         }
-        if is_auth_failure(&err) {
-            last_auth_failure = Some(ReauthCandidate {
-                subscription_id: sub_id.clone(),
-                error: err.clone(),
-            });
+        let exhausted = is_auth_failure(&error)
+            || error.contains("hit your limit")
+            || error.contains("usage limit")
+            || error.contains("rate_limit")
+            || error.contains("429");
+        if !exhausted {
+            return result;
         }
-        let is_subscription_burnout = err.contains("hit your limit")
-            || err.contains("hit your session limit")
-            || err.contains("session limit")
-            || err.contains("usage limit")
-            || err.contains("weekly limit")
-            || err.contains("authentication_error")
-            || err.contains("Invalid authentication credentials")
-            || err.contains("401")
-            || err.contains("rate_limit")
-            || is_permanent_auth_failure(&err);
-        if !is_subscription_burnout {
-            return AttemptOutcome {
-                response: result,
-                reauth_candidate: last_auth_failure,
-            };
-        }
-        eprintln!("[router] sub {sub_id} burnt out ({err}); rotating to next");
+        eprintln!(
+            "[router] credential {credential_id} exhausted for {provider} ({error}); rotating"
+        );
         last_failure = Some(result);
     }
-    // Every active sub failed. If the failures are auth errors (not quota), the
-    // CLI itself is likely stale — kick a reactive background refresh so the next
-    // request recovers automatically.
-    let response = last_failure.unwrap_or_else(|| {
+    last_failure.unwrap_or_else(|| {
         ModelResponse::failure(
             &request.model,
-            format!("all '{provider}' subs burnt out for agent"),
+            format!("all '{provider}' credentials unavailable for agent"),
         )
-    });
-    AttemptOutcome {
-        response,
-        reauth_candidate: last_auth_failure,
-    }
+    })
 }
 
 fn string_field(row: &Value, key: &str) -> String {

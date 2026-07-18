@@ -1,12 +1,9 @@
 use clap::{Parser, Subcommand};
 use tracing::info;
 
-use brama::subscription_dispatch::{
-    collect_subscription_checks, collect_task_quality, CollectOptions, TaskQualityOptions,
-};
+use brama::subscription_dispatch::{collect_task_quality, TaskQualityOptions};
 use brama::{
-    build_default_router, detect_compute_resources, select_model_for_resources, start_server,
-    Message,
+    detect_compute_resources, select_model_for_resources, start_server, Message, ModelRequest,
 };
 
 #[derive(Parser)]
@@ -26,38 +23,26 @@ enum Commands {
     },
     /// Run a test inference through the router
     Test {
-        /// Model to test with
-        #[arg(short, long, default_value = "gpt-4o-mini")]
+        /// Canonical provider/model route to test
+        #[arg(short, long, default_value = "openai/gpt-5.4")]
         model: String,
+        /// Jeden agent/client id whose provider credential should be used
+        #[arg(long, default_value = "wisent-app")]
+        agent_id: String,
     },
     /// Detect local hardware capabilities
     Detect,
     /// Serve the read-only stdio MCP server (agent surface)
     Mcp,
-    /// Collect native CLI subscription/auth checks into subscription-router
-    CollectSubscriptionChecks {
-        /// Model-router agent/client id whose runtime credentials should be checked
-        #[arg(long)]
-        agent_id: String,
-        /// Optional provider filter: claude_code, codex, kimi, opencode
-        #[arg(long)]
-        provider: Option<String>,
-        /// Allow provider runtime calls when no cheap status command exists
-        #[arg(long, default_value_t = false)]
-        deep: bool,
-        /// Write results to subscription_router_checks cache table
-        #[arg(long, default_value_t = false)]
-        persist: bool,
-    },
-    /// Collect deterministic task-quality checks for active subscription models
+    /// Collect deterministic task-quality checks for active provider routes
     CollectTaskQuality {
-        /// Model-router agent/client id whose runtime credentials should be checked
+        /// Jeden agent/client id whose provider credentials should be checked
         #[arg(long)]
         agent_id: String,
         /// Task key used later as model="task:<task>"
         #[arg(long)]
         task: String,
-        /// Prompt sent to each active subscription model
+        /// Prompt sent to each active stateless provider route
         #[arg(long)]
         prompt: String,
         /// Exact expected response for score=1
@@ -82,25 +67,32 @@ async fn main() {
 
     match cli.command {
         Commands::Serve { port } => {
-            let router = build_default_router();
             info!("Starting server on port {port}");
-            if let Err(e) = start_server(router, port).await {
+            if let Err(e) = start_server(port).await {
                 eprintln!("Server error: {e}");
                 std::process::exit(1);
             }
         }
-        Commands::Test { model } => {
-            let router = build_default_router();
-            let messages = vec![Message {
-                role: "user".into(),
-                content: "Say hello in one sentence.".into(),
-                tool_call_id: None,
-                name: None,
-                tool_calls: None,
-            }];
-            let resp = router
-                .complete(messages, &model, 256, 0.7, None, None)
-                .await;
+        Commands::Test { model, agent_id } => {
+            let request = ModelRequest {
+                messages: vec![Message {
+                    role: "user".into(),
+                    content: "Say hello in one sentence.".into(),
+                    tool_call_id: None,
+                    name: None,
+                    tool_calls: None,
+                }],
+                model,
+                max_tokens: 256,
+                temperature: 0.7,
+                system: None,
+                tools: None,
+                billing_target: None,
+                subscription_decision_id: None,
+            };
+            let resp =
+                brama::subscription_dispatch::dispatch_subscription_for_agent(&agent_id, &request)
+                    .await;
             if resp.success {
                 println!("Model: {}", resp.model);
                 println!("Response: {}", resp.content);
@@ -131,32 +123,6 @@ async fn main() {
         }
         Commands::Mcp => {
             brama::mcp::serve();
-        }
-        Commands::CollectSubscriptionChecks {
-            agent_id,
-            provider,
-            deep,
-            persist,
-        } => {
-            match collect_subscription_checks(CollectOptions {
-                agent_id,
-                provider,
-                deep,
-                persist,
-            })
-            .await
-            {
-                Ok(value) => {
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".into())
-                    );
-                }
-                Err(e) => {
-                    eprintln!("{e}");
-                    std::process::exit(1);
-                }
-            }
         }
         Commands::CollectTaskQuality {
             agent_id,

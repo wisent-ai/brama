@@ -16,6 +16,9 @@ chmod 750 "$socket_dir"
 
 export GNUPGHOME="$gnupg_dir"
 gpg --batch --quiet --import "$SKARBIEC_GPG_PRIVATE_KEY_FILE"
+# Public recipient keys (owner + recovery) so donated credentials can be
+# encrypted to every default recipient, not only this workload's key.
+gpg --batch --quiet --import /etc/brama-skarbiec/recipient-public-keys.asc
 
 metadata_token_json="$(curl --fail --silent --show-error \
   -H 'Metadata-Flavor: Google' \
@@ -46,6 +49,36 @@ export SKARBIEC_WORM_CHECKPOINT="$runtime_dir/checkpoint.json"
 export SKARBIEC_WORKLOAD_ID=brama-cloudrun
 export SKARBIEC_WORKLOAD_SIGNING_KEY_FILE="$config_dir/brama-proof.key"
 export ENTITLEMENTS_ROUTER_BIN=/usr/local/bin/skarbiec-entitlements-router
+
+# Weles reauth endpoint for credential refresh on redeem. WELES_URL is the
+# service base; the skarbiec router appends /api/v1/runs. The bearer token is
+# read from the vault so no secret passes through the service config.
+: "${WELES_URL:=https://weles.wisent.ai}"
+export WELES_URL
+if [ -z "${WELES_TOKEN:-}" ]; then
+  weles_token_value="$("$ENTITLEMENTS_ROUTER_BIN" get WELES_CONSOLE_API_TOKEN 2>/dev/null | python3 -c '
+import json, sys
+def find(o):
+    if isinstance(o, str):
+        return o
+    if isinstance(o, dict):
+        for k in ("value", "secret", "token", "plaintext", "current"):
+            if k in o:
+                r = find(o[k])
+                if r:
+                    return r
+    return None
+try:
+    v = find(json.load(sys.stdin))
+except Exception:
+    v = None
+print(v or "")
+' 2>/dev/null || true)"
+  if [ -n "$weles_token_value" ]; then
+    export WELES_TOKEN="$weles_token_value"
+  fi
+  unset weles_token_value
+fi
 
 subscriptions_file="$runtime_dir/subscriptions.json"
 capabilities_file="$runtime_dir/provider-capabilities.json"

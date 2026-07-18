@@ -1,9 +1,5 @@
 [
   {
-    "id": "brama-sub-wisent-app-claude-primary",
-    "provider": "claude-code"
-  },
-  {
     "id": "brama-sub-wisent-app-codex-primary",
     "provider": "codex"
   },
@@ -12,8 +8,20 @@
     "provider": "kimi"
   },
   {
-    "id": "brama-sub-wisent-app-opencode-primary",
-    "provider": "opencode"
+    "id": "brama-sub-wisent-app-claude-1",
+    "provider": "claude-code"
+  },
+  {
+    "id": "brama-sub-wisent-app-claude-2",
+    "provider": "claude-code"
+  },
+  {
+    "id": "brama-sub-wisent-app-claude-3",
+    "provider": "claude-code"
+  },
+  {
+    "id": "brama-sub-wisent-app-claude-primary",
+    "provider": "claude-code"
   },
   {
     "id": "brama-sub-wisent-app-anthropic-primary",

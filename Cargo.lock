@@ -212,7 +212,6 @@ name = "brama"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
- "async-trait",
  "axum",
  "base64",
  "chrono",
@@ -228,7 +227,6 @@ dependencies = [
  "sha2",
  "subtle",
  "sysinfo",
- "tempfile",
  "thiserror",
  "tokio",
  "tracing",
