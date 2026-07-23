@@ -41,6 +41,12 @@ struct CachedRegistryModels {
 static REGISTRY_MODEL_CACHE: LazyLock<Mutex<HashMap<String, CachedRegistryModels>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+/// Discovery failures are cached briefly too: without it every catalog call
+/// re-pays full provider timeouts for credentials that are stale anyway.
+const MODEL_FAILURE_CACHE_TTL: Duration = Duration::from_secs(60);
+static REGISTRY_MODEL_FAILURE_CACHE: LazyLock<Mutex<HashMap<String, (Instant, String)>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
 pub fn is_subscription_model(model: &str) -> bool {
     provider_for(model).is_some()
 }
@@ -75,6 +81,19 @@ pub async fn registry_models_for_agent(
         let models = if let Some(cached) = cached {
             cached
         } else {
+            let recent_failure = REGISTRY_MODEL_FAILURE_CACHE
+                .lock()
+                .ok()
+                .and_then(|cache| {
+                    cache
+                        .get(&cache_key)
+                        .filter(|(fetched, _)| fetched.elapsed() < MODEL_FAILURE_CACHE_TTL)
+                        .map(|(_, error)| error.clone())
+                });
+            if let Some(error) = recent_failure {
+                failures.push(format!("{}: {error}", entry.id));
+                continue;
+            }
             let secret = match broker::subscription_credential(&entry.id, provider).await {
                 Some(secret) => secret,
                 None => {
@@ -96,6 +115,9 @@ pub async fn registry_models_for_agent(
             {
                 Ok(models) => models,
                 Err(error) => {
+                    if let Ok(mut cache) = REGISTRY_MODEL_FAILURE_CACHE.lock() {
+                        cache.insert(cache_key.clone(), (Instant::now(), error.clone()));
+                    }
                     failures.push(format!("{}: {error}", entry.id));
                     continue;
                 }
