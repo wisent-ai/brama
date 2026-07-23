@@ -7,6 +7,8 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -386,11 +388,100 @@ fn configured_subscriptions(agent_id: &str) -> Option<Result<Vec<SubscriptionEnt
     Some(parse_subscriptions(encoded.as_bytes(), agent_id))
 }
 
+/// One vault item row from the entitlements router's bare `list` command.
+#[derive(Debug, Deserialize)]
+struct VaultListItem {
+    id: Option<String>,
+    #[serde(default)]
+    deleted: bool,
+}
+
+/// Map the router's full vault listing to one agent's subscriptions. Vault
+/// resource ids look like `provider:<provider>:<rest>`; the `brama-sub-<agent>-`
+/// prefix applies to `<rest>` only, after the `provider:<provider>:` segment is
+/// stripped. Non-deleted resources become active entries keyed by `<rest>`.
+fn parse_live_subscriptions(output: &[u8], agent_id: &str) -> Result<Vec<SubscriptionEntry>, ()> {
+    let prefix = subscription_prefix(agent_id);
+    let items: Vec<VaultListItem> = serde_json::from_slice(output).map_err(|_| ())?;
+    Ok(items
+        .into_iter()
+        .filter(|item| !item.deleted)
+        .filter_map(|item| {
+            let id = complete_field(item.id)?;
+            let resource = id.strip_prefix("provider:")?;
+            let (provider, rest) = resource.split_once(':')?;
+            if !rest.starts_with(&prefix) {
+                return None;
+            }
+            Some(SubscriptionEntry {
+                id: rest.to_owned(),
+                provider: provider.trim().to_lowercase().replace('_', "-"),
+                status: "active".to_owned(),
+            })
+        })
+        .collect())
+}
+
+/// Live discovery results per agent. Entries are stored only after a
+/// successful listing so a failed shell never poisons the cache.
+fn live_subscriptions_cache() -> &'static Mutex<HashMap<String, (Instant, Vec<SubscriptionEntry>)>>
+{
+    static CACHE: OnceLock<Mutex<HashMap<String, (Instant, Vec<SubscriptionEntry>)>>> =
+        OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+const LIVE_SUBSCRIPTIONS_CACHE_TTL: Duration = Duration::from_secs(60);
+
+/// Resolve one agent's subscriptions from the vault, serving a fresh cached
+/// listing unless `bypass_cache` is set (used when a lookup failed and the
+/// caller wants to re-check the vault instead of trusting a stale entry).
+async fn live_subscriptions(
+    broker: &str,
+    agent_id: &str,
+    bypass_cache: bool,
+) -> Result<Vec<SubscriptionEntry>, ()> {
+    if !bypass_cache {
+        if let Ok(cache) = live_subscriptions_cache().lock() {
+            if let Some((fetched_at, entries)) = cache.get(agent_id) {
+                if fetched_at.elapsed() < LIVE_SUBSCRIPTIONS_CACHE_TTL {
+                    return Ok(entries.clone());
+                }
+            }
+        }
+    }
+    let entries = list_subscriptions_live(broker, agent_id).await?;
+    if let Ok(mut cache) = live_subscriptions_cache().lock() {
+        cache.insert(agent_id.to_owned(), (Instant::now(), entries.clone()));
+    }
+    Ok(entries)
+}
+
+/// Shell the entitlements router's bare `list`, which returns a JSON array of
+/// every vault item (`{"id","type","tags","updated_at","deleted","versions"}`).
+async fn list_subscriptions_live(broker: &str, agent_id: &str) -> Result<Vec<SubscriptionEntry>, ()> {
+    let output = tokio::process::Command::new(broker)
+        .arg("list")
+        .output()
+        .await
+        .map_err(|_| ())?;
+    if !output.status.success() {
+        return Err(());
+    }
+    parse_live_subscriptions(&output.stdout, agent_id)
+}
+
 async fn list_subscriptions_result(agent_id: &str) -> Result<Vec<SubscriptionEntry>, ()> {
+    let broker = entitlements_router_bin();
+    // Live vault discovery wins; a failed lookup bypasses the cache and falls
+    // back to the deployment-time env catalog, then to the legacy broker path.
+    if let Ok(live) = live_subscriptions(&broker, agent_id, false).await {
+        return Ok(live);
+    }
     if let Some(configured) = configured_subscriptions(agent_id) {
         return configured;
     }
-    list_subscriptions_with_broker(&entitlements_router_bin(), agent_id).await
+    list_subscriptions_with_broker(&broker, agent_id).await
 }
 
 async fn list_subscriptions_with_broker(

@@ -84,32 +84,35 @@ subscriptions_file="$runtime_dir/subscriptions.json"
 capabilities_file="$runtime_dir/provider-capabilities.json"
 catalog_file="$runtime_dir/subscription-catalog.json"
 "$ENTITLEMENTS_ROUTER_BIN" list >"$subscriptions_file"
-python3 - "$ENTITLEMENTS_ROUTER_BIN" "$config_dir/subscriptions.json" "$subscriptions_file" "$capabilities_file" "$catalog_file" <<'PY'
+python3 - "$ENTITLEMENTS_ROUTER_BIN" "$subscriptions_file" "$capabilities_file" "$catalog_file" <<'PY'
 import json
 import subprocess
 import sys
 
-router, manifest_path, available_path, capabilities_path, catalog_path = sys.argv[1:]
-with open(manifest_path, encoding="utf-8") as source:
-    manifest = json.load(source)
+router, available_path, capabilities_path, catalog_path = sys.argv[1:]
 with open(available_path, encoding="utf-8") as source:
-    available_resources = {
-        item["id"]
-        for item in json.load(source)
-        if isinstance(item, dict)
-        and isinstance(item.get("id"), str)
-        and not item.get("deleted", False)
-    }
+    available_items = json.load(source)
 
+# Discovery is vault-driven: every non-deleted provider resource shaped
+# provider:<provider>:brama-sub-wisent-app-* yields one capability and one
+# catalog entry. No baked manifest is consulted.
 normalize = lambda value: value.strip().lower().replace("_", "-")
 capabilities = {}
 catalog = []
-for entry in manifest:
-    item_id = entry["id"]
-    provider = normalize(entry["provider"])
-    resource = f"provider:{provider}:{item_id}"
-    if resource not in available_resources:
+for item in available_items:
+    if not isinstance(item, dict) or item.get("deleted", False):
         continue
+    resource_id = item.get("id")
+    if not isinstance(resource_id, str):
+        continue
+    segments = resource_id.split(":", 2)
+    if len(segments) != 3 or segments[0] != "provider":
+        continue
+    provider = normalize(segments[1])
+    item_id = segments[2]
+    if not item_id.startswith("brama-sub-wisent-app-"):
+        continue
+    resource = f"provider:{provider}:{item_id}"
     issued = subprocess.run(
         [
             router,

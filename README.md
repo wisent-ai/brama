@@ -25,8 +25,9 @@ OpenAI-compatible `/v1/chat/completions` requests must include a canonical
 
 Jeden is the only agent runtime. Brama performs exactly one provider API call
 per attempt; it does not start Claude Code, Codex, Kimi Code, OpenCode, or any
-other agent CLI. Provider credentials are enumerated through
-`entitlements-router list-items brama-sub-<slugged-agent>-` and redeemed from
+other agent CLI. Provider credentials are discovered live from the Skarbiec
+vault (`entitlements-router list`, keeping non-deleted
+`provider:<provider>:brama-sub-<slugged-agent>-*` resources) and redeemed from
 Skarbiec only at the final-use boundary.
 
 ## Secrets and state
@@ -47,9 +48,11 @@ Environment:
   `SKARBIEC_WORKLOAD_SIGNING_KEY_FILE` — canonical workload identity. The key
   file must be a regular owner-owned file with no group/other permissions.
 - `ENTITLEMENTS_ROUTER_BIN` — optional path to the broker executable; defaults
-  to `entitlements-router`. Brama invokes `list-items` with the bound
-  `brama-sub-<slugged-agent>-` prefix and treats command failures or malformed rows as
-  an empty subscription set.
+  to `entitlements-router`. Brama shells the bare `list` command (cached per
+  agent for 60s) and keeps non-deleted `provider:` rows whose resource tail
+  starts with the bound `brama-sub-<slugged-agent>-` prefix. On command
+  failure it falls back to `BRAMA_SUBSCRIPTION_CATALOG`, then to the legacy
+  `list-items` probe; malformed rows yield an empty subscription set.
 - `BRAMA_REQUEST_SIGN_CAPABILITY_IDS` — trusted JSON object mapping agent IDs
   to opaque request-sign capability IDs (`agent:<slugged-agent>` bindings).
 - `BRAMA_PROVIDER_CAPABILITY_IDS` — trusted JSON object. Direct API providers
