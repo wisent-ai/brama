@@ -264,6 +264,10 @@ async fn chat_completions(
         return (status, Json(body));
     }
 
+    // Telemetry is keyed by the requested route id, not the upstream model the
+    // subscription rotation actually served, so it joins with catalog ids.
+    crate::core::perf::record(&selected_model, resp.latency_ms, resp.output_tokens);
+
     let has_tool_calls = resp.tool_calls.as_ref().map_or(false, |tc| !tc.is_empty());
     let finish_reason = if has_tool_calls { "tool_calls" } else { "stop" };
 
@@ -293,6 +297,19 @@ async fn chat_completions(
 
 async fn health() -> impl IntoResponse {
     Json(json!({"status": "ok"}))
+}
+
+/// Optional per-model telemetry block, present only when the route has stats.
+fn perf_json(model: &str) -> Option<serde_json::Value> {
+    crate::core::perf::get(model).map(|perf| {
+        json!({
+            "count": perf.count,
+            "latencyMs": perf.latency_ms,
+            "tps": perf.tps,
+            "lastLatencyMs": perf.last_latency_ms,
+            "lastTps": perf.last_tps,
+        })
+    })
 }
 
 async fn list_models(headers: axum::http::HeaderMap) -> impl IntoResponse {
@@ -355,7 +372,7 @@ async fn list_models(headers: axum::http::HeaderMap) -> impl IntoResponse {
                         model.cache_write_price,
                     )
                 });
-                json!({
+                let mut entry = json!({
                     "id": id,
                     "available": available.contains(&id),
                     "contextWindow": context_window,
@@ -372,7 +389,11 @@ async fn list_models(headers: axum::http::HeaderMap) -> impl IntoResponse {
                     },
                     "fallback": [],
                     "promotion": [],
-                })
+                });
+                if let Some(perf) = perf_json(&id) {
+                    entry["perf"] = perf;
+                }
+                entry
             })
             .collect::<Vec<_>>();
         return Json(json!({
@@ -389,11 +410,15 @@ async fn list_models(headers: axum::http::HeaderMap) -> impl IntoResponse {
                 .get(&id)
                 .map(|model| model.provider_id.as_str())
                 .unwrap_or("brama");
-            json!({
+            let mut entry = json!({
                 "id": id,
                 "object": "model",
                 "owned_by": owner,
-            })
+            });
+            if let Some(perf) = perf_json(&id) {
+                entry["perf"] = perf;
+            }
+            entry
         })
         .collect::<Vec<_>>();
     Json(json!({
@@ -407,6 +432,7 @@ async fn get_stats() -> impl IntoResponse {
         "total_requests": TOTAL_REQUESTS.load(Ordering::Relaxed),
         "total_input_tokens": TOTAL_INPUT_TOKENS.load(Ordering::Relaxed),
         "total_output_tokens": TOTAL_OUTPUT_TOKENS.load(Ordering::Relaxed),
+        "perfModels": crate::core::perf::tracked_count(),
     }))
 }
 
@@ -565,6 +591,9 @@ async fn retire_subscription(
 }
 
 pub async fn start_server(port: u16) -> Result<(), std::io::Error> {
+    // Touch the perf registry so persisted stats load at startup, not on first use.
+    info!(models = crate::core::perf::tracked_count(), "perf registry loaded");
+
     let app = Router::new()
         .route("/v1/chat/completions", post(chat_completions))
         .route("/v1/models", get(list_models))
