@@ -1123,6 +1123,8 @@ fn model_response_from_responses_stream(
     let mut content = String::new();
     let mut completed = Value::Null;
     let mut failure = None;
+    let mut done_text = String::new();
+    let mut done_tool_calls = Vec::new();
     for line in body.lines() {
         let Some(data) = line.strip_prefix("data:") else {
             continue;
@@ -1138,6 +1140,48 @@ fn model_response_from_responses_stream(
             Some("response.output_text.delta") => {
                 if let Some(delta) = event.get("delta").and_then(Value::as_str) {
                     content.push_str(delta);
+                }
+            }
+            Some("response.output_item.done") => {
+                // Codex's completed event ships output: [] — the real message
+                // and function_call items only arrive in output_item.done.
+                if let Some(item) = event.get("item") {
+                    match item.get("type").and_then(Value::as_str) {
+                        Some("message") => {
+                            for part in item
+                                .get("content")
+                                .and_then(Value::as_array)
+                                .into_iter()
+                                .flatten()
+                            {
+                                if let Some(value) = part.get("text").and_then(Value::as_str) {
+                                    done_text.push_str(value);
+                                }
+                            }
+                        }
+                        Some("function_call") => done_tool_calls.push(ToolCall {
+                            id: item
+                                .get("call_id")
+                                .or_else(|| item.get("id"))
+                                .and_then(Value::as_str)
+                                .unwrap_or("tool")
+                                .to_string(),
+                            call_type: "function".into(),
+                            function: crate::types::ToolCallFunction {
+                                name: item
+                                    .get("name")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("tool")
+                                    .to_string(),
+                                arguments: item
+                                    .get("arguments")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("{}")
+                                    .to_string(),
+                            },
+                        }),
+                        _ => {}
+                    }
                 }
             }
             Some("response.completed") => {
@@ -1206,6 +1250,14 @@ fn model_response_from_responses_stream(
         }
         if !text.is_empty() {
             content = text;
+        }
+    }
+    if content.is_empty() && !done_text.is_empty() {
+        content = done_text;
+    }
+    for call in done_tool_calls {
+        if !tool_calls.iter().any(|existing| existing.id == call.id) {
+            tool_calls.push(call);
         }
     }
     let usage = completed.get("usage");
