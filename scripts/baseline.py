@@ -153,7 +153,14 @@ def from_stado(objects: list) -> dict:
 
 
 def honest_tag() -> str:
-    """The newest tag whose own tree declares the version the tag claims."""
+    """The newest tag whose own tree declares the version the tag claims.
+
+    A tag naming a version its tree does not declare is reported and skipped, so a
+    mis-signed tag cannot move the baseline onto a surface never released under that
+    number. Alias tags for one version (`0.1.0` beside `v0.1.0`) tie, and the tie is
+    broken by `git tag --list` order so the answer is stable across runs -- the
+    workflow's staleness check needs this to converge, not merely to be defensible.
+    """
     best = None
     for line in git("tag", "--list").splitlines():
         tag = line.strip()

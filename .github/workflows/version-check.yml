@@ -146,18 +146,30 @@ jobs:
             echo "Nothing is published for brama yet, and the baseline does not claim otherwise."
           fi
 
-          # Being honest about the tier is not the same as being on the best one. A
-          # release or tag can appear after the baseline was generated, and a head:
-          # baseline stays truthful while quietly measuring against a superseded thing.
-          # Only the tier prefix is compared: a head: marker carries a sha that moves
-          # every commit, so full-marker equality would demand a regeneration per commit.
-          # This prints the regenerated document and throws it away -- the committed
-          # baseline is never rewritten here and the regenerated surface never reaches
-          # the decision, because a check that recomputes both sides gates nothing.
+          # Being honest about the tier is not the same as being on the best artifact. A
+          # release or tag can appear after the baseline was generated, and the baseline
+          # stays perfectly truthful while quietly measuring against a superseded thing.
+          #
+          # On every tier but head the marker names its artifact exactly -- an object uri
+          # or a tag -- and those do not move, so the whole marker is compared and a newer
+          # release of the same kind is caught too. head:<sha> moves with every commit, so
+          # there only the tier is compared; full equality would demand a regeneration per
+          # commit forever.
+          #
+          # This prints the regenerated document and throws it away: the committed baseline
+          # is never rewritten here and the regenerated surface never reaches the decision,
+          # because a check that recomputes both sides gates nothing.
           best="$(python3 scripts/baseline.py | jq -r '.source | split(" ") | first')"
-          if [ "${best%%:*}" != "${marker%%:*}" ]; then
-            echo "::error::The baseline sits on tier '${marker%%:*}' but '${best%%:*}' is" \
-              "reachable now. Regenerate it: python3 scripts/baseline.py --write"
+          if [ "${marker%%:*}" = head ]; then
+            have="${marker%%:*}"
+            want="${best%%:*}"
+          else
+            have="$marker"
+            want="$best"
+          fi
+          if [ "$have" != "$want" ]; then
+            echo "::error::The baseline is $have, but $want is the best one reachable now." \
+              "Regenerate it: python3 scripts/baseline.py --write"
             false
           fi
-          echo "Tier '${marker%%:*}' is still the best baseline available."
+          echo "Baseline $have is still the best one available."
