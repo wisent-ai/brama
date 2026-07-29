@@ -1,0 +1,163 @@
+name: version-check
+
+# Refuse a change whose declared version disagrees with what it did to Brama's public
+# contract. That contract is the command list `bin/brama` advertises, because the thing
+# `.github/workflows/deploy-stado.yml` publishes to stado://releases/brama/ is a runtime
+# bundle other machines invoke by command name -- and `brama mcp` reports the declared
+# version back over MCP `initialize`, so a wrong number is externally observable.
+#
+# The rule itself lives in one place for the whole fleet and is NOT copied here:
+# https://github.com/lbartoszcze/AutoVersion. This workflow supplies only the two things
+# this repository alone knows: its surface, and the version it declares.
+#
+# The baseline is the committed released-surface.json and is never regenerated here; only
+# the candidate is recomputed. A check that rebuilt both sides would always agree with
+# itself and would gate nothing.
+#
+# This deliberately does not gate deploy-stado.yml with `needs:`. A hard edge onto this
+# job would turn any Actions outage into a permanently blocked deploy, and that file has
+# a different owner. scripts/surface.py `--verify` is the check to add to the publish job
+# when its owner wants one: the built binary's own `--help` must agree with the scan.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install the shared rule
+        run: pip install --quiet "git+https://github.com/lbartoszcze/AutoVersion@v0.1.0"
+
+      - name: Read the advertised command surface
+        # No cargo, no toolchain, no dependency graph: the commands are scanned out of
+        # the clap declaration, so a release decision cannot be broken by an unrelated
+        # dependency and stays a seconds-long step. A declaration that does not scan
+        # fails this step rather than silently shrinking the surface.
+        run: python3 scripts/surface.py > "$RUNNER_TEMP/candidate.json"
+
+      - name: Compare against the released contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          released="$(jq -r .version released-surface.json)"
+          declared="$(python3 scripts/baseline.py --declared-version)"
+          echo "baseline: $released"
+          echo "declared: $declared"
+
+          verdict="$(autoversion decide \
+            --current "$released" \
+            --published-surface released-surface.json \
+            --candidate-surface "$RUNNER_TEMP/candidate.json" \
+            --json)"
+          echo "$verdict"
+
+          change="$(printf '%s' "$verdict" | jq -r .change)"
+          required="$(printf '%s' "$verdict" | jq -r .next)"
+
+          if [ "$declared" = "$released" ]; then
+            if [ "$change" != "internal" ]; then
+              echo "::error::The command surface changed ($change) but Cargo.toml still" \
+                "declares the baseline version $released. The next version must be $required."
+              false
+            fi
+            echo "The command surface is unchanged."
+          elif [ "$declared" != "$required" ]; then
+            echo "::error::Cargo.toml declares $declared, but a $change change to" \
+              "$released requires $required."
+            false
+          else
+            echo "Declared version matches the $change change."
+          fi
+
+  baseline:
+    # released-surface.json must describe something a consumer can really obtain, and it
+    # must not claim a release that does not exist. Both directions are asserted against
+    # the channel this product actually publishes to; "not on PyPI" would be vacuously
+    # true for a Rust binary and would prove nothing.
+    #
+    # Asking the channel needs the provisioned Stado CLI, which is why this runs on the
+    # same self-hosted class that publishes. Forks opening pull requests never reach it.
+    if: github.event_name != 'pull_request'
+    runs-on: [self-hosted, linux, stado-service]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch tags so a better baseline tier cannot hide
+        # A shallow checkout carries no tags, and scripts/baseline.py prefers a tag over
+        # HEAD. Without this the tier assertion below would report "head is still best"
+        # on a repository that had just been tagged.
+        run: git fetch --tags --force --quiet
+
+      - name: Assert the baseline agrees with the release channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          STADO_BIN="${STADO_BIN:-stado}"
+
+          # The marker is the first whitespace-delimited token of "source"; the rest is
+          # prose for humans. scripts/baseline.py writes it, this reads it, and nothing
+          # here has to grep prose.
+          marker="$(jq -r '.source | split(" ") | first' released-surface.json)"
+          case "$marker" in
+            stado:*)               claims_release=yes ;;
+            git-archive:*|head:*)  claims_release=no ;;
+            *)
+              echo "::error::unknown baseline marker: $marker." \
+                "Regenerate with: python3 scripts/baseline.py --write"
+              false
+              ;;
+          esac
+
+          listing="$("$STADO_BIN" storage objects releases "brama/" --json)"
+          serves="$(printf '%s' "$listing" | jq -r 'if (.objects | any) then "yes" else "no" end')"
+          echo "marker: $marker (claims a release: $claims_release)"
+          echo "stado://releases/brama/ serves objects: $serves"
+
+          if [ "$claims_release" = yes ]; then
+            if [ "$serves" = no ]; then
+              echo "::error::The baseline claims $marker but stado://releases/brama/ is" \
+                "empty, so every comparison is measured against something nobody can obtain."
+              false
+            fi
+            object="${marker#stado:}"
+            if ! printf '%s' "$listing" \
+              | jq -e --arg uri "$object" '.objects | map(.uri) | index($uri)' >/dev/null; then
+              echo "::error::The baseline names $object, which the release channel does not list."
+              false
+            fi
+            echo "Baseline $object exists in the release channel."
+          else
+            if [ "$serves" = yes ]; then
+              echo "::error::The baseline claims no release, but stado://releases/brama/" \
+                "now serves objects. Regenerate it: python3 scripts/baseline.py --write"
+              false
+            fi
+            echo "Nothing is published for brama yet, and the baseline does not claim otherwise."
+          fi
+
+          # Being honest about the tier is not the same as being on the best one. A
+          # release or tag can appear after the baseline was generated, and a head:
+          # baseline stays truthful while quietly measuring against a superseded thing.
+          # Only the tier prefix is compared: a head: marker carries a sha that moves
+          # every commit, so full-marker equality would demand a regeneration per commit.
+          # This prints the regenerated document and throws it away -- the committed
+          # baseline is never rewritten here and the regenerated surface never reaches
+          # the decision, because a check that recomputes both sides gates nothing.
+          best="$(python3 scripts/baseline.py | jq -r '.source | split(" ") | first')"
+          if [ "${best%%:*}" != "${marker%%:*}" ]; then
+            echo "::error::The baseline sits on tier '${marker%%:*}' but '${best%%:*}' is" \
+              "reachable now. Regenerate it: python3 scripts/baseline.py --write"
+            false
+          fi
+          echo "Tier '${marker%%:*}' is still the best baseline available."

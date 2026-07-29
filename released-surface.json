@@ -1,0 +1,11 @@
+{
+  "version": "0.1.0",
+  "source": "head:12b60dbb002ce27a1f82990b85b7c57c9bc22a7a -- NOT PUBLISHED: stado://releases/brama/ is empty and this repository has no tags, so this baseline claims no release and only records the contract as of that commit",
+  "surface": [
+    "collect-task-quality",
+    "detect",
+    "mcp",
+    "serve",
+    "test"
+  ]
+}
