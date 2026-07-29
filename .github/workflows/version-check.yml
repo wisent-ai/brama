@@ -37,7 +37,62 @@ jobs:
           persist-credentials: false
 
       - name: Install the shared rule
-        run: pip install --quiet "git+https://github.com/lbartoszcze/AutoVersion@v0.1.0"
+        # Never `pip install` into the system interpreter. `ubuntu-latest` resolves to an
+        # Ubuntu whose python3 carries the externally-managed marker, so that spelling
+        # dies with `error: externally-managed-environment` before any check runs. The
+        # gate would be permanently red, which by this fleet's own standard is worth
+        # exactly what a sleeping one is worth and trains people to ignore a red build.
+        # Invisible from a laptop, and invisible here too while Actions is billing-locked,
+        # because this step has never once run on a runner.
+        #
+        # A venv sidesteps the marker without --break-system-packages, and appending its
+        # bin to GITHUB_PATH leaves every later `autoversion` call spelled exactly as it
+        # was. RUNNER_TEMP and GITHUB_PATH exist only on a runner, hence the defaults --
+        # which are also what let this body be extracted and run locally, the only
+        # technique available here that can falsify a claim about CI.
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${RUNNER_TEMP:=$(mktemp -d)}"
+          : "${GITHUB_PATH:=$(mktemp)}"
+          python3 -m venv "$RUNNER_TEMP/rule"
+          "$RUNNER_TEMP/rule/bin/python" -m pip install --quiet \
+            "git+https://github.com/lbartoszcze/AutoVersion@v0.1.0"
+          echo "$RUNNER_TEMP/rule/bin" >> "$GITHUB_PATH"
+          # GITHUB_PATH takes effect on the NEXT step only, so without this export the
+          # assertion below would consult whatever `autoversion` was already on PATH --
+          # including a stranger's. Prepending after the install is what makes the venv
+          # win, and it is load-bearing separately from the GITHUB_PATH line.
+          export PATH="$RUNNER_TEMP/rule/bin:$PATH"
+
+          # Now prove the rule answers, and that the thing answering IS the rule. A
+          # `--help` probe is not enough: a sabotaged binary prints help happily. So ask
+          # a known-answer pair through the exact spelling every later step uses --
+          # identical surfaces must read `internal`, one removed name must read
+          # `breaking`. A stranger that always answers "internal" fails the second arm
+          # immediately, and that arm is the only thing here that requires the gate to be
+          # ABLE TO REFUSE: with `declared == released` the comparison below takes its
+          # "nothing to release" branch and would pass under a constant "internal" too.
+          # An empty candidate is no use as the breaking case -- the rule rejects it
+          # outright as a far more likely broken extractor.
+          probe="$RUNNER_TEMP/probe"
+          mkdir -p "$probe"
+          printf '{"surface":["alpha","beta"]}\n' > "$probe/published.json"
+          printf '{"surface":["alpha","beta"]}\n' > "$probe/same.json"
+          printf '{"surface":["alpha"]}\n' > "$probe/shrunk.json"
+          current="$(jq -r .version released-surface.json)"
+          unchanged="$(autoversion decide --current "$current" \
+            --published-surface "$probe/published.json" \
+            --candidate-surface "$probe/same.json" --json | jq -r .change)"
+          shrunk="$(autoversion decide --current "$current" \
+            --published-surface "$probe/published.json" \
+            --candidate-surface "$probe/shrunk.json" --json | jq -r .change)"
+          if [ "$unchanged" != internal ] || [ "$shrunk" != breaking ]; then
+            echo "::error::the rule does not answer as the rule: identical surfaces read" \
+              "'$unchanged' and a removed name read '$shrunk'. Something other than" \
+              "AutoVersion is answering, so no verdict below means anything."
+            false
+          fi
 
       - name: Read the advertised command surface
         # No cargo, no toolchain, no dependency graph: the commands are scanned out of
@@ -219,8 +274,26 @@ jobs:
           #
           # This prints the regenerated document and throws it away: the committed baseline
           # is never rewritten here and the regenerated surface never reaches the decision,
-          # because a check that recomputes both sides gates nothing.
-          best="$(python3 scripts/baseline.py | jq -r '.source | split(" ") | first')"
+          # because a check that recomputes both sides gates nothing. Bare, with no flag:
+          # this generator writes the file only for `--write` and prints to stdout
+          # otherwise.
+          #
+          # Do NOT fold this back into `best="$(python3 scripts/baseline.py | jq ...)"`.
+          # Inside a command substitution containing a pipeline the generator's exit
+          # status is discarded and `set -e` does not reach in, so a dead generator yields
+          # an empty `best` -- which either refuses while blaming the wrong thing or, if
+          # the committed marker ever also reads empty, compares "" against "" and passes
+          # vacuously. Run it into a file, test its status, then demand both markers be
+          # non-empty before comparing them. RUNNER_TEMP exists only on a runner, hence
+          # the default, which is also what lets this body be extracted and run locally.
+          : "${RUNNER_TEMP:=$(mktemp -d)}"
+          python3 scripts/baseline.py > "$RUNNER_TEMP/best.json" || {
+            echo "::error::the baseline generator failed, so the best reachable tier is" \
+              "unknown. That is not the same as up to date."; false; }
+          best="$(jq -r '.source | split(" ") | first' "$RUNNER_TEMP/best.json")"
+          [ -n "$best" ] && [ -n "$marker" ] || {
+            echo "::error::a marker read empty ('$marker' committed, '$best' regenerated)," \
+              "so this comparison would be vacuous."; false; }
           if [ "${marker%%:*}" = head ]; then
             have="${marker%%:*}"
             want="${best%%:*}"
