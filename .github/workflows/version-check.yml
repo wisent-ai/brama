@@ -123,7 +123,38 @@ jobs:
               ;;
           esac
 
+          # Control first, subject second. The reverse assertion reads "brama is absent"
+          # out of an EMPTY listing, so a probe that answered nothing must never be read as
+          # an answer. A failed `stado` aborts here under `set -e` (verified: a bad
+          # namespace and an unreachable API both exit nonzero with empty stdout), but an
+          # empty stdout with a zero exit would sail straight through, because jq consumes
+          # empty input silently and reports success -- and there the wrong answer is the
+          # one that passes.
+          #
+          # `storage ls` and `storage stat` are the wrong tools here whatever they seem to
+          # say: they read the queue store, not the product namespace, and report absence
+          # for release objects that demonstrably exist. Only `storage objects <namespace>
+          # <prefix>` sees this channel.
+          #
+          # The control is skarbiec, and that is not an arbitrary pick: deploy-stado.yml
+          # refuses to run without a pinned skarbiec-entitlements-router from
+          # stado://releases/skarbiec/, so a channel that cannot show skarbiec is not the
+          # channel brama publishes to, and its silence about brama means nothing.
+          control="$("$STADO_BIN" storage objects releases skarbiec --json)"
+          if ! printf '%s' "$control" | jq -e '.objects | any' >/dev/null; then
+            echo "::error::the release channel cannot show skarbiec, which brama's own" \
+              "deploy requires, so the absence of brama here is unproven. Refusing rather" \
+              "than assuming nothing is published."
+            false
+          fi
+
           listing="$("$STADO_BIN" storage objects releases "brama/" --json)"
+          if ! printf '%s' "$listing" \
+            | jq -e 'has("objects") and (.objects | type == "array")' >/dev/null; then
+            echo "::error::the brama listing was not well-formed, so its emptiness proves" \
+              "nothing. Refusing rather than assuming nothing is published."
+            false
+          fi
           serves="$(printf '%s' "$listing" | jq -r 'if (.objects | any) then "yes" else "no" end')"
           echo "marker: $marker (claims a release: $claims_release)"
           echo "stado://releases/brama/ serves objects: $serves"
