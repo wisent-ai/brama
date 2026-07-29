@@ -65,32 +65,51 @@ jobs:
           # win, and it is load-bearing separately from the GITHUB_PATH line.
           export PATH="$RUNNER_TEMP/rule/bin:$PATH"
 
-          # Now prove the rule answers, and that the thing answering IS the rule. A
-          # `--help` probe is not enough: a sabotaged binary prints help happily. So ask
-          # a known-answer pair through the exact spelling every later step uses --
-          # identical surfaces must read `internal`, one removed name must read
-          # `breaking`. A stranger that always answers "internal" fails the second arm
-          # immediately, and that arm is the only thing here that requires the gate to be
-          # ABLE TO REFUSE: with `declared == released` the comparison below takes its
-          # "nothing to release" branch and would pass under a constant "internal" too.
-          # An empty candidate is no use as the breaking case -- the rule rejects it
-          # outright as a far more likely broken extractor.
-          probe="$RUNNER_TEMP/probe"
-          mkdir -p "$probe"
-          printf '{"surface":["alpha","beta"]}\n' > "$probe/published.json"
-          printf '{"surface":["alpha","beta"]}\n' > "$probe/same.json"
-          printf '{"surface":["alpha"]}\n' > "$probe/shrunk.json"
+          # Which `autoversion` is about to answer? Establish that BEFORE asking it
+          # anything. `--help` is satisfied by any executable that exits zero, so a
+          # stranger earlier on PATH passes a liveness probe and then supplies every
+          # verdict below -- and if the export above is ever dropped in an edit, the
+          # symptom is a green step rather than a red one. Naming the resolved path is
+          # what makes that failure visible instead of invisible.
+          resolved="$(command -v autoversion || true)"
+          case "$resolved" in
+            "$RUNNER_TEMP/rule/bin/"*) ;;
+            *)
+              echo "::error::autoversion resolves to '${resolved:-nothing}', outside the" \
+                "venv this step just built, so a stranger would answer for the rule and" \
+                "every verdict below would be its word rather than the rule's."
+              false
+              ;;
+          esac
+
+          # Then two DIFFERENT known answers, because one cannot be enough: a saboteur
+          # that always says `internal` passes a single-answer probe AND the gate's own
+          # steps, since with the declared version equal to the released one `internal`
+          # IS the passing branch. Identical surfaces must read `internal`; a surface
+          # with one name removed must read `breaking`. That second arm is the only
+          # thing here that requires the gate to be ABLE TO REFUSE.
+          #
+          # Both sides are built from the COMMITTED baseline rather than a synthetic
+          # pair, so this same step also proves the frozen file parses and that it is
+          # the file reaching the decision. The name is dropped without a bare index,
+          # which this workspace refuses. An empty candidate would be no use as the
+          # breaking case -- the rule rejects it outright as a far more likely broken
+          # extractor.
+          shrunk="$RUNNER_TEMP/shrunk.json"
+          jq '{surface: (.surface - [(.surface | sort | first)])}' \
+            released-surface.json > "$shrunk"
           current="$(jq -r .version released-surface.json)"
           unchanged="$(autoversion decide --current "$current" \
-            --published-surface "$probe/published.json" \
-            --candidate-surface "$probe/same.json" --json | jq -r .change)"
-          shrunk="$(autoversion decide --current "$current" \
-            --published-surface "$probe/published.json" \
-            --candidate-surface "$probe/shrunk.json" --json | jq -r .change)"
-          if [ "$unchanged" != internal ] || [ "$shrunk" != breaking ]; then
-            echo "::error::the rule does not answer as the rule: identical surfaces read" \
-              "'$unchanged' and a removed name read '$shrunk'. Something other than" \
-              "AutoVersion is answering, so no verdict below means anything."
+            --published-surface released-surface.json \
+            --candidate-surface released-surface.json --json | jq -r .change)"
+          removed="$(autoversion decide --current "$current" \
+            --published-surface released-surface.json \
+            --candidate-surface "$shrunk" --json | jq -r .change)"
+          if [ "$unchanged" != internal ] || [ "$removed" != breaking ]; then
+            echo "::error::the rule does not answer as the rule: the committed surface" \
+              "against itself read '$unchanged', and with one name removed it read" \
+              "'$removed'. Something other than AutoVersion is answering, so no verdict" \
+              "below means anything."
             false
           fi
 
