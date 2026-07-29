@@ -93,11 +93,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch tags so a better baseline tier cannot hide
-        # A shallow checkout carries no tags, and scripts/baseline.py prefers a tag over
-        # HEAD. Without this the tier assertion below would report "head is still best"
-        # on a repository that had just been tagged.
-        run: git fetch --tags --force --quiet
+      - name: Make tags and their trees visible
+        # actions/checkout fetches one commit and no tags, so `git tag --list` would be
+        # empty on the runner however many tags the remote holds -- the tier assertion
+        # below would then report "head is still best" on a repository that had just been
+        # tagged, and pass while asleep. Unshallowing is needed as well as the tags: a
+        # shallow clone lacks the tag's tree, so scripts/baseline.py could not `git
+        # archive` it. `--unshallow` errors on an already complete clone, hence the
+        # fallback; either branch leaves the step green.
+        run: git fetch --force --tags --unshallow --quiet || git fetch --force --tags --quiet
 
       - name: Assert the baseline agrees with the release channel
         shell: bash
