@@ -310,9 +310,23 @@ jobs:
             echo "::error::the baseline generator failed, so the best reachable tier is" \
               "unknown. That is not the same as up to date."; false; }
           best="$(jq -r '.source | split(" ") | first' "$RUNNER_TEMP/best.json")"
-          [ -n "$best" ] && [ -n "$marker" ] || {
-            echo "::error::a marker read empty ('$marker' committed, '$best' regenerated)," \
-              "so this comparison would be vacuous."; false; }
+          # Non-empty is not enough, and `-n` alone is the fail-open half of this guard:
+          # on a document whose `.source` is the empty string this exact expression hands
+          # back the literal four-character string `null` with a zero exit (measured), so
+          # `-n` waves it through -- and if the committed marker ever read the same way,
+          # `null` would be compared with `null` and the step would pass vacuously, which
+          # is the one outcome a frozen file exists to prevent.
+          for token in "$marker" "$best"; do
+            case "${token:-}" in
+              ''|null)
+                echo "::error::a marker read '${token:-<empty>}' ('$marker' committed," \
+                  "'$best' regenerated), so this comparison would be vacuous. The" \
+                  "baseline's .source is missing or empty; regenerate it with" \
+                  "python3 scripts/baseline.py --write"
+                false
+                ;;
+            esac
+          done
           if [ "${marker%%:*}" = head ]; then
             have="${marker%%:*}"
             want="${best%%:*}"
