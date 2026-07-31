@@ -1,3 +1,4 @@
+pub mod build_info;
 pub mod capability;
 pub mod core;
 pub mod crypto;
@@ -5,12 +6,14 @@ pub mod detection;
 pub mod gateway;
 pub mod journal;
 pub mod mcp;
+pub mod providers;
 pub mod subscription_dispatch;
 pub mod types;
 
+pub use crate::build_info::{current as build_info, BuildInfo};
 pub use crate::core::server::start_server;
 pub use crate::detection::{detect_compute_resources, select_model_for_resources};
-pub use crate::subscription_dispatch::provider_registry;
+pub use crate::providers::adapter as provider_registry;
 pub use crate::types::{
     ComputeResources, Message, ModelRequest, ModelResponse, RouterError, Tool, ToolCall,
     ToolCallFunction, ToolFunction,

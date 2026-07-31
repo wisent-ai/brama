@@ -134,8 +134,6 @@ pub struct ModelRequest {
     pub tools: Option<Vec<Tool>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub billing_target: Option<BillingTarget>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub subscription_decision_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -147,6 +145,9 @@ pub struct ModelResponse {
     pub latency_ms: f64,
     pub cost: f64,
     pub success: bool,
+    /// Number of provider HTTP calls consumed by this routed request.
+    #[serde(default)]
+    pub attempts: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -162,6 +163,7 @@ impl ModelResponse {
             output_tokens: 0,
             latency_ms: 0.0,
             cost: 0.0,
+            attempts: u32::default(),
             success: false,
             error: Some(error),
             tool_calls: None,

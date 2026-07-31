@@ -7,6 +7,10 @@ use crate::types::{Message, ModelRequest};
 
 const SOURCE: &str = "brama-task-quality";
 
+fn max_quality_models() -> usize {
+    "25".parse().expect("valid task-quality model limit")
+}
+
 #[derive(Debug, Clone)]
 pub struct TaskQualityOptions {
     pub agent_id: String,
@@ -15,9 +19,23 @@ pub struct TaskQualityOptions {
     pub expected_exact: Option<String>,
     pub expected_contains: Option<String>,
     pub persist: bool,
+    pub max_models: usize,
+    pub allow_provider_cost: bool,
 }
 
 pub async fn collect_task_quality(opts: TaskQualityOptions) -> Result<Value, String> {
+    if !opts.allow_provider_cost {
+        return Err(
+            "refusing billable task-quality collection without explicit cost acknowledgement"
+                .into(),
+        );
+    }
+    if opts.max_models == usize::default() || opts.max_models > max_quality_models() {
+        return Err(format!(
+            "max_models must be between one and {}",
+            max_quality_models()
+        ));
+    }
     if opts.task.trim().is_empty() {
         return Err("task is required".into());
     }
@@ -28,7 +46,8 @@ pub async fn collect_task_quality(opts: TaskQualityOptions) -> Result<Value, Str
         return Err("expected_exact or expected_contains is required".into());
     }
 
-    let models = active_supported_models_for_agent(&opts.agent_id).await?;
+    let mut models = active_supported_models_for_agent(&opts.agent_id).await?;
+    models.truncate(opts.max_models);
     let mut rows = Vec::new();
     for model in models {
         rows.push(check_model(&opts, &model).await);
@@ -71,6 +90,7 @@ pub async fn collect_task_quality(opts: TaskQualityOptions) -> Result<Value, Str
         "agentId": opts.agent_id,
         "task": opts.task,
         "persisted": opts.persist,
+        "maxModels": opts.max_models,
         "rows": rows.len(),
         "bestModel": best_model,
         "bestModels": best_models,
@@ -94,7 +114,6 @@ async fn check_model(opts: &TaskQualityOptions, model: &str) -> Value {
         system: None,
         tools: None,
         billing_target: None,
-        subscription_decision_id: None,
     };
     let resp = dispatch_subscription_for_agent(&opts.agent_id, &request).await;
     let content = resp.content.trim().to_string();
@@ -123,6 +142,7 @@ async fn check_model(opts: &TaskQualityOptions, model: &str) -> Value {
             "expectedContains": opts.expected_contains,
             "output": truncate(&content, 1500),
             "latencyMs": resp.latency_ms,
+            "attempts": resp.attempts,
             "success": resp.success,
         },
         "checked_at": checked_at,

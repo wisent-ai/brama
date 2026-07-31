@@ -1,17 +1,17 @@
 ---
 name: brama
-description: Use brama, the multi-provider LLM gateway (formerly model-router), through its Rust CLI or its read-only MCP server. brama is the gate every agent's model calls pass through — an OpenAI-compatible HTTP router with subscription routing, task-quality selection, ranked provider retry, and local-inference detection. Use the agent surface when a task needs to see local hardware and the recommended local model, or the list of routable model ids. The token-spending completions endpoint and every collect/mutate command stay in the HTTP server and CLI, off the agent surface.
+description: Use Brama, the multi-provider LLM gateway formerly named model-router, through its authenticated HTTP API, Rust CLI, or read-only MCP server. Brama is the gate for Wisent model calls: canonical routing, agent subscriptions, task-quality selection, bounded provider attempts, and local hardware detection. Use MCP only for credential-free hardware detection; model execution and every collect or mutation operation stay in HTTP and CLI.
 ---
 
 # brama
 
-brama (Polish for "gate") is the multi-provider LLM gateway in this ecosystem —
-the gate every agent's model traffic passes through. It is an OpenAI-compatible
-HTTP router: it authenticates a signed agent, picks a provider by subscription
-routing or stored task-quality evidence, advances through ranked candidates when
-a provider call fails, and can manage local inference. The canonical repository is
-`wisent-ai/brama`; the crate, binary, directory, CLI, MCP server, and skill are
-all named `brama`.
+Brama (Polish for “gate”) is the multi-provider LLM gateway in this ecosystem.
+It authenticates a service or signed agent, selects an allowed provider route,
+redeems the exact provider capability at final use, applies bounded attempts,
+and returns one normalized response. It detects local hardware but does not
+start or manage local inference. The canonical repository remains
+`wisent-ai/brama`; the product, crate, binary, CLI, MCP server, and
+service are `brama`.
 
 ## Canonical engine
 
@@ -23,16 +23,18 @@ router). Do not reimplement its routing, auth, or provider logic.
 - `detection.rs` — local compute detection and the model recommendation.
 - `subscription_dispatch/` — stateless provider selection and task-quality routing.
 
-Build with `cargo build --bin brama`.
+Build the development source with `cargo build --locked --bin brama`. No stable
+release is currently published; `main` is not a production coordinate.
 
 ## CLI
 
 ```bash
-brama serve --port <port>            # start the OpenAI-compatible HTTP server
-brama test --model <model>           # run one inference through the router
-brama detect                         # print local hardware + recommended model
-brama collect-task-quality …         # persist deterministic task-quality checks
-brama mcp                            # the read-only stdio MCP server (below)
+brama version                        # print product and build identity as JSON
+brama serve --port <port>            # start the authenticated HTTP gateway
+brama test --allow-provider-cost …   # execute one billable inference
+brama detect                         # local hardware; no provider or credential
+brama collect-task-quality --allow-provider-cost … # bounded billable collection
+brama mcp                            # read-only stdio MCP server
 ```
 
 ## MCP
@@ -46,19 +48,25 @@ brama mcp
 The server writes JSON-RPC frames only to stdout and routes diagnostics to
 stderr. It handles the standard `initialize`, `ping`, `tools/list`, and
 `tools/call` methods, and pins the MCP protocol version the sibling servers use.
-Every tool runs in-process on the crate's own logic and is credential-free,
-network-free, and zero-cost. Exposed tools:
+Every MCP tool runs in-process on credential-free, network-free logic. The only
+exposed tool is:
 
 - `brama_detect` — local compute resources (GPU type and name, VRAM, RAM, CPU
-  cores, CUDA/Metal) plus the model and backend brama would recommend for this
-  host.
-- `brama_models` — the model ids brama can route to (the default router's known
-  models).
+  cores, CUDA/Metal) plus the model and backend Brama recommends for an external
+  local-inference runtime.
 
 The token-spending path — `/v1/chat/completions` and the `test` inference — and
 the collecting/persisting `collect-task-quality` command are deliberately not
 exposed over MCP. They cost money or change stored evidence, so they stay in the
 CLI and HTTP server, off the agent surface.
+
+The HTTP envelope is fail closed: every non-health route requires the exact
+bearer assigned to one client identity from that client's dedicated Skarbiec
+item. Generic canonical calls may use bearer identity alone. Subscription
+providers, selectors, caller-specific model discovery, and mutations also
+require body/path-bound agent HMAC headers, which must match the bearer binding.
+Bearer-only model discovery exposes only the caller-authorized catalog.
+Use HTTPS unless an authenticated loopback caller explicitly opts into HTTP.
 
 ## Operational rules
 
@@ -67,9 +75,8 @@ CLI and HTTP server, off the agent surface.
 - The MCP surface is read-only and free by construction. To route a real
   completion, call the HTTP server; to refresh stored evidence, use the collect
   commands — never through MCP.
-- The deployed service, its HTTP URL, the `MODEL_ROUTER_*` environment variables,
-  the client-secret table, and the request headers still carry the old
-  `model-router` name; they change only in a coordinated redeploy, not as part of
-  the crate rename.
+- The deployed service URL remains `STADO_MODEL_ROUTER_URL`; each caller uses
+  only its own dedicated model-router item and consumer. Product HMAC identities
+  remain separate and must match the bearer binding when present.
 - brama is the single gate for model traffic; keep provider and routing logic in
   the crate, not in callers.

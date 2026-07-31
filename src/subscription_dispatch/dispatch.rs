@@ -1,16 +1,25 @@
 //! Route canonical `provider/model` requests through stateless provider APIs.
 
-use aes_gcm::aead::rand_core::{OsRng, RngCore};
 use axum::http::HeaderMap;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::io::Read;
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
+use tracing::{info, warn};
 
 use crate::crypto;
 use crate::gateway::broker;
-use crate::subscription_dispatch::provider_registry;
+use crate::providers::adapter as provider_registry;
 use crate::types::{ModelRequest, ModelResponse};
+
+fn max_selector_models() -> usize {
+    "3".parse().expect("valid selector model limit")
+}
+
+fn max_credential_attempts() -> usize {
+    "2".parse().expect("valid credential attempt limit")
+}
 const MODEL_CACHE_TTL: Duration = Duration::from_secs(300);
 fn is_permanent_auth_failure(error: &str) -> bool {
     let error = error.to_ascii_lowercase();
@@ -25,6 +34,7 @@ fn is_auth_failure(error: &str) -> bool {
         || error.contains("authentication_error")
         || error.contains("failed to authenticate")
         || error.contains("401")
+        || error.contains("provider_authentication")
         || error.contains("oauth")
         || is_permanent_auth_failure(&error)
 }
@@ -35,7 +45,7 @@ async fn mark_credential_revoked(credential_id: &str) {
 
 struct CachedRegistryModels {
     fetched: Instant,
-    models: Vec<crate::subscription_dispatch::provider_registry::RegistryModel>,
+    models: Vec<provider_registry::RegistryModel>,
 }
 
 static REGISTRY_MODEL_CACHE: LazyLock<Mutex<HashMap<String, CachedRegistryModels>>> =
@@ -51,13 +61,17 @@ pub fn is_subscription_model(model: &str) -> bool {
     provider_for(model).is_some()
 }
 
+pub fn provider_requires_caller_identity(model: &str) -> bool {
+    matches!(provider_for(model), Some("claude-code" | "codex" | "kimi"))
+}
+
 pub(crate) fn provider_for(model: &str) -> Option<&str> {
     provider_registry::provider_id_from_route(model)
 }
 
 pub async fn registry_models_for_agent(
     agent_id: &str,
-) -> Result<Vec<crate::subscription_dispatch::provider_registry::RegistryModel>, String> {
+) -> Result<Vec<provider_registry::RegistryModel>, String> {
     let entries = broker::list_subscriptions(agent_id)
         .await
         .into_iter()
@@ -81,15 +95,12 @@ pub async fn registry_models_for_agent(
         let models = if let Some(cached) = cached {
             cached
         } else {
-            let recent_failure = REGISTRY_MODEL_FAILURE_CACHE
-                .lock()
-                .ok()
-                .and_then(|cache| {
-                    cache
-                        .get(&cache_key)
-                        .filter(|(fetched, _)| fetched.elapsed() < MODEL_FAILURE_CACHE_TTL)
-                        .map(|(_, error)| error.clone())
-                });
+            let recent_failure = REGISTRY_MODEL_FAILURE_CACHE.lock().ok().and_then(|cache| {
+                cache
+                    .get(&cache_key)
+                    .filter(|(fetched, _)| fetched.elapsed() < MODEL_FAILURE_CACHE_TTL)
+                    .map(|(_, error)| error.clone())
+            });
             if let Some(error) = recent_failure {
                 failures.push(format!("{}: {error}", entry.id));
                 continue;
@@ -108,11 +119,7 @@ pub async fn registry_models_for_agent(
                     continue;
                 }
             };
-            let discovered = match crate::subscription_dispatch::provider_registry::discover_models(
-                provider, secret,
-            )
-            .await
-            {
+            let discovered = match provider_registry::discover_models(provider, secret).await {
                 Ok(models) => models,
                 Err(error) => {
                     if let Ok(mut cache) = REGISTRY_MODEL_FAILURE_CACHE.lock() {
@@ -214,14 +221,24 @@ pub(crate) async fn authenticate_agent(
     Ok(agent_id)
 }
 
-fn shuffle_models(models: &mut [String]) {
-    if models.len() < 2 {
-        return;
+fn random_u64() -> Result<u64, String> {
+    let mut bytes = u64::default().to_ne_bytes();
+    std::fs::File::open("/dev/urandom")
+        .and_then(|mut source| source.read_exact(&mut bytes))
+        .map_err(|_| "operating system randomness is unavailable".to_string())?;
+    Ok(u64::from_ne_bytes(bytes))
+}
+
+fn shuffle_models(models: &mut [String]) -> Result<(), String> {
+    let one = std::iter::once(()).count();
+    if models.len() <= one {
+        return Ok(());
     }
-    for i in (1..models.len()).rev() {
-        let j = (OsRng.next_u64() as usize) % (i + 1);
+    for i in (one..models.len()).rev() {
+        let j = (random_u64()? as usize) % (i + one);
         models.swap(i, j);
     }
+    Ok(())
 }
 
 async fn any_subscription_models(
@@ -249,7 +266,7 @@ pub async fn active_supported_models_for_agent(agent_id: &str) -> Result<Vec<Str
     if models.is_empty() {
         return Err("no active stateless provider models for signed agent".into());
     }
-    shuffle_models(&mut models);
+    shuffle_models(&mut models)?;
     Ok(models)
 }
 
@@ -263,7 +280,7 @@ pub async fn active_vision_capable_models_for_agent(agent_id: &str) -> Result<Ve
     if models.is_empty() {
         return Err("no active vision-capable stateless provider model for signed agent".into());
     }
-    shuffle_models(&mut models);
+    shuffle_models(&mut models)?;
     Ok(models)
 }
 
@@ -336,7 +353,7 @@ async fn task_quality_models(agent_id: &str, task: &str) -> Result<Vec<String>, 
             group.push(scored[idx].0.clone());
             idx += 1;
         }
-        shuffle_models(&mut group);
+        shuffle_models(&mut group)?;
         ordered.extend(group);
     }
     Ok(ordered)
@@ -344,6 +361,38 @@ async fn task_quality_models(agent_id: &str, task: &str) -> Result<Vec<String>, 
 
 /// `model: "any"` selects among active stateless provider routes for the
 /// signed agent and rotates across credentials on provider exhaustion.
+async fn dispatch_ranked_models(
+    headers: &HeaderMap,
+    request: &ModelRequest,
+    raw_body: &[u8],
+    models: Vec<String>,
+    failure_context: String,
+) -> ModelResponse {
+    let mut attempts = u32::default();
+    let mut errors = Vec::new();
+    for model in models.into_iter().take(max_selector_models()) {
+        let mut candidate = request.clone();
+        candidate.model = model.clone();
+        let mut response = dispatch_subscription(headers, &candidate, raw_body).await;
+        attempts = attempts.saturating_add(response.attempts);
+        response.attempts = attempts;
+        if response.success {
+            return response;
+        }
+        errors.push(format!(
+            "{}: {}",
+            model,
+            response.error.as_deref().unwrap_or("failed")
+        ));
+    }
+    let mut failure = ModelResponse::failure(
+        &request.model,
+        format!("{failure_context}; tried {}", errors.join("; ")),
+    );
+    failure.attempts = attempts;
+    failure
+}
+
 pub async fn dispatch_any_subscription(
     headers: &HeaderMap,
     request: &ModelRequest,
@@ -353,27 +402,14 @@ pub async fn dispatch_any_subscription(
         Ok(models) => models,
         Err(e) => return ModelResponse::failure(&request.model, e),
     };
-    let mut errors = Vec::new();
-    for model in models {
-        let mut candidate = request.clone();
-        candidate.model = model.clone();
-        let resp = dispatch_subscription(headers, &candidate, raw_body).await;
-        if resp.success {
-            return resp;
-        }
-        errors.push(format!(
-            "{}: {}",
-            model,
-            resp.error.unwrap_or_else(|| "failed".to_string())
-        ));
-    }
-    ModelResponse::failure(
-        &request.model,
-        format!(
-            "no working subscription model for signed agent; tried {}",
-            errors.join("; ")
-        ),
+    dispatch_ranked_models(
+        headers,
+        request,
+        raw_body,
+        models,
+        "no working subscription model for signed agent".into(),
     )
+    .await
 }
 
 /// `model: "any-vision-capable"` selects an active stateless provider route
@@ -387,27 +423,14 @@ pub async fn dispatch_any_vision_capable_subscription(
         Ok(models) => models,
         Err(e) => return ModelResponse::failure(&request.model, e),
     };
-    let mut errors = Vec::new();
-    for model in models {
-        let mut candidate = request.clone();
-        candidate.model = model.clone();
-        let resp = dispatch_subscription(headers, &candidate, raw_body).await;
-        if resp.success {
-            return resp;
-        }
-        errors.push(format!(
-            "{}: {}",
-            model,
-            resp.error.unwrap_or_else(|| "failed".to_string())
-        ));
-    }
-    ModelResponse::failure(
-        &request.model,
-        format!(
-            "no working vision-capable subscription model for signed agent; tried {}",
-            errors.join("; ")
-        ),
+    dispatch_ranked_models(
+        headers,
+        request,
+        raw_body,
+        models,
+        "no working vision-capable subscription model for signed agent".into(),
     )
+    .await
 }
 
 /// `model: "task:<name>"` means: use measured quality evidence for `<name>`.
@@ -427,27 +450,14 @@ pub async fn dispatch_task_subscription(
         Ok(models) => models,
         Err(e) => return ModelResponse::failure(&request.model, e),
     };
-    let mut errors = Vec::new();
-    for model in models {
-        let mut candidate = request.clone();
-        candidate.model = model.clone();
-        let resp = dispatch_subscription(headers, &candidate, raw_body).await;
-        if resp.success {
-            return resp;
-        }
-        errors.push(format!(
-            "{}: {}",
-            model,
-            resp.error.unwrap_or_else(|| "failed".to_string())
-        ));
-    }
-    ModelResponse::failure(
-        &request.model,
-        format!(
-            "no working quality-ranked model for task '{task}'; tried {}",
-            errors.join("; ")
-        ),
+    dispatch_ranked_models(
+        headers,
+        request,
+        raw_body,
+        models,
+        format!("no working quality-ranked model for task '{task}'"),
     )
+    .await
 }
 
 pub async fn dispatch_subscription_for_agent(
@@ -461,6 +471,82 @@ pub async fn dispatch_subscription_for_agent(
         }
     };
     dispatch_subscription_attempt(provider, agent_id, request).await
+}
+
+/// Execute a caller-independent canonical route with Brama's dedicated direct
+/// provider capability. Subscription provider credentials are never eligible.
+pub async fn dispatch_direct(request: &ModelRequest) -> ModelResponse {
+    let provider = match provider_for(&request.model) {
+        Some(provider) => provider,
+        None => {
+            return ModelResponse::failure(&request.model, "unknown provider/model route".into())
+        }
+    };
+    if provider_requires_caller_identity(&request.model) {
+        return ModelResponse::failure(
+            &request.model,
+            "auth: caller identity is required for subscription providers".into(),
+        );
+    }
+    let credential = match broker::provider_credential(provider).await {
+        Some(credential) => credential,
+        None => {
+            return ModelResponse::failure(
+                &request.model,
+                format!("direct '{provider}' credential is unavailable"),
+            )
+        }
+    };
+    let credential = match credential.expose_utf8() {
+        Ok(credential) => credential,
+        Err(_) => {
+            return ModelResponse::failure(
+                &request.model,
+                format!("direct '{provider}' credential is not valid UTF-8"),
+            )
+        }
+    };
+    provider_registry::dispatch(request, credential).await
+}
+
+/// Execute an ordered caller-independent route chain. A failed primary is
+/// followed by each configured fallback; attempt accounting spans the chain.
+pub async fn dispatch_direct_with_fallback(
+    request: &ModelRequest,
+    fallbacks: &[String],
+) -> ModelResponse {
+    let mut response = dispatch_direct(request).await;
+    let mut attempts = response.attempts;
+    for fallback in fallbacks {
+        if response.success {
+            break;
+        }
+        let mut next = request.clone();
+        next.model = fallback.clone();
+        response = dispatch_direct(&next).await;
+        attempts = attempts.saturating_add(response.attempts);
+    }
+    response.attempts = attempts;
+    response
+}
+
+pub async fn dispatch_direct_openai_typed(
+    route_id: &str,
+    path: &str,
+    payload: serde_json::Map<String, Value>,
+) -> Result<Value, String> {
+    let provider =
+        provider_for(route_id).ok_or_else(|| "unknown provider/model route".to_string())?;
+    if provider_requires_caller_identity(route_id) {
+        return Err("auth: caller identity is required for subscription providers".to_string());
+    }
+    let credential = broker::provider_credential(provider)
+        .await
+        .ok_or_else(|| format!("direct '{provider}' credential is unavailable"))?;
+    let credential = credential
+        .expose_utf8()
+        .map_err(|_| format!("direct '{provider}' credential is not valid UTF-8"))?;
+    provider_registry::dispatch_openai_typed(route_id, path, payload, credential).await
 }
 
 /// Authenticate the Jeden caller, redeem the selected provider credential at
@@ -511,14 +597,17 @@ async fn dispatch_subscription_attempt(
         );
     }
 
-    let mut last_failure = None;
-    for (index, entry) in rows.iter().enumerate() {
+    let mut provider_attempts = u32::default();
+    for (index, entry) in rows.iter().take(max_credential_attempts()).enumerate() {
         let credential_id = &entry.id;
         let token = match broker::subscription_credential(credential_id, provider).await {
             Some(token) => token,
             None => {
-                eprintln!(
-                    "[router] credential {credential_id} is unavailable for provider {provider}"
+                warn!(
+                    event = "credential_unavailable",
+                    provider,
+                    credential_index = index,
+                    "bounded credential is unavailable"
                 );
                 continue;
             }
@@ -526,24 +615,37 @@ async fn dispatch_subscription_attempt(
         let token = match token.expose_utf8() {
             Ok(token) => token,
             Err(_) => {
-                eprintln!(
-                    "[router] credential {credential_id} is not valid UTF-8 for provider {provider}"
+                warn!(
+                    event = "credential_invalid_encoding",
+                    provider,
+                    credential_index = index,
+                    "bounded credential has invalid encoding"
                 );
                 continue;
             }
         };
-        let result = provider_registry::dispatch(request, token).await;
+        provider_attempts = provider_attempts.saturating_add(u32::from(true));
+        let mut result = provider_registry::dispatch(request, token).await;
+        result.attempts = provider_attempts;
         if result.success {
             if index > 0 {
-                eprintln!(
-                    "[router] rotated to credential {credential_id} (idx={index}) for {provider}"
+                info!(
+                    event = "credential_rotated",
+                    provider,
+                    credential_index = index,
+                    "provider request succeeded after bounded rotation"
                 );
             }
             return result;
         }
         let error = result.error.clone().unwrap_or_default();
         if is_permanent_auth_failure(&error) {
-            eprintln!("[router] credential {credential_id} permanently rejected; retiring");
+            warn!(
+                event = "credential_retired",
+                provider,
+                credential_index = index,
+                "provider permanently rejected bounded credential"
+            );
             mark_credential_revoked(credential_id).await;
         }
         let exhausted = is_auth_failure(&error)
@@ -554,17 +656,19 @@ async fn dispatch_subscription_attempt(
         if !exhausted {
             return result;
         }
-        eprintln!(
-            "[router] credential {credential_id} exhausted for {provider} ({error}); rotating"
+        warn!(
+            event = "credential_exhausted",
+            provider,
+            credential_index = index,
+            "provider rejected bounded credential with a rotatable failure"
         );
-        last_failure = Some(result);
     }
-    last_failure.unwrap_or_else(|| {
-        ModelResponse::failure(
-            &request.model,
-            format!("all '{provider}' credentials unavailable for agent"),
-        )
-    })
+    let mut failure = ModelResponse::failure(
+        &request.model,
+        format!("all bounded '{provider}' credentials unavailable for agent"),
+    );
+    failure.attempts = provider_attempts;
+    failure
 }
 
 fn string_field(row: &Value, key: &str) -> String {

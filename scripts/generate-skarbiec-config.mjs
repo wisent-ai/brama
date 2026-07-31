@@ -1,17 +1,29 @@
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 
-const [binaryPath, outputDir, subscriptionsPath] = process.argv.slice(2);
-if (!binaryPath || !outputDir || !subscriptionsPath) {
-  throw new Error('usage: generate-skarbiec-config.mjs <brama-binary> <output-dir> <subscriptions-json>');
+const [, , binaryPath, outputDir, subscriptionsPath, executablePath = binaryPath, workloadUidInput, workloadGidInput] = process.argv;
+if (!binaryPath || !outputDir || !subscriptionsPath || !isAbsolute(executablePath)) {
+  throw new Error('usage: generate-skarbiec-config.mjs <brama-binary> <output-dir> <subscriptions-json> [absolute-runtime-binary] [uid] [gid]');
 }
 
 const workloadUid = 10001;
 const workloadGid = 10001;
+const configuredWorkloadUid = workloadUidInput === undefined ? workloadUid : Number(workloadUidInput);
+const configuredWorkloadGid = workloadGidInput === undefined ? workloadGid : Number(workloadGidInput);
+if (
+  !Number.isSafeInteger(configuredWorkloadUid) ||
+  !Number.isSafeInteger(configuredWorkloadGid) ||
+  String(configuredWorkloadUid).startsWith('-') ||
+  String(configuredWorkloadGid).startsWith('-')
+) {
+  throw new Error('workload uid and gid must be non-negative safe integers');
+}
 const maxTtlSeconds = 315_360_000;
 const maxUses = 10_000_000;
 const subscriptions = JSON.parse(readFileSync(subscriptionsPath, 'utf8'));
+const subscriptionAgentIds = ['content-platform', 'oko', 'wisent-app'];
+const requestSignAgentIds = ['wisent-app'];
 if (!Array.isArray(subscriptions) || subscriptions.length === 0) {
   throw new Error('subscriptions manifest must be a non-empty array');
 }
@@ -20,7 +32,7 @@ for (const subscription of subscriptions) {
     !subscription ||
     typeof subscription.id !== 'string' ||
     typeof subscription.provider !== 'string' ||
-    !/^brama-sub-wisent-app-[a-z0-9-]+$/.test(subscription.id) ||
+    !subscriptionAgentIds.some((agentId) => subscription.id.startsWith(`brama-sub-${agentId}-`)) ||
     !/^[a-z0-9-]+$/.test(subscription.provider)
   ) {
     throw new Error('subscriptions manifest contains an invalid entry');
@@ -63,15 +75,23 @@ const subscriptionRules = subscriptions.map(({ id, provider }) => ({
   max_uses: maxUses,
   delegation_depth: 0,
 }));
-const requestSignRule = {
-  purpose: 'brama.request.sign',
-  resource: 'agent:wisent-app',
+const directProviderRules = [...new Set([...subscriptions.map(({ provider }) => provider), 'local-openai'])].map((provider) => ({
+  purpose: 'brama.provider.authenticate',
+  resource: `provider:${provider}`,
   target: 'brama',
   max_ttl_seconds: maxTtlSeconds,
   max_uses: maxUses,
-  delegation_depth: 0,
-};
-const rules = [requestSignRule, ...subscriptionRules];
+  delegation_depth: Number(false),
+}));
+const requestSignRules = requestSignAgentIds.map((agentId) => ({
+  purpose: 'brama.request.sign',
+  resource: `agent:${agentId}`,
+  target: 'brama',
+  max_ttl_seconds: maxTtlSeconds,
+  max_uses: maxUses,
+  delegation_depth: Number(false),
+}));
+const rules = [...requestSignRules, ...directProviderRules, ...subscriptionRules];
 const policyKey = ed25519();
 const registryKey = ed25519();
 const proofKey = ed25519();
@@ -100,11 +120,11 @@ const registry = {
   version: 'v1',
   sequence: 1,
   workloads: {
-    'brama-cloudrun': {
+    'brama-service': {
       target: 'brama',
-      uid: workloadUid,
-      gid: workloadGid,
-      executable_path: '/usr/local/bin/brama',
+      uid: configuredWorkloadUid,
+      gid: configuredWorkloadGid,
+      executable_path: executablePath,
       executable_sha256: createHash('sha256').update(readFileSync(binaryPath)).digest('hex'),
       proof_key: proofKey.publicRaw.toString('base64'),
       agent_ids: ['brama-runtime'],

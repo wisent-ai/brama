@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 use tokio::sync::{Mutex, RwLock};
 
-use super::provider_registry::RegistryModel;
+use crate::providers::adapter::RegistryModel;
 
 const DEFAULT_CATALOG_URL: &str = "https://models.dev/api.json";
 const DEFAULT_CACHE_PATH: &str = "/tmp/brama-models-dev-cache.json";
@@ -36,7 +36,6 @@ pub enum CatalogAuth {
 pub struct CatalogProvider {
     pub id: String,
     pub display_name: String,
-    pub api_base: Option<String>,
     pub protocol: CatalogProtocol,
     pub auth: CatalogAuth,
 }
@@ -115,16 +114,37 @@ pub async fn snapshot() -> Result<Arc<CatalogSnapshot>, String> {
     Ok(parsed)
 }
 
+fn catalog_url() -> Result<reqwest::Url, String> {
+    let raw = std::env::var("BRAMA_MODEL_CATALOG_URL")
+        .unwrap_or_else(|_| DEFAULT_CATALOG_URL.to_string());
+    let url = reqwest::Url::parse(raw.trim())
+        .map_err(|error| format!("invalid model catalog URL: {error}"))?;
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err("model catalog URL must not contain user info".into());
+    }
+    let host = url
+        .host_str()
+        .ok_or_else(|| "model catalog URL must contain a host".to_string())?;
+    let loopback = host.eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|address| address.is_loopback());
+    if url.scheme() != "https" && !(url.scheme() == "http" && loopback) {
+        return Err("model catalog URL must use HTTPS or explicit loopback HTTP".into());
+    }
+    Ok(url)
+}
+
 async fn read_live_catalog() -> Result<String, String> {
     if let Ok(path) = std::env::var("BRAMA_MODEL_CATALOG_PATH") {
         return tokio::fs::read_to_string(path)
             .await
             .map_err(|error| error.to_string());
     }
-    let url = std::env::var("BRAMA_MODEL_CATALOG_URL")
-        .unwrap_or_else(|_| DEFAULT_CATALOG_URL.to_string());
+    let url = catalog_url()?;
     let response = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|error| error.to_string())?
         .get(url)
@@ -179,12 +199,6 @@ fn parse_catalog(raw: &str) -> Result<CatalogSnapshot, String> {
         }
         let npm = row.get("npm").and_then(Value::as_str).unwrap_or_default();
         let (protocol, auth) = protocol_for(npm);
-        let api_base = row
-            .get("api")
-            .and_then(Value::as_str)
-            .filter(|value| value.starts_with("https://") || value.starts_with("http://"))
-            .map(str::to_string)
-            .or_else(|| default_api_base(id).map(str::to_string));
         providers.insert(
             id.to_string(),
             CatalogProvider {
@@ -194,7 +208,6 @@ fn parse_catalog(raw: &str) -> Result<CatalogSnapshot, String> {
                     .and_then(Value::as_str)
                     .unwrap_or(id)
                     .to_string(),
-                api_base,
                 protocol,
                 auth,
             },
@@ -304,23 +317,6 @@ fn protocol_for(npm: &str) -> (CatalogProtocol, CatalogAuth) {
         return (CatalogProtocol::OpenAiChat, CatalogAuth::Bearer);
     }
     (CatalogProtocol::Unsupported, CatalogAuth::Bearer)
-}
-
-fn default_api_base(id: &str) -> Option<&'static str> {
-    match id {
-        "anthropic" => Some("https://api.anthropic.com/v1"),
-        "openai" => Some("https://api.openai.com/v1"),
-        "xai" => Some("https://api.x.ai/v1"),
-        "mistral" => Some("https://api.mistral.ai/v1"),
-        "cerebras" => Some("https://api.cerebras.ai/v1"),
-        "perplexity" => Some("https://api.perplexity.ai"),
-        "deepinfra" => Some("https://api.deepinfra.com/v1/openai"),
-        "togetherai" => Some("https://api.together.xyz/v1"),
-        "venice" => Some("https://api.venice.ai/api/v1"),
-        "google" => Some("https://generativelanguage.googleapis.com/v1beta"),
-        "groq" => Some("https://api.groq.com/openai/v1"),
-        _ => None,
-    }
 }
 
 fn cost(model: &Value, key: &str) -> f64 {

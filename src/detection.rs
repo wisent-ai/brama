@@ -107,7 +107,7 @@ fn detect_nvidia() -> Option<(String, f64)> {
 }
 
 /// Given detected compute resources, recommend a model and
-/// backend (provider name) for local or cloud inference.
+/// backend (provider name) for local or external API inference.
 pub fn select_model_for_resources(resources: &ComputeResources) -> (String, String) {
     if resources.has_metal && resources.vram_gb >= 24.0 {
         return ("qwen3-8b".into(), "local".into());
@@ -121,6 +121,6 @@ pub fn select_model_for_resources(resources: &ComputeResources) -> (String, Stri
     if resources.has_cuda && resources.vram_gb >= 8.0 {
         return ("qwen3-4b".into(), "local".into());
     }
-    // No local GPU capacity: fall back to the configured cloud provider.
+    // No local GPU capacity: fall back to the configured remote provider.
     ("cydonia-24b".into(), "featherless".into())
 }

@@ -2,11 +2,11 @@
 // credential-free, read-only surface to MCP agents, for parity with the weles,
 // skarbiec, stado, lem, echo, most, probierz, and byk MCP servers.
 //
-// brama is the multi-provider LLM gateway (formerly model-router). The tools
-// here run in-process on the crate's own logic and touch nothing that costs
-// tokens or needs credentials: local hardware detection with the recommended
-// model, and the list of routable model ids. The token-spending completions
-// path and every collect/mutate command are deliberately excluded. serve()
+// Brama is the multi-provider LLM gateway formerly named model-router. The
+// only MCP tool runs local hardware detection in process. It needs no
+// credential, performs no network request, and incurs no model cost. Model
+// discovery, token-spending completions, collection, and mutation remain on
+// their authenticated HTTP or explicitly billable CLI boundaries. serve()
 // owns stdout exclusively (JSON-RPC frames only); diagnostics go to stderr.
 
 use std::io::{BufRead, Write};

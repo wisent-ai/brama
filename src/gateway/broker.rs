@@ -1,28 +1,34 @@
 //! Credential seams for Brama.
 //!
-//! Capability redemption is authoritative when configured. Production
-//! deployments that have not yet mounted the local Skarbiec broker use the
-//! existing encrypted Supabase pool; plaintext exists only in zeroizing memory
-//! at HMAC verification or provider invocation boundaries.
+//! Capability redemption through the local Skarbiec broker is authoritative.
+//! Missing, malformed, or unavailable capability configuration fails closed;
+//! Brama never falls back to an ambient secret or remote credential store.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{LazyLock, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::{json, Value};
+use tracing::warn;
 
 use crate::capability::{CapabilityClient, CapabilityRef, Secret};
 
 const ENTITLEMENTS_ROUTER_BIN_ENV: &str = "ENTITLEMENTS_ROUTER_BIN";
 const DEFAULT_ENTITLEMENTS_ROUTER_BIN: &str = "entitlements-router";
 const REQUEST_SIGN_CAPABILITIES_ENV: &str = "BRAMA_REQUEST_SIGN_CAPABILITY_IDS";
+const REQUEST_SIGN_IDENTITIES_ENV: &str = "BRAMA_REQUEST_SIGN_IDENTITIES";
+const CENTRAL_REQUEST_SIGN_AGENTS: &[&str] = &["content-platform", "oko", "weles"];
 const PROVIDER_CAPABILITIES_ENV: &str = "BRAMA_PROVIDER_CAPABILITY_IDS";
-const SUBSCRIPTION_ID_ALIASES_ENV: &str = "BRAMA_SUBSCRIPTION_ID_ALIASES";
 const SUBSCRIPTION_CATALOG_ENV: &str = "BRAMA_SUBSCRIPTION_CATALOG";
 const DONATED_SUBSCRIPTIONS_FILE_ENV: &str = "BRAMA_DONATED_SUBSCRIPTIONS_FILE";
 const DEFAULT_DONATED_SUBSCRIPTIONS_FILE: &str = "/tmp/brama-skarbiec/donated-subscriptions.json";
+const DONATION_RECIPIENT_ENV: &str = "SKARBIEC_DONATION_RECIPIENT";
+const DEFAULT_DONATION_RECIPIENT: &str = "brama-service";
+
+static OAUTH_REFRESH_LOCK: LazyLock<tokio::sync::Mutex<()>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(()));
 
 /// Fold an identifier into the stable resource alphabet used by deployment
 /// bindings. The original identifier remains the lookup key in trusted config.
@@ -56,16 +62,6 @@ struct BrokerSubscriptionEntry {
     status: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct LegacySubscriptionCredential {
-    key_encrypted: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct LegacyAgentSecret {
-    auth_secret: String,
-}
-
 fn capability_map(name: &str) -> Option<HashMap<String, String>> {
     let encoded = std::env::var(name).ok()?;
     let parsed: HashMap<String, String> = serde_json::from_str(&encoded).ok()?;
@@ -83,108 +79,20 @@ fn client() -> Option<CapabilityClient> {
     CapabilityClient::from_env().ok()
 }
 
-fn legacy_supabase() -> Option<(String, String)> {
-    let base = std::env::var("SUPABASE_URL").ok()?;
-    let key = std::env::var("SUPABASE_SERVICE_ROLE_KEY").ok()?;
-    Some((base.trim_end_matches('/').to_owned(), key))
-}
-fn subscription_id_aliases() -> HashMap<String, String> {
-    capability_map(SUBSCRIPTION_ID_ALIASES_ENV).unwrap_or_default()
-}
-
-fn legacy_subscription_id(canonical_id: &str) -> String {
-    subscription_id_aliases()
-        .remove(canonical_id)
-        .unwrap_or_else(|| canonical_id.to_owned())
-}
-
-fn canonical_subscription_id(legacy_id: &str) -> String {
-    subscription_id_aliases()
-        .into_iter()
-        .find_map(|(canonical, legacy)| (legacy == legacy_id).then_some(canonical))
-        .unwrap_or_else(|| legacy_id.to_owned())
-}
-
-async fn legacy_get<T: for<'de> Deserialize<'de>>(
-    table: &str,
-    query: &[(&str, String)],
-) -> Option<T> {
-    let (base, key) = legacy_supabase()?;
-    reqwest::Client::new()
-        .get(format!("{base}/rest/v1/{table}"))
-        .header("apikey", &key)
-        .bearer_auth(&key)
-        .query(query)
-        .send()
-        .await
-        .ok()?
-        .error_for_status()
-        .ok()?
-        .json()
-        .await
-        .ok()
-}
-
-async fn legacy_agent_auth_secret(agent_id: &str) -> Option<Secret> {
-    let query = [
-        ("select", "auth_secret".to_owned()),
-        ("agent_id", format!("eq.{agent_id}")),
-        ("limit", "1".to_owned()),
-    ];
-    let rows: Vec<LegacyAgentSecret> = legacy_get("model_router_clients", &query).await?;
-    rows.into_iter()
-        .next()
-        .map(|row| Secret::from_bytes(row.auth_secret.into_bytes()))
-        .or_else(|| {
-            std::env::var("AGENT_AUTH_SECRET")
-                .ok()
-                .map(|secret| Secret::from_bytes(secret.into_bytes()))
-        })
-}
-
-async fn legacy_subscriptions(agent_id: &str) -> Option<Vec<SubscriptionEntry>> {
-    let query = [
-        ("select", "id,provider,status".to_owned()),
-        ("instance_id", format!("eq.{agent_id}")),
-        ("status", "eq.active".to_owned()),
-    ];
-    let mut rows: Vec<SubscriptionEntry> = legacy_get("trade_agent_subscriptions", &query).await?;
-    for row in &mut rows {
-        row.id = canonical_subscription_id(&row.id);
-    }
-    Some(rows)
-}
-
-async fn legacy_subscription_credential(subscription_id: &str, provider: &str) -> Option<Secret> {
-    let subscription_id = legacy_subscription_id(subscription_id);
-    let query = [
-        ("select", "key_encrypted".to_owned()),
-        ("id", format!("eq.{subscription_id}")),
-        ("provider", format!("eq.{provider}")),
-        ("status", "eq.active".to_owned()),
-        ("limit", "1".to_owned()),
-    ];
-    let rows: Vec<LegacySubscriptionCredential> =
-        legacy_get("trade_agent_subscriptions", &query).await?;
-    let encrypted = rows.into_iter().next()?.key_encrypted;
-    crate::crypto::decrypt(&encrypted)
-        .ok()
-        .map(|secret| Secret::from_bytes(secret.into_bytes()))
-}
-
-/// Redeem an agent-specific request-signing secret immediately before HMAC
-/// verification. The capability ID comes only from trusted process config.
+/// Resolve an agent-specific request-signing secret immediately before HMAC
+/// verification. Content Platform, Oko, and Weles are strict central-item
+/// projections; they never fall back to generated agent resources or another
+/// product.
 pub async fn get_agent_auth_secret(agent_id: &str) -> Option<Secret> {
-    if let Some(secret) =
-        configured_capability(REQUEST_SIGN_CAPABILITIES_ENV, agent_id).and_then(|capability_id| {
-            let resource = format!("agent:{}", slug(agent_id));
-            let binding = CapabilityRef::request_sign(&capability_id, &resource).ok()?;
-            client()?.redeem(&binding).ok()
-        })
-    {
-        return Some(secret);
+    if CENTRAL_REQUEST_SIGN_AGENTS.contains(&agent_id) {
+        let secret = capability_map(REQUEST_SIGN_IDENTITIES_ENV)?.remove(agent_id)?;
+        return Some(Secret::from_bytes(secret.into_bytes()));
     }
-    legacy_agent_auth_secret(agent_id).await
+
+    let capability_id = configured_capability(REQUEST_SIGN_CAPABILITIES_ENV, agent_id)?;
+    let resource = format!("agent:{}", slug(agent_id));
+    let binding = CapabilityRef::request_sign(&capability_id, &resource).ok()?;
+    client()?.redeem(&binding).ok()
 }
 
 /// Return whether trusted deployment config contains a locally valid direct
@@ -205,30 +113,56 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
     client()?.redeem(&binding).ok()
 }
 
-/// Redeem one subscription provider credential immediately before its CLI call.
-/// The local resource binds both provider and subscription to prevent cross-use.
+/// Redeem one subscription credential at the final-use boundary. Expired
+/// provider OAuth grants are refreshed only inside this scoped Brama runtime
+/// and persisted through the local entitlements router over stdin.
 pub async fn subscription_credential(subscription_id: &str, provider: &str) -> Option<Secret> {
-    if let Some(secret) = configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id)
-        .and_then(|capability_id| {
-            let resource = format!("provider:{}:{}", slug(provider), slug(subscription_id));
-            let binding = CapabilityRef::provider(&capability_id, &resource).ok()?;
-            client()?.redeem(&binding).ok()
-        })
-    {
-        return Some(secret);
+    let capability_id = configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id)?;
+    let resource = format!("provider:{}:{}", slug(provider), slug(subscription_id));
+    let binding = CapabilityRef::provider(&capability_id, &resource).ok()?;
+    let credential = client()?.redeem(&binding).ok()?;
+    if !super::oauth_refresh::needs_refresh(&credential, provider) {
+        return Some(credential);
     }
-    legacy_subscription_credential(subscription_id, provider).await
+    drop(credential);
+
+    // Refresh-token rotation is single-flight. Re-redeeming after the lock
+    // ensures a concurrent caller observes the value already written to vault.
+    let _guard = OAUTH_REFRESH_LOCK.lock().await;
+    let credential = client()?.redeem(&binding).ok()?;
+    if !super::oauth_refresh::needs_refresh(&credential, provider) {
+        return Some(credential);
+    }
+    let mut fresh = match super::oauth_refresh::refresh(&credential, provider).await {
+        Ok(fresh) => fresh,
+        Err(_) => {
+            warn!(
+                event = "oauth_refresh_failed",
+                provider, "OAuth refresh failed; preserving the previously redeemed credential"
+            );
+            return Some(credential);
+        }
+    };
+    if put_subscription_credential(subscription_id, provider, &fresh)
+        .await
+        .is_err()
+    {
+        warn!(
+            event = "oauth_refresh_persist_failed",
+            provider, "refreshed OAuth credential could not be persisted"
+        );
+        return Some(credential);
+    }
+    Some(Secret::from_bytes(std::mem::take(&mut *fresh)))
 }
 
-/// Enumerate one agent's subscription metadata through the entitlements broker
-/// when mounted, otherwise through the encrypted production subscription pool.
-/// The donated-subscriptions overlay file is re-read on every call and merged
-/// on top of whichever source answered (dedupe by id, overlay wins).
+/// Enumerate one agent's subscription metadata through the local entitlements
+/// broker or its trusted deployment-time catalog. The donated-subscriptions
+/// overlay is metadata only; every credential use still requires a capability.
 pub async fn list_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
-    let mut entries = match list_subscriptions_result(agent_id).await {
-        Ok(rows) => rows,
-        Err(()) => legacy_subscriptions(agent_id).await.unwrap_or_default(),
-    };
+    let mut entries = list_subscriptions_result(agent_id)
+        .await
+        .unwrap_or_default();
     for donated in donated_subscriptions(agent_id) {
         match entries.iter_mut().find(|entry| entry.id == donated.id) {
             Some(existing) => *existing = donated,
@@ -319,25 +253,34 @@ fn entitlements_router_bin() -> String {
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_ENTITLEMENTS_ROUTER_BIN.to_owned())
 }
+fn donation_recipient() -> String {
+    std::env::var(DONATION_RECIPIENT_ENV)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_DONATION_RECIPIENT.to_owned())
+}
 
-/// Store one donated OAuth credential blob through the local entitlements
-/// router; plaintext crosses only the child process stdin pipe.
-pub async fn put_donated_credential(subscription_id: &str, api_key: &str) -> Result<(), String> {
+async fn put_credential(item_id: &str, secret: &[u8]) -> Result<(), String> {
     use std::process::Stdio;
     use tokio::io::AsyncWriteExt;
-    let item_id = format!("provider:claude-code:{subscription_id}");
+
     let mut child = tokio::process::Command::new(entitlements_router_bin())
         .arg("credential-put")
-        .arg(&item_id)
+        .arg(item_id)
         .arg("--recipient")
-        .arg("brama-cloud-run")
+        .arg(donation_recipient())
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| format!("spawn entitlements router: {error}"))?;
-    if let Some(mut stdin) = child.stdin.take() {
-        let _ = stdin.write_all(api_key.as_bytes()).await;
+    let write_result = match child.stdin.take() {
+        Some(mut stdin) => stdin.write_all(secret).await,
+        None => return Err("entitlements router stdin is unavailable".to_owned()),
+    };
+    if write_result.is_err() {
+        let _ = child.kill().await;
+        return Err("write entitlements router credential failed".to_owned());
     }
     let output = child
         .wait_with_output()
@@ -345,10 +288,27 @@ pub async fn put_donated_credential(subscription_id: &str, api_key: &str) -> Res
         .map_err(|error| format!("wait entitlements router: {error}"))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        let detail: String = stderr.trim().chars().take(200).collect();
+        let detail_limit: usize = "200".parse().expect("valid credential error detail limit");
+        let detail: String = stderr.trim().chars().take(detail_limit).collect();
         return Err(format!("credential-put failed: {detail}"));
     }
     Ok(())
+}
+
+/// Store one donated OAuth credential blob through the local entitlements
+/// router; plaintext crosses only the child process stdin pipe.
+pub async fn put_donated_credential(subscription_id: &str, api_key: &str) -> Result<(), String> {
+    let item_id = format!("provider:claude-code:{subscription_id}");
+    put_credential(&item_id, api_key.as_bytes()).await
+}
+
+async fn put_subscription_credential(
+    subscription_id: &str,
+    provider: &str,
+    credential: &[u8],
+) -> Result<(), String> {
+    let item_id = format!("provider:{}:{}", slug(provider), slug(subscription_id));
+    put_credential(&item_id, credential).await
 }
 
 fn subscription_prefix(agent_id: &str) -> String {
@@ -459,7 +419,10 @@ async fn live_subscriptions(
 
 /// Shell the entitlements router's bare `list`, which returns a JSON array of
 /// every vault item (`{"id","type","tags","updated_at","deleted","versions"}`).
-async fn list_subscriptions_live(broker: &str, agent_id: &str) -> Result<Vec<SubscriptionEntry>, ()> {
+async fn list_subscriptions_live(
+    broker: &str,
+    agent_id: &str,
+) -> Result<Vec<SubscriptionEntry>, ()> {
     let output = tokio::process::Command::new(broker)
         .arg("list")
         .output()
@@ -473,29 +436,10 @@ async fn list_subscriptions_live(broker: &str, agent_id: &str) -> Result<Vec<Sub
 
 async fn list_subscriptions_result(agent_id: &str) -> Result<Vec<SubscriptionEntry>, ()> {
     let broker = entitlements_router_bin();
-    // Live vault discovery wins; a failed lookup bypasses the cache and falls
-    // back to the deployment-time env catalog, then to the legacy broker path.
+    // Live vault discovery wins. A failed lookup may use the trusted
+    // deployment-time metadata catalog, but never a remote credential store.
     if let Ok(live) = live_subscriptions(&broker, agent_id, false).await {
         return Ok(live);
     }
-    if let Some(configured) = configured_subscriptions(agent_id) {
-        return configured;
-    }
-    list_subscriptions_with_broker(&broker, agent_id).await
-}
-
-async fn list_subscriptions_with_broker(
-    broker: &str,
-    agent_id: &str,
-) -> Result<Vec<SubscriptionEntry>, ()> {
-    let output = tokio::process::Command::new(broker)
-        .arg("list-items")
-        .arg(subscription_prefix(agent_id))
-        .output()
-        .await
-        .map_err(|_| ())?;
-    if !output.status.success() {
-        return Err(());
-    }
-    parse_subscriptions(&output.stdout, agent_id)
+    configured_subscriptions(agent_id).unwrap_or(Err(()))
 }
