@@ -2,8 +2,8 @@
 
 ## Reporting
 
-Report vulnerabilities through the private GitHub Security Advisory channel for
-[`wisent-ai/model-router`](https://github.com/wisent-ai/model-router/security/advisories/new).
+Report vulnerabilities through GitHub's private Security Advisory channel for
+[`wisent-ai/brama`](https://github.com/wisent-ai/brama/security/advisories/new).
 Do not open a normal issue containing credentials, capability handles, prompts,
 provider responses, vault metadata, account identifiers, or exploit details.
 

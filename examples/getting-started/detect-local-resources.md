@@ -17,7 +17,7 @@
 ## Steps
 
 ```bash
-git clone https://github.com/wisent-ai/model-router.git brama
+git clone https://github.com/wisent-ai/brama.git brama
 cd brama
 cargo run --locked -- detect
 ```

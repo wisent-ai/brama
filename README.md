@@ -4,7 +4,7 @@ Brama gives Wisent services one authenticated, provider-neutral HTTP gateway for
 LLM inference while keeping client identity, subscription ownership, provider
 credentials, and routing policy under Wisent control.
 
-Canonical repository: [`wisent-ai/model-router`](https://github.com/wisent-ai/model-router).
+Canonical repository: [`wisent-ai/brama`](https://github.com/wisent-ai/brama).
 The product, Rust crate, binary, CLI, MCP server, and service are named `brama`.
 
 ## Problem and intended users
@@ -165,10 +165,10 @@ Prerequisites:
 - Git;
 - the Rust toolchain required by `Cargo.lock` (the production build uses the
   pinned builder in `Dockerfile`);
-- a source checkout of the private repository.
+- a source checkout of the public repository.
 
 ```bash
-git clone https://github.com/wisent-ai/model-router.git brama
+git clone https://github.com/wisent-ai/brama.git brama
 cd brama
 cargo run --locked -- detect
 ```
@@ -243,15 +243,15 @@ The complete state, error, retry, authorization, and resource contract is in
 
 - **Maturity:** pre-1.0. Public contract changes follow the `0.x` policy in
   [`RELEASE.md`](RELEASE.md).
-- **Current source version:** `0.1.0`, owned by `Cargo.toml`; the incompatible Unreleased contract requires `0.2.0` before publication.
-- **Supported source:** `main` for development only; no stable channel is
+- **Current source version:** `0.1.0`, owned by `Cargo.toml`; the incompatible Unreleased contract requires `0.2.0` before a stable binary release.
+- **Supported source:** public `main` for development; no stable binary channel is
   currently published.
-- **Issues and operator support:** private
-  [`wisent-ai/model-router` issues](https://github.com/wisent-ai/model-router/issues);
+- **Issues and operator support:**
+  [`wisent-ai/brama` issues](https://github.com/wisent-ai/brama/issues);
   see [`SUPPORT.md`](SUPPORT.md).
 - **Security reports:** use the private GitHub Security Advisory channel defined
   in [`SECURITY.md`](SECURITY.md); never put credentials in an issue.
-- **License:** proprietary Wisent AI software; see [`LICENSE`](LICENSE).
+- **License:** Apache License 2.0; see [`LICENSE`](LICENSE).
 
 Rust code defines executable behavior. This README owns the product promise,
 boundaries, use cases, terminology, status, and operator entry points. Detailed

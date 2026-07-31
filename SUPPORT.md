@@ -2,7 +2,7 @@
 
 ## Product and development issues
 
-Use the private [`wisent-ai/model-router` issue tracker](https://github.com/wisent-ai/model-router/issues)
+Use the public [`wisent-ai/brama` issue tracker](https://github.com/wisent-ai/brama/issues)
 for defects, capability requests, documentation gaps, and operator-visible
 failures that contain no credentials, prompts, provider responses, account IDs,
 or personal data.

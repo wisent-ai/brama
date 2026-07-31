@@ -10,7 +10,7 @@ It authenticates a service or signed agent, selects an allowed provider route,
 redeems the exact provider capability at final use, applies bounded attempts,
 and returns one normalized response. It detects local hardware but does not
 start or manage local inference. The canonical repository remains
-`wisent-ai/model-router`; the product, crate, binary, CLI, MCP server, and
+`wisent-ai/brama`; the product, crate, binary, CLI, MCP server, and
 service are `brama`.
 
 ## Canonical engine
