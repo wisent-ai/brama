@@ -10,6 +10,9 @@ vault through the entitlements-router broker (never fetched directly). Non-secre
 operational state — subscription retirements, rotated-value overlays, and
 task-quality history — lives in a local append-only journal.
 
+Canonical repository: [`wisent-ai/brama`](https://github.com/wisent-ai/brama).
+The product, Rust crate, binary, CLI, MCP server, and service are named `brama`.
+
 ## Provider routing contract
 
 OpenAI-compatible `/v1/chat/completions` requests must include a canonical
@@ -71,3 +74,11 @@ and records each outcome to the journal, which the `task:` selector then ranks
 over. Subscription metadata comes from the broker; provider credentials are
 redeemed independently at their final-use boundary.
 
+
+## Status and license
+
+Public development source; no stable binary channel is currently promised.
+
+- Issues: [`wisent-ai/brama`](https://github.com/wisent-ai/brama/issues)
+- Vulnerabilities: [private GitHub Security Advisory](https://github.com/wisent-ai/brama/security/advisories/new)
+- License: Apache License 2.0; see [`LICENSE`](LICENSE)

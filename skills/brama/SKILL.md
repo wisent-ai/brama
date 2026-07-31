@@ -9,9 +9,9 @@ brama (Polish for "gate") is the multi-provider LLM gateway in this ecosystem â€
 the gate every agent's model traffic passes through. It is an OpenAI-compatible
 HTTP router: it authenticates a signed agent, picks a provider by subscription
 routing or stored task-quality evidence, advances through ranked candidates when
-a provider call fails, and can manage local inference. The repository is still
-`model-router` on GitHub and the deployed service keeps that name until a
-coordinated redeploy; the crate, binary, and directory are `brama`.
+a provider call fails, and can manage local inference. The canonical repository is
+`wisent-ai/brama`; the crate, binary, directory, CLI, MCP server, and skill are
+all named `brama`.
 
 ## Canonical engine
 
