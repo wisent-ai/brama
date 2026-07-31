@@ -1,25 +1,58 @@
-FROM rust:1.86-slim AS brama-builder
+FROM rust:1.86-slim@sha256:57d415bbd61ce11e2d5f73de068103c7bd9f3188dc132c97cef4a8f62989e944 AS brama-builder
+RUN printf '%s\n' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260714T000000Z/ bookworm main' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260714T000000Z/ bookworm-updates main' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/20260714T000000Z/ bookworm-security main' \
+      > /etc/apt/sources.list \
+    && rm -f /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+      pkg-config=1.8.1-1 \
+      libssl-dev=3.0.20-1~deb12u2 \
+      ca-certificates=20230311+deb12u1 \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /build/brama
-RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY brama/Cargo.toml brama/Cargo.lock ./
 COPY brama/src ./src
 COPY brama/scripts/omp-model-metadata.json ./scripts/omp-model-metadata.json
-RUN cargo build --release --bin brama
+RUN cargo build --locked --release --bin brama
 
-FROM rust:1.86-slim AS skarbiec-builder
+FROM rust:1.86-slim@sha256:57d415bbd61ce11e2d5f73de068103c7bd9f3188dc132c97cef4a8f62989e944 AS skarbiec-builder
 WORKDIR /build/skarbiec
 COPY entitlements-rotator/Cargo.toml entitlements-rotator/Cargo.lock ./
 COPY entitlements-rotator/src ./src
-RUN cargo build --release --bin skarbiec-entitlements-router
+RUN cargo build --locked --release --bin skarbiec-entitlements-router
 
-FROM node:22-slim AS capability-config
+FROM node:22.22.0-bookworm-slim@sha256:dd9d21971ec4395903fa6143c2b9267d048ae01ca6d3ea96f16cb30df6187d94 AS capability-config
 COPY --from=brama-builder /build/brama/target/release/brama /usr/local/bin/brama
 COPY brama/scripts/generate-skarbiec-config.mjs /usr/local/lib/brama/generate-skarbiec-config.mjs
 COPY brama/scripts/skarbiec-subscriptions.json /usr/local/lib/brama/skarbiec-subscriptions.json
 RUN node /usr/local/lib/brama/generate-skarbiec-config.mjs /usr/local/bin/brama /etc/brama-skarbiec /usr/local/lib/brama/skarbiec-subscriptions.json
 
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3 curl gnupg python3 \
+FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
+# Supply only the exact URL rendered by `stado storage url` for a pinned
+# stado://releases/stado/... object; the checksum remains independently pinned.
+ARG STADO_CLI_RELEASE_URL
+ARG STADO_CLI_RELEASE_SHA256
+RUN test -n "$STADO_CLI_RELEASE_URL" \
+    && test -n "$STADO_CLI_RELEASE_SHA256" \
+    && printf '%s\n' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260714T000000Z/ bookworm main' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260714T000000Z/ bookworm-updates main' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/20260714T000000Z/ bookworm-security main' \
+      > /etc/apt/sources.list \
+    && rm -f /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+      ca-certificates=20230311+deb12u1 \
+      libssl3=3.0.20-1~deb12u2 \
+      curl=7.88.1-10+deb12u15 \
+      gnupg=2.2.40-1.1+deb12u2 \
+      python3=3.11.2-1+b1 \
+    && curl --fail --silent --show-error --location "$STADO_CLI_RELEASE_URL" --output /tmp/stado \
+    && printf '%s  %s\n' "$STADO_CLI_RELEASE_SHA256" /tmp/stado | sha256sum --check - \
+    && chmod a=rx /tmp/stado \
+    && mv /tmp/stado /usr/local/bin/stado \
     && groupadd --gid 10001 skarbiec-capability-clients \
     && useradd --uid 10001 --gid 10001 --home-dir /nonexistent --no-create-home brama \
     && rm -rf /var/lib/apt/lists/*

@@ -6,8 +6,8 @@
 //!
 //! Stats are best-effort persisted to a JSON file (atomic rewrite, at most
 //! every [`FLUSH_INTERVAL_MS`] ms) and reloaded on startup so a process
-//! restart keeps recent numbers. The file lives on instance-local storage
-//! (`/tmp` on Cloud Run), so numbers are per-instance, never fleet-wide.
+//! restart keeps recent numbers. The file lives on the service host's
+//! instance-local `/tmp`, so numbers are per process, never fleet-wide.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -46,8 +46,7 @@ pub struct ModelPerf {
     pub last_tps: f64,
 }
 
-static REGISTRY: LazyLock<Mutex<HashMap<String, PerfStats>>> =
-    LazyLock::new(|| Mutex::new(load()));
+static REGISTRY: LazyLock<Mutex<HashMap<String, PerfStats>>> = LazyLock::new(|| Mutex::new(load()));
 static LAST_FLUSH_MS: AtomicU64 = AtomicU64::new(0);
 
 fn now_ms() -> u64 {
@@ -214,7 +213,11 @@ mod tests {
         record("test/model-a", 1000.0, 40);
         let a = get("test/model-a").expect("model-a tracked");
         let expected = 0.3 * 40.0 + 0.7 * 10.0;
-        assert!((a.last_tps - expected).abs() < 1e-9, "last_tps={}", a.last_tps);
+        assert!(
+            (a.last_tps - expected).abs() < 1e-9,
+            "last_tps={}",
+            a.last_tps
+        );
 
         let snap = snapshot();
         let a_pos = snap.iter().position(|m| m.model == "test/model-a").unwrap();

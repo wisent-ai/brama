@@ -1,0 +1,235 @@
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+use serde::Deserialize;
+
+pub const ROUTES_FILE_ENV: &str = "BRAMA_INFERENCE_ROUTES_FILE";
+
+#[derive(Debug, Deserialize)]
+struct Endpoint {
+    host: String,
+    port: u16,
+}
+
+#[derive(Debug, Deserialize)]
+struct Deployment {
+    name: String,
+    endpoint: Endpoint,
+}
+#[derive(Debug, Deserialize)]
+struct Registry {
+    #[serde(default)]
+    deployments: Vec<Deployment>,
+    #[serde(default)]
+    routes: HashMap<String, String>,
+    #[serde(default)]
+    fallbacks: HashMap<String, Vec<String>>,
+}
+
+fn read(path: &Path) -> Result<Registry, String> {
+    let metadata = std::fs::symlink_metadata(path)
+        .map_err(|error| format!("cannot read inference routes metadata: {error}"))?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err("inference routes must be a regular non-symlink file".to_string());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let one = u8::BITS / u8::BITS;
+        let shift = one + one;
+        let non_owner_mask = u32::from(u8::MAX) >> shift;
+        if metadata.uid() != unsafe { libc::geteuid() } {
+            return Err("inference routes must be owned by the Brama user".to_string());
+        }
+        if metadata.permissions().mode() & non_owner_mask != u32::MIN {
+            return Err("inference routes must not be accessible by group or other".to_string());
+        }
+    }
+    let body = std::fs::read_to_string(path)
+        .map_err(|error| format!("cannot read inference routes: {error}"))?;
+    serde_json::from_str(&body).map_err(|error| format!("invalid inference routes: {error}"))
+}
+
+pub fn configured_path() -> Option<PathBuf> {
+    std::env::var_os(ROUTES_FILE_ENV)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+fn tailscale_ipv4(value: &str) -> bool {
+    let Ok(address) = value.parse::<std::net::Ipv4Addr>() else {
+        return false;
+    };
+    let octets = address.octets();
+    let first = "100".parse::<u8>().expect("static Tailscale prefix");
+    let lower = "64".parse::<u8>().expect("static Tailscale range");
+    let upper = "128".parse::<u8>().expect("static Tailscale range");
+    octets[usize::MIN] == first && (lower..upper).contains(&octets[usize::from(true)])
+}
+
+fn resolved_destination(registry: &Registry, destination: &str) -> Result<String, String> {
+    if destination.contains('/') {
+        return Ok(destination.to_string());
+    }
+    let deployment = registry
+        .deployments
+        .iter()
+        .find(|deployment| deployment.name == destination)
+        .ok_or_else(|| format!("unknown inference deployment '{destination}'"))?;
+    if !tailscale_ipv4(&deployment.endpoint.host) || deployment.endpoint.port == u16::MIN {
+        return Err(format!(
+            "inference deployment '{destination}' has no safe Tailscale endpoint"
+        ));
+    }
+    Ok(format!("local-openai/{destination}"))
+}
+
+pub fn resolved(path: &Path) -> Result<HashMap<String, String>, String> {
+    let registry = read(path)?;
+    let mut routes = HashMap::new();
+    for (alias, destination) in &registry.routes {
+        routes.insert(alias.clone(), resolved_destination(&registry, destination)?);
+    }
+    Ok(routes)
+}
+
+pub fn resolved_fallbacks(path: &Path) -> Result<HashMap<String, Vec<String>>, String> {
+    let registry = read(path)?;
+    let mut fallbacks = HashMap::new();
+    for (alias, destinations) in &registry.fallbacks {
+        if !registry.routes.contains_key(alias) {
+            return Err(format!(
+                "inference fallback route '{alias}' has no primary destination"
+            ));
+        }
+        let primary = registry
+            .routes
+            .get(alias)
+            .ok_or_else(|| format!("inference route '{alias}' disappeared"))?;
+        let mut seen = std::collections::HashSet::from([primary.as_str()]);
+        let mut resolved = Vec::with_capacity(destinations.len());
+        for destination in destinations {
+            if !seen.insert(destination.as_str()) {
+                return Err(format!(
+                    "inference route '{alias}' repeats destination '{destination}'"
+                ));
+            }
+            resolved.push(resolved_destination(&registry, destination)?);
+        }
+        fallbacks.insert(alias.clone(), resolved);
+    }
+    Ok(fallbacks)
+}
+
+pub fn base_url(path: &Path, deployment_name: &str) -> Result<String, String> {
+    let registry = read(path)?;
+    let deployment = registry
+        .deployments
+        .iter()
+        .find(|deployment| deployment.name == deployment_name)
+        .ok_or_else(|| format!("unknown inference deployment '{deployment_name}'"))?;
+    if !tailscale_ipv4(&deployment.endpoint.host) || deployment.endpoint.port == u16::MIN {
+        return Err(format!(
+            "inference deployment '{deployment_name}' has no safe Tailscale endpoint"
+        ));
+    }
+    Ok(format!(
+        "http://{}:{}",
+        deployment.endpoint.host, deployment.endpoint.port
+    ))
+}
+
+pub fn validate(path: &Path) -> Result<(), String> {
+    resolved(path)?;
+    resolved_fallbacks(path).map(|_| ())
+}
+
+pub fn resolve(path: &Path, alias: &str) -> Result<Option<String>, String> {
+    Ok(resolved(path)?.remove(alias))
+}
+
+pub fn route_chain(path: &Path, alias: &str) -> Result<Option<Vec<String>>, String> {
+    let registry = read(path)?;
+    let Some(primary) = registry.routes.get(alias) else {
+        return Ok(None);
+    };
+    let fallbacks = registry
+        .fallbacks
+        .get(alias)
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    let mut seen = std::collections::HashSet::from([primary.as_str()]);
+    let mut chain = Vec::with_capacity(fallbacks.len().saturating_add(usize::from(true)));
+    chain.push(resolved_destination(&registry, primary)?);
+    for fallback in fallbacks {
+        if !seen.insert(fallback.as_str()) {
+            return Err(format!(
+                "inference route '{alias}' repeats destination '{fallback}'"
+            ));
+        }
+        chain.push(resolved_destination(&registry, fallback)?);
+    }
+    Ok(Some(chain))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{base_url, resolve};
+
+    fn route_file(suffix: &str) -> std::path::PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = std::env::temp_dir().join(format!(
+            "brama-inference-routes-{}-{suffix}.json",
+            std::process::id()
+        ));
+        std::fs::write(
+            &path,
+            "{\"deployments\":[{\"name\":\"chat-primary\",\"endpoint\":{\"host\":\"100.100.1.2\",\"port\":8001}}],\"routes\":{\"wisent-backend/chat/primary\":\"chat-primary\"}}",
+        )
+        .expect("write route fixture");
+        let mode = u32::from_str_radix("600", u8::BITS).expect("static owner-only mode");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode))
+            .expect("secure route fixture");
+        path
+    }
+
+    #[test]
+    fn local_route_resolves_provider_and_tailscale_origin() {
+        let path = route_file("valid");
+        assert_eq!(
+            resolve(&path, "wisent-backend/chat/primary").expect("resolve"),
+            Some("local-openai/chat-primary".to_string())
+        );
+        assert_eq!(
+            base_url(&path, "chat-primary").expect("origin"),
+            "http://100.100.1.2:8001"
+        );
+        std::fs::remove_file(path).expect("remove fixture");
+    }
+
+    #[test]
+    fn non_tailscale_origin_is_rejected() {
+        let path = route_file("invalid");
+        std::fs::write(
+            &path,
+            "{\"deployments\":[{\"name\":\"chat-primary\",\"endpoint\":{\"host\":\"192.168.1.2\",\"port\":8001}}],\"routes\":{\"wisent-backend/chat/primary\":\"chat-primary\"}}",
+        )
+        .expect("replace route fixture");
+        let error = base_url(&path, "chat-primary").expect_err("reject LAN origin");
+        assert!(error.contains("safe Tailscale endpoint"));
+        std::fs::remove_file(path).expect("remove fixture");
+    }
+    #[test]
+    fn group_readable_snapshot_is_rejected() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = route_file("permissions");
+        let mode = u32::from_str_radix("644", u8::BITS).expect("static insecure mode");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode))
+            .expect("change fixture mode");
+        let error =
+            resolve(&path, "wisent-backend/chat/primary").expect_err("reject insecure mode");
+        assert!(error.contains("group or other"));
+        std::fs::remove_file(path).expect("remove fixture");
+    }
+}

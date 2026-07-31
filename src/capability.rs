@@ -5,7 +5,6 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 
-use aes_gcm::aead::rand_core::{OsRng, RngCore};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use ed25519_dalek::{Signer, SigningKey};
@@ -23,7 +22,6 @@ const MAX_KEY_BYTES: u64 = 4096;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Purpose {
     ProviderAuthenticate,
-    SupabaseConnect,
     RequestSign,
 }
 
@@ -31,7 +29,6 @@ impl Purpose {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::ProviderAuthenticate => "brama.provider.authenticate",
-            Self::SupabaseConnect => "brama.supabase.connect",
             Self::RequestSign => "brama.request.sign",
         }
     }
@@ -39,7 +36,6 @@ impl Purpose {
     const fn resource_prefix(self) -> &'static str {
         match self {
             Self::ProviderAuthenticate => "provider:",
-            Self::SupabaseConnect => "supabase:",
             Self::RequestSign => "agent:",
         }
     }
@@ -88,10 +84,6 @@ impl<'a> CapabilityRef<'a> {
 
     pub fn provider(id: &'a str, resource: &'a str) -> Result<Self, CapabilityError> {
         Self::new(id, TARGET, Purpose::ProviderAuthenticate, resource)
-    }
-
-    pub fn supabase(id: &'a str, resource: &'a str) -> Result<Self, CapabilityError> {
-        Self::new(id, TARGET, Purpose::SupabaseConnect, resource)
     }
 
     pub fn request_sign(id: &'a str, resource: &'a str) -> Result<Self, CapabilityError> {
@@ -222,7 +214,11 @@ impl CapabilityClient {
         }
 
         let mut nonce_bytes = [0_u8; 32];
-        OsRng.fill_bytes(&mut nonce_bytes);
+        OpenOptions::new()
+            .read(true)
+            .open("/dev/urandom")
+            .and_then(|mut source| source.read_exact(&mut nonce_bytes))
+            .map_err(|_| CapabilityError::InvalidConfiguration)?;
         let nonce = hex::encode(nonce_bytes);
         nonce_bytes.zeroize();
 

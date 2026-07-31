@@ -15,6 +15,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Print secret-free product and build identity as JSON
+    Version,
     /// Start the OpenAI-compatible HTTP server
     Serve {
         /// Port to listen on
@@ -24,11 +26,14 @@ enum Commands {
     /// Run a test inference through the router
     Test {
         /// Canonical provider/model route to test
-        #[arg(short, long, default_value = "openai/gpt-5.4")]
+        #[arg(short, long, default_value = "openai/default")]
         model: String,
         /// Jeden agent/client id whose provider credential should be used
         #[arg(long, default_value = "wisent-app")]
         agent_id: String,
+        /// Acknowledge that this command performs a billable provider request
+        #[arg(long, default_value_t = false)]
+        allow_provider_cost: bool,
     },
     /// Detect local hardware capabilities
     Detect,
@@ -54,6 +59,12 @@ enum Commands {
         /// Write results into subscription_router_checks
         #[arg(long, default_value_t = false)]
         persist: bool,
+        /// Maximum active models to check (bounded again by the library)
+        #[arg(long, default_value = "3")]
+        max_models: usize,
+        /// Acknowledge that this command performs billable provider requests
+        #[arg(long, default_value_t = false)]
+        allow_provider_cost: bool,
     },
 }
 
@@ -66,6 +77,12 @@ async fn main() {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Version => {
+            println!(
+                "{}",
+                serde_json::to_string(&brama::build_info()).unwrap_or_else(|_| "{}".into())
+            );
+        }
         Commands::Serve { port } => {
             info!("Starting server on port {port}");
             if let Err(e) = start_server(port).await {
@@ -73,7 +90,15 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::Test { model, agent_id } => {
+        Commands::Test {
+            model,
+            agent_id,
+            allow_provider_cost,
+        } => {
+            if !allow_provider_cost {
+                eprintln!("refusing billable inference without explicit --allow-provider-cost");
+                std::process::exit(i32::from(true));
+            }
             let request = ModelRequest {
                 messages: vec![Message {
                     role: "user".into(),
@@ -88,7 +113,6 @@ async fn main() {
                 system: None,
                 tools: None,
                 billing_target: None,
-                subscription_decision_id: None,
             };
             let resp =
                 brama::subscription_dispatch::dispatch_subscription_for_agent(&agent_id, &request)
@@ -131,6 +155,8 @@ async fn main() {
             expected_exact,
             expected_contains,
             persist,
+            max_models,
+            allow_provider_cost,
         } => {
             match collect_task_quality(TaskQualityOptions {
                 agent_id,
@@ -139,6 +165,8 @@ async fn main() {
                 expected_exact,
                 expected_contains,
                 persist,
+                max_models,
+                allow_provider_cost,
             })
             .await
             {

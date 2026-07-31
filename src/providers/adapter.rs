@@ -5,6 +5,7 @@
 //! subscriptions. Secrets are passed in-memory by the Skarbiec capability broker
 //! and are never persisted here.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use std::time::Instant;
@@ -12,8 +13,15 @@ use std::time::Instant;
 use reqwest::{Client, RequestBuilder};
 use serde_json::{json, Map, Value};
 
-use super::model_catalog::{self, CatalogAuth, CatalogProtocol, CatalogProvider};
+use crate::subscription_dispatch::model_catalog::{
+    self, CatalogAuth, CatalogProtocol, CatalogProvider,
+};
 use crate::types::{Message, ModelRequest, ModelResponse, ToolCall};
+
+const QWEN_DEFAULT_MODEL: &str = "qwen2.5-72b-instruct";
+const OPENAI_DEFAULT_MODEL: &str = "gpt-5.4";
+const OPENAI_EMBEDDING_MODEL: &str = "text-embedding-3-small";
+const OPENAI_MODERATION_MODEL: &str = "omni-moderation-latest";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WireProtocol {
@@ -274,6 +282,16 @@ const PROVIDERS: &[ProviderDescriptor] = &[
         auth: AuthKind::Bearer,
         static_models: &[],
     },
+    ProviderDescriptor {
+        id: "local-openai",
+        display_name: "Stado Local OpenAI",
+        base_url: "http://127.0.0.1",
+        models_path: "/v1/models",
+        chat_path: "/v1/chat/completions",
+        wire: WireProtocol::OpenAiChat,
+        auth: AuthKind::Bearer,
+        static_models: &[],
+    },
 ];
 
 pub fn providers() -> &'static [ProviderDescriptor] {
@@ -288,10 +306,34 @@ pub fn provider_id_from_route(value: &str) -> Option<&str> {
     (valid_provider_id(provider_id) && valid_model_id(model_id)).then_some(provider_id)
 }
 
-pub fn route(value: &str) -> Option<(&'static ProviderDescriptor, &str)> {
+pub fn route(value: &str) -> Option<(&'static ProviderDescriptor, Cow<'_, str>)> {
     let (provider_id, model_id) = value.split_once('/')?;
     let descriptor = provider(provider_id)?;
-    valid_model_id(model_id).then_some((descriptor, model_id))
+    if !valid_model_id(model_id) {
+        return None;
+    }
+    let concrete = match value {
+        "qwen/default" => QWEN_DEFAULT_MODEL,
+        "openai/default" => OPENAI_DEFAULT_MODEL,
+        "openai/embeddings" => OPENAI_EMBEDDING_MODEL,
+        "openai/moderation" => OPENAI_MODERATION_MODEL,
+        _ => return Some((descriptor, Cow::Borrowed(model_id))),
+    };
+    Some((descriptor, Cow::Borrowed(concrete)))
+}
+
+pub fn supports_chat_route(value: &str) -> bool {
+    route(value).is_some_and(|(_, model_id)| {
+        model_id.as_ref() != OPENAI_EMBEDDING_MODEL && model_id.as_ref() != OPENAI_MODERATION_MODEL
+    })
+}
+
+pub fn supports_embedding_route(value: &str) -> bool {
+    value == "openai/embeddings" && route(value).is_some()
+}
+
+pub fn supports_moderation_route(value: &str) -> bool {
+    value == "openai/moderation" && route(value).is_some()
 }
 
 fn valid_model_id(value: &str) -> bool {
@@ -307,23 +349,6 @@ fn valid_provider_id(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
-}
-
-fn credential_base_url(secret: &str) -> Option<String> {
-    let value = serde_json::from_str::<Value>(secret.trim()).ok()?;
-    let result = [
-        value.pointer("/base_url"),
-        value.pointer("/baseUrl"),
-        value.pointer("/api_base"),
-        value.pointer("/apiBase"),
-        value.pointer("/endpoint"),
-    ]
-    .into_iter()
-    .flatten()
-    .find_map(Value::as_str)
-    .filter(|value| value.starts_with("https://") || value.starts_with("http://"))
-    .map(str::to_string);
-    result
 }
 
 fn credential_key(secret: &str) -> Result<String, String> {
@@ -382,9 +407,38 @@ fn catalog_endpoint(base_url: &str, path: &str) -> String {
     endpoint(base, path)
 }
 
-fn provider_base_url(descriptor: &ProviderDescriptor) -> String {
-    let suffix = descriptor
-        .id
+fn trusted_provider_hosts(provider_id: &str) -> Option<&'static [&'static str]> {
+    match provider_id {
+        "anthropic" | "claude-code" => Some(&["api.anthropic.com"]),
+        "kimi" => Some(&["api.kimi.com"]),
+        "openai" => Some(&["api.openai.com"]),
+        "codex" => Some(&["chatgpt.com"]),
+        "openrouter" => Some(&["openrouter.ai"]),
+        "groq" => Some(&["api.groq.com"]),
+        "mistral" => Some(&["api.mistral.ai"]),
+        "xai" => Some(&["api.x.ai"]),
+        "deepseek" => Some(&["api.deepseek.com"]),
+        "cerebras" => Some(&["api.cerebras.ai"]),
+        "fireworks" => Some(&["api.fireworks.ai"]),
+        "together" | "togetherai" => Some(&["api.together.xyz"]),
+        "nvidia" => Some(&["integrate.api.nvidia.com"]),
+        "moonshot" => Some(&["api.moonshot.ai"]),
+        "zai" => Some(&["api.z.ai"]),
+        "qwen" => Some(&["dashscope-intl.aliyuncs.com"]),
+        "huggingface" => Some(&["router.huggingface.co"]),
+        "venice" => Some(&["api.venice.ai"]),
+        "novita" => Some(&["api.novita.ai"]),
+        "synthetic" => Some(&["api.synthetic.new"]),
+        "perplexity" => Some(&["api.perplexity.ai"]),
+        "deepinfra" => Some(&["api.deepinfra.com"]),
+        "google" => Some(&["generativelanguage.googleapis.com"]),
+        "local-openai" => Some(&[]),
+        _ => None,
+    }
+}
+
+fn provider_base_url_override(provider_id: &str) -> Option<String> {
+    let suffix = provider_id
         .chars()
         .map(|character| {
             if character.is_ascii_alphanumeric() {
@@ -397,7 +451,77 @@ fn provider_base_url(descriptor: &ProviderDescriptor) -> String {
     std::env::var(format!("BRAMA_PROVIDER_{suffix}_BASE_URL"))
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| descriptor.base_url.to_string())
+}
+
+fn validated_provider_base_url(
+    provider_id: &str,
+    candidate: &str,
+    allow_explicit_loopback: bool,
+) -> Result<String, String> {
+    if candidate.trim() != candidate {
+        return Err(format!(
+            "provider `{provider_id}` base URL must not contain surrounding whitespace"
+        ));
+    }
+    let url = reqwest::Url::parse(candidate)
+        .map_err(|error| format!("provider `{provider_id}` has an invalid base URL: {error}"))?;
+    if url.cannot_be_a_base() || !url.username().is_empty() || url.password().is_some() {
+        return Err(format!(
+            "provider `{provider_id}` base URL must be an absolute URL without user info"
+        ));
+    }
+    if url.query().is_some() || url.fragment().is_some() {
+        return Err(format!(
+            "provider `{provider_id}` base URL must not contain a query or fragment"
+        ));
+    }
+    let host = url
+        .host_str()
+        .ok_or_else(|| format!("provider `{provider_id}` base URL has no host"))?;
+    let trusted = trusted_provider_hosts(provider_id)
+        .ok_or_else(|| format!("provider `{provider_id}` has no trusted host policy"))?;
+    let loopback = host.eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|address| address.is_loopback());
+    if loopback {
+        if !allow_explicit_loopback || !matches!(url.scheme(), "http" | "https") {
+            return Err(format!(
+                "provider `{provider_id}` loopback endpoint requires an explicit deployment override"
+            ));
+        }
+    } else {
+        if url.scheme() != "https" {
+            return Err(format!("provider `{provider_id}` base URL must use HTTPS"));
+        }
+        if !trusted
+            .iter()
+            .any(|allowed| host.eq_ignore_ascii_case(allowed))
+        {
+            return Err(format!(
+                "provider `{provider_id}` host `{host}` is not trusted"
+            ));
+        }
+    }
+    Ok(url.as_str().trim_end_matches('/').to_string())
+}
+
+fn provider_base_url(descriptor: &ProviderDescriptor) -> Result<String, String> {
+    if let Some(configured) = provider_base_url_override(descriptor.id) {
+        return validated_provider_base_url(descriptor.id, &configured, true);
+    }
+    validated_provider_base_url(descriptor.id, descriptor.base_url, false)
+}
+fn provider_base_url_for(
+    descriptor: &ProviderDescriptor,
+    model_id: &str,
+) -> Result<String, String> {
+    if descriptor.id != "local-openai" {
+        return provider_base_url(descriptor);
+    }
+    let path = crate::core::inference_routes::configured_path()
+        .ok_or_else(|| "BRAMA_INFERENCE_ROUTES_FILE is required for local inference".to_string())?;
+    crate::core::inference_routes::base_url(&path, model_id)
 }
 
 fn authorize(
@@ -555,23 +679,42 @@ fn apply_omp_model_metadata(provider_id: &str, models: &mut [RegistryModel]) {
     }
 }
 
-fn catalog_provider_base_url(descriptor: &CatalogProvider, secret: &str) -> Option<String> {
-    let suffix = descriptor
-        .id
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() {
-                character.to_ascii_uppercase()
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>();
-    std::env::var(format!("BRAMA_PROVIDER_{suffix}_BASE_URL"))
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .or_else(|| credential_base_url(secret))
-        .or_else(|| descriptor.api_base.clone())
+fn trusted_catalog_base_url(provider_id: &str) -> Option<&'static str> {
+    match provider_id {
+        "anthropic" | "claude-code" => Some("https://api.anthropic.com/v1"),
+        "kimi" => Some("https://api.kimi.com/coding/v1"),
+        "openai" => Some("https://api.openai.com/v1"),
+        "codex" => Some("https://chatgpt.com/backend-api/codex"),
+        "openrouter" => Some("https://openrouter.ai/api/v1"),
+        "groq" => Some("https://api.groq.com/openai/v1"),
+        "mistral" => Some("https://api.mistral.ai/v1"),
+        "xai" => Some("https://api.x.ai/v1"),
+        "deepseek" => Some("https://api.deepseek.com"),
+        "cerebras" => Some("https://api.cerebras.ai/v1"),
+        "fireworks" => Some("https://api.fireworks.ai/inference/v1"),
+        "together" | "togetherai" => Some("https://api.together.xyz/v1"),
+        "nvidia" => Some("https://integrate.api.nvidia.com/v1"),
+        "moonshot" => Some("https://api.moonshot.ai/v1"),
+        "zai" => Some("https://api.z.ai/api/paas/v4"),
+        "qwen" => Some("https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
+        "huggingface" => Some("https://router.huggingface.co/v1"),
+        "venice" => Some("https://api.venice.ai/api/v1"),
+        "novita" => Some("https://api.novita.ai/openai/v1"),
+        "synthetic" => Some("https://api.synthetic.new/v1"),
+        "perplexity" => Some("https://api.perplexity.ai"),
+        "deepinfra" => Some("https://api.deepinfra.com/v1/openai"),
+        "google" => Some("https://generativelanguage.googleapis.com/v1beta"),
+        _ => None,
+    }
+}
+
+fn catalog_provider_base_url(descriptor: &CatalogProvider) -> Result<String, String> {
+    if let Some(configured) = provider_base_url_override(&descriptor.id) {
+        return validated_provider_base_url(&descriptor.id, &configured, true);
+    }
+    let base_url = trusted_catalog_base_url(&descriptor.id)
+        .ok_or_else(|| format!("provider `{}` has no trusted endpoint", descriptor.id))?;
+    validated_provider_base_url(&descriptor.id, base_url, false)
 }
 
 fn authorize_catalog(
@@ -647,31 +790,32 @@ pub async fn discover_models(
             .cloned()
             .collect::<Vec<_>>();
         let key = credential_key(secret)?;
-        if let Some(base_url) = catalog_provider_base_url(descriptor, secret) {
-            let client = Client::builder()
-                .timeout(std::time::Duration::from_secs(20))
-                .build()
-                .map_err(|error| error.to_string())?;
-            let request = authorize_catalog(
-                client.get(catalog_endpoint(&base_url, "/models")),
-                descriptor,
-                &key,
-            );
-            if let Ok(response) = request.send().await {
-                if response.status().is_success() {
-                    if let Ok(body) = response.json::<Value>().await {
-                        let dynamic = body
-                            .get("data")
-                            .or_else(|| body.get("models"))
-                            .and_then(Value::as_array)
-                            .cloned()
-                            .unwrap_or_default();
-                        models.extend(
-                            dynamic
-                                .iter()
-                                .filter_map(|row| catalog_model_from_value(provider_id, row)),
-                        );
-                    }
+        let base_url = catalog_provider_base_url(descriptor)?;
+        let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(20))
+            .redirect(reqwest::redirect::Policy::none())
+            .no_proxy()
+            .build()
+            .map_err(|error| error.to_string())?;
+        let request = authorize_catalog(
+            client.get(catalog_endpoint(&base_url, "/models")),
+            descriptor,
+            &key,
+        );
+        if let Ok(response) = request.send().await {
+            if response.status().is_success() {
+                if let Ok(body) = response.json::<Value>().await {
+                    let dynamic = body
+                        .get("data")
+                        .or_else(|| body.get("models"))
+                        .and_then(Value::as_array)
+                        .cloned()
+                        .unwrap_or_default();
+                    models.extend(
+                        dynamic
+                            .iter()
+                            .filter_map(|row| catalog_model_from_value(provider_id, row)),
+                    );
                 }
             }
         }
@@ -686,15 +830,15 @@ pub async fn discover_models(
     let descriptor = provider(provider_id)
         .ok_or_else(|| format!("provider `{provider_id}` is not in the Wisent registry"))?;
     let key = credential_key(secret)?;
+    let base_url = provider_base_url(descriptor)?;
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(20))
+        .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
         .build()
         .map_err(|error| error.to_string())?;
     let request = authorize_provider(
-        client.get(endpoint(
-            &provider_base_url(descriptor),
-            descriptor.models_path,
-        )),
+        client.get(endpoint(&base_url, descriptor.models_path)),
         descriptor,
         &key,
         secret,
@@ -1049,6 +1193,7 @@ fn model_response_from_openai(route_id: &str, body: Value, elapsed_ms: f64) -> M
         latency_ms: elapsed_ms,
         cost: 0.0,
         success: true,
+        attempts: u32::from(true),
         error: None,
         tool_calls,
     }
@@ -1107,6 +1252,7 @@ fn model_response_from_anthropic(route_id: &str, body: Value, elapsed_ms: f64) -
         latency_ms: elapsed_ms,
         cost: 0.0,
         success: true,
+        attempts: u32::from(true),
         error: None,
         tool_calls: (!tool_calls.is_empty()).then_some(tool_calls),
     }
@@ -1205,7 +1351,7 @@ fn model_response_from_responses_stream(
         }
     }
     if let Some(message) = failure {
-        return ModelResponse::failure(route_id, message);
+        return attempted_failure(route_id, format!("provider_failure: {message}"));
     }
     let mut tool_calls = Vec::new();
     if let Some(output) = completed.get("output").and_then(Value::as_array) {
@@ -1275,6 +1421,7 @@ fn model_response_from_responses_stream(
         latency_ms: elapsed_ms,
         cost: 0.0,
         success: true,
+        attempts: u32::from(true),
         error: None,
         tool_calls: (!tool_calls.is_empty()).then_some(tool_calls),
     }
@@ -1402,6 +1549,7 @@ fn model_response_from_google(route_id: &str, body: Value, elapsed_ms: f64) -> M
         latency_ms: elapsed_ms,
         cost: 0.0,
         success: true,
+        attempts: u32::from(true),
         error: None,
         tool_calls: (!tool_calls.is_empty()).then_some(tool_calls),
     }
@@ -1447,14 +1595,14 @@ async fn dispatch_catalog(request: &ModelRequest, secret: &str) -> ModelResponse
         Ok(key) => key,
         Err(error) => return ModelResponse::failure(&request.model, error),
     };
-    let Some(base_url) = catalog_provider_base_url(descriptor, secret) else {
-        return ModelResponse::failure(
-            &request.model,
-            format!("provider `{provider_id}` has no API endpoint"),
-        );
+    let base_url = match catalog_provider_base_url(descriptor) {
+        Ok(base_url) => base_url,
+        Err(error) => return ModelResponse::failure(&request.model, error),
     };
     let client = match Client::builder()
         .timeout(std::time::Duration::from_secs(255))
+        .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
         .build()
     {
         Ok(client) => client,
@@ -1468,10 +1616,7 @@ async fn dispatch_catalog(request: &ModelRequest, secret: &str) -> ModelResponse
             body.insert("max_tokens".into(), json!(request.max_tokens));
             body.insert("temperature".into(), json!(request.temperature));
             if let Some(tools) = &request.tools {
-                body.insert(
-                    "tools".into(),
-                    normalized_tools_value(tools),
-                );
+                body.insert("tools".into(), normalized_tools_value(tools));
             }
             (
                 catalog_endpoint(&base_url, "/chat/completions"),
@@ -1522,12 +1667,11 @@ async fn dispatch_catalog(request: &ModelRequest, secret: &str) -> ModelResponse
         .await
     {
         Ok(response) => response,
-        Err(error) => return ModelResponse::failure(&request.model, error.to_string()),
+        Err(error) => return transport_failure(&request.model, &error),
     };
-    let status = response.status();
-    let text = match response.text().await {
-        Ok(text) => text,
-        Err(error) => return ModelResponse::failure(&request.model, error.to_string()),
+    let (status, text) = match bounded_response_text(response).await {
+        Ok(result) => result,
+        Err(message) => return attempted_failure(&request.model, message),
     };
     if !status.is_success() {
         return provider_error(&request.model, status, &text);
@@ -1535,7 +1679,7 @@ async fn dispatch_catalog(request: &ModelRequest, secret: &str) -> ModelResponse
     let body = match serde_json::from_str::<Value>(&text) {
         Ok(body) => body,
         Err(error) => {
-            return ModelResponse::failure(
+            return attempted_failure(
                 &request.model,
                 format!("invalid provider response: {error}"),
             )
@@ -1554,8 +1698,58 @@ async fn dispatch_catalog(request: &ModelRequest, secret: &str) -> ModelResponse
     }
 }
 
+fn max_provider_response_bytes() -> usize {
+    "16777216"
+        .parse()
+        .expect("valid provider response byte limit")
+}
+
+fn max_provider_error_chars() -> usize {
+    "2048"
+        .parse()
+        .expect("valid provider error character limit")
+}
+
+async fn bounded_response_text(
+    mut response: reqwest::Response,
+) -> Result<(reqwest::StatusCode, String), String> {
+    let status = response.status();
+    let mut body = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|_| "dependency_unavailable: provider response read failed".to_string())?
+    {
+        if body.len().saturating_add(chunk.len()) > max_provider_response_bytes() {
+            return Err("provider_failure: provider response exceeded byte limit".to_string());
+        }
+        body.extend_from_slice(&chunk);
+    }
+    let text = String::from_utf8(body)
+        .map_err(|_| "provider_failure: provider response is not UTF-8".to_string())?;
+    Ok((status, text))
+}
+
+fn transport_error_message(error: &reqwest::Error) -> String {
+    if error.is_timeout() {
+        "dependency_timeout: provider request timed out".to_string()
+    } else {
+        "dependency_unavailable: provider request failed".to_string()
+    }
+}
+
+fn transport_failure(route_id: &str, error: &reqwest::Error) -> ModelResponse {
+    attempted_failure(route_id, transport_error_message(error))
+}
+
+fn attempted_failure(route_id: &str, message: String) -> ModelResponse {
+    let mut failure = ModelResponse::failure(route_id, message);
+    failure.attempts = u32::from(true);
+    failure
+}
+
 fn provider_error(route_id: &str, status: reqwest::StatusCode, body: &str) -> ModelResponse {
-    let message = serde_json::from_str::<Value>(body)
+    let detail = serde_json::from_str::<Value>(body)
         .ok()
         .and_then(|value| {
             value
@@ -1565,7 +1759,23 @@ fn provider_error(route_id: &str, status: reqwest::StatusCode, body: &str) -> Mo
                 .map(str::to_string)
         })
         .unwrap_or_else(|| format!("provider returned HTTP {}", status.as_u16()));
-    ModelResponse::failure(route_id, message)
+    let detail = detail
+        .chars()
+        .take(max_provider_error_chars())
+        .collect::<String>();
+    let kind = if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        "provider_rate_limited"
+    } else if matches!(
+        status,
+        reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN
+    ) {
+        "provider_authentication"
+    } else if status.is_server_error() {
+        "dependency_unavailable"
+    } else {
+        "provider_failure"
+    };
+    attempted_failure(route_id, format!("{kind}: {detail}"))
 }
 
 pub async fn dispatch(request: &ModelRequest, secret: &str) -> ModelResponse {
@@ -1576,8 +1786,14 @@ pub async fn dispatch(request: &ModelRequest, secret: &str) -> ModelResponse {
         Ok(key) => key,
         Err(error) => return ModelResponse::failure(&request.model, error),
     };
+    let base_url = match provider_base_url_for(descriptor, &model_id) {
+        Ok(base_url) => base_url,
+        Err(error) => return ModelResponse::failure(&request.model, error),
+    };
     let client = match Client::builder()
         .timeout(std::time::Duration::from_secs(255))
+        .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
         .build()
     {
         Ok(client) => client,
@@ -1586,7 +1802,7 @@ pub async fn dispatch(request: &ModelRequest, secret: &str) -> ModelResponse {
     let payload = match descriptor.wire {
         WireProtocol::OpenAiChat => {
             let mut body = Map::new();
-            body.insert("model".into(), json!(model_id));
+            body.insert("model".into(), json!(model_id.as_ref()));
             body.insert("messages".into(), Value::Array(openai_messages(request)));
             body.insert("max_tokens".into(), json!(request.max_tokens));
             // kimi-for-coding pins temperature to 1 and rejects any other value.
@@ -1594,10 +1810,7 @@ pub async fn dispatch(request: &ModelRequest, secret: &str) -> ModelResponse {
                 body.insert("temperature".into(), json!(request.temperature));
             }
             if let Some(tools) = &request.tools {
-                body.insert(
-                    "tools".into(),
-                    normalized_tools_value(tools),
-                );
+                body.insert("tools".into(), normalized_tools_value(tools));
             }
             Value::Object(body)
         }
@@ -1616,14 +1829,11 @@ pub async fn dispatch(request: &ModelRequest, secret: &str) -> ModelResponse {
             }
             body
         }
-        WireProtocol::OpenAiResponses => responses_payload(request, model_id),
+        WireProtocol::OpenAiResponses => responses_payload(request, model_id.as_ref()),
     };
     let started = Instant::now();
     let response = match authorize_provider(
-        client.post(endpoint(
-            &provider_base_url(descriptor),
-            descriptor.chat_path,
-        )),
+        client.post(endpoint(&base_url, descriptor.chat_path)),
         descriptor,
         &key,
         secret,
@@ -1633,12 +1843,11 @@ pub async fn dispatch(request: &ModelRequest, secret: &str) -> ModelResponse {
     .await
     {
         Ok(response) => response,
-        Err(error) => return ModelResponse::failure(&request.model, error.to_string()),
+        Err(error) => return transport_failure(&request.model, &error),
     };
-    let status = response.status();
-    let text = match response.text().await {
-        Ok(text) => text,
-        Err(error) => return ModelResponse::failure(&request.model, error.to_string()),
+    let (status, text) = match bounded_response_text(response).await {
+        Ok(result) => result,
+        Err(message) => return attempted_failure(&request.model, message),
     };
     if !status.is_success() {
         return provider_error(&request.model, status, &text);
@@ -1650,7 +1859,7 @@ pub async fn dispatch(request: &ModelRequest, secret: &str) -> ModelResponse {
     let body = match serde_json::from_str::<Value>(&text) {
         Ok(body) => body,
         Err(error) => {
-            return ModelResponse::failure(
+            return attempted_failure(
                 &request.model,
                 format!("invalid provider response: {error}"),
             )
@@ -1663,4 +1872,57 @@ pub async fn dispatch(request: &ModelRequest, secret: &str) -> ModelResponse {
         }
         WireProtocol::OpenAiResponses => unreachable!(),
     }
+}
+
+pub async fn dispatch_openai_typed(
+    route_id: &str,
+    path: &str,
+    mut payload: Map<String, Value>,
+    secret: &str,
+) -> Result<Value, String> {
+    let supported = match path {
+        "/v1/embeddings" => supports_embedding_route(route_id),
+        "/v1/moderations" => supports_moderation_route(route_id),
+        _ => false,
+    };
+    if !supported {
+        return Err("model route does not support the requested capability".to_string());
+    }
+    let (descriptor, model_id) =
+        route(route_id).ok_or_else(|| "invalid provider/model route".to_string())?;
+    let key = credential_key(secret)?;
+    let base_url = provider_base_url(descriptor)?;
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(
+            "255".parse().expect("static number"),
+        ))
+        .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
+        .build()
+        .map_err(|_| "dependency_unavailable: provider client could not be built".to_string())?;
+    payload.insert("model".to_string(), Value::String(model_id.to_string()));
+    let response = authorize_provider(
+        client.post(endpoint(&base_url, path)),
+        descriptor,
+        &key,
+        secret,
+    )
+    .json(&Value::Object(payload))
+    .send()
+    .await
+    .map_err(|error| transport_error_message(&error))?;
+    let (status, text) = bounded_response_text(response).await?;
+    if !status.is_success() {
+        let failure = provider_error(route_id, status, &text);
+        return Err(failure
+            .error
+            .unwrap_or_else(|| format!("provider returned HTTP {}", status.as_u16())));
+    }
+    let mut body: Value = serde_json::from_str(&text)
+        .map_err(|_| "provider_failure: provider returned malformed JSON".to_string())?;
+    let object = body
+        .as_object_mut()
+        .ok_or_else(|| "provider_failure: provider returned a non-object response".to_string())?;
+    object.insert("model".to_string(), Value::String(route_id.to_string()));
+    Ok(body)
 }
