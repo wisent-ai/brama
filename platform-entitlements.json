@@ -1,0 +1,11 @@
+{
+  "schema": "wisent.product-entitlements.current",
+  "product": "brama",
+  "organization_id": "WISENT_ORGANIZATION_ID",
+  "principal_id": "signed Brama client identity",
+  "community": ["brama.self-hosted"],
+  "managed": ["brama.managed", "brama.organization-policy", "brama.dedicated"],
+  "managed_failure": "fail-closed before provider selection",
+  "community_failure": "self-hosted gateway remains available",
+  "secret_boundary": "provider credentials remain in Skarbiec"
+}
