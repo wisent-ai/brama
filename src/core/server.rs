@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::LazyLock;
@@ -1606,10 +1606,10 @@ pub async fn start_server(port: u16) -> Result<(), std::io::Error> {
         .merge(protected)
         .layer(middleware::from_fn(require_secure_transport));
 
-    let addr = format!("0.0.0.0:{port}");
+    let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
     info!("Starting brama server on {addr}");
 
-    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),

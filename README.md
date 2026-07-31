@@ -225,8 +225,10 @@ The complete state, error, retry, authorization, and resource contract is in
 - **Credentials:** callers use dedicated bearer items. Request-sign identities
   and provider capabilities remain separate. Secrets are redeemed at final use
   and are not written to JSON configuration, logs, or Brama state.
-- **Network:** the service binds `0.0.0.0`; only loopback or an explicitly trusted
-  HTTPS terminator is accepted. Provider endpoints require approved HTTPS hosts,
+- **Network:** the service binds loopback only. The registered Linux host's
+  Caddy instance terminates HTTPS from `BRAMA_API_HOST` and proxies to the
+  `BRAMA_PORT` loopback listener; the GitHub deployment reloads that config
+  after Stado deploys Brama. Provider endpoints require approved HTTPS hosts,
   disable redirects, and bypass ambient proxies.
 - **Failure:** stable HTTP error codes distinguish invalid input, authentication,
   authorization, quota, timeout, dependency unavailability, and provider

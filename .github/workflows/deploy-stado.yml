@@ -48,6 +48,8 @@ jobs:
       SKARBIEC_ROUTER_RELEASE_URI: ${{ vars.SKARBIEC_ROUTER_RELEASE_URI }}
       SKARBIEC_ROUTER_RELEASE_SHA256: ${{ vars.SKARBIEC_ROUTER_RELEASE_SHA256 }}
       STADO_RELEASE_VERSION: ${{ github.sha }}
+      BRAMA_API_HOST: ${{ vars.BRAMA_API_HOST }}
+      BRAMA_PORT: ${{ vars.BRAMA_PORT }}
     steps:
       - name: Check out the exact source revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -153,3 +155,17 @@ jobs:
           echo "::add-mask::$STADO_API_TOKEN"
           export STADO_API_TOKEN
           scripts/deploy-stado-service.sh
+
+      - name: Reload host-local HTTPS ingress
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${BRAMA_API_HOST:?configure BRAMA_API_HOST}"
+          : "${BRAMA_PORT:?configure BRAMA_PORT}"
+          if ! command -v caddy >/dev/null; then
+            echo "::error::Caddy is not installed on the registered Brama host."
+            false
+          fi
+          BRAMA_UPSTREAM="localhost:${BRAMA_PORT}"
+          export BRAMA_UPSTREAM
+          caddy reload --config "$GITHUB_WORKSPACE/deploy/Caddyfile" --adapter caddyfile
