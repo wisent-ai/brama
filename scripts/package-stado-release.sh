@@ -87,13 +87,15 @@ const provenance = {
 require("node:fs").writeFileSync(outputPath, JSON.stringify(provenance) + "\n", { mode: Number.parseInt("600", "8") });
 NODE
 
+service_uid=${BRAMA_SERVICE_UID:-$(id -u)}
+service_gid=${BRAMA_SERVICE_GID:-$(id -g)}
 node "$repo_root/scripts/generate-skarbiec-config.mjs" \
   "$staging_dir/bin/brama" \
   "$staging_dir/etc/brama-skarbiec" \
   "$repo_root/scripts/skarbiec-subscriptions.json" \
   "$target_root/bin/brama" \
-  "$(id -u)" \
-  "$(id -g)"
+  "$service_uid" \
+  "$service_gid"
 
 mkdir -p "$(dirname -- "$STADO_RELEASE_ARCHIVE")"
 tar -C "$staging_dir" -czf "$STADO_RELEASE_ARCHIVE" .
