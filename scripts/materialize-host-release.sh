@@ -54,6 +54,7 @@ BRAMA_SECRET_SOURCE=local-vault
 BRAMA_GNUPG_HOME=$HOME/.stado/brama-gnupg
 SKARBIEC_VAULT_FILE=$vault_root/skarbiec.vault.json
 BRAMA_CONTROL_CONFIG=$HOME/.stado/brama-control-config.json
+BRAMA_INFERENCE_ROUTES_FILE=$HOME/.stado/brama-inference-routes.json
 BRAMA_RUNTIME_DIR=$HOME/.stado/run/brama
 EOF
 chmod u=rw,go= "$config_dir/service.env"
