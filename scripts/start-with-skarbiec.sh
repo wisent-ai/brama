@@ -114,6 +114,13 @@ export SKARBIEC_WORKLOAD_ID=brama-service
 export SKARBIEC_WORKLOAD_SIGNING_KEY_FILE="$config_dir/brama-proof.key"
 export SKARBIEC_DONATION_RECIPIENT=brama-service
 export ENTITLEMENTS_ROUTER_BIN
+if [ -e "$SKARBIEC_CAP_SOCKET" ] || [ -L "$SKARBIEC_CAP_SOCKET" ]; then
+  [ -S "$SKARBIEC_CAP_SOCKET" ] && [ ! -L "$SKARBIEC_CAP_SOCKET" ] || {
+    printf '%s\n' "unsafe stale capability socket: $SKARBIEC_CAP_SOCKET" >/dev/stderr
+    false
+  }
+  rm -f -- "$SKARBIEC_CAP_SOCKET"
+fi
 
 # The central Stado service document is the sole source of Brama's nonsecret
 # Wisent-backend ingress and provider policy. Service env files may select the
