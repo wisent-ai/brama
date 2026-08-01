@@ -38,14 +38,33 @@ mkdir -p "$runtime_dir" "$socket_dir" "$gnupg_dir" "$worm_dir"
 chmod u=rwx,go= "$runtime_dir" "$gnupg_dir" "$worm_dir"
 chmod u=rwx,g=rx,o= "$socket_dir"
 
-private_key_file="$runtime_dir/vault-private-key.asc"; trap 'rm -f "$private_key_file"' EXIT HUP INT TERM
-[ -x "$STADO_BIN" ] || { printf '%s\n' "STADO_BIN is not executable: $STADO_BIN" >/dev/stderr; false; }
-STADO_CONFIG=${BRAMA_SKARBIEC_STADO_CONFIG:-${HOME:-/nonexistent}/.config/stado/brama-service.json} "$STADO_BIN" secrets get brama-service --field gpg_private_key >"$private_key_file"
-chmod u=rw,go= "$private_key_file"
-# The plaintext staging file exists only until the GnuPG import below.
-
-export GNUPGHOME="$gnupg_dir"
-gpg --batch --quiet --import "$private_key_file"; rm -f "$private_key_file"; trap - EXIT HUP INT TERM; unset private_key_file BRAMA_SKARBIEC_STADO_CONFIG STADO_CONFIG
+secret_source=${BRAMA_SECRET_SOURCE:-stado}
+case "$secret_source" in
+  local-vault)
+    : "${BRAMA_GNUPG_HOME:?BRAMA_GNUPG_HOME is required for local-vault secrets}"
+    [ -d "$BRAMA_GNUPG_HOME" ] || {
+      printf '%s\n' "BRAMA_GNUPG_HOME is not a directory" >/dev/stderr
+      false
+    }
+    export GNUPGHOME="$BRAMA_GNUPG_HOME"
+    ;;
+  stado)
+    private_key_file="$runtime_dir/vault-private-key.asc"
+    trap 'rm -f "$private_key_file"' EXIT HUP INT TERM
+    [ -x "$STADO_BIN" ] || { printf '%s\n' "STADO_BIN is not executable: $STADO_BIN" >/dev/stderr; false; }
+    STADO_CONFIG=${BRAMA_SKARBIEC_STADO_CONFIG:-${HOME:-/nonexistent}/.config/stado/brama-service.json} "$STADO_BIN" secrets get brama-service --field gpg_private_key >"$private_key_file"
+    chmod u=rw,go= "$private_key_file"
+    export GNUPGHOME="$gnupg_dir"
+    gpg --batch --quiet --import "$private_key_file"
+    rm -f "$private_key_file"
+    trap - EXIT HUP INT TERM
+    unset private_key_file BRAMA_SKARBIEC_STADO_CONFIG STADO_CONFIG
+    ;;
+  *)
+    printf '%s\n' "BRAMA_SECRET_SOURCE must be stado or local-vault" >/dev/stderr
+    false
+    ;;
+esac
 # Public recipient keys (owner + recovery) keep donations recoverable without
 # exposing any provider credential to Stado or the service configuration.
 gpg --batch --quiet --import "$config_dir/recipient-public-keys.asc"
@@ -174,19 +193,23 @@ rm -rf "$policy_dir"
 trap - EXIT HUP INT TERM
 unset policy_dir control_config BRAMA_CONTROL_CONFIG
 
-# Read every accepted bearer directly from that client's dedicated Skarbiec
-# item using the verifier-only consumer. There is no shared ingress token,
-# compatibility item, or default identity.
-: "${BRAMA_MODEL_ROUTER_VERIFIER_STADO_CONFIG:?set BRAMA_MODEL_ROUTER_VERIFIER_STADO_CONFIG}"
+# Read every accepted bearer from its dedicated Skarbiec item. Hosted
+# deployments use the verifier-only Stado consumer; a host-local deployment
+# uses a GPG recipient that was granted only these exact items.
+model_reader_config=${BRAMA_MODEL_ROUTER_VERIFIER_STADO_CONFIG:-}
+if [ "$secret_source" = stado ] && [ -z "$model_reader_config" ]; then
+  printf '%s\n' "BRAMA_MODEL_ROUTER_VERIFIER_STADO_CONFIG is required" >/dev/stderr
+  false
+fi
 : "${BRAMA_ALLOWED_MODELS:?set exact closed Brama model allowlist}"
 BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES="$(
-  STADO_CONFIG="$BRAMA_MODEL_ROUTER_VERIFIER_STADO_CONFIG" python3 - "$STADO_BIN" <<'PY'
+  python3 - "$STADO_BIN" "$ENTITLEMENTS_ROUTER_BIN" "$secret_source" "$model_reader_config" <<'PY'
 import json
 import os
 import subprocess
 import sys
 
-stado = sys.argv[1]
+stado, router, source, stado_config = sys.argv[1:]
 all_models = os.environ["BRAMA_ALLOWED_MODELS"].split(",")
 backend_models = [model for model in all_models if model.startswith("wisent-backend/")]
 weles_models = ["weles/agent/primary"]
@@ -210,22 +233,34 @@ sources = [
     ("brama-operations", "brama-operations-model-router", "wisent-app", None),
 ]
 
-def token(item):
-    result = subprocess.run(
-        [stado, "secrets", "get", item, "--field", "token"],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=os.environ,
-    )
-    value = result.stdout.rstrip("\r\n")
-    if not value or value.strip() != value or any(character.isspace() for character in value):
-        raise RuntimeError(f"{item}/token is not a single non-empty bearer")
+def field(item, name):
+    if source == "local-vault":
+        result = subprocess.run(
+            [router, "get", item],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=os.environ,
+        )
+        value = json.loads(result.stdout).get(name)
+    else:
+        environment = os.environ.copy()
+        environment["STADO_CONFIG"] = stado_config
+        result = subprocess.run(
+            [stado, "secrets", "get", item, "--field", name],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        value = result.stdout.rstrip("\r\n")
+    if not isinstance(value, str) or not value or value.strip() != value:
+        raise RuntimeError(f"{item}/{name} is not a single non-empty value")
     return value
 
 identities = []
 for client_id, item, agent_id, allowed_models in sources:
-    identity = {"client_id": client_id, "token": token(item)}
+    identity = {"client_id": client_id, "token": field(item, "token")}
     if agent_id is not None:
         identity["agent_id"] = agent_id
     if allowed_models is not None:
@@ -239,20 +274,23 @@ PY
   false
 }
 export BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES
-unset BRAMA_MODEL_ROUTER_VERIFIER_STADO_CONFIG BRAMA_ALLOWED_MODELS
+unset model_reader_config BRAMA_MODEL_ROUTER_VERIFIER_STADO_CONFIG BRAMA_ALLOWED_MODELS
 
 # Content Platform, Oko, and Weles identities are read from their exact
-# centrally managed items. They are never copied into the provider vault or
-# represented by generated `agent:*` items.
-: "${BRAMA_REQUEST_SIGN_STADO_CONFIG:?set BRAMA_REQUEST_SIGN_STADO_CONFIG}"
+# centrally managed items.
+request_reader_config=${BRAMA_REQUEST_SIGN_STADO_CONFIG:-}
+if [ "$secret_source" = stado ] && [ -z "$request_reader_config" ]; then
+  printf '%s\n' "BRAMA_REQUEST_SIGN_STADO_CONFIG is required" >/dev/stderr
+  false
+fi
 BRAMA_REQUEST_SIGN_IDENTITIES="$(
-  STADO_CONFIG="$BRAMA_REQUEST_SIGN_STADO_CONFIG" python3 - "$STADO_BIN" <<'PY'
+  python3 - "$STADO_BIN" "$ENTITLEMENTS_ROUTER_BIN" "$secret_source" "$request_reader_config" <<'PY'
 import json
 import os
 import subprocess
 import sys
 
-stado = sys.argv[1]
+stado, router, source, stado_config = sys.argv[1:]
 sources = {
     "content-platform": "content-platform-agent-auth",
     "oko": "oko-model-agent-auth",
@@ -260,15 +298,27 @@ sources = {
 }
 
 def field(item, name):
-    result = subprocess.run(
-        [stado, "secrets", "get", item, "--field", name],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=os.environ,
-    )
-    value = result.stdout.rstrip("\r\n")
-    if not value:
+    if source == "local-vault":
+        result = subprocess.run(
+            [router, "get", item],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=os.environ,
+        )
+        value = json.loads(result.stdout).get(name)
+    else:
+        environment = os.environ.copy()
+        environment["STADO_CONFIG"] = stado_config
+        result = subprocess.run(
+            [stado, "secrets", "get", item, "--field", name],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        value = result.stdout.rstrip("\r\n")
+    if not isinstance(value, str) or not value:
         raise RuntimeError(f"{item}/{name} is empty")
     return value
 
@@ -286,23 +336,51 @@ PY
   false
 }
 export BRAMA_REQUEST_SIGN_IDENTITIES
-unset BRAMA_REQUEST_SIGN_STADO_CONFIG
+unset request_reader_config BRAMA_REQUEST_SIGN_STADO_CONFIG
 
 # Weles reauth uses one dedicated Skarbiec item and one accepted runtime name.
 # It is not the Weles console token and has no general Weles API scope.
 : "${WELES_URL:=https://weles.wisent.ai}"
-: "${BRAMA_WELES_REAUTH_STADO_CONFIG:?set BRAMA_WELES_REAUTH_STADO_CONFIG}"
-BRAMA_WELES_REAUTH_TOKEN="$(
-  STADO_CONFIG="$BRAMA_WELES_REAUTH_STADO_CONFIG" \
-    "$STADO_BIN" secrets get brama-weles-reauth --field token
-)"
-[ -n "$BRAMA_WELES_REAUTH_TOKEN" ] &&
-  [ "$BRAMA_WELES_REAUTH_TOKEN" = "$(printf '%s' "$BRAMA_WELES_REAUTH_TOKEN" | tr -d '[:space:]')" ] || {
-  printf '%s\n' "brama-weles-reauth/token is empty or malformed" >/dev/stderr
+weles_reader_config=${BRAMA_WELES_REAUTH_STADO_CONFIG:-}
+if [ "$secret_source" = stado ] && [ -z "$weles_reader_config" ]; then
+  printf '%s\n' "BRAMA_WELES_REAUTH_STADO_CONFIG is required" >/dev/stderr
   false
-}
+fi
+BRAMA_WELES_REAUTH_TOKEN="$(
+  python3 - "$STADO_BIN" "$ENTITLEMENTS_ROUTER_BIN" "$secret_source" "$weles_reader_config" <<'PY'
+import json
+import os
+import subprocess
+import sys
+
+stado, router, source, stado_config = sys.argv[1:]
+if source == "local-vault":
+    result = subprocess.run(
+        [router, "get", "brama-weles-reauth"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=os.environ,
+    )
+    value = json.loads(result.stdout).get("token")
+else:
+    environment = os.environ.copy()
+    environment["STADO_CONFIG"] = stado_config
+    result = subprocess.run(
+        [stado, "secrets", "get", "brama-weles-reauth", "--field", "token"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    value = result.stdout.rstrip("\r\n")
+if not isinstance(value, str) or not value or value.strip() != value:
+    raise RuntimeError("brama-weles-reauth/token is empty or malformed")
+sys.stdout.write(value)
+PY
+)"
 export WELES_URL BRAMA_WELES_REAUTH_TOKEN
-unset BRAMA_WELES_REAUTH_STADO_CONFIG
+unset weles_reader_config BRAMA_WELES_REAUTH_STADO_CONFIG secret_source
 
 subscriptions_file="$runtime_dir/subscriptions.json"
 capabilities_file="$runtime_dir/provider-capabilities.json"
