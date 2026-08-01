@@ -2,7 +2,12 @@
 set -eu
 umask u=rwx,go=
 
-release_version=${BRAMA_RELEASE_VERSION:-d636085c144075ea8a39c4ea77f8ec19b74ff7b9}
+release_marker=${BRAMA_RELEASE_MARKER:-"$HOME/.stado/brama-release-version"}
+[ -f "$release_marker" ] || { printf '%s\n' "missing Brama release marker: $release_marker" >/dev/stderr; false; }
+IFS= read -r release_version <"$release_marker"
+case "$release_version" in
+  .|..|*[![:alnum:]._-]*) printf '%s\n' 'invalid Brama release marker' >/dev/stderr; false ;;
+esac
 platform=${BRAMA_RELEASE_PLATFORM:-linux-x86_64}
 release_archive="$HOME/.stado/releases/brama/$release_version/$platform/brama.tar.gz"
 vault_archive="$HOME/.stado/releases/brama-vault/$release_version/$platform/brama-vault.tar.gz"
