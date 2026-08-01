@@ -440,10 +440,12 @@ def issue(purpose, resource):
             "--ttl", "2592000",
             "--max-uses", "1000000",
         ],
-        check=True,
         capture_output=True,
         text=True,
     )
+    if issued.returncode:
+        detail = issued.stderr.strip() or issued.stdout.strip() or "no detail"
+        raise RuntimeError(f"capability issue failed for {resource}: {detail}")
     return json.loads(issued.stdout)["capability_id"]
 
 capabilities = {}
