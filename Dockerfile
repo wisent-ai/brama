@@ -14,6 +14,7 @@ RUN printf '%s\n' \
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
+COPY scripts/omp-model-metadata.json ./scripts/omp-model-metadata.json
 ARG BRAMA_SOURCE_REVISION
 ARG BRAMA_BUILD_PLATFORM
 ARG BRAMA_BUILD_TIMESTAMP
