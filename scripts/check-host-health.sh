@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-service_env="$HOME/.stado/services/brama/config/service.env"
+service_env="$HOME/.config/brama/service.env"
 [ -f "$service_env" ] || {
   printf '%s\n' "missing Brama service environment: $service_env" >/dev/stderr
   false
