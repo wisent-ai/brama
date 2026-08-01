@@ -33,7 +33,7 @@ PY
   )
 fi
 payload='{"model":"wisent-backend/chat/primary","messages":[{"role":"user","content":"Reply exactly: ready"}],"stream":false}'
-curl --fail --silent --show-error \
+curl --fail-with-body --silent --show-error \
   --header "Authorization: Bearer $token" \
   --header 'Content-Type: application/json' \
   --data "$payload" \
