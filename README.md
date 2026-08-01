@@ -1,5 +1,14 @@
 # Brama
 
+<!-- wisent-readme-signals:start -->
+[![CI](https://github.com/wisent-ai/brama/actions/workflows/deploy-stado.yml/badge.svg?branch=main)](https://github.com/wisent-ai/brama/actions/workflows/deploy-stado.yml)
+[![Release](https://img.shields.io/github/v/release/wisent-ai/brama?display_name=tag&sort=semver)](https://github.com/wisent-ai/brama/releases)
+[![Downloads](https://img.shields.io/github/downloads/wisent-ai/brama/total)](https://github.com/wisent-ai/brama/releases)
+[![License](https://img.shields.io/github/license/wisent-ai/brama)](https://github.com/wisent-ai/brama)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Wisent-5865F2?logo=discord&logoColor=white)](https://discord.gg/qRjpkthq54)
+<!-- wisent-readme-signals:end -->
+
+
 Brama gives Wisent services one authenticated, provider-neutral HTTP gateway for
 LLM inference while keeping client identity, subscription ownership, provider
 credentials, and routing policy under Wisent control.
