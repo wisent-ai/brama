@@ -488,6 +488,17 @@ for item in available_items:
         case _:
             continue
 
+for purpose, resource in sorted(allowed):
+    if purpose != "brama.provider.authenticate":
+        continue
+    match resource.split(":"):
+        case ["provider", provider_name]:
+            provider = normalize(provider_name)
+            if provider not in capabilities:
+                capabilities[provider] = issue(purpose, resource)
+        case _:
+            continue
+
 request_capabilities = {
     agent_id: issue("brama.request.sign", f"agent:{agent_id}")
     for agent_id in request_sign_agents
