@@ -32,7 +32,7 @@ print(document["services"]["brama"]["port"])
 PY
   )
 fi
-payload='{"model":"wisent-backend/chat/primary","messages":[{"role":"user","content":"Reply exactly: ready"}],"stream":false}'
+payload='{"model":"wisent-backend/chat/primary","messages":[{"role":"user","content":"Reply exactly: ready"}]}'
 curl --fail-with-body --silent --show-error \
   --header "Authorization: Bearer $token" \
   --header 'Content-Type: application/json' \
