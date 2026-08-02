@@ -8,7 +8,7 @@ a machine-readable marker that the version-check workflow asserts both ways.
 Tiers, best first:
 
   stado:<object uri>   an object really present under stado://releases/brama/. This is
-                       what `.github/workflows/deploy-stado.yml` publishes, and the only
+                       what `.github/workflows/deploy-brama.yml` publishes, and the only
                        artifact any consumer of this product can obtain.
   git-archive:<tag>    a tag whose own Cargo.toml declares the version the tag claims.
                        A tag that names a version its tree does not declare is refused,
@@ -88,7 +88,7 @@ def published_objects() -> list:
     if stado is None:
         raise LookupError(
             "no `stado` on PATH, so publication cannot be determined; install the "
-            "pinned Stado CLI as .github/workflows/deploy-stado.yml does"
+            "pinned Stado CLI as .github/workflows/deploy-brama.yml does"
         )
     listed = subprocess.run(
         [stado, "storage", "objects", NAMESPACE, f"{PRODUCT}/", "--json"],

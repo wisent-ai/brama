@@ -2,7 +2,7 @@ name: version-check
 
 # Refuse a change whose declared version disagrees with what it did to Brama's public
 # contract. That contract is the command list `bin/brama` advertises, because the thing
-# `.github/workflows/deploy-stado.yml` publishes to stado://releases/brama/ is a runtime
+# `.github/workflows/deploy-brama.yml` publishes to stado://releases/brama/ is a runtime
 # bundle other machines invoke by command name -- and `brama mcp` reports the declared
 # version back over MCP `initialize`, so a wrong number is externally observable.
 #
@@ -14,7 +14,7 @@ name: version-check
 # the candidate is recomputed. A check that rebuilt both sides would always agree with
 # itself and would gate nothing.
 #
-# This deliberately does not gate deploy-stado.yml with `needs:`. A hard edge onto this
+# This deliberately does not gate deploy-brama.yml with `needs:`. A hard edge onto this
 # job would turn any Actions outage into a permanently blocked deploy, and that file has
 # a different owner. scripts/surface.py `--verify` is the check to add to the publish job
 # when its owner wants one: the built binary's own `--help` must agree with the scan.
@@ -210,7 +210,7 @@ jobs:
           # for release objects that demonstrably exist. Only `storage objects <namespace>
           # <prefix>` sees this channel.
           #
-          # The control is skarbiec, and that is not an arbitrary pick: deploy-stado.yml
+          # The control is skarbiec, and that is not an arbitrary pick: deploy-brama.yml
           # refuses to run without a pinned skarbiec-entitlements-router from
           # stado://releases/skarbiec/, so a channel that cannot show skarbiec is not the
           # channel brama publishes to, and its silence about brama means nothing.

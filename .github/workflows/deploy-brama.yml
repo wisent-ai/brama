@@ -1,4 +1,4 @@
-name: deploy-stado
+name: deploy-brama
 
 # Publishes an immutable Brama runtime bundle to Stado, stages it on the
 # registered service host, and asks Stado to install the long-lived service.
@@ -30,7 +30,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: deploy-stado-brama
+  group: deploy-brama
   cancel-in-progress: false
 
 jobs:

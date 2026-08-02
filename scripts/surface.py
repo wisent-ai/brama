@@ -2,7 +2,7 @@
 
 What a caller of this product depends on is not its Rust symbols -- the library crate is
 internal and nothing in the Stado release exposes it -- but **which commands the shipped
-`brama` binary offers**. The release published by `.github/workflows/deploy-stado.yml`
+`brama` binary offers**. The release published by `.github/workflows/deploy-brama.yml`
 is a runtime bundle whose entry points are `bin/brama` and the launcher that execs it,
 so the command list is exactly the part of this repository other machines invoke by
 name. Adding a command is a capability; removing or renaming one breaks whoever scripted
