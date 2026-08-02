@@ -2,9 +2,9 @@ name: version-check
 
 # Refuse a change whose declared version disagrees with what it did to Brama's public
 # contract. That contract is the command list `bin/brama` advertises, because the thing
-# `.github/workflows/deploy-brama.yml` publishes to stado://releases/brama/ is a runtime
-# bundle other machines invoke by command name -- and `brama mcp` reports the declared
-# version back over MCP `initialize`, so a wrong number is externally observable.
+# `.github/workflows/release.yml` publishes to GitHub Releases is a runtime bundle
+# other machines invoke by command name -- and `brama mcp` reports the declared version
+# back over MCP `initialize`, so a wrong number is externally observable.
 #
 # The rule itself lives in one place for the whole fleet and is NOT copied here:
 # https://github.com/lbartoszcze/AutoVersion. This workflow supplies only the two things
@@ -14,10 +14,9 @@ name: version-check
 # the candidate is recomputed. A check that rebuilt both sides would always agree with
 # itself and would gate nothing.
 #
-# This deliberately does not gate deploy-brama.yml with `needs:`. A hard edge onto this
-# job would turn any Actions outage into a permanently blocked deploy, and that file has
-# a different owner. scripts/surface.py `--verify` is the check to add to the publish job
-# when its owner wants one: the built binary's own `--help` must agree with the scan.
+# This deliberately does not gate `release.yml` with `needs:`. Tag publication builds the
+# candidate independently, while this workflow checks that the committed baseline still
+# names the best complete GitHub Release consumers can download.
 
 on:
   pull_request:
@@ -155,178 +154,34 @@ jobs:
           fi
 
   baseline:
-    # released-surface.json must describe something a consumer can really obtain, and it
-    # must not claim a release that does not exist. Both directions are asserted against
-    # the channel this product actually publishes to; "not on PyPI" would be vacuously
-    # true for a Rust binary and would prove nothing.
-    #
-    # Asking the channel needs the provisioned Stado CLI, which is why this runs on the
-    # same self-hosted class that publishes. Forks opening pull requests never reach it.
     if: github.event_name != 'pull_request'
-    runs-on: [self-hosted, linux, stado-service]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Make tags and their trees visible
-        # actions/checkout fetches one commit and no tags, so `git tag --list` would be
-        # empty on the runner however many tags the remote holds -- the tier assertion
-        # below would then report "head is still best" on a repository that had just been
-        # tagged, and pass while asleep. Unshallowing is needed as well as the tags: a
-        # shallow clone lacks the tag's tree, so scripts/baseline.py could not `git
-        # archive` it. `--unshallow` errors on an already complete clone, hence the
-        # fallback; either branch leaves the step green.
-        run: git fetch --force --tags --unshallow --quiet || git fetch --force --tags --quiet
-
-      - name: Assert the baseline agrees with the release channel
+      - name: Assert the baseline agrees with GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          STADO_BIN="${STADO_BIN:-stado}"
-
-          # The marker is the first whitespace-delimited token of "source"; the rest is
-          # prose for humans. scripts/baseline.py writes it, this reads it, and nothing
-          # here has to grep prose.
-          marker="$(jq -r '.source | split(" ") | first' released-surface.json)"
+          marker="$(jq -er '.source | split(" ") | first | select(length > 0)' released-surface.json)"
           case "$marker" in
-            stado:*)               claims_release=yes ;;
-            git-archive:*|head:*)  claims_release=no ;;
+            github-release:*|git-archive:*|head:*) ;;
             *)
-              echo "::error::unknown baseline marker: $marker." \
-                "Regenerate with: python3 scripts/baseline.py --write"
+              echo "::error::unknown baseline marker: $marker"
               false
               ;;
           esac
 
-          # Control first, subject second. The reverse assertion reads "brama is absent"
-          # out of an EMPTY listing, so a probe that answered nothing must never be read as
-          # an answer. A failed `stado` aborts here under `set -e` (verified: a bad
-          # namespace and an unreachable API both exit nonzero with empty stdout), but an
-          # empty stdout with a zero exit would sail straight through, because jq consumes
-          # empty input silently and reports success -- and there the wrong answer is the
-          # one that passes.
-          #
-          # `storage ls` and `storage stat` are the wrong tools here whatever they seem to
-          # say: they read the queue store, not the product namespace, and report absence
-          # for release objects that demonstrably exist. Only `storage objects <namespace>
-          # <prefix>` sees this channel.
-          #
-          # The control is skarbiec, and that is not an arbitrary pick: deploy-brama.yml
-          # refuses to run without a pinned skarbiec-entitlements-router from
-          # stado://releases/skarbiec/, so a channel that cannot show skarbiec is not the
-          # channel brama publishes to, and its silence about brama means nothing.
-          control="$("$STADO_BIN" storage objects releases skarbiec --json)"
-          if ! printf '%s' "$control" | jq -e '.objects | any' >/dev/null; then
-            echo "::error::the release channel cannot show skarbiec, which brama's own" \
-              "deploy requires, so the absence of brama here is unproven. Refusing rather" \
-              "than assuming nothing is published."
-            false
-          fi
-
-          # Two surfaces, and they must agree. `storage objects` enumerates through the API
-          # gateway; `storage stat` resolves one stado:// URI against whatever store this
-          # machine is configured to read -- measured on a developer host, `stat` answered
-          # "present" even with STADO_API_URL pointed at a dead port, while `objects` failed
-          # outright. So neither alone proves the runner is looking at the channel the
-          # deploy publishes to: an enumeration can be authoritative-but-remote and a stat
-          # can be local-but-stale. Requiring both to resolve one really published object
-          # catches a runner reading the wrong store, which an enumeration alone would
-          # report as a plain, believable absence. (Bare paths are a trap here: `stat` reads
-          # them as raw store keys and answers "absent" for objects that exist. Always the
-          # full stado:// URI, which is what the listing yields.)
-          control_object="$(printf '%s' "$control" | jq -r '.objects | first | .uri')"
-          control_state="$("$STADO_BIN" storage stat "$control_object" --json | jq -r .state)"
-          if [ "$control_state" != present ]; then
-            echo "::error::the channel lists $control_object but this store reports it" \
-              "'$control_state', so the runner is not reading the store the channel" \
-              "publishes to. Refusing rather than trusting its answer about brama."
-            false
-          fi
-
-          listing="$("$STADO_BIN" storage objects releases "brama/" --json)"
-          if ! printf '%s' "$listing" \
-            | jq -e 'has("objects") and (.objects | type == "array")' >/dev/null; then
-            echo "::error::the brama listing was not well-formed, so its emptiness proves" \
-              "nothing. Refusing rather than assuming nothing is published."
-            false
-          fi
-          serves="$(printf '%s' "$listing" | jq -r 'if (.objects | any) then "yes" else "no" end')"
-          echo "marker: $marker (claims a release: $claims_release)"
-          echo "stado://releases/brama/ serves objects: $serves"
-
-          if [ "$claims_release" = yes ]; then
-            if [ "$serves" = no ]; then
-              echo "::error::The baseline claims $marker but stado://releases/brama/ is" \
-                "empty, so every comparison is measured against something nobody can obtain."
-              false
-            fi
-            object="${marker#stado:}"
-            if ! printf '%s' "$listing" \
-              | jq -e --arg uri "$object" '.objects | map(.uri) | index($uri)' >/dev/null; then
-              echo "::error::The baseline names $object, which the release channel does not list."
-              false
-            fi
-            state="$("$STADO_BIN" storage stat "$object" --json | jq -r .state)"
-            if [ "$state" != present ]; then
-              echo "::error::The channel lists $object but this store reports it '$state'." \
-                "The baseline names an object nobody can actually fetch."
-              false
-            fi
-            echo "Baseline $object is listed and present in the release channel."
-          else
-            if [ "$serves" = yes ]; then
-              echo "::error::The baseline claims no release, but stado://releases/brama/" \
-                "now serves objects. Regenerate it: python3 scripts/baseline.py --write"
-              false
-            fi
-            echo "Nothing is published for brama yet, and the baseline does not claim otherwise."
-          fi
-
-          # Being honest about the tier is not the same as being on the best artifact. A
-          # release or tag can appear after the baseline was generated, and the baseline
-          # stays perfectly truthful while quietly measuring against a superseded thing.
-          #
-          # On every tier but head the marker names its artifact exactly -- an object uri
-          # or a tag -- and those do not move, so the whole marker is compared and a newer
-          # release of the same kind is caught too. head:<sha> moves with every commit, so
-          # there only the tier is compared; full equality would demand a regeneration per
-          # commit forever.
-          #
-          # This prints the regenerated document and throws it away: the committed baseline
-          # is never rewritten here and the regenerated surface never reaches the decision,
-          # because a check that recomputes both sides gates nothing. Bare, with no flag:
-          # this generator writes the file only for `--write` and prints to stdout
-          # otherwise.
-          #
-          # Do NOT fold this back into `best="$(python3 scripts/baseline.py | jq ...)"`.
-          # Inside a command substitution containing a pipeline the generator's exit
-          # status is discarded and `set -e` does not reach in, so a dead generator yields
-          # an empty `best` -- which either refuses while blaming the wrong thing or, if
-          # the committed marker ever also reads empty, compares "" against "" and passes
-          # vacuously. Run it into a file, test its status, then demand both markers be
-          # non-empty before comparing them. RUNNER_TEMP exists only on a runner, hence
-          # the default, which is also what lets this body be extracted and run locally.
           : "${RUNNER_TEMP:=$(mktemp -d)}"
-          python3 scripts/baseline.py > "$RUNNER_TEMP/best.json" || {
-            echo "::error::the baseline generator failed, so the best reachable tier is" \
-              "unknown. That is not the same as up to date."; false; }
-          best="$(jq -r '.source | split(" ") | first' "$RUNNER_TEMP/best.json")"
-          # Non-empty is not enough, and `-n` alone is the fail-open half of this guard:
-          # on a document whose `.source` is the empty string this exact expression hands
-          # back the literal four-character string `null` with a zero exit (measured), so
-          # `-n` waves it through -- and if the committed marker ever read the same way,
-          # `null` would be compared with `null` and the step would pass vacuously, which
-          # is the one outcome a frozen file exists to prevent.
-          for token in "$marker" "$best"; do
-            case "${token:-}" in
-              ''|null)
-                echo "::error::a marker read '${token:-<empty>}' ('$marker' committed," \
-                  "'$best' regenerated), so this comparison would be vacuous. The" \
-                  "baseline's .source is missing or empty; regenerate it with" \
-                  "python3 scripts/baseline.py --write"
-                false
-                ;;
-            esac
-          done
+          python3 scripts/baseline.py > "$RUNNER_TEMP/best.json"
+          best="$(jq -er '.source | split(" ") | first | select(length > 0)' "$RUNNER_TEMP/best.json")"
+
           if [ "${marker%%:*}" = head ]; then
             have="${marker%%:*}"
             want="${best%%:*}"
@@ -335,8 +190,8 @@ jobs:
             want="$best"
           fi
           if [ "$have" != "$want" ]; then
-            echo "::error::The baseline is $have, but $want is the best one reachable now." \
-              "Regenerate it: python3 scripts/baseline.py --write"
+            echo "::error::The baseline is $have, but $want is the best complete release."
+            echo "::error::Regenerate it with: python3 scripts/baseline.py --write"
             false
           fi
-          echo "Baseline $have is still the best one available."
+          echo "Baseline $have matches the independent GitHub release channel."

@@ -37,7 +37,7 @@ function validatedRouterBaseURL(raw) {
   const url = new URL(raw);
   const loopback = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname);
   const insecureLoopbackAllowed =
-    process.env.STADO_MODEL_ROUTER_ALLOW_INSECURE_LOOPBACK?.trim() === '1';
+    process.env.BRAMA_ALLOW_INSECURE_LOOPBACK?.trim() === '1';
   if (
     (url.protocol !== 'https:' &&
       !(url.protocol === 'http:' && loopback && insecureLoopbackAllowed)) ||
@@ -47,14 +47,14 @@ function validatedRouterBaseURL(raw) {
     url.hash ||
     (url.pathname !== '' && url.pathname !== '/')
   ) {
-    throw new Error('STADO_MODEL_ROUTER_URL must be HTTPS or explicitly enabled loopback HTTP');
+    throw new Error('BRAMA_URL must be HTTPS or explicitly enabled loopback HTTP');
   }
   return url.origin;
 }
 
 function loadConfig() {
   const config = {
-    STADO_MODEL_ROUTER_URL: process.env.STADO_MODEL_ROUTER_URL,
+    BRAMA_URL: process.env.BRAMA_URL,
     BRAMA_OPERATIONS_MODEL_ROUTER_TOKEN: process.env.BRAMA_OPERATIONS_MODEL_ROUTER_TOKEN,
     WISENT_APP_AGENT_ID: process.env.WISENT_APP_AGENT_ID,
     WISENT_APP_AGENT_AUTH_SECRET: process.env.WISENT_APP_AGENT_AUTH_SECRET,
@@ -64,7 +64,7 @@ function loadConfig() {
   for (const [key, value] of Object.entries(config)) {
     if (!value) throw new Error(`missing environment variable ${key}`);
   }
-  config.STADO_MODEL_ROUTER_URL = validatedRouterBaseURL(config.STADO_MODEL_ROUTER_URL);
+  config.BRAMA_URL = validatedRouterBaseURL(config.BRAMA_URL);
   return config;
 }
 
@@ -83,7 +83,7 @@ function sign(cfg, body) {
 }
 
 async function activeModels(cfg) {
-  const res = await fetch(`${cfg.STADO_MODEL_ROUTER_URL}/v1/models`, {
+  const res = await fetch(`${cfg.BRAMA_URL}/v1/models`, {
     headers: {
       ...sign(cfg, ''),
       'x-jeden-schema-min': '1',
@@ -105,7 +105,7 @@ async function callModel(cfg, model, args) {
     temperature: 0,
   });
   const started = Date.now();
-  const res = await fetch(`${cfg.STADO_MODEL_ROUTER_URL}/v1/chat/completions`, {
+  const res = await fetch(`${cfg.BRAMA_URL}/v1/chat/completions`, {
     method: 'POST',
     headers: sign(cfg, body),
     body,

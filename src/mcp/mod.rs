@@ -1,6 +1,6 @@
 // Model Context Protocol transport: a stdio JSON-RPC server exposing brama's
-// credential-free, read-only surface to MCP agents, for parity with the weles,
-// skarbiec, stado, lem, echo, most, probierz, and byk MCP servers.
+// credential-free, read-only surface to MCP agents, alongside the product-owned
+// MCP servers for weles, skarbiec, lem, echo, most, probierz, and byk.
 //
 // Brama is the multi-provider LLM gateway formerly named model-router. The
 // only MCP tool runs local hardware detection in process. It needs no

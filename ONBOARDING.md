@@ -10,8 +10,8 @@ inference without distributing provider credentials to callers.
 - **Authenticated loopback gateway:** real HTTP boundary on one host; requires
   generated client and Skarbiec capability configuration and may contact a
   provider only when an inference endpoint is called.
-- **Production Stado service:** registered Linux host, immutable release, trusted
-  TLS terminator, central Stado policy, and scoped Skarbiec grants.
+- **Production host service:** operator-managed Linux host, immutable GitHub
+  Release, trusted TLS terminator, local service policy, and scoped Skarbiec grants.
 
 Do not begin with production configuration or a provider call.
 
@@ -36,10 +36,10 @@ Required for an authenticated loopback gateway:
 Additional production prerequisites:
 
 - supported Linux architecture and the runtime shared libraries in the release;
-- registered Stado host and service owner;
+- an operator-owned host service account and service manager;
 - HTTPS ingress whose exact peer IP is in `BRAMA_TRUSTED_PROXY_IPS`;
-- Docker and Node on the release runner only, not the runtime host;
-- scoped Stado consumers documented in `deploy/*.env.example`;
+- access to the selected GitHub Release archive and checksum;
+- scoped Skarbiec consumers documented in `deploy/*.env.example`;
 - operator-owned backup and rollback access to the materialized vault and Brama
   journal.
 
@@ -58,17 +58,16 @@ After the first release, installation must select:
 product version + source revision + platform + archive SHA-256 + provenance
 ```
 
-from the canonical Stado paths in [`RELEASE.md`](RELEASE.md), verify the digest,
-and install the packaged launcher. A source checkout is never the normal
-production installation model.
+from the GitHub Release described in [`RELEASE.md`](RELEASE.md), verify the
+digest, and install the packaged binary and launcher. A source checkout is never
+the normal production installation model.
 
 ## Safe local first success
 
 ### Starting state
 
-Use a clean shell. No Brama, Stado, Skarbiec, provider, or agent environment
-variables are required. The command below performs local hardware inspection
-only.
+Use a clean shell. No Brama, Skarbiec, provider, or agent environment variables
+are required. The command below performs local hardware inspection only.
 
 ### Run detection
 
@@ -148,13 +147,13 @@ cost are explicit.
 
 ## Production path
 
-Production uses the exact runtime built and published by the release workflow.
-The runner must be the registered service host or must first materialize the
-immutable object there through an approved Stado object/machine path. The
-operator configures:
+Production uses the exact runtime published by the release workflow. The
+operator downloads the platform archive and checksum from GitHub Releases,
+verifies the digest, extracts it under an immutable versioned directory, and
+configures:
 
-- `STADO_SERVICE_HOST` and immutable release root;
-- the central Brama service document containing client allowlists and aliases;
+- the host service account, immutable installation root, and service manager;
+- the local Brama control document containing client allowlists and aliases;
 - verifier-only consumers for dedicated client token items;
 - request-sign consumers for the exact central identities;
 - Brama's provider capability grants;
@@ -182,15 +181,15 @@ Automation must not parse decorative human log output.
 
 Keep these identities separate:
 
-- release publisher: write only the Brama release namespace;
-- runtime Stado reader: read only the Brama service recipient key;
+- GitHub release publisher: repository contents permission only for tagged releases;
+- host runtime: no GitHub publication permission and only its scoped Skarbiec grants;
 - bearer verifier: read only each dedicated client token item;
 - request-sign verifier: read only the named central HMAC items;
 - Brama workload: redeem only configured Brama capability IDs;
 - Weles reauthentication: one dedicated finite token, not a console token;
 - caller: one dedicated bearer and, when needed, one exact agent identity.
 
-Credentials are rotated or revoked at their authority: Stado consumer, Skarbiec
+Credentials are rotated or revoked at their authority: GitHub, Skarbiec
 capability, or product-owned request-sign item. Never place them in committed
 env files, URLs, request examples, logs, screenshots, or provider payloads.
 
@@ -202,9 +201,9 @@ env files, URLs, request examples, logs, screenshots, or provider payloads.
 
 **Meaning:** the verifier registry was not generated.
 
-**Action:** launch through the packaged wrapper and confirm the verifier Stado
-consumer can read every dedicated client token item. Do not create a shared
-fallback token.
+**Action:** launch through the packaged wrapper and confirm each verifier-only
+Skarbiec consumer can read its dedicated client token item. Do not create a
+shared fallback token.
 
 ### Missing or invalid model aliases
 
@@ -265,8 +264,8 @@ bind an unauthenticated alternative interface.
 
 ## Uninstall and reset
 
-- Stop the Stado service through its owner-approved service operation.
-- Revoke runtime, verifier, request-sign, and publisher grants independently.
+- Stop Brama through the operator-owned host service manager.
+- Revoke runtime, verifier, request-sign, and GitHub publisher grants independently.
 - Retain or securely remove the journal according to operator policy.
 - Remove only the immutable staged release being decommissioned after its
   rollback window closes.

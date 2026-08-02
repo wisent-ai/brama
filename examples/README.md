@@ -50,8 +50,8 @@ examples require the owning human operator's explicit approval before use.
 | Operator | Inspect protected process stats | `GET /stats` | Authenticated read-only | [`operations/inspect-build-and-health.md`](operations/inspect-build-and-health.md) | Documented; not executed |
 | Caller | Diagnose cleartext, bearer, HMAC, allowlist rejection | HTTP error contract | Read-only negative path | [`failures/auth-and-transport.md`](failures/auth-and-transport.md) | Documented; not executed |
 | Caller | Diagnose provider limit, timeout, or outage | HTTP error contract | Provider-facing failure | [`failures/provider-unavailable.md`](failures/provider-unavailable.md) | Controlled qualification required |
-| Release operator | Upgrade one immutable runtime | Stado packaged launcher | Recovery mutation | [`recovery/upgrade-and-rollback.md`](recovery/upgrade-and-rollback.md) | Controlled qualification required |
-| Release operator | Roll back and prove previous identity | Stado packaged launcher | Recovery mutation | [`recovery/upgrade-and-rollback.md`](recovery/upgrade-and-rollback.md) | Controlled qualification required |
+| Release operator | Upgrade one immutable runtime | Verified GitHub Release archive | Recovery mutation | [`recovery/upgrade-and-rollback.md`](recovery/upgrade-and-rollback.md) | Controlled qualification required |
+| Release operator | Roll back and prove previous identity | Versioned host installation | Recovery mutation | [`recovery/upgrade-and-rollback.md`](recovery/upgrade-and-rollback.md) | Controlled qualification required |
 | Developer | Execute local inference in Brama | — | — | Not supported; see README non-goals | Not supported |
 | Caller | Stream completion tokens | — | — | Not supported; buffered response only | Not supported |
 

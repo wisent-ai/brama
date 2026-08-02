@@ -50,7 +50,7 @@ endpoint, and correct capability.
 | models.dev | HTTPS JSON catalog | no credential | public metadata and protocol discovery | models.dev; cached by Brama |
 | Skarbiec capability broker | `skarbiec.redeem.v1` over Unix socket | Brama workload Ed25519 proof | final-use bounded secret redemption | Skarbiec operator |
 | entitlements router | local process/CLI | local vault authorization | live subscription list, credential put, capability service | Skarbiec operator |
-| Stado | release object and service APIs | separate finite publisher/runtime consumers | immutable publication, scoped secret reads, service deployment | Stado operator |
+| GitHub Releases and host service manager | HTTPS assets plus operator-owned installation | GitHub publisher and host operator | immutable publication and versioned host installation | Brama release owner / deployment operator |
 | Weles reauthentication | dedicated HTTPS operation | finite Brama reauth token | refresh of the accepted runtime identity only | Weles operator |
 
 ## Model providers
@@ -165,27 +165,28 @@ Stop new subscription selection, revoke router/vault access, preserve existing
 journal evidence, and remove only Brama-owned non-secret overlay state after its
 retention decision. Direct provider routes remain usable when configured.
 
-## Stado hosting and publication
+## Publication and host installation
 
 ### Outcome
 
-Publish one immutable release and install that same packaged launcher on the
-registered service host without ad-hoc SSH or provider-specific deployment.
+Publish immutable per-platform archives and checksums on GitHub Releases.
+Deployment operators download one exact version, verify its digest, install it
+under a versioned host path, and control process activation with their own
+service manager.
 
 ### Identity
 
-Release publisher, runtime secret reader, bearer verifier, request-sign reader,
-and service operator are separate grants. The runner and registered host use the
-same required UID/GID contract. Runtime credentials never enter GitHub or the
-release archive.
+GitHub publication, host installation, bearer verification, request-sign
+reading, and provider access are separate identities. Runtime credentials never
+enter GitHub, a release archive, or a command line.
 
 ### Failure and removal
 
-Checksum, provenance, publication, staging, and deploy failures stop promotion.
-An unavailable Stado control plane does not change the bytes or state of an
-already running Brama service. Decommissioning removes the service registration,
-revokes grants separately, preserves rollback objects until retention expires,
-and never deletes provider vault resources as a shortcut.
+Build, checksum, publication, download, and host activation failures stop
+promotion. GitHub availability does not control an already installed service.
+Decommissioning stops the host process, revokes runtime grants separately,
+preserves the previous version until retention expires, and never deletes
+provider vault resources as a shortcut.
 
 ## Integration health
 
@@ -213,8 +214,8 @@ credentials.
 
 Brama maintainers own normalized protocols and routing. Provider-account owners
 own subscriptions, billing, quota, and revocation. Skarbiec owns secret
-authority; Stado owns publication and service control; deployment operators own
-network and host recovery.
+authority; Brama release owners own GitHub publication; deployment operators
+own installation, process control, network, and host recovery.
 
 An integration change is complete only when capability, configuration, data,
 timeout, errors, compatibility, observability, disablement, removal, examples,

@@ -27,12 +27,7 @@ RUN BRAMA_SOURCE_REVISION="$BRAMA_SOURCE_REVISION" \
     cargo build --locked --release --bin brama
 
 FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
-# Supply only the exact URL rendered by `stado storage url` for a pinned
-# stado://releases/stado/... object; the checksum remains independently pinned.
-ARG STADO_CLI_RELEASE_URL
-ARG STADO_CLI_RELEASE_SHA256
-RUN test -n "$STADO_CLI_RELEASE_URL" \
-    && test -n "$STADO_CLI_RELEASE_SHA256" \
+RUN true \
     && printf '%s\n' \
       'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260714T000000Z/ bookworm main' \
       'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260714T000000Z/ bookworm-updates main' \
@@ -43,11 +38,6 @@ RUN test -n "$STADO_CLI_RELEASE_URL" \
     && apt-get install -y --no-install-recommends \
       ca-certificates=20230311+deb12u1 \
       libssl3=3.0.20-1~deb12u2 \
-      curl=7.88.1-10+deb12u15 \
-    && curl --fail --silent --show-error --location "$STADO_CLI_RELEASE_URL" --output /tmp/stado \
-    && printf '%s  %s\n' "$STADO_CLI_RELEASE_SHA256" /tmp/stado | sha256sum --check - \
-    && chmod a=rx /tmp/stado \
-    && mv /tmp/stado /usr/local/bin/stado \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /build/target/release/brama /usr/local/bin/brama
 ENV RUST_LOG=info

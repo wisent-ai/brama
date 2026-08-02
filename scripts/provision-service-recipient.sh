@@ -3,7 +3,7 @@ set -eu
 umask u=rwx,go=
 
 identity=${BRAMA_SKARBIEC_RECIPIENT_IDENTITY:-brama-rtx@wisent.local}
-gnupg_home=${BRAMA_SKARBIEC_GNUPG_HOME:-"$HOME/.stado/brama-gnupg"}
+gnupg_home=${BRAMA_SKARBIEC_GNUPG_HOME:-"$HOME/.local/share/brama/gnupg"}
 mkdir -p "$gnupg_home"
 chmod u=rwx,go= "$gnupg_home"
 

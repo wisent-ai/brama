@@ -284,7 +284,7 @@ const PROVIDERS: &[ProviderDescriptor] = &[
     },
     ProviderDescriptor {
         id: "local-openai",
-        display_name: "Stado Local OpenAI",
+        display_name: "Local OpenAI",
         base_url: "http://127.0.0.1",
         models_path: "/v1/models",
         chat_path: "/v1/chat/completions",

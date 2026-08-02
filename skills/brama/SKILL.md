@@ -75,7 +75,7 @@ Use HTTPS unless an authenticated loopback caller explicitly opts into HTTP.
 - The MCP surface is read-only and free by construction. To route a real
   completion, call the HTTP server; to refresh stored evidence, use the collect
   commands — never through MCP.
-- The deployed service URL remains `STADO_MODEL_ROUTER_URL`; each caller uses
+- The deployed service URL is `BRAMA_URL`; each caller uses
   only its own dedicated model-router item and consumer. Product HMAC identities
   remain separate and must match the bearer binding when present.
 - brama is the single gate for model traffic; keep provider and routing logic in

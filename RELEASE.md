@@ -6,10 +6,10 @@ recovered.
 
 ## Current release state
 
-Brama is pre-1.0 and currently has no published immutable release. `main` is a
-mutable development source, not a production coordinate. The checked-in
-`released-surface.json` must state this honestly until Stado contains a real
-Brama release or an honest SemVer tag identifies one.
+Brama is pre-1.0 and currently has no complete immutable binary release. `main`
+is mutable development source, not a production coordinate. The checked-in
+`released-surface.json` must state this honestly until a GitHub Release contains
+every supported archive and checksum.
 
 ## Canonical product version
 
@@ -69,33 +69,33 @@ revision, platform, and digest.
 
 ## Release artifacts
 
-A release publishes without overwrite:
+A release publishes immutable assets on the matching GitHub Release:
 
 ```text
-stado://releases/brama/<semver>/<platform>/brama-runtime.tar.gz
-stado://releases/brama/<semver>/<platform>/brama-runtime.tar.gz.sha256
-stado://releases/brama/<semver>/<platform>/provenance.json
+brama-vX.Y.Z-linux-amd64.tar.gz
+brama-vX.Y.Z-linux-amd64.tar.gz.sha256
+brama-vX.Y.Z-darwin-arm64.tar.gz
+brama-vX.Y.Z-darwin-arm64.tar.gz.sha256
 ```
 
-The runtime contains:
+Each archive contains:
 
 ```text
-bin/brama
-bin/start-with-skarbiec
-bin/skarbiec-entitlements-router
-bin/stado
-etc/brama-skarbiec/*
-share/brama/provenance.json
+brama
+start-with-skarbiec
+LICENSE
+provenance.json
 ```
 
 `provenance.json` records product name, product version, source revision,
-platform, build timestamp, archive filename, builder identity, and dependency
-lock identity. The sidecar records the archive digest because an archive cannot
-contain its own final digest.
+platform, build timestamp, and builder identity. The sidecar records the archive
+digest because an archive cannot contain its own final digest. Runtime
+configuration, credentials, state, launchers, and unrelated product binaries
+are never included.
 
 ## Qualification gate
 
-Before creating a tag or publishing a stable object, the release owner records:
+Before creating a tag or publishing a stable GitHub Release, the release owner records:
 
 - README, onboarding, core, integration, example, and test contracts agree;
 - the public-surface decision and required version agree;
@@ -119,11 +119,12 @@ No narrow check qualifies unexecuted layers.
 6. Produce provenance and the runtime archive for one platform.
 7. Record SHA-256 and qualification evidence.
 8. Create the immutable SemVer tag for that exact revision.
-9. Publish archive, digest, and provenance with `--if-absent` semantics.
-10. Stage those same bytes on the registered service host.
-11. Deploy through Stado and confirm the approved public health/version result.
-12. Promote the same verified bytes; never rebuild per channel.
-13. Update `released-surface.json` from the release that consumers can obtain.
+9. Let `.github/workflows/release.yml` publish every supported archive and
+   checksum to the matching GitHub Release without overwrite.
+10. Download the target archive on the service host and verify its checksum.
+11. Install it under an immutable versioned path and switch the host service
+    manager only after operator-approved checks.
+12. Update `released-surface.json` from the complete release consumers can obtain.
 
 Steps that execute validation or contact environments require the explicit
 approval described in [`TESTING.md`](TESTING.md).
@@ -161,12 +162,12 @@ records.
 
 ## Upgrade
 
-1. Resolve the target SemVer, platform, provenance, and digest.
+1. Resolve the target SemVer, platform, archive URL, and digest from GitHub Releases.
 2. Read every intervening release note and required operator action.
 3. Preserve the append-only journal and any operator-required vault backup.
-4. Materialize the immutable archive on the registered host.
-5. Verify the archive digest before extraction.
-6. Deploy the packaged launcher through Stado.
+4. Download the immutable archive to the operator-managed host.
+5. Verify the published checksum before extraction.
+6. Install under a new versioned directory and update the host service manager.
 7. Confirm the approved health/version outcome and one authorized catalog path.
 8. Retain the previous immutable runtime until the rollback window closes.
 
@@ -179,7 +180,7 @@ staged launcher path. The operator must:
    overlay;
 2. preserve journal and capability evidence;
 3. confirm the previous release can interpret current non-secret state;
-4. deploy the previous immutable launcher through Stado;
+4. point the host service manager at the previous verified installation;
 5. confirm build identity and the approved health/version outcome;
 6. confirm one authorized non-billable discovery path;
 7. revoke or rotate credentials only when compromise, not code regression,
@@ -190,8 +191,8 @@ qualified, rollback is unsupported and the release must say so before upgrade.
 
 ## Security and ownership
 
-Build, signing, publication, Stado control, bearer verification, request-sign,
-and provider runtime identities are separate least-privilege credentials.
-Runtime credentials never enter artifacts, provenance, or GitHub. Release
-maintainers own source/version/provenance; deployment operators own host,
-network, runtime grants, state backup, and rollback execution.
+Build, signing, GitHub publication, bearer verification, request-sign, and
+provider runtime identities are separate least-privilege credentials. Runtime
+credentials never enter artifacts, provenance, or GitHub. Release maintainers
+own source/version/provenance; deployment operators own host, network, runtime
+grants, state backup, and rollback execution.

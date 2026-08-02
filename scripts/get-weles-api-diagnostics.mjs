@@ -23,7 +23,8 @@ function parseEnv(text) {
 
 async function tokens(env) {
   const out = [env.WELES_CONSOLE_API_TOKEN, env.WELES_DIAG_API_TOKEN, env.WELES_API_TOKEN].filter(Boolean);
-  const grant = (await readFile(`${homedir()}/.stado/weles-service-deployer-skarbiec-token`, 'utf8')).trim();
+  const grantPath = env.WELES_SKARBIEC_TOKEN_FILE || `${homedir()}/.local/share/weles/service-deployer-skarbiec-token`;
+  const grant = (await readFile(grantPath, 'utf8')).trim();
   const response = await fetch('http://127.0.0.1:8787/v1/items/read', {
     method: 'POST',
     headers: { Authorization: `Bearer ${grant}`, 'Content-Type': 'application/json', 'X-Consumer': 'weles-service-deployer' },

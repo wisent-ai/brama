@@ -15,7 +15,7 @@ Core consists of:
 - append-only retirement and quality state;
 - build identity, health, statistics, CLI, and read-only MCP boundaries.
 
-Provider protocols, models.dev, Skarbiec transport, entitlements router, Stado,
+Provider protocols, models.dev, Skarbiec transport, entitlements router, host deployment,
 and external model services are integrations. They may implement a core seam but
 must not redefine client identity, ownership, limits, state authority, or public
 error semantics.

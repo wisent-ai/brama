@@ -1,0 +1,61 @@
+name: release
+
+on:
+  push:
+    tags: [ "v*" ]
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-amd64
+            architecture: x86_64
+          - os: macos-latest
+            platform: darwin-arm64
+            architecture: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Record build timestamp
+        run: printf '%s\n' "BRAMA_BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+      - name: Build tagged artifact
+        env:
+          BRAMA_SOURCE_REVISION: ${{ github.sha }}
+          BRAMA_BUILD_PLATFORM: ${{ matrix.platform }}
+        run: cargo build --locked --release --bin brama
+      - name: Publish immutable tagged artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          actual_architecture="$(uname -m)"
+          if [ "$actual_architecture" != "${{ matrix.architecture }}" ]; then
+            printf '%s\n' "release runner architecture $actual_architecture does not match ${{ matrix.architecture }}"
+            false
+          fi
+          archive="brama-${GITHUB_REF_NAME}-${{ matrix.platform }}.tar.gz"
+          checksum="${archive}.sha256"
+          stage="$(mktemp -d)"
+          cp target/release/brama LICENSE "$stage/"
+          cp scripts/start-with-skarbiec.sh "$stage/start-with-skarbiec"
+          chmod 0755 "$stage/brama" "$stage/start-with-skarbiec"
+          jq -n \
+            --arg product brama \
+            --arg version "${GITHUB_REF_NAME#v}" \
+            --arg source_revision "$GITHUB_SHA" \
+            --arg platform "${{ matrix.platform }}" \
+            --arg built_at "$BRAMA_BUILD_TIMESTAMP" \
+            --arg builder "github-actions/${{ runner.os }}-${{ runner.arch }}" \
+            '{product: $product, version: $version, source_revision: $source_revision, platform: $platform, built_at: $built_at, builder: $builder}' \
+            > "$stage/provenance.json"
+          tar -czf "$archive" -C "$stage" .
+          openssl dgst -sha256 -r "$archive" > "$checksum"
+          gh release view "$GITHUB_REF_NAME" >/dev/null \
+            || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes \
+            || gh release view "$GITHUB_REF_NAME" >/dev/null
+          gh release upload "$GITHUB_REF_NAME" "$archive" "$checksum"
+

@@ -14,7 +14,7 @@ Include:
 - public route or CLI operation;
 - normalized error status, code, retryability, and attempt count;
 - bounded redacted logs;
-- whether a catalog, broker, router, provider, or Stado dependency was involved;
+- whether a catalog, broker, router, provider, release, or host dependency was involved;
 - cleanup and current service state.
 
 Do not include bearer tokens, HMAC signatures, capability IDs, OAuth blobs,
@@ -28,7 +28,7 @@ provider API keys, raw request bodies, donated secrets, or vault content.
   service host, immutable staging, backup, and rollback execution.
 - Skarbiec operators own secret authority, capability policy, vault recovery,
   and entitlements router operation.
-- Stado operators own release object/service availability and scoped consumers.
+- Release owners publish immutable GitHub assets; host operators own installation.
 - Provider-account owners own subscription delegation, quota, billing, rotation,
   and revocation.
 - Calling-product owners own dedicated bearer use, exact agent signatures,

@@ -9,8 +9,8 @@ provider responses, vault metadata, account identifiers, or exploit details.
 
 If a secret may be exposed, revoke or rotate it at its owning authority first:
 client token item, request-sign item, Skarbiec capability, provider account,
-Stado consumer, or workload signing key. Preserve bounded evidence without
-copying the secret.
+GitHub publisher credential, or workload signing key. Preserve bounded evidence
+without copying the secret.
 
 ## Supported versions
 
@@ -42,8 +42,8 @@ release coordinate.
 
 Repository maintainers triage the software boundary and coordinate a corrected
 release. Deployment operators own ingress containment and rollback. Skarbiec and
-provider owners own credential revocation and account actions. Stado owners own
-release/service access containment. Callers own prompt/data incident response.
+provider owners own credential revocation and account actions. Release owners
+contain GitHub publication credentials. Callers own prompt/data incident response.
 
 ## Disclosure expectations
 

@@ -1,10 +1,10 @@
 """Print brama's public surface: the commands its binary advertises.
 
 What a caller of this product depends on is not its Rust symbols -- the library crate is
-internal and nothing in the Stado release exposes it -- but **which commands the shipped
-`brama` binary offers**. The release published by `.github/workflows/deploy-brama.yml`
-is a runtime bundle whose entry points are `bin/brama` and the launcher that execs it,
-so the command list is exactly the part of this repository other machines invoke by
+internal and nothing outside the release archive exposes it -- but **which commands the
+shipped `brama` binary offers**. The archive published by
+`.github/workflows/release.yml` contains the binary and its launcher, so the command list
+is exactly the part of this repository other machines invoke by
 name. Adding a command is a capability; removing or renaming one breaks whoever scripted
 it yesterday. That makes the command list the public contract, and this prints it for
 the shared versioning rule to compare.

@@ -30,7 +30,7 @@ production-facing groups require separately controlled approval.
 | Secret safety | No bearer, HMAC, capability, OAuth, donation, prompt, or provider secret in logs/state/errors/artifacts |
 | State | Journal append/read semantics, overlay atomicity, cache TTL, restart behavior |
 | Subscription lifecycle | Authorized list/donate/retire plus negative ownership evidence and off-switch |
-| Integration outage | Catalog, broker, router, provider, and Stado failure isolation |
+| Integration outage | Catalog, broker, router, provider, and host dependency failure isolation |
 | Examples | Every supported example reaches its documented result and cleanup boundary |
 | Release | Immutable publication, provenance, digest, upgrade, rollback, and recovery |
 
