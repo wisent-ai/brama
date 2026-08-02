@@ -1,6 +1,7 @@
 # Brama
 
 <!-- wisent-readme-signals:start -->
+[![deploy-brama](https://github.com/wisent-ai/brama/actions/workflows/deploy-brama.yml/badge.svg?branch=main)](https://github.com/wisent-ai/brama/actions/workflows/deploy-brama.yml)
 [![Release](https://img.shields.io/github/v/release/wisent-ai/brama?display_name=tag&sort=semver)](https://github.com/wisent-ai/brama/releases)
 [![Downloads](https://img.shields.io/github/downloads/wisent-ai/brama/total)](https://github.com/wisent-ai/brama/releases)
 [![License](https://img.shields.io/github/license/wisent-ai/brama)](https://github.com/wisent-ai/brama)
