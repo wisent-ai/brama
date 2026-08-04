@@ -5,7 +5,6 @@ set -eu
 recipient=${BRAMA_SKARBIEC_RECIPIENT_IDENTITY:-brama-rtx@wisent.local}
 
 for item in \
-  content-platform-production-model-router \
   echo-model-router \
   oko-model-router \
   weles-model-router \
@@ -22,7 +21,7 @@ for item in \
   wisent-trade-agent-model-router \
   wisent-backend-model-router \
   brama-operations-model-router \
-  content-platform-agent-auth \
+  echo-agent-auth \
   oko-model-agent-auth \
   weles-model-agent-auth \
   brama-weles-reauth

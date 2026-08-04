@@ -178,8 +178,7 @@ all_models = os.environ["BRAMA_ALLOWED_MODELS"].split(",")
 backend_models = [model for model in all_models if model.startswith("wisent-backend/")]
 weles_models = ["weles/agent/primary"]
 sources = [
-    ("content-platform-production", "content-platform-production-model-router", "content-platform", None),
-    ("echo", "echo-model-router", None, None),
+    ("echo", "echo-model-router", "echo", None),
     ("oko", "oko-model-router", "oko", None),
     ("weles", "weles-model-router", "weles", weles_models),
     ("weles-keyword-planner", "weles-keyword-planner-model-router", "wisent-app", None),
@@ -228,8 +227,7 @@ PY
 export BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES
 unset BRAMA_ALLOWED_MODELS
 
-# Content Platform, Oko, and Weles identities are read from their exact
-# Skarbiec items.
+# Echo, Oko, and Weles identities are read from their exact Skarbiec items.
 BRAMA_REQUEST_SIGN_IDENTITIES="$(
   python3 - "$ENTITLEMENTS_ROUTER_BIN" <<'PY'
 import json
@@ -241,7 +239,7 @@ arguments = iter(sys.argv)
 next(arguments)
 router = next(arguments)
 sources = {
-    "content-platform": "content-platform-agent-auth",
+    "echo": "echo-agent-auth",
     "oko": "oko-model-agent-auth",
     "weles": "weles-model-agent-auth",
 }
@@ -346,7 +344,7 @@ request_sign_agents = sorted(
     and isinstance(resource, str)
     and resource.startswith("agent:")
 )
-subscription_agents = sorted([*request_sign_agents, "content-platform", "oko"])
+subscription_agents = sorted([*request_sign_agents, "echo", "oko"])
 normalize = lambda value: value.strip().lower().replace("_", "-")
 
 def issue(purpose, resource):
