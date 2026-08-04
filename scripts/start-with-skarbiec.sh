@@ -377,48 +377,44 @@ for item in available_items:
     resource_id = item.get("id")
     if not isinstance(resource_id, str):
         continue
-    match resource_id.split(":"):
-        case ["provider", provider_name]:
-            provider = normalize(provider_name)
-            resource = f"provider:{provider}"
-            if ("brama.provider.authenticate", resource) not in allowed:
-                continue
-            capabilities[provider] = issue("brama.provider.authenticate", resource)
-        case ["provider", provider_name, item_id]:
-            provider = normalize(provider_name)
-            agent_id = next(
-                (
-                    agent
-                    for agent in subscription_agents
-                    if item_id.startswith(f"brama-sub-{agent}-")
-                ),
-                None,
-            )
-            if agent_id is None:
-                continue
-            resource = f"provider:{provider}:{item_id}"
-            if ("brama.provider.authenticate", resource) not in allowed:
-                continue
-            capabilities[item_id] = issue("brama.provider.authenticate", resource)
-            catalog.append({
-                "id": item_id,
-                "provider": provider,
-                "agent_id": agent_id,
-                "status": "active",
-            })
-        case _:
+    parts = resource_id.split(":")
+    if len(parts) == 2 and parts[0] == "provider":
+        provider = normalize(parts[1])
+        resource = f"provider:{provider}"
+        if ("brama.provider.authenticate", resource) not in allowed:
             continue
+        capabilities[provider] = issue("brama.provider.authenticate", resource)
+    elif len(parts) == 3 and parts[0] == "provider":
+        provider, item_id = normalize(parts[1]), parts[2]
+        agent_id = next(
+            (
+                agent
+                for agent in subscription_agents
+                if item_id.startswith(f"brama-sub-{agent}-")
+            ),
+            None,
+        )
+        if agent_id is None:
+            continue
+        resource = f"provider:{provider}:{item_id}"
+        if ("brama.provider.authenticate", resource) not in allowed:
+            continue
+        capabilities[item_id] = issue("brama.provider.authenticate", resource)
+        catalog.append({
+            "id": item_id,
+            "provider": provider,
+            "agent_id": agent_id,
+            "status": "active",
+        })
 
 for purpose, resource in sorted(allowed):
     if purpose != "brama.provider.authenticate":
         continue
-    match resource.split(":"):
-        case ["provider", provider_name]:
-            provider = normalize(provider_name)
-            if provider not in capabilities:
-                capabilities[provider] = issue(purpose, resource)
-        case _:
-            continue
+    parts = resource.split(":")
+    if len(parts) == 2 and parts[0] == "provider":
+        provider = normalize(parts[1])
+        if provider not in capabilities:
+            capabilities[provider] = issue(purpose, resource)
 
 request_capabilities = {
     agent_id: issue("brama.request.sign", f"agent:{agent_id}")
