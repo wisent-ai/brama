@@ -62,11 +62,13 @@ jobs:
         if: inputs.action == 'prepare'
         working-directory: brama-source
         env:
-          GH_TOKEN: ${{ github.token }}
+          RELEASE_BASE_URL: https://github.com/${{ github.repository }}/releases/download/v${{ inputs.version }}
         run: |
-          gh release download "v${{ inputs.version }}" \
-            --pattern "brama-v${{ inputs.version }}-linux-amd64.tar.gz" \
-            --pattern "brama-v${{ inputs.version }}-darwin-arm64.tar.gz"
+          for platform in linux-amd64 darwin-arm64; do
+            curl --fail --location --proto '=https' --tlsv1.2 \
+              --output "brama-v${{ inputs.version }}-$platform.tar.gz" \
+              "$RELEASE_BASE_URL/brama-v${{ inputs.version }}-$platform.tar.gz"
+          done
       - name: Publish signed qualified candidate to Stado
         if: inputs.action == 'prepare'
         working-directory: brama-source
