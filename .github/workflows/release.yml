@@ -25,6 +25,14 @@ jobs:
           repository: ${{ github.repository_owner }}/skarbiec
           ref: ${{ vars.SKARBIEC_RELEASE_REVISION }}
           path: skarbiec-source
+      - name: Authorize pinned private source dependency
+        env:
+          ECHO_WEB_REPOSITORY_TOKEN: ${{ secrets.ECHO_WEB_REPOSITORY_TOKEN }}
+        run: |
+          git config --global \
+            url."https://x-access-token:${ECHO_WEB_REPOSITORY_TOKEN}@github.com/".insteadOf \
+            https://github.com/
+          printf '%s\n' 'CARGO_NET_GIT_FETCH_WITH_CLI=true' >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
       - name: Record build timestamp
         run: printf '%s\n' "BRAMA_BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"

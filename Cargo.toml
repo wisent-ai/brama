@@ -1,6 +1,6 @@
 [package]
 name = "brama"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 license-file = "LICENSE"
 
@@ -31,7 +31,7 @@ hex = "0.4"
 chrono = { version = "0.4", features = ["serde"] }
 subtle = "2.6"
 uuid = { version = "1", features = ["serde", "v4"] }
-wisent-onboarding-client = { path = "../echo-web/crates/onboarding-client" }
+wisent-onboarding-client = { git = "https://github.com/wisent-ai/echo-web", rev = "aa423766991c3c958145bc7e5f2a62748bb3951c", package = "wisent-onboarding-client" }
 
 ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }
 libc = "0.2"

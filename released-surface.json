@@ -1,6 +1,6 @@
 {
-  "version": "0.2.0",
-  "source": "pending:v0.2.0 — publish only from a qualified immutable candidate through Stado release control",
+  "version": "0.2.1",
+  "source": "pending:v0.2.1 — publish only from a qualified immutable candidate through Stado release control",
   "surface": [
     "collect-task-quality",
     "detect",
