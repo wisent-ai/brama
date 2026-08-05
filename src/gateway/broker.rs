@@ -114,8 +114,9 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
 }
 
 /// Redeem one subscription credential at the final-use boundary. Expired
-/// provider OAuth grants are refreshed only inside this scoped Brama runtime
-/// and persisted through the local entitlements router over stdin.
+/// provider OAuth grants are refreshed only inside this scoped Brama runtime,
+/// used immediately, and persisted through the local entitlements router when
+/// possible.
 pub async fn subscription_credential(subscription_id: &str, provider: &str) -> Option<Secret> {
     let capability_id = configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id)?;
     let resource = format!("provider:{}:{}", slug(provider), slug(subscription_id));
@@ -149,9 +150,8 @@ pub async fn subscription_credential(subscription_id: &str, provider: &str) -> O
     {
         warn!(
             event = "oauth_refresh_persist_failed",
-            provider, "refreshed OAuth credential could not be persisted"
+            provider, "refreshed OAuth credential could not be persisted; using it in memory"
         );
-        return Some(credential);
     }
     Some(Secret::from_bytes(std::mem::take(&mut *fresh)))
 }
