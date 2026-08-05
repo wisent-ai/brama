@@ -23,6 +23,7 @@ for item in \
   wisent-backend-model-router \
   brama-operations-model-router \
   tama-objective-authority-model-router \
+  agent:wisent-app \
   echo-agent-auth \
   content-platform-agent-auth \
   oko-model-agent-auth \
