@@ -44,9 +44,6 @@ jobs:
           ref: ${{ vars.STADO_RELEASE_CLI_REVISION }}
           path: stado-source
       - uses: dtolnay/rust-toolchain@stable
-      - name: Build pinned Stado release client
-        working-directory: stado-source/stado-rs
-        run: cargo build --locked --release --bin stado
       - name: Materialize ephemeral release credentials
         env:
           BRAMA_RELEASE_SIGNING_KEY_B64: ${{ secrets.BRAMA_RELEASE_SIGNING_KEY_B64 }}
@@ -55,9 +52,14 @@ jobs:
           umask 077
           mkdir -p "$RUNNER_TEMP/release-control"
           if [ "${{ inputs.action }}" = prepare ]; then
+            : "${BRAMA_RELEASE_SIGNING_KEY_B64:?BRAMA_RELEASE_SIGNING_KEY_B64 is required for prepare}"
+            : "${BRAMA_RELEASE_QUALIFICATION_JSON_B64:?BRAMA_RELEASE_QUALIFICATION_JSON_B64 is required for prepare}"
             printf '%s' "$BRAMA_RELEASE_SIGNING_KEY_B64" | base64 --decode > "$RUNNER_TEMP/release-control/brama-release.pk8"
             printf '%s' "$BRAMA_RELEASE_QUALIFICATION_JSON_B64" | base64 --decode > "$RUNNER_TEMP/release-control/qualification.json"
           fi
+      - name: Build pinned Stado release client
+        working-directory: stado-source/stado-rs
+        run: cargo build --locked --release --bin stado
       - name: Download exact GitHub release bytes
         if: inputs.action == 'prepare'
         working-directory: brama-source
