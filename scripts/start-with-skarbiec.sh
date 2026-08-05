@@ -190,6 +190,10 @@ all_models = os.environ["BRAMA_ALLOWED_MODELS"].split(",")
 backend_models = [model for model in all_models if model.startswith("wisent-backend/")]
 weles_models = ["weles/agent/primary"]
 tama_models = ["-best"]
+# Lem reads literature one paper per call, so it is capped to the chat
+# aliases rather than the whole catalogue: a harvest that could reach an
+# image or embedding route is a harvest that can spend on one by mistake.
+lem_models = ["wisent-backend/chat/primary", "wisent-backend/chat/fallback"]
 sources = [
     ("content-platform-production", "content-platform-production-model-router", "content-platform", None),
     ("echo", "echo-model-router", "echo", None),
@@ -209,6 +213,7 @@ sources = [
     ("wisent-backend", "wisent-backend-model-router", None, backend_models),
     ("tama-objective-authority", "tama-objective-authority-model-router", "wisent-app", tama_models),
     ("brama-operations", "brama-operations-model-router", "wisent-app", None),
+    ("lem", "lem-model-router", None, lem_models),
 ]
 
 def field(item, name):
