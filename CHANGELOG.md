@@ -3,10 +3,12 @@
 All notable Brama changes are documented here. Brama follows Semantic
 Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
-## 0.2.1 - 2026-08-04
+## 0.2.2 - 2026-08-04
 
 The `v0.2.0` tag produced no release artifacts because its external onboarding
 source was not yet pinned for isolated CI builds.
+The `v0.2.1` artifacts were built but not qualified or promoted because the
+Weles reauthorization reader still expected the retired Skarbiec item shape.
 
 ### Added
 

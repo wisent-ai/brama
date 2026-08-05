@@ -323,7 +323,13 @@ result = subprocess.run(
     text=True,
     env=os.environ,
 )
-value = json.loads(result.stdout).get("token")
+payload = json.loads(result.stdout)
+if payload.get("schema") != "skarbiec.item.v2":
+    raise RuntimeError("brama-weles-reauth did not return a Skarbiec v2 item")
+fields = payload.get("fields")
+if not isinstance(fields, dict):
+    raise RuntimeError("brama-weles-reauth did not return a fields object")
+value = fields.get("token")
 if not isinstance(value, str) or not value or value.strip() != value:
     raise RuntimeError("brama-weles-reauth/token is empty or malformed")
 sys.stdout.write(value)
