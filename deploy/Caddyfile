@@ -1,7 +1,6 @@
-# Managed HTTPS ingress for Brama on the registered Linux service host.
-# BRAMA_API_HOST is the dedicated public DNS name; BRAMA_UPSTREAM is the
-# loopback listener assembled by the deployment workflow.
-https://{$BRAMA_API_HOST} {
+# Canonical public Brama ingress on the registered Linux service host.
+# BRAMA_UPSTREAM is the loopback listener assembled by the deployment workflow.
+https://brama.wisent.ai {
     tls {
         issuer acme {
             disable_http_challenge

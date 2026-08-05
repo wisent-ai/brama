@@ -8,6 +8,8 @@ const RUN_ID_INDEX = Number('2');
 const FILE_PATH_INDEX = Number('3');
 const UNAUTHORIZED = Number('401');
 const REQUEST_TIMEOUT_MS = Number('30000');
+const STADO_SKARBIEC_GATEWAY_URL = process.env.STADO_SKARBIEC_GATEWAY_URL || 'http://127.0.0.1:17602';
+const STADO_WELES_GATEWAY_URL = process.env.STADO_WELES_GATEWAY_URL || 'http://127.0.0.1:17604';
 
 function parseEnv(text) {
   const out = {};
@@ -25,7 +27,7 @@ async function tokens(env) {
   const out = [env.WELES_CONSOLE_API_TOKEN, env.WELES_DIAG_API_TOKEN, env.WELES_API_TOKEN].filter(Boolean);
   const grantPath = env.WELES_SKARBIEC_TOKEN_FILE || `${homedir()}/.local/share/weles/service-deployer-skarbiec-token`;
   const grant = (await readFile(grantPath, 'utf8')).trim();
-  const response = await fetch('http://127.0.0.1:8787/v1/items/read', {
+  const response = await fetch(`${STADO_SKARBIEC_GATEWAY_URL}/v1/items/read`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${grant}`, 'Content-Type': 'application/json', 'X-Consumer': 'weles-service-deployer' },
     body: JSON.stringify({ id: 'weles-service-deployer' }),
@@ -41,7 +43,7 @@ if (!runId) throw new Error('usage: node scripts/get-weles-api-diagnostics.mjs <
 const webEnvUrl = new URL('../../backends/weles-web/.env.local', import.meta.url);
 const echoEnvUrl = new URL('../../echo/.env.local', import.meta.url);
 const env = { ...parseEnv(await readFile(webEnvUrl, 'utf8')), ...parseEnv(await readFile(echoEnvUrl, 'utf8')) };
-const origin = (env.ECHO_WELES_API_URL || env.WELES_MAC_MINI_API_URL || 'http://100.120.25.24:8788').replace(/\/+$/, '');
+const origin = (env.ECHO_WELES_API_URL || env.WELES_API_URL || STADO_WELES_GATEWAY_URL).replace(/\/+$/, '');
 
 for (const token of await tokens(env)) {
   const path = filePath

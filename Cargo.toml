@@ -1,6 +1,6 @@
 [package]
 name = "brama"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license-file = "LICENSE"
 
@@ -13,6 +13,7 @@ name = "brama"
 path = "src/lib.rs"
 
 [dependencies]
+async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
@@ -29,6 +30,8 @@ sha2 = "0.10"
 hex = "0.4"
 chrono = { version = "0.4", features = ["serde"] }
 subtle = "2.6"
+uuid = { version = "1", features = ["serde", "v4"] }
+wisent-onboarding-client = { path = "../echo-web/crates/onboarding-client" }
 
 ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }
 libc = "0.2"

@@ -3,7 +3,7 @@
 All notable Brama changes are documented here. Brama follows Semantic
 Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
-## Unreleased
+## 0.2.0 - 2026-08-04
 
 ### Added
 
@@ -16,6 +16,8 @@ Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 - Public-surface versioning for HTTP, MCP, configuration, state, and CLI
   contracts rather than command names alone.
 - Immutable release provenance and digest sidecars.
+- Signed immutable Stado release publication, promotion, blue-green rollout,
+  centralized status, quarantine, and automatic rollback integration.
 
 ### Changed
 

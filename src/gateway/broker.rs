@@ -19,7 +19,7 @@ const ENTITLEMENTS_ROUTER_BIN_ENV: &str = "ENTITLEMENTS_ROUTER_BIN";
 const DEFAULT_ENTITLEMENTS_ROUTER_BIN: &str = "entitlements-router";
 const REQUEST_SIGN_CAPABILITIES_ENV: &str = "BRAMA_REQUEST_SIGN_CAPABILITY_IDS";
 const REQUEST_SIGN_IDENTITIES_ENV: &str = "BRAMA_REQUEST_SIGN_IDENTITIES";
-const CENTRAL_REQUEST_SIGN_AGENTS: &[&str] = &["content-platform", "oko", "weles"];
+const CENTRAL_REQUEST_SIGN_AGENTS: &[&str] = &["echo", "content-platform", "oko", "weles"];
 const PROVIDER_CAPABILITIES_ENV: &str = "BRAMA_PROVIDER_CAPABILITY_IDS";
 const SUBSCRIPTION_CATALOG_ENV: &str = "BRAMA_SUBSCRIPTION_CATALOG";
 const DONATED_SUBSCRIPTIONS_FILE_ENV: &str = "BRAMA_DONATED_SUBSCRIPTIONS_FILE";
@@ -80,9 +80,9 @@ fn client() -> Option<CapabilityClient> {
 }
 
 /// Resolve an agent-specific request-signing secret immediately before HMAC
-/// verification. Content Platform, Oko, and Weles are strict central-item
-/// projections; they never fall back to generated agent resources or another
-/// product.
+/// verification. Echo, legacy Content Platform, Oko, and Weles are strict
+/// central-item projections; they never fall back to generated agent resources
+/// or another product.
 pub async fn get_agent_auth_secret(agent_id: &str) -> Option<Secret> {
     if CENTRAL_REQUEST_SIGN_AGENTS.contains(&agent_id) {
         let secret = capability_map(REQUEST_SIGN_IDENTITIES_ENV)?.remove(agent_id)?;

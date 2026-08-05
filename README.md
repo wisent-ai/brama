@@ -38,7 +38,8 @@ provider attempts, normalized errors, and auditable routing decisions.
 ### Included
 
 - OpenAI-compatible chat completions, embeddings, moderations, and model catalog.
-- Canonical `provider/model` routing and deployment-owned logical aliases.
+- Canonical `provider/model` routing and deployment-owned logical aliases,
+  including `-best` for the strongest operator-approved subscription route.
 - Agent-scoped selectors: `any`, `any-vision-capable`, and `task:<task-name>`.
 - Direct provider capabilities owned by Brama and subscription capabilities
   delegated to one agent.
@@ -152,10 +153,13 @@ Wisent service / Jeden
 ```
 
 Skarbiec is authoritative for secret capability redemption. The entitlements
-router is authoritative for live subscription resources. Brama's journal stores
-only retirement markers and task-quality observations; provider credentials are
-forbidden. Public model metadata is read from models.dev and is never credential
-authority.
+router is authoritative for live subscription resources. `-best` is an explicit
+deployment alias for `claude-code/claude-opus-4-6`; a caller still needs both an
+allowlisted bearer and the HMAC identity that owns the eligible subscription.
+It does not infer quality from prompt text or unlock a direct provider
+credential. Brama's journal stores only retirement markers and task-quality
+observations; provider credentials are forbidden. Public model metadata is read
+from models.dev and is never credential authority.
 
 ## Quick start
 
@@ -230,11 +234,13 @@ The complete state, error, retry, authorization, and resource contract is in
 - **Credentials:** callers use dedicated bearer items. Request-sign identities
   and provider capabilities remain separate. Secrets are redeemed at final use
   and are not written to JSON configuration, logs, or Brama state.
-- **Network:** the service binds loopback only. The Linux host's ingress proxy
-  terminates HTTPS from `BRAMA_API_HOST` and proxies to the `BRAMA_PORT`
-  loopback listener. The host service manager is responsible for installing a
-  verified GitHub Release and reloading ingress. Provider endpoints require
-  approved HTTPS hosts, disable redirects, and bypass ambient proxies.
+- **Network:** clients use the canonical `https://brama.wisent.ai` endpoint.
+  The service binds loopback only; the registered Linux host's ingress proxy
+  terminates HTTPS and proxies to the `BRAMA_PORT` loopback listener. Physical
+  host names, Tailscale addresses, Cloud Run URLs, and local forwards are not
+  client discovery. The host service manager installs verified releases and
+  reloads ingress. Provider endpoints require approved HTTPS hosts, disable
+  redirects, and bypass ambient proxies.
 - **Failure:** stable HTTP error codes distinguish invalid input, authentication,
   authorization, quota, timeout, dependency unavailability, and provider
   failure. Retryability is included in the error envelope.

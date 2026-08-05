@@ -1,5 +1,6 @@
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 
 const [, , binaryPath, outputDir, subscriptionsPath, executablePath = binaryPath, workloadUidInput, workloadGidInput] = process.argv;
@@ -22,7 +23,7 @@ if (
 const maxTtlSeconds = 315_360_000;
 const maxUses = 10_000_000;
 const subscriptions = JSON.parse(readFileSync(subscriptionsPath, 'utf8'));
-const subscriptionAgentIds = ['content-platform', 'oko', 'wisent-app'];
+const subscriptionAgentIds = ['echo', 'content-platform', 'oko', 'wisent-app'];
 const requestSignAgentIds = ['wisent-app'];
 if (!Array.isArray(subscriptions) || subscriptions.length === 0) {
   throw new Error('subscriptions manifest must be a non-empty array');
@@ -67,6 +68,37 @@ function writeSigned(name, document, domain, key) {
   writeFileSync(join(outputDir, `${name}.sig`), `${signature.toString('base64')}\n`, { mode: 0o600 });
 }
 
+function macosCodeSigningRequirement(path) {
+  if (process.platform !== 'darwin') return undefined;
+  const verified = spawnSync(
+    '/usr/bin/codesign',
+    ['--verify', '--strict', '--all-architectures', path],
+    { encoding: 'utf8' },
+  );
+  if (verified.error || verified.status !== 0) {
+    throw new Error(`Brama binary does not have a valid macOS code signature: ${verified.stderr || verified.error}`);
+  }
+  const displayed = spawnSync(
+    '/usr/bin/codesign',
+    ['--display', '--requirements', '-', path],
+    { encoding: 'utf8' },
+  );
+  if (displayed.error || displayed.status !== 0) {
+    throw new Error(`cannot read Brama designated requirement: ${displayed.stderr || displayed.error}`);
+  }
+  const output = `${displayed.stdout}\n${displayed.stderr}`;
+  const requirement = output
+    .split(/\r?\n/u)
+    .map((line) => line.startsWith('# ') ? line.slice(2) : line)
+    .find((line) => line.startsWith('designated => '))
+    ?.slice('designated => '.length)
+    .trim();
+  if (!requirement || requirement.length > 4096 || requirement.includes('\0')) {
+    throw new Error('Brama designated requirement is missing or invalid');
+  }
+  return requirement;
+}
+
 const subscriptionRules = subscriptions.map(({ id, provider }) => ({
   purpose: 'brama.provider.authenticate',
   resource: `provider:${provider}:${id}`,
@@ -95,6 +127,7 @@ const rules = [...requestSignRules, ...directProviderRules, ...subscriptionRules
 const policyKey = ed25519();
 const registryKey = ed25519();
 const proofKey = ed25519();
+const macosRequirement = macosCodeSigningRequirement(binaryPath);
 const policy = {
   version: 'v1',
   sequence: 1,
@@ -126,6 +159,9 @@ const registry = {
       gid: configuredWorkloadGid,
       executable_path: executablePath,
       executable_sha256: createHash('sha256').update(readFileSync(binaryPath)).digest('hex'),
+      ...(macosRequirement === undefined
+        ? {}
+        : { macos_code_signing_requirement: macosRequirement }),
       proof_key: proofKey.publicRaw.toString('base64'),
       agent_ids: ['brama-runtime'],
     },

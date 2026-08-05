@@ -20,14 +20,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/skarbiec
+          ref: ${{ vars.SKARBIEC_RELEASE_REVISION }}
+          path: skarbiec-source
       - uses: dtolnay/rust-toolchain@stable
       - name: Record build timestamp
         run: printf '%s\n' "BRAMA_BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
-      - name: Build tagged artifact
+      - name: Build tagged artifact once
         env:
           BRAMA_SOURCE_REVISION: ${{ github.sha }}
           BRAMA_BUILD_PLATFORM: ${{ matrix.platform }}
-        run: cargo build --locked --release --bin brama
+        run: |
+          cargo build --locked --release --bin brama
+          cargo build --locked --release --bin skarbiec --manifest-path skarbiec-source/Cargo.toml
       - name: Publish immutable tagged artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -40,17 +47,31 @@ jobs:
           archive="brama-${GITHUB_REF_NAME}-${{ matrix.platform }}.tar.gz"
           checksum="${archive}.sha256"
           stage="$(mktemp -d)"
-          cp target/release/brama LICENSE "$stage/"
-          cp scripts/start-with-skarbiec.sh "$stage/start-with-skarbiec"
-          chmod 0755 "$stage/brama" "$stage/start-with-skarbiec"
+          mkdir -p "$stage/bin" "$stage/etc/brama-skarbiec"
+          cp target/release/brama "$stage/bin/brama"
+          cp skarbiec-source/target/release/skarbiec "$stage/bin/skarbiec-entitlements-router"
+          cp scripts/start-with-skarbiec.sh "$stage/bin/start-with-skarbiec"
+          cp scripts/skarbiec-subscriptions.json "$stage/etc/brama-skarbiec/subscriptions.json"
+          cp scripts/skarbiec-recipient-public-keys.asc "$stage/etc/brama-skarbiec/recipient-public-keys.asc"
+          cp LICENSE "$stage/"
+          node scripts/generate-skarbiec-config.mjs \
+            "$stage/bin/brama" \
+            "$stage/etc/brama-skarbiec" \
+            "$stage/etc/brama-skarbiec/subscriptions.json"
+          chmod 0755 \
+            "$stage/bin/brama" \
+            "$stage/bin/skarbiec-entitlements-router" \
+            "$stage/bin/start-with-skarbiec"
+          skarbiec_revision="$(git -C skarbiec-source rev-parse HEAD)"
           jq -n \
             --arg product brama \
             --arg version "${GITHUB_REF_NAME#v}" \
             --arg source_revision "$GITHUB_SHA" \
+            --arg skarbiec_revision "$skarbiec_revision" \
             --arg platform "${{ matrix.platform }}" \
             --arg built_at "$BRAMA_BUILD_TIMESTAMP" \
             --arg builder "github-actions/${{ runner.os }}-${{ runner.arch }}" \
-            '{product: $product, version: $version, source_revision: $source_revision, platform: $platform, built_at: $built_at, builder: $builder}' \
+            '{product: $product, version: $version, source_revision: $source_revision, dependencies: {skarbiec: $skarbiec_revision}, platform: $platform, built_at: $built_at, builder: $builder}' \
             > "$stage/provenance.json"
           tar -czf "$archive" -C "$stage" .
           openssl dgst -sha256 -r "$archive" > "$checksum"

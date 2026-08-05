@@ -27,6 +27,11 @@ fi
 BRAMA_BIN=${BRAMA_BIN:-"$default_brama_bin"}
 ENTITLEMENTS_ROUTER_BIN=${ENTITLEMENTS_ROUTER_BIN:-"$default_router_bin"}
 config_dir=${BRAMA_SKARBIEC_CONFIG_DIR:-"$default_config_dir"}
+PYTHON_BIN=${PYTHON_BIN:-python3}
+command -v "$PYTHON_BIN" >/dev/null 2>&1 || {
+  printf '%s\n' "PYTHON_BIN is not executable: $PYTHON_BIN" >/dev/stderr
+  false
+}
 runtime_dir=${BRAMA_RUNTIME_DIR:-/tmp/brama-skarbiec}
 socket_dir="$runtime_dir/socket"
 gnupg_dir="$runtime_dir/gnupg"
@@ -68,6 +73,7 @@ export SKARBIEC_CAP_STATE="$runtime_dir/capability.sqlite"
 export SKARBIEC_CAP_SOCKET="$socket_dir/broker.sock"
 SKARBIEC_CAP_SOCKET_GID=$(id -g)
 export SKARBIEC_CAP_SOCKET_GID
+chgrp "$SKARBIEC_CAP_SOCKET_GID" "$socket_dir"
 export SKARBIEC_WORM_RECEIPT_DIR="$worm_dir"
 export SKARBIEC_WORM_RECEIPT_COMMAND="$config_dir/worm-receipt"
 export SKARBIEC_WORM_CHECKPOINT="$runtime_dir/checkpoint.json"
@@ -80,6 +86,11 @@ if [ -e "$SKARBIEC_CAP_SOCKET" ] || [ -L "$SKARBIEC_CAP_SOCKET" ]; then
     printf '%s\n' "unsafe stale capability socket: $SKARBIEC_CAP_SOCKET" >/dev/stderr
     false
   }
+  lsof_bin=$(command -v lsof || true)
+  if [ -n "$lsof_bin" ] && "$lsof_bin" -t -- "$SKARBIEC_CAP_SOCKET" >/dev/null 2>&1; then
+    printf '%s\n' "Skarbiec capability socket is owned by another process" >/dev/stderr
+    false
+  fi
   rm -f -- "$SKARBIEC_CAP_SOCKET"
 fi
 
@@ -93,7 +104,7 @@ control_config=${BRAMA_CONTROL_CONFIG:-${HOME:-/nonexistent}/.config/brama/contr
 }
 policy_dir=$(mktemp -d "$runtime_dir/policy.XXXXXX")
 trap 'rm -rf "$policy_dir"' EXIT HUP INT TERM
-python3 - "$control_config" "$policy_dir/allowed-models" "$policy_dir/model-aliases" <<'PY'
+"$PYTHON_BIN" - "$control_config" "$policy_dir/allowed-models" "$policy_dir/model-aliases" <<'PY'
 import json
 import os
 import stat
@@ -113,6 +124,7 @@ except (KeyError, TypeError) as error:
     raise SystemExit(f"services.brama policy is incomplete: {error}") from error
 
 expected_alias_routes = {
+    "-best": "claude-code/claude-opus-4-6",
     "wisent-backend/chat/primary": "qwen/default",
     "wisent-backend/chat/fallback": "qwen/default",
     "wisent-backend/evaluation": "openai/default",
@@ -135,14 +147,14 @@ if (
     or aliases != expected_alias_routes
 ):
     raise SystemExit("services.brama.model_aliases must map every exact alias to one provider/model route")
-expected_providers = {"local-openai", "openai", "qwen"}
+expected_providers = {"openai", "qwen"}
 if (
     not isinstance(required_providers, list)
     or set(required_providers) != expected_providers
     or len(required_providers) != len(expected_providers)
 ):
     raise SystemExit(
-        "services.brama.required_provider_capabilities must contain the exact alias providers"
+        "services.brama.required_provider_capabilities must contain the exact direct provider set"
     )
 
 def write_policy(path, value):
@@ -165,7 +177,7 @@ unset policy_dir control_config BRAMA_CONTROL_CONFIG
 # entitlement router and its exact recipient grant.
 : "${BRAMA_ALLOWED_MODELS:?set exact closed Brama model allowlist}"
 BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES="$(
-  python3 - "$ENTITLEMENTS_ROUTER_BIN" <<'PY'
+  "$PYTHON_BIN" - "$ENTITLEMENTS_ROUTER_BIN" <<'PY'
 import json
 import os
 import subprocess
@@ -177,9 +189,10 @@ router = next(arguments)
 all_models = os.environ["BRAMA_ALLOWED_MODELS"].split(",")
 backend_models = [model for model in all_models if model.startswith("wisent-backend/")]
 weles_models = ["weles/agent/primary"]
+tama_models = ["-best"]
 sources = [
     ("content-platform-production", "content-platform-production-model-router", "content-platform", None),
-    ("echo", "echo-model-router", None, None),
+    ("echo", "echo-model-router", "echo", None),
     ("oko", "oko-model-router", "oko", None),
     ("weles", "weles-model-router", "weles", weles_models),
     ("weles-keyword-planner", "weles-keyword-planner-model-router", "wisent-app", None),
@@ -194,6 +207,7 @@ sources = [
     ("trading-autonomy", "trading-autonomy-model-router", None, None),
     ("wisent-trade-agent", "wisent-trade-agent-model-router", None, None),
     ("wisent-backend", "wisent-backend-model-router", None, backend_models),
+    ("tama-objective-authority", "tama-objective-authority-model-router", "wisent-app", tama_models),
     ("brama-operations", "brama-operations-model-router", "wisent-app", None),
 ]
 
@@ -205,7 +219,13 @@ def field(item, name):
         text=True,
         env=os.environ,
     )
-    value = json.loads(result.stdout).get(name)
+    payload = json.loads(result.stdout)
+    if payload.get("schema") != "skarbiec.item.v2":
+        raise RuntimeError(f"{item} did not return a Skarbiec v2 item")
+    fields = payload.get("fields")
+    if not isinstance(fields, dict):
+        raise RuntimeError(f"{item} did not return a fields object")
+    value = fields.get(name)
     if not isinstance(value, str) or not value or value.strip() != value:
         raise RuntimeError(f"{item}/{name} is not a single non-empty value")
     return value
@@ -228,10 +248,10 @@ PY
 export BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES
 unset BRAMA_ALLOWED_MODELS
 
-# Content Platform, Oko, and Weles identities are read from their exact
-# Skarbiec items.
+# Echo, legacy Content Platform, Oko, and Weles identities are read from their
+# exact Skarbiec items.
 BRAMA_REQUEST_SIGN_IDENTITIES="$(
-  python3 - "$ENTITLEMENTS_ROUTER_BIN" <<'PY'
+  "$PYTHON_BIN" - "$ENTITLEMENTS_ROUTER_BIN" <<'PY'
 import json
 import os
 import subprocess
@@ -241,6 +261,7 @@ arguments = iter(sys.argv)
 next(arguments)
 router = next(arguments)
 sources = {
+    "echo": "echo-agent-auth",
     "content-platform": "content-platform-agent-auth",
     "oko": "oko-model-agent-auth",
     "weles": "weles-model-agent-auth",
@@ -254,7 +275,13 @@ def field(item, name):
         text=True,
         env=os.environ,
     )
-    value = json.loads(result.stdout).get(name)
+    payload = json.loads(result.stdout)
+    if payload.get("schema") != "skarbiec.item.v2":
+        raise RuntimeError(f"{item} did not return a Skarbiec v2 item")
+    fields = payload.get("fields")
+    if not isinstance(fields, dict):
+        raise RuntimeError(f"{item} did not return a fields object")
+    value = fields.get(name)
     if not isinstance(value, str) or not value:
         raise RuntimeError(f"{item}/{name} is empty")
     return value
@@ -274,12 +301,13 @@ PY
 }
 export BRAMA_REQUEST_SIGN_IDENTITIES
 
+
 # Weles reauth uses one dedicated Skarbiec item and one accepted runtime name.
 # It is not the Weles console token and has no general Weles API scope.
 : "${WELES_URL:=https://weles.wisent.ai}"
 
 BRAMA_WELES_REAUTH_TOKEN="$(
-  python3 - "$ENTITLEMENTS_ROUTER_BIN" <<'PY'
+  "$PYTHON_BIN" - "$ENTITLEMENTS_ROUTER_BIN" <<'PY'
 import json
 import os
 import subprocess
@@ -308,7 +336,7 @@ capabilities_file="$runtime_dir/provider-capabilities.json"
 request_capabilities_file="$runtime_dir/request-sign-capabilities.json"
 catalog_file="$runtime_dir/subscription-catalog.json"
 "$ENTITLEMENTS_ROUTER_BIN" list >"$subscriptions_file"
-python3 - \
+"$PYTHON_BIN" - \
   "$ENTITLEMENTS_ROUTER_BIN" \
   "$subscriptions_file" \
   "$config_dir/policy.json" \
@@ -346,7 +374,7 @@ request_sign_agents = sorted(
     and isinstance(resource, str)
     and resource.startswith("agent:")
 )
-subscription_agents = sorted([*request_sign_agents, "content-platform", "oko"])
+subscription_agents = sorted([*request_sign_agents, "echo", "content-platform", "oko"])
 normalize = lambda value: value.strip().lower().replace("_", "-")
 
 def issue(purpose, resource):
@@ -377,48 +405,44 @@ for item in available_items:
     resource_id = item.get("id")
     if not isinstance(resource_id, str):
         continue
-    match resource_id.split(":"):
-        case ["provider", provider_name]:
-            provider = normalize(provider_name)
-            resource = f"provider:{provider}"
-            if ("brama.provider.authenticate", resource) not in allowed:
-                continue
-            capabilities[provider] = issue("brama.provider.authenticate", resource)
-        case ["provider", provider_name, item_id]:
-            provider = normalize(provider_name)
-            agent_id = next(
-                (
-                    agent
-                    for agent in subscription_agents
-                    if item_id.startswith(f"brama-sub-{agent}-")
-                ),
-                None,
-            )
-            if agent_id is None:
-                continue
-            resource = f"provider:{provider}:{item_id}"
-            if ("brama.provider.authenticate", resource) not in allowed:
-                continue
-            capabilities[item_id] = issue("brama.provider.authenticate", resource)
-            catalog.append({
-                "id": item_id,
-                "provider": provider,
-                "agent_id": agent_id,
-                "status": "active",
-            })
-        case _:
+    parts = resource_id.split(":")
+    if len(parts) == 2 and parts[0] == "provider":
+        provider = normalize(parts[1])
+        resource = f"provider:{provider}"
+        if ("brama.provider.authenticate", resource) not in allowed:
             continue
+        capabilities[provider] = issue("brama.provider.authenticate", resource)
+    elif len(parts) == 3 and parts[0] == "provider":
+        provider, item_id = normalize(parts[1]), parts[2]
+        agent_id = next(
+            (
+                agent
+                for agent in subscription_agents
+                if item_id.startswith(f"brama-sub-{agent}-")
+            ),
+            None,
+        )
+        if agent_id is None:
+            continue
+        resource = f"provider:{provider}:{item_id}"
+        if ("brama.provider.authenticate", resource) not in allowed:
+            continue
+        capabilities[item_id] = issue("brama.provider.authenticate", resource)
+        catalog.append({
+            "id": item_id,
+            "provider": provider,
+            "agent_id": agent_id,
+            "status": "active",
+        })
 
 for purpose, resource in sorted(allowed):
     if purpose != "brama.provider.authenticate":
         continue
-    match resource.split(":"):
-        case ["provider", provider_name]:
-            provider = normalize(provider_name)
-            if provider not in capabilities:
-                capabilities[provider] = issue(purpose, resource)
-        case _:
-            continue
+    parts = resource.split(":")
+    if len(parts) == 2 and parts[0] == "provider":
+        provider = normalize(parts[1])
+        if provider not in capabilities:
+            capabilities[provider] = issue(purpose, resource)
 
 request_capabilities = {
     agent_id: issue("brama.request.sign", f"agent:{agent_id}")
@@ -436,6 +460,12 @@ export BRAMA_PROVIDER_CAPABILITY_IDS="$(cat "$capabilities_file")"
 export BRAMA_REQUEST_SIGN_CAPABILITY_IDS="$(cat "$request_capabilities_file")"
 export BRAMA_SUBSCRIPTION_CATALOG="$(cat "$catalog_file")"
 
+# The Mac worker exposes only its deployment-owned local chat provider.
+if [ "$(uname -s)" = Darwin ]; then
+  export BRAMA_MODEL_ALIASES='{"weles/agent/primary":"local-openai/chat-primary","wisent-backend/chat/fallback":"local-openai/chat-primary","wisent-backend/chat/primary":"local-openai/chat-primary","wisent-backend/embeddings":"openai/embeddings","wisent-backend/evaluation":"local-openai/chat-primary","wisent-backend/moderation":"openai/moderation"}'
+fi
+
+
 $ENTITLEMENTS_ROUTER_BIN capability-serve &
 broker_pid=$!
 trap 'kill "$broker_pid" 2>/dev/null || true' EXIT INT TERM
@@ -449,4 +479,4 @@ while [ ! -S "$SKARBIEC_CAP_SOCKET" ]; do
   sleep 0.05
 done
 
-exec "$BRAMA_BIN" serve --port "${PORT:-8080}"
+exec "$BRAMA_BIN" serve --port "${BRAMA_PORT_OVERRIDE:-${PORT:-8080}}"

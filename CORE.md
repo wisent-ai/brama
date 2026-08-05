@@ -45,6 +45,12 @@ No subscription credential is eligible for this workflow.
 The caller supplies the three agent HMAC headers over the exact raw request body.
 The bearer-bound agent, signed agent, and path agent must agree where present.
 
+The deployment alias `-best` resolves to
+`claude-code/claude-opus-4-6`. It is accepted only for bearers whose model
+allowlist names `-best`; the HMAC identity still selects the subscription owner.
+The alias never authorizes a direct Claude credential or another agent's
+subscription.
+
 `billingTarget` contains `providerId`, `accountId`, and `subscriptionId`:
 
 - `providerId` must match the canonical route provider;

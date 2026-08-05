@@ -22,6 +22,8 @@ for item in \
   wisent-trade-agent-model-router \
   wisent-backend-model-router \
   brama-operations-model-router \
+  tama-objective-authority-model-router \
+  echo-agent-auth \
   content-platform-agent-auth \
   oko-model-agent-auth \
   weles-model-agent-auth \

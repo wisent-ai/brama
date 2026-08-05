@@ -23,6 +23,18 @@ enum Commands {
         #[arg(short, long, default_value_t = 8080)]
         port: u16,
     },
+    /// Follow Brama's first-use journey and optionally receive one real model response
+    Onboard {
+        /// Canonical provider/model route for the first real response
+        #[arg(short, long, default_value = "openai/default")]
+        model: String,
+        /// Stable workload id whose separately provisioned provider credential should be used
+        #[arg(long, default_value = "wisent-app")]
+        agent_id: String,
+        /// Acknowledge that onboarding should perform one billable provider request
+        #[arg(long, default_value_t = false)]
+        allow_provider_cost: bool,
+    },
     /// Run a test inference through the router
     Test {
         /// Canonical provider/model route to test
@@ -90,6 +102,20 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Commands::Onboard {
+            model,
+            agent_id,
+            allow_provider_cost,
+        } => match brama::onboarding::run_first_use(model, agent_id, allow_provider_cost).await {
+            Ok(false) if allow_provider_cost => {
+                std::process::exit(1);
+            }
+            Ok(_) => {}
+            Err(error) => {
+                eprintln!("Onboarding error: {error}");
+                std::process::exit(1);
+            }
+        },
         Commands::Test {
             model,
             agent_id,

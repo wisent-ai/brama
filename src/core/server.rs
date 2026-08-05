@@ -52,6 +52,7 @@ const WISENT_EVALUATION_ALIAS: &str = "wisent-backend/evaluation";
 const WISENT_EMBEDDING_ALIAS: &str = "wisent-backend/embeddings";
 const WISENT_MODERATION_ALIAS: &str = "wisent-backend/moderation";
 const WELES_AGENT_PRIMARY_ALIAS: &str = "weles/agent/primary";
+const BEST_ALIAS: &str = "-best";
 const WISENT_MODEL_ALIASES: &[&str] = &[
     WISENT_CHAT_PRIMARY_ALIAS,
     WISENT_CHAT_FALLBACK_ALIAS,
@@ -66,6 +67,7 @@ const MODEL_ALIASES: &[&str] = &[
     WISENT_EMBEDDING_ALIAS,
     WISENT_MODERATION_ALIAS,
     WELES_AGENT_PRIMARY_ALIAS,
+    BEST_ALIAS,
 ];
 
 #[derive(Clone, Debug, Deserialize)]

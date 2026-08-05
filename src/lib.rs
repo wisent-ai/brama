@@ -6,6 +6,7 @@ pub mod detection;
 pub mod gateway;
 pub mod journal;
 pub mod mcp;
+pub mod onboarding;
 pub mod providers;
 pub mod subscription_dispatch;
 pub mod types;

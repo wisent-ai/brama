@@ -135,7 +135,7 @@ Use the packaged `start-with-skarbiec` launcher. It owns these steps:
 3. import the scoped Brama recipient key into an owner-only runtime directory;
 4. generate and verify Skarbiec trust, policy, workload, and capability files;
 5. read each accepted client bearer from its dedicated item;
-6. load central Content Platform, Oko, and Weles request-sign identities;
+6. load central Echo, legacy Content Platform, Oko, and Weles request-sign identities;
 7. derive provider and agent capability maps from live vault resources;
 8. start the owner-bound capability socket;
 9. exec `brama serve --port <port>`.

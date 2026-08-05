@@ -1,6 +1,6 @@
 {
-  "version": "0.1.0",
-  "source": "head:12b60dbb002ce27a1f82990b85b7c57c9bc22a7a -- NOT PUBLISHED: no complete GitHub Release or usable SemVer tag exists; this baseline records the contract as of that commit",
+  "version": "0.2.0",
+  "source": "pending:v0.2.0 — publish only from a qualified immutable candidate through Stado release control",
   "surface": [
     "collect-task-quality",
     "detect",
