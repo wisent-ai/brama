@@ -22,6 +22,7 @@ for item in \
   wisent-trade-agent-model-router \
   wisent-backend-model-router \
   brama-operations-model-router \
+  brama-desktop-model-router \
   tama-objective-authority-model-router \
   agent:wisent-app \
   echo-agent-auth \

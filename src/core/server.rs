@@ -9,7 +9,7 @@ use axum::extract::{ConnectInfo, Extension, Path, State};
 use axum::http::{header::AUTHORIZATION, HeaderMap, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -69,6 +69,7 @@ const MODEL_ALIASES: &[&str] = &[
     WELES_AGENT_PRIMARY_ALIAS,
     BEST_ALIAS,
 ];
+const BRAMA_DESKTOP_CLIENT_ID: &str = "brama-desktop";
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1325,6 +1326,209 @@ fn wire_protocol_name(protocol: crate::providers::adapter::WireProtocol) -> &'st
     }
 }
 
+fn require_brama_desktop(identity: &ModelClientIdentity) -> Result<(), ApiError> {
+    if identity.client_id == BRAMA_DESKTOP_CLIENT_ID && identity.allowed_models.is_none() {
+        Ok(())
+    } else {
+        Err(api_error(StatusCode::FORBIDDEN, "forbidden"))
+    }
+}
+
+fn route_supported(alias: &str, route: &str) -> bool {
+    if route.is_empty()
+        || route.trim() != route
+        || route.contains('*')
+        || route.bytes().any(|byte| byte.is_ascii_control())
+    {
+        return false;
+    }
+    let supported = match alias {
+        WISENT_CHAT_PRIMARY_ALIAS
+        | WISENT_CHAT_FALLBACK_ALIAS
+        | WISENT_EVALUATION_ALIAS
+        | WELES_AGENT_PRIMARY_ALIAS => crate::providers::adapter::supports_chat_route(route),
+        WISENT_EMBEDDING_ALIAS => crate::providers::adapter::supports_embedding_route(route),
+        WISENT_MODERATION_ALIAS => crate::providers::adapter::supports_moderation_route(route),
+        _ => false,
+    };
+    supported
+        && crate::providers::adapter::provider_id_from_route(route)
+            .is_some_and(crate::gateway::broker::provider_capability_configured)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AdminRouteUpdate {
+    alias: String,
+    primary: String,
+    #[serde(default)]
+    fallbacks: Vec<String>,
+}
+
+async fn admin_snapshot(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Extension(aliases): Extension<ModelAliases>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    let routes = match aliases.routes_file.as_deref() {
+        Some(path) => crate::core::inference_routes::snapshot(path)
+            .map_err(|_| api_error(StatusCode::SERVICE_UNAVAILABLE, "route registry unavailable"))?,
+        None => json!({
+            "routes": aliases.routes,
+            "fallbacks": {},
+            "deployments": [],
+        }),
+    };
+    let providers = crate::providers::adapter::providers()
+        .iter()
+        .map(|provider| {
+            json!({
+                "id": provider.id,
+                "displayName": provider.display_name,
+                "wireProtocol": wire_protocol_name(provider.wire),
+                "configured": crate::gateway::broker::provider_capability_configured(provider.id),
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(Json(json!({
+        "schemaVersion": 1,
+        "build": crate::build_info::current(),
+        "routes": routes,
+        "providers": providers,
+        "automaticRollback": true,
+        "boundaries": {
+            "routing": "brama",
+            "releases": "stado",
+            "credentials": "skarbiec",
+        },
+    })))
+}
+
+async fn update_admin_route(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Extension(aliases): Extension<ModelAliases>,
+    Json(request): Json<AdminRouteUpdate>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    if !MODEL_ALIASES.contains(&request.alias.as_str()) {
+        return Err(api_error(StatusCode::BAD_REQUEST, "unknown route alias"));
+    }
+    let mut seen = HashSet::from([request.primary.as_str()]);
+    if !route_supported(&request.alias, &request.primary)
+        || request.fallbacks.iter().any(|route| {
+            !seen.insert(route.as_str()) || !route_supported(&request.alias, route)
+        })
+    {
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            "route chain is unsupported, duplicated, or unavailable",
+        ));
+    }
+    let path = aliases
+        .routes_file
+        .as_deref()
+        .ok_or_else(|| api_error(StatusCode::CONFLICT, "runtime route registry is not configured"))?;
+    let routes = crate::core::inference_routes::update_route(
+        path,
+        &request.alias,
+        &request.primary,
+        &request.fallbacks,
+    )
+    .map_err(|_| api_error(StatusCode::CONFLICT, "route update was rejected"))?;
+    Ok(Json(json!({"ok": true, "routes": routes})))
+}
+
+async fn list_admin_subscriptions(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Path(agent_id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    if agent_id.is_empty()
+        || !agent_id
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    {
+        return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
+    }
+    let subscriptions = crate::gateway::broker::list_subscriptions(&agent_id)
+        .await
+        .into_iter()
+        .map(|entry| {
+            json!({
+                "id": entry.id,
+                "provider": entry.provider,
+                "status": entry.status,
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(Json(json!({"agentId": agent_id, "subscriptions": subscriptions})))
+}
+
+async fn create_admin_subscription(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Path(agent_id): Path<String>,
+    Json(request): Json<DonateSubscriptionRequest>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    if agent_id.is_empty()
+        || !agent_id
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    {
+        return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
+    }
+    let provider = match request.provider.as_deref().map(str::trim) {
+        Some("claude_code" | "claude-code") => "claude-code",
+        _ => return Err(api_error(StatusCode::BAD_REQUEST, "provider must be claude_code")),
+    };
+    let api_key = request.api_key.as_deref().unwrap_or("");
+    if api_key.is_empty() || api_key.chars().count() > 8000 {
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            "api_key must contain 1..8000 characters",
+        ));
+    }
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let subscription_id = format!(
+        "brama-sub-{}-claude-{millis}",
+        crate::gateway::broker::slug(&agent_id)
+    );
+    crate::gateway::broker::put_donated_credential(&subscription_id, api_key)
+        .await
+        .map_err(|_| api_error(StatusCode::CONFLICT, "subscription credential was rejected"))?;
+    crate::gateway::broker::donated_add(&agent_id, &subscription_id, provider)
+        .map_err(|_| api_error(StatusCode::CONFLICT, "subscription registration failed"))?;
+    Ok(Json(json!({
+        "subscription": {
+            "id": subscription_id,
+            "provider": provider,
+            "status": "active",
+            "label": request.label,
+        }
+    })))
+}
+
+async fn retire_admin_subscription(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Path((agent_id, subscription_id)): Path<(String, String)>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    let owned = crate::gateway::broker::list_subscriptions(&agent_id)
+        .await
+        .into_iter()
+        .any(|entry| entry.id == subscription_id);
+    if !owned {
+        return Err(api_error(StatusCode::NOT_FOUND, "subscription not found"));
+    }
+    crate::journal::retire(&subscription_id);
+    crate::gateway::broker::donated_remove(&subscription_id)
+        .map_err(|_| api_error(StatusCode::CONFLICT, "subscription retirement failed"))?;
+    Ok(Json(json!({"ok": true})))
+}
+
 async fn get_stats() -> impl IntoResponse {
     let provider_descriptors = crate::providers::adapter::providers();
     let configured_direct_providers = provider_descriptors
@@ -1598,6 +1802,16 @@ pub async fn start_server(port: u16) -> Result<(), std::io::Error> {
                 .delete(retire_subscription),
         )
         .route("/stats", get(get_stats))
+        .route("/v1/admin/snapshot", get(admin_snapshot))
+        .route("/v1/admin/routes", put(update_admin_route))
+        .route(
+            "/v1/admin/subscriptions/:agent_id",
+            get(list_admin_subscriptions).post(create_admin_subscription),
+        )
+        .route(
+            "/v1/admin/subscriptions/:agent_id/:subscription_id",
+            delete(retire_admin_subscription),
+        )
         .layer(Extension(aliases))
         .layer(middleware::from_fn_with_state(
             ingress_auth,

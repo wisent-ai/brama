@@ -1,22 +1,27 @@
 use std::collections::HashMap;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 pub const ROUTES_FILE_ENV: &str = "BRAMA_INFERENCE_ROUTES_FILE";
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct Endpoint {
     host: String,
     port: u16,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct Deployment {
     name: String,
     endpoint: Endpoint,
 }
-#[derive(Debug, Deserialize)]
+
+#[derive(Debug, Deserialize, Serialize)]
 struct Registry {
     #[serde(default)]
     deployments: Vec<Deployment>,
@@ -25,6 +30,8 @@ struct Registry {
     #[serde(default)]
     fallbacks: HashMap<String, Vec<String>>,
 }
+
+static ROUTE_WRITE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 fn read(path: &Path) -> Result<Registry, String> {
     let metadata = std::fs::symlink_metadata(path)
@@ -54,6 +61,99 @@ pub fn configured_path() -> Option<PathBuf> {
     std::env::var_os(ROUTES_FILE_ENV)
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
+}
+
+pub fn snapshot(path: &Path) -> Result<Value, String> {
+    let body = std::fs::read_to_string(path)
+        .map_err(|error| format!("cannot read inference routes: {error}"))?;
+    let value: Value = serde_json::from_str(&body)
+        .map_err(|error| format!("invalid inference routes: {error}"))?;
+    let registry: Registry = serde_json::from_value(value.clone())
+        .map_err(|error| format!("invalid inference routes: {error}"))?;
+    for destination in registry.routes.values() {
+        resolved_destination(&registry, destination)?;
+    }
+    for (alias, destinations) in &registry.fallbacks {
+        if !registry.routes.contains_key(alias) {
+            return Err(format!(
+                "inference fallback route '{alias}' has no primary destination"
+            ));
+        }
+        for destination in destinations {
+            resolved_destination(&registry, destination)?;
+        }
+    }
+    Ok(value)
+}
+
+pub fn update_route(
+    path: &Path,
+    alias: &str,
+    primary: &str,
+    fallbacks: &[String],
+) -> Result<Value, String> {
+    let _guard = ROUTE_WRITE_LOCK
+        .lock()
+        .map_err(|_| "inference route write lock is poisoned".to_string())?;
+    let mut value = snapshot(path)?;
+    let document = value
+        .as_object_mut()
+        .ok_or_else(|| "inference routes must be a JSON object".to_string())?;
+    let routes = document
+        .entry("routes")
+        .or_insert_with(|| Value::Object(Default::default()))
+        .as_object_mut()
+        .ok_or_else(|| "inference routes.routes must be an object".to_string())?;
+    routes.insert(alias.to_string(), Value::String(primary.to_string()));
+    let fallback_map = document
+        .entry("fallbacks")
+        .or_insert_with(|| Value::Object(Default::default()))
+        .as_object_mut()
+        .ok_or_else(|| "inference routes.fallbacks must be an object".to_string())?;
+    if fallbacks.is_empty() {
+        fallback_map.remove(alias);
+    } else {
+        fallback_map.insert(
+            alias.to_string(),
+            Value::Array(fallbacks.iter().cloned().map(Value::String).collect()),
+        );
+    }
+
+    let bytes = serde_json::to_vec_pretty(&value)
+        .map_err(|error| format!("cannot encode inference routes: {error}"))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "inference routes path has no parent".to_string())?;
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "inference routes path has no safe file name".to_string())?;
+    let staging = parent.join(format!(".{file_name}.{}.tmp", std::process::id()));
+    let result = (|| {
+        #[cfg(unix)]
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options
+            .open(&staging)
+            .map_err(|error| format!("cannot create route staging file: {error}"))?;
+        file.write_all(&bytes)
+            .map_err(|error| format!("cannot write route staging file: {error}"))?;
+        file.write_all(b"\n")
+            .map_err(|error| format!("cannot finish route staging file: {error}"))?;
+        file.sync_all()
+            .map_err(|error| format!("cannot sync route staging file: {error}"))?;
+        validate(&staging)?;
+        std::fs::rename(&staging, path)
+            .map_err(|error| format!("cannot commit inference routes: {error}"))?;
+        Ok(value)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&staging);
+    }
+    result
 }
 fn tailscale_ipv4(value: &str) -> bool {
     let Ok(address) = value.parse::<std::net::Ipv4Addr>() else {

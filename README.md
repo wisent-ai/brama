@@ -208,6 +208,10 @@ operator paths. Runnable, risk-labeled workflows are indexed in
 - **Subscription lifecycle:** `GET`, `POST`, and `DELETE`
   `/v1/subscriptions/:agent_id`; always bearer- and HMAC-protected.
 - **Operations:** public `GET /health`; protected `GET /stats`.
+- **Desktop control plane:** `brama-desktop` alone may call
+  `GET /v1/admin/snapshot`, `PUT /v1/admin/routes`, and the `GET`, `POST`, and
+  `DELETE` `/v1/admin/subscriptions/:agent_id` family. These endpoints return
+  identifiers and status only; subscription credentials remain write-only.
 - **CLI:** `serve`, `version`, `detect`, `test`, `collect-task-quality`, and
   `mcp`. Billable commands require an explicit cost acknowledgement.
 - **MCP:** read-only stdio JSON-RPC exposing `brama_detect` only. Model execution,
@@ -228,6 +232,11 @@ The complete state, error, retry, authorization, and resource contract is in
   per request, rejects symlinks and group/other-readable files, accepts only
   Tailscale IPv4 deployment endpoints, fails closed on malformed updates, and
   attempts centrally declared fallback routes in order.
+- **Desktop credential:** Brama Desktop proves its local Ed25519 workload key
+  to Skarbiec for the exact
+  `acquire:brama-desktop-model-router#token` scope. The one-time acquisition
+  bearer is consumed immediately; the Brama model-router bearer remains only
+  in process memory and is reacquired after restart.
 - **State:** `$BRAMA_STATE_DIR/journal.jsonl` contains retirement and quality
   records. `/tmp/brama-perf.json` contains replaceable process telemetry. The
   entitlements router owns encrypted provider credential storage.

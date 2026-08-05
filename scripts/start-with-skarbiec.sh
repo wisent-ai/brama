@@ -173,6 +173,36 @@ rm -rf "$policy_dir"
 trap - EXIT HUP INT TERM
 unset policy_dir control_config BRAMA_CONTROL_CONFIG
 
+# Persist operator route changes outside immutable releases. The initial
+# registry mirrors the exact validated launch aliases; later writes are atomic
+# and owner-only in Brama's runtime.
+BRAMA_INFERENCE_ROUTES_FILE=${BRAMA_INFERENCE_ROUTES_FILE:-"$HOME/.config/brama/inference-routes.json"}
+routes_dir=$(dirname "$BRAMA_INFERENCE_ROUTES_FILE")
+mkdir -p "$routes_dir"
+chmod 0700 "$routes_dir"
+if [ ! -e "$BRAMA_INFERENCE_ROUTES_FILE" ]; then
+  BRAMA_MODEL_ALIASES="$BRAMA_MODEL_ALIASES" "$PYTHON_BIN" - "$BRAMA_INFERENCE_ROUTES_FILE" <<'PY'
+import json
+import os
+import stat
+import sys
+
+path = sys.argv[1]
+document = {
+    "schema_version": 1,
+    "routes": json.loads(os.environ["BRAMA_MODEL_ALIASES"]),
+    "fallbacks": {},
+    "deployments": [],
+}
+descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, stat.S_IRUSR | stat.S_IWUSR)
+with os.fdopen(descriptor, "w", encoding="utf-8") as target:
+    json.dump(document, target, indent=2, sort_keys=True)
+    target.write("\n")
+PY
+fi
+export BRAMA_INFERENCE_ROUTES_FILE
+unset routes_dir
+
 # Read every accepted bearer from its dedicated Skarbiec item through the local
 # entitlement router and its exact recipient grant.
 : "${BRAMA_ALLOWED_MODELS:?set exact closed Brama model allowlist}"
@@ -213,6 +243,7 @@ sources = [
     ("wisent-backend", "wisent-backend-model-router", None, backend_models),
     ("tama-objective-authority", "tama-objective-authority-model-router", "wisent-app", tama_models),
     ("brama-operations", "brama-operations-model-router", "wisent-app", None),
+    ("brama-desktop", "brama-desktop-model-router", None, None),
     ("lem", "lem-model-router", None, lem_models),
 ]
 
