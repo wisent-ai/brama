@@ -33,7 +33,7 @@ struct Registry {
 
 static ROUTE_WRITE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
-fn read(path: &Path) -> Result<Registry, String> {
+fn read_body(path: &Path) -> Result<String, String> {
     let metadata = std::fs::symlink_metadata(path)
         .map_err(|error| format!("cannot read inference routes metadata: {error}"))?;
     if metadata.file_type().is_symlink() || !metadata.is_file() {
@@ -42,18 +42,19 @@ fn read(path: &Path) -> Result<Registry, String> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::{MetadataExt, PermissionsExt};
-        let one = u8::BITS / u8::BITS;
-        let shift = one + one;
-        let non_owner_mask = u32::from(u8::MAX) >> shift;
+        const NON_OWNER_MASK: u32 = 0o077;
         if metadata.uid() != unsafe { libc::geteuid() } {
             return Err("inference routes must be owned by the Brama user".to_string());
         }
-        if metadata.permissions().mode() & non_owner_mask != u32::MIN {
+        if metadata.permissions().mode() & NON_OWNER_MASK != u32::MIN {
             return Err("inference routes must not be accessible by group or other".to_string());
         }
     }
-    let body = std::fs::read_to_string(path)
-        .map_err(|error| format!("cannot read inference routes: {error}"))?;
+    std::fs::read_to_string(path).map_err(|error| format!("cannot read inference routes: {error}"))
+}
+
+fn read(path: &Path) -> Result<Registry, String> {
+    let body = read_body(path)?;
     serde_json::from_str(&body).map_err(|error| format!("invalid inference routes: {error}"))
 }
 
@@ -64,8 +65,7 @@ pub fn configured_path() -> Option<PathBuf> {
 }
 
 pub fn snapshot(path: &Path) -> Result<Value, String> {
-    let body = std::fs::read_to_string(path)
-        .map_err(|error| format!("cannot read inference routes: {error}"))?;
+    let body = read_body(path)?;
     let value: Value = serde_json::from_str(&body)
         .map_err(|error| format!("invalid inference routes: {error}"))?;
     let registry: Registry = serde_json::from_value(value.clone())
