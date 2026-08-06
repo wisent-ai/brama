@@ -1,11 +1,13 @@
 {
-  "version": "0.2.2",
-  "source": "pending:v0.2.2 — publish only from a qualified immutable candidate through Stado release control",
+  "version": "0.2.4",
+  "source": "github-release:v0.2.4 -- immutable archives and checksums published by the repository release workflow",
   "surface": [
     "collect-task-quality",
     "detect",
     "mcp",
+    "onboard",
     "serve",
-    "test"
+    "test",
+    "version"
   ]
 }
