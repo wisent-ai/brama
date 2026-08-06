@@ -526,4 +526,33 @@ while [ ! -S "$SKARBIEC_CAP_SOCKET" ]; do
   sleep 0.05
 done
 
+# Where to listen, and whose hops are already encrypted, both worked out by
+# Stado from the placement and the host records rather than written here. A
+# host the gateway is not placed on gets a refusal, and the variables stay
+# unset: it then binds loopback, which is what an instance nobody placed should
+# be reachable as. Moving the gateway needs no edit in this file.
+if [ -z "${BRAMA_BIND_ADDRESS:-}" ]; then
+  if [ -x "$HOME/.stado/bin/stado" ]; then
+    stado_bin="$HOME/.stado/bin/stado"
+  else
+    stado_bin="$(command -v stado || true)"
+  fi
+  if [ -n "$stado_bin" ]; then
+    serving="$("$stado_bin" service directory bind brama 2>/dev/null || true)"
+    for line in $serving; do
+      case "$line" in
+        bind_address=*) BRAMA_BIND_ADDRESS="${line#bind_address=}" ;;
+        encrypted_peers=*) BRAMA_ENCRYPTED_PEER_IPS="${line#encrypted_peers=}" ;;
+      esac
+    done
+    if [ -n "${BRAMA_BIND_ADDRESS:-}" ]; then
+      export BRAMA_BIND_ADDRESS
+      printf 'serving on %s for the fleet\n' "$BRAMA_BIND_ADDRESS"
+    fi
+    if [ -n "${BRAMA_ENCRYPTED_PEER_IPS:-}" ]; then
+      export BRAMA_ENCRYPTED_PEER_IPS
+    fi
+  fi
+fi
+
 exec "$BRAMA_BIN" serve --port "${BRAMA_PORT_OVERRIDE:-${PORT:-8080}}"
