@@ -1371,8 +1371,12 @@ async fn admin_snapshot(
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
     let routes = match aliases.routes_file.as_deref() {
-        Some(path) => crate::core::inference_routes::snapshot(path)
-            .map_err(|_| api_error(StatusCode::SERVICE_UNAVAILABLE, "route registry unavailable"))?,
+        Some(path) => crate::core::inference_routes::snapshot(path).map_err(|_| {
+            api_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "route registry unavailable",
+            )
+        })?,
         None => json!({
             "routes": aliases.routes,
             "fallbacks": {},
@@ -1415,19 +1419,22 @@ async fn update_admin_route(
     }
     let mut seen = HashSet::from([request.primary.as_str()]);
     if !route_supported(&request.alias, &request.primary)
-        || request.fallbacks.iter().any(|route| {
-            !seen.insert(route.as_str()) || !route_supported(&request.alias, route)
-        })
+        || request
+            .fallbacks
+            .iter()
+            .any(|route| !seen.insert(route.as_str()) || !route_supported(&request.alias, route))
     {
         return Err(api_error(
             StatusCode::BAD_REQUEST,
             "route chain is unsupported, duplicated, or unavailable",
         ));
     }
-    let path = aliases
-        .routes_file
-        .as_deref()
-        .ok_or_else(|| api_error(StatusCode::CONFLICT, "runtime route registry is not configured"))?;
+    let path = aliases.routes_file.as_deref().ok_or_else(|| {
+        api_error(
+            StatusCode::CONFLICT,
+            "runtime route registry is not configured",
+        )
+    })?;
     let routes = crate::core::inference_routes::update_route(
         path,
         &request.alias,
@@ -1461,7 +1468,9 @@ async fn list_admin_subscriptions(
             })
         })
         .collect::<Vec<_>>();
-    Ok(Json(json!({"agentId": agent_id, "subscriptions": subscriptions})))
+    Ok(Json(
+        json!({"agentId": agent_id, "subscriptions": subscriptions}),
+    ))
 }
 
 async fn create_admin_subscription(
@@ -1479,7 +1488,12 @@ async fn create_admin_subscription(
     }
     let provider = match request.provider.as_deref().map(str::trim) {
         Some("claude_code" | "claude-code") => "claude-code",
-        _ => return Err(api_error(StatusCode::BAD_REQUEST, "provider must be claude_code")),
+        _ => {
+            return Err(api_error(
+                StatusCode::BAD_REQUEST,
+                "provider must be claude_code",
+            ))
+        }
     };
     let api_key = request.api_key.as_deref().unwrap_or("");
     if api_key.is_empty() || api_key.chars().count() > 8000 {
