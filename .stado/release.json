@@ -21,5 +21,8 @@
       "repo": "https://github.com/wisent-ai/skarbiec",
       "revision": "8f45d1f5c92183198e732c7559443851d625245a"
     }
-  }
+  },
+  "after_stage": [
+    "node scripts/generate-skarbiec-config.mjs \"$STAGE/bin/brama\" \"$STAGE/etc/brama-skarbiec\" \"$STAGE/etc/brama-skarbiec/subscriptions.json\""
+  ]
 }
