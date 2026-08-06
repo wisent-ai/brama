@@ -142,11 +142,21 @@ async fn read_live_catalog() -> Result<String, String> {
             .map_err(|error| error.to_string());
     }
     let url = catalog_url()?;
-    let response = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .map_err(|error| error.to_string())?
+    // One client for the refresh, not one per refresh: each `Client` carries its
+    // own connection pool, and a new one every cycle leaks the sockets of the
+    // last one until the process runs out of descriptors.
+    static CATALOG_CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> =
+        std::sync::OnceLock::new();
+    let client = CATALOG_CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .timeout(Duration::from_secs(30))
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .map_err(|error| error.to_string())
+        })
+        .clone()?;
+    let response = client
         .get(url)
         .send()
         .await

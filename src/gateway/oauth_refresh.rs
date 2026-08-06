@@ -223,11 +223,19 @@ async fn request_refresh_grant(
     config: &OAuthProvider,
     refresh_token: &str,
 ) -> Result<RefreshGrant, String> {
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(refresh_timeout())
-        .build()
-        .map_err(|_| "OAuth refresh client configuration failed".to_owned())?;
+    // One client for every refresh. A fresh `Client` per call brings a fresh
+    // connection pool with it and strands the previous one's sockets.
+    static REFRESH_CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> =
+        std::sync::OnceLock::new();
+    let client = REFRESH_CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .timeout(refresh_timeout())
+                .build()
+                .map_err(|_| "OAuth refresh client configuration failed".to_owned())
+        })
+        .clone()?;
     let parameters = OAuthRefreshRequest {
         grant_type: "refresh_token",
         refresh_token,

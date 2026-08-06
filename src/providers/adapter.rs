@@ -351,6 +351,43 @@ fn valid_provider_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
 }
 
+/// Two clients for this process, not one per request.
+///
+/// Every `reqwest::Client` owns its own connection pool, so building one per
+/// call opens a fresh socket for each request and holds that pool until the
+/// client is dropped. Under ordinary traffic the descriptors then accumulate
+/// faster than they are reclaimed, and the listener eventually stops being able
+/// to accept at all -- `Too many open files` -- while the process stays up and
+/// keeps looking healthy. reqwest is built to have one client reused; it is
+/// reference-counted inside, so handing out clones costs nothing.
+static CONTROL_CLIENT: std::sync::OnceLock<Result<Client, String>> = std::sync::OnceLock::new();
+static DISPATCH_CLIENT: std::sync::OnceLock<Result<Client, String>> = std::sync::OnceLock::new();
+
+fn build_shared_client(seconds: &str) -> Result<Client, String> {
+    Client::builder()
+        .timeout(std::time::Duration::from_secs(
+            seconds.parse().expect("static number"),
+        ))
+        .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
+        .build()
+        .map_err(|error| error.to_string())
+}
+
+/// Catalogue and provider control calls, which are expected to answer quickly.
+fn control_client() -> Result<Client, String> {
+    CONTROL_CLIENT
+        .get_or_init(|| build_shared_client("20"))
+        .clone()
+}
+
+/// Model dispatch, which waits as long as a generation legitimately takes.
+fn dispatch_client() -> Result<Client, String> {
+    DISPATCH_CLIENT
+        .get_or_init(|| build_shared_client("255"))
+        .clone()
+}
+
 fn credential_key(secret: &str) -> Result<String, String> {
     let trimmed = secret.trim();
     if trimmed.is_empty() {
@@ -791,12 +828,7 @@ pub async fn discover_models(
             .collect::<Vec<_>>();
         let key = credential_key(secret)?;
         let base_url = catalog_provider_base_url(descriptor)?;
-        let client = Client::builder()
-            .timeout(std::time::Duration::from_secs(20))
-            .redirect(reqwest::redirect::Policy::none())
-            .no_proxy()
-            .build()
-            .map_err(|error| error.to_string())?;
+        let client = control_client()?;
         let request = authorize_catalog(
             client.get(catalog_endpoint(&base_url, "/models")),
             descriptor,
@@ -831,12 +863,7 @@ pub async fn discover_models(
         .ok_or_else(|| format!("provider `{provider_id}` is not in the Wisent registry"))?;
     let key = credential_key(secret)?;
     let base_url = provider_base_url(descriptor)?;
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(20))
-        .redirect(reqwest::redirect::Policy::none())
-        .no_proxy()
-        .build()
-        .map_err(|error| error.to_string())?;
+    let client = control_client()?;
     let request = authorize_provider(
         client.get(endpoint(&base_url, descriptor.models_path)),
         descriptor,
@@ -1599,14 +1626,9 @@ async fn dispatch_catalog(request: &ModelRequest, secret: &str) -> ModelResponse
         Ok(base_url) => base_url,
         Err(error) => return ModelResponse::failure(&request.model, error),
     };
-    let client = match Client::builder()
-        .timeout(std::time::Duration::from_secs(255))
-        .redirect(reqwest::redirect::Policy::none())
-        .no_proxy()
-        .build()
-    {
+    let client = match dispatch_client() {
         Ok(client) => client,
-        Err(error) => return ModelResponse::failure(&request.model, error.to_string()),
+        Err(error) => return ModelResponse::failure(&request.model, error),
     };
     let (url, payload) = match descriptor.protocol {
         CatalogProtocol::OpenAiChat => {
@@ -1790,14 +1812,9 @@ pub async fn dispatch(request: &ModelRequest, secret: &str) -> ModelResponse {
         Ok(base_url) => base_url,
         Err(error) => return ModelResponse::failure(&request.model, error),
     };
-    let client = match Client::builder()
-        .timeout(std::time::Duration::from_secs(255))
-        .redirect(reqwest::redirect::Policy::none())
-        .no_proxy()
-        .build()
-    {
+    let client = match dispatch_client() {
         Ok(client) => client,
-        Err(error) => return ModelResponse::failure(&request.model, error.to_string()),
+        Err(error) => return ModelResponse::failure(&request.model, error),
     };
     let payload = match descriptor.wire {
         WireProtocol::OpenAiChat => {
@@ -1892,13 +1909,7 @@ pub async fn dispatch_openai_typed(
         route(route_id).ok_or_else(|| "invalid provider/model route".to_string())?;
     let key = credential_key(secret)?;
     let base_url = provider_base_url(descriptor)?;
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(
-            "255".parse().expect("static number"),
-        ))
-        .redirect(reqwest::redirect::Policy::none())
-        .no_proxy()
-        .build()
+    let client = dispatch_client()
         .map_err(|_| "dependency_unavailable: provider client could not be built".to_string())?;
     payload.insert("model".to_string(), Value::String(model_id.to_string()));
     let response = authorize_provider(
