@@ -1,0 +1,15 @@
+{
+  "product": "brama",
+  "platforms": ["darwin-arm64", "linux-amd64"],
+  "build": "cargo build --locked --release --bin brama",
+  "stage": {
+    "bin/brama": "target/release/brama",
+    "bin/start-with-skarbiec": "scripts/start-with-skarbiec.sh",
+    "etc/brama-skarbiec/subscriptions.json": "scripts/skarbiec-subscriptions.json",
+    "etc/brama-skarbiec/recipient-public-keys.asc": "scripts/skarbiec-recipient-public-keys.asc",
+    "LICENSE": "LICENSE"
+  },
+  "binary": "bin/brama",
+  "launcher": "bin/start-with-skarbiec",
+  "minimum_stado_version": "0.5.1"
+}
