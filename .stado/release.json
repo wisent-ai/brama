@@ -1,15 +1,25 @@
 {
   "product": "brama",
-  "platforms": ["darwin-arm64", "linux-amd64"],
-  "build": "cargo build --locked --release --bin brama",
+  "platforms": [
+    "darwin-arm64",
+    "linux-amd64"
+  ],
+  "build": "cargo build --locked --release --bin brama && cargo build --locked --release --bin skarbiec --manifest-path skarbiec-source/Cargo.toml",
   "stage": {
     "bin/brama": "target/release/brama",
     "bin/start-with-skarbiec": "scripts/start-with-skarbiec.sh",
     "etc/brama-skarbiec/subscriptions.json": "scripts/skarbiec-subscriptions.json",
     "etc/brama-skarbiec/recipient-public-keys.asc": "scripts/skarbiec-recipient-public-keys.asc",
-    "LICENSE": "LICENSE"
+    "LICENSE": "LICENSE",
+    "bin/skarbiec-entitlements-router": "skarbiec-source/target/release/skarbiec"
   },
   "binary": "bin/brama",
   "launcher": "bin/start-with-skarbiec",
-  "minimum_stado_version": "0.5.1"
+  "minimum_stado_version": "0.5.1",
+  "sources": {
+    "skarbiec-source": {
+      "repo": "https://github.com/wisent-ai/skarbiec",
+      "revision": "8f45d1f5c92183198e732c7559443851d625245a"
+    }
+  }
 }
