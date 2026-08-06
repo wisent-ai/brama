@@ -80,7 +80,7 @@ provider attempts, normalized errors, and auditable routing decisions.
 | Deployment-managed local inference routing | Linux GPU target over Tailscale | Implemented |
 | Outbound response streaming | — | Not supported |
 | Immutable public release | GitHub Releases for `linux-amd64` and `darwin-arm64` | Implemented; `released-surface.json` names the newest recorded release |
-| Per-installation Skarbiec trust material | — | Not supported; the archive bundles build-time defaults |
+| Per-installation Skarbiec trust material | Operator-managed host | Implemented; `bin/provision-skarbiec-trust` generates it and the launcher refuses to start without it |
 | Declared 1.0 contract stability | — | Not yet declared |
 
 The current-state column is authoritative. Unavailable capability must not be
@@ -189,10 +189,10 @@ tar -xzf "brama-v${version}-${platform}.tar.gz"
 ./bin/brama detect
 ```
 
-Serving traffic takes more than the archive. Read
-[`ONBOARDING.md`](ONBOARDING.md) before the first authenticated request, and
-treat the bundled `etc/brama-skarbiec` as the known gap
-[`RELEASE.md`](RELEASE.md) describes rather than as production trust material.
+Serving traffic takes more than the archive. Provision this installation's trust
+material once with `bin/provision-skarbiec-trust` — the archive ships no signing
+key and the launcher refuses to start until that material exists — then read
+[`ONBOARDING.md`](ONBOARDING.md) before the first authenticated request.
 
 Maintainers working on unreleased source run the same command from a checkout,
 which needs Git and the Rust toolchain required by `Cargo.lock` (the production

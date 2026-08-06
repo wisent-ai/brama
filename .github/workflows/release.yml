@@ -55,21 +55,26 @@ jobs:
           archive="brama-${GITHUB_REF_NAME}-${{ matrix.platform }}.tar.gz"
           checksum="${archive}.sha256"
           stage="$(mktemp -d)"
-          mkdir -p "$stage/bin" "$stage/etc/brama-skarbiec"
+          mkdir -p "$stage/bin" "$stage/libexec" "$stage/etc/brama-skarbiec"
           cp target/release/brama "$stage/bin/brama"
           cp skarbiec-source/target/release/skarbiec "$stage/bin/skarbiec-entitlements-router"
           cp scripts/start-with-skarbiec.sh "$stage/bin/start-with-skarbiec"
+          cp scripts/provision-skarbiec-trust.sh "$stage/bin/provision-skarbiec-trust"
           cp scripts/skarbiec-subscriptions.json "$stage/etc/brama-skarbiec/subscriptions.json"
           cp scripts/skarbiec-recipient-public-keys.asc "$stage/etc/brama-skarbiec/recipient-public-keys.asc"
           cp LICENSE "$stage/"
-          node scripts/generate-skarbiec-config.mjs \
-            "$stage/bin/brama" \
-            "$stage/etc/brama-skarbiec" \
-            "$stage/etc/brama-skarbiec/subscriptions.json"
+          # The trust material is NOT generated here. It pins the absolute path
+          # and SHA-256 of the binary allowed to redeem a capability, which a
+          # build machine cannot know, and generating it here would put the same
+          # workload proof key in every copy of this archive. The operator runs
+          # bin/provision-skarbiec-trust once per installation instead, so the
+          # generator ships as data rather than being executed now.
+          cp scripts/generate-skarbiec-config.mjs "$stage/libexec/generate-skarbiec-config.mjs"
           chmod 0755 \
             "$stage/bin/brama" \
             "$stage/bin/skarbiec-entitlements-router" \
-            "$stage/bin/start-with-skarbiec"
+            "$stage/bin/start-with-skarbiec" \
+            "$stage/bin/provision-skarbiec-trust"
           skarbiec_revision="$(git -C skarbiec-source rev-parse HEAD)"
           jq -n \
             --arg product brama \

@@ -5,6 +5,33 @@ Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
 ## Unreleased
 
+### Security
+
+- The release archive no longer contains any signing key. Until now the release
+  build ran `scripts/generate-skarbiec-config.mjs`, so every download of one
+  archive carried the same Ed25519 workload proof seed in
+  `etc/brama-skarbiec/brama-proof.key`, alongside a signed ten-year `policy.json`
+  granting provider authentication and request signing, a `trust.json` vouching
+  for both, and a `worm-receipt` stub that discarded audit records while the
+  policy pinned its digest. The launcher defaulted to exactly that directory,
+  which is always present in a published archive.
+- Trust material is now generated per installation by
+  `bin/provision-skarbiec-trust`, and `bin/start-with-skarbiec` refuses to start
+  while any of it is missing rather than falling back to a shared copy. The
+  registry pins the absolute path and SHA-256 of the binary allowed to redeem a
+  capability, which is knowledge a build machine does not have, so generating it
+  on the host is also the only way that pin can be correct.
+
+### Changed
+
+- **Incompatible.** `etc/brama-skarbiec` in the archive now holds only
+  `subscriptions.json` and `recipient-public-keys.asc`; the generator ships as
+  `libexec/generate-skarbiec-config.mjs` and is not executed at build time. An
+  installation that relied on the bundled trust material must run
+  `bin/provision-skarbiec-trust` once and re-grant the capabilities that were
+  bound to the discarded key. Under the pre-one policy a breaking change advances
+  `MINOR` from the published `0.2.5`, so this is `0.3.0`.
+
 ### Fixed
 
 - Documentation asserted that no immutable public release existed while five

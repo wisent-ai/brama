@@ -91,21 +91,16 @@ brama-vX.Y.Z-darwin-arm64.tar.gz
 brama-vX.Y.Z-darwin-arm64.tar.gz.sha256
 ```
 
-Each archive is self-contained and expands to:
+Each archive expands to:
 
 ```text
 bin/brama
 bin/skarbiec-entitlements-router
 bin/start-with-skarbiec
+bin/provision-skarbiec-trust
+libexec/generate-skarbiec-config.mjs
 etc/brama-skarbiec/subscriptions.json
 etc/brama-skarbiec/recipient-public-keys.asc
-etc/brama-skarbiec/trust.json
-etc/brama-skarbiec/policy.json
-etc/brama-skarbiec/policy.sig
-etc/brama-skarbiec/registry.json
-etc/brama-skarbiec/registry.sig
-etc/brama-skarbiec/brama-proof.key
-etc/brama-skarbiec/worm-receipt
 LICENSE
 provenance.json
 ```
@@ -119,32 +114,28 @@ under `dependencies.skarbiec`, platform, build timestamp, and builder identity.
 The `.sha256` sidecar records the archive digest because an archive cannot
 contain its own final digest.
 
-`etc/brama-skarbiec` is the launcher's default trust material, generated during
-the release build by `scripts/generate-skarbiec-config.mjs`.
-
 An archive never contains the Skarbiec vault, provider credentials, host-specific
-runtime configuration, or Brama journal state. `SKARBIEC_VAULT_FILE` must always
-be supplied by the operator.
+runtime configuration, Brama journal state, or any signing key.
+`SKARBIEC_VAULT_FILE` must always be supplied by the operator.
 
-### Open defect: bundled workload trust material
+### Trust material is provisioned per installation
 
-Because `etc/brama-skarbiec` is generated at build time, every download of one
-archive carries the same Ed25519 seed in `brama-proof.key`, the same signed
-ten-year `policy.json`, and the same `trust.json` that vouches for both.
-`bin/start-with-skarbiec` defaults to exactly that directory when the bundle
-layout is present, which it always is in a published archive.
+The signed policy, workload registry, trust root, WORM receipt command and
+workload proof key are **not** in the archive. `bin/provision-skarbiec-trust`
+generates them on the host, once, before the first start, and
+`bin/start-with-skarbiec` refuses to start while any of them is missing.
 
-The bundled `registry.json` declares the workload's executable path, its
-SHA-256, and on macOS a code-signing requirement next to the public half of that
-seed, so the seed is not by itself a bearer token; whether a mismatch is refused
-is Skarbiec's contract and not a claim this document makes. `worm-receipt` is a
-stub that discards what it is given while `policy.json` pins its digest as
-`worm_command_sha256`, so the bundled default keeps no audit trail.
+Two reasons, and the first is the one that decides it. The registry pins the
+absolute path and the SHA-256 of the binary permitted to redeem a capability, and
+a build machine cannot know where the artifact will be installed. The second is
+that a copy generated at build time would ship one Ed25519 proof seed inside
+every download of that archive, so the workload identity of every installation
+would be a value any downloader already holds.
 
-A per-installation seed and a real receipt sink are what this contract requires,
-and the bundled material is neither. Until provisioning moves per installation,
-an operator must point `BRAMA_SKARBIEC_CONFIG_DIR` at their own material. The
-bundled directory is a known gap, not a supported production configuration.
+Re-provisioning replaces the installation's identity, so
+`provision-skarbiec-trust` refuses to overwrite existing material unless
+`--force` is given, and the capabilities bound to the previous key must be
+re-granted afterwards.
 
 ## Qualification gate
 

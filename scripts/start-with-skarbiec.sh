@@ -64,6 +64,31 @@ chmod u=rw,go= "$vault_file"
 export SKARBIEC_VAULT_FILE="$vault_file"
 unset source_vault_file
 
+# The trust material below is per installation and is deliberately absent from
+# the release archive. It pins the absolute path and SHA-256 of the binary
+# allowed to redeem a capability, so one shared copy would both misidentify the
+# workload and put the same proof key in every download. Refuse to start rather
+# than run half-provisioned: a partially written directory is how a superseded
+# key outlives the re-provision that was supposed to replace it.
+if [ -x "$script_dir/provision-skarbiec-trust" ]; then
+  provision_hint="$script_dir/provision-skarbiec-trust"
+else
+  provision_hint="$bundle_root/scripts/provision-skarbiec-trust.sh"
+fi
+missing=
+for required in trust.json policy.json policy.sig registry.json registry.sig \
+  brama-proof.key worm-receipt; do
+  [ -f "$config_dir/$required" ] || missing="$missing $required"
+done
+if [ -n "$missing" ]; then
+  printf '%s\n' "missing Skarbiec trust material in $config_dir:$missing" >/dev/stderr
+  printf '%s\n' "Provision this installation once before starting it:" >/dev/stderr
+  printf '%s\n' "  $provision_hint" >/dev/stderr
+  printf '%s\n' "Point BRAMA_SKARBIEC_CONFIG_DIR at that directory first if the" >/dev/stderr
+  printf '%s\n' "material belongs somewhere other than $config_dir." >/dev/stderr
+  false
+fi
+
 export SKARBIEC_CAP_TRUST_ROOT="$config_dir/trust.json"
 export SKARBIEC_CAP_POLICY="$config_dir/policy.json"
 export SKARBIEC_CAP_POLICY_SIG="$config_dir/policy.sig"

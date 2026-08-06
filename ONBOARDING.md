@@ -29,7 +29,8 @@ Required for an authenticated loopback gateway:
 - all safe-path prerequisites;
 - the packaged or explicitly selected `entitlements-router`;
 - GnuPG and an authorized local Skarbiec vault;
-- an owner-bound capability socket and Brama workload signing key;
+- this installation's provisioned trust material and its owner-bound capability
+  socket;
 - generated client identities, aliases, and capability maps;
 - one free loopback port.
 
@@ -128,13 +129,27 @@ maps. A bare service startup is not the safe first-user path.
 
 ## Authenticated loopback path
 
+Provision this installation once, before its first start:
+
+```bash
+bin/provision-skarbiec-trust
+```
+
+That writes the signed policy, the workload registry, the trust root, the receipt
+command and the workload proof key into `etc/brama-skarbiec`. The release archive
+ships none of them, because the registry pins the absolute path and SHA-256 of
+the binary allowed to redeem a capability and a build machine cannot know either.
+Re-running it replaces this installation's identity, so it refuses without
+`--force`.
+
 Use the packaged `start-with-skarbiec` launcher. It owns these steps:
 
 1. load the selected service environment file without overriding individual
    central policy values;
 2. materialize the authorized encrypted vault;
 3. import the scoped Brama recipient key into an owner-only runtime directory;
-4. generate and verify Skarbiec trust, policy, workload, and capability files;
+4. verify this installation's Skarbiec trust, policy, and workload files are
+   present, and refuse to start when any of them is missing;
 5. read each accepted client bearer from its dedicated item;
 6. load central Echo, legacy Content Platform, Oko, and Weles request-sign identities;
 7. derive provider and agent capability maps from live vault resources;
