@@ -2,7 +2,7 @@
 
 **Goal:** obtain Brama's local hardware report and external-runtime model recommendation.
 
-**Status:** written against the `0.1.0` contract and not re-verified against the published `0.2.5`.
+**Status:** written against the `0.1.0` contract and not re-verified against the newest published release.
 
 **Risk:** local read-only. No credential, service, product state, provider network, or model cost.
 

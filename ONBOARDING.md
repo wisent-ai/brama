@@ -48,9 +48,10 @@ private keys into a shell command merely to check them.
 
 ## Release selection
 
-Immutable Brama releases are published. The newest complete one is `v0.2.5`,
-carrying both supported platform archives and both checksums. `main` is
-development source and must never be represented as a release.
+Immutable Brama releases are published. `main` is development source and must
+never be represented as a release. For which release is newest, read
+`released-surface.json` or the repository's GitHub Releases list; this page does
+not restate a version it cannot keep current.
 
 Installation must select:
 

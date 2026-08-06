@@ -2,7 +2,7 @@
 
 **Goal:** distinguish bounded provider exhaustion, dependency outage, timeout, and permanent provider failure.
 
-**Status:** written against the `0.1.0` contract and not re-verified against the published `0.2.5`.
+**Status:** written against the `0.1.0` contract and not re-verified against the newest published release.
 
 **Risk:** provider-facing diagnostics may be billable. Do not reproduce against a provider without explicit owner approval.
 

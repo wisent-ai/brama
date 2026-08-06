@@ -2,7 +2,7 @@
 
 **Goal:** operate the agent-scoped subscription lifecycle without exposing provider credentials.
 
-**Status:** written against the `0.1.0` contract and not re-verified against the published `0.2.5`.
+**Status:** written against the `0.1.0` contract and not re-verified against the newest published release.
 
 **Risk:** listing is authenticated read-only; donation and retirement are security mutations. Donation may involve provider OAuth outside Brama. Explicit owner approval is required for every mutation.
 

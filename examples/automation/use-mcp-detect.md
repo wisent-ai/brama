@@ -2,7 +2,7 @@
 
 **Goal:** let an MCP host obtain Brama's local resource recommendation without network or credentials.
 
-**Status:** written against the `0.1.0` contract and not re-verified against the published `0.2.5`.
+**Status:** written against the `0.1.0` contract and not re-verified against the newest published release.
 
 **Risk:** local read-only. The MCP surface exposes only `brama_detect`; it cannot list models, spend tokens, collect evidence, or mutate state.
 

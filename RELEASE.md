@@ -6,14 +6,23 @@ recovered.
 
 ## Current release state
 
-Brama is pre-1.0 and does publish immutable binary releases. The newest complete
-release is `v0.2.5`: a non-draft, non-prerelease GitHub Release carrying both
-supported platform archives and both checksums. `main` remains mutable
-development source and is never a production coordinate.
+Brama is pre-1.0 and does publish immutable binary releases. `main` remains
+mutable development source and is never a production coordinate.
 
-`released-surface.json` records the newest release consumers can actually
-obtain. Regenerate it with `scripts/baseline.py --write`, which recovers the
-surface from that release, never from the working tree.
+Which release is newest is deliberately not restated here. A version written
+into prose goes stale the moment the next tag lands, which is how this section
+came to claim that no release existed while five were published. Two records
+answer it instead, and a machine maintains both:
+
+- `released-surface.json` names the newest release this repository has recorded;
+  `scripts/baseline.py --write` regenerates it from that release rather than
+  from the working tree;
+- the repository's GitHub Releases list is authoritative for what a consumer can
+  actually download.
+
+A tag alone is not a release. A tagged revision whose release workflow did not
+finish leaves a coordinate with nothing installable behind it, so confirm the
+release and its assets exist before treating any tag as a release coordinate.
 
 ## Canonical product version
 

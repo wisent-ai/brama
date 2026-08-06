@@ -2,7 +2,7 @@
 
 **Goal:** install one verified GitHub Release and restore the previous known-good installation without changing credentials.
 
-**Status:** complete immutable releases are published; `v0.2.5` is the newest, carrying both platform archives and both checksums. This procedure has not been executed on a host, so it remains an operator procedure rather than recorded evidence.
+**Status:** complete immutable releases are published; `released-surface.json` and the repository's GitHub Releases list name which one is newest. This procedure has not been executed on a host, so it remains an operator procedure rather than recorded evidence.
 
 **Risk:** production-facing recovery mutation. Requires explicit release-owner and deployment-owner approval naming SemVer, source revision, platform, archive digest, host, maintenance window, rollback target, and evidence location.
 

@@ -9,9 +9,20 @@ Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
 - Documentation asserted that no immutable public release existed while five
   were published. `README.md`, `ONBOARDING.md`, `RELEASE.md`,
-  `examples/README.md`, and `examples/recovery/upgrade-and-rollback.md` now name
-  the newest published release and give the download-and-verify install path
-  instead of sending every reader to build from source.
+  `examples/README.md`, and `examples/recovery/upgrade-and-rollback.md` now give
+  the download-and-verify install path instead of sending every reader to build
+  from source.
+- Documentation no longer restates which release is newest, which source version
+  is current, or which version an example targets. Every such literal went stale
+  within hours of being written: the first correction of this section named
+  `v0.2.5` in prose, and two further versions were cut the same day. Prose now
+  points at the two machine-maintained records — `released-surface.json` and the
+  GitHub Releases list — and `Cargo.toml` stays the single source of the source
+  version rather than being duplicated into a sentence.
+- `RELEASE.md` records that a tag alone is not a release, because a tagged
+  revision whose release workflow did not finish leaves a coordinate with
+  nothing installable behind it. This has now happened twice, at `v0.2.0` and
+  again at `v0.2.6`.
 - `RELEASE.md` listed an archive layout the release workflow does not produce.
   It now records the real contents, including the bundled Skarbiec entitlements
   router and the launcher's default trust material, and states that bundled

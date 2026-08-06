@@ -2,7 +2,7 @@
 
 **Goal:** recover from a pre-provider HTTP rejection without exposing or rotating unrelated secrets.
 
-**Status:** written against the `0.1.0` contract and not re-verified against the published `0.2.5`.
+**Status:** written against the `0.1.0` contract and not re-verified against the newest published release.
 
 **Risk:** read-only negative path. Use only loopback or an approved non-production diagnostic environment; do not intentionally send malformed authentication to production.
 

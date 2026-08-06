@@ -2,7 +2,7 @@
 
 **Goal:** diagnose one route or refresh evidence used by `task:<name>` selection.
 
-**Status:** written against the `0.1.0` contract and not re-verified against the published `0.2.5`.
+**Status:** written against the `0.1.0` contract and not re-verified against the newest published release.
 
 **Risk:** credentialed, provider-facing, and billable. `--persist` also appends non-secret task-quality state. Explicit human approval must name agent, task, prompt class, expected result, model cap, persistence, and spend.
 

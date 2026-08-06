@@ -2,7 +2,7 @@
 
 **Goal:** identify the exact Brama process without redeeming a provider credential.
 
-**Status:** written against the `0.1.0` contract and not re-verified against the published `0.2.5`.
+**Status:** written against the `0.1.0` contract and not re-verified against the newest published release.
 
 **Risk:** `brama version` is local read-only; `/health` is public and secret-free; `/stats` is authenticated read-only.
 
@@ -25,7 +25,7 @@ brama version
 Expected JSON shape:
 
 ```json
-{"product":"brama","version":"0.2.5","source_revision":"...","platform":"...","built_at":"..."}
+{"product":"brama","version":"...","source_revision":"...","platform":"...","built_at":"..."}
 ```
 
 Read public process health:

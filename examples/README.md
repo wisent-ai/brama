@@ -7,12 +7,14 @@ cleanup, and next action.
 
 ## Status and consent
 
-The newest published release is `0.2.5`. This catalog was written against the
-`0.1.0` development contract and has not been re-checked command by command
-against `0.2.5`, so treat any version-specific detail below as unverified until
-it is. Examples are **documented, not executed**: none was run while creating
-this catalog because explicit testing or provider-execution consent was not
-provided. Do not treat a documented example as qualification evidence.
+This catalog was written against the `0.1.0` development contract and has not
+been re-checked command by command against the newest published release, so
+treat any version-specific detail below as unverified until it is. The newest
+published release is named by `released-surface.json` and by the repository's
+GitHub Releases list, never restated here. Examples are **documented, not
+executed**: none was run while creating this catalog because explicit testing or
+provider-execution consent was not provided. Do not treat a documented example
+as qualification evidence.
 
 Risk labels:
 

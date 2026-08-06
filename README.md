@@ -79,7 +79,7 @@ provider attempts, normalized errors, and auditable routing decisions.
 | Claude Code donation endpoint | Authorized agent and entitlements router | Implemented |
 | Deployment-managed local inference routing | Linux GPU target over Tailscale | Implemented |
 | Outbound response streaming | — | Not supported |
-| Immutable public release | GitHub Releases for `linux-amd64` and `darwin-arm64` | Implemented; newest is `v0.2.5` |
+| Immutable public release | GitHub Releases for `linux-amd64` and `darwin-arm64` | Implemented; `released-surface.json` names the newest recorded release |
 | Per-installation Skarbiec trust material | — | Not supported; the archive bundles build-time defaults |
 | Declared 1.0 contract stability | — | Not yet declared |
 
@@ -173,7 +173,12 @@ Install the archive for your platform and verify its published checksum before
 extracting it:
 
 ```bash
-version=0.2.5
+# List published releases and choose one. There is no `latest` production
+# contract, so the version is selected deliberately, never resolved for you.
+curl --fail --silent --proto '=https' --tlsv1.2 \
+  https://api.github.com/repos/wisent-ai/brama/releases | grep '"tag_name"'
+
+version=<chosen SemVer, without the v prefix>
 platform=darwin-arm64   # or linux-amd64
 base="https://github.com/wisent-ai/brama/releases/download/v${version}"
 curl --fail --location --proto '=https' --tlsv1.2 --remote-name-all \
@@ -282,9 +287,10 @@ The complete state, error, retry, authorization, and resource contract is in
 
 - **Maturity:** pre-1.0. Public contract changes follow the `0.x` policy in
   [`RELEASE.md`](RELEASE.md).
-- **Current source version:** `0.2.5`, owned by `Cargo.toml`.
+- **Current source version:** the `version` field in `Cargo.toml`, which is the
+  single canonical source; this page does not duplicate the number.
 - **Supported source:** public `main` for development; immutable releases are
-  published on GitHub Releases, newest `v0.2.5`.
+  published on GitHub Releases.
 - **Issues and operator support:**
   [`wisent-ai/brama` issues](https://github.com/wisent-ai/brama/issues);
   see [`SUPPORT.md`](SUPPORT.md).
