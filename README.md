@@ -79,7 +79,9 @@ provider attempts, normalized errors, and auditable routing decisions.
 | Claude Code donation endpoint | Authorized agent and entitlements router | Implemented |
 | Deployment-managed local inference routing | Linux GPU target over Tailscale | Implemented |
 | Outbound response streaming | — | Not supported |
-| Stable public release | — | Not yet published |
+| Immutable public release | GitHub Releases for `linux-amd64` and `darwin-arm64` | Implemented; newest is `v0.2.5` |
+| Per-installation Skarbiec trust material | — | Not supported; the archive bundles build-time defaults |
+| Declared 1.0 contract stability | — | Not yet declared |
 
 The current-state column is authoritative. Unavailable capability must not be
 advertised by the API, MCP server, examples, or release notes.
@@ -163,18 +165,33 @@ from models.dev and is never credential authority.
 
 ## Quick start
 
-No immutable public release exists yet. Production installation from `main` is
-unsupported. This is the safe maintainer pre-release path: it detects local
-hardware, performs no provider request, reads no credential, creates no Brama
-state, and incurs no model cost.
+The normal path is the newest published release. `brama detect` is the safe first
+command either way: it reads local hardware, performs no provider request, reads
+no credential, creates no Brama state, and incurs no model cost.
 
-Prerequisites:
+Install the archive for your platform and verify its published checksum before
+extracting it:
 
-- macOS or Linux;
-- Git;
-- the Rust toolchain required by `Cargo.lock` (the production build uses the
-  pinned builder in `Dockerfile`);
-- a source checkout of the public repository.
+```bash
+version=0.2.5
+platform=darwin-arm64   # or linux-amd64
+base="https://github.com/wisent-ai/brama/releases/download/v${version}"
+curl --fail --location --proto '=https' --tlsv1.2 --remote-name-all \
+  "${base}/brama-v${version}-${platform}.tar.gz" \
+  "${base}/brama-v${version}-${platform}.tar.gz.sha256"
+shasum -a 256 --check "brama-v${version}-${platform}.tar.gz.sha256"
+tar -xzf "brama-v${version}-${platform}.tar.gz"
+./bin/brama detect
+```
+
+Serving traffic takes more than the archive. Read
+[`ONBOARDING.md`](ONBOARDING.md) before the first authenticated request, and
+treat the bundled `etc/brama-skarbiec` as the known gap
+[`RELEASE.md`](RELEASE.md) describes rather than as production trust material.
+
+Maintainers working on unreleased source run the same command from a checkout,
+which needs Git and the Rust toolchain required by `Cargo.lock` (the production
+build uses the pinned builder in `Dockerfile`):
 
 ```bash
 git clone https://github.com/wisent-ai/brama.git brama
@@ -193,7 +210,7 @@ Recommended model: ...
 Recommended backend: ...
 ```
 
-This command does not start a service. Cargo build output may remain under
+Neither command starts a service. The checkout path may leave build output under
 `target/`; it is a local build cache, not product state. Continue with
 [`ONBOARDING.md`](ONBOARDING.md) for the authenticated loopback and production
 operator paths. Runnable, risk-labeled workflows are indexed in
@@ -265,9 +282,9 @@ The complete state, error, retry, authorization, and resource contract is in
 
 - **Maturity:** pre-1.0. Public contract changes follow the `0.x` policy in
   [`RELEASE.md`](RELEASE.md).
-- **Current source version:** `0.1.0`, owned by `Cargo.toml`; the incompatible Unreleased contract requires `0.2.0` before a stable binary release.
-- **Supported source:** public `main` for development; no stable binary channel is
-  currently published.
+- **Current source version:** `0.2.5`, owned by `Cargo.toml`.
+- **Supported source:** public `main` for development; immutable releases are
+  published on GitHub Releases, newest `v0.2.5`.
 - **Issues and operator support:**
   [`wisent-ai/brama` issues](https://github.com/wisent-ai/brama/issues);
   see [`SUPPORT.md`](SUPPORT.md).

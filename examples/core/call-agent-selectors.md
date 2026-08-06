@@ -2,7 +2,7 @@
 
 **Goal:** sign one exact request and let Brama use only subscriptions delegated to that agent within bounded attempts.
 
-**Status:** implemented on development source `0.1.0`; release requires `0.2.0`.
+**Status:** written against the `0.1.0` contract and not re-verified against the published `0.2.5`.
 
 **Risk:** credentialed, provider-facing, and billable. `any` and `task:` may perform up to six provider calls. Explicit human approval must name agent, account, selector/route, prompt class, output limit, and spend.
 

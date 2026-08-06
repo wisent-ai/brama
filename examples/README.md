@@ -7,10 +7,12 @@ cleanup, and next action.
 
 ## Status and consent
 
-Brama has no immutable public release. Examples target the current development
-source `0.1.0`; the incompatible Unreleased contract requires `0.2.0` before publication. They are **documented, not executed**. No example was run while
-creating this catalog because explicit testing or provider-execution consent was
-not provided. Do not treat a documented example as qualification evidence.
+The newest published release is `0.2.5`. This catalog was written against the
+`0.1.0` development contract and has not been re-checked command by command
+against `0.2.5`, so treat any version-specific detail below as unverified until
+it is. Examples are **documented, not executed**: none was run while creating
+this catalog because explicit testing or provider-execution consent was not
+provided. Do not treat a documented example as qualification evidence.
 
 Risk labels:
 

@@ -6,10 +6,14 @@ recovered.
 
 ## Current release state
 
-Brama is pre-1.0 and currently has no complete immutable binary release. `main`
-is mutable development source, not a production coordinate. The checked-in
-`released-surface.json` must state this honestly until a GitHub Release contains
-every supported archive and checksum.
+Brama is pre-1.0 and does publish immutable binary releases. The newest complete
+release is `v0.2.5`: a non-draft, non-prerelease GitHub Release carrying both
+supported platform archives and both checksums. `main` remains mutable
+development source and is never a production coordinate.
+
+`released-surface.json` records the newest release consumers can actually
+obtain. Regenerate it with `scripts/baseline.py --write`, which recovers the
+surface from that release, never from the working tree.
 
 ## Canonical product version
 
@@ -78,20 +82,60 @@ brama-vX.Y.Z-darwin-arm64.tar.gz
 brama-vX.Y.Z-darwin-arm64.tar.gz.sha256
 ```
 
-Each archive contains:
+Each archive is self-contained and expands to:
 
 ```text
-brama
-start-with-skarbiec
+bin/brama
+bin/skarbiec-entitlements-router
+bin/start-with-skarbiec
+etc/brama-skarbiec/subscriptions.json
+etc/brama-skarbiec/recipient-public-keys.asc
+etc/brama-skarbiec/trust.json
+etc/brama-skarbiec/policy.json
+etc/brama-skarbiec/policy.sig
+etc/brama-skarbiec/registry.json
+etc/brama-skarbiec/registry.sig
+etc/brama-skarbiec/brama-proof.key
+etc/brama-skarbiec/worm-receipt
 LICENSE
 provenance.json
 ```
 
-`provenance.json` records product name, product version, source revision,
-platform, build timestamp, and builder identity. The sidecar records the archive
-digest because an archive cannot contain its own final digest. Runtime
-configuration, credentials, state, launchers, and unrelated product binaries
-are never included.
+`bin/skarbiec-entitlements-router` is a second product's binary, built from the
+revision pinned by the `SKARBIEC_RELEASE_REVISION` repository variable. Brama
+cannot redeem a provider capability without it, so the release ships it rather
+than asking an operator to match two versions by hand. `provenance.json`
+records product name, product version, source revision, that Skarbiec revision
+under `dependencies.skarbiec`, platform, build timestamp, and builder identity.
+The `.sha256` sidecar records the archive digest because an archive cannot
+contain its own final digest.
+
+`etc/brama-skarbiec` is the launcher's default trust material, generated during
+the release build by `scripts/generate-skarbiec-config.mjs`.
+
+An archive never contains the Skarbiec vault, provider credentials, host-specific
+runtime configuration, or Brama journal state. `SKARBIEC_VAULT_FILE` must always
+be supplied by the operator.
+
+### Open defect: bundled workload trust material
+
+Because `etc/brama-skarbiec` is generated at build time, every download of one
+archive carries the same Ed25519 seed in `brama-proof.key`, the same signed
+ten-year `policy.json`, and the same `trust.json` that vouches for both.
+`bin/start-with-skarbiec` defaults to exactly that directory when the bundle
+layout is present, which it always is in a published archive.
+
+The bundled `registry.json` declares the workload's executable path, its
+SHA-256, and on macOS a code-signing requirement next to the public half of that
+seed, so the seed is not by itself a bearer token; whether a mismatch is refused
+is Skarbiec's contract and not a claim this document makes. `worm-receipt` is a
+stub that discards what it is given while `policy.json` pins its digest as
+`worm_command_sha256`, so the bundled default keeps no audit trail.
+
+A per-installation seed and a real receipt sink are what this contract requires,
+and the bundled material is neither. Until provisioning moves per installation,
+an operator must point `BRAMA_SKARBIEC_CONFIG_DIR` at their own material. The
+bundled directory is a known gap, not a supported production configuration.
 
 ## Qualification gate
 

@@ -22,7 +22,7 @@ Required for safe local detection:
 - macOS or Linux;
 - Git;
 - Rust/Cargo compatible with `Cargo.lock`;
-- a source checkout while no immutable release is published.
+- either the newest published release archive or a source checkout.
 
 Required for an authenticated loopback gateway:
 
@@ -48,11 +48,11 @@ private keys into a shell command merely to check them.
 
 ## Release selection
 
-No immutable Brama release is published yet. Therefore normal installation and
-production onboarding are unavailable. `main` is a development source and must
-not be represented as stable.
+Immutable Brama releases are published. The newest complete one is `v0.2.5`,
+carrying both supported platform archives and both checksums. `main` is
+development source and must never be represented as a release.
 
-After the first release, installation must select:
+Installation must select:
 
 ```text
 product version + source revision + platform + archive SHA-256 + provenance

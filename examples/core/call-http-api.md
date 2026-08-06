@@ -2,7 +2,7 @@
 
 **Goal:** discover authorized models and, with separate approval, execute one direct provider route.
 
-**Status:** implemented on development source `0.1.0`; release requires `0.2.0`.
+**Status:** written against the `0.1.0` contract and not re-verified against the published `0.2.5`.
 
 **Risk:** catalog is authenticated read-only and non-billable; chat, embeddings, and moderation are credentialed, provider-facing, and potentially billable.
 
