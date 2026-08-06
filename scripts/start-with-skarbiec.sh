@@ -24,6 +24,15 @@ elif [ -n "${BRAMA_SERVICE_ENV_FILE:-}" ]; then
   false
 fi
 
+# A versioned bundle carries its own components, and its own win. The service
+# env file is sourced with `set -a`, so a path written there once pins every
+# later version to the directory that happened to be current that day: the
+# launcher from the new bundle starts, runs a binary from the old one, and the
+# gateway never comes up. The override still works for a bundle that does not
+# carry the component.
+if [ -x "$default_brama_bin" ]; then BRAMA_BIN="$default_brama_bin"; fi
+if [ -x "$default_router_bin" ]; then ENTITLEMENTS_ROUTER_BIN="$default_router_bin"; fi
+if [ -d "$default_config_dir" ]; then BRAMA_SKARBIEC_CONFIG_DIR="$default_config_dir"; fi
 BRAMA_BIN=${BRAMA_BIN:-"$default_brama_bin"}
 ENTITLEMENTS_ROUTER_BIN=${ENTITLEMENTS_ROUTER_BIN:-"$default_router_bin"}
 config_dir=${BRAMA_SKARBIEC_CONFIG_DIR:-"$default_config_dir"}
