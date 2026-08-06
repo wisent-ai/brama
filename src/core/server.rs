@@ -355,27 +355,11 @@ impl ModelAliases {
                     format!("{MODEL_ALIASES_ENV} contains an unsafe route for {alias}"),
                 ));
             }
-            let supported = match alias.as_str() {
-                WISENT_CHAT_PRIMARY_ALIAS
-                | WISENT_CHAT_FALLBACK_ALIAS
-                | WISENT_EVALUATION_ALIAS
-                | WELES_AGENT_PRIMARY_ALIAS => {
-                    crate::providers::adapter::supports_chat_route(route)
-                }
-                WISENT_EMBEDDING_ALIAS => {
-                    crate::providers::adapter::supports_embedding_route(route)
-                }
-                WISENT_MODERATION_ALIAS => {
-                    crate::providers::adapter::supports_moderation_route(route)
-                }
-                _ => false,
-            };
-            let provider = crate::providers::adapter::provider_id_from_route(route);
-            if !supported
-                || provider.is_none_or(|provider| {
-                    !crate::gateway::broker::provider_capability_configured(provider)
-                })
-            {
+            let supported = alias_route_shape_supported(alias.as_str(), route);
+            let capability_ok = !alias_requires_direct_capability(alias.as_str())
+                || crate::providers::adapter::provider_id_from_route(route)
+                    .is_some_and(crate::gateway::broker::provider_capability_configured);
+            if !supported || !capability_ok {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidInput,
                     format!(
@@ -407,7 +391,10 @@ impl ModelAliases {
     fn chat_route(&self, alias: &str) -> (Option<String>, Vec<String>) {
         if !matches!(
             alias,
-            WISENT_CHAT_PRIMARY_ALIAS | WISENT_CHAT_FALLBACK_ALIAS | WISENT_EVALUATION_ALIAS
+            WISENT_CHAT_PRIMARY_ALIAS
+                | WISENT_CHAT_FALLBACK_ALIAS
+                | WISENT_EVALUATION_ALIAS
+                | BEST_ALIAS
         ) {
             return (None, Vec::new());
         }
@@ -1334,6 +1321,30 @@ fn require_brama_desktop(identity: &ModelClientIdentity) -> Result<(), ApiError>
     }
 }
 
+/// Which alias may carry which kind of route. `-best` is a chat route like the
+/// other chat aliases; what differs is who pays for it, not what it is.
+fn alias_route_shape_supported(alias: &str, route: &str) -> bool {
+    match alias {
+        WISENT_CHAT_PRIMARY_ALIAS
+        | WISENT_CHAT_FALLBACK_ALIAS
+        | WISENT_EVALUATION_ALIAS
+        | WELES_AGENT_PRIMARY_ALIAS
+        | BEST_ALIAS => crate::providers::adapter::supports_chat_route(route),
+        WISENT_EMBEDDING_ALIAS => crate::providers::adapter::supports_embedding_route(route),
+        WISENT_MODERATION_ALIAS => crate::providers::adapter::supports_moderation_route(route),
+        _ => false,
+    }
+}
+
+/// `-best` resolves to a subscription route: the caller's HMAC identity selects
+/// the subscription that pays, and Brama deliberately holds no direct provider
+/// credential for it. Requiring a configured direct capability would reject the
+/// only configuration the alias is ever meant to have. Every other alias names
+/// a capability Brama itself owns.
+fn alias_requires_direct_capability(alias: &str) -> bool {
+    alias != BEST_ALIAS
+}
+
 fn route_supported(alias: &str, route: &str) -> bool {
     if route.is_empty()
         || route.trim() != route
@@ -1342,18 +1353,10 @@ fn route_supported(alias: &str, route: &str) -> bool {
     {
         return false;
     }
-    let supported = match alias {
-        WISENT_CHAT_PRIMARY_ALIAS
-        | WISENT_CHAT_FALLBACK_ALIAS
-        | WISENT_EVALUATION_ALIAS
-        | WELES_AGENT_PRIMARY_ALIAS => crate::providers::adapter::supports_chat_route(route),
-        WISENT_EMBEDDING_ALIAS => crate::providers::adapter::supports_embedding_route(route),
-        WISENT_MODERATION_ALIAS => crate::providers::adapter::supports_moderation_route(route),
-        _ => false,
-    };
-    supported
-        && crate::providers::adapter::provider_id_from_route(route)
-            .is_some_and(crate::gateway::broker::provider_capability_configured)
+    alias_route_shape_supported(alias, route)
+        && (!alias_requires_direct_capability(alias)
+            || crate::providers::adapter::provider_id_from_route(route)
+                .is_some_and(crate::gateway::broker::provider_capability_configured))
 }
 
 #[derive(Debug, Deserialize)]
