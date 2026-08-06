@@ -482,6 +482,26 @@ fn forwarded_proto_is_https(headers: &HeaderMap) -> Option<bool> {
     }
 }
 
+/// Peers whose hop is already encrypted before it reaches this process.
+///
+/// The fleet's mesh authenticates and encrypts node to node, so a request
+/// arriving from one of those nodes has had exactly the protection this guard
+/// exists to demand -- it simply cannot be seen from inside the request. That
+/// is a narrow statement about named peers, not a general exemption for plain
+/// HTTP: the list is written out by whoever renders this unit, from the hosts
+/// the registry declares, and an address that is not on it is refused like any
+/// other.
+fn encrypted_transport_peer(peer: std::net::IpAddr) -> bool {
+    std::env::var("BRAMA_ENCRYPTED_PEER_IPS")
+        .ok()
+        .is_some_and(|configured| {
+            configured
+                .split(',')
+                .filter_map(|value| value.trim().parse::<std::net::IpAddr>().ok())
+                .any(|trusted| trusted == peer)
+        })
+}
+
 fn trusted_forwarded_peer(peer: std::net::IpAddr) -> bool {
     std::env::var("BRAMA_TRUSTED_PROXY_IPS")
         .ok()
@@ -501,7 +521,8 @@ async fn require_secure_transport(request: axum::extract::Request, next: Next) -
         .map(|connect_info| connect_info.0.ip());
     let loopback = peer.is_some_and(|address| address.is_loopback());
     let trusted_https_proxy = peer.is_some_and(trusted_forwarded_peer) && forwarded == Some(true);
-    if loopback || trusted_https_proxy {
+    let already_encrypted = peer.is_some_and(encrypted_transport_peer);
+    if loopback || trusted_https_proxy || already_encrypted {
         return next.run(request).await;
     }
     api_error(
@@ -1839,7 +1860,22 @@ pub async fn start_server(port: u16) -> Result<(), std::io::Error> {
         .merge(protected)
         .layer(middleware::from_fn(require_secure_transport));
 
-    let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+    // Loopback unless this host is told otherwise. A gateway that binds a
+    // routable address by default is one that can be reached before anybody
+    // decided it should be, so the placed host declares its own address and
+    // every other host keeps the old behaviour.
+    let addr = match std::env::var("BRAMA_BIND_ADDRESS") {
+        Ok(configured) if !configured.trim().is_empty() => {
+            let parsed: std::net::IpAddr = configured.trim().parse().map_err(|_| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("BRAMA_BIND_ADDRESS is not an IP address: {configured}"),
+                )
+            })?;
+            SocketAddr::from((parsed, port))
+        }
+        _ => SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
+    };
     info!("Starting brama server on {addr}");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
