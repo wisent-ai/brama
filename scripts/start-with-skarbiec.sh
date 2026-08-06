@@ -502,9 +502,14 @@ export BRAMA_PROVIDER_CAPABILITY_IDS="$(cat "$capabilities_file")"
 export BRAMA_REQUEST_SIGN_CAPABILITY_IDS="$(cat "$request_capabilities_file")"
 export BRAMA_SUBSCRIPTION_CATALOG="$(cat "$catalog_file")"
 
-# The Mac worker exposes only its deployment-owned local chat provider.
+# The Mac worker exposes only its deployment-owned local chat provider, plus the
+# `-best` subscription route. `-best` must be present: `MODEL_ALIASES` in
+# src/core/server.rs requires the exact seven-alias set, so omitting it here
+# fails startup with "must contain the exact named alias set". It carries no
+# direct provider capability by design; the caller's HMAC identity selects the
+# subscription that pays.
 if [ "$(uname -s)" = Darwin ]; then
-  export BRAMA_MODEL_ALIASES='{"weles/agent/primary":"local-openai/chat-primary","wisent-backend/chat/fallback":"local-openai/chat-primary","wisent-backend/chat/primary":"local-openai/chat-primary","wisent-backend/embeddings":"openai/embeddings","wisent-backend/evaluation":"local-openai/chat-primary","wisent-backend/moderation":"openai/moderation"}'
+  export BRAMA_MODEL_ALIASES='{"-best":"claude-code/claude-opus-4-6","weles/agent/primary":"local-openai/chat-primary","wisent-backend/chat/fallback":"local-openai/chat-primary","wisent-backend/chat/primary":"local-openai/chat-primary","wisent-backend/embeddings":"openai/embeddings","wisent-backend/evaluation":"local-openai/chat-primary","wisent-backend/moderation":"openai/moderation"}'
 fi
 
 
