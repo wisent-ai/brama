@@ -282,13 +282,19 @@ sources = [
 ]
 
 def field(item, name):
+    # check=True hides the reason: the traceback names the command and drops
+    # everything the router said about why it refused, which turns a one-line
+    # cause into an afternoon of guessing from the outside.
     result = subprocess.run(
         [router, "get", item],
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
         env=os.environ,
     )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise SystemExit(f"reading {item} through the entitlements router failed: {detail}")
     payload = json.loads(result.stdout)
     if payload.get("schema") != "skarbiec.item.v2":
         raise RuntimeError(f"{item} did not return a Skarbiec v2 item")
@@ -338,13 +344,19 @@ sources = {
 }
 
 def field(item, name):
+    # check=True hides the reason: the traceback names the command and drops
+    # everything the router said about why it refused, which turns a one-line
+    # cause into an afternoon of guessing from the outside.
     result = subprocess.run(
         [router, "get", item],
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
         env=os.environ,
     )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise SystemExit(f"reading {item} through the entitlements router failed: {detail}")
     payload = json.loads(result.stdout)
     if payload.get("schema") != "skarbiec.item.v2":
         raise RuntimeError(f"{item} did not return a Skarbiec v2 item")
