@@ -109,12 +109,22 @@ struct ModelIngressAuth {
 
 impl ModelIngressAuth {
     fn from_env() -> Result<Self, std::io::Error> {
-        let encoded = std::env::var(MODEL_ROUTER_CLIENT_IDENTITIES_ENV).map_err(|_| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("{MODEL_ROUTER_CLIENT_IDENTITIES_ENV} is required"),
-            )
-        })?;
+        // Absent means "ask the authority", not "misconfigured". Building this
+        // table requires reading every client's secret before the first request
+        // is served, which is a broad grant for a router and the reason a
+        // gateway could not start on a host that was not provisioned to decrypt
+        // other clients' items. A bearer that is not here is resolved against
+        // Skarbiec, which is where it was issued.
+        let Ok(encoded) = std::env::var(MODEL_ROUTER_CLIENT_IDENTITIES_ENV) else {
+            return Ok(Self {
+                credentials: Vec::new(),
+            });
+        };
+        if encoded.trim().is_empty() {
+            return Ok(Self {
+                credentials: Vec::new(),
+            });
+        }
         let configured: Vec<ModelClientCredential> =
             serde_json::from_str(&encoded).map_err(|error| {
                 std::io::Error::new(
@@ -123,10 +133,9 @@ impl ModelIngressAuth {
                 )
             })?;
         if configured.is_empty() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("{MODEL_ROUTER_CLIENT_IDENTITIES_ENV} must not be empty"),
-            ));
+            return Ok(Self {
+                credentials: Vec::new(),
+            });
         }
 
         let mut client_ids = HashSet::with_capacity(configured.len());
@@ -424,13 +433,130 @@ fn exact_agent_header(headers: &HeaderMap, expected: &str) -> bool {
         && values.next().is_none()
 }
 
+/// Resolve a bearer by asking Skarbiec what it is.
+///
+/// The answer is an identity and its capabilities, and the right to reach this
+/// gateway is one of them: `call` on `brama`, with the route in the field, so a
+/// client's reach is a grant in the vault rather than a list compiled into this
+/// binary. A client with no such capability is not a client of this service,
+/// whatever else its credential may be good for.
+///
+/// Cached for seconds, not for the life of the process. That interval is how
+/// long a revoked credential keeps working, and it is the number that replaces
+/// "until somebody restarts the gateway".
+async fn identity_from_authority(headers: &HeaderMap) -> Option<ModelClientIdentity> {
+    let bearer = presented_bearer(headers)?;
+    let digest = hex::encode(Sha256::digest(bearer.as_bytes()));
+    if let Some(cached) = cached_identity(&digest) {
+        return cached;
+    }
+    let resolved = ask_authority(&bearer).await;
+    remember_identity(digest, resolved.clone());
+    resolved
+}
+
+fn presented_bearer(headers: &HeaderMap) -> Option<String> {
+    let mut values = headers.get_all(AUTHORIZATION).iter();
+    let value = values.next()?;
+    if values.next().is_some() {
+        return None;
+    }
+    value
+        .to_str()
+        .ok()?
+        .strip_prefix("Bearer ")
+        .filter(|token| !token.is_empty())
+        .map(str::to_string)
+}
+
+type IdentityCache =
+    std::sync::Mutex<HashMap<String, (std::time::Instant, Option<ModelClientIdentity>)>>;
+static IDENTITY_CACHE: std::sync::OnceLock<IdentityCache> = std::sync::OnceLock::new();
+
+fn identity_cache_ttl() -> std::time::Duration {
+    std::time::Duration::from_secs("5".parse().expect("static number"))
+}
+
+fn cached_identity(digest: &str) -> Option<Option<ModelClientIdentity>> {
+    let cache = IDENTITY_CACHE.get_or_init(Default::default);
+    let guard = cache.lock().ok()?;
+    let (seen, identity) = guard.get(digest)?;
+    if seen.elapsed() > identity_cache_ttl() {
+        return None;
+    }
+    Some(identity.clone())
+}
+
+fn remember_identity(digest: String, identity: Option<ModelClientIdentity>) {
+    let cache = IDENTITY_CACHE.get_or_init(Default::default);
+    if let Ok(mut guard) = cache.lock() {
+        let ttl = identity_cache_ttl();
+        guard.retain(|_, (seen, _)| seen.elapsed() <= ttl);
+        guard.insert(digest, (std::time::Instant::now(), identity));
+    }
+}
+
+async fn ask_authority(bearer: &str) -> Option<ModelClientIdentity> {
+    let base = std::env::var("WC_SKARBIEC_URL").ok()?;
+    let consumer = std::env::var("BRAMA_SKARBIEC_CONSUMER").ok()?;
+    let token_file = std::env::var("BRAMA_SKARBIEC_TOKEN_FILE").ok()?;
+    let own = std::fs::read_to_string(&token_file).ok()?;
+    let client = crate::providers::adapter::control_client().ok()?;
+    let response = client
+        .post(format!(
+            "{}/v1/tokens/introspect",
+            base.trim_end_matches('/')
+        ))
+        .header("X-Consumer", consumer)
+        .bearer_auth(own.trim())
+        .json(&json!({"token": bearer}))
+        .send()
+        .await
+        .ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+    let answer: Value = response.json().await.ok()?;
+    if answer.get("active").and_then(Value::as_bool) != Some(true) {
+        return None;
+    }
+    let client_id = answer.get("consumer").and_then(Value::as_str)?.to_string();
+    let routes: HashSet<String> = answer
+        .get("capabilities")
+        .and_then(Value::as_array)?
+        .iter()
+        .filter(|capability| {
+            capability.get("action").and_then(Value::as_str) == Some("call")
+                && capability.get("item").and_then(Value::as_str) == Some("brama")
+        })
+        .filter_map(|capability| capability.get("field").and_then(Value::as_str))
+        .map(str::to_string)
+        .collect();
+    if routes.is_empty() {
+        return None;
+    }
+    Some(ModelClientIdentity {
+        client_id,
+        agent_id: None,
+        allowed_models: Some(routes),
+    })
+}
+
 async fn require_model_bearer(
     State(auth): State<ModelIngressAuth>,
     mut request: axum::extract::Request,
     next: Next,
 ) -> Response {
-    let Some(identity) = auth.identity_for(request.headers()) else {
-        return api_error(StatusCode::UNAUTHORIZED, "unauthorized").into_response();
+    let identity = match auth.identity_for(request.headers()) {
+        Some(identity) => identity,
+        // The table is a copy of the vault taken at boot: it cannot expire, it
+        // cannot be revoked, and a client registered since this process started
+        // is absent from it. Ask the authority that issued the credential
+        // instead of refusing on the strength of a snapshot.
+        None => match identity_from_authority(request.headers()).await {
+            Some(identity) => identity,
+            None => return api_error(StatusCode::UNAUTHORIZED, "unauthorized").into_response(),
+        },
     };
     if identity.allowed_models.is_some()
         && !matches!(

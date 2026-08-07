@@ -375,7 +375,7 @@ fn build_shared_client(seconds: &str) -> Result<Client, String> {
 }
 
 /// Catalogue and provider control calls, which are expected to answer quickly.
-fn control_client() -> Result<Client, String> {
+pub fn control_client() -> Result<Client, String> {
     CONTROL_CLIENT
         .get_or_init(|| build_shared_client("20"))
         .clone()
