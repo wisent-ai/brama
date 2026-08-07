@@ -9,7 +9,10 @@ through the loopback listener, so a line with a body means a model answered.
 It makes requests and changes nothing.
 """
 
+import hashlib
+import hmac
 import json
+import time
 import os
 import pathlib
 import subprocess
@@ -77,23 +80,63 @@ for authority in dict.fromkeys(candidates):
 if not base:
     raise SystemExit("no candidate address served /health")
 
-ALIASES = ("-best", "local-openai/chat-primary", "wisent-backend/chat/primary")
+BEST = "-best"
+ALIASES = (BEST, "local-openai/chat-primary", "wisent-backend/chat/primary")
 
-# The bearer alone is what a direct or alias route needs. Adding an agent header
-# switches the gateway to the signed-agent path, which also wants a timestamp and
-# an HMAC over the body: that is a client, not a probe, and sending half of it
-# turns three working routes into three 401s. `-best` is the subscription route
-# and therefore needs that client; what this can still show is that the gateway
-# resolves it, which its own routing log records as
-# `routing_mode="subscription" selected_model=claude-code/...`.
+# A direct or alias route needs the bearer only. `-best` is the subscription
+# route: the agent identity selects the subscription that pays, so the gateway
+# wants the signed trio — id, timestamp, and an HMAC-SHA256 over
+# `{agent}:{timestamp}:{sha256(body)}` keyed by that agent's request-sign
+# secret. Sending the id alone switches the gateway onto that path and then
+# fails it, which is how a probe turns three working routes into three 401s.
+#
+# The secret comes from the same Skarbiec item the launcher reads, through the
+# same router, and stays in this process: it is never printed and never reaches
+# a command line.
+SIGNING_AGENT = "echo"
+SIGNING_ITEM = "echo-agent-auth"
+SIGNING_FIELD = "agent_auth_secret"
+
+
+def signing_secret():
+    fetched = subprocess.run(
+        [router, "get", SIGNING_ITEM],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=environment,
+    )
+    if fetched.returncode:
+        return None, (fetched.stderr or fetched.stdout).strip().replace("\n", " ")
+    try:
+        fields = json.loads(fetched.stdout)["fields"]
+    except (ValueError, KeyError):
+        return None, "the router did not return a Skarbiec item"
+    value = fields.get(SIGNING_FIELD)
+    if not isinstance(value, str) or not value:
+        return None, f"{SIGNING_ITEM}/{SIGNING_FIELD} is empty"
+    return value.encode(), None
+
+
+secret, secret_problem = signing_secret()
+if secret_problem:
+    print(f"request signing unavailable: {secret_problem}")
+
 for alias in ALIASES:
     payload = json.dumps(
         {"model": alias, "messages": [{"role": "user", "content": "say ok"}]}
     ).encode()
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    if alias == BEST and secret:
+        stamp = str(int(time.time()))
+        message = f"{SIGNING_AGENT}:{stamp}:{hashlib.sha256(payload).hexdigest()}"
+        headers["x-agent-id"] = SIGNING_AGENT
+        headers["x-agent-timestamp"] = stamp
+        headers["x-agent-signature"] = hmac.new(
+            secret, message.encode(), hashlib.sha256
+        ).hexdigest()
     request = urllib.request.Request(
-        f"{base}/v1/chat/completions",
-        data=payload,
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        f"{base}/v1/chat/completions", data=payload, headers=headers
     )
     try:
         with urllib.request.urlopen(request) as answer:
