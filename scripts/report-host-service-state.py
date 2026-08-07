@@ -11,6 +11,7 @@ which never contain credential values.
 """
 from __future__ import annotations
 
+import datetime
 import os
 import subprocess
 from pathlib import Path
@@ -55,6 +56,14 @@ print(" ", launchctl_state())
 for log in LOGS:
     print()
     print("log:", log)
+    # A tail says what the file ends with, never when that was written. Two
+    # artifacts share one log here, so an old crash loop and a current start sit
+    # in the same tail with nothing between them saying which is which.
+    if log.exists():
+        written = datetime.datetime.fromtimestamp(
+            log.stat().st_mtime, datetime.timezone.utc
+        ).isoformat()
+        print("  last written:", written)
     if not log.exists():
         print("  absent")
         continue
