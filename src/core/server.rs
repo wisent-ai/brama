@@ -372,16 +372,32 @@ impl ModelAliases {
                 ));
             }
             let supported = alias_route_shape_supported(alias.as_str(), route);
-            let capability_ok = !alias_requires_direct_capability(alias.as_str())
-                || crate::providers::adapter::provider_id_from_route(route)
-                    .is_some_and(crate::gateway::broker::provider_capability_configured);
-            if !supported || !capability_ok {
+            if !supported {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidInput,
-                    format!(
-                        "{MODEL_ALIASES_ENV} route for {alias} has no configured matching provider capability"
-                    ),
+                    format!("{MODEL_ALIASES_ENV} route for {alias} is not a shape this alias can take"),
                 ));
+            }
+            // A missing provider capability and a malformed alias table are
+            // different faults, and only one of them is this gateway's
+            // configuration. The shape above is: refuse, because a wrong table
+            // would route callers somewhere unintended. A credential that was
+            // never issued on this host is the environment, and refusing to
+            // start for it takes down every alias whose provider IS present --
+            // which is how one absent subscription left the whole fleet with no
+            // gateway at all. Start, serve what is serviceable, and let the
+            // aliases that have no credential resolve to nothing, exactly as an
+            // alias nobody declared already does.
+            if alias_requires_direct_capability(alias.as_str())
+                && !crate::providers::adapter::provider_id_from_route(route)
+                    .is_some_and(crate::gateway::broker::provider_capability_configured)
+            {
+                warn!(
+                    event = "alias_provider_capability_absent",
+                    alias = %alias,
+                    route = %route,
+                    "no provider capability was issued for this route; the alias will not serve"
+                );
             }
         }
         Ok(Self {
@@ -390,10 +406,36 @@ impl ModelAliases {
         })
     }
 
+    /// A route Brama can actually authenticate to, or nothing.
+    ///
+    /// Startup no longer refuses over a provider capability that was never
+    /// issued here, so the check has to live where the route is used. Nothing
+    /// is the honest answer: it is what an alias nobody declared already
+    /// returns, and every caller of these two already handles it. Routing
+    /// anyway would send a caller to a provider this gateway holds no
+    /// credential for, and report it as that provider's refusal.
+    fn serviceable(alias: &str, route: String) -> Option<String> {
+        if !alias_requires_direct_capability(alias) {
+            return Some(route);
+        }
+        if crate::providers::adapter::provider_id_from_route(&route)
+            .is_some_and(crate::gateway::broker::provider_capability_configured)
+        {
+            return Some(route);
+        }
+        warn!(
+            event = "alias_route_unserviceable",
+            alias = %alias,
+            route = %route,
+            "refusing an alias whose provider capability was never issued"
+        );
+        None
+    }
+
     fn source(&self, alias: &str) -> Option<String> {
         if let Some(path) = self.routes_file.as_deref() {
             match crate::core::inference_routes::resolve(path, alias) {
-                Ok(Some(route)) => return Some(route),
+                Ok(Some(route)) => return Self::serviceable(alias, route),
                 Ok(None) => {}
                 Err(error) => {
                     warn!(event = "inference_routes_invalid", %error);
@@ -401,7 +443,10 @@ impl ModelAliases {
                 }
             }
         }
-        self.routes.get(alias).cloned()
+        self.routes
+            .get(alias)
+            .cloned()
+            .and_then(|route| Self::serviceable(alias, route))
     }
 
     fn chat_route(&self, alias: &str) -> (Option<String>, Vec<String>) {
@@ -417,7 +462,9 @@ impl ModelAliases {
         if let Some(path) = self.routes_file.as_deref() {
             match crate::core::inference_routes::route_chain(path, alias) {
                 Ok(Some(chain)) => {
-                    let mut destinations = chain.into_iter();
+                    let mut destinations = chain
+                        .into_iter()
+                        .filter_map(|route| Self::serviceable(alias, route));
                     return (destinations.next(), destinations.collect::<Vec<String>>());
                 }
                 Ok(None) => {}
@@ -427,7 +474,13 @@ impl ModelAliases {
                 }
             }
         }
-        (self.routes.get(alias).cloned(), Vec::new())
+        (
+            self.routes
+                .get(alias)
+                .cloned()
+                .and_then(|route| Self::serviceable(alias, route)),
+            Vec::new(),
+        )
     }
 }
 
