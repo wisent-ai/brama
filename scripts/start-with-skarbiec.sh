@@ -187,6 +187,17 @@ for name, value in expected.items():
 PY
 }
 
+# The workload identity belongs to this host's gateway, not to a bundle
+# version. The vault holds its public half, and the broker verifies every
+# redemption against that, so a key minted fresh in each new digest directory
+# is a new stranger every update: capabilities keep being issued and every
+# redemption is refused. Keep the private half in one stable place and let the
+# generator reuse it; only the very first provision mints one.
+stable_proof_key=${BRAMA_PROOF_KEY_FILE:-"${HOME:-/nonexistent}/.stado/brama-proof.key"}
+if [ -f "$stable_proof_key" ]; then
+  BRAMA_PROOF_KEY_FILE="$stable_proof_key"
+  export BRAMA_PROOF_KEY_FILE
+fi
 if ! registry_describes_this_installation; then
   if [ -x "$provision_hint" ] && [ -f "$config_dir/subscriptions.json" ]; then
     printf '%s\n' "provisioning this installation's Skarbiec identity in $config_dir" >/dev/stderr
@@ -195,6 +206,14 @@ if ! registry_describes_this_installation; then
     BRAMA_WORKLOAD_UID="${BRAMA_WORKLOAD_UID:-$(id -u)}" \
     BRAMA_WORKLOAD_GID="${BRAMA_WORKLOAD_GID:-$(id -g)}" \
     "$provision_hint" --force >/dev/stderr
+    # A first provision mints the identity. Put it where the next version will
+    # find it, or the very next update becomes a stranger again.
+    if [ ! -f "$stable_proof_key" ] && [ -f "$config_dir/brama-proof.key" ]; then
+      mkdir -p "$(dirname -- "$stable_proof_key")"
+      cp "$config_dir/brama-proof.key" "$stable_proof_key"
+      chmod u=rw,go= "$stable_proof_key"
+      printf '%s\n' "recorded this gateway's workload identity at $stable_proof_key" >/dev/stderr
+    fi
   fi
 fi
 

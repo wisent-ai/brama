@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { createHash, generateKeyPairSync, sign } from 'node:crypto';
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign } from 'node:crypto';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 
 const [, , binaryPath, outputDir, subscriptionsPath, executablePath = binaryPath, workloadUidInput, workloadGidInput] = process.argv;
@@ -59,6 +59,45 @@ function ed25519() {
     publicRaw: Buffer.from(publicJwk.x, 'base64url'),
     privateSeed: Buffer.from(privateJwk.d, 'base64url'),
   };
+}
+
+// The broker verifies a redemption against the public key the VAULT holds for
+// this workload, so the private half is an identity, not a build artifact.
+// Minting a fresh one on every run meant an update -- which lands the bundle
+// under a new digest directory and provisions it there -- silently replaced
+// the identity the vault knows. The authority kept issuing capabilities and
+// the broker kept refusing to redeem them, which surfaces only as a credential
+// that is "unavailable".
+//
+// So a key that already exists is kept. BRAMA_PROOF_KEY_FILE names one to
+// carry forward from the installation being replaced; otherwise a key already
+// sitting in the output directory is reused. Only a first provision mints.
+function ed25519FromSeed(seedHex) {
+  const seed = Buffer.from(seedHex.trim(), 'hex');
+  const prefix = Buffer.from('302e020100300506032b657004220420', 'hex');
+  const privateKey = createPrivateKey({
+    key: Buffer.concat([prefix, seed]),
+    format: 'der',
+    type: 'pkcs8',
+  });
+  const publicJwk = createPublicKey(privateKey).export({ format: 'jwk' });
+  if (!publicJwk.x) throw new Error('Ed25519 JWK export is incomplete');
+  return {
+    privateKey,
+    publicRaw: Buffer.from(publicJwk.x, 'base64url'),
+    privateSeed: seed,
+  };
+}
+
+function proofIdentity(outputDir) {
+  const carried = process.env.BRAMA_PROOF_KEY_FILE;
+  const existing = join(outputDir, 'brama-proof.key');
+  for (const candidate of [carried, existing]) {
+    if (candidate && existsSync(candidate)) {
+      return ed25519FromSeed(readFileSync(candidate, 'utf8'));
+    }
+  }
+  return ed25519();
 }
 
 function writeSigned(name, document, domain, key) {
@@ -126,7 +165,7 @@ const requestSignRules = requestSignAgentIds.map((agentId) => ({
 const rules = [...requestSignRules, ...directProviderRules, ...subscriptionRules];
 const policyKey = ed25519();
 const registryKey = ed25519();
-const proofKey = ed25519();
+const proofKey = proofIdentity(outputDir);
 const macosRequirement = macosCodeSigningRequirement(binaryPath);
 const policy = {
   version: 'v1',

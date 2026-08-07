@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import subprocess
 from pathlib import Path
 
 HOME = Path(os.environ.get("HOME", "."))
@@ -50,6 +51,17 @@ if binary.exists():
     print("binary sha256:", digest(binary))
     print("binary uid/gid:", binary.stat().st_uid, binary.stat().st_gid)
 
+
+# The other side of the comparison: what the kernel will actually report for
+# the process that asks. Pinning is only ever right relative to this.
+running = subprocess.run(
+    ["/bin/ps", "-Ao", "pid=,uid=,gid=,comm="],
+    capture_output=True,
+    text=True,
+)
+for line in running.stdout.splitlines():
+    if line.rstrip().endswith("/bin/brama"):
+        print("running:", line.strip())
 registry = CONFIG / "registry.json"
 if registry.exists():
     try:
