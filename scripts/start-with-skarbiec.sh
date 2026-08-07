@@ -102,6 +102,17 @@ if [ "$source_vault_file" != "$vault_file" ]; then
 fi
 chmod u=rw,go= "$vault_file"
 export SKARBIEC_VAULT_FILE="$vault_file"
+# The routes table says which vault coordinate a purpose stands for, and the
+# authority looks for it beside the vault it was given. That is now the copy
+# above, in a runtime directory this launcher just made, where the operator's
+# table has never been -- so every resource resolved to nothing and the gateway
+# started with no provider it could authenticate to. Name the real one instead
+# of copying it: one table, beside the vault it belongs to, never a stale
+# duplicate. Absent, the authority keeps its own default.
+if [ -f "${source_vault_file%/*}/capability-routes.json" ]; then
+  SKARBIEC_CAPABILITY_ROUTES_FILE="${source_vault_file%/*}/capability-routes.json"
+  export SKARBIEC_CAPABILITY_ROUTES_FILE
+fi
 unset source_vault_file
 
 # The trust material below is per installation and is deliberately absent from
