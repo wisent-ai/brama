@@ -557,6 +557,7 @@ catalog_file="$runtime_dir/subscription-catalog.json"
   "$request_capabilities_file" \
   "$catalog_file" <<'PY'
 import json
+import os
 import subprocess
 import sys
 
@@ -679,6 +680,25 @@ for agent_id in request_sign_agents:
     granted = issue("brama.request.sign", f"agent:{agent_id}")
     if granted is not None:
         request_capabilities[agent_id] = granted
+
+# Every capability refused, and none issued, has one overwhelmingly likely
+# cause worth stating once instead of leaving it to be inferred from a column
+# of identical refusals followed by an alias error that mentions none of this.
+# A resource names a purpose; only the issuing operator says which vault entry
+# it stands for, and that mapping lives in one file beside the vault. Without
+# it nothing resolves, the gateway starts with no provider it may authenticate
+# to, and the first alias that needs one ends the process.
+if not capabilities and not request_capabilities:
+    routes_file = os.environ.get("SKARBIEC_CAPABILITY_ROUTES_FILE", "")
+    where = routes_file or "capability-routes.json beside the Skarbiec vault"
+    sys.stderr.write(
+        "no capability was issued for any provider on this host: the routes "
+        f"table is missing or maps nothing.\nExpected at: {where}\n"
+        'Each entry maps one resource to one vault coordinate, for example '
+        '{"provider:openai": {"item": "provider-openai", "field": "api_key"}}.\n'
+        "The issuing operator writes it -- a workload that chose its own "
+        "mapping would be choosing which credential its purpose stands for.\n"
+    )
 with open(capabilities_path, "w", encoding="utf-8") as target:
     json.dump(capabilities, target, separators=(",", ":"))
 with open(request_capabilities_path, "w", encoding="utf-8") as target:
