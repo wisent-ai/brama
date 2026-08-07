@@ -312,7 +312,7 @@ sources = [
     ("lem", "lem-model-router", None, lem_models),
 ]
 
-def field(item, name):
+def field(item, name, required=True):
     # check=True hides the reason: the traceback names the command and drops
     # everything the router said about why it refused, which turns a one-line
     # cause into an afternoon of guessing from the outside.
@@ -325,7 +325,18 @@ def field(item, name):
     )
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip()
-        raise SystemExit(f"reading {item} through the entitlements router failed: {detail}")
+        message = f"reading {item} through the entitlements router failed: {detail}"
+        if required:
+            raise SystemExit(message)
+        # A host holds the credentials for the products it serves, not for
+        # every product in the fleet. Refusing to boot because the item for
+        # one unrelated client is encrypted to a key this machine was never
+        # given takes down every client whose item is readable, which is the
+        # whole gateway. That client is left out instead; nothing it could
+        # have done becomes possible, because Brama only accepts the bearers
+        # it was handed here.
+        sys.stderr.write(f"{message}\nskipping client identity {item}\n")
+        return None
     payload = json.loads(result.stdout)
     if payload.get("schema") != "skarbiec.item.v2":
         raise RuntimeError(f"{item} did not return a Skarbiec v2 item")
@@ -337,9 +348,17 @@ def field(item, name):
         raise RuntimeError(f"{item}/{name} is not a single non-empty value")
     return value
 
+# The two clients the server itself verifies at startup — it exits unless
+# `wisent-backend` and `weles` carry their exact alias sets — must be present
+# or the failure belongs at the top, not in a warning nobody reads.
+REQUIRED_CLIENTS = {"wisent-backend", "weles"}
+
 identities = []
 for client_id, item, agent_id, allowed_models in sources:
-    identity = {"client_id": client_id, "token": field(item, "token")}
+    token = field(item, "token", required=client_id in REQUIRED_CLIENTS)
+    if token is None:
+        continue
+    identity = {"client_id": client_id, "token": token}
     if agent_id is not None:
         identity["agent_id"] = agent_id
     if allowed_models is not None:
