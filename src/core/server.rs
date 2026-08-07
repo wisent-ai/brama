@@ -256,6 +256,13 @@ impl ModelIngressAuth {
         client_id: &str,
         aliases: &[&str],
     ) -> Result<(), std::io::Error> {
+        // This checks a table for internal consistency. With no table there is
+        // nothing inconsistent: those clients are resolved against Skarbiec,
+        // where their alias set is a capability rather than a line in an
+        // environment variable this process was started with.
+        if self.credentials.is_empty() {
+            return Ok(());
+        }
         let expected = aliases
             .iter()
             .copied()
