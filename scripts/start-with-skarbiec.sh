@@ -69,7 +69,11 @@ if [ -x "$HOME/.stado/bin/stado" ]; then
 else
   stado_bin="$(command -v stado || true)"
 fi
-if [ -n "$stado_bin" ] && ! gpg --batch --list-secret-keys --with-colons 2>/dev/null | grep -q '^sec'; then
+# Imported unconditionally: a home that already holds some secret key is not a
+# home that holds this one, and skipping on that basis is why the router still
+# reported "No secret key" after the import was added. Importing a key that is
+# already present costs nothing.
+if [ -n "$stado_bin" ]; then
   service_key="$gnupg_dir/brama-service.key"
   rm -f "$service_key"
   ( umask 077
