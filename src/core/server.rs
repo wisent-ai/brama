@@ -1067,12 +1067,23 @@ async fn chat_completions(
             "model must be a canonical provider/model route or a supported selector",
         );
     }
+    // Subscription dispatch is for credentials that belong to the caller, and
+    // the four tests below say when that is the case: an explicit subscription
+    // selector, a named billing target, or a provider whose usage must bill to
+    // the caller's own subscription -- `claude-code`, `codex`, `kimi`.
+    //
+    // Presenting agent auth used to be a fifth. It protected nothing those four
+    // do not already cover, and it inverted the access rule: the same client,
+    // with the same bearer and the same alias, was served from the deployment's
+    // own provider when it stayed anonymous and refused with "no active
+    // credential for agent" the moment it proved who it was. The catalogue said
+    // the opposite in the same breath, marking those models available to agent
+    // callers. Proving more identity cannot grant less access.
     let caller_scoped_request = any_subscription
         || any_vision_capable_subscription
         || task_subscription.is_some()
         || req.billing_target.is_some()
-        || provider_requires_caller_identity(&selected_model)
-        || has_caller_auth_headers(&headers);
+        || provider_requires_caller_identity(&selected_model);
 
     let routing_mode = if task_subscription.is_some() {
         "task"
