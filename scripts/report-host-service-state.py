@@ -17,7 +17,12 @@ from pathlib import Path
 
 HOME = Path(os.environ.get("HOME", "."))
 UNIT = os.environ.get("BRAMA_UNIT", "com.wisent.always-on.brama")
-LOG_LINES = int(os.environ.get("BRAMA_LOG_LINES", "25"))
+# `stado host run-helper` carries no caller environment, so this default is the
+# window every remote diagnosis gets. One start emits a line per provider it
+# skips, so a window shorter than that hides the very lines the summary refers
+# to — and reading a summary without them is how "each fix moved us forward"
+# survived three restarts that were all failing the same way.
+LOG_LINES = int(os.environ.get("BRAMA_LOG_LINES", "70"))
 LOGS = (
     HOME / ".stado" / "logs" / "brama-always-on.err",
     HOME / ".stado" / "logs" / "brama-always-on.out",
