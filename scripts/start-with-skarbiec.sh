@@ -591,6 +591,12 @@ subscription_agents = sorted([*request_sign_agents, "echo", "content-platform", 
 normalize = lambda value: value.strip().lower().replace("_", "-")
 
 def issue(purpose, resource):
+    # Lifetime and use count are the authority's to set, not this launcher's.
+    # It used to name a thirty-day, million-use capability, which the authority
+    # now refuses outright: capabilities there are short and countable by
+    # design, and their nonce retention is derived from that ceiling. Asking for
+    # the defaults keeps the two in step, and moving the ceiling to fit an old
+    # ask would have widened a security bound to spare this line a change.
     issued = subprocess.run(
         [
             router,
@@ -599,15 +605,19 @@ def issue(purpose, resource):
             "--purpose", purpose,
             "--resource", resource,
             "--target", "brama",
-            "--ttl", "2592000",
-            "--max-uses", "1000000",
         ],
         capture_output=True,
         text=True,
     )
     if issued.returncode:
         detail = issued.stderr.strip() or issued.stdout.strip() or "no detail"
-        raise RuntimeError(f"capability issue failed for {resource}: {detail}")
+        # One subscription that cannot be issued is not a reason to serve
+        # nobody. The same judgement is already made when an item cannot be
+        # read: the client that depends on it is left out, and every other
+        # client keeps its gateway. A raise here takes the whole thing down.
+        sys.stderr.write(f"capability issue failed for {resource}: {detail}\n")
+        sys.stderr.write(f"skipping subscription {resource}\n")
+        return None
     return json.loads(issued.stdout)["capability_id"]
 
 capabilities = {}
@@ -624,7 +634,9 @@ for item in available_items:
         resource = f"provider:{provider}"
         if ("brama.provider.authenticate", resource) not in allowed:
             continue
-        capabilities[provider] = issue("brama.provider.authenticate", resource)
+        granted = issue("brama.provider.authenticate", resource)
+        if granted is not None:
+            capabilities[provider] = granted
     elif len(parts) == 3 and parts[0] == "provider":
         provider, item_id = normalize(parts[1]), parts[2]
         agent_id = next(
@@ -640,7 +652,10 @@ for item in available_items:
         resource = f"provider:{provider}:{item_id}"
         if ("brama.provider.authenticate", resource) not in allowed:
             continue
-        capabilities[item_id] = issue("brama.provider.authenticate", resource)
+        granted = issue("brama.provider.authenticate", resource)
+        if granted is None:
+            continue
+        capabilities[item_id] = granted
         catalog.append({
             "id": item_id,
             "provider": provider,
@@ -655,12 +670,15 @@ for purpose, resource in sorted(allowed):
     if len(parts) == 2 and parts[0] == "provider":
         provider = normalize(parts[1])
         if provider not in capabilities:
-            capabilities[provider] = issue(purpose, resource)
+            granted = issue(purpose, resource)
+            if granted is not None:
+                capabilities[provider] = granted
 
-request_capabilities = {
-    agent_id: issue("brama.request.sign", f"agent:{agent_id}")
-    for agent_id in request_sign_agents
-}
+request_capabilities = {}
+for agent_id in request_sign_agents:
+    granted = issue("brama.request.sign", f"agent:{agent_id}")
+    if granted is not None:
+        request_capabilities[agent_id] = granted
 with open(capabilities_path, "w", encoding="utf-8") as target:
     json.dump(capabilities, target, separators=(",", ":"))
 with open(request_capabilities_path, "w", encoding="utf-8") as target:
