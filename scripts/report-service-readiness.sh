@@ -194,6 +194,49 @@ then
   cat "$routes_file"
 fi
 
+# A route needs one item and one field. The item id is already the operator's
+# choice -- the vault names it exactly as the resource -- but the field name is
+# not visible from the resource, and `inspect-vault` is the one reader that
+# gives names without values.
+printf '%s\n' '--- vault item metadata (nonsecret) ---'
+stado_bin="$HOME/.stado/bin/stado"
+if [ -x "$stado_bin" ] && [ -f "$vault" ]
+then
+  inventory="$(mktemp)"
+  if "$stado_bin" credentials inspect-vault "$vault" --json > "$inventory"
+  then
+    "${PYTHON_BIN:-python3}" "$HOME/.stado/bin/brama-readiness-fields" "$inventory"
+  else
+    printf '%s\n' 'inspect-vault-failed'
+  fi
+  rm -f "$inventory"
+else
+  printf '%s\n' 'stado-or-vault-missing'
+fi
+
+printf '%s\n' '--- brama-runtime policy rules ---'
+policy="${BRAMA_SKARBIEC_CONFIG_DIR:-}/policy.json"
+if [ ! -f "$policy" ]
+then
+  policy="$bundle/etc/brama-skarbiec/policy.json"
+fi
+label=policy
+aim="$policy"
+report_path
+if [ -f "$policy" ]
+then
+  cat "$policy"
+fi
+
+# Field names, never field values. A route needs one item and one field name,
+# and picking the field is the difference between handing a purpose the key it
+# was authorised for and handing it a neighbouring one.
+printf '%s\n' '--- field names of the resources the router lists ---'
+if [ -f "$subscriptions" ]
+then
+  "${PYTHON_BIN:-python3}" "$HOME/.stado/bin/brama-readiness-fields" "$subscriptions"
+fi
+
 printf '%s\n' '--- bundle contents ---'
 if [ -d "$bundle" ]
 then

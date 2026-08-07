@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""Write the capability routes this host's own vault already determines.
+
+A resource names a purpose; the routes file says which vault coordinate that
+purpose stands for. Nothing on this host writes it, so every `capability-issue`
+is refused, the gateway starts with no provider it may authenticate to, and it
+dies on the first alias that needed one.
+
+The design keeps this decision away from the workload for a good reason: a
+gateway that picked its own mapping would be picking which credential its
+purpose stands for. This is not that. It runs on the operator's side, and it
+records only mappings the host's contents already fix, with no room to choose:
+
+  * the item is the resource -- the launcher builds resources FROM item ids,
+    so the two are the same string, not a match this program invents,
+  * the field is taken only when the item carries exactly ONE. Two or more and
+    there is a real choice to make, so it refuses and names them for a human.
+
+Create-only: an existing routes file is never touched, so an operator's own
+mapping always wins. Reverse by deleting the file it reports.
+
+Prints item ids and field names, never a value.
+"""
+from __future__ import annotations
+
+import json
+import os
+import stat
+import subprocess
+from pathlib import Path
+
+HOME = Path(os.environ.get("HOME", "."))
+BUNDLE = HOME / ".stado" / "services" / "brama" / "current" / "darwin-arm"
+ROUTER = Path(os.environ.get("ENTITLEMENTS_ROUTER_BIN", str(BUNDLE / "bin" / "skarbiec-entitlements-router")))
+SERVICE_ENV = Path(os.environ.get("BRAMA_SERVICE_ENV_FILE", str(HOME / ".config" / "brama" / "service.env")))
+RESOURCE_PREFIXES = ("provider:", "provider-", "agent:", "agent-")
+GPG_DIRECTORIES = ("/opt/homebrew/bin", "/usr/local/bin", "/usr/bin")
+
+
+def vault_path() -> str:
+    configured = os.environ.get("SKARBIEC_VAULT_FILE", "")
+    if configured:
+        return configured
+    if SERVICE_ENV.is_file():
+        for line in SERVICE_ENV.read_text(errors="replace").splitlines():
+            name, sep, value = line.partition("=")
+            if sep and name.strip() == "SKARBIEC_VAULT_FILE":
+                return value.strip().strip('"').strip("'")
+    return str(HOME / ".stado" / "skarbiec.vault.json")
+
+
+def router(*arguments: str) -> subprocess.CompletedProcess:
+    environment = dict(os.environ)
+    environment["SKARBIEC_VAULT_FILE"] = VAULT
+    search = [*GPG_DIRECTORIES, *environment.get("PATH", "").split(os.pathsep)]
+    environment["PATH"] = os.pathsep.join(part for part in search if part)
+    return subprocess.run([str(ROUTER), *arguments], capture_output=True, text=True, env=environment)
+
+
+def first_line(text: str) -> str:
+    head, _separator, _rest = text.partition("\n")
+    return head
+
+
+VAULT = vault_path()
+# Path("") is Path("."), which is truthy and exists, so the empty environment
+# value has to be rejected as a string before it ever becomes a path.
+_configured_routes = os.environ.get("SKARBIEC_CAPABILITY_ROUTES_FILE", "").strip()
+ROUTES = Path(_configured_routes) if _configured_routes else Path(VAULT).with_name("capability-routes.json")
+print("vault:", VAULT)
+print("routes:", ROUTES)
+
+if not ROUTER.exists():
+    raise SystemExit("entitlements router is absent; nothing can be provisioned")
+if ROUTES.exists():
+    print("status: present -- left exactly as it is")
+    raise SystemExit()
+
+listed = router("list")
+if listed.returncode:
+    raise SystemExit(f"listing the vault failed: {first_line(listed.stderr.strip()) or 'no detail'}")
+
+resources = sorted(
+    entry["id"]
+    for entry in json.loads(listed.stdout)
+    if isinstance(entry, dict)
+    and not entry.get("deleted", False)
+    and isinstance(entry.get("id"), str)
+    and entry["id"].startswith(RESOURCE_PREFIXES)
+)
+
+routes = {}
+skipped = []
+for item in resources:
+    got = router("get", item)
+    if got.returncode:
+        skipped.append((item, first_line(got.stderr.strip()) or "no detail"))
+        continue
+    fields = json.loads(got.stdout).get("fields")
+    if not isinstance(fields, dict) or not fields:
+        skipped.append((item, "no fields"))
+        continue
+    names = sorted(fields)
+    try:
+        (single,) = names
+    except ValueError:
+        skipped.append((item, f"operator must choose among {names}"))
+        continue
+    routes[item] = {"item": item, "field": single}
+    print("route:", item, "->", single)
+
+for item, reason in skipped:
+    print("skipped:", item, "--", reason)
+
+if not routes:
+    raise SystemExit("no unambiguous route on this host; nothing written")
+
+staging = ROUTES.with_name(ROUTES.name + ".staging")
+staging.write_text(json.dumps(routes, indent=None, sort_keys=True) + "\n", encoding="utf-8")
+os.chmod(staging, stat.S_IRUSR | stat.S_IWUSR)
+os.rename(staging, ROUTES)
+print("status: written", len(routes), "routes;", len(skipped), "left for a human")
+print("undo: rm", ROUTES)
