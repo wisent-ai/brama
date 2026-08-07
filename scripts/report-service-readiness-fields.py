@@ -13,6 +13,7 @@ Names only. No value from the vault is read or printed.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 
 
@@ -64,10 +65,34 @@ def version_shape(entry: dict) -> list[str]:
     return []
 
 
-def main() -> None:
+def inventory() -> object:
+    # `--vault <stado> <vault>` asks Stado for the vault's nonsecret metadata
+    # instead of reading a file the router happened to leave behind. Running it
+    # here keeps the failure text: a shell cannot merge the error stream
+    # without naming a file descriptor, and the reason it refused is the only
+    # useful part when it refuses.
+    if "--vault" in sys.argv:
+        vault = sys.argv.pop()
+        binary = sys.argv.pop()
+        result = subprocess.run(
+            [binary, "credentials", "inspect-vault", vault, "--json"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode:
+            detail = (result.stderr or result.stdout).strip()
+            print("inspect-vault failed:", detail)
+            return None
+        return json.loads(result.stdout)
     path = sys.argv.pop()
     with open(path, encoding="utf-8") as source:
-        document = json.load(source)
+        return json.load(source)
+
+
+def main() -> None:
+    document = inventory()
+    if document is None:
+        return
 
     listed = entries(document)
     if not listed:

@@ -202,14 +202,7 @@ printf '%s\n' '--- vault item metadata (nonsecret) ---'
 stado_bin="$HOME/.stado/bin/stado"
 if [ -x "$stado_bin" ] && [ -f "$vault" ]
 then
-  inventory="$(mktemp)"
-  if "$stado_bin" credentials inspect-vault "$vault" --json > "$inventory"
-  then
-    "${PYTHON_BIN:-python3}" "$HOME/.stado/bin/brama-readiness-fields" "$inventory"
-  else
-    printf '%s\n' 'inspect-vault-failed'
-  fi
-  rm -f "$inventory"
+  "${PYTHON_BIN:-python3}" "$HOME/.stado/bin/brama-readiness-fields" --vault "$stado_bin" "$vault"
 else
   printf '%s\n' 'stado-or-vault-missing'
 fi
