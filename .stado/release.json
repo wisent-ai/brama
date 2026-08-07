@@ -8,6 +8,8 @@
   "stage": {
     "bin/brama": "target/release/brama",
     "bin/start-with-skarbiec": "scripts/start-with-skarbiec.sh",
+    "bin/provision-skarbiec-trust": "scripts/provision-skarbiec-trust.sh",
+    "libexec/generate-skarbiec-config.mjs": "scripts/generate-skarbiec-config.mjs",
     "etc/brama-skarbiec/subscriptions.json": "scripts/skarbiec-subscriptions.json",
     "etc/brama-skarbiec/recipient-public-keys.asc": "scripts/skarbiec-recipient-public-keys.asc",
     "LICENSE": "LICENSE",
@@ -21,8 +23,5 @@
       "repo": "https://github.com/wisent-ai/skarbiec",
       "revision": "a5b897569653c36feebb29437baeef1f50596d06"
     }
-  },
-  "after_stage": [
-    "node scripts/generate-skarbiec-config.mjs \"$STAGE/bin/brama\" \"$STAGE/etc/brama-skarbiec\" \"$STAGE/etc/brama-skarbiec/subscriptions.json\""
-  ]
+  }
 }
