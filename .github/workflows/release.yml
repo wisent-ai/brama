@@ -77,6 +77,22 @@ jobs:
         run: |
           cargo build --locked --release --bin brama
           cargo build --locked --release --bin skarbiec --manifest-path skarbiec-source/Cargo.toml
+      - name: Refuse a router that cannot answer the launcher
+        # The launcher and the router come from two repositories and the pin
+        # between them was unchecked, which is how every release for weeks
+        # shipped a bundle whose first start died on `unknown command:
+        # capability-issue`. Free to catch here, days of a dead gateway
+        # otherwise.
+        run: |
+          python3 scripts/check-router-verbs.py \
+            scripts/start-with-skarbiec.sh \
+            skarbiec-source/target/release/skarbiec
+      - name: Refuse a launcher that does not parse
+        # `sh -n` cannot see inside the heredoc Python the launcher carries, and
+        # a block that does not compile fails at boot on the host instead.
+        run: |
+          sh -n scripts/start-with-skarbiec.sh
+          python3 scripts/check-launcher-blocks.py scripts/start-with-skarbiec.sh
       - name: Publish immutable tagged artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -104,11 +120,15 @@ jobs:
           # bin/provision-skarbiec-trust once per installation instead, so the
           # generator ships as data rather than being executed now.
           cp scripts/generate-skarbiec-config.mjs "$stage/libexec/generate-skarbiec-config.mjs"
-          # The diagnostic ships beside the generator for the same reason the
-          # generator ships at all: the question it answers — which of the
-          # four pinned fields does this host disagree with — can only be
+          # The diagnostic and the two repairs ship beside the generator for the
+          # same reason the generator ships at all: the questions they answer —
+          # which pinned field this host disagrees with, which capability was
+          # never issued, where the gateway is actually reachable — can only be
           # asked where the installation is.
-          cp scripts/skarbiec-identity-report.py "$stage/libexec/skarbiec-identity-report.py"
+          cp scripts/brama-diagnose.py "$stage/libexec/brama-diagnose.py"
+          cp scripts/brama-route-probe.py "$stage/libexec/brama-route-probe.py"
+          cp scripts/brama-clear-stale-broker.py "$stage/libexec/brama-clear-stale-broker.py"
+          cp scripts/brama-repair-inference-routes.py "$stage/libexec/brama-repair-inference-routes.py"
           chmod 0755 \
             "$stage/bin/brama" \
             "$stage/bin/skarbiec-entitlements-router" \

@@ -89,28 +89,64 @@ pub async fn get_agent_auth_secret(agent_id: &str) -> Option<Secret> {
         return Some(Secret::from_bytes(secret.into_bytes()));
     }
 
-    let capability_id = configured_capability(REQUEST_SIGN_CAPABILITIES_ENV, agent_id)?;
     let resource = format!("agent:{}", slug(agent_id));
-    let binding = CapabilityRef::request_sign(&capability_id, &resource).ok()?;
+    if let Some(capability_id) = configured_capability(REQUEST_SIGN_CAPABILITIES_ENV, agent_id) {
+        if let Ok(binding) = CapabilityRef::request_sign(&capability_id, &resource) {
+            if let Some(secret) = client()?.redeem(&binding).ok() {
+                return Some(secret);
+            }
+        }
+    }
+    // Same reasoning as a provider credential: the id the launcher seeded is
+    // short-lived by contract, so its refusal is the steady state and a fresh
+    // capability is the answer, not an error.
+    let fresh = issue_capability(REQUEST_SIGN_PURPOSE, &resource).await?;
+    let binding = CapabilityRef::request_sign(&fresh, &resource).ok()?;
     client()?.redeem(&binding).ok()
 }
 
-/// Return whether trusted deployment config contains a locally valid direct
-/// provider capability. This never redeems or handles plaintext.
+/// Return whether this installation can obtain a direct provider capability.
+///
+/// Startup validation refuses an alias whose provider has none, so this has to
+/// answer the question the request path will actually ask. It used to read one
+/// environment variable the launcher filled at boot; with capabilities issued
+/// where they are spent, an absent entry means nothing until the broker has
+/// been asked. Asking costs one capability, which is the cheapest possible
+/// proof that the path works, and is far cheaper than a gateway that starts
+/// and refuses every request.
 pub fn provider_capability_configured(provider: &str) -> bool {
-    let Some(capability_id) = configured_capability(PROVIDER_CAPABILITIES_ENV, provider) else {
-        return false;
-    };
     let resource = format!("provider:{}", slug(provider));
-    CapabilityRef::provider(&capability_id, &resource).is_ok() && client().is_some()
+    if client().is_none() {
+        return false;
+    }
+    if let Some(capability_id) = configured_capability(PROVIDER_CAPABILITIES_ENV, provider) {
+        if CapabilityRef::provider(&capability_id, &resource).is_ok() {
+            return true;
+        }
+    }
+    issue_capability_blocking(PROVIDER_PURPOSE, &resource)
+        .is_some_and(|capability_id| CapabilityRef::provider(&capability_id, &resource).is_ok())
 }
 
 /// Redeem a direct provider API credential immediately before the HTTP call.
+///
+/// The launcher seeds one id per provider at boot and those expire within the
+/// hour, so a refusal is the expected steady state rather than a fault: obtain
+/// a fresh capability and redeem that. Both attempts go through the same
+/// broker, and neither ever holds plaintext beyond the returned [`Secret`].
 pub async fn provider_credential(provider: &str) -> Option<Secret> {
-    let capability_id = configured_capability(PROVIDER_CAPABILITIES_ENV, provider)?;
     let resource = format!("provider:{}", slug(provider));
-    let binding = CapabilityRef::provider(&capability_id, &resource).ok()?;
-    client()?.redeem(&binding).ok()
+    let broker = client()?;
+    if let Some(capability_id) = configured_capability(PROVIDER_CAPABILITIES_ENV, provider) {
+        if let Ok(binding) = CapabilityRef::provider(&capability_id, &resource) {
+            if let Ok(secret) = broker.redeem(&binding) {
+                return Some(secret);
+            }
+        }
+    }
+    let fresh = issue_capability(PROVIDER_PURPOSE, &resource).await?;
+    let binding = CapabilityRef::provider(&fresh, &resource).ok()?;
+    broker.redeem(&binding).ok()
 }
 
 /// Redeem one subscription credential at the final-use boundary. Expired
@@ -253,6 +289,87 @@ fn entitlements_router_bin() -> String {
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_ENTITLEMENTS_ROUTER_BIN.to_owned())
 }
+
+const PROVIDER_PURPOSE: &str = "brama.provider.authenticate";
+const REQUEST_SIGN_PURPOSE: &str = "brama.request.sign";
+const RUNTIME_AGENT: &str = "brama-runtime";
+const CAPABILITY_TARGET: &str = "brama";
+
+/// The `capability-issue` request, taking the broker's own limits.
+///
+/// No lifetime or use count is passed, and that is the point. Skarbiec refuses
+/// a ttl over an hour and a use count over sixteen, while the launcher asked
+/// for thirty days and a million uses: every request was refused and the
+/// gateway came up answering `/health` and serving nothing. The broker's
+/// defaults are a short life and a single use, which is the right shape once
+/// the capability is obtained where it is spent. Nothing is cached: a
+/// single-use capability has nothing worth keeping, and an id the launcher put
+/// in the environment of a running process cannot be refreshed at all.
+fn issue_arguments(purpose: &str, resource: &str) -> Vec<String> {
+    vec![
+        "capability-issue".to_owned(),
+        "--agent".to_owned(),
+        RUNTIME_AGENT.to_owned(),
+        "--purpose".to_owned(),
+        purpose.to_owned(),
+        "--resource".to_owned(),
+        resource.to_owned(),
+        "--target".to_owned(),
+        CAPABILITY_TARGET.to_owned(),
+    ]
+}
+
+fn issued_capability_id(
+    stdout: &[u8],
+    stderr: &[u8],
+    succeeded: bool,
+    resource: &str,
+) -> Option<String> {
+    if !succeeded {
+        warn!(
+            event = "capability_issue_refused",
+            resource = resource,
+            detail = String::from_utf8_lossy(stderr).trim()
+        );
+        return None;
+    }
+    serde_json::from_slice::<Value>(stdout)
+        .ok()?
+        .get("capability_id")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+}
+
+/// Obtain one capability on the request path.
+async fn issue_capability(purpose: &str, resource: &str) -> Option<String> {
+    let output = tokio::process::Command::new(entitlements_router_bin())
+        .args(issue_arguments(purpose, resource))
+        .output()
+        .await
+        .ok()?;
+    issued_capability_id(
+        &output.stdout,
+        &output.stderr,
+        output.status.success(),
+        resource,
+    )
+}
+
+/// The same request during startup validation, where there is no runtime to
+/// await on and blocking for one child process costs nothing.
+fn issue_capability_blocking(purpose: &str, resource: &str) -> Option<String> {
+    let output = std::process::Command::new(entitlements_router_bin())
+        .args(issue_arguments(purpose, resource))
+        .output()
+        .ok()?;
+    issued_capability_id(
+        &output.stdout,
+        &output.stderr,
+        output.status.success(),
+        resource,
+    )
+}
+
 fn donation_recipient() -> String {
     std::env::var(DONATION_RECIPIENT_ENV)
         .ok()

@@ -104,17 +104,75 @@ chmod u=rw,go= "$vault_file"
 export SKARBIEC_VAULT_FILE="$vault_file"
 unset source_vault_file
 
-# The trust material below is per installation and is deliberately absent from
-# the release archive. It pins the absolute path and SHA-256 of the binary
-# allowed to redeem a capability, so one shared copy would both misidentify the
-# workload and put the same proof key in every download. Refuse to start rather
-# than run half-provisioned: a partially written directory is how a superseded
-# key outlives the re-provision that was supposed to replace it.
+# The trust material below is per installation. It pins the absolute path,
+# SHA-256, uid and gid of the process allowed to redeem a capability, so
+# material generated anywhere but this installation describes somebody else and
+# the broker refuses every redemption with `peer mismatch` - while the gateway
+# answers /health, which is what made this take days to see.
+#
+# Two things put a foreign registry here. An archive built with the material
+# baked in carries the build machine's stage path and its container account.
+# And an installation copied to a new directory - which is what happens every
+# time the fleet materialises an artifact under a fresh digest-named path - is
+# a new installation as far as the broker is concerned, however faithful the
+# copy.
+#
+# So this provisions rather than refuses. The bundle carries everything the
+# generator needs, the account that runs the service is the account the
+# registry must name, and doing it here means no operator has to notice that a
+# directory moved. Refusing is kept for the case where the bundle cannot
+# provision itself.
 if [ -x "$script_dir/provision-skarbiec-trust" ]; then
   provision_hint="$script_dir/provision-skarbiec-trust"
 else
   provision_hint="$bundle_root/scripts/provision-skarbiec-trust.sh"
 fi
+
+registry_describes_this_installation() {
+  [ -f "$config_dir/registry.json" ] || return
+  BRAMA_BIN="$BRAMA_BIN" "$PYTHON_BIN" - "$config_dir/registry.json" <<'PY'
+import hashlib
+import json
+import os
+import sys
+
+arguments = iter(sys.argv)
+next(arguments)
+registry_path = next(arguments)
+binary = os.environ["BRAMA_BIN"]
+try:
+    document = json.load(open(registry_path, encoding="utf-8"))
+except (OSError, ValueError) as error:
+    raise SystemExit(f"workload registry is unreadable: {error}")
+workload = next(iter(document.get("workloads", {}).values()), {})
+with open(binary, "rb") as handle:
+    digest = hashlib.sha256(handle.read()).hexdigest()
+expected = {
+    "uid": os.getuid(),
+    "gid": os.getgid(),
+    "executable_path": os.path.realpath(binary),
+    "executable_sha256": digest,
+}
+for name, value in expected.items():
+    if str(workload.get(name)) != str(value):
+        raise SystemExit(
+            f"workload registry disagrees on {name}: "
+            f"pinned={workload.get(name)} actual={value}"
+        )
+PY
+}
+
+if ! registry_describes_this_installation; then
+  if [ -x "$provision_hint" ] && [ -f "$config_dir/subscriptions.json" ]; then
+    printf '%s\n' "provisioning this installation's Skarbiec identity in $config_dir" >/dev/stderr
+    BRAMA_SKARBIEC_CONFIG_DIR="$config_dir" \
+    BRAMA_BIN="$BRAMA_BIN" \
+    BRAMA_WORKLOAD_UID="${BRAMA_WORKLOAD_UID:-$(id -u)}" \
+    BRAMA_WORKLOAD_GID="${BRAMA_WORKLOAD_GID:-$(id -g)}" \
+    "$provision_hint" --force >/dev/stderr
+  fi
+fi
+
 missing=
 for required in trust.json policy.json policy.sig registry.json registry.sig \
   brama-proof.key worm-receipt; do
@@ -539,6 +597,19 @@ subscription_agents = sorted([*request_sign_agents, "echo", "content-platform", 
 normalize = lambda value: value.strip().lower().replace("_", "-")
 
 def issue(purpose, resource):
+    """Ask for one capability, on the broker's own terms.
+
+    No ttl or max-uses is passed. This asked for thirty days and a million
+    uses, which the broker refuses outright - it permits an hour and sixteen
+    uses - so every request failed and the whole start aborted on the first
+    one. Brama obtains its own capability where it spends it, so what is
+    seeded here only has to cover the first request, and the broker's defaults
+    cover that.
+
+    A refusal is reported and skipped rather than raised. One provider the
+    vault cannot back is not a reason to leave the fleet without a gateway,
+    and the alias that needed it fails on its own terms with its own message.
+    """
     issued = subprocess.run(
         [
             router,
@@ -547,15 +618,14 @@ def issue(purpose, resource):
             "--purpose", purpose,
             "--resource", resource,
             "--target", "brama",
-            "--ttl", "2592000",
-            "--max-uses", "1000000",
         ],
         capture_output=True,
         text=True,
     )
     if issued.returncode:
         detail = issued.stderr.strip() or issued.stdout.strip() or "no detail"
-        raise RuntimeError(f"capability issue failed for {resource}: {detail}")
+        sys.stderr.write(f"no capability for {resource}: {detail}\n")
+        return None
     return json.loads(issued.stdout)["capability_id"]
 
 capabilities = {}
@@ -572,7 +642,9 @@ for item in available_items:
         resource = f"provider:{provider}"
         if ("brama.provider.authenticate", resource) not in allowed:
             continue
-        capabilities[provider] = issue("brama.provider.authenticate", resource)
+        capability_id = issue("brama.provider.authenticate", resource)
+        if capability_id is not None:
+            capabilities[provider] = capability_id
     elif len(parts) == 3 and parts[0] == "provider":
         provider, item_id = normalize(parts[1]), parts[2]
         agent_id = next(
@@ -588,7 +660,10 @@ for item in available_items:
         resource = f"provider:{provider}:{item_id}"
         if ("brama.provider.authenticate", resource) not in allowed:
             continue
-        capabilities[item_id] = issue("brama.provider.authenticate", resource)
+        capability_id = issue("brama.provider.authenticate", resource)
+        if capability_id is None:
+            continue
+        capabilities[item_id] = capability_id
         catalog.append({
             "id": item_id,
             "provider": provider,
@@ -603,12 +678,15 @@ for purpose, resource in sorted(allowed):
     if len(parts) == 2 and parts[0] == "provider":
         provider = normalize(parts[1])
         if provider not in capabilities:
-            capabilities[provider] = issue(purpose, resource)
+            capability_id = issue(purpose, resource)
+            if capability_id is not None:
+                capabilities[provider] = capability_id
 
-request_capabilities = {
-    agent_id: issue("brama.request.sign", f"agent:{agent_id}")
-    for agent_id in request_sign_agents
-}
+request_capabilities = {}
+for agent_id in request_sign_agents:
+    capability_id = issue("brama.request.sign", f"agent:{agent_id}")
+    if capability_id is not None:
+        request_capabilities[agent_id] = capability_id
 with open(capabilities_path, "w", encoding="utf-8") as target:
     json.dump(capabilities, target, separators=(",", ":"))
 with open(request_capabilities_path, "w", encoding="utf-8") as target:

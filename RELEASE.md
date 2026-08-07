@@ -161,15 +161,20 @@ read like a signing or key problem for days. `bin/provision-skarbiec-trust`
 now always passes the provisioning account's uid and gid, and
 `BRAMA_WORKLOAD_UID` / `BRAMA_WORKLOAD_GID` remain the override.
 
-Upgrading in place therefore has an order. Install the new version beside the
-old one, run its own `bin/provision-skarbiec-trust` as the account that will
-run the service, confirm the registry describes that installation, and only
-then point the service manager at it. Doing the last step first leaves a
-gateway that looks healthy and serves nothing.
+The launcher now does this itself. When the registry in the installation it is
+about to run does not describe that installation - wrong path, wrong digest,
+wrong account - it provisions before starting rather than refusing, because the
+bundle carries everything the generator needs and the account that runs the
+service is the account the registry must name. Copying an installation to a new
+directory, which is what the fleet does every time it materialises an artifact
+under a digest-named path, therefore heals on the next start instead of
+producing a gateway that answers `/health` and serves nothing.
 
-`scripts/skarbiec-identity-report.py` prints that comparison for every
-installed generation, beside the runtime values that decide which registry is
-consulted at all. Run it before concluding anything about a redemption
+`scripts/brama-diagnose.py` prints that comparison for every installed
+generation, beside the units that start Brama, the capabilities actually issued
+against the providers the policy grants, each alias route against those
+capabilities, where the gateway is reachable and by which scheme, and the
+current boot attempt. Run it before concluding anything about a redemption
 refusal.
 
 ## Qualification gate
