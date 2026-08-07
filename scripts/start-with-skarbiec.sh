@@ -102,6 +102,17 @@ if [ "$source_vault_file" != "$vault_file" ]; then
 fi
 chmod u=rw,go= "$vault_file"
 export SKARBIEC_VAULT_FILE="$vault_file"
+# The routes table says which vault coordinate a purpose stands for, and the
+# authority looks for it beside the vault it was given. That is now the copy
+# above, in a runtime directory this launcher just made, where the operator's
+# table has never been -- so every resource resolved to nothing and the gateway
+# started with no provider it could authenticate to. Name the real one instead
+# of copying it: one table, beside the vault it belongs to, never a stale
+# duplicate. Absent, the authority keeps its own default.
+if [ -f "${source_vault_file%/*}/capability-routes.json" ]; then
+  SKARBIEC_CAPABILITY_ROUTES_FILE="${source_vault_file%/*}/capability-routes.json"
+  export SKARBIEC_CAPABILITY_ROUTES_FILE
+fi
 unset source_vault_file
 
 # The trust material below is per installation. It pins the absolute path,
@@ -223,15 +234,88 @@ else
   unset BRAMA_SKARBIEC_CONSUMER
   unset BRAMA_SKARBIEC_TOKEN_FILE
 fi
+
+# A gateway the fleet can actually reach. Brama binds loopback unless it is
+# told otherwise, which is the right default and also the reason nothing off
+# this box could call it: every machine had been handed `127.0.0.1:8080` and
+# reached whatever answered there, which on one of them was an unmanaged
+# second gateway that refused the caller's bearer -- a routing fault wearing a
+# credential fault's clothes.
+#
+# Stado places the service, so Stado knows both halves: the address the placed
+# host should serve on, and which peers arrive over an encrypted link and may
+# therefore speak plaintext to it. Asking is what keeps the two from drifting.
+#
+# Only the placed host binds a routable address. Anywhere else -- no Stado, no
+# placement, or a placement naming another machine -- the gateway keeps its
+# loopback behaviour, so a stray copy can never claim the fleet's address.
+stado_bin=${STADO_BIN:-"${HOME:-/nonexistent}/.stado/bin/stado"}
+[ -x "$stado_bin" ] || stado_bin=$(command -v stado || true)
+bind_json=
+if [ -n "$stado_bin" ]; then
+  bind_json=$("$stado_bin" service directory bind brama --json || true)
+fi
+if [ -n "$bind_json" ]; then
+  bind_host=$(printf '%s' "$bind_json" | "$PYTHON_BIN" -c '
+import json, sys
+try:
+    print(json.load(sys.stdin).get("host", ""))
+except Exception:
+    pass
+')
+  this_host=$("$stado_bin" registry self | { IFS="$(printf "\t")" read -r name _rest || true; printf "%s" "$name"; })
+  if [ -n "$bind_host" ] && [ "$bind_host" = "$this_host" ]; then
+    BRAMA_BIND_ADDRESS=$(printf '%s' "$bind_json" | "$PYTHON_BIN" -c '
+import json, sys
+try:
+    print(json.load(sys.stdin).get("bind_address", ""))
+except Exception:
+    pass
+')
+    BRAMA_ENCRYPTED_PEER_IPS=$(printf '%s' "$bind_json" | "$PYTHON_BIN" -c '
+import json, sys
+try:
+    print(",".join(json.load(sys.stdin).get("encrypted_peers", [])))
+except Exception:
+    pass
+')
+    if [ -n "$BRAMA_BIND_ADDRESS" ]; then
+      export BRAMA_BIND_ADDRESS
+      export BRAMA_ENCRYPTED_PEER_IPS
+      printf '%s\n' "serving the fleet on $BRAMA_BIND_ADDRESS for peers ${BRAMA_ENCRYPTED_PEER_IPS:-none}" >/dev/stderr
+    fi
+  fi
+fi
 if [ -e "$SKARBIEC_CAP_SOCKET" ] || [ -L "$SKARBIEC_CAP_SOCKET" ]; then
   [ -S "$SKARBIEC_CAP_SOCKET" ] && [ ! -L "$SKARBIEC_CAP_SOCKET" ] || {
     printf '%s\n' "unsafe stale capability socket: $SKARBIEC_CAP_SOCKET" >/dev/stderr
     false
   }
+  # An owner here used to end the start, and nothing ever cleared it: the
+  # launcher is the only thing that creates this broker, so a live owner is a
+  # leftover from an earlier start -- and until the trap above was fixed, every
+  # failed start produced one. Refusing made the first failure permanent.
+  #
+  # End it, but only when it really is this installation's broker. Anything
+  # else holding the path is a situation this script must not resolve by
+  # killing a process it cannot identify, so that still refuses.
   lsof_bin=$(command -v lsof || true)
-  if [ -n "$lsof_bin" ] && "$lsof_bin" -t -- "$SKARBIEC_CAP_SOCKET" >/dev/null 2>&1; then
-    printf '%s\n' "Skarbiec capability socket is owned by another process" >/dev/stderr
-    false
+  if [ -n "$lsof_bin" ]; then
+    for owner in $("$lsof_bin" -t -- "$SKARBIEC_CAP_SOCKET" || true); do
+      owner_command=$(ps -p "$owner" -o comm= || true)
+      case "$owner_command" in
+        *skarbiec-entitlements-router|*/skarbiec)
+          printf '%s\n' "ending a leftover capability broker: $owner" >/dev/stderr
+          kill "$owner" || true
+          ;;
+        "")
+          ;;
+        *)
+          printf '%s\n' "capability socket is held by $owner_command ($owner), which this launcher did not start" >/dev/stderr
+          false
+          ;;
+      esac
+    done
   fi
   rm -f -- "$SKARBIEC_CAP_SOCKET"
 fi
@@ -563,6 +647,7 @@ catalog_file="$runtime_dir/subscription-catalog.json"
   "$request_capabilities_file" \
   "$catalog_file" <<'PY'
 import json
+import os
 import subprocess
 import sys
 
@@ -597,19 +682,12 @@ subscription_agents = sorted([*request_sign_agents, "echo", "content-platform", 
 normalize = lambda value: value.strip().lower().replace("_", "-")
 
 def issue(purpose, resource):
-    """Ask for one capability, on the broker's own terms.
-
-    No ttl or max-uses is passed. This asked for thirty days and a million
-    uses, which the broker refuses outright - it permits an hour and sixteen
-    uses - so every request failed and the whole start aborted on the first
-    one. Brama obtains its own capability where it spends it, so what is
-    seeded here only has to cover the first request, and the broker's defaults
-    cover that.
-
-    A refusal is reported and skipped rather than raised. One provider the
-    vault cannot back is not a reason to leave the fleet without a gateway,
-    and the alias that needed it fails on its own terms with its own message.
-    """
+    # Lifetime and use count are the authority's to set, not this launcher's.
+    # It used to name a thirty-day, million-use capability, which the authority
+    # now refuses outright: capabilities there are short and countable by
+    # design, and their nonce retention is derived from that ceiling. Asking for
+    # the defaults keeps the two in step, and moving the ceiling to fit an old
+    # ask would have widened a security bound to spare this line a change.
     issued = subprocess.run(
         [
             router,
@@ -624,7 +702,12 @@ def issue(purpose, resource):
     )
     if issued.returncode:
         detail = issued.stderr.strip() or issued.stdout.strip() or "no detail"
-        sys.stderr.write(f"no capability for {resource}: {detail}\n")
+        # One subscription that cannot be issued is not a reason to serve
+        # nobody. The same judgement is already made when an item cannot be
+        # read: the client that depends on it is left out, and every other
+        # client keeps its gateway. A raise here takes the whole thing down.
+        sys.stderr.write(f"capability issue failed for {resource}: {detail}\n")
+        sys.stderr.write(f"skipping subscription {resource}\n")
         return None
     return json.loads(issued.stdout)["capability_id"]
 
@@ -642,9 +725,9 @@ for item in available_items:
         resource = f"provider:{provider}"
         if ("brama.provider.authenticate", resource) not in allowed:
             continue
-        capability_id = issue("brama.provider.authenticate", resource)
-        if capability_id is not None:
-            capabilities[provider] = capability_id
+        granted = issue("brama.provider.authenticate", resource)
+        if granted is not None:
+            capabilities[provider] = granted
     elif len(parts) == 3 and parts[0] == "provider":
         provider, item_id = normalize(parts[1]), parts[2]
         agent_id = next(
@@ -660,10 +743,10 @@ for item in available_items:
         resource = f"provider:{provider}:{item_id}"
         if ("brama.provider.authenticate", resource) not in allowed:
             continue
-        capability_id = issue("brama.provider.authenticate", resource)
-        if capability_id is None:
+        granted = issue("brama.provider.authenticate", resource)
+        if granted is None:
             continue
-        capabilities[item_id] = capability_id
+        capabilities[item_id] = granted
         catalog.append({
             "id": item_id,
             "provider": provider,
@@ -678,15 +761,34 @@ for purpose, resource in sorted(allowed):
     if len(parts) == 2 and parts[0] == "provider":
         provider = normalize(parts[1])
         if provider not in capabilities:
-            capability_id = issue(purpose, resource)
-            if capability_id is not None:
-                capabilities[provider] = capability_id
+            granted = issue(purpose, resource)
+            if granted is not None:
+                capabilities[provider] = granted
 
 request_capabilities = {}
 for agent_id in request_sign_agents:
-    capability_id = issue("brama.request.sign", f"agent:{agent_id}")
-    if capability_id is not None:
-        request_capabilities[agent_id] = capability_id
+    granted = issue("brama.request.sign", f"agent:{agent_id}")
+    if granted is not None:
+        request_capabilities[agent_id] = granted
+
+# Every capability refused, and none issued, has one overwhelmingly likely
+# cause worth stating once instead of leaving it to be inferred from a column
+# of identical refusals followed by an alias error that mentions none of this.
+# A resource names a purpose; only the issuing operator says which vault entry
+# it stands for, and that mapping lives in one file beside the vault. Without
+# it nothing resolves, the gateway starts with no provider it may authenticate
+# to, and the first alias that needs one ends the process.
+if not capabilities and not request_capabilities:
+    routes_file = os.environ.get("SKARBIEC_CAPABILITY_ROUTES_FILE", "")
+    where = routes_file or "capability-routes.json beside the Skarbiec vault"
+    sys.stderr.write(
+        "no capability was issued for any provider on this host: the routes "
+        f"table is missing or maps nothing.\nExpected at: {where}\n"
+        'Each entry maps one resource to one vault coordinate, for example '
+        '{"provider:openai": {"item": "provider-openai", "field": "api_key"}}.\n'
+        "The issuing operator writes it -- a workload that chose its own "
+        "mapping would be choosing which credential its purpose stands for.\n"
+    )
 with open(capabilities_path, "w", encoding="utf-8") as target:
     json.dump(capabilities, target, separators=(",", ":"))
 with open(request_capabilities_path, "w", encoding="utf-8") as target:
@@ -752,4 +854,17 @@ if [ -z "${BRAMA_BIND_ADDRESS:-}" ]; then
   fi
 fi
 
-exec "$BRAMA_BIN" serve --port "${BRAMA_PORT_OVERRIDE:-${PORT:-8080}}"
+# `exec` replaces this shell, and with it every trap set above -- including the
+# one that stops the capability broker. So each time the gateway exited, the
+# broker outlived it and kept the capability socket, and the next start refused
+# because that socket was owned by another process. Every failed start made the
+# next one impossible, and nothing recovered without someone ending the
+# leftover by hand. Stay in the process tree instead: the broker dies with the
+# launcher, and the gateway's own exit status is still what the supervisor sees.
+"$BRAMA_BIN" serve --port "${BRAMA_PORT_OVERRIDE:-${PORT:-8080}}" &
+brama_pid=$!
+trap 'if ps -p "$brama_pid" >/dev/null; then kill "$brama_pid"; fi
+      if ps -p "$broker_pid" >/dev/null; then kill "$broker_pid"; fi' EXIT INT TERM
+wait "$brama_pid"
+brama_status=$?
+exit "$brama_status"
