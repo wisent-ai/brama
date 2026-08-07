@@ -233,10 +233,31 @@ if [ -e "$SKARBIEC_CAP_SOCKET" ] || [ -L "$SKARBIEC_CAP_SOCKET" ]; then
     printf '%s\n' "unsafe stale capability socket: $SKARBIEC_CAP_SOCKET" >/dev/stderr
     false
   }
+  # An owner here used to end the start, and nothing ever cleared it: the
+  # launcher is the only thing that creates this broker, so a live owner is a
+  # leftover from an earlier start -- and until the trap above was fixed, every
+  # failed start produced one. Refusing made the first failure permanent.
+  #
+  # End it, but only when it really is this installation's broker. Anything
+  # else holding the path is a situation this script must not resolve by
+  # killing a process it cannot identify, so that still refuses.
   lsof_bin=$(command -v lsof || true)
-  if [ -n "$lsof_bin" ] && "$lsof_bin" -t -- "$SKARBIEC_CAP_SOCKET" >/dev/null 2>&1; then
-    printf '%s\n' "Skarbiec capability socket is owned by another process" >/dev/stderr
-    false
+  if [ -n "$lsof_bin" ]; then
+    for owner in $("$lsof_bin" -t -- "$SKARBIEC_CAP_SOCKET" || true); do
+      owner_command=$(ps -p "$owner" -o comm= || true)
+      case "$owner_command" in
+        *skarbiec-entitlements-router|*/skarbiec)
+          printf '%s\n' "ending a leftover capability broker: $owner" >/dev/stderr
+          kill "$owner" || true
+          ;;
+        "")
+          ;;
+        *)
+          printf '%s\n' "capability socket is held by $owner_command ($owner), which this launcher did not start" >/dev/stderr
+          false
+          ;;
+      esac
+    done
   fi
   rm -f -- "$SKARBIEC_CAP_SOCKET"
 fi
