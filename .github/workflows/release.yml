@@ -14,7 +14,11 @@ jobs:
           - os: ubuntu-latest
             platform: linux-amd64
             architecture: x86_64
-          - os: macos-latest
+          # The Stado release host builds its own platform. GitHub-hosted macOS
+          # minutes are billed at ten times the Linux rate against a monthly
+          # budget this organisation has already spent, and the host that runs
+          # Brama is the same arm64 macOS machine the artifact targets.
+          - os: stado-release
             platform: darwin-arm64
             architecture: arm64
     runs-on: ${{ matrix.os }}
