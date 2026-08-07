@@ -5,6 +5,21 @@ Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
 ## Unreleased
 
+### Released under the wrong name
+
+`v0.2.9`, `v0.2.10`, `v0.2.11`, `v0.2.12` and `v0.2.13` were cut from trees that
+already declared `0.3.0`, so five published releases carry this breaking change
+under patch-looking names. Anyone who upgraded to one of them has a service that
+will not start until `bin/provision-skarbiec-trust` has run, and the version
+number gave no warning.
+
+A published coordinate is immutable, so the names cannot be corrected. Each of the
+five release notes now opens with what the artifact actually contains and what the
+operator must do. `scripts/baseline.py` no longer aborts when it meets a release
+whose tree disagrees with its name — it reports it, skips it, and keeps looking —
+because before that fix one mis-named release froze the baseline eight releases
+behind.
+
 ### Security
 
 - The release archive no longer contains any signing key. Until now the release
