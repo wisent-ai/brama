@@ -43,3 +43,34 @@ if not value:
 else:
     digest = hashlib.sha256(value.encode()).hexdigest()
     print("length:", len(value), "digest:", digest[: len("0123456789abcdef")])
+
+# A host whose operator consumer holds no grant on this item still has the item:
+# the gateway reads it through the broker, and the point here is only whether
+# two hosts hold the same value. Fall back to the vault itself, and print a
+# digest either way.
+if not value:
+    import json
+
+    skarbiec = HOME / ".stado" / "bin" / "skarbiec"
+    if skarbiec.exists():
+        opened = subprocess.run(
+            [str(skarbiec), "get", ITEM],
+            capture_output=True,
+            text=True,
+            env={
+                **os.environ,
+                "PATH": "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+                "SKARBIEC_VAULT_FILE": str(HOME / ".stado" / "skarbiec.vault.json"),
+            },
+        )
+        if opened.returncode == len(""):
+            try:
+                fields = (json.loads(opened.stdout).get("fields") or {})
+            except ValueError:
+                fields = {}
+            direct = fields.get(FIELD, "")
+            if direct:
+                digest = hashlib.sha256(direct.encode()).hexdigest()
+                print("via vault length:", len(direct), "digest:", digest[: len("0123456789abcdef")])
+            else:
+                print("vault item has no field", FIELD, "-- fields:", sorted(fields))
