@@ -23,6 +23,13 @@ jobs:
             architecture: arm64
     runs-on: ${{ matrix.os }}
     steps:
+      # A self-hosted runner inherits the launch daemon's PATH, not a login
+      # shell's, so Homebrew binaries the release steps rely on — `gh` above
+      # all — are absent until they are added explicitly.
+      - name: Put Homebrew on PATH for the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        run: printf '%s\n' /opt/homebrew/bin >> "$GITHUB_PATH"
+
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
