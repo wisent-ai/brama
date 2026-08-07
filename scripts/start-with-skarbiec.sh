@@ -155,13 +155,6 @@ export SKARBIEC_WORM_RECEIPT_COMMAND="$config_dir/worm-receipt"
 export SKARBIEC_WORM_CHECKPOINT="$runtime_dir/checkpoint.json"
 export SKARBIEC_WORKLOAD_ID=brama-service
 export SKARBIEC_WORKLOAD_SIGNING_KEY_FILE="$config_dir/brama-proof.key"
-# `read_owner_key` opens this file itself and refuses any mode carrying group or
-# other bits, so a key left world-readable by whatever wrote it disables the
-# capability client — and a disabled client reports as "no configured matching
-# provider capability" against an arbitrary alias, never as a permission fault.
-# Narrow it here, where the path is already known, rather than trusting every
-# provisioning route to have done it.
-chmod go-rwx "$config_dir/brama-proof.key"
 export SKARBIEC_DONATION_RECIPIENT=brama-service
 export ENTITLEMENTS_ROUTER_BIN
 
@@ -803,15 +796,17 @@ if [ -z "${BRAMA_BIND_ADDRESS:-}" ]; then
   fi
 fi
 
-# `exec` on purpose. Supervising the gateway from this shell instead looked
-# tidier -- a trap could then stop the capability broker -- but it put a shell
-# between the supervisor and the process that matters. The supervisor stops the
-# job by signalling what it launched, that signal is not one a shell trap gets
-# to answer, and the gateway it had started outlived the stop as a disowned
-# process still holding port 8080. Every later start then failed on an address
-# already in use, and the service showed inactive while a gateway it no longer
-# controlled kept serving.
-#
-# The broker no longer needs the trap: a leftover one is ended at startup by
-# the socket guard above, which is the same repair without the shell.
-exec "$BRAMA_BIN" serve --port "${BRAMA_PORT_OVERRIDE:-${PORT:-8080}}"
+# `exec` replaces this shell, and with it every trap set above -- including the
+# one that stops the capability broker. So each time the gateway exited, the
+# broker outlived it and kept the capability socket, and the next start refused
+# because that socket was owned by another process. Every failed start made the
+# next one impossible, and nothing recovered without someone ending the
+# leftover by hand. Stay in the process tree instead: the broker dies with the
+# launcher, and the gateway's own exit status is still what the supervisor sees.
+"$BRAMA_BIN" serve --port "${BRAMA_PORT_OVERRIDE:-${PORT:-8080}}" &
+brama_pid=$!
+trap 'if ps -p "$brama_pid" >/dev/null; then kill "$brama_pid"; fi
+      if ps -p "$broker_pid" >/dev/null; then kill "$broker_pid"; fi' EXIT INT TERM
+wait "$brama_pid"
+brama_status=$?
+exit "$brama_status"
