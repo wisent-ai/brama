@@ -35,8 +35,12 @@ for argument in "$@"; do
   esac
 done
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-bundle_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
+# `pwd -P`, so the path this pins is the one the kernel will report for the
+# running gateway. Invoked through `.../brama/current/...`, a logical `pwd`
+# records the alias, and the broker then compares it against the physical
+# digest directory and refuses every redemption as a peer mismatch.
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+bundle_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
 
 if [ -f "$bundle_root/libexec/generate-skarbiec-config.mjs" ]; then
   generator="$bundle_root/libexec/generate-skarbiec-config.mjs"
