@@ -115,17 +115,75 @@ if [ -f "${source_vault_file%/*}/capability-routes.json" ]; then
 fi
 unset source_vault_file
 
-# The trust material below is per installation and is deliberately absent from
-# the release archive. It pins the absolute path and SHA-256 of the binary
-# allowed to redeem a capability, so one shared copy would both misidentify the
-# workload and put the same proof key in every download. Refuse to start rather
-# than run half-provisioned: a partially written directory is how a superseded
-# key outlives the re-provision that was supposed to replace it.
+# The trust material below is per installation. It pins the absolute path,
+# SHA-256, uid and gid of the process allowed to redeem a capability, so
+# material generated anywhere but this installation describes somebody else and
+# the broker refuses every redemption with `peer mismatch` - while the gateway
+# answers /health, which is what made this take days to see.
+#
+# Two things put a foreign registry here. An archive built with the material
+# baked in carries the build machine's stage path and its container account.
+# And an installation copied to a new directory - which is what happens every
+# time the fleet materialises an artifact under a fresh digest-named path - is
+# a new installation as far as the broker is concerned, however faithful the
+# copy.
+#
+# So this provisions rather than refuses. The bundle carries everything the
+# generator needs, the account that runs the service is the account the
+# registry must name, and doing it here means no operator has to notice that a
+# directory moved. Refusing is kept for the case where the bundle cannot
+# provision itself.
 if [ -x "$script_dir/provision-skarbiec-trust" ]; then
   provision_hint="$script_dir/provision-skarbiec-trust"
 else
   provision_hint="$bundle_root/scripts/provision-skarbiec-trust.sh"
 fi
+
+registry_describes_this_installation() {
+  [ -f "$config_dir/registry.json" ] || return
+  BRAMA_BIN="$BRAMA_BIN" "$PYTHON_BIN" - "$config_dir/registry.json" <<'PY'
+import hashlib
+import json
+import os
+import sys
+
+arguments = iter(sys.argv)
+next(arguments)
+registry_path = next(arguments)
+binary = os.environ["BRAMA_BIN"]
+try:
+    document = json.load(open(registry_path, encoding="utf-8"))
+except (OSError, ValueError) as error:
+    raise SystemExit(f"workload registry is unreadable: {error}")
+workload = next(iter(document.get("workloads", {}).values()), {})
+with open(binary, "rb") as handle:
+    digest = hashlib.sha256(handle.read()).hexdigest()
+expected = {
+    "uid": os.getuid(),
+    "gid": os.getgid(),
+    "executable_path": os.path.realpath(binary),
+    "executable_sha256": digest,
+}
+for name, value in expected.items():
+    if str(workload.get(name)) != str(value):
+        raise SystemExit(
+            f"workload registry disagrees on {name}: "
+            f"pinned={workload.get(name)} actual={value}"
+        )
+PY
+}
+
+if ! registry_describes_this_installation; then
+  if [ -x "$provision_hint" ] && [ -f "$config_dir/subscriptions.json" ]; then
+    printf '%s\n' "provisioning this installation's Skarbiec identity in $config_dir" >/dev/stderr
+    BRAMA_SKARBIEC_CONFIG_DIR="$config_dir" \
+    BRAMA_BIN="$BRAMA_BIN" \
+    BRAMA_WORKLOAD_UID="${BRAMA_WORKLOAD_UID:-$(id -u)}" \
+    BRAMA_WORKLOAD_GID="${BRAMA_WORKLOAD_GID:-$(id -g)}" \
+    "$provision_hint" --force >/dev/stderr
+  fi
+fi
+
 missing=
 for required in trust.json policy.json policy.sig registry.json registry.sig \
   brama-proof.key worm-receipt; do
