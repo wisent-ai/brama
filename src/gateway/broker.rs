@@ -100,9 +100,35 @@ pub async fn get_agent_auth_secret(agent_id: &str) -> Option<Secret> {
     // Same reasoning as a provider credential: the id the launcher seeded is
     // short-lived by contract, so its refusal is the steady state and a fresh
     // capability is the answer, not an error.
-    let fresh = issue_capability(REQUEST_SIGN_PURPOSE, &resource).await?;
-    let binding = CapabilityRef::request_sign(&fresh, &resource).ok()?;
-    client()?.redeem(&binding).ok()
+    // The provider path already says when the authority refuses; this one
+    // returned None in silence, and the caller sees only "no auth secret for
+    // agent" -- a sentence that fits a missing item, a refused issue and a
+    // denied redemption equally well.
+    let Some(fresh) = issue_capability(REQUEST_SIGN_PURPOSE, &resource).await else {
+        warn!(
+            event = "request_sign_issue_failed",
+            agent_id, %resource, "the authority would not issue a request-sign capability"
+        );
+        return None;
+    };
+    let Ok(binding) = CapabilityRef::request_sign(&fresh, &resource) else {
+        warn!(
+            event = "request_sign_binding_invalid",
+            agent_id, %resource, "the issued capability does not bind to this resource"
+        );
+        return None;
+    };
+    match client()?.redeem(&binding) {
+        Ok(secret) => Some(secret),
+        Err(error) => {
+            warn!(
+                event = "request_sign_redeem_failed",
+                agent_id, %resource, %error,
+                "the authority issued a request-sign capability and refused to redeem it"
+            );
+            None
+        }
+    }
 }
 /// The providers this installation can obtain a direct capability for, resolved
 /// in one pass.

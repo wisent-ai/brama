@@ -28,11 +28,25 @@ NAME = os.environ.get("AGENT_SECRET_NAME", "jeden-agent-auth-secret")
 if not STADO.exists():
     raise SystemExit(f"stado is unavailable here: {STADO}")
 
+# The transfer reads the selected store as whichever consumer the environment
+# presents, and the default one holds no grant here. Asking as that default and
+# reading the 403 as "nobody may read this" is how a grant that exists gets
+# reported as missing: `local-operator` carries `read agent:wisent-app#value`
+# on this host and has a token file beside the others.
+CONSUMER = os.environ.get("AGENT_SECRET_CONSUMER", "local-operator")
+TOKEN_FILE = os.environ.get(
+    "AGENT_SECRET_TOKEN_FILE", str(HOME / ".stado" / f"{CONSUMER}-skarbiec-token")
+)
 done = subprocess.run(
     [str(STADO), "host", "install-credential", TARGET, ITEM, FIELD, NAME],
     capture_output=True,
     text=True,
-    env={**os.environ, "PATH": "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"},
+    env={
+        **os.environ,
+        "PATH": "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "WC_SKARBIEC_CONSUMER": CONSUMER,
+        "WC_SKARBIEC_TOKEN_FILE": TOKEN_FILE,
+    },
 )
 print("target:", TARGET, "item:", ITEM, "field:", FIELD, "name:", NAME)
 print("exit:", done.returncode)

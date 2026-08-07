@@ -44,10 +44,25 @@ def provenance_version(version: Path) -> str:
             return ""
     return ""
 
-live_trust = (SERVICES / "current" / PLATFORM / "etc" / "brama-skarbiec").resolve()
-print("live trust:", live_trust, "policy present:", (live_trust / "policy.json").exists())
-if not (live_trust / "policy.json").exists():
-    raise SystemExit("the serving bundle carries no provisioned trust to reuse")
+# Prefer the directory the serving bundle actually uses, because that is the
+# material the fleet is authenticating against right now; fall back to a search
+# only when `current` has already been relinked to an unprovisioned newcomer,
+# which is what an update does before activation runs. Picking any provisioned
+# directory instead re-pins a registry nobody reads.
+serving = (SERVICES / "current" / PLATFORM / "etc" / "brama-skarbiec").resolve()
+if (serving / "policy.json").exists():
+    live_trust = serving
+else:
+    provisioned = [
+        candidate / PLATFORM / "etc" / "brama-skarbiec"
+        for candidate in sorted(SERVICES.iterdir(), key=lambda path: path.name)
+        if not candidate.is_symlink()
+        and (candidate / PLATFORM / "etc" / "brama-skarbiec" / "policy.json").exists()
+    ]
+    if not provisioned:
+        raise SystemExit("no installed bundle carries provisioned trust to reuse")
+    live_trust = provisioned[len(provisioned) - len("x")].resolve()
+print("trust source:", live_trust)
 
 targets = [
     version
@@ -80,6 +95,13 @@ for other in targets:
 bundle = target / PLATFORM
 trust_link = bundle / "etc" / "brama-skarbiec"
 trust_link.parent.mkdir(parents=True, exist_ok=True)
+if trust_link.is_symlink() and trust_link.resolve() != live_trust:
+    # A link left by an earlier activation can name a different provisioned
+    # directory than the one just re-pinned, and then the bundle reads a
+    # registry naming another binary. One of the two has to move; the link is
+    # the cheap one.
+    trust_link.unlink()
+    print("repointed stale link")
 if trust_link.is_symlink() or trust_link.exists():
     print("already linked:", trust_link)
 else:

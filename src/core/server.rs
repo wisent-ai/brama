@@ -1900,7 +1900,16 @@ async fn authorize_caller(
 ) -> Result<String, ApiError> {
     let caller = authenticate_agent(headers, raw_body)
         .await
-        .map_err(|_| api_error(StatusCode::UNAUTHORIZED, "unauthorized"))?;
+        // The response stays deliberately blank -- an unauthenticated caller
+        // learns nothing -- but the operator was learning nothing either. A
+        // missing header, a clock outside the skew window, a secret the gateway
+        // could not redeem and a genuinely wrong signature all arrived as one
+        // word, and telling them apart from the outside is not possible: the
+        // caller sees 401 whether the fault is its own or this side's.
+        .map_err(|reason| {
+            warn!(%reason, event = "caller_auth_rejected", "agent authentication refused");
+            api_error(StatusCode::UNAUTHORIZED, "unauthorized")
+        })?;
     if client_identity
         .agent_id
         .as_deref()
