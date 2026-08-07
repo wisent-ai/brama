@@ -104,31 +104,7 @@ if [ -n "$stado_bin" ]; then
   rm -f "$service_key"
 fi
 
-: "${SKARBIEC_VAULT_FILE:?SKARBIEC_VAULT_FILE is required}"
-source_vault_file=$SKARBIEC_VAULT_FILE
-[ -f "$source_vault_file" ] || {
-  printf '%s\n' "SKARBIEC_VAULT_FILE is not a regular file" >/dev/stderr
-  false
-}
-vault_file="$runtime_dir/vault.json"
-if [ "$source_vault_file" != "$vault_file" ]; then
-  cp "$source_vault_file" "$vault_file"
-fi
-chmod u=rw,go= "$vault_file"
-export SKARBIEC_VAULT_FILE="$vault_file"
-# The routes table says which vault coordinate a purpose stands for, and the
-# authority looks for it beside the vault it was given. That is now the copy
-# above, in a runtime directory this launcher just made, where the operator's
-# table has never been -- so every resource resolved to nothing and the gateway
-# started with no provider it could authenticate to. Name the real one instead
-# of copying it: one table, beside the vault it belongs to, never a stale
-# duplicate. Absent, the authority keeps its own default.
-if [ -f "${source_vault_file%/*}/capability-routes.json" ]; then
-  SKARBIEC_CAPABILITY_ROUTES_FILE="${source_vault_file%/*}/capability-routes.json"
-  export SKARBIEC_CAPABILITY_ROUTES_FILE
-fi
-unset source_vault_file
-
+provision_and_register_workload() {
 # The trust material below is per installation. It pins the absolute path,
 # SHA-256, uid and gid of the process allowed to redeem a capability, so
 # material generated anywhere but this installation describes somebody else and
@@ -197,6 +173,56 @@ if ! registry_describes_this_installation; then
     "$provision_hint" --force >/dev/stderr
   fi
 fi
+
+# Every start, not only the starts that provisioned. The vault is where the
+# broker looks for the public half of the key this installation proves with, and
+# the entry it finds may belong to another generation entirely - a copy that was
+# provisioned after this one, on the same host, leaves exactly that. The
+# registration is idempotent and re-dates the grant, so doing it unconditionally
+# costs one vault write and removes a whole class of `capability redemption
+# denied` that no message anywhere explains.
+register="$bundle_root/libexec/brama-register-workload.py"
+if [ -f "$register" ]; then
+  BRAMA_SKARBIEC_CONFIG_DIR="$config_dir" \
+  ENTITLEMENTS_ROUTER_BIN="$ENTITLEMENTS_ROUTER_BIN" \
+  SKARBIEC_VAULT_FILE="$SKARBIEC_VAULT_FILE" \
+  "$PYTHON_BIN" "$register" >/dev/stderr || \
+    printf '%s\n' "workload registration failed; redemption will be denied" >/dev/stderr
+fi
+}
+
+: "${SKARBIEC_VAULT_FILE:?SKARBIEC_VAULT_FILE is required}"
+source_vault_file=$SKARBIEC_VAULT_FILE
+[ -f "$source_vault_file" ] || {
+  printf '%s\n' "SKARBIEC_VAULT_FILE is not a regular file" >/dev/stderr
+  false
+}
+# The workload registration belongs to the durable vault, not to the copy this
+# launcher is about to make: the copy exists for the length of one boot, and a
+# grant written into it is gone by the next one — while `token-mint` refuses to
+# write it there at all, because the copy carries none of the owner material
+# that authorises a change. So provisioning and registration happen against the
+# real vault, above the copy, and the copy then carries the result.
+provision_and_register_workload
+
+vault_file="$runtime_dir/vault.json"
+if [ "$source_vault_file" != "$vault_file" ]; then
+  cp "$source_vault_file" "$vault_file"
+fi
+chmod u=rw,go= "$vault_file"
+export SKARBIEC_VAULT_FILE="$vault_file"
+# The routes table says which vault coordinate a purpose stands for, and the
+# authority looks for it beside the vault it was given. That is now the copy
+# above, in a runtime directory this launcher just made, where the operator's
+# table has never been -- so every resource resolved to nothing and the gateway
+# started with no provider it could authenticate to. Name the real one instead
+# of copying it: one table, beside the vault it belongs to, never a stale
+# duplicate. Absent, the authority keeps its own default.
+if [ -f "${source_vault_file%/*}/capability-routes.json" ]; then
+  SKARBIEC_CAPABILITY_ROUTES_FILE="${source_vault_file%/*}/capability-routes.json"
+  export SKARBIEC_CAPABILITY_ROUTES_FILE
+fi
+unset source_vault_file
 
 missing=
 for required in trust.json policy.json policy.sig registry.json registry.sig \

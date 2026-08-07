@@ -39,6 +39,8 @@ EXECUTABLES = {
 }
 DATA = {
     "libexec/generate-skarbiec-config.mjs": scripts / "generate-skarbiec-config.mjs",
+    "libexec/brama-register-workload.py": scripts / "brama-register-workload.py",
+    "libexec/brama-write-capability-routes.py": scripts / "brama-write-capability-routes.py",
     "libexec/brama-diagnose.py": scripts / "brama-diagnose.py",
     "libexec/brama-route-probe.py": scripts / "brama-route-probe.py",
     "libexec/brama-clear-stale-broker.py": scripts / "brama-clear-stale-broker.py",
@@ -49,7 +51,14 @@ DATA = {
 }
 
 with tempfile.TemporaryDirectory() as workspace:
-    stage = pathlib.Path(workspace) / "darwin-arm"
+    # The archive carries `bin/`, `libexec/` and `etc/` at its root, exactly as
+    # the release workflow's `tar -czf … -C "$stage" .` does. The installer on
+    # the far side creates the platform directory itself, so an archive that
+    # also contains one produces `darwin-arm/darwin-arm/bin/brama`: the unit's
+    # program path does not exist, launchd reports that to the system log rather
+    # than to the service's own, and every report about the service looks
+    # healthy while nothing runs.
+    stage = pathlib.Path(workspace) / "stage"
     for relative, source in {**EXECUTABLES, **DATA}.items():
         if not source.is_file():
             raise SystemExit(f"missing {source}")
@@ -69,7 +78,7 @@ with tempfile.TemporaryDirectory() as workspace:
         f'"builder":"operator-local"}}\n'
     )
     with tarfile.open(output, "w:gz") as archive:
-        archive.add(stage, arcname="darwin-arm")
+        archive.add(stage, arcname=".")
 
 digest = hashlib.sha256(pathlib.Path(output).read_bytes()).hexdigest()
 print(f"{output}")
