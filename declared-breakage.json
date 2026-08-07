@@ -1,0 +1,4 @@
+{
+  "version": "0.3.0",
+  "reason": "The release archive no longer contains the launcher's trust material: the signed policy, workload registry, trust root, receipt command and workload proof key moved out of etc/brama-skarbiec and are generated per installation by bin/provision-skarbiec-trust. start-with-skarbiec refuses to start until they exist, so an installation that relied on the bundled copy stops working until it is provisioned and its capabilities are re-granted. RELEASE.md counts the release archive layout and launcher behavior as public contract, and the command list scripts/surface.py extracts cannot see either, which is why this declaration exists."
+}

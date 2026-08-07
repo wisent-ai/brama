@@ -128,10 +128,39 @@ jobs:
           echo "baseline: $released"
           echo "declared: $declared"
 
+          # RELEASE.md counts the archive layout and the launcher's behavior as
+          # public contract, and scripts/surface.py cannot see either: it reads the
+          # command list a caller invokes by name. So a release owner may declare
+          # breakage the surface cannot show, which the shared rule accepts through
+          # --breaking and which escalates the class only, never lowers it.
+          #
+          # The declaration is bound to one version and expires by itself. It
+          # applies only while Cargo.toml still declares the version named in
+          # declared-breakage.json, so it cannot become a switch left on that makes
+          # every later release look breaking.
+          escalate=()
+          if [ -f declared-breakage.json ]; then
+            breaking_version="$(jq -er .version declared-breakage.json)"
+            jq -er '.reason | select(length > (" " | length))' declared-breakage.json >/dev/null || {
+              echo "::error::declared-breakage.json names no reason, so nothing here" \
+                "records why the surface is trusted less than the declaration."
+              false
+            }
+            if [ "$declared" = "$breaking_version" ]; then
+              escalate=(--breaking)
+              echo "declared breakage applies to $breaking_version:" \
+                "$(jq -r .reason declared-breakage.json)"
+            else
+              echo "declared-breakage.json names $breaking_version, which is not the" \
+                "declared $declared, so it is spent and does not apply."
+            fi
+          fi
+
           verdict="$(autoversion decide \
             --current "$released" \
             --published-surface released-surface.json \
             --candidate-surface "$RUNNER_TEMP/candidate.json" \
+            "${escalate[@]}" \
             --json)"
           echo "$verdict"
 

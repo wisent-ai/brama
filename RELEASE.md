@@ -62,11 +62,18 @@ The public contract includes:
 - release archive layout and launcher behavior;
 - documented limits, retry, cost, compatibility, and recovery behavior.
 
-`scripts/surface.py` extracts the mechanically visible part of this contract.
-`released-surface.json` is the immutable published baseline, never a candidate
-regenerated from the same working tree. A release owner records semantic
-breakage that extraction cannot see in the release notes and selects the larger
-required version change.
+`scripts/surface.py` extracts the mechanically visible part of this contract: the
+command list a caller invokes by name. `released-surface.json` is the immutable
+published baseline, never a candidate regenerated from the same working tree.
+
+Two entries in the list above — the release archive layout and the launcher's
+behavior — are contract that no extractor can see, so a release owner declares
+that breakage instead of hoping a command list reveals it. The declaration lives
+in `declared-breakage.json`, naming the version it belongs to and why, and
+`version-check` passes it to the shared rule as `--breaking`, which escalates the
+class and can never lower it. It applies only while `Cargo.toml` still declares
+that version, so it expires on its own rather than becoming a switch left on that
+makes every later release look breaking.
 
 ## Release channels
 
