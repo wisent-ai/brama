@@ -191,7 +191,16 @@ config_dir = pathlib.Path(
     settings.get("BRAMA_SKARBIEC_CONFIG_DIR")
     or (architecture_root(resolved) / "etc" / "brama-skarbiec" if resolved else "")
 )
-runtime_dir = pathlib.Path(settings.get("BRAMA_RUNTIME_DIR") or "/tmp/brama-skarbiec")
+# The launcher names its runtime directory after the installation it is running,
+# so a report that reads the unsuffixed path shows whatever an older generation
+# left behind — capabilities "issued" hours ago by a bundle no longer on disk.
+# That reads as a working broker on a host where nothing was issued at all.
+installation = resolved.name if resolved else ""
+runtime_dir = pathlib.Path(
+    settings.get("BRAMA_RUNTIME_DIR")
+    or (f"/tmp/brama-skarbiec-{installation}" if installation else "/tmp/brama-skarbiec")
+)
+print(f"runtime dir: {runtime_dir}")
 
 print("\n=== policy grants against capabilities issued")
 granted = set()
