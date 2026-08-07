@@ -3,9 +3,9 @@ import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sig
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 
-const [, , binaryPath, outputDir, subscriptionsPath, executablePath = binaryPath, workloadUidInput, workloadGidInput, workloadSeedPath] = process.argv;
+const [, , binaryPath, outputDir, subscriptionsPath, executablePath = binaryPath, workloadUidInput, workloadGidInput] = process.argv;
 if (!binaryPath || !outputDir || !subscriptionsPath || !isAbsolute(executablePath)) {
-  throw new Error('usage: generate-skarbiec-config.mjs <brama-binary> <output-dir> <subscriptions-json> [absolute-runtime-binary] [uid] [gid] [workload-seed-file]');
+  throw new Error('usage: generate-skarbiec-config.mjs <brama-binary> <output-dir> <subscriptions-json> [absolute-runtime-binary] [uid] [gid]');
 }
 
 const workloadUid = 10001;
@@ -61,28 +61,27 @@ function ed25519() {
   };
 }
 
-/// Reuse this host's workload key when it already has one.
-///
-/// The registry pins where the binary is and what it hashes to, and those change
-/// with every installation. The key that proves the workload does not have to:
-/// it identifies Brama on this host. Minting a new one per installation forced a
-/// vault write per installation - and the launcher cannot authorise one, because
-/// the vault is encrypted to the owner and the service's own GPG home holds no
-/// secret key for it. So every re-provision left the vault naming a key nobody
-/// would present again and the broker denied every redemption.
-///
-/// Reusing a durable seed makes the operator's one registration keep working
-/// while path, digest and account are re-pinned freely.
-function workloadKey(seedPath) {
-  if (!seedPath || !existsSync(seedPath)) return ed25519();
-  const seed = Buffer.from(readFileSync(seedPath, 'utf8').trim(), 'hex');
-  const pkcs8 = Buffer.concat([
-    Buffer.from('302e020100300506032b657004220420', 'hex'),
-    seed,
-  ]);
-  const privateKey = createPrivateKey({ key: pkcs8, format: 'der', type: 'pkcs8' });
+// The broker verifies a redemption against the public key the VAULT holds for
+// this workload, so the private half is an identity, not a build artifact.
+// Minting a fresh one on every run meant an update -- which lands the bundle
+// under a new digest directory and provisions it there -- silently replaced
+// the identity the vault knows. The authority kept issuing capabilities and
+// the broker kept refusing to redeem them, which surfaces only as a credential
+// that is "unavailable".
+//
+// So a key that already exists is kept. BRAMA_PROOF_KEY_FILE names one to
+// carry forward from the installation being replaced; otherwise a key already
+// sitting in the output directory is reused. Only a first provision mints.
+function ed25519FromSeed(seedHex) {
+  const seed = Buffer.from(seedHex.trim(), 'hex');
+  const prefix = Buffer.from('302e020100300506032b657004220420', 'hex');
+  const privateKey = createPrivateKey({
+    key: Buffer.concat([prefix, seed]),
+    format: 'der',
+    type: 'pkcs8',
+  });
   const publicJwk = createPublicKey(privateKey).export({ format: 'jwk' });
-  if (!publicJwk.x) throw new Error('Ed25519 public JWK export is incomplete');
+  if (!publicJwk.x) throw new Error('Ed25519 JWK export is incomplete');
   return {
     privateKey,
     publicRaw: Buffer.from(publicJwk.x, 'base64url'),
@@ -90,7 +89,16 @@ function workloadKey(seedPath) {
   };
 }
 
-
+function proofIdentity(outputDir) {
+  const carried = process.env.BRAMA_PROOF_KEY_FILE;
+  const existing = join(outputDir, 'brama-proof.key');
+  for (const candidate of [carried, existing]) {
+    if (candidate && existsSync(candidate)) {
+      return ed25519FromSeed(readFileSync(candidate, 'utf8'));
+    }
+  }
+  return ed25519();
+}
 function writeSigned(name, document, domain, key) {
   const bytes = Buffer.from(JSON.stringify(document), 'utf8');
   writeFileSync(join(outputDir, `${name}.json`), bytes, { mode: 0o600 });
@@ -156,7 +164,7 @@ const requestSignRules = requestSignAgentIds.map((agentId) => ({
 const rules = [...requestSignRules, ...directProviderRules, ...subscriptionRules];
 const policyKey = ed25519();
 const registryKey = ed25519();
-const proofKey = workloadKey(workloadSeedPath);
+const proofKey = proofIdentity(outputDir);
 const macosRequirement = macosCodeSigningRequirement(binaryPath);
 const policy = {
   version: 'v1',
@@ -205,15 +213,16 @@ const trust = {
 
 writeFileSync(join(outputDir, 'trust.json'), JSON.stringify(trust), { mode: 0o600 });
 writeFileSync(join(outputDir, 'brama-proof.key'), `${proofKey.privateSeed.toString('hex')}\n`, { mode: 0o600 });
-// The durable copy is written once, as private as the trust material beside it:
-// the mode comes from that file rather than being restated, so the two cannot
-// drift apart.
-if (workloadSeedPath && !existsSync(workloadSeedPath)) {
-  const seedDirectory = join(workloadSeedPath, '..');
-  mkdirSync(seedDirectory, { recursive: true });
-  chmodSync(seedDirectory, statSync(outputDir).mode);
-  writeFileSync(workloadSeedPath, `${proofKey.privateSeed.toString('hex')}\n`);
-  chmodSync(workloadSeedPath, statSync(join(outputDir, 'trust.json')).mode);
+// `proofIdentity` reads a carried key but never creates one, so the first
+// provision on a host still has to leave it somewhere later installations will
+// find. Without that, every new generation mints a fresh key, and the vault
+// grant that key needs can only be authorised by the owner — so the gateway is
+// back to `capability redemption denied` on the next deploy.
+const carriedKeyPath = process.env.BRAMA_PROOF_KEY_FILE;
+if (carriedKeyPath && !existsSync(carriedKeyPath)) {
+  mkdirSync(join(carriedKeyPath, '..'), { recursive: true });
+  writeFileSync(carriedKeyPath, `${proofKey.privateSeed.toString('hex')}\n`);
+  chmodSync(carriedKeyPath, statSync(join(outputDir, 'brama-proof.key')).mode);
 }
 writeSigned('policy', policy, policyDomain, policyKey);
 writeSigned('registry', registry, registryDomain, registryKey);

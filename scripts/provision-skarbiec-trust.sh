@@ -101,15 +101,16 @@ runtime_bin=$(CDPATH= cd -- "$(dirname -- "$brama_bin")" && pwd)/$(basename -- "
 # installation is provisioned by the account that will run it, so that account
 # is the honest default and the variables stay as the override for the cases
 # where it is not.
-# And so is the durable workload seed. The key that proves the workload belongs
-# to Brama on this host, not to one installation of it: the registry re-pins path,
-# digest and account freely, but a new key would need a fresh vault grant, and the
-# service cannot authorise one - the vault is encrypted to the owner. Reusing the
-# seed is what lets the operator's single registration keep working across every
-# re-provision.
-workload_seed=${BRAMA_WORKLOAD_KEY_FILE:-"${HOME:-/nonexistent}/.config/brama/brama-proof.key"}
+# And so is the durable workload key, by environment rather than argument. The
+# key that proves the workload belongs to Brama on this host, not to one
+# installation of it: the registry re-pins path, digest and account freely, but a
+# new key needs a fresh vault grant, and the service cannot authorise one because
+# the vault is encrypted to the owner. Carrying the key across installations is
+# what lets the operator's single registration keep working.
+BRAMA_PROOF_KEY_FILE=${BRAMA_PROOF_KEY_FILE:-"${HOME:-/nonexistent}/.config/brama/brama-proof.key"}
+export BRAMA_PROOF_KEY_FILE
 set -- "$brama_bin" "$config_dir" "$subscriptions" "$runtime_bin" \
-  "${BRAMA_WORKLOAD_UID:-$(id -u)}" "${BRAMA_WORKLOAD_GID:-$(id -g)}" "$workload_seed"
+  "${BRAMA_WORKLOAD_UID:-$(id -u)}" "${BRAMA_WORKLOAD_GID:-$(id -g)}"
 "$NODE_BIN" "$generator" "$@"
 
 printf '%s\n' "provisioned Skarbiec trust material for $runtime_bin in $config_dir"
