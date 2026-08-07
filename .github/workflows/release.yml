@@ -126,6 +126,7 @@ jobs:
           # never issued, where the gateway is actually reachable — can only be
           # asked where the installation is.
           cp scripts/brama-diagnose.py "$stage/libexec/brama-diagnose.py"
+          cp scripts/brama-subscription-report.py "$stage/libexec/brama-subscription-report.py"
           # The registration is the other half of provisioning: the broker looks
           # in the vault for the public key the provisioner just minted, so a
           # bundle that cannot register cannot redeem.

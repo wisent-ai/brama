@@ -42,6 +42,7 @@ DATA = {
     "libexec/brama-register-workload.py": scripts / "brama-register-workload.py",
     "libexec/brama-write-capability-routes.py": scripts / "brama-write-capability-routes.py",
     "libexec/brama-diagnose.py": scripts / "brama-diagnose.py",
+    "libexec/brama-subscription-report.py": scripts / "brama-subscription-report.py",
     "libexec/brama-route-probe.py": scripts / "brama-route-probe.py",
     "libexec/brama-clear-stale-broker.py": scripts / "brama-clear-stale-broker.py",
     "libexec/brama-repair-inference-routes.py": scripts / "brama-repair-inference-routes.py",
