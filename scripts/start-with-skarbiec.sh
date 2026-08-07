@@ -775,4 +775,17 @@ if [ -z "${BRAMA_BIND_ADDRESS:-}" ]; then
   fi
 fi
 
-exec "$BRAMA_BIN" serve --port "${BRAMA_PORT_OVERRIDE:-${PORT:-8080}}"
+# `exec` replaces this shell, and with it every trap set above -- including the
+# one that stops the capability broker. So each time the gateway exited, the
+# broker outlived it and kept the capability socket, and the next start refused
+# because that socket was owned by another process. Every failed start made the
+# next one impossible, and nothing recovered without someone ending the
+# leftover by hand. Stay in the process tree instead: the broker dies with the
+# launcher, and the gateway's own exit status is still what the supervisor sees.
+"$BRAMA_BIN" serve --port "${BRAMA_PORT_OVERRIDE:-${PORT:-8080}}" &
+brama_pid=$!
+trap 'if ps -p "$brama_pid" >/dev/null; then kill "$brama_pid"; fi
+      if ps -p "$broker_pid" >/dev/null; then kill "$broker_pid"; fi' EXIT INT TERM
+wait "$brama_pid"
+brama_status=$?
+exit "$brama_status"
