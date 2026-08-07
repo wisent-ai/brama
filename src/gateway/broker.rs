@@ -138,15 +138,41 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
     let resource = format!("provider:{}", slug(provider));
     let broker = client()?;
     if let Some(capability_id) = configured_capability(PROVIDER_CAPABILITIES_ENV, provider) {
-        if let Ok(binding) = CapabilityRef::provider(&capability_id, &resource) {
-            if let Ok(secret) = broker.redeem(&binding) {
-                return Some(secret);
-            }
+        match CapabilityRef::provider(&capability_id, &resource) {
+            Ok(binding) => match broker.redeem(&binding) {
+                Ok(secret) => return Some(secret),
+                // Reported, not swallowed. The caller turns a missing credential
+                // into `dependency_unavailable`, which names the provider and
+                // nothing else; without this line the reason the broker gave
+                // exists nowhere and the next person guesses again.
+                Err(error) => warn!(
+                    event = "capability_redeem_failed",
+                    resource = resource.as_str(),
+                    stage = "seeded",
+                    detail = %error
+                ),
+            },
+            Err(error) => warn!(
+                event = "capability_binding_invalid",
+                resource = resource.as_str(),
+                detail = %error
+            ),
         }
     }
     let fresh = issue_capability(PROVIDER_PURPOSE, &resource).await?;
     let binding = CapabilityRef::provider(&fresh, &resource).ok()?;
-    broker.redeem(&binding).ok()
+    match broker.redeem(&binding) {
+        Ok(secret) => Some(secret),
+        Err(error) => {
+            warn!(
+                event = "capability_redeem_failed",
+                resource = resource.as_str(),
+                stage = "fresh",
+                detail = %error
+            );
+            None
+        }
+    }
 }
 
 /// Redeem one subscription credential at the final-use boundary. Expired
