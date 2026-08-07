@@ -136,17 +136,63 @@ pub fn provider_capability_configured(provider: &str) -> bool {
 /// broker, and neither ever holds plaintext beyond the returned [`Secret`].
 pub async fn provider_credential(provider: &str) -> Option<Secret> {
     let resource = format!("provider:{}", slug(provider));
-    let broker = client()?;
+    // Every step below can fail, and this used to return None for all of them,
+    // so a caller saw one sentence -- "credential is unavailable" -- covering a
+    // broker that was never configured, a capability that had expired, a route
+    // the authority does not have, and a workload the broker will not accept.
+    // Telling them apart from the outside was not possible, and guessing wrong
+    // cost a day.
+    let Some(broker) = client() else {
+        warn!(
+            event = "provider_credential_no_broker",
+            provider,
+            "no capability broker client: SKARBIEC_CAP_SOCKET, SKARBIEC_WORKLOAD_ID or the \
+             workload signing key is missing or unreadable"
+        );
+        return None;
+    };
     if let Some(capability_id) = configured_capability(PROVIDER_CAPABILITIES_ENV, provider) {
-        if let Ok(binding) = CapabilityRef::provider(&capability_id, &resource) {
-            if let Ok(secret) = broker.redeem(&binding) {
-                return Some(secret);
-            }
+        match CapabilityRef::provider(&capability_id, &resource) {
+            Ok(binding) => match broker.redeem(&binding) {
+                Ok(secret) => return Some(secret),
+                Err(error) => warn!(
+                    event = "provider_credential_redeem_failed",
+                    provider,
+                    %resource,
+                    %error,
+                    "the capability issued at boot did not redeem; asking for a fresh one"
+                ),
+            },
+            Err(error) => warn!(
+                event = "provider_credential_binding_invalid",
+                provider, %resource, %error, "the configured capability id is not usable"
+            ),
+        }
+    } else {
+        warn!(
+            event = "provider_credential_not_configured",
+            provider,
+            "no capability was issued for this provider at boot; asking for one now"
+        );
+    }
+    let Some(fresh) = issue_capability(PROVIDER_PURPOSE, &resource).await else {
+        warn!(
+            event = "provider_credential_issue_failed",
+            provider, %resource, "the authority would not issue a capability for this resource"
+        );
+        return None;
+    };
+    let binding = CapabilityRef::provider(&fresh, &resource).ok()?;
+    match broker.redeem(&binding) {
+        Ok(secret) => Some(secret),
+        Err(error) => {
+            warn!(
+                event = "provider_credential_fresh_redeem_failed",
+                provider, %resource, %error, "a freshly issued capability did not redeem either"
+            );
+            None
         }
     }
-    let fresh = issue_capability(PROVIDER_PURPOSE, &resource).await?;
-    let binding = CapabilityRef::provider(&fresh, &resource).ok()?;
-    broker.redeem(&binding).ok()
 }
 
 /// Redeem one subscription credential at the final-use boundary. Expired
