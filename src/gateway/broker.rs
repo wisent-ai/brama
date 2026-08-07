@@ -147,9 +147,9 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
             event = "provider_credential_no_broker",
             provider,
             "no capability broker client: SKARBIEC_CAP_SOCKET, SKARBIEC_WORKLOAD_ID or the \
-             workload signing key is missing or unreadable"
+             workload signing key is missing or unreadable; trying the read grant"
         );
-        return None;
+        return provider_credential_by_grant(&resource).await;
     };
     if let Some(capability_id) = configured_capability(PROVIDER_CAPABILITIES_ENV, provider) {
         match CapabilityRef::provider(&capability_id, &resource) {
@@ -188,9 +188,10 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
         Err(error) => {
             warn!(
                 event = "provider_credential_fresh_redeem_failed",
-                provider, %resource, %error, "a freshly issued capability did not redeem either"
+                provider, %resource, %error,
+                "a freshly issued capability did not redeem either; trying the read grant"
             );
-            None
+            provider_credential_by_grant(&resource).await
         }
     }
 }
@@ -408,6 +409,53 @@ async fn issue_capability(purpose: &str, resource: &str) -> Option<String> {
         output.status.success(),
         resource,
     )
+}
+
+/// The vault coordinate a resource stands for, as the operator wrote it.
+///
+/// The same table the authority consults, read here so nothing in this process
+/// ever decides for itself which credential a purpose means.
+fn capability_route(resource: &str) -> Option<(String, String)> {
+    let path = std::env::var_os("SKARBIEC_CAPABILITY_ROUTES_FILE")?;
+    let raw = std::fs::read_to_string(path).ok()?;
+    let table: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let entry = table.get(resource)?;
+    let item = entry.get("item")?.as_str()?.to_owned();
+    let field = entry.get("field")?.as_str()?.to_owned();
+    Some((item, field))
+}
+
+/// Read one provider credential through the grant the vault already carries.
+///
+/// Redeeming a capability is the stronger path and stays first. It is not the
+/// only one the fleet provisions: some providers are granted as a plain
+/// per-field read to a named consumer -- `read:provider:local-openai#token` is
+/// exactly that -- and where the grant that exists is a read, refusing to use
+/// it means refusing to serve a provider the operator deliberately allowed.
+///
+/// Nothing is widened here. The router presents this host's consumer identity
+/// and the authority still decides: without the grant the read is refused, and
+/// the coordinate comes from the operator's routes table rather than a guess.
+async fn provider_credential_by_grant(resource: &str) -> Option<Secret> {
+    let (item, field) = capability_route(resource)?;
+    let output = tokio::process::Command::new(entitlements_router_bin())
+        .arg("get")
+        .arg(&item)
+        .output()
+        .await
+        .ok()?;
+    if !output.status.success() {
+        warn!(
+            event = "provider_credential_read_refused",
+            %resource,
+            %item,
+            "the authority refused a direct read of this provider credential"
+        );
+        return None;
+    }
+    let payload: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+    let value = payload.get("fields")?.get(&field)?.as_str()?;
+    Some(Secret::from_bytes(value.as_bytes().to_vec()))
 }
 
 /// The same request during startup validation, where there is no runtime to
