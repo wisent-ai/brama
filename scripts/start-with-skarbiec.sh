@@ -298,11 +298,12 @@ def field(item, name, required=True):
         if required:
             raise SystemExit(message)
         # A host holds the credentials for the products it serves, not for
-        # every product in the fleet. Refusing to boot because one unrelated
-        # client's item is encrypted to a key this machine was never given
-        # takes down every client whose item is readable, which is the whole
-        # gateway. The client is left out; nothing it could have done becomes
-        # possible, because Brama only accepts bearers it was handed here.
+        # every product in the fleet. Refusing to boot because the item for
+        # one unrelated client is encrypted to a key this machine was never
+        # given takes down every client whose item is readable, which is the
+        # whole gateway. That client is left out instead; nothing it could
+        # have done becomes possible, because Brama only accepts the bearers
+        # it was handed here.
         sys.stderr.write(f"{message}\nskipping client identity {item}\n")
         return None
     payload = json.loads(result.stdout)
