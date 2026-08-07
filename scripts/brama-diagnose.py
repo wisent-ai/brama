@@ -166,6 +166,17 @@ for generation in sorted(services.iterdir(), key=lambda path: path.name):
     print(f"  {generation.name}{marker}  installed {moment(generation.stat().st_mtime)}")
     print(f"    files:    {'complete' if not missing else 'missing ' + ', '.join(missing)}")
     print(f"    router {CAPABILITY_VERB}: {router_answers(root)}")
+    # A launcher without its executable bit is a unit that never starts and
+    # never explains: launchd reports the failure to the system log, not to the
+    # service's own, so the error stream stays exactly as it was on the last
+    # successful boot and everything here reads as healthy.
+    unrunnable = [
+        name
+        for name in ("bin/brama", "bin/skarbiec-entitlements-router", "bin/start-with-skarbiec")
+        if (root / name).is_file() and not os.access(root / name, os.X_OK)
+    ]
+    if unrunnable:
+        print(f"    NOT EXECUTABLE: {', '.join(unrunnable)}")
     for line in registry_verdict(root):
         print(f"    registry: {line}")
 
@@ -286,6 +297,26 @@ if error_log.is_file():
     print(latest.strip())
 else:
     print(f"  {error_log}: absent")
+# The slice above starts at the last time the gateway announced itself, which
+# hides a start that never got that far: a launcher that dies while provisioning,
+# registering or reading its own configuration prints before that line, not
+# after. The raw tail is therefore not redundant with it.
+#
+# The per-provider refusals are dropped from this view. On a host whose vault
+# backs two providers out of twenty-two they are twenty identical lines, and
+# they push the launcher's own account of provisioning and registration - the
+# part nothing else reports - out of any tail worth reading.
+NOISE = ("capability issue failed for", "skipping subscription")
+RAW_TAIL = len("a couple of dozen lines of the launcher's own account is what is worth")
+print("\n=== last lines of the error stream, per-provider refusals dropped")
+if error_log.is_file():
+    raw = [
+        line
+        for line in error_log.read_text(errors="replace").splitlines()
+        if not any(marker in line for marker in NOISE)
+    ]
+    for line in raw[-RAW_TAIL:] if len(raw) > RAW_TAIL else raw:
+        print(f"  {line}")
 
 # The broker and the launcher write to the unit's other stream, and a
 # redemption refusal is reported there while the gateway's own log says only

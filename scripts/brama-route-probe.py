@@ -79,6 +79,13 @@ if not base:
 
 ALIASES = ("-best", "local-openai/chat-primary", "wisent-backend/chat/primary")
 
+# The bearer alone is what a direct or alias route needs. Adding an agent header
+# switches the gateway to the signed-agent path, which also wants a timestamp and
+# an HMAC over the body: that is a client, not a probe, and sending half of it
+# turns three working routes into three 401s. `-best` is the subscription route
+# and therefore needs that client; what this can still show is that the gateway
+# resolves it, which its own routing log records as
+# `routing_mode="subscription" selected_model=claude-code/...`.
 for alias in ALIASES:
     payload = json.dumps(
         {"model": alias, "messages": [{"role": "user", "content": "say ok"}]}

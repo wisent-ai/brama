@@ -1,11 +1,15 @@
 import { spawnSync } from 'node:child_process';
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign } from 'node:crypto';
+<<<<<<< HEAD
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+=======
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+>>>>>>> origin/main
 import { isAbsolute, join } from 'node:path';
 
-const [, , binaryPath, outputDir, subscriptionsPath, executablePath = binaryPath, workloadUidInput, workloadGidInput] = process.argv;
+const [, , binaryPath, outputDir, subscriptionsPath, executablePath = binaryPath, workloadUidInput, workloadGidInput, workloadSeedPath] = process.argv;
 if (!binaryPath || !outputDir || !subscriptionsPath || !isAbsolute(executablePath)) {
-  throw new Error('usage: generate-skarbiec-config.mjs <brama-binary> <output-dir> <subscriptions-json> [absolute-runtime-binary] [uid] [gid]');
+  throw new Error('usage: generate-skarbiec-config.mjs <brama-binary> <output-dir> <subscriptions-json> [absolute-runtime-binary] [uid] [gid] [workload-seed-file]');
 }
 
 const workloadUid = 10001;
@@ -61,6 +65,30 @@ function ed25519() {
   };
 }
 
+<<<<<<< HEAD
+/// Reuse this host's workload key when it already has one.
+///
+/// The registry pins where the binary is and what it hashes to, and those change
+/// with every installation. The key that proves the workload does not have to:
+/// it identifies Brama on this host. Minting a new one per installation forced a
+/// vault write per installation - and the launcher cannot authorise one, because
+/// the vault is encrypted to the owner and the service's own GPG home holds no
+/// secret key for it. So every re-provision left the vault naming a key nobody
+/// would present again and the broker denied every redemption.
+///
+/// Reusing a durable seed makes the operator's one registration keep working
+/// while path, digest and account are re-pinned freely.
+function workloadKey(seedPath) {
+  if (!seedPath || !existsSync(seedPath)) return ed25519();
+  const seed = Buffer.from(readFileSync(seedPath, 'utf8').trim(), 'hex');
+  const pkcs8 = Buffer.concat([
+    Buffer.from('302e020100300506032b657004220420', 'hex'),
+    seed,
+  ]);
+  const privateKey = createPrivateKey({ key: pkcs8, format: 'der', type: 'pkcs8' });
+  const publicJwk = createPublicKey(privateKey).export({ format: 'jwk' });
+  if (!publicJwk.x) throw new Error('Ed25519 public JWK export is incomplete');
+=======
 // The broker verifies a redemption against the public key the VAULT holds for
 // this workload, so the private half is an identity, not a build artifact.
 // Minting a fresh one on every run meant an update -- which lands the bundle
@@ -82,6 +110,7 @@ function ed25519FromSeed(seedHex) {
   });
   const publicJwk = createPublicKey(privateKey).export({ format: 'jwk' });
   if (!publicJwk.x) throw new Error('Ed25519 JWK export is incomplete');
+>>>>>>> origin/main
   return {
     privateKey,
     publicRaw: Buffer.from(publicJwk.x, 'base64url'),
@@ -89,6 +118,8 @@ function ed25519FromSeed(seedHex) {
   };
 }
 
+<<<<<<< HEAD
+=======
 function proofIdentity(outputDir) {
   const carried = process.env.BRAMA_PROOF_KEY_FILE;
   const existing = join(outputDir, 'brama-proof.key');
@@ -100,6 +131,7 @@ function proofIdentity(outputDir) {
   return ed25519();
 }
 
+>>>>>>> origin/main
 function writeSigned(name, document, domain, key) {
   const bytes = Buffer.from(JSON.stringify(document), 'utf8');
   writeFileSync(join(outputDir, `${name}.json`), bytes, { mode: 0o600 });
@@ -165,7 +197,11 @@ const requestSignRules = requestSignAgentIds.map((agentId) => ({
 const rules = [...requestSignRules, ...directProviderRules, ...subscriptionRules];
 const policyKey = ed25519();
 const registryKey = ed25519();
+<<<<<<< HEAD
+const proofKey = workloadKey(workloadSeedPath);
+=======
 const proofKey = proofIdentity(outputDir);
+>>>>>>> origin/main
 const macosRequirement = macosCodeSigningRequirement(binaryPath);
 const policy = {
   version: 'v1',
@@ -214,6 +250,16 @@ const trust = {
 
 writeFileSync(join(outputDir, 'trust.json'), JSON.stringify(trust), { mode: 0o600 });
 writeFileSync(join(outputDir, 'brama-proof.key'), `${proofKey.privateSeed.toString('hex')}\n`, { mode: 0o600 });
+// The durable copy is written once, as private as the trust material beside it:
+// the mode comes from that file rather than being restated, so the two cannot
+// drift apart.
+if (workloadSeedPath && !existsSync(workloadSeedPath)) {
+  const seedDirectory = join(workloadSeedPath, '..');
+  mkdirSync(seedDirectory, { recursive: true });
+  chmodSync(seedDirectory, statSync(outputDir).mode);
+  writeFileSync(workloadSeedPath, `${proofKey.privateSeed.toString('hex')}\n`);
+  chmodSync(workloadSeedPath, statSync(join(outputDir, 'trust.json')).mode);
+}
 writeSigned('policy', policy, policyDomain, policyKey);
 writeSigned('registry', registry, registryDomain, registryKey);
 for (const name of ['trust.json', 'brama-proof.key', 'policy.json', 'policy.sig', 'registry.json', 'registry.sig', 'worm-receipt']) {
