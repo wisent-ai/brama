@@ -286,3 +286,17 @@ if error_log.is_file():
     print(latest.strip())
 else:
     print(f"  {error_log}: absent")
+
+# The broker and the launcher write to the unit's other stream, and a
+# redemption refusal is reported there while the gateway's own log says only
+# that a dependency was unavailable. Reading one and not the other is how "the
+# credential is unavailable" stays a mystery.
+TAIL_LINES = len("twenty lines is enough")
+output_log = home / ".stado" / "logs" / "brama-always-on.out"
+print("\n=== broker and launcher output")
+if output_log.is_file():
+    lines = output_log.read_text(errors="replace").splitlines()
+    for line in lines[-TAIL_LINES:] if len(lines) > TAIL_LINES else lines:
+        print(f"  {line}")
+else:
+    print(f"  {output_log}: absent")

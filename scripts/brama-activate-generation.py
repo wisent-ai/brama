@@ -146,37 +146,17 @@ assignments = {
     "ENTITLEMENTS_ROUTER_BIN": str(root / "bin" / "skarbiec-entitlements-router"),
     "BRAMA_SKARBIEC_CONFIG_DIR": str(config_dir),
 }
-
-# Where the gateway binds has to agree with where its TLS terminator forwards.
-# Brama refuses plain HTTP from anything but loopback, and Tailscale serve
-# proxies to a loopback port, so a launcher that binds the tailnet address
-# instead leaves the funnel talking to a closed port and every direct caller
-# getting 426. The terminator's own configuration is the authority for which
-# address that is, so it is read rather than assumed, and the launcher only
-# picks an address when the service env names none.
-forwarded = ""
-TAILSCALE_CANDIDATES = (
-    "/usr/local/bin/tailscale",
-    "/opt/homebrew/bin/tailscale",
-    "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
-)
-tailscale = shutil.which("tailscale") or next(
-    (name for name in TAILSCALE_CANDIDATES if pathlib.Path(name).exists()), ""
-)
-if tailscale:
-    served = subprocess.run(
-        [tailscale, "serve", "status"], capture_output=True, text=True, check=False
-    )
-    port = settings.get("PORT") or "8080"
-    if f"http://127.0.0.1:{port}" in (served.stdout + served.stderr):
-        forwarded = "127.0.0.1"
-if forwarded:
-    assignments["BRAMA_BIND_ADDRESS"] = forwarded
-    print(f"tls terminator forwards to {forwarded}:{settings.get('PORT') or '8080'}; binding there")
+# Which address the gateway binds is not this script's decision and not the TLS
+# terminator's either: the launcher asks Stado for the placement
+# (`service directory bind brama`) and the registry's answer wins over anything
+# written here. An assignment in the service env is therefore inert at best and
+# misleading at worst, so it is removed rather than set.
+stale = "BRAMA_BIND_ADDRESS"
 kept = [
     line
     for line in env_file.read_text().splitlines()
     if not any(line.startswith(f"{name}=") for name in assignments)
+    and not line.startswith(f"{stale}=")
 ]
 kept.extend(f"{name}={value}" for name, value in assignments.items())
 env_file.write_text("\n".join(kept) + "\n")

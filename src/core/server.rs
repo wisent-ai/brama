@@ -699,13 +699,29 @@ fn trusted_forwarded_peer(peer: std::net::IpAddr) -> bool {
         })
 }
 
+/// The address this process itself bound.
+///
+/// A request whose source is the address the gateway listens on came from this
+/// machine and never crossed a network, so it has the protection this guard
+/// demands for the same reason a loopback request does. Without this, a
+/// gateway placed on a routable address cannot be exercised from the host it
+/// runs on at all: `/health` answers, every other path returns 426, and an
+/// operator diagnosing it concludes the gateway is broken. That is not a
+/// hypothetical - it is where this comment came from.
+fn own_bound_address(peer: std::net::IpAddr) -> bool {
+    std::env::var("BRAMA_BIND_ADDRESS")
+        .ok()
+        .and_then(|configured| configured.trim().parse::<std::net::IpAddr>().ok())
+        .is_some_and(|bound| bound == peer)
+}
+
 async fn require_secure_transport(request: axum::extract::Request, next: Next) -> Response {
     let forwarded = forwarded_proto_is_https(request.headers());
     let peer = request
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
         .map(|connect_info| connect_info.0.ip());
-    let loopback = peer.is_some_and(|address| address.is_loopback());
+    let loopback = peer.is_some_and(|address| address.is_loopback() || own_bound_address(address));
     let trusted_https_proxy = peer.is_some_and(trusted_forwarded_peer) && forwarded == Some(true);
     let already_encrypted = peer.is_some_and(encrypted_transport_peer);
     if loopback || trusted_https_proxy || already_encrypted {
