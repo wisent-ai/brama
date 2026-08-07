@@ -66,6 +66,15 @@ target_bin.mkdir(parents=True)
 libexec = staging / "libexec"
 libexec.mkdir(parents=True)
 shutil.copy(ROOT / "scripts" / "generate-skarbiec-config.mjs", libexec / "generate-skarbiec-config.mjs")
+# The launcher registers this installation's workload public key on every start
+# through this file, and skips the step in silence when it is absent. A package
+# without it installs, starts, serves -- and every capability redemption is
+# denied on a proof the vault cannot match, which the release workflow avoids by
+# shipping it in the same directory.
+shutil.copy(
+    ROOT / "scripts" / "brama-register-workload.py",
+    libexec / "brama-register-workload.py",
+)
 
 for name, source in {**binaries, **scripts}.items():
     placed = target_bin / name
