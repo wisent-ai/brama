@@ -506,11 +506,17 @@ async fn credential_by_grant(resource: &str) -> Option<Secret> {
         .await
         .ok()?;
     if !output.status.success() {
+        // The authority's own sentence, not a summary of it. "credential
+        // unavailable" fits a missing item, a key this host lacks and an item
+        // still in the legacy envelope equally well, and only the last of those
+        // is fixed by a migration the message would otherwise never name.
+        let detail = String::from_utf8_lossy(&output.stderr);
         warn!(
-            event = "provider_credential_read_refused",
+            event = "credential_read_refused",
             %resource,
             %item,
-            "the authority refused a direct read of this provider credential"
+            detail = %detail.trim(),
+            "the authority refused a direct read of this credential"
         );
         return None;
     }
