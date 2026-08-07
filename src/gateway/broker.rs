@@ -338,7 +338,13 @@ fn entitlements_router_bin() -> String {
 
 const PROVIDER_PURPOSE: &str = "brama.provider.authenticate";
 const REQUEST_SIGN_PURPOSE: &str = "brama.request.sign";
-const RUNTIME_AGENT: &str = "brama-runtime";
+/// The agent a capability is issued to, which is also the identity whose key
+/// the broker verifies a redemption against: it looks the public half up by
+/// the capability's agent, while the proof is signed by the workload. Naming
+/// anything but the workload here therefore refuses every redemption -- the
+/// vault has no `brama-runtime`, it has `brama-service`, so the lookup came
+/// back empty and the denial said nothing about which name was missing.
+const RUNTIME_AGENT: &str = "brama-service";
 const CAPABILITY_TARGET: &str = "brama";
 
 /// The `capability-issue` request, taking the broker's own limits.

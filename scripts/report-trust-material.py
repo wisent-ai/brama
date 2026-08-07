@@ -51,6 +51,14 @@ if binary.exists():
     print("binary sha256:", digest(binary))
     print("binary uid/gid:", binary.stat().st_uid, binary.stat().st_gid)
 
+# Whether the identity was reused or minted again is the whole question, and
+# it is answerable without printing a byte of key material.
+for label, path in (
+    ("stable", HOME / ".stado" / "brama-proof.key"),
+    ("current", CONFIG / "brama-proof.key"),
+):
+    print("key", label + ":", "exists:", path.exists(), "sha256:", digest(path) if path.exists() else "-")
+
 
 # The other side of the comparison: what the kernel will actually report for
 # the process that asks. Pinning is only ever right relative to this.

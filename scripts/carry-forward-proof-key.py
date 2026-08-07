@@ -35,18 +35,17 @@ print("current:", current_config, "exists:", current_config.exists())
 print("source:", source_config, "exists:", source_config.exists())
 
 source_key = source_config / KEY
+stable_key = HOME / ".stado" / KEY
+print("stable:", stable_key, "exists:", stable_key.exists())
+
 if not source_key.exists():
     raise SystemExit(f"no registered key at {source_key}")
-if not current_config.exists():
-    raise SystemExit(f"current installation has no config directory at {current_config}")
+if stable_key.exists():
+    print("status: already recorded -- left exactly as it is")
+    raise SystemExit()
 
-target_key = current_config / KEY
-if target_key.exists():
-    minted = current_config / f"{KEY}.minted"
-    shutil.copy2(target_key, minted)
-    print("kept the freshly minted key at:", minted)
-
-shutil.copy2(source_key, target_key)
-os.chmod(target_key, stat.S_IRUSR | stat.S_IWUSR)
-print("carried forward:", source_key, "->", target_key)
-print("bytes:", target_key.stat().st_size)
+stable_key.parent.mkdir(parents=True, exist_ok=True)
+shutil.copy2(source_key, stable_key)
+os.chmod(stable_key, stat.S_IRUSR | stat.S_IWUSR)
+print("recorded:", source_key, "->", stable_key)
+print("undo: rm", stable_key)

@@ -206,6 +206,26 @@ const registry = {
     },
   },
 };
+
+// One identity, one name. The broker looks the redeeming public key up by the
+// capability's AGENT while the proof is signed by the WORKLOAD, so two names
+// for the same thing means the lookup misses and every redemption is denied --
+// which is exactly what happened while the agent was called `brama-runtime`
+// and the vault only ever registered `brama-service`. The policy and registry
+// are rewritten onto the workload's name here rather than above, so the grant
+// window and rate limits keep the single definition they already have.
+const [runtimeAgent] = Object.keys(registry.workloads);
+const [legacyAgent] = Object.keys(policy.agents);
+if (runtimeAgent !== legacyAgent) {
+  policy.roles = { [runtimeAgent]: policy.roles[legacyAgent] };
+  policy.agents = { [runtimeAgent]: { roles: [runtimeAgent] } };
+  policy.agent_grants = { [runtimeAgent]: policy.agent_grants[legacyAgent] };
+  policy.leases = { [runtimeAgent]: policy.leases[legacyAgent] };
+  for (const grant of policy.agent_grants[runtimeAgent]) {
+    grant.grant_id = `${runtimeAgent}-grant`;
+  }
+  registry.workloads[runtimeAgent].agent_ids = [runtimeAgent];
+}
 const trust = {
   version: 'v1',
   policy_key: policyKey.publicRaw.toString('base64'),

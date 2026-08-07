@@ -222,22 +222,34 @@ impl CapabilityClient {
         let nonce = hex::encode(nonce_bytes);
         nonce_bytes.zeroize();
 
-        let mut proof_input = Zeroizing::new(Vec::with_capacity(
-            PROOF_DOMAIN.len() + capability.id.len() + nonce.len() + self.workload_id.len() + 2,
-        ));
+        // The authority signs over capability id, nonce, workload id and the
+        // operation, each followed by a separator, then the authorization id.
+        // This built a shorter payload and omitted the last two parts, so no
+        // proof it produced could ever verify -- a mismatch that reads, from
+        // the outside, as a credential that is unavailable.
+        const OPERATION: &str = "redeem";
+        const AUTHORIZATION_ID: &str = "";
+        let mut proof_input = Zeroizing::new(Vec::new());
         proof_input.extend_from_slice(PROOF_DOMAIN);
-        proof_input.extend_from_slice(capability.id.as_bytes());
-        proof_input.push(0);
-        proof_input.extend_from_slice(nonce.as_bytes());
-        proof_input.push(0);
-        proof_input.extend_from_slice(self.workload_id.as_bytes());
+        for part in [
+            capability.id,
+            nonce.as_str(),
+            self.workload_id.as_str(),
+            OPERATION,
+        ] {
+            proof_input.extend_from_slice(part.as_bytes());
+            proof_input.push(b'\0');
+        }
+        proof_input.extend_from_slice(AUTHORIZATION_ID.as_bytes());
         let proof = URL_SAFE_NO_PAD.encode(self.signing_key.sign(&proof_input).to_bytes());
 
         let request = RedeemRequest {
             version: WIRE_VERSION,
+            operation: OPERATION,
             capability_id: capability.id,
             nonce: &nonce,
             workload_id: &self.workload_id,
+            authorization_id: AUTHORIZATION_ID,
             proof,
         };
         let mut encoded = Zeroizing::new(
@@ -276,12 +288,22 @@ impl CapabilityClient {
     }
 }
 
+/// The wire the authority reads.
+///
+/// `operation` and `authorization_id` were absent here while the authority
+/// required the first and signed over both. It rejected every request at its
+/// opening validation, replied with an opaque `denied`, and the gateway
+/// reported a provider credential that was merely "unavailable" -- so the
+/// missing field looked like a credential problem for as long as anyone cared
+/// to look.
 #[derive(Serialize)]
 struct RedeemRequest<'a> {
     version: &'static str,
+    operation: &'static str,
     capability_id: &'a str,
     nonce: &'a str,
     workload_id: &'a str,
+    authorization_id: &'a str,
     proof: String,
 }
 
