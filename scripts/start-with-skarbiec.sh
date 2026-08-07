@@ -59,6 +59,33 @@ export GNUPGHOME="$BRAMA_GNUPG_HOME"
 # credentials to service configuration.
 gpg --batch --quiet --import "$config_dir/recipient-public-keys.asc"
 
+# This service has its own identity, and the fleet already keeps it: the vault
+# item `brama-service` carries the private half for exactly this purpose. Import
+# it here, because everything below decrypts with it, and without it the
+# entitlements router fails with "No secret key" and no indication that the key
+# was ever meant to be somewhere.
+if [ -x "$HOME/.stado/bin/stado" ]; then
+  stado_bin="$HOME/.stado/bin/stado"
+else
+  stado_bin="$(command -v stado || true)"
+fi
+if [ -n "$stado_bin" ] && ! gpg --batch --list-secret-keys --with-colons 2>/dev/null | grep -q '^sec'; then
+  service_key="$gnupg_dir/brama-service.key"
+  rm -f "$service_key"
+  ( umask 077
+    STADO_CONFIG=${BRAMA_SKARBIEC_STADO_CONFIG:-"${HOME:-/nonexistent}/.config/stado/brama-service.json"} \
+      "$stado_bin" secrets get brama-service --field gpg_private_key > "$service_key" ) || {
+    printf '%s\n' 'cannot read this service identity from Skarbiec (brama-service.gpg_private_key)' >/dev/stderr
+    false
+  }
+  gpg --batch --quiet --import "$service_key" || {
+    rm -f "$service_key"
+    printf '%s\n' 'the service identity from Skarbiec did not import' >/dev/stderr
+    false
+  }
+  rm -f "$service_key"
+fi
+
 : "${SKARBIEC_VAULT_FILE:?SKARBIEC_VAULT_FILE is required}"
 source_vault_file=$SKARBIEC_VAULT_FILE
 [ -f "$source_vault_file" ] || {
