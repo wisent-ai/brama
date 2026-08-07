@@ -104,6 +104,11 @@ jobs:
           # bin/provision-skarbiec-trust once per installation instead, so the
           # generator ships as data rather than being executed now.
           cp scripts/generate-skarbiec-config.mjs "$stage/libexec/generate-skarbiec-config.mjs"
+          # The diagnostic ships beside the generator for the same reason the
+          # generator ships at all: the question it answers — which of the
+          # four pinned fields does this host disagree with — can only be
+          # asked where the installation is.
+          cp scripts/skarbiec-identity-report.py "$stage/libexec/skarbiec-identity-report.py"
           chmod 0755 \
             "$stage/bin/brama" \
             "$stage/bin/skarbiec-entitlements-router" \
