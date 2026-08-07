@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import stat
 import subprocess
 from pathlib import Path
@@ -72,9 +73,21 @@ print("routes:", ROUTES)
 
 if not ROUTER.exists():
     raise SystemExit("entitlements router is absent; nothing can be provisioned")
+# Additive, never destructive. An existing table is an operator's decision and
+# every entry in it stays exactly as written; only resources it does not
+# mention at all can be added, and only where the host's own contents leave no
+# choice about what they mean. A resource the operator deliberately left out
+# with a different mapping is therefore never touched.
+existing = {}
 if ROUTES.exists():
-    print("status: present -- left exactly as it is")
-    raise SystemExit()
+    try:
+        loaded = json.loads(ROUTES.read_text(errors="replace"))
+    except ValueError as error:
+        raise SystemExit(f"the routes table does not parse; refusing to touch it: {error}")
+    if not isinstance(loaded, dict):
+        raise SystemExit("the routes table is not an object of resources; refusing to touch it")
+    existing = loaded
+    print("existing routes:", len(existing))
 
 listed = router("list")
 if listed.returncode:
@@ -92,6 +105,8 @@ resources = sorted(
 routes = {}
 skipped = []
 for item in resources:
+    if item in existing:
+        continue
     got = router("get", item)
     if got.returncode:
         skipped.append((item, first_line(got.stderr.strip()) or "no detail"))
@@ -107,17 +122,23 @@ for item in resources:
         skipped.append((item, f"operator must choose among {names}"))
         continue
     routes[item] = {"item": item, "field": single}
-    print("route:", item, "->", single)
+    print("adding:", item, "->", single)
 
 for item, reason in skipped:
     print("skipped:", item, "--", reason)
 
 if not routes:
-    raise SystemExit("no unambiguous route on this host; nothing written")
+    print("status: nothing to add; every resource this host can resolve is already mapped")
+    raise SystemExit()
 
+merged = dict(existing)
+merged.update(routes)
 staging = ROUTES.with_name(ROUTES.name + ".staging")
-staging.write_text(json.dumps(routes, indent=None, sort_keys=True) + "\n", encoding="utf-8")
+staging.write_text(json.dumps(merged, indent=None, sort_keys=True) + "\n", encoding="utf-8")
 os.chmod(staging, stat.S_IRUSR | stat.S_IWUSR)
+if ROUTES.exists():
+    shutil.copy2(ROUTES, ROUTES.with_name(ROUTES.name + ".before-add"))
+    print("kept the table as it was at:", ROUTES.with_name(ROUTES.name + ".before-add"))
 os.rename(staging, ROUTES)
-print("status: written", len(routes), "routes;", len(skipped), "left for a human")
-print("undo: rm", ROUTES)
+print("status: added", len(routes), "routes to", len(existing), "already there")
+print("undo: mv", ROUTES.with_name(ROUTES.name + ".before-add"), ROUTES)
