@@ -732,11 +732,12 @@ def issue(purpose, resource):
         [
             router,
             "capability-issue",
-            # The broker verifies a redemption against the key registered for
-            # the capability's agent, and the proof is signed by the workload.
-            # The two must be the same name or nothing ever redeems: the vault
-            # registers `brama-service`, never `brama-runtime`.
-            "--agent", os.environ.get("SKARBIEC_WORKLOAD_ID", "brama-service"),
+            # The authority verifies a redemption against the key registered
+            # for this agent, and allows a workload key only on a consumer that
+            # carries `acquire`. `brama-service` carries one `read` for this
+            # gateway's GPG key and so can never be that consumer, whatever
+            # else is fixed; the runtime needs its own acquisition consumer.
+            "--agent", "brama-runtime",
             "--purpose", purpose,
             "--resource", resource,
             "--target", "brama",
