@@ -151,28 +151,45 @@ def published_release() -> str:
     if not candidates:
         return ""
 
-    _, tag = max(candidates)
-    claimed = SEMVER_TAG.match(tag)
-    _, declared = revision(tag)
-    if claimed is None or declared != claimed.group(ONE):
-        raise LookupError(f"GitHub Release {tag} does not match Cargo.toml version {declared}")
+    details_cache: dict = {}
+    for _, tag in sorted(candidates, reverse=True):
+        claimed = SEMVER_TAG.match(tag)
+        _, declared = revision(tag)
+        if claimed is None or declared != claimed.group(ONE):
+            # A release whose tree declares a different version than its name is
+            # filed under a coordinate it does not contain. Believing the name
+            # would measure every later change against the wrong artifact, so it
+            # is reported and skipped — never allowed to abort the ladder, because
+            # one mis-signed release would then freeze the baseline forever.
+            print(
+                f"baseline.py: release {tag} names version {claimed.group(ONE) if claimed else tag}"
+                f" but its tree declares {declared}; skipping it and looking further back.",
+                file=sys.stderr,
+            )
+            continue
 
-    details = gh("release", "view", tag, "--repo", slug, "--json", "assets")
-    asset_names = {asset["name"] for asset in details["assets"]}
-    expected = {
-        name
-        for platform in SUPPORTED_PLATFORMS
-        for name in (
-            f"{PRODUCT}-{tag}-{platform}.tar.gz",
-            f"{PRODUCT}-{tag}-{platform}.tar.gz.sha256",
+        details = details_cache.setdefault(
+            tag, gh("release", "view", tag, "--repo", slug, "--json", "assets")
         )
-    }
-    missing = sorted(expected - asset_names)
-    if missing:
-        raise LookupError(
-            f"GitHub Release {tag} is incomplete; missing assets: {', '.join(missing)}"
-        )
-    return tag
+        asset_names = {asset["name"] for asset in details["assets"]}
+        expected = {
+            name
+            for platform in SUPPORTED_PLATFORMS
+            for name in (
+                f"{PRODUCT}-{tag}-{platform}.tar.gz",
+                f"{PRODUCT}-{tag}-{platform}.tar.gz.sha256",
+            )
+        }
+        missing = sorted(expected - asset_names)
+        if missing:
+            print(
+                f"baseline.py: release {tag} is incomplete; missing assets: "
+                f"{', '.join(missing)}; skipping it and looking further back.",
+                file=sys.stderr,
+            )
+            continue
+        return tag
+    return ""
 
 
 def baseline() -> dict:
