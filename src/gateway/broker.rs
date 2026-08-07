@@ -124,9 +124,16 @@ pub async fn get_agent_auth_secret(agent_id: &str) -> Option<Secret> {
             warn!(
                 event = "request_sign_redeem_failed",
                 agent_id, %resource, %error,
-                "the authority issued a request-sign capability and refused to redeem it"
+                "the authority issued a request-sign capability and refused to redeem it; \
+                 trying the read grant"
             );
-            None
+            // The provider path already falls back this way when a capability
+            // cannot be redeemed -- a workload proof that no longer matches the
+            // key the vault registered takes down every redemption, and there
+            // is no reason the signing secret should be the one credential with
+            // no way through. The grant is the authority's own, narrower than a
+            // capability, and the route is the same coordinate either way.
+            credential_by_grant(&resource).await
         }
     }
 }
@@ -203,7 +210,7 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
             "no capability broker client: SKARBIEC_CAP_SOCKET, SKARBIEC_WORKLOAD_ID or the \
              workload signing key is missing or unreadable; trying the read grant"
         );
-        return provider_credential_by_grant(&resource).await;
+        return credential_by_grant(&resource).await;
     };
     if let Some(capability_id) = configured_capability(PROVIDER_CAPABILITIES_ENV, provider) {
         match CapabilityRef::provider(&capability_id, &resource) {
@@ -245,7 +252,7 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
                 provider, %resource, %error,
                 "a freshly issued capability did not redeem either; trying the read grant"
             );
-            provider_credential_by_grant(&resource).await
+            credential_by_grant(&resource).await
         }
     }
 }
@@ -490,7 +497,7 @@ fn capability_route(resource: &str) -> Option<(String, String)> {
 /// Nothing is widened here. The router presents this host's consumer identity
 /// and the authority still decides: without the grant the read is refused, and
 /// the coordinate comes from the operator's routes table rather than a guess.
-async fn provider_credential_by_grant(resource: &str) -> Option<Secret> {
+async fn credential_by_grant(resource: &str) -> Option<Secret> {
     let (item, field) = capability_route(resource)?;
     let output = tokio::process::Command::new(entitlements_router_bin())
         .arg("get")
