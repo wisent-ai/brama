@@ -367,9 +367,13 @@ for client_id, item, agent_id, allowed_models in sources:
 sys.stdout.write(json.dumps(identities, separators=(",", ":")))
 PY
 )"
+# Empty is allowed now. The gateway resolves a bearer it does not recognise
+# against Skarbiec, so this list is a warm start rather than a precondition --
+# and building it requires reading every client's secret here, which is what
+# stopped this launcher on a host that was not provisioned to decrypt them.
 [ -n "$BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES" ] || {
-  printf '%s\n' "model-router verifier identities are empty" >/dev/stderr
-  false
+  printf '%s\n' "no client identities read at start; bearers will be resolved through Skarbiec" >/dev/stderr
+  BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES=""
 }
 export BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES
 unset BRAMA_ALLOWED_MODELS
