@@ -104,6 +104,34 @@ pub async fn get_agent_auth_secret(agent_id: &str) -> Option<Secret> {
     let binding = CapabilityRef::request_sign(&fresh, &resource).ok()?;
     client()?.redeem(&binding).ok()
 }
+/// The providers this installation can obtain a direct capability for, resolved
+/// in one pass.
+///
+/// `provider_capability_configured` answers for one provider and pays the whole
+/// cost each time: it parses the capability map out of the environment and
+/// rebuilds the client, which opens and parses the workload signing key. A
+/// caller holding a catalogue asks once per model, and this installation's
+/// catalogue carries several thousand of them, so an authenticated `/v1/models`
+/// spent longer rebuilding the same client than any client waits for a reply.
+/// The work does not vary per provider, so it is done once here and the answer
+/// is a set membership test.
+pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
+    let mut configured = std::collections::HashSet::new();
+    if client().is_none() {
+        return configured;
+    }
+    let Some(map) = capability_map(PROVIDER_CAPABILITIES_ENV) else {
+        return configured;
+    };
+    for (provider, capability_id) in map {
+        let resource = format!("provider:{}", slug(&provider));
+        if CapabilityRef::provider(&capability_id, &resource).is_ok() {
+            configured.insert(provider);
+        }
+    }
+    configured
+}
+
 
 /// Return whether this installation can obtain a direct provider capability.
 ///

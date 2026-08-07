@@ -1396,6 +1396,16 @@ async fn list_models(
         None
     };
     let include_perf = catalog_agent.is_some();
+    // Resolved once, not once per model: the per-provider question costs a
+    // capability-map parse and a client rebuild, and this catalogue carries
+    // thousands of entries. Asking inside the loop made an authenticated
+    // catalogue take longer than a client's timeout, so the request that
+    // proves a caller's identity was the only one that never returned.
+    let configured_providers = if catalog_agent.is_some() {
+        crate::gateway::broker::configured_provider_capabilities()
+    } else {
+        HashSet::new()
+    };
     let mut model_ids = Vec::new();
     let mut available = HashSet::new();
 
@@ -1409,7 +1419,7 @@ async fn list_models(
             for model in &catalog.models {
                 model_ids.push(model.route_id.clone());
                 if catalog_agent.is_some()
-                    && crate::gateway::broker::provider_capability_configured(&model.provider_id)
+                    && configured_providers.contains(&model.provider_id)
                 {
                     available.insert(model.route_id.clone());
                 }
