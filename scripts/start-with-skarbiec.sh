@@ -867,7 +867,6 @@ with open(request_capabilities_path, "w", encoding="utf-8") as target:
 with open(catalog_path, "w", encoding="utf-8") as target:
     json.dump({"items": catalog}, target, separators=(",", ":"))
 PY
-
 export BRAMA_PROVIDER_CAPABILITY_IDS="$(cat "$capabilities_file")"
 export BRAMA_REQUEST_SIGN_CAPABILITY_IDS="$(cat "$request_capabilities_file")"
 export BRAMA_SUBSCRIPTION_CATALOG="$(cat "$catalog_file")"
