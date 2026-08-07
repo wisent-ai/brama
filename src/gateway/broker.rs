@@ -338,6 +338,15 @@ fn entitlements_router_bin() -> String {
 
 const PROVIDER_PURPOSE: &str = "brama.provider.authenticate";
 const REQUEST_SIGN_PURPOSE: &str = "brama.request.sign";
+/// The agent a capability is issued to, and the identity whose registered key
+/// the authority verifies a redemption against.
+///
+/// It is deliberately not `brama-service`. That consumer exists, but it holds
+/// one `read` capability for this gateway's GPG key, and the authority allows
+/// a workload key only on a consumer that carries `acquire` -- so naming it
+/// here can never redeem, whatever else is fixed. The runtime agent needs its
+/// own acquisition consumer in the vault, bound to the proof key this
+/// installation provisions.
 const RUNTIME_AGENT: &str = "brama-runtime";
 const CAPABILITY_TARGET: &str = "brama";
 

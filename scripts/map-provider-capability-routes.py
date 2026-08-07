@@ -23,7 +23,22 @@ import subprocess
 from pathlib import Path
 
 HOME = Path(os.environ.get("HOME", "."))
-SKARBIEC = HOME / ".stado" / "bin" / "skarbiec"
+# Hosts differ on where the operator binary lives, and a mapper that only looks
+# in one of them reports "unavailable" on a machine that has it.
+SKARBIEC = Path(
+    os.environ.get("SKARBIEC_BIN", "")
+    or next(
+        (
+            str(candidate)
+            for candidate in (
+                HOME / ".stado" / "bin" / "skarbiec",
+                HOME / ".local" / "bin" / "skarbiec",
+            )
+            if candidate.exists()
+        ),
+        str(HOME / ".stado" / "bin" / "skarbiec"),
+    )
+)
 VAULT = Path(
     os.environ.get("SKARBIEC_VAULT_FILE", str(HOME / ".stado" / "skarbiec.vault.json"))
 )
@@ -36,6 +51,33 @@ ENV = {
     "PATH": "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
     "SKARBIEC_VAULT_FILE": str(VAULT),
 }
+
+
+def granted_fields() -> dict[str, set[str]]:
+    """Which field each consumer is granted on each item.
+
+    A grant names the coordinate outright -- `provider:local-openai#token` --
+    so the route can be transcribed from it without decrypting anything. That
+    matters on a workstation, where opening an item can raise a passphrase
+    prompt in front of whoever is sitting there.
+    """
+    listed = subprocess.run(
+        [str(SKARBIEC), "tokens"], capture_output=True, text=True, check=False, env=ENV
+    )
+    fields: dict[str, set[str]] = {}
+    if listed.returncode or not listed.stdout.strip():
+        return fields
+    try:
+        grants = json.loads(listed.stdout)
+    except ValueError:
+        return fields
+    for grant in grants if isinstance(grants, list) else []:
+        for capability in grant.get("capabilities", []) or []:
+            item = capability.get("item")
+            field = capability.get("field")
+            if isinstance(item, str) and isinstance(field, str) and field:
+                fields.setdefault(item, set()).add(field)
+    return fields
 
 if not SKARBIEC.exists():
     raise SystemExit("skarbiec is unavailable on this host")
@@ -52,23 +94,30 @@ if ROUTES.exists():
     except ValueError:
         raise SystemExit("existing routes unreadable; refusing to overwrite")
 
+granted = granted_fields()
 added = []
 for item in providers:
     if item in table:
         print("route present:", item)
         continue
-    read = subprocess.run(
-        [str(SKARBIEC), "get", item], capture_output=True, text=True, check=False, env=ENV
-    )
-    if read.returncode or not read.stdout.strip():
-        print("unreadable, skipped:", item)
-        continue
-    try:
-        payload = json.loads(read.stdout)
-    except ValueError:
-        print("non-JSON payload, skipped:", item)
-        continue
-    fields = sorted((payload.get("fields") or {}).keys())
+    fields = sorted(granted.get(item, set()))
+    source = "grant"
+    if not fields:
+        # No grant names this item, so the field has to come from the item
+        # itself. This is the only path that decrypts, and it runs last.
+        read = subprocess.run(
+            [str(SKARBIEC), "get", item], capture_output=True, text=True, check=False, env=ENV
+        )
+        if read.returncode or not read.stdout.strip():
+            print("unreadable, skipped:", item)
+            continue
+        try:
+            payload = json.loads(read.stdout)
+        except ValueError:
+            print("non-JSON payload, skipped:", item)
+            continue
+        fields = sorted((payload.get("fields") or {}).keys())
+        source = "item"
     candidates = [name for name in CREDENTIAL_FIELDS if name in fields]
     if len(candidates) != len("a"):
         print("ambiguous fields, skipped:", item, fields)
@@ -76,7 +125,7 @@ for item in providers:
     chosen = candidates.pop()
     table[item] = {"item": item, "field": chosen}
     added.append((item, chosen))
-    print("route added:", item, "->", chosen)
+    print(f"route added ({source}):", item, "->", chosen)
 
 if added:
     ROUTES.write_text(json.dumps(table, indent=INDENT, sort_keys=True) + "\n")

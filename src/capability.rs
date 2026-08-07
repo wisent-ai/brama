@@ -15,13 +15,6 @@ use zeroize::{Zeroize, Zeroizing};
 pub const TARGET: &str = "brama";
 pub const WIRE_VERSION: &str = "skarbiec.redeem.v1";
 const PROOF_DOMAIN: &[u8] = b"SKARBIEC-WORKLOAD-PROOF\0v1\0";
-/// The one operation Brama performs, and the one the broker will accept from
-/// it. Sent in the request and signed over; a request without it is refused
-/// before the broker looks at the key.
-const OPERATION_REDEEM: &str = "redeem";
-/// Brama redeems nothing on anyone's behalf, so the authorization id is empty —
-/// which is exactly what the broker compares against a record that carries none.
-const AUTHORIZATION_ID: &str = "";
 const MAX_CONTROL_LINE: usize = 4096;
 const MAX_SECRET_BYTES: usize = 64 * 1024;
 const MAX_KEY_BYTES: u64 = 4096;
@@ -229,24 +222,20 @@ impl CapabilityClient {
         let nonce = hex::encode(nonce_bytes);
         nonce_bytes.zeroize();
 
-        // The broker signs over five fields, each NUL-terminated except the
-        // last: capability id, nonce, workload id, operation, authorization id.
-        // This used to stop after the workload id and to omit `operation` from
-        // the request entirely, so the broker read an empty operation, refused
-        // it before looking at anything else, and answered `capability
-        // redemption denied` — the same answer a wrong key or an expired grant
-        // produces. Every provider request on this host failed that way.
-        //
-        // Brama holds no authorization id: the empty string is what the broker
-        // compares against a record that has none, and it must still be part of
-        // what was signed.
+        // The authority signs over capability id, nonce, workload id and the
+        // operation, each followed by a separator, then the authorization id.
+        // This built a shorter payload and omitted the last two parts, so no
+        // proof it produced could ever verify -- a mismatch that reads, from
+        // the outside, as a credential that is unavailable.
+        const OPERATION: &str = "redeem";
+        const AUTHORIZATION_ID: &str = "";
         let mut proof_input = Zeroizing::new(Vec::new());
         proof_input.extend_from_slice(PROOF_DOMAIN);
         for part in [
             capability.id,
             nonce.as_str(),
             self.workload_id.as_str(),
-            OPERATION_REDEEM,
+            OPERATION,
         ] {
             proof_input.extend_from_slice(part.as_bytes());
             proof_input.push(b'\0');
@@ -256,10 +245,11 @@ impl CapabilityClient {
 
         let request = RedeemRequest {
             version: WIRE_VERSION,
-            operation: OPERATION_REDEEM,
+            operation: OPERATION,
             capability_id: capability.id,
             nonce: &nonce,
             workload_id: &self.workload_id,
+            authorization_id: AUTHORIZATION_ID,
             proof,
         };
         let mut encoded = Zeroizing::new(
@@ -298,6 +288,14 @@ impl CapabilityClient {
     }
 }
 
+/// The wire the authority reads.
+///
+/// `operation` and `authorization_id` were absent here while the authority
+/// required the first and signed over both. It rejected every request at its
+/// opening validation, replied with an opaque `denied`, and the gateway
+/// reported a provider credential that was merely "unavailable" -- so the
+/// missing field looked like a credential problem for as long as anyone cared
+/// to look.
 #[derive(Serialize)]
 struct RedeemRequest<'a> {
     version: &'static str,
@@ -305,6 +303,7 @@ struct RedeemRequest<'a> {
     capability_id: &'a str,
     nonce: &'a str,
     workload_id: &'a str,
+    authorization_id: &'a str,
     proof: String,
 }
 
