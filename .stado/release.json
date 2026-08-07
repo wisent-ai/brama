@@ -21,7 +21,7 @@
   "sources": {
     "skarbiec-source": {
       "repo": "https://github.com/wisent-ai/skarbiec",
-      "revision": "a5b897569653c36feebb29437baeef1f50596d06"
+      "revision": "f711f3f1ecececf809c9abe9edbfc322f605b6f2"
     }
   }
 }
