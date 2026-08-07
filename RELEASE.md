@@ -144,6 +144,22 @@ Re-provisioning replaces the installation's identity, so
 `--force` is given, and the capabilities bound to the previous key must be
 re-granted afterwards.
 
+When an installation is replaced without that re-grant, the symptom is not a
+startup failure. Brama comes up, `/health` answers 200, and every request that
+needs a provider credential returns `503 dependency_unavailable`, with
+`capability redemption denied: peer mismatch` on stderr. The registry pins the
+absolute path and SHA-256 of the binary allowed to redeem, so a rebuilt binary
+is a different workload even at the same path, and the capabilities the vault
+still holds belong to the previous key. `provision-skarbiec-trust --force`
+regenerates the installation identity but cannot re-grant on the vault side:
+`workload_public_key` for the redeeming agent has to be updated where the vault
+lives, which is an operator grant, not a step the launcher can take on its own.
+
+Upgrading in place therefore has an order. Install the new version beside the
+old one, provision its trust material, re-grant the capabilities to the new
+workload key, and only then point the service manager at it. Doing the last
+step first leaves a gateway that looks healthy and serves nothing.
+
 ## Qualification gate
 
 Before creating a tag or publishing a stable GitHub Release, the release owner records:
