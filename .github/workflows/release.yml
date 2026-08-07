@@ -31,6 +31,29 @@ jobs:
         run: printf '%s\n' /opt/homebrew/bin >> "$GITHUB_PATH"
 
       - uses: actions/checkout@v4
+
+      - name: Refuse a tag that disagrees with the manifest
+        # Five releases, v0.2.9 through v0.2.13, were cut from trees already
+        # declaring 0.3.0, so each published a breaking change under a
+        # patch-looking name and a consumer selecting one had no warning. A
+        # published coordinate is immutable, so the only repair available
+        # afterwards was prose. This refuses before the first artifact is built,
+        # which is the only point where the mistake is still free.
+        run: |
+          set -euo pipefail
+          declared="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          test -n "$declared" || {
+            printf '%s\n' "Cargo.toml declares no version"
+            false
+          }
+          if [ "$GITHUB_REF_NAME" != "v$declared" ]; then
+            printf '%s\n' "tag $GITHUB_REF_NAME must equal v$declared, the version" \
+              "Cargo.toml declares. Either the tag is named for a version this tree" \
+              "does not contain, or the version change was never committed."
+            false
+          fi
+          printf '%s\n' "tag $GITHUB_REF_NAME matches the declared version"
+
       - uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/skarbiec
