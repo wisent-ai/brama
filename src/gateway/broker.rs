@@ -257,24 +257,73 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
     }
 }
 
+/// Redeem one provider-purpose capability for a resource.
+///
+/// Kept as a function rather than a chain so the capability id outlives the
+/// binding that borrows it; inlining it is what the borrow checker refuses.
+fn redeem_provider_resource(capability_id: &str, resource: &str) -> Option<Secret> {
+    let binding = CapabilityRef::provider(capability_id, resource).ok()?;
+    client()?.redeem(&binding).ok()
+}
+
 /// Redeem one subscription credential at the final-use boundary. Expired
 /// provider OAuth grants are refreshed only inside this scoped Brama runtime,
 /// used immediately, and persisted through the local entitlements router when
 /// possible.
 pub async fn subscription_credential(subscription_id: &str, provider: &str) -> Option<Secret> {
-    let capability_id = configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id)?;
     let resource = format!("provider:{}:{}", slug(provider), slug(subscription_id));
-    let binding = CapabilityRef::provider(&capability_id, &resource).ok()?;
-    let credential = client()?.redeem(&binding).ok()?;
+    // A capability is single-use and short-lived by contract, and model
+    // discovery redeems one at boot, so the id the launcher seeded is spent
+    // before the first request arrives. The provider path already answers that
+    // by asking for a fresh one and, failing that, reading through the
+    // authority's own grant; a subscription had neither, and every call after
+    // startup reported the credential as simply unavailable.
+    let seeded = configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id);
+    let credential = match seeded
+        .as_deref()
+        .and_then(|capability_id| redeem_provider_resource(capability_id, &resource))
+    {
+        Some(credential) => credential,
+        None => match issue_capability(PROVIDER_PURPOSE, &resource).await {
+            Some(fresh) => match redeem_provider_resource(&fresh, &resource) {
+                Some(credential) => credential,
+                None => {
+                    warn!(
+                        event = "subscription_credential_redeem_failed",
+                        provider, %resource,
+                        "a freshly issued capability did not redeem; trying the read grant"
+                    );
+                    credential_by_grant(&resource).await?
+                }
+            },
+            None => {
+                warn!(
+                    event = "subscription_credential_issue_failed",
+                    provider, %resource,
+                    "the authority would not issue a capability; trying the read grant"
+                );
+                credential_by_grant(&resource).await?
+            }
+        },
+    };
     if !super::oauth_refresh::needs_refresh(&credential, provider) {
         return Some(credential);
     }
     drop(credential);
 
-    // Refresh-token rotation is single-flight. Re-redeeming after the lock
-    // ensures a concurrent caller observes the value already written to vault.
+    // Refresh-token rotation is single-flight. Re-reading after the lock lets a
+    // concurrent caller observe the value already written to the vault, and it
+    // goes through the same acquisition as above rather than a binding built
+    // from an id that may since have been spent.
     let _guard = OAUTH_REFRESH_LOCK.lock().await;
-    let credential = client()?.redeem(&binding).ok()?;
+    let seeded = configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id);
+    let credential = match seeded
+        .as_deref()
+        .and_then(|capability_id| redeem_provider_resource(capability_id, &resource))
+    {
+        Some(credential) => credential,
+        None => credential_by_grant(&resource).await?,
+    };
     if !super::oauth_refresh::needs_refresh(&credential, provider) {
         return Some(credential);
     }

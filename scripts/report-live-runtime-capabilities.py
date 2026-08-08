@@ -43,3 +43,13 @@ for root in ROOTS:
                 print(f"   {name}: {key} len={len(text)} digest={digest}")
             if not content:
                 print("  ", name, "is empty")
+    catalog = root / "subscription-catalog.json"
+    if catalog.exists():
+        try:
+            entries = json.loads(catalog.read_text())
+        except ValueError as error:
+            print("   subscription-catalog.json unreadable:", error)
+        else:
+            listed = entries.get("items", entries) if isinstance(entries, dict) else entries
+            names = [item.get("id") for item in listed] if isinstance(listed, list) else listed
+            print("   subscription-catalog.json:", names)
