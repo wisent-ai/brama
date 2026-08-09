@@ -670,7 +670,6 @@ fn complete_field(value: Option<String>) -> Option<String> {
 }
 
 fn parse_subscriptions(output: &[u8], agent_id: &str) -> Result<Vec<SubscriptionEntry>, ()> {
-    let prefix = subscription_prefix(agent_id);
     let response: BrokerItems = serde_json::from_slice(output).map_err(|_| ())?;
 
     Ok(response
@@ -681,7 +680,7 @@ fn parse_subscriptions(output: &[u8], agent_id: &str) -> Result<Vec<Subscription
             let provider = complete_field(entry.provider)?;
             let entry_agent_id = complete_field(entry.agent_id)?;
             let status = complete_field(entry.status)?;
-            if !id.starts_with(&prefix) || entry_agent_id != agent_id {
+            if entry_agent_id != agent_id {
                 return None;
             }
             Some(SubscriptionEntry {
@@ -786,9 +785,19 @@ async fn list_subscriptions_live(
 
 async fn list_subscriptions_result(agent_id: &str) -> Result<Vec<SubscriptionEntry>, ()> {
     let broker = entitlements_router_bin();
-    // Live vault discovery wins. A failed lookup may use the trusted
-    // deployment-time metadata catalog, but never a remote credential store.
-    if let Ok(live) = live_subscriptions(&broker, agent_id, false).await {
+    // Live vault discovery supplies conventional per-agent entries. The
+    // deployment catalog additionally carries explicit sharing decisions for
+    // items whose owner-prefixed id belongs to a different agent. It was built
+    // from the same live listing at startup, so merging it cannot invent a
+    // credential; final use still requires capability redemption.
+    if let Ok(mut live) = live_subscriptions(&broker, agent_id, false).await {
+        if let Some(Ok(configured)) = configured_subscriptions(agent_id) {
+            for entry in configured {
+                if !live.iter().any(|existing| existing.id == entry.id) {
+                    live.push(entry);
+                }
+            }
+        }
         return Ok(live);
     }
     configured_subscriptions(agent_id).unwrap_or(Err(()))
