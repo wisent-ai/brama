@@ -1,0 +1,15 @@
+[automation]
+managed = true
+source_fingerprint = "be39aae2b4023e97"
+category = "gateway"
+
+[banner]
+title = "Route every model through one gateway."
+description = "Authenticated multi-provider LLM routing with fallback chains and local inference."
+product = "Wisent"
+url = "wisent.ai"
+theme = "dark"
+layout = "routes-left"
+art_seed = "brama"
+width = 1584
+height = 396
