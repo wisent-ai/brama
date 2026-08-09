@@ -51,5 +51,13 @@ for root in ROOTS:
             print("   subscription-catalog.json unreadable:", error)
         else:
             listed = entries.get("items", entries) if isinstance(entries, dict) else entries
-            names = [item.get("id") for item in listed] if isinstance(listed, list) else listed
+            names = (
+                [
+                    f"{item.get('id')}@{item.get('agent_id')}"
+                    for item in listed
+                    if isinstance(item, dict)
+                ]
+                if isinstance(listed, list)
+                else listed
+            )
             print("   subscription-catalog.json:", names)

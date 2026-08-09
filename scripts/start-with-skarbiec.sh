@@ -674,7 +674,7 @@ catalog_file="$runtime_dir/subscription-catalog.json"
   "$ENTITLEMENTS_ROUTER_BIN" \
   "$subscriptions_file" \
   "$config_dir/policy.json" \
-  "$config_dir/subscriptions.json" \
+  "$bundle_root/etc/brama-skarbiec/subscriptions.json" \
   "$capabilities_file" \
   "$request_capabilities_file" \
   "$catalog_file" <<'PY'
