@@ -23,7 +23,7 @@ if (
 const maxTtlSeconds = 315_360_000;
 const maxUses = 10_000_000;
 const subscriptions = JSON.parse(readFileSync(subscriptionsPath, 'utf8'));
-const subscriptionAgentIds = ['echo', 'content-platform', 'oko', 'wisent-app'];
+const subscriptionAgentIds = ['echo', 'content-platform', 'oko', 'wisent-app', 'lem'];
 const requestSignAgentIds = ['wisent-app'];
 if (!Array.isArray(subscriptions) || subscriptions.length === 0) {
   throw new Error('subscriptions manifest must be a non-empty array');
@@ -34,7 +34,12 @@ for (const subscription of subscriptions) {
     typeof subscription.id !== 'string' ||
     typeof subscription.provider !== 'string' ||
     !subscriptionAgentIds.some((agentId) => subscription.id.startsWith(`brama-sub-${agentId}-`)) ||
-    !/^[a-z0-9-]+$/.test(subscription.provider)
+    !/^[a-z0-9-]+$/.test(subscription.provider) ||
+    (subscription.agents !== undefined && (
+      !Array.isArray(subscription.agents) ||
+      subscription.agents.length === 0 ||
+      subscription.agents.some((agentId) => !subscriptionAgentIds.includes(agentId))
+    ))
   ) {
     throw new Error('subscriptions manifest contains an invalid entry');
   }

@@ -569,8 +569,8 @@ rm -f "$identities_file"
 export BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES
 unset BRAMA_ALLOWED_MODELS
 
-# Echo, legacy Content Platform, Oko, and Weles identities are read from their
-# exact Skarbiec items.
+# Echo, legacy Content Platform, Oko, Weles, and Lem identities are read from
+# their exact Skarbiec items.
 BRAMA_REQUEST_SIGN_IDENTITIES="$(
   "$PYTHON_BIN" - "$ENTITLEMENTS_ROUTER_BIN" <<'PY'
 import json
@@ -586,6 +586,7 @@ sources = {
     "content-platform": "content-platform-agent-auth",
     "oko": "oko-model-agent-auth",
     "weles": "weles-model-agent-auth",
+    "lem": "lem-agent-auth",
 }
 
 def field(item, name):
@@ -673,6 +674,7 @@ catalog_file="$runtime_dir/subscription-catalog.json"
   "$ENTITLEMENTS_ROUTER_BIN" \
   "$subscriptions_file" \
   "$config_dir/policy.json" \
+  "$config_dir/subscriptions.json" \
   "$capabilities_file" \
   "$request_capabilities_file" \
   "$catalog_file" <<'PY'
@@ -686,6 +688,7 @@ import sys
     router,
     available_path,
     policy_path,
+    manifest_path,
     capabilities_path,
     request_capabilities_path,
     catalog_path,
@@ -694,6 +697,8 @@ with open(available_path, encoding="utf-8") as source:
     available_items = json.load(source)
 with open(policy_path, encoding="utf-8") as source:
     policy = json.load(source)
+with open(manifest_path, encoding="utf-8") as source:
+    subscription_manifest = json.load(source)
 
 rules = policy.get("roles", {}).get("brama-runtime", [])
 allowed = {
@@ -708,7 +713,20 @@ request_sign_agents = sorted(
     and isinstance(resource, str)
     and resource.startswith("agent:")
 )
-subscription_agents = sorted([*request_sign_agents, "echo", "content-platform", "oko"])
+manifest_agents = {
+    entry["id"]: entry["agents"]
+    for entry in subscription_manifest
+    if isinstance(entry, dict) and isinstance(entry.get("agents"), list)
+}
+subscription_agents = sorted({
+    *request_sign_agents,
+    "echo",
+    "content-platform",
+    "oko",
+    "weles",
+    "lem",
+    *(agent for agents in manifest_agents.values() for agent in agents),
+})
 normalize = lambda value: value.strip().lower().replace("_", "-")
 
 def issue(purpose, resource):
@@ -765,15 +783,18 @@ for item in available_items:
             capabilities[provider] = granted
     elif len(parts) == 3 and parts[0] == "provider":
         provider, item_id = normalize(parts[1]), parts[2]
-        agent_id = next(
-            (
-                agent
-                for agent in subscription_agents
-                if item_id.startswith(f"brama-sub-{agent}-")
-            ),
-            None,
-        )
-        if agent_id is None:
+        agent_ids = manifest_agents.get(item_id)
+        if agent_ids is None:
+            inferred = next(
+                (
+                    agent
+                    for agent in subscription_agents
+                    if item_id.startswith(f"brama-sub-{agent}-")
+                ),
+                None,
+            )
+            agent_ids = [] if inferred is None else [inferred]
+        if not agent_ids:
             continue
         resource = f"provider:{provider}:{item_id}"
         if ("brama.provider.authenticate", resource) not in allowed:
@@ -782,12 +803,13 @@ for item in available_items:
         if granted is None:
             continue
         capabilities[item_id] = granted
-        catalog.append({
-            "id": item_id,
-            "provider": provider,
-            "agent_id": agent_id,
-            "status": "active",
-        })
+        for agent_id in agent_ids:
+            catalog.append({
+                "id": item_id,
+                "provider": provider,
+                "agent_id": agent_id,
+                "status": "active",
+            })
 
 for purpose, resource in sorted(allowed):
     if purpose != "brama.provider.authenticate":

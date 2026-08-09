@@ -1,7 +1,8 @@
 [
   {
     "id": "brama-sub-wisent-app-codex-primary",
-    "provider": "codex"
+    "provider": "codex",
+    "agents": ["wisent-app", "lem"]
   },
   {
     "id": "brama-sub-wisent-app-kimi-primary",

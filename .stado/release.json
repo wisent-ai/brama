@@ -10,6 +10,7 @@
     "bin/start-with-skarbiec": "scripts/start-with-skarbiec.sh",
     "bin/provision-skarbiec-trust": "scripts/provision-skarbiec-trust.sh",
     "libexec/generate-skarbiec-config.mjs": "scripts/generate-skarbiec-config.mjs",
+    "libexec/brama-register-workload.py": "scripts/brama-register-workload.py",
     "etc/brama-skarbiec/subscriptions.json": "scripts/skarbiec-subscriptions.json",
     "etc/brama-skarbiec/recipient-public-keys.asc": "scripts/skarbiec-recipient-public-keys.asc",
     "LICENSE": "LICENSE",

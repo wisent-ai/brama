@@ -76,6 +76,14 @@ shutil.copy(
     libexec / "brama-register-workload.py",
 )
 
+config = staging / "etc" / "brama-skarbiec"
+config.mkdir(parents=True)
+shutil.copy(ROOT / "scripts" / "skarbiec-subscriptions.json", config / "subscriptions.json")
+shutil.copy(
+    ROOT / "scripts" / "skarbiec-recipient-public-keys.asc",
+    config / "recipient-public-keys.asc",
+)
+
 for name, source in {**binaries, **scripts}.items():
     placed = target_bin / name
     shutil.copy(source, placed)
