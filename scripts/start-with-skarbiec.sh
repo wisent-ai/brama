@@ -13,7 +13,7 @@ bundle_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
 if [ -x "$bundle_root/bin/brama" ] && [ -x "$bundle_root/bin/skarbiec-entitlements-router" ]; then
   default_brama_bin="$bundle_root/bin/brama"
   default_router_bin="$bundle_root/bin/skarbiec-entitlements-router"
-  default_config_dir="$bundle_root/etc/brama-skarbiec"
+  default_config_dir="${HOME:-/nonexistent}/.config/brama/trust"
   bundled_installation=1
 else
   default_brama_bin=/usr/local/bin/brama
@@ -32,16 +32,12 @@ elif [ -n "${BRAMA_SERVICE_ENV_FILE:-}" ]; then
   false
 fi
 
-# A versioned bundle carries its own components, and its own win. The service
-# env file is sourced with `set -a`, so a path written there once pins every
-# later version to the directory that happened to be current that day: the
-# launcher from the new bundle starts, runs a binary from the old one, and the
-# gateway never comes up. The override still works for a bundle that does not
-# carry the component.
+# A versioned bundle carries its own executables, and those always win. Trust
+# configuration is host-owned and stable across bundle digests, so an explicit
+# BRAMA_SKARBIEC_CONFIG_DIR remains authoritative.
 if [ "$bundled_installation" -eq 1 ]; then
   BRAMA_BIN="$default_brama_bin"
   ENTITLEMENTS_ROUTER_BIN="$default_router_bin"
-  BRAMA_SKARBIEC_CONFIG_DIR="$default_config_dir"
 else
   if [ -x "$default_brama_bin" ]; then BRAMA_BIN="$default_brama_bin"; fi
   if [ -x "$default_router_bin" ]; then ENTITLEMENTS_ROUTER_BIN="$default_router_bin"; fi
@@ -77,9 +73,6 @@ chmod u=rwx,g=rx,o= "$socket_dir"
   false
 }
 export GNUPGHOME="$BRAMA_GNUPG_HOME"
-# Public recipient keys keep donations recoverable without exposing provider
-# credentials to service configuration.
-gpg --batch --quiet --import "$config_dir/recipient-public-keys.asc"
 
 # This service has its own identity, and the fleet already keeps it: the vault
 # item `brama-service` carries the private half for exactly this purpose. Import
@@ -231,6 +224,9 @@ source_vault_file=$SKARBIEC_VAULT_FILE
 # that authorises a change. So provisioning and registration happen against the
 # real vault, above the copy, and the copy then carries the result.
 provision_and_register_workload
+# Public recipient keys keep donations recoverable without exposing provider
+# credentials to service configuration.
+gpg --batch --quiet --import "$config_dir/recipient-public-keys.asc"
 
 vault_file="$runtime_dir/vault.json"
 if [ "$source_vault_file" != "$vault_file" ]; then
