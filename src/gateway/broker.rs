@@ -41,6 +41,20 @@ pub fn slug(value: &str) -> String {
         .collect()
 }
 
+/// The coordinate a direct provider credential is read from.
+///
+/// The dispatch path names it in provider failures, because the repair to a
+/// credential that cannot be used is always at the coordinate it came from,
+/// and a message that omits it sends the reader looking for the item first.
+pub fn provider_resource(provider: &str) -> String {
+    format!("provider:{}", slug(provider))
+}
+
+/// The coordinate one subscription's credential is read from.
+pub fn subscription_resource(provider: &str, subscription_id: &str) -> String {
+    format!("provider:{}:{}", slug(provider), slug(subscription_id))
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct SubscriptionEntry {
     pub id: String,
@@ -157,7 +171,7 @@ pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
         return configured;
     };
     for (provider, capability_id) in map {
-        let resource = format!("provider:{}", slug(&provider));
+        let resource = provider_resource(&provider);
         if CapabilityRef::provider(&capability_id, &resource).is_ok() {
             configured.insert(provider);
         }
@@ -176,7 +190,7 @@ pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
 /// proof that the path works, and is far cheaper than a gateway that starts
 /// and refuses every request.
 pub fn provider_capability_configured(provider: &str) -> bool {
-    let resource = format!("provider:{}", slug(provider));
+    let resource = provider_resource(provider);
     if client().is_none() {
         return false;
     }
@@ -196,7 +210,7 @@ pub fn provider_capability_configured(provider: &str) -> bool {
 /// a fresh capability and redeem that. Both attempts go through the same
 /// broker, and neither ever holds plaintext beyond the returned [`Secret`].
 pub async fn provider_credential(provider: &str) -> Option<Secret> {
-    let resource = format!("provider:{}", slug(provider));
+    let resource = provider_resource(provider);
     // Every step below can fail, and this used to return None for all of them,
     // so a caller saw one sentence -- "credential is unavailable" -- covering a
     // broker that was never configured, a capability that had expired, a route
@@ -271,7 +285,7 @@ fn redeem_provider_resource(capability_id: &str, resource: &str) -> Option<Secre
 /// used immediately, and persisted through the local entitlements router when
 /// possible.
 pub async fn subscription_credential(subscription_id: &str, provider: &str) -> Option<Secret> {
-    let resource = format!("provider:{}:{}", slug(provider), slug(subscription_id));
+    let resource = subscription_resource(provider, subscription_id);
     // A capability is single-use and short-lived by contract, and model
     // discovery redeems one at boot, so the id the launcher seeded is spent
     // before the first request arrives. The provider path already answers that

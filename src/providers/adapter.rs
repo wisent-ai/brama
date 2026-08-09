@@ -388,24 +388,100 @@ fn dispatch_client() -> Result<Client, String> {
         .clone()
 }
 
-fn credential_key(secret: &str) -> Result<String, String> {
+/// A typed envelope is exactly a `type` and a `value`, and nothing else. An
+/// object that merely carries a `type` beside its own fields -- a reauth
+/// document does -- is a credential, not a container.
+const ENVELOPE_FIELDS: usize = 2;
+
+/// The document fields a provider credential is read from, named in the order
+/// they are tried, for a message an operator can act on.
+const SUPPORTED_KEY_FIELDS: &str = "key, apiKey, api_key, access, accessToken, \
+     access_token, token, tokens.access_token, claudeAiOauth.accessToken";
+
+/// The credential behind whatever the store handed back.
+///
+/// Two packagings reach here and both are legitimate. A credential written
+/// directly is the secret itself, or a provider document carrying it under a
+/// known field. A credential imported into Skarbiec is wrapped in a typed
+/// envelope -- `{"type": "env", "value": "..."}` -- with the secret one level
+/// in, and the store hands that back verbatim.
+///
+/// Nothing unwrapped it, so every item written by the import path answered
+/// `no supported key field`: a sentence that reads as an absent credential
+/// while the credential was present, in a container. The peel happens here,
+/// on the one path every provider and every subscription shares, rather than
+/// in the branch of whichever provider was noticed first.
+///
+/// `None` means the text is not JSON at all, which is the ordinary shape of a
+/// bare secret and needs no interpretation.
+fn credential_document(secret: &str) -> Option<Value> {
+    let mut value = serde_json::from_str::<Value>(secret.trim()).ok()?;
+    // Envelopes nest when an already-wrapped value is imported a second time,
+    // so peel until the shape stops being one.
+    loop {
+        let inner = match value.as_object_mut() {
+            Some(fields) if fields.len() == ENVELOPE_FIELDS && fields.contains_key("type") => {
+                fields.remove("value")
+            }
+            _ => None,
+        };
+        match inner {
+            Some(inner) => value = inner,
+            None => return Some(value),
+        }
+    }
+}
+
+/// Say what an unusable credential looks like without saying what it holds.
+///
+/// Field names are structure, not secrets, and naming them is the difference
+/// between an operator finding the item in one look and guessing at it.
+fn credential_shape(document: &Value) -> String {
+    match document {
+        Value::Object(fields) => {
+            let mut names = fields.keys().map(String::as_str).collect::<Vec<_>>();
+            names.sort_unstable();
+            format!("a JSON object with fields [{}]", names.join(", "))
+        }
+        Value::Array(items) => format!("a JSON array of {} entries", items.len()),
+        Value::String(_) => "an empty JSON string".to_string(),
+        Value::Number(_) => "a bare JSON number".to_string(),
+        Value::Bool(_) => "a bare JSON boolean".to_string(),
+        Value::Null => "JSON null".to_string(),
+    }
+}
+
+/// Reduce a stored credential to the bearer a provider will accept.
+///
+/// `item` is the vault coordinate the secret was redeemed from, and it is in
+/// the failure message because the repair is always at that coordinate.
+fn credential_key(item: &str, secret: &str) -> Result<String, String> {
     let trimmed = secret.trim();
     if trimmed.is_empty() {
-        return Err("Skarbiec returned an empty provider credential".into());
+        return Err(format!("Skarbiec item `{item}` holds an empty credential"));
     }
-    let Ok(value) = serde_json::from_str::<Value>(trimmed) else {
+    let Some(document) = credential_document(trimmed) else {
         return Ok(trimmed.to_string());
     };
+    // An envelope around a bare secret unwraps to a string, and so does a
+    // credential that was stored as a quoted JSON string. Both are the key.
+    if let Some(key) = document.as_str() {
+        let key = key.trim();
+        if key.is_empty() {
+            return Err(format!("Skarbiec item `{item}` holds an empty credential"));
+        }
+        return Ok(key.to_string());
+    }
     let candidates = [
-        value.pointer("/key"),
-        value.pointer("/apiKey"),
-        value.pointer("/api_key"),
-        value.pointer("/access"),
-        value.pointer("/accessToken"),
-        value.pointer("/access_token"),
-        value.pointer("/token"),
-        value.pointer("/tokens/access_token"),
-        value.pointer("/claudeAiOauth/accessToken"),
+        document.pointer("/key"),
+        document.pointer("/apiKey"),
+        document.pointer("/api_key"),
+        document.pointer("/access"),
+        document.pointer("/accessToken"),
+        document.pointer("/access_token"),
+        document.pointer("/token"),
+        document.pointer("/tokens/access_token"),
+        document.pointer("/claudeAiOauth/accessToken"),
     ];
     let key = candidates
         .into_iter()
@@ -413,12 +489,18 @@ fn credential_key(secret: &str) -> Result<String, String> {
         .find_map(Value::as_str)
         .map(str::to_string)
         .filter(|value| !value.trim().is_empty());
-    key.ok_or_else(|| "Skarbiec provider credential has no supported key field".to_string())
+    key.ok_or_else(|| {
+        format!(
+            "Skarbiec item `{item}` holds {}, which carries no credential: expected a bare \
+             secret, a typed envelope carrying it under `value`, or an object carrying it \
+             under one of {SUPPORTED_KEY_FIELDS}",
+            credential_shape(&document)
+        )
+    })
 }
 
 fn credential_account_id(secret: &str) -> Option<String> {
-    let value = serde_json::from_str::<Value>(secret.trim()).ok()?;
-    value
+    credential_document(secret)?
         .pointer("/tokens/account_id")
         .and_then(Value::as_str)
         .map(str::to_string)
@@ -811,6 +893,7 @@ fn catalog_model_from_value(provider_id: &str, row: &Value) -> Option<RegistryMo
 
 pub async fn discover_models(
     provider_id: &str,
+    item: &str,
     secret: &str,
 ) -> Result<Vec<RegistryModel>, String> {
     let catalog = model_catalog::snapshot().await?;
@@ -826,7 +909,7 @@ pub async fn discover_models(
             .filter(|model| model.provider_id == provider_id)
             .cloned()
             .collect::<Vec<_>>();
-        let key = credential_key(secret)?;
+        let key = credential_key(item, secret)?;
         let base_url = catalog_provider_base_url(descriptor)?;
         let client = control_client()?;
         let request = authorize_catalog(
@@ -861,7 +944,7 @@ pub async fn discover_models(
 
     let descriptor = provider(provider_id)
         .ok_or_else(|| format!("provider `{provider_id}` is not in the Wisent registry"))?;
-    let key = credential_key(secret)?;
+    let key = credential_key(item, secret)?;
     let base_url = provider_base_url(descriptor)?;
     let client = control_client()?;
     let request = authorize_provider(
@@ -1582,7 +1665,7 @@ fn model_response_from_google(route_id: &str, body: Value, elapsed_ms: f64) -> M
     }
 }
 
-async fn dispatch_catalog(request: &ModelRequest, secret: &str) -> ModelResponse {
+async fn dispatch_catalog(request: &ModelRequest, item: &str, secret: &str) -> ModelResponse {
     let Some((provider_id, model_id)) = request.model.split_once('/') else {
         return ModelResponse::failure(&request.model, "invalid provider/model route".into());
     };
@@ -1618,7 +1701,7 @@ async fn dispatch_catalog(request: &ModelRequest, secret: &str) -> ModelResponse
             ),
         );
     }
-    let key = match credential_key(secret) {
+    let key = match credential_key(item, secret) {
         Ok(key) => key,
         Err(error) => return ModelResponse::failure(&request.model, error),
     };
@@ -1800,11 +1883,11 @@ fn provider_error(route_id: &str, status: reqwest::StatusCode, body: &str) -> Mo
     attempted_failure(route_id, format!("{kind}: {detail}"))
 }
 
-pub async fn dispatch(request: &ModelRequest, secret: &str) -> ModelResponse {
+pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> ModelResponse {
     let Some((descriptor, model_id)) = route(&request.model) else {
-        return dispatch_catalog(request, secret).await;
+        return dispatch_catalog(request, item, secret).await;
     };
-    let key = match credential_key(secret) {
+    let key = match credential_key(item, secret) {
         Ok(key) => key,
         Err(error) => return ModelResponse::failure(&request.model, error),
     };
@@ -1895,6 +1978,7 @@ pub async fn dispatch_openai_typed(
     route_id: &str,
     path: &str,
     mut payload: Map<String, Value>,
+    item: &str,
     secret: &str,
 ) -> Result<Value, String> {
     let supported = match path {
@@ -1907,7 +1991,7 @@ pub async fn dispatch_openai_typed(
     }
     let (descriptor, model_id) =
         route(route_id).ok_or_else(|| "invalid provider/model route".to_string())?;
-    let key = credential_key(secret)?;
+    let key = credential_key(item, secret)?;
     let base_url = provider_base_url(descriptor)?;
     let client = dispatch_client()
         .map_err(|_| "dependency_unavailable: provider client could not be built".to_string())?;

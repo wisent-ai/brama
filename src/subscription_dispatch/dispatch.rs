@@ -119,7 +119,9 @@ pub async fn registry_models_for_agent(
                     continue;
                 }
             };
-            let discovered = match provider_registry::discover_models(provider, secret).await {
+            let item = broker::subscription_resource(provider, &entry.id);
+            let discovered = match provider_registry::discover_models(provider, &item, secret).await
+            {
                 Ok(models) => models,
                 Err(error) => {
                     if let Ok(mut cache) = REGISTRY_MODEL_FAILURE_CACHE.lock() {
@@ -506,7 +508,7 @@ pub async fn dispatch_direct(request: &ModelRequest) -> ModelResponse {
             )
         }
     };
-    provider_registry::dispatch(request, credential).await
+    provider_registry::dispatch(request, &broker::provider_resource(provider), credential).await
 }
 
 /// Execute an ordered caller-independent route chain. A failed primary is
@@ -546,7 +548,14 @@ pub async fn dispatch_direct_openai_typed(
     let credential = credential
         .expose_utf8()
         .map_err(|_| format!("direct '{provider}' credential is not valid UTF-8"))?;
-    provider_registry::dispatch_openai_typed(route_id, path, payload, credential).await
+    provider_registry::dispatch_openai_typed(
+        route_id,
+        path,
+        payload,
+        &broker::provider_resource(provider),
+        credential,
+    )
+    .await
 }
 
 /// Authenticate the Jeden caller, redeem the selected provider credential at
@@ -625,7 +634,8 @@ async fn dispatch_subscription_attempt(
             }
         };
         provider_attempts = provider_attempts.saturating_add(u32::from(true));
-        let mut result = provider_registry::dispatch(request, token).await;
+        let item = broker::subscription_resource(provider, credential_id);
+        let mut result = provider_registry::dispatch(request, &item, token).await;
         result.attempts = provider_attempts;
         if result.success {
             if index > 0 {
