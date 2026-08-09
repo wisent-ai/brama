@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "product": "brama",
+  "releases": true,
+  "version_source": {
+    "kind": "regex",
+    "path": "Cargo.toml",
+    "pattern": "(?m)^version\\s*=\\s*\"(?P<version>[0-9]+\\.[0-9]+\\.[0-9]+)\"\\s*$"
+  },
+  "inputs": {
+    "skarbiec": {
+      "uri": "stado://sources/skarbiec/sha256/5cfcc50e0b3f847c9a2d19843001c61727a228afea39e38dc1cbc1f992680815/source.tar.gz",
+      "sha256": "5cfcc50e0b3f847c9a2d19843001c61727a228afea39e38dc1cbc1f992680815",
+      "mount": "skarbiec"
+    }
+  },
+  "platforms": {
+    "darwin-arm64": {
+      "quality": [
+        {
+          "name": "brama-release-quality",
+          "argv": ["scripts/release/quality.sh"]
+        }
+      ],
+      "build": {
+        "argv": ["scripts/release/build.sh"]
+      },
+      "stage": {
+        "stage/bin/brama": "bin/brama",
+        "stage/bin/skarbiec-entitlements-router": "bin/skarbiec-entitlements-router",
+        "stage/bin/start-with-skarbiec": "bin/start-with-skarbiec",
+        "stage/bin/provision-skarbiec-trust": "bin/provision-skarbiec-trust",
+        "stage/libexec/generate-skarbiec-config.mjs": "libexec/generate-skarbiec-config.mjs",
+        "stage/libexec/brama-diagnose.py": "libexec/brama-diagnose.py",
+        "stage/libexec/brama-subscription-report.py": "libexec/brama-subscription-report.py",
+        "stage/libexec/brama-register-workload.py": "libexec/brama-register-workload.py",
+        "stage/libexec/brama-write-capability-routes.py": "libexec/brama-write-capability-routes.py",
+        "stage/libexec/brama-route-probe.py": "libexec/brama-route-probe.py",
+        "stage/libexec/brama-clear-stale-broker.py": "libexec/brama-clear-stale-broker.py",
+        "stage/libexec/brama-repair-inference-routes.py": "libexec/brama-repair-inference-routes.py",
+        "stage/etc/brama-skarbiec/subscriptions.json": "etc/brama-skarbiec/subscriptions.json",
+        "stage/etc/brama-skarbiec/recipient-public-keys.asc": "etc/brama-skarbiec/recipient-public-keys.asc",
+        "stage/LICENSE": "LICENSE"
+      }
+    },
+    "linux-amd64": {
+      "quality": [
+        {
+          "name": "brama-release-quality",
+          "argv": ["scripts/release/quality.sh"]
+        }
+      ],
+      "build": {
+        "argv": ["scripts/release/build.sh"]
+      },
+      "stage": {
+        "stage/bin/brama": "bin/brama",
+        "stage/bin/skarbiec-entitlements-router": "bin/skarbiec-entitlements-router",
+        "stage/bin/start-with-skarbiec": "bin/start-with-skarbiec",
+        "stage/bin/provision-skarbiec-trust": "bin/provision-skarbiec-trust",
+        "stage/libexec/generate-skarbiec-config.mjs": "libexec/generate-skarbiec-config.mjs",
+        "stage/libexec/brama-diagnose.py": "libexec/brama-diagnose.py",
+        "stage/libexec/brama-subscription-report.py": "libexec/brama-subscription-report.py",
+        "stage/libexec/brama-register-workload.py": "libexec/brama-register-workload.py",
+        "stage/libexec/brama-write-capability-routes.py": "libexec/brama-write-capability-routes.py",
+        "stage/libexec/brama-route-probe.py": "libexec/brama-route-probe.py",
+        "stage/libexec/brama-clear-stale-broker.py": "libexec/brama-clear-stale-broker.py",
+        "stage/libexec/brama-repair-inference-routes.py": "libexec/brama-repair-inference-routes.py",
+        "stage/etc/brama-skarbiec/subscriptions.json": "etc/brama-skarbiec/subscriptions.json",
+        "stage/etc/brama-skarbiec/recipient-public-keys.asc": "etc/brama-skarbiec/recipient-public-keys.asc",
+        "stage/LICENSE": "LICENSE"
+      }
+    }
+  },
+  "runtime": {
+    "binary": "bin/brama",
+    "launcher": "bin/start-with-skarbiec",
+    "config_schema": 1,
+    "state_schema": 1,
+    "minimum_stado_version": "0.6.1",
+    "rollback_compatible_with": ["0.2.2"]
+  },
+  "promotion": {
+    "channels": ["candidate", "stable"],
+    "reconcile": true
+  }
+}
