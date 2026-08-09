@@ -457,8 +457,8 @@ unset routes_dir
 # Read every accepted bearer from its dedicated Skarbiec item through the local
 # entitlement router and its exact recipient grant.
 : "${BRAMA_ALLOWED_MODELS:?set exact closed Brama model allowlist}"
-BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES="$(
-  "$PYTHON_BIN" - "$ENTITLEMENTS_ROUTER_BIN" <<'PY'
+identities_file="$runtime_dir/model-router-client-identities.json"
+"$PYTHON_BIN" - "$ENTITLEMENTS_ROUTER_BIN" >"$identities_file" <<'PY'
 import json
 import os
 import subprocess
@@ -556,7 +556,8 @@ for client_id, item, agent_id, allowed_models in sources:
     identities.append(identity)
 sys.stdout.write(json.dumps(identities, separators=(",", ":")))
 PY
-)"
+BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES=$(cat "$identities_file")
+rm -f "$identities_file"
 # Empty is allowed now. The gateway resolves a bearer it does not recognise
 # against Skarbiec, so this list is a warm start rather than a precondition --
 # and building it requires reading every client's secret here, which is what
