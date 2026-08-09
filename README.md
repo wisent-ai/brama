@@ -225,6 +225,11 @@ operator paths. Runnable, risk-labeled workflows are indexed in
 
 - **HTTP inference:** `POST /v1/chat/completions`, `/v1/embeddings`, and
   `/v1/moderations` are the canonical model-execution interfaces.
+- **Account subscriptions:** authenticated Wisent users use
+  `GET|POST /v1/account/subscriptions` and
+  `DELETE /v1/account/subscriptions/:subscription_id`. Brama derives the
+  subscription owner from the verified Wisent session; the caller never
+  supplies an account or agent identifier.
 - **HTTP discovery:** `GET /v1/models`; bearer-only discovery is public catalog
   scope, while signed discovery includes agent-owned availability.
 - **Subscription lifecycle:** `GET`, `POST`, and `DELETE`
@@ -265,13 +270,12 @@ The complete state, error, retry, authorization, and resource contract is in
 - **Credentials:** callers use dedicated bearer items. Request-sign identities
   and provider capabilities remain separate. Secrets are redeemed at final use
   and are not written to JSON configuration, logs, or Brama state.
-- **Network:** clients use the canonical `https://brama.wisent.ai` endpoint.
-  The service binds loopback only; the registered Linux host's ingress proxy
-  terminates HTTPS and proxies to the `BRAMA_PORT` loopback listener. Physical
-  host names, Tailscale addresses, Cloud Run URLs, and local forwards are not
-  client discovery. The host service manager installs verified releases and
-  reloads ingress. Provider endpoints require approved HTTPS hosts, disable
-  redirects, and bypass ambient proxies.
+- **Network:** desktop account clients use the hosted
+  `https://charless-mac-mini.tail6443b3.ts.net` endpoint. Brama remains bound
+  to loopback; the placed host's Tailscale Funnel connector terminates HTTPS
+  and proxies to the `BRAMA_PORT` listener. Self-hosted clients continue to
+  discover logical service addresses through Stado. Provider endpoints require
+  approved HTTPS hosts, disable redirects, and bypass ambient proxies.
 - **Failure:** stable HTTP error codes distinguish invalid input, authentication,
   authorization, quota, timeout, dependency unavailability, and provider
   failure. Retryability is included in the error envelope.

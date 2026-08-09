@@ -70,6 +70,7 @@ const MODEL_ALIASES: &[&str] = &[
     BEST_ALIAS,
 ];
 const BRAMA_DESKTOP_CLIENT_ID: &str = "brama-desktop";
+const BRAMA_USER_CLIENT_ID: &str = "brama-user";
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -86,6 +87,7 @@ struct ModelClientCredential {
 struct ModelClientIdentity {
     client_id: String,
     agent_id: Option<String>,
+    user_id: Option<String>,
     allowed_models: Option<HashSet<String>>,
 }
 impl ModelClientIdentity {
@@ -243,6 +245,7 @@ impl ModelIngressAuth {
                 identity: ModelClientIdentity {
                     client_id: credential.client_id,
                     agent_id: credential.agent_id,
+                    user_id: None,
                     allowed_models,
                 },
                 token_digest,
@@ -375,7 +378,9 @@ impl ModelAliases {
             if !supported {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidInput,
-                    format!("{MODEL_ALIASES_ENV} route for {alias} is not a shape this alias can take"),
+                    format!(
+                        "{MODEL_ALIASES_ENV} route for {alias} is not a shape this alias can take"
+                    ),
                 ));
             }
             // A missing provider capability and a malformed alias table are
@@ -493,24 +498,20 @@ fn exact_agent_header(headers: &HeaderMap, expected: &str) -> bool {
         && values.next().is_none()
 }
 
-/// Resolve a bearer by asking Skarbiec what it is.
-///
-/// The answer is an identity and its capabilities, and the right to reach this
-/// gateway is one of them: `call` on `brama`, with the route in the field, so a
-/// client's reach is a grant in the vault rather than a list compiled into this
-/// binary. A client with no such capability is not a client of this service,
-/// whatever else its credential may be good for.
-///
-/// Cached for seconds, not for the life of the process. That interval is how
-/// long a revoked credential keeps working, and it is the number that replaces
-/// "until somebody restarts the gateway".
+/// Resolve a bearer against the configured service authority, then against
+/// Wisent Identity for the account-scoped desktop surface. Both authorities
+/// fail closed and the result is cached only briefly so revocation remains
+/// effective without restarting the gateway.
 async fn identity_from_authority(headers: &HeaderMap) -> Option<ModelClientIdentity> {
     let bearer = presented_bearer(headers)?;
     let digest = hex::encode(Sha256::digest(bearer.as_bytes()));
     if let Some(cached) = cached_identity(&digest) {
         return cached;
     }
-    let resolved = ask_authority(&bearer).await;
+    let resolved = match ask_authority(&bearer).await {
+        Some(identity) => Some(identity),
+        None => ask_wisent_identity(&bearer).await,
+    };
     remember_identity(digest, resolved.clone());
     resolved
 }
@@ -598,8 +599,51 @@ async fn ask_authority(bearer: &str) -> Option<ModelClientIdentity> {
     Some(ModelClientIdentity {
         client_id,
         agent_id: None,
+        user_id: None,
         allowed_models: Some(routes),
     })
+}
+async fn ask_wisent_identity(bearer: &str) -> Option<ModelClientIdentity> {
+    let base = std::env::var("BRAMA_WISENT_AUTH_URL").ok()?;
+    let anon_key = std::env::var("BRAMA_WISENT_AUTH_ANON_KEY").ok()?;
+    if anon_key.trim().is_empty() {
+        return None;
+    }
+    let mut endpoint = reqwest::Url::parse(base.trim()).ok()?;
+    if endpoint.scheme() != "https" {
+        return None;
+    }
+    endpoint.set_path("/auth/v1/user");
+    endpoint.set_query(None);
+    endpoint.set_fragment(None);
+    let response = crate::providers::adapter::control_client()
+        .ok()?
+        .get(endpoint)
+        .header("apikey", anon_key)
+        .bearer_auth(bearer)
+        .send()
+        .await
+        .ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+    let bytes = response.bytes().await.ok()?;
+    if bytes.len() > 64 * 1024 {
+        return None;
+    }
+    let answer: Value = serde_json::from_slice(&bytes).ok()?;
+    let user_id = answer.get("id").and_then(Value::as_str)?;
+    let normalized = uuid::Uuid::parse_str(user_id).ok()?.to_string();
+    Some(ModelClientIdentity {
+        client_id: BRAMA_USER_CLIENT_ID.to_string(),
+        agent_id: None,
+        user_id: Some(normalized),
+        allowed_models: Some(HashSet::new()),
+    })
+}
+
+fn is_account_path(path: &str) -> bool {
+    path == "/v1/account/subscriptions" || path.starts_with("/v1/account/subscriptions/")
 }
 
 async fn require_model_bearer(
@@ -619,6 +663,7 @@ async fn require_model_bearer(
         },
     };
     if identity.allowed_models.is_some()
+        && !is_account_path(request.uri().path())
         && !matches!(
             request.uri().path(),
             "/v1/chat/completions" | "/v1/embeddings" | "/v1/moderations" | "/v1/models"
@@ -1432,9 +1477,7 @@ async fn list_models(
             catalog_revision = catalog.revision.clone();
             for model in &catalog.models {
                 model_ids.push(model.route_id.clone());
-                if catalog_agent.is_some()
-                    && configured_providers.contains(&model.provider_id)
-                {
+                if catalog_agent.is_some() && configured_providers.contains(&model.provider_id) {
                     available.insert(model.route_id.clone());
                 }
                 registry_metadata.insert(model.route_id.clone(), model.clone());
@@ -1705,16 +1748,24 @@ async fn update_admin_route(
     Ok(Json(json!({"ok": true, "routes": routes})))
 }
 
-async fn list_admin_subscriptions(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-    Path(agent_id): Path<String>,
-) -> Result<Json<Value>, ApiError> {
-    require_brama_desktop(&client_identity)?;
-    if agent_id.is_empty()
-        || !agent_id
+fn valid_agent_id(agent_id: &str) -> bool {
+    !agent_id.is_empty()
+        && agent_id
             .bytes()
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
-    {
+}
+
+fn account_agent_id(identity: &ModelClientIdentity) -> Result<String, ApiError> {
+    let user_id = identity
+        .user_id
+        .as_deref()
+        .filter(|_| identity.client_id == BRAMA_USER_CLIENT_ID)
+        .ok_or_else(|| api_error(StatusCode::FORBIDDEN, "forbidden"))?;
+    Ok(format!("user-{}", user_id.replace('-', "")))
+}
+
+async fn list_subscriptions(agent_id: String) -> Result<Json<Value>, ApiError> {
+    if !valid_agent_id(&agent_id) {
         return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
     }
     let subscriptions = crate::gateway::broker::list_subscriptions(&agent_id)
@@ -1733,17 +1784,11 @@ async fn list_admin_subscriptions(
     ))
 }
 
-async fn create_admin_subscription(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-    Path(agent_id): Path<String>,
-    Json(request): Json<DonateSubscriptionRequest>,
+async fn create_subscription(
+    agent_id: String,
+    request: DonateSubscriptionRequest,
 ) -> Result<Json<Value>, ApiError> {
-    require_brama_desktop(&client_identity)?;
-    if agent_id.is_empty()
-        || !agent_id
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
-    {
+    if !valid_agent_id(&agent_id) {
         return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
     }
     let provider = match request.provider.as_deref().map(str::trim) {
@@ -1785,11 +1830,10 @@ async fn create_admin_subscription(
     })))
 }
 
-async fn retire_admin_subscription(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-    Path((agent_id, subscription_id)): Path<(String, String)>,
+async fn retire_managed_subscription(
+    agent_id: String,
+    subscription_id: String,
 ) -> Result<Json<Value>, ApiError> {
-    require_brama_desktop(&client_identity)?;
     let owned = crate::gateway::broker::list_subscriptions(&agent_id)
         .await
         .into_iter()
@@ -1801,6 +1845,51 @@ async fn retire_admin_subscription(
     crate::gateway::broker::donated_remove(&subscription_id)
         .map_err(|_| api_error(StatusCode::CONFLICT, "subscription retirement failed"))?;
     Ok(Json(json!({"ok": true})))
+}
+
+async fn list_account_subscriptions(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+) -> Result<Json<Value>, ApiError> {
+    list_subscriptions(account_agent_id(&client_identity)?).await
+}
+
+async fn create_account_subscription(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Json(request): Json<DonateSubscriptionRequest>,
+) -> Result<Json<Value>, ApiError> {
+    create_subscription(account_agent_id(&client_identity)?, request).await
+}
+
+async fn retire_account_subscription(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Path(subscription_id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    retire_managed_subscription(account_agent_id(&client_identity)?, subscription_id).await
+}
+
+async fn list_admin_subscriptions(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Path(agent_id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    list_subscriptions(agent_id).await
+}
+
+async fn create_admin_subscription(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Path(agent_id): Path<String>,
+    Json(request): Json<DonateSubscriptionRequest>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    create_subscription(agent_id, request).await
+}
+
+async fn retire_admin_subscription(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Path((agent_id, subscription_id)): Path<(String, String)>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    retire_managed_subscription(agent_id, subscription_id).await
 }
 
 async fn get_stats() -> impl IntoResponse {
@@ -2083,6 +2172,14 @@ pub async fn start_server(port: u16) -> Result<(), std::io::Error> {
             get(list_agent_subscriptions)
                 .post(donate_subscription)
                 .delete(retire_subscription),
+        )
+        .route(
+            "/v1/account/subscriptions",
+            get(list_account_subscriptions).post(create_account_subscription),
+        )
+        .route(
+            "/v1/account/subscriptions/:subscription_id",
+            delete(retire_account_subscription),
         )
         .route("/stats", get(get_stats))
         .route("/v1/admin/snapshot", get(admin_snapshot))
