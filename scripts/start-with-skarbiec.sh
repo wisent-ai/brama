@@ -301,57 +301,12 @@ else
   unset BRAMA_SKARBIEC_TOKEN_FILE
 fi
 
-# A gateway the fleet can actually reach. Brama binds loopback unless it is
-# told otherwise, which is the right default and also the reason nothing off
-# this box could call it: every machine had been handed `127.0.0.1:8080` and
-# reached whatever answered there, which on one of them was an unmanaged
-# second gateway that refused the caller's bearer -- a routing fault wearing a
-# credential fault's clothes.
-#
-# Stado places the service, so Stado knows both halves: the address the placed
-# host should serve on, and which peers arrive over an encrypted link and may
-# therefore speak plaintext to it. Asking is what keeps the two from drifting.
-#
-# Only the placed host binds a routable address. Anywhere else -- no Stado, no
-# placement, or a placement naming another machine -- the gateway keeps its
-# loopback behaviour, so a stray copy can never claim the fleet's address.
-stado_bin=${STADO_BIN:-"${HOME:-/nonexistent}/.stado/bin/stado"}
-[ -x "$stado_bin" ] || stado_bin=$(command -v stado || true)
-bind_json=
-if [ -n "$stado_bin" ]; then
-  bind_json=$("$stado_bin" service directory bind brama --json || true)
-fi
-if [ -n "$bind_json" ]; then
-  bind_host=$(printf '%s' "$bind_json" | "$PYTHON_BIN" -c '
-import json, sys
-try:
-    print(json.load(sys.stdin).get("host", ""))
-except Exception:
-    pass
-')
-  this_host=$("$stado_bin" registry self | { IFS="$(printf "\t")" read -r name _rest || true; printf "%s" "$name"; })
-  if [ -n "$bind_host" ] && [ "$bind_host" = "$this_host" ]; then
-    BRAMA_BIND_ADDRESS=$(printf '%s' "$bind_json" | "$PYTHON_BIN" -c '
-import json, sys
-try:
-    print(json.load(sys.stdin).get("bind_address", ""))
-except Exception:
-    pass
-')
-    BRAMA_ENCRYPTED_PEER_IPS=$(printf '%s' "$bind_json" | "$PYTHON_BIN" -c '
-import json, sys
-try:
-    print(",".join(json.load(sys.stdin).get("encrypted_peers", [])))
-except Exception:
-    pass
-')
-    if [ -n "$BRAMA_BIND_ADDRESS" ]; then
-      export BRAMA_BIND_ADDRESS
-      export BRAMA_ENCRYPTED_PEER_IPS
-      printf '%s\n' "serving the fleet on $BRAMA_BIND_ADDRESS for peers ${BRAMA_ENCRYPTED_PEER_IPS:-none}" >/dev/stderr
-    fi
-  fi
-fi
+# The service directory is host-relative: Stado adapters on this host route to
+# Brama's loopback listener, while public ingress terminates before forwarding
+# locally. Ignore stale deployment variables from the superseded fleet-wide
+# plaintext listener.
+unset BRAMA_BIND_ADDRESS
+unset BRAMA_ENCRYPTED_PEER_IPS
 if [ -e "$SKARBIEC_CAP_SOCKET" ] || [ -L "$SKARBIEC_CAP_SOCKET" ]; then
   [ -S "$SKARBIEC_CAP_SOCKET" ] && [ ! -L "$SKARBIEC_CAP_SOCKET" ] || {
     printf '%s\n' "unsafe stale capability socket: $SKARBIEC_CAP_SOCKET" >/dev/stderr
@@ -895,34 +850,6 @@ while [ ! -S "$SKARBIEC_CAP_SOCKET" ]; do
   sleep 0.05
 done
 
-# Where to listen, and whose hops are already encrypted, both worked out by
-# Stado from the placement and the host records rather than written here. A
-# host the gateway is not placed on gets a refusal, and the variables stay
-# unset: it then binds loopback, which is what an instance nobody placed should
-# be reachable as. Moving the gateway needs no edit in this file.
-if [ -z "${BRAMA_BIND_ADDRESS:-}" ]; then
-  if [ -x "$HOME/.stado/bin/stado" ]; then
-    stado_bin="$HOME/.stado/bin/stado"
-  else
-    stado_bin="$(command -v stado || true)"
-  fi
-  if [ -n "$stado_bin" ]; then
-    serving="$("$stado_bin" service directory bind brama 2>/dev/null || true)"
-    for line in $serving; do
-      case "$line" in
-        bind_address=*) BRAMA_BIND_ADDRESS="${line#bind_address=}" ;;
-        encrypted_peers=*) BRAMA_ENCRYPTED_PEER_IPS="${line#encrypted_peers=}" ;;
-      esac
-    done
-    if [ -n "${BRAMA_BIND_ADDRESS:-}" ]; then
-      export BRAMA_BIND_ADDRESS
-      printf 'serving on %s for the fleet\n' "$BRAMA_BIND_ADDRESS"
-    fi
-    if [ -n "${BRAMA_ENCRYPTED_PEER_IPS:-}" ]; then
-      export BRAMA_ENCRYPTED_PEER_IPS
-    fi
-  fi
-fi
 
 # `exec` on purpose. Supervising the gateway from this shell instead looked
 # tidier -- a trap could then stop the capability broker -- but it put a shell
