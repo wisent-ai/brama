@@ -1406,7 +1406,10 @@ async fn list_models(
     } else {
         None
     };
-    let include_perf = catalog_agent.is_some();
+    // The same condition decides two disclosures: performance history and
+    // whether a model can actually be served. Both are answers about the
+    // caller, so neither is given to a request that has not said who it is.
+    let caller_known = catalog_agent.is_some();
     // Resolved once, not once per model: the per-provider question costs a
     // capability-map parse and a client rebuild, and this catalogue carries
     // thousands of entries. Asking inside the loop made an authenticated
@@ -1506,7 +1509,7 @@ async fn list_models(
                     "fallback": [],
                     "promotion": [],
                 });
-                if include_perf {
+                if caller_known {
                     if let Some(perf) = perf_json(&id) {
                         entry["perf"] = perf;
                     }
@@ -1533,7 +1536,17 @@ async fn list_models(
                 "object": "model",
                 "owned_by": owner,
             });
-            if include_perf {
+            // Whether this gateway can serve the id, for a caller whose
+            // identity makes the answer knowable. `data` is the public
+            // models.dev catalogue, several thousand ids wide, and almost none
+            // of them have a credential behind them on any one installation.
+            // A caller with no way to tell them apart picks a plausible name
+            // and gets `dependency_unavailable` at dispatch -- which is how a
+            // downstream product came to default to a model that had never
+            // been servable here. The Jeden schema has carried this field all
+            // along; the OpenAI-shaped view had nowhere to say it.
+            if caller_known {
+                entry["available"] = json!(available.contains(&id));
                 if let Some(perf) = perf_json(&id) {
                     entry["perf"] = perf;
                 }
