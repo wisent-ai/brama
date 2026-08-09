@@ -10,14 +10,16 @@ umask 077
 # "unavailable" long after start, with /health and /v1/models still answering.
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 bundle_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
-if [ -x "$bundle_root/bin/brama" ] && [ -d "$bundle_root/etc/brama-skarbiec" ]; then
+if [ -x "$bundle_root/bin/brama" ] && [ -x "$bundle_root/bin/skarbiec-entitlements-router" ]; then
   default_brama_bin="$bundle_root/bin/brama"
   default_router_bin="$bundle_root/bin/skarbiec-entitlements-router"
   default_config_dir="$bundle_root/etc/brama-skarbiec"
+  bundled_installation=1
 else
   default_brama_bin=/usr/local/bin/brama
   default_router_bin=/usr/local/bin/skarbiec-entitlements-router
   default_config_dir=/etc/brama-skarbiec
+  bundled_installation=0
 fi
 
 service_env_file=${BRAMA_SERVICE_ENV_FILE:-${HOME:-/nonexistent}/.config/brama/service.env}
@@ -36,9 +38,15 @@ fi
 # launcher from the new bundle starts, runs a binary from the old one, and the
 # gateway never comes up. The override still works for a bundle that does not
 # carry the component.
-if [ -x "$default_brama_bin" ]; then BRAMA_BIN="$default_brama_bin"; fi
-if [ -x "$default_router_bin" ]; then ENTITLEMENTS_ROUTER_BIN="$default_router_bin"; fi
-if [ -d "$default_config_dir" ]; then BRAMA_SKARBIEC_CONFIG_DIR="$default_config_dir"; fi
+if [ "$bundled_installation" -eq 1 ]; then
+  BRAMA_BIN="$default_brama_bin"
+  ENTITLEMENTS_ROUTER_BIN="$default_router_bin"
+  BRAMA_SKARBIEC_CONFIG_DIR="$default_config_dir"
+else
+  if [ -x "$default_brama_bin" ]; then BRAMA_BIN="$default_brama_bin"; fi
+  if [ -x "$default_router_bin" ]; then ENTITLEMENTS_ROUTER_BIN="$default_router_bin"; fi
+  if [ -d "$default_config_dir" ]; then BRAMA_SKARBIEC_CONFIG_DIR="$default_config_dir"; fi
+fi
 BRAMA_BIN=${BRAMA_BIN:-"$default_brama_bin"}
 ENTITLEMENTS_ROUTER_BIN=${ENTITLEMENTS_ROUTER_BIN:-"$default_router_bin"}
 config_dir=${BRAMA_SKARBIEC_CONFIG_DIR:-"$default_config_dir"}
