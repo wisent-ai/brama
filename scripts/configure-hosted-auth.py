@@ -25,27 +25,39 @@ def main() -> None:
     }
 
     trust_dir = Path.home() / ".config" / "brama" / "trust"
-    subscription_target = trust_dir / "subscriptions.json"
     configured_source = configured.get("BRAMA_SKARBIEC_CONFIG_DIR")
-    candidates = []
+    candidate_dirs = []
     if configured_source:
-        candidates.append(Path(configured_source).expanduser() / "subscriptions.json")
-    candidates.extend(
+        candidate_dirs.append(Path(configured_source).expanduser())
+    candidate_dirs.extend(
         sorted(
-            (Path.home() / ".stado" / "services" / "brama").glob(
-                "*/darwin-arm/etc/brama-skarbiec/subscriptions.json"
+            (
+                manifest.parent
+                for manifest in (Path.home() / ".stado" / "services" / "brama").glob(
+                    "*/darwin-arm/etc/brama-skarbiec/subscriptions.json"
+                )
             ),
-            key=lambda candidate: candidate.stat().st_mtime,
+            key=lambda candidate: (candidate / "subscriptions.json").stat().st_mtime,
             reverse=True,
         )
     )
-    if not subscription_target.exists():
-        source = next((candidate for candidate in candidates if candidate.is_file()), None)
+    for manifest_name in ("subscriptions.json", "recipient-public-keys.asc"):
+        target = trust_dir / manifest_name
+        if target.exists():
+            continue
+        source = next(
+            (
+                candidate / manifest_name
+                for candidate in candidate_dirs
+                if (candidate / manifest_name).is_file()
+            ),
+            None,
+        )
         if source is None:
-            raise SystemExit("cannot locate the existing Brama subscriptions manifest")
+            raise SystemExit(f"cannot locate the existing Brama {manifest_name}")
         trust_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, subscription_target)
-        subscription_target.chmod(0o600)
+        shutil.copyfile(source, target)
+        target.chmod(0o600)
 
     values = {
         **AUTH_VALUES,
