@@ -14,9 +14,8 @@ name: version-check
 # the candidate is recomputed. A check that rebuilt both sides would always agree with
 # itself and would gate nothing.
 #
-# This deliberately does not gate `release.yml` with `needs:`. Tag publication builds the
-# candidate independently, while this workflow checks that the committed baseline still
-# names the best complete GitHub Release consumers can download.
+# A successful push to main tags the version already declared in Cargo.toml.
+# The existing v* release workflow remains the sole artifact publisher.
 
 on:
   pull_request:
@@ -80,3 +79,12 @@ jobs:
             false
           fi
           echo "Baseline $have matches the independent GitHub release channel."
+
+  tag:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [rust-gates, contract, baseline]
+    permissions:
+      contents: write
+    uses: wisent-ai/quality-control/.github/workflows/tag-on-manifest-bump.yml@897485548846d7dfe38832b6b9a38212cdd1685a
+    with:
+      manifest: Cargo.toml
