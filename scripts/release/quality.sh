@@ -19,6 +19,9 @@ if [[ "$declared" != "$version" ]]; then
 fi
 
 cargo fmt --manifest-path "$manifest" -- --check
+cargo clippy --locked --all-targets \
+  --manifest-path "$manifest" -- -D warnings
+python3 "$source_dir/scripts/surface.py" >/dev/null
 sh -n "$source_dir/scripts/start-with-skarbiec.sh"
 sh -n "$source_dir/scripts/provision-skarbiec-trust.sh"
 python3 "$source_dir/scripts/check-launcher-blocks.py" \
