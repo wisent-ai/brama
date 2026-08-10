@@ -708,10 +708,6 @@ async fn put_subscription_credential(
     put_credential(&item_id, credential).await
 }
 
-fn subscription_prefix(agent_id: &str) -> String {
-    format!("brama-sub-{}-", slug(agent_id))
-}
-
 fn complete_field(value: Option<String>) -> Option<String> {
     value.filter(|field| !field.is_empty() && field.trim() == field)
 }
@@ -747,31 +743,41 @@ fn configured_subscriptions(agent_id: &str) -> Option<Result<Vec<SubscriptionEnt
 /// One vault item row from the entitlements router's bare `list` command.
 #[derive(Debug, Deserialize)]
 struct VaultListItem {
-    id: Option<String>,
+    #[serde(default)]
+    tags: Vec<String>,
     #[serde(default)]
     deleted: bool,
 }
 
-/// Map the router's full vault listing to one agent's subscriptions. Vault
-/// resource ids look like `provider:<provider>:<rest>`; the `brama-sub-<agent>-`
-/// prefix applies to `<rest>` only, after the `provider:<provider>:` segment is
-/// stripped. Non-deleted resources become active entries keyed by `<rest>`.
+fn subscription_tag_value<'a>(tags: &'a [String], prefix: &str) -> Option<&'a str> {
+    tags.iter().find_map(|tag| {
+        tag.strip_prefix(prefix)
+            .and_then(|value| (!value.is_empty()).then_some(value))
+    })
+}
+
+/// Map the router's full vault listing to one agent's subscriptions. An item
+/// is a subscription when it carries the `brama:subscription` tag plus
+/// `brama:agent:<agent>`; `brama:provider:` and `brama:id:` tags carry the
+/// provider and subscription id, so item ids stay opaque and renames are safe.
+/// Non-deleted resources become active entries.
 fn parse_live_subscriptions(output: &[u8], agent_id: &str) -> Result<Vec<SubscriptionEntry>, ()> {
-    let prefix = subscription_prefix(agent_id);
+    let agent_tag = format!("brama:agent:{agent_id}");
     let items: Vec<VaultListItem> = serde_json::from_slice(output).map_err(|_| ())?;
     Ok(items
         .into_iter()
         .filter(|item| !item.deleted)
+        .filter(|item| {
+            item.tags.iter().any(|tag| tag == "brama:subscription")
+                && item.tags.iter().any(|tag| tag == &agent_tag)
+        })
         .filter_map(|item| {
-            let id = complete_field(item.id)?;
-            let resource = id.strip_prefix("provider:")?;
-            let (provider, rest) = resource.split_once(':')?;
-            if !rest.starts_with(&prefix) {
-                return None;
-            }
             Some(SubscriptionEntry {
-                id: rest.to_owned(),
-                provider: provider.trim().to_lowercase().replace('_', "-"),
+                id: subscription_tag_value(&item.tags, "brama:id:")?.to_owned(),
+                provider: subscription_tag_value(&item.tags, "brama:provider:")?
+                    .trim()
+                    .to_lowercase()
+                    .replace('_', "-"),
                 status: "active".to_owned(),
             })
         })

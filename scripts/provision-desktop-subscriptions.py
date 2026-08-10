@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Materialize the four Brama Desktop subscription items without printing secrets."""
+"""Materialize the four Brama Desktop subscription items without printing secrets.
+
+Discovery contract: a subscription item is any vault bundle tagged
+`brama:subscription` plus `brama:agent:<agent>` for every owning agent. The
+provider and the subscription id travel in `brama:provider:<name>` and
+`brama:id:<name>` tags, so the item id itself is opaque and renames break
+nothing.
+"""
 
 from __future__ import annotations
 
@@ -18,11 +25,12 @@ RECIPIENTS = (
     "skarbiec-owner-20260728 <lukaszbartoszcze@wisent.ai>",
     "brama-rtx@wisent.local",
 )
-PRIMARY = "provider:codex:brama-sub-wisent-app-codex-primary"
+CATALOG = Path(__file__).with_name("skarbiec-subscriptions.json")
 SOURCES = {
-    "provider:codex:brama-sub-wisent-app-codex-secondary": "codex-reauth-config",
-    "provider:claude-code:brama-sub-wisent-app-claude-primary": "claude-reauth-config",
-    "provider:kimi:brama-sub-wisent-app-kimi-primary": "kimi-reauth-config",
+    "brama-sub-wisent-app-codex-primary": "codex-reauth-config",
+    "brama-sub-wisent-app-codex-secondary": "codex-reauth-config",
+    "brama-sub-wisent-app-claude-primary": "claude-reauth-config",
+    "brama-sub-wisent-app-kimi-primary": "kimi-reauth-config",
 }
 ENVIRONMENT = {
     **os.environ,
@@ -48,7 +56,7 @@ def read_item(identifier: str) -> dict[str, object]:
     return document
 
 
-def write_subscription(target: str, source: str) -> None:
+def write_subscription(item_id: str, entry: dict[str, object], source: str) -> None:
     document = read_item(source)
     document["kind"] = "bundle"
     context = document.get("context")
@@ -57,13 +65,23 @@ def write_subscription(target: str, source: str) -> None:
         document["context"] = context
     context["source_item"] = source
     context["subscription_owner"] = "wisent-app"
+    subscription_id = str(entry["id"])
+    agents = [str(agent) for agent in entry.get("agents", ["wisent-app"])]
+    tags = [
+        "brama:subscription",
+        f"brama:provider:{entry['provider']}",
+        f"brama:id:{subscription_id}",
+        *[f"brama:agent:{agent}" for agent in agents],
+    ]
     written = subprocess.run(
         [
             str(SKARBIEC),
             "set-json",
-            target,
+            item_id,
             "--recipients",
             ",".join(RECIPIENTS),
+            "--tags",
+            ",".join(tags),
         ],
         input=json.dumps(document),
         capture_output=True,
@@ -72,11 +90,14 @@ def write_subscription(target: str, source: str) -> None:
         check=False,
     )
     if written.returncode:
-        raise SystemExit(f"cannot write subscription item {target}: {written.stderr.strip()}")
-    print(target)
+        raise SystemExit(f"cannot write subscription item {item_id}: {written.stderr.strip()}")
+    print(item_id)
 
 
-read_item(PRIMARY)
-print(PRIMARY)
-for target, source in SOURCES.items():
-    write_subscription(target, source)
+catalog = json.loads(CATALOG.read_text())
+for row in catalog:
+    subscription_id = row["id"]
+    source = SOURCES.get(subscription_id)
+    if source is None:
+        raise SystemExit(f"catalog entry {subscription_id} has no source credential mapping")
+    write_subscription(f"provider:{row['provider']}:{subscription_id}", row, source)
