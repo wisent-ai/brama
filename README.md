@@ -275,6 +275,14 @@ The complete state, error, retry, authorization, and resource contract is in
   records. `/tmp/brama-perf.json` contains replaceable process telemetry. The
   entitlements router owns encrypted subscription credential storage in
   managed deployments.
+- **Subscription discovery:** a provider subscription is a Skarbiec item tagged
+  `brama:subscription` and `brama:agent:<agent>`, carrying its provider and
+  subscription id in `brama:provider:<provider>` and `brama:id:<id>`. Both the
+  gateway and Brama Desktop filter on those tags, so vault item ids are opaque
+  and renaming one changes nothing. `scripts/provision-desktop-subscriptions.py`
+  writes the owner vault and `scripts/provision-host-subscriptions.sh` writes a
+  managed host's vault; both are idempotent and derive their tags from
+  `scripts/skarbiec-subscriptions.json`.
 - **Credentials:** callers use dedicated bearer items. Request-sign identities
   and provider capabilities remain separate. Secrets are redeemed at final use
   and are not written to JSON configuration, logs, or Brama state. Standalone
