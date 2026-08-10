@@ -10,9 +10,9 @@
 
 # Brama: Keep All Your Models Accessible Through One Endpoint
 
-Brama gives Wisent services one authenticated, provider-neutral HTTP gateway for
-LLM inference while keeping client identity, subscription ownership, provider
-credentials, and routing policy under Wisent control.
+Brama gives each user and Wisent service one authenticated, provider-neutral
+HTTP gateway for LLM inference without coupling callers to one provider or
+requiring a Wisent-operated backend.
 
 Canonical repository: [`wisent-ai/brama`](https://github.com/wisent-ai/brama).
 The product, Rust crate, binary, CLI, MCP server, and service are named `brama`.
@@ -24,8 +24,9 @@ credentials into every caller, coupling callers to provider wire formats, or
 silently charging the wrong account. Direct provider integrations also duplicate
 model discovery, OAuth refresh, retry, error handling, and access policy.
 
-Brama serves three audiences:
-
+Brama serves four audiences:
+- **Desktop users** run a private Brama process on their own computer and add
+  their own provider credentials or subscriptions.
 - **Wisent service developers** use one OpenAI-compatible API and stable logical
   aliases instead of provider credentials and provider-specific clients.
 - **Jeden runtimes** use an agent-bound HMAC identity to discover and spend only
@@ -48,8 +49,9 @@ provider attempts, normalized errors, and auditable routing decisions.
 - Agent-scoped selectors: `any`, `any-vision-capable`, and `task:<task-name>`.
 - Direct provider capabilities owned by Brama and subscription capabilities
   delegated to one agent.
-- Final-use secret redemption through the local Skarbiec capability socket.
-- Live subscription discovery through `entitlements-router` with a bounded cache.
+- Final-use secret redemption through the local Skarbiec capability socket in
+  managed deployments, or a zeroizing in-memory credential map in standalone
+  desktop deployments.
 - Bounded credential rotation for authentication, quota, and rate-limit failures.
 - OAuth refresh for Claude Code, Codex, and Kimi subscription credentials.
 - An append-only operational journal for retirement and task-quality evidence.
@@ -264,23 +266,24 @@ The complete state, error, retry, authorization, and resource contract is in
   per request, rejects symlinks and group/other-readable files, accepts only
   Tailscale IPv4 deployment endpoints, fails closed on malformed updates, and
   attempts centrally declared fallback routes in order.
-- **Desktop credential:** Brama Desktop proves its local Ed25519 workload key
-  to Skarbiec for the exact
-  `acquire:brama-desktop-model-router#token` scope. The one-time acquisition
-  bearer is consumed immediately; the Brama model-router bearer remains only
-  in process memory and is reacquired after restart.
+- **Desktop credentials:** standalone Brama Desktop launches its bundled Brama
+  binary on loopback, sends provider credentials once over the child process's
+  standard input, and keeps both its router bearer and provider credentials out
+  of process arguments, files, logs, and Brama state. A Stado-discovered Brama
+  installation may instead acquire its scoped bearer from Skarbiec.
 - **State:** `$BRAMA_STATE_DIR/journal.jsonl` contains retirement and quality
   records. `/tmp/brama-perf.json` contains replaceable process telemetry. The
-  entitlements router owns encrypted provider credential storage.
+  entitlements router owns encrypted subscription credential storage in
+  managed deployments.
 - **Credentials:** callers use dedicated bearer items. Request-sign identities
   and provider capabilities remain separate. Secrets are redeemed at final use
-  and are not written to JSON configuration, logs, or Brama state.
-- **Network:** desktop account clients use the hosted
-  `https://charless-mac-mini.tail6443b3.ts.net` endpoint. Brama remains bound
-  to loopback; the placed host's Tailscale Funnel connector terminates HTTPS
-  and proxies to the `BRAMA_PORT` listener. Self-hosted clients continue to
-  discover logical service addresses through Stado. Provider endpoints require
-  approved HTTPS hosts, disable redirects, and bypass ambient proxies.
+  and are not written to JSON configuration, logs, or Brama state. Standalone
+  launchers pass a provider-to-credential JSON object to
+  `brama serve --local-credentials-stdin` over standard input.
+- **Network:** Brama binds to loopback. Standalone desktop clients use their
+  bundled process; managed clients may discover a local Brama service through
+  Stado. Provider endpoints require approved HTTPS hosts, disable redirects,
+  and bypass ambient proxies.
 - **Failure:** stable HTTP error codes distinguish invalid input, authentication,
   authorization, quota, timeout, dependency unavailability, and provider
   failure. Retryability is included in the error envelope.

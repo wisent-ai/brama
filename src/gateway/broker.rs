@@ -1,8 +1,8 @@
 //! Credential seams for Brama.
 //!
-//! Capability redemption through the local Skarbiec broker is authoritative.
-//! Missing, malformed, or unavailable capability configuration fails closed;
-//! Brama never falls back to an ambient secret or remote credential store.
+//! Capability redemption through the local Skarbiec broker is authoritative
+//! for managed installations. A standalone desktop installation may instead
+//! install an in-memory provider credential map before the server starts.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::warn;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::capability::{CapabilityClient, CapabilityRef, Secret};
 
@@ -29,6 +30,8 @@ const DEFAULT_DONATION_RECIPIENT: &str = "brama-service";
 
 static OAUTH_REFRESH_LOCK: LazyLock<tokio::sync::Mutex<()>> =
     LazyLock::new(|| tokio::sync::Mutex::new(()));
+static LOCAL_PROVIDER_CREDENTIALS: OnceLock<HashMap<String, Zeroizing<Vec<u8>>>> =
+    OnceLock::new();
 
 /// Fold an identifier into the stable resource alphabet used by deployment
 /// bindings. The original identifier remains the lookup key in trusted config.
@@ -39,6 +42,41 @@ pub fn slug(value: &str) -> String {
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect()
+}
+
+/// Install direct provider credentials supplied by the standalone desktop
+/// launcher. The JSON input is consumed and zeroized; plaintext then remains
+/// only in zeroizing process memory for this server lifetime.
+pub fn install_local_provider_credentials(encoded: &mut String) -> Result<(), String> {
+    let parsed: Result<HashMap<String, String>, _> = serde_json::from_str(encoded);
+    encoded.zeroize();
+    let mut parsed =
+        parsed.map_err(|error| format!("local provider credentials are invalid: {error}"))?;
+    if parsed
+        .iter()
+        .any(|(provider, value)| provider.trim().is_empty() || value.is_empty())
+    {
+        parsed.values_mut().for_each(Zeroize::zeroize);
+        return Err("local provider names and credentials must be non-empty".to_owned());
+    }
+    let mut credentials = HashMap::with_capacity(parsed.len());
+    for (provider, mut value) in parsed {
+        credentials.insert(
+            provider.trim().to_owned(),
+            Zeroizing::new(value.as_bytes().to_vec()),
+        );
+        value.zeroize();
+    }
+    LOCAL_PROVIDER_CREDENTIALS
+        .set(credentials)
+        .map_err(|_| "local provider credentials were already installed".to_owned())
+}
+
+fn local_provider_credential(provider: &str) -> Option<Secret> {
+    LOCAL_PROVIDER_CREDENTIALS
+        .get()?
+        .get(provider)
+        .map(|value| Secret::from_bytes(value.as_slice().to_vec()))
 }
 
 /// The coordinate a direct provider credential is read from.
@@ -163,7 +201,10 @@ pub async fn get_agent_auth_secret(agent_id: &str) -> Option<Secret> {
 /// The work does not vary per provider, so it is done once here and the answer
 /// is a set membership test.
 pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
-    let mut configured = std::collections::HashSet::new();
+    let mut configured = LOCAL_PROVIDER_CREDENTIALS
+        .get()
+        .map(|credentials| credentials.keys().cloned().collect())
+        .unwrap_or_default();
     if client().is_none() {
         return configured;
     }
@@ -190,6 +231,12 @@ pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
 /// proof that the path works, and is far cheaper than a gateway that starts
 /// and refuses every request.
 pub fn provider_capability_configured(provider: &str) -> bool {
+    if LOCAL_PROVIDER_CREDENTIALS
+        .get()
+        .is_some_and(|credentials| credentials.contains_key(provider))
+    {
+        return true;
+    }
     let resource = provider_resource(provider);
     if client().is_none() {
         return false;
@@ -210,6 +257,9 @@ pub fn provider_capability_configured(provider: &str) -> bool {
 /// a fresh capability and redeem that. Both attempts go through the same
 /// broker, and neither ever holds plaintext beyond the returned [`Secret`].
 pub async fn provider_credential(provider: &str) -> Option<Secret> {
+    if let Some(secret) = local_provider_credential(provider) {
+        return Some(secret);
+    }
     let resource = provider_resource(provider);
     // Every step below can fail, and this used to return None for all of them,
     // so a caller saw one sentence -- "credential is unavailable" -- covering a

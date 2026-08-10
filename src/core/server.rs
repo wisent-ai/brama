@@ -320,13 +320,17 @@ struct ModelAliases {
 }
 
 impl ModelAliases {
-    fn from_env() -> Result<Self, std::io::Error> {
-        let encoded = std::env::var(MODEL_ALIASES_ENV).map_err(|_| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("{MODEL_ALIASES_ENV} is required"),
-            )
-        })?;
+    fn from_env(require_exact_aliases: bool) -> Result<Self, std::io::Error> {
+        let encoded = match std::env::var(MODEL_ALIASES_ENV) {
+            Ok(encoded) => encoded,
+            Err(_) if !require_exact_aliases => "{}".to_owned(),
+            Err(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("{MODEL_ALIASES_ENV} is required"),
+                ));
+            }
+        };
         let routes: HashMap<String, String> = serde_json::from_str(&encoded).map_err(|error| {
             std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
@@ -348,7 +352,9 @@ impl ModelAliases {
             .copied()
             .map(str::to_string)
             .collect::<HashSet<_>>();
-        if effective_routes.keys().cloned().collect::<HashSet<_>>() != expected {
+        if require_exact_aliases
+            && effective_routes.keys().cloned().collect::<HashSet<_>>() != expected
+        {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 format!("{MODEL_ALIASES_ENV} must contain the exact named alias set"),
@@ -2150,12 +2156,14 @@ async fn retire_subscription(
     (StatusCode::OK, Json(json!({"ok": true})))
 }
 
-pub async fn start_server(port: u16) -> Result<(), std::io::Error> {
+pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Error> {
     let _ = STARTED_AT.elapsed();
     let ingress_auth = ModelIngressAuth::from_env()?;
-    ingress_auth.requires_exact_aliases("wisent-backend", WISENT_MODEL_ALIASES)?;
-    ingress_auth.requires_exact_aliases("weles", &[WELES_AGENT_PRIMARY_ALIAS])?;
-    let aliases = ModelAliases::from_env()?;
+    if !standalone {
+        ingress_auth.requires_exact_aliases("wisent-backend", WISENT_MODEL_ALIASES)?;
+        ingress_auth.requires_exact_aliases("weles", &[WELES_AGENT_PRIMARY_ALIAS])?;
+    }
+    let aliases = ModelAliases::from_env(!standalone)?;
     // Touch the perf registry so persisted stats load at startup, not on first use.
     info!(
         models = crate::core::perf::tracked_count(),
