@@ -10,9 +10,14 @@
 
 # Brama: Keep All Your Models Accessible Through One Endpoint
 
-Brama gives each user and Wisent service one authenticated, provider-neutral
-HTTP gateway for LLM inference without coupling callers to one provider or
-requiring a Wisent-operated backend.
+All Models and Providers United in One API.
+
+Brama is the simplicity your stack needs. One API, one identity, uniting every
+model you own in one API. When you switch from Claude-Cthulu to GPT-Bazillion or
+cancel your subscription, you won’t have to update it everywhere. Define
+heuristics such as best, fast, or cheap to call this endpoint with intelligent
+routing. And every token is attributed, so you can audit where your subscription
+and API money is going. Host it anywhere — even on remote devices.
 
 Canonical repository: [`wisent-ai/brama`](https://github.com/wisent-ai/brama).
 The product, Rust crate, binary, CLI, MCP server, and service are named `brama`.
