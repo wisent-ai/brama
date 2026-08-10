@@ -17,12 +17,11 @@ answer it instead, and a machine maintains both:
 - `released-surface.json` names the newest release this repository has recorded;
   `scripts/baseline.py --write` regenerates it from that release rather than
   from the working tree;
-- the repository's GitHub Releases list is authoritative for what a consumer can
-  actually download.
+- the canonical Stado release receipt names the immutable source snapshot,
+  staged archive, digest, qualification, and promoted channel.
 
-A tag alone is not a release. A tagged revision whose release workflow did not
-finish leaves a coordinate with nothing installable behind it, so confirm the
-release and its assets exist before treating any tag as a release coordinate.
+A tag alone is not a release. Treat a coordinate as installable only after
+Stado has stored the signed release receipt and reconciled its channel.
 
 ## Canonical product version
 
@@ -33,11 +32,11 @@ release notes derive from it.
 Product version and source revision are separate:
 
 - `product_version`: SemVer from `Cargo.toml`;
-- `source_revision`: the exact Git commit selected for the build;
+- `source_revision`: the immutable source snapshot selected by Stado;
 - `platform`: target OS and architecture;
 - `artifact_digest`: SHA-256 of the immutable runtime archive;
 - `built_at`: UTC build timestamp;
-- `provenance`: the release manifest shipped with the artifact.
+- `provenance`: the canonical Stado release receipt.
 
 A commit SHA must not be presented as the product version. An artifact without
 all five identities is not releasable.
@@ -89,13 +88,11 @@ revision, platform, and digest.
 
 ## Release artifacts
 
-A release publishes immutable assets on the matching GitHub Release:
+A release stores one immutable archive and signed receipt per platform:
 
 ```text
-brama-vX.Y.Z-linux-amd64.tar.gz
-brama-vX.Y.Z-linux-amd64.tar.gz.sha256
-brama-vX.Y.Z-darwin-arm64.tar.gz
-brama-vX.Y.Z-darwin-arm64.tar.gz.sha256
+stado://releases/brama/X.Y.Z/linux-amd64/release.tar.gz
+stado://releases/brama/X.Y.Z/darwin-arm64/release.tar.gz
 ```
 
 Each archive expands to:
@@ -109,17 +106,15 @@ libexec/generate-skarbiec-config.mjs
 etc/brama-skarbiec/subscriptions.json
 etc/brama-skarbiec/recipient-public-keys.asc
 LICENSE
-provenance.json
 ```
 
-`bin/skarbiec-entitlements-router` is a second product's binary, built from the
-revision pinned by the `SKARBIEC_RELEASE_REVISION` repository variable. Brama
-cannot redeem a provider capability without it, so the release ships it rather
-than asking an operator to match two versions by hand. `provenance.json`
-records product name, product version, source revision, that Skarbiec revision
-under `dependencies.skarbiec`, platform, build timestamp, and builder identity.
-The `.sha256` sidecar records the archive digest because an archive cannot
-contain its own final digest.
+`bin/skarbiec-entitlements-router` is a second product's binary. The
+`.wisent-release.json` input pins its immutable Skarbiec source URI and SHA-256,
+and Stado verifies and mounts that snapshot before invoking the build. Brama
+therefore ships the compatible router without cloning another provider or
+asking an operator to match two versions by hand. Stado records source inputs,
+builder identity, stage paths, and the final archive digest in the release
+receipt.
 
 An archive never contains the Skarbiec vault, provider credentials, host-specific
 runtime configuration, Brama journal state, or any signing key.
@@ -179,7 +174,7 @@ refusal.
 
 ## Qualification gate
 
-Before creating a tag or publishing a stable GitHub Release, the release owner records:
+Before promoting a stable Stado release, the release owner records:
 
 - README, onboarding, core, integration, example, and test contracts agree;
 - the public-surface decision and required version agree;
@@ -199,16 +194,13 @@ No narrow check qualifies unexecuted layers.
 2. Review the full public contract, not only CLI command names.
 3. Select and commit the required SemVer change in `Cargo.toml` and lockfile.
 4. Update `CHANGELOG.md`, compatibility, migration, and operator actions.
-5. Build once in the digest-pinned builder with `--locked`.
-6. Produce provenance and the runtime archive for one platform.
-7. Record SHA-256 and qualification evidence.
-8. Create the immutable SemVer tag for that exact revision.
-9. Let `.github/workflows/release.yml` publish every supported archive and
-   checksum to the matching GitHub Release without overwrite.
-10. Download the target archive on the service host and verify its checksum.
-11. Install it under an immutable versioned path and switch the host service
-    manager only after operator-approved checks.
-12. Update `released-surface.json` from the complete release consumers can obtain.
+5. Submit the immutable source snapshot to Stado.
+6. Let Stado resolve `.wisent-release.json`, verify pinned inputs, run the
+   platform recipe, stage the archive, and store the signed release receipt.
+7. Promote the exact version to `candidate`.
+8. Reconcile the candidate on the target service and record qualification.
+9. Promote the same immutable receipts to `stable`.
+10. Update `released-surface.json` from the complete canonical release.
 
 Steps that execute validation or contact environments require the explicit
 approval described in [`TESTING.md`](TESTING.md).
@@ -246,14 +238,13 @@ records.
 
 ## Upgrade
 
-1. Resolve the target SemVer, platform, archive URL, and digest from GitHub Releases.
+1. Resolve the target SemVer, platform, archive URI, and digest from Stado.
 2. Read every intervening release note and required operator action.
 3. Preserve the append-only journal and any operator-required vault backup.
-4. Download the immutable archive to the operator-managed host.
-5. Verify the published checksum before extraction.
-6. Install under a new versioned directory and update the host service manager.
-7. Confirm the approved health/version outcome and one authorized catalog path.
-8. Retain the previous immutable runtime until the rollback window closes.
+4. Let Stado install the digest-pinned archive under a new versioned directory.
+5. Reconcile the selected channel to the host service manager.
+6. Confirm the approved health/version outcome and one authorized catalog path.
+7. Retain the previous immutable runtime until the rollback window closes.
 
 ## Rollback and recovery
 
