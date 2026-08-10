@@ -30,8 +30,7 @@ const DEFAULT_DONATION_RECIPIENT: &str = "brama-service";
 
 static OAUTH_REFRESH_LOCK: LazyLock<tokio::sync::Mutex<()>> =
     LazyLock::new(|| tokio::sync::Mutex::new(()));
-static LOCAL_PROVIDER_CREDENTIALS: OnceLock<HashMap<String, Zeroizing<Vec<u8>>>> =
-    OnceLock::new();
+static LOCAL_PROVIDER_CREDENTIALS: OnceLock<HashMap<String, Zeroizing<Vec<u8>>>> = OnceLock::new();
 
 /// Fold an identifier into the stable resource alphabet used by deployment
 /// bindings. The original identifier remains the lookup key in trusted config.
@@ -220,7 +219,6 @@ pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
     configured
 }
 
-
 /// Return whether this installation can obtain a direct provider capability.
 ///
 /// Startup validation refuses an alias whose provider has none, so this has to
@@ -296,8 +294,7 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
     } else {
         warn!(
             event = "provider_credential_not_configured",
-            provider,
-            "no capability was issued for this provider at boot; asking for one now"
+            provider, "no capability was issued for this provider at boot; asking for one now"
         );
     }
     let Some(fresh) = issue_capability(PROVIDER_PURPOSE, &resource).await else {
