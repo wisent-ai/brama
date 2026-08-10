@@ -84,7 +84,7 @@ provider attempts, normalized errors, and auditable routing decisions.
 | Claude Code donation endpoint | Authorized agent and entitlements router | Implemented |
 | Deployment-managed local inference routing | Linux GPU target over Tailscale | Implemented |
 | Outbound response streaming | — | Not supported |
-| Immutable public release | GitHub Releases for `linux-amd64` and `darwin-arm64` | Implemented; `released-surface.json` names the newest recorded release |
+| Immutable public release | Canonical Stado channels for `linux-amd64` and `darwin-arm64` | Implemented; `released-surface.json` names the newest recorded release |
 | Per-installation Skarbiec trust material | Operator-managed host | Implemented; `bin/provision-skarbiec-trust` generates it and the launcher refuses to start without it |
 | Declared 1.0 contract stability | — | Not yet declared |
 
@@ -299,7 +299,7 @@ The complete state, error, retry, authorization, and resource contract is in
 - **Current source version:** the `version` field in `Cargo.toml`, which is the
   single canonical source; this page does not duplicate the number.
 - **Supported source:** public `main` for development; immutable releases are
-  published on GitHub Releases.
+  built, stored, and promoted through Stado.
 - **Issues and operator support:**
   [`wisent-ai/brama` issues](https://github.com/wisent-ai/brama/issues);
   see [`SUPPORT.md`](SUPPORT.md).
