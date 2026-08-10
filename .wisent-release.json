@@ -19,11 +19,15 @@
       "quality": [
         {
           "name": "brama-release-quality",
-          "argv": ["scripts/release/quality.sh"]
+          "argv": [
+            "scripts/release/quality.sh"
+          ]
         }
       ],
       "build": {
-        "argv": ["scripts/release/build.sh"]
+        "argv": [
+          "scripts/release/build.sh"
+        ]
       },
       "stage": {
         "stage/bin/brama": "bin/brama",
@@ -41,17 +45,22 @@
         "stage/etc/brama-skarbiec/subscriptions.json": "etc/brama-skarbiec/subscriptions.json",
         "stage/etc/brama-skarbiec/recipient-public-keys.asc": "etc/brama-skarbiec/recipient-public-keys.asc",
         "stage/LICENSE": "LICENSE"
-      }
+      },
+      "runner_platform": "darwin-arm64"
     },
     "linux-amd64": {
       "quality": [
         {
           "name": "brama-release-quality",
-          "argv": ["scripts/release/quality.sh"]
+          "argv": [
+            "scripts/release/quality.sh"
+          ]
         }
       ],
       "build": {
-        "argv": ["scripts/release/build.sh"]
+        "argv": [
+          "scripts/release/build.sh"
+        ]
       },
       "stage": {
         "stage/bin/brama": "bin/brama",
@@ -69,7 +78,8 @@
         "stage/etc/brama-skarbiec/subscriptions.json": "etc/brama-skarbiec/subscriptions.json",
         "stage/etc/brama-skarbiec/recipient-public-keys.asc": "etc/brama-skarbiec/recipient-public-keys.asc",
         "stage/LICENSE": "LICENSE"
-      }
+      },
+      "runner_platform": "linux-amd64"
     }
   },
   "runtime": {
@@ -78,10 +88,15 @@
     "config_schema": 1,
     "state_schema": 1,
     "minimum_stado_version": "0.6.1",
-    "rollback_compatible_with": ["0.2.2"]
+    "rollback_compatible_with": [
+      "0.2.2"
+    ]
   },
   "promotion": {
-    "channels": ["candidate", "stable"],
+    "channels": [
+      "candidate",
+      "stable"
+    ],
     "reconcile": true
   }
 }
