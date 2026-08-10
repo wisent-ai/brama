@@ -471,13 +471,16 @@ all_models = os.environ["BRAMA_ALLOWED_MODELS"].split(",")
 backend_models = [model for model in all_models if model.startswith("wisent-backend/")]
 weles_models = ["weles/agent/primary"]
 tama_models = ["-best"]
-# Lem's figure pipeline uses Codex to create the reviewable SVG intermediate
-# before the provider-neutral TikZ conversion. Literature reads remain capped
-# to the two chat aliases.
+# Lem's figure pipeline asks for a capability, not a vendor: `any-vision-capable`
+# for judging a rendered figure and `any` for drafting one. Pinning the client to
+# a model name dated the allowlist to whatever was current the day it was written
+# and made every model change a Brama edit. Literature reads remain capped to the
+# two chat aliases.
 lem_models = [
     "wisent-backend/chat/primary",
     "wisent-backend/chat/fallback",
-    "codex/gpt-5.5",
+    "any",
+    "any-vision-capable",
 ]
 sources = [
     ("content-platform-production", "content-platform-production-model-router", "content-platform", None),
