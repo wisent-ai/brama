@@ -22,7 +22,24 @@ from pathlib import Path
 HOME = Path(os.environ.get("HOME", "."))
 STADO = HOME / ".stado" / "bin" / "stado"
 SKARBIEC = HOME / ".stado" / "bin" / "skarbiec"
-VAULT = HOME / ".stado" / "skarbiec.vault.json"
+SERVICE_ENV = Path(
+    os.environ.get("BRAMA_SERVICE_ENV_FILE", str(HOME / ".config" / "brama" / "service.env"))
+)
+
+
+def service_vault() -> Path:
+    configured = os.environ.get("SKARBIEC_VAULT_FILE", "")
+    if configured:
+        return Path(configured)
+    if SERVICE_ENV.is_file():
+        for line in SERVICE_ENV.read_text(errors="replace").splitlines():
+            name, separator, value = line.partition("=")
+            if separator and name.strip() == "SKARBIEC_VAULT_FILE":
+                return Path(value.strip().strip('"').strip("'"))
+    return HOME / ".stado" / "skarbiec.vault.json"
+
+
+VAULT = service_vault()
 TARGET = os.environ.get("AGENT_SECRET_TARGET", "lukasz-macbook")
 ITEM = os.environ.get("AGENT_SECRET_ITEM", "agent:wisent-app")
 FIELD = os.environ.get("AGENT_SECRET_FIELD", "value")
