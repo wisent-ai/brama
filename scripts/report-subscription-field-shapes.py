@@ -35,6 +35,12 @@ def describe(prefix: str, value: object) -> None:
         print(f"    {prefix}: array length={len(value)} types={','.join(kinds)}")
     elif isinstance(value, str):
         print(f"    {prefix}: string length={len(value)}")
+        try:
+            nested = json.loads(value)
+        except ValueError:
+            nested = None
+        if isinstance(nested, (dict, list)):
+            describe(f"{prefix}.json", nested)
     else:
         print(f"    {prefix}: {type(value).__name__}")
 
