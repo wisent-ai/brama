@@ -245,12 +245,18 @@ operator paths. Runnable, risk-labeled workflows are indexed in
 - **HTTP discovery:** `GET /v1/models`; bearer-only discovery is public catalog
   scope, while signed discovery includes agent-owned availability.
 - **Subscription lifecycle:** `GET`, `POST`, and `DELETE`
-  `/v1/subscriptions/:agent_id`; always bearer- and HMAC-protected.
+  `/v1/subscriptions/:agent_id`; always bearer- and HMAC-protected. A `GET`
+  returns, per subscription, the plan windows the provider itself reported
+  (`limits`: `used_fraction`, `window_label`, `resets_at_ms`), what Brama
+  measured (`measured`: requests, failures, input and output tokens, first and
+  last use), and any rate-limit `block` in force. An empty `limits` array means
+  the provider publishes no plan state; it does not mean nothing was used.
 - **Operations:** public `GET /health`; protected `GET /stats`.
 - **Desktop control plane:** `brama-desktop` alone may call
   `GET /v1/admin/snapshot`, `PUT /v1/admin/routes`, and the `GET`, `POST`, and
   `DELETE` `/v1/admin/subscriptions/:agent_id` family. These endpoints return
-  identifiers and status only; subscription credentials remain write-only.
+  identifiers, usage and status only; subscription credentials remain
+  write-only.
 - **CLI:** `serve`, `version`, `detect`, `test`, `collect-task-quality`, and
   `mcp`. Billable commands require an explicit cost acknowledgement.
 - **MCP:** read-only stdio JSON-RPC exposing `brama_detect` only. Model execution,
@@ -277,9 +283,13 @@ The complete state, error, retry, authorization, and resource contract is in
   of process arguments, files, logs, and Brama state. A Stado-discovered Brama
   installation may instead acquire its scoped bearer from Skarbiec.
 - **State:** `$BRAMA_STATE_DIR/journal.jsonl` contains retirement and quality
-  records. `/tmp/brama-perf.json` contains replaceable process telemetry. The
-  entitlements router owns encrypted subscription credential storage in
-  managed deployments.
+  records. `$BRAMA_SUBSCRIPTION_USAGE_FILE`, by default
+  `~/.config/brama/subscription-usage.json` and owner-readable only, holds the
+  per-subscription usage ledger: measured counters, the newest plan reading per
+  window, and any block. It is written atomically and is not a cache — the
+  question it answers spans months, not process lifetimes. `/tmp/brama-perf.json`
+  contains replaceable process telemetry. The entitlements router owns encrypted
+  subscription credential storage in managed deployments.
 - **Subscription discovery:** a provider subscription is a Skarbiec item tagged
   `brama:subscription` and `brama:agent:<agent>`, carrying its provider and
   subscription id in `brama:provider:<provider>` and `brama:id:<id>`. Both the

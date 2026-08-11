@@ -136,6 +136,24 @@ pub struct ModelRequest {
     pub billing_target: Option<BillingTarget>,
 }
 
+/// One window of a subscription's plan, as the provider itself reported it on
+/// the response to a call Brama already made.
+///
+/// Brama does not model plan sizes. A provider that publishes utilization does
+/// so as a fraction of its own limit and names when that window resets, and
+/// that pair is the only honest thing to store: a token count Brama derived
+/// would be a second, disagreeing account of a quota it does not own.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LimitReading {
+    pub limit_id: String,
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window_label: Option<String>,
+    pub used_fraction: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resets_at_ms: Option<i64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelResponse {
     pub content: String,
@@ -152,6 +170,11 @@ pub struct ModelResponse {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ToolCall>>,
+    /// Plan windows the provider reported on this exact response, when it
+    /// reports any. Present on rate-limited responses too, which is when it
+    /// matters most.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub limits: Vec<LimitReading>,
 }
 
 impl ModelResponse {
@@ -167,6 +190,7 @@ impl ModelResponse {
             success: false,
             error: Some(error),
             tool_calls: None,
+            limits: Vec::new(),
         }
     }
 }

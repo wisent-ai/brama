@@ -1,6 +1,7 @@
 pub mod dispatch;
 pub mod model_catalog;
 pub mod quality;
+pub mod usage;
 
 pub(crate) use dispatch::{authenticate_agent, registry_models_for_agent};
 pub use dispatch::{

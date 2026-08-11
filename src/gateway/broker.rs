@@ -322,9 +322,45 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
 ///
 /// Kept as a function rather than a chain so the capability id outlives the
 /// binding that borrows it; inlining it is what the borrow checker refuses.
+///
+/// The refusal is logged rather than swallowed. The direct-provider path above
+/// already says why a redemption failed, and the subscription path returning a
+/// bare `None` is what made "credential unavailable" cover a missing route, an
+/// expired capability and a workload the vault will not accept -- three repairs
+/// behind one sentence.
 fn redeem_provider_resource(capability_id: &str, resource: &str) -> Option<Secret> {
-    let binding = CapabilityRef::provider(capability_id, resource).ok()?;
-    client()?.redeem(&binding).ok()
+    let binding = match CapabilityRef::provider(capability_id, resource) {
+        Ok(binding) => binding,
+        Err(error) => {
+            warn!(
+                event = "subscription_capability_binding_invalid",
+                %resource, %error, "the capability id does not bind to this resource"
+            );
+            return None;
+        }
+    };
+    let broker = match client() {
+        Some(broker) => broker,
+        None => {
+            warn!(
+                event = "subscription_capability_no_broker",
+                %resource,
+                "no capability broker client: SKARBIEC_CAP_SOCKET, SKARBIEC_WORKLOAD_ID or the \
+                 workload signing key is missing or unreadable"
+            );
+            return None;
+        }
+    };
+    match broker.redeem(&binding) {
+        Ok(secret) => Some(secret),
+        Err(error) => {
+            warn!(
+                event = "subscription_capability_redeem_refused",
+                %resource, %error, "the authority refused to redeem this capability"
+            );
+            None
+        }
+    }
 }
 
 /// Redeem one subscription credential at the final-use boundary. Expired
@@ -608,13 +644,30 @@ fn capability_route(resource: &str) -> Option<(String, String)> {
 /// and the authority still decides: without the grant the read is refused, and
 /// the coordinate comes from the operator's routes table rather than a guess.
 async fn credential_by_grant(resource: &str) -> Option<Secret> {
-    let (item, field) = capability_route(resource)?;
-    let output = tokio::process::Command::new(entitlements_router_bin())
+    let Some((item, field)) = capability_route(resource) else {
+        warn!(
+            event = "credential_read_unrouted",
+            %resource,
+            "no capability route maps this resource to a vault item and field"
+        );
+        return None;
+    };
+    let output = match tokio::process::Command::new(entitlements_router_bin())
         .arg("get")
         .arg(&item)
         .output()
         .await
-        .ok()?;
+    {
+        Ok(output) => output,
+        Err(error) => {
+            warn!(
+                event = "credential_read_unspawnable",
+                %resource, %item, %error,
+                "the entitlements router could not be started"
+            );
+            return None;
+        }
+    };
     if !output.status.success() {
         // The authority's own sentence, not a summary of it. "credential
         // unavailable" fits a missing item, a key this host lacks and an item
@@ -630,8 +683,29 @@ async fn credential_by_grant(resource: &str) -> Option<Secret> {
         );
         return None;
     }
-    let payload: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
-    let value = payload.get("fields")?.get(&field)?.as_str()?;
+    let payload: serde_json::Value = match serde_json::from_slice(&output.stdout) {
+        Ok(payload) => payload,
+        Err(error) => {
+            warn!(
+                event = "credential_read_unparseable",
+                %resource, %item, %error,
+                "the authority returned a credential document that is not JSON"
+            );
+            return None;
+        }
+    };
+    let Some(value) = payload
+        .get("fields")
+        .and_then(|fields| fields.get(&field))
+        .and_then(serde_json::Value::as_str)
+    else {
+        warn!(
+            event = "credential_read_field_absent",
+            %resource, %item, %field,
+            "the credential document carries no such field"
+        );
+        return None;
+    };
     Some(Secret::from_bytes(value.as_bytes().to_vec()))
 }
 

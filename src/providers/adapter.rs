@@ -16,7 +16,7 @@ use serde_json::{json, Map, Value};
 use crate::subscription_dispatch::model_catalog::{
     self, CatalogAuth, CatalogProtocol, CatalogProvider,
 };
-use crate::types::{Message, ModelRequest, ModelResponse, ToolCall};
+use crate::types::{LimitReading, Message, ModelRequest, ModelResponse, ToolCall};
 
 const QWEN_DEFAULT_MODEL: &str = "qwen2.5-72b-instruct";
 const OPENAI_DEFAULT_MODEL: &str = "gpt-5.4";
@@ -1306,6 +1306,7 @@ fn model_response_from_openai(route_id: &str, body: Value, elapsed_ms: f64) -> M
         attempts: u32::from(true),
         error: None,
         tool_calls,
+        limits: Vec::new(),
     }
 }
 
@@ -1365,6 +1366,7 @@ fn model_response_from_anthropic(route_id: &str, body: Value, elapsed_ms: f64) -
         attempts: u32::from(true),
         error: None,
         tool_calls: (!tool_calls.is_empty()).then_some(tool_calls),
+        limits: Vec::new(),
     }
 }
 
@@ -1534,6 +1536,7 @@ fn model_response_from_responses_stream(
         attempts: u32::from(true),
         error: None,
         tool_calls: (!tool_calls.is_empty()).then_some(tool_calls),
+        limits: Vec::new(),
     }
 }
 
@@ -1662,6 +1665,7 @@ fn model_response_from_google(route_id: &str, body: Value, elapsed_ms: f64) -> M
         attempts: u32::from(true),
         error: None,
         tool_calls: (!tool_calls.is_empty()).then_some(tool_calls),
+        limits: Vec::new(),
     }
 }
 
@@ -1774,12 +1778,13 @@ async fn dispatch_catalog(request: &ModelRequest, item: &str, secret: &str) -> M
         Ok(response) => response,
         Err(error) => return transport_failure(&request.model, &error),
     };
-    let (status, text) = match bounded_response_text(response).await {
+    let (status, plan, text) = match bounded_response_text(response).await {
         Ok(result) => result,
         Err(message) => return attempted_failure(&request.model, message),
     };
+    let limits = limit_readings(&descriptor.id, &plan);
     if !status.is_success() {
-        return provider_error(&request.model, status, &text);
+        return with_limits(provider_error(&request.model, status, &text), limits);
     }
     let body = match serde_json::from_str::<Value>(&text) {
         Ok(body) => body,
@@ -1791,16 +1796,21 @@ async fn dispatch_catalog(request: &ModelRequest, item: &str, secret: &str) -> M
         }
     };
     let elapsed_ms = started.elapsed().as_secs_f64() * 1_000.0;
-    match descriptor.protocol {
-        CatalogProtocol::OpenAiChat => model_response_from_openai(&request.model, body, elapsed_ms),
-        CatalogProtocol::AnthropicMessages => {
-            model_response_from_anthropic(&request.model, body, elapsed_ms)
-        }
-        CatalogProtocol::GoogleGenerateContent => {
-            model_response_from_google(&request.model, body, elapsed_ms)
-        }
-        CatalogProtocol::Unsupported => unreachable!(),
-    }
+    with_limits(
+        match descriptor.protocol {
+            CatalogProtocol::OpenAiChat => {
+                model_response_from_openai(&request.model, body, elapsed_ms)
+            }
+            CatalogProtocol::AnthropicMessages => {
+                model_response_from_anthropic(&request.model, body, elapsed_ms)
+            }
+            CatalogProtocol::GoogleGenerateContent => {
+                model_response_from_google(&request.model, body, elapsed_ms)
+            }
+            CatalogProtocol::Unsupported => unreachable!(),
+        },
+        limits,
+    )
 }
 
 fn max_provider_response_bytes() -> usize {
@@ -1815,10 +1825,28 @@ fn max_provider_error_chars() -> usize {
         .expect("valid provider error character limit")
 }
 
+/// The response headers that carry plan state, lowercased, and nothing else.
+///
+/// Only the two families any provider on this fleet publishes are kept, so a
+/// header sweep can never turn into an accidental log of provider metadata.
+fn plan_headers(headers: &reqwest::header::HeaderMap) -> HashMap<String, String> {
+    headers
+        .iter()
+        .filter_map(|(name, value)| {
+            let name = name.as_str().to_ascii_lowercase();
+            if !(name.starts_with("anthropic-ratelimit-unified-") || name.starts_with("x-codex-")) {
+                return None;
+            }
+            Some((name, value.to_str().ok()?.to_string()))
+        })
+        .collect()
+}
+
 async fn bounded_response_text(
     mut response: reqwest::Response,
-) -> Result<(reqwest::StatusCode, String), String> {
+) -> Result<(reqwest::StatusCode, HashMap<String, String>, String), String> {
     let status = response.status();
+    let plan = plan_headers(response.headers());
     let mut body = Vec::new();
     while let Some(chunk) = response
         .chunk()
@@ -1832,7 +1860,88 @@ async fn bounded_response_text(
     }
     let text = String::from_utf8(body)
         .map_err(|_| "provider_failure: provider response is not UTF-8".to_string())?;
-    Ok((status, text))
+    Ok((status, plan, text))
+}
+
+fn header_number(headers: &HashMap<String, String>, name: &str) -> Option<f64> {
+    headers.get(name)?.trim().parse::<f64>().ok()
+}
+
+/// Turn one provider's plan headers into limit readings.
+///
+/// Anthropic publishes a utilization fraction and a reset instant per named
+/// window; Codex publishes a used percentage, the window length in minutes and
+/// a reset instant, per meter. Nothing is invented for providers that publish
+/// neither -- an absent reading is absent, not zero.
+fn limit_readings(provider_id: &str, headers: &HashMap<String, String>) -> Vec<LimitReading> {
+    let seconds_to_ms = |seconds: f64| (seconds * 1_000.0).round() as i64;
+    match provider_id {
+        "claude-code" | "anthropic" => ["5h", "7d"]
+            .into_iter()
+            .filter_map(|window| {
+                let prefix = format!("anthropic-ratelimit-unified-{window}");
+                let used = header_number(headers, &format!("{prefix}-utilization"))?;
+                let resets = header_number(headers, &format!("{prefix}-reset"))
+                    .filter(|value| *value > 0.0)
+                    .map(seconds_to_ms);
+                Some(LimitReading {
+                    limit_id: format!("anthropic:{window}"),
+                    label: match window {
+                        "5h" => "Claude 5 hour".to_string(),
+                        _ => "Claude 7 day".to_string(),
+                    },
+                    window_label: Some(match window {
+                        "5h" => "5 hours".to_string(),
+                        _ => "7 days".to_string(),
+                    }),
+                    used_fraction: used.clamp(0.0, 1.0),
+                    resets_at_ms: resets,
+                })
+            })
+            .collect(),
+        "codex" | "openai-codex" => ["primary", "secondary"]
+            .into_iter()
+            .filter_map(|meter| {
+                let percent = header_number(headers, &format!("x-codex-{meter}-used-percent"))?;
+                let minutes = header_number(headers, &format!("x-codex-{meter}-window-minutes"));
+                let resets = header_number(headers, &format!("x-codex-{meter}-reset-at"))
+                    .filter(|value| *value > 0.0)
+                    .map(seconds_to_ms);
+                Some(LimitReading {
+                    limit_id: format!("codex:{meter}"),
+                    label: format!("Codex {meter} window"),
+                    window_label: minutes.map(window_label_from_minutes),
+                    used_fraction: (percent / 100.0).clamp(0.0, 1.0),
+                    resets_at_ms: resets,
+                })
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn window_label_from_minutes(minutes: f64) -> String {
+    let minutes = minutes.max(0.0).round() as i64;
+    let hour = 60;
+    let day = 24 * hour;
+    if minutes >= day && minutes % day == 0 {
+        let days = minutes / day;
+        return format!("{days} day{}", if days == 1 { "" } else { "s" });
+    }
+    if minutes >= hour && minutes % hour == 0 {
+        let hours = minutes / hour;
+        return format!("{hours} hour{}", if hours == 1 { "" } else { "s" });
+    }
+    format!("{minutes} minutes")
+}
+
+/// Carry the plan readings out with whatever response the call produced.
+///
+/// A rate-limited answer is the one that most needs them, so this is applied to
+/// failures as well as successes rather than only on the happy path.
+fn with_limits(mut response: ModelResponse, limits: Vec<LimitReading>) -> ModelResponse {
+    response.limits = limits;
+    response
 }
 
 fn transport_error_message(error: &reqwest::Error) -> String {
@@ -1945,16 +2054,20 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
         Ok(response) => response,
         Err(error) => return transport_failure(&request.model, &error),
     };
-    let (status, text) = match bounded_response_text(response).await {
+    let (status, plan, text) = match bounded_response_text(response).await {
         Ok(result) => result,
         Err(message) => return attempted_failure(&request.model, message),
     };
+    let limits = limit_readings(descriptor.id, &plan);
     if !status.is_success() {
-        return provider_error(&request.model, status, &text);
+        return with_limits(provider_error(&request.model, status, &text), limits);
     }
     let elapsed_ms = started.elapsed().as_secs_f64() * 1_000.0;
     if descriptor.wire == WireProtocol::OpenAiResponses {
-        return model_response_from_responses_stream(&request.model, &text, elapsed_ms);
+        return with_limits(
+            model_response_from_responses_stream(&request.model, &text, elapsed_ms),
+            limits,
+        );
     }
     let body = match serde_json::from_str::<Value>(&text) {
         Ok(body) => body,
@@ -1965,13 +2078,18 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
             )
         }
     };
-    match descriptor.wire {
-        WireProtocol::OpenAiChat => model_response_from_openai(&request.model, body, elapsed_ms),
-        WireProtocol::AnthropicMessages => {
-            model_response_from_anthropic(&request.model, body, elapsed_ms)
-        }
-        WireProtocol::OpenAiResponses => unreachable!(),
-    }
+    with_limits(
+        match descriptor.wire {
+            WireProtocol::OpenAiChat => {
+                model_response_from_openai(&request.model, body, elapsed_ms)
+            }
+            WireProtocol::AnthropicMessages => {
+                model_response_from_anthropic(&request.model, body, elapsed_ms)
+            }
+            WireProtocol::OpenAiResponses => unreachable!(),
+        },
+        limits,
+    )
 }
 
 pub async fn dispatch_openai_typed(
@@ -2006,7 +2124,7 @@ pub async fn dispatch_openai_typed(
     .send()
     .await
     .map_err(|error| transport_error_message(&error))?;
-    let (status, text) = bounded_response_text(response).await?;
+    let (status, _plan, text) = bounded_response_text(response).await?;
     if !status.is_success() {
         let failure = provider_error(route_id, status, &text);
         return Err(failure

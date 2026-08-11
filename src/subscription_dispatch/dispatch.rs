@@ -11,6 +11,7 @@ use tracing::{info, warn};
 use crate::crypto;
 use crate::gateway::broker;
 use crate::providers::adapter as provider_registry;
+use crate::subscription_dispatch::usage;
 use crate::types::{ModelRequest, ModelResponse};
 
 fn max_selector_models() -> usize {
@@ -609,6 +610,19 @@ async fn dispatch_subscription_attempt(
     let mut provider_attempts = u32::default();
     for (index, entry) in rows.iter().take(max_credential_attempts()).enumerate() {
         let credential_id = &entry.id;
+        // A credential inside a recorded block is skipped without a provider
+        // call. The previous behaviour re-derived exhaustion from an error
+        // string on every request, which meant paying for the 429 to learn what
+        // the last 429 already said.
+        if usage::is_blocked(credential_id) {
+            warn!(
+                event = "credential_blocked",
+                provider,
+                credential_index = index,
+                "bounded credential is inside a recorded rate-limit block"
+            );
+            continue;
+        }
         let token = match broker::subscription_credential(credential_id, provider).await {
             Some(token) => token,
             None => {
@@ -637,6 +651,7 @@ async fn dispatch_subscription_attempt(
         let item = broker::subscription_resource(provider, credential_id);
         let mut result = provider_registry::dispatch(request, &item, token).await;
         result.attempts = provider_attempts;
+        usage::record_call(credential_id, provider, &result);
         if result.success {
             if index > 0 {
                 info!(
@@ -666,6 +681,7 @@ async fn dispatch_subscription_attempt(
         if !exhausted {
             return result;
         }
+        usage::record_block(credential_id, provider, &error, &result);
         warn!(
             event = "credential_exhausted",
             provider,

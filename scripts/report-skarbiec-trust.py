@@ -157,6 +157,36 @@ def main() -> None:
             )
     report["vault_provider_items"] = vault_report
 
+    usage_file = settings.get("BRAMA_SUBSCRIPTION_USAGE_FILE") or str(
+        config_dir / "subscription-usage.json"
+    )
+    usage_path = Path(os.path.expandvars(usage_file)).expanduser()
+    report["subscription_usage"] = {"path": str(usage_path), **describe(usage_path)}
+    if usage_path.is_file():
+        try:
+            report["subscription_usage"]["document"] = json.loads(
+                usage_path.read_text(encoding="utf-8")
+            )
+        except ValueError as error:
+            report["subscription_usage"]["detail"] = str(error)
+
+    # The gateway's own tracing output, filtered. A capability refusal names the
+    # resource and the authority's reason, and reading it is the difference
+    # between repairing a grant and guessing at one.
+    log_root = HOME / ".stado" / "logs"
+    interesting = (
+        "capability",
+        "credential_",
+        "subscription_",
+        "redeem",
+        "codex",
+    )
+    lines = []
+    for log in sorted(log_root.glob("brama*.err"), key=lambda p: p.stat().st_mtime)[-2:]:
+        text = log.read_text(encoding="utf-8", errors="replace").splitlines()
+        lines.extend(line for line in text if any(token in line for token in interesting))
+    report["gateway_log"] = {"root": str(log_root), "matching_tail": lines[-400:]}
+
 
     launcher = HOME / ".stado" / "bin" / "skarbiec-keychain-launcher"
     report["keychain_launcher"] = describe(launcher)
