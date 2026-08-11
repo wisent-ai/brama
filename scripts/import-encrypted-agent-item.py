@@ -47,7 +47,14 @@ try:
     value = (json.loads(opened.stdout).get("fields") or {}).get("value")
     if not isinstance(value, str) or not value:
         raise SystemExit("recovered identity has no value field")
-    canonical = json.dumps({"kind": kind, "value": value})
+    canonical = json.dumps(
+        {
+            "schema": "skarbiec.item.v2",
+            "kind": kind,
+            "fields": {"value": value},
+            "context": {},
+        }
+    )
     installed = subprocess.run(
         [str(skarbiec), "set-json", item, "--recipients", ",".join(recipients)],
         input=canonical,
