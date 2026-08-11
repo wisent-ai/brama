@@ -23,6 +23,21 @@ items = sorted(
     for item in (document.get("items") or {})
     if item.startswith("provider:codex:brama-sub-wisent-app-codex-")
 )
+
+
+def describe(prefix: str, value: object) -> None:
+    if isinstance(value, dict):
+        print(f"    {prefix}: object keys={','.join(sorted(value))}")
+        for key, nested in sorted(value.items()):
+            describe(f"{prefix}.{key}", nested)
+    elif isinstance(value, list):
+        kinds = sorted({type(nested).__name__ for nested in value})
+        print(f"    {prefix}: array length={len(value)} types={','.join(kinds)}")
+    elif isinstance(value, str):
+        print(f"    {prefix}: string length={len(value)}")
+    else:
+        print(f"    {prefix}: {type(value).__name__}")
+
 for item in items:
     opened = subprocess.run(
         [str(skarbiec), "get", item],
@@ -52,3 +67,5 @@ for item in items:
         elif isinstance(parsed, list):
             shape = "json array"
         print(f"  {name}: length={len(text)} shape={shape}")
+        if isinstance(parsed, (dict, list)):
+            describe(name, parsed)
