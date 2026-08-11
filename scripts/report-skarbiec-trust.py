@@ -187,6 +187,27 @@ def main() -> None:
         lines.extend(line for line in text if any(token in line for token in interesting))
     report["gateway_log"] = {"root": str(log_root), "matching_tail": lines[-400:]}
 
+    # Issuing and redeeming must reach the same broker. Each release start makes
+    # a fresh runtime directory with its own socket, so a stale path in the
+    # service env is the exact shape of "no such capability": the router issues
+    # against one instance and the client redeems against another.
+    sockets = {
+        "SKARBIEC_CAP_SOCKET": settings.get("SKARBIEC_CAP_SOCKET", ""),
+        "SKARBIEC_SOCKET": settings.get("SKARBIEC_SOCKET", ""),
+        "WC_SKARBIEC_URL": settings.get("WC_SKARBIEC_URL", ""),
+    }
+    report["broker_endpoints"] = {
+        name: {
+            "value": value,
+            **(describe(Path(os.path.expandvars(value)).expanduser()) if value.startswith("/") else {}),
+        }
+        for name, value in sockets.items()
+    }
+    report["runtime_sockets"] = [
+        {"path": str(p / "socket"), **describe(p / "socket")}
+        for p in sorted(Path("/tmp").glob("brama-skarbiec-*"), key=lambda p: p.stat().st_mtime)[-3:]
+    ]
+
 
     launcher = HOME / ".stado" / "bin" / "skarbiec-keychain-launcher"
     report["keychain_launcher"] = describe(launcher)

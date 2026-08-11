@@ -1770,6 +1770,28 @@ fn account_agent_id(identity: &ModelClientIdentity) -> Result<String, ApiError> 
     Ok(format!("user-{}", user_id.replace('-', "")))
 }
 
+/// One subscription as every reader sees it: identity, plan windows the
+/// provider reported, what Brama measured, and any block in force.
+///
+/// `limits` is empty when the provider publishes no plan state; that is a fact
+/// about the provider, not a zero, and readers must render it as unknown rather
+/// than as "nothing used".
+fn subscription_view(entry: &crate::gateway::broker::SubscriptionEntry) -> Value {
+    let recorded = crate::subscription_dispatch::usage::usage_for(&entry.id);
+    let limits = recorded
+        .as_ref()
+        .map(|usage| usage.limits.values().cloned().collect::<Vec<_>>())
+        .unwrap_or_default();
+    json!({
+        "id": entry.id,
+        "provider": entry.provider,
+        "status": entry.status,
+        "limits": limits,
+        "measured": recorded.as_ref().map(|usage| &usage.measured),
+        "block": recorded.as_ref().and_then(|usage| usage.block.clone()),
+    })
+}
+
 async fn list_subscriptions(agent_id: String) -> Result<Json<Value>, ApiError> {
     if !valid_agent_id(&agent_id) {
         return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
@@ -1777,13 +1799,7 @@ async fn list_subscriptions(agent_id: String) -> Result<Json<Value>, ApiError> {
     let subscriptions = crate::gateway::broker::list_subscriptions(&agent_id)
         .await
         .into_iter()
-        .map(|entry| {
-            json!({
-                "id": entry.id,
-                "provider": entry.provider,
-                "status": entry.status,
-            })
-        })
+        .map(|entry| subscription_view(&entry))
         .collect::<Vec<_>>();
     Ok(Json(
         json!({"agentId": agent_id, "subscriptions": subscriptions}),
@@ -2049,13 +2065,7 @@ async fn list_agent_subscriptions(
     let subscriptions = crate::gateway::broker::list_subscriptions(&agent_id)
         .await
         .into_iter()
-        .map(|entry| {
-            json!({
-                "id": entry.id,
-                "provider": entry.provider,
-                "status": entry.status,
-            })
-        })
+        .map(|entry| subscription_view(&entry))
         .collect::<Vec<_>>();
     Ok(Json(json!({"subscriptions": subscriptions})))
 }
