@@ -27,16 +27,20 @@ SERVICE_ENV = Path(
 )
 
 
-def service_vault() -> Path:
-    configured = os.environ.get("SKARBIEC_VAULT_FILE", "")
-    if configured:
-        return Path(configured)
+def service_value(name: str) -> str:
     if SERVICE_ENV.is_file():
         for line in SERVICE_ENV.read_text(errors="replace").splitlines():
-            name, separator, value = line.partition("=")
-            if separator and name.strip() == "SKARBIEC_VAULT_FILE":
-                return Path(value.strip().strip('"').strip("'"))
-    return HOME / ".stado" / "skarbiec.vault.json"
+            key, separator, value = line.partition("=")
+            if separator and key.strip() == name:
+                return value.strip().strip('"').strip("'")
+    return ""
+
+
+def service_vault() -> Path:
+    configured = os.environ.get("SKARBIEC_VAULT_FILE") or service_value(
+        "SKARBIEC_VAULT_FILE"
+    )
+    return Path(configured) if configured else HOME / ".stado" / "skarbiec.vault.json"
 
 
 VAULT = service_vault()
@@ -62,6 +66,9 @@ environment = {
     "PATH": "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
     "WC_SKARBIEC_CONSUMER": CONSUMER,
     "WC_SKARBIEC_TOKEN_FILE": TOKEN_FILE,
+    "WC_SKARBIEC_URL": os.environ.get("WC_SKARBIEC_URL")
+    or service_value("WC_SKARBIEC_URL")
+    or "http://127.0.0.1:17612",
 }
 
 
