@@ -143,7 +143,10 @@ if done.returncode:
             [str(STADO), "host", "install-secret", TARGET, str(source), NAME],
             capture_output=True,
             text=True,
-            env=environment,
+            env={
+                **os.environ,
+                "PATH": "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+            },
         )
         print("fallback:", "owner-key install-secret")
     finally:
