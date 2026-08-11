@@ -7,10 +7,10 @@ verifies with its own, and the request is rejected as if the credential were
 forged. The gateway is the verifier for the whole fleet, so its copy is the one
 a caller has to sign with.
 
-Runs on the gateway host and pushes the field through `stado host
-install-credential`, which reads the selected store here and lands an
-owner-only file there. The value never appears in a command line, an argument
-list or this output.
+Runs on the gateway host and first uses `stado host install-credential`. If the
+live broker's administrative bearer cannot read the source, it falls back to an
+owner-key read into a mode-0600 temporary file and `stado host install-secret`,
+then removes that file. The value never appears in argv, stdout or logs.
 """
 from __future__ import annotations
 
@@ -116,6 +116,38 @@ if done.returncode and ("403" in detail or "not authorized" in detail):
     os.replace(temporary, token_path)
     print("refreshed:", CONSUMER, "bearer")
     done = transfer()
+if done.returncode:
+    owner_environment = {
+        **environment,
+        "SKARBIEC_VAULT_FILE": str(VAULT),
+    }
+    opened = subprocess.run(
+        [str(SKARBIEC), "get", ITEM],
+        capture_output=True,
+        text=True,
+        env=owner_environment,
+    )
+    if opened.returncode:
+        raise SystemExit(
+            "owner read failed: " + " ".join((opened.stderr or "").split())
+        )
+    value = (json.loads(opened.stdout).get("fields") or {}).get(FIELD)
+    if not isinstance(value, str) or not value:
+        raise SystemExit(f"owner read returned no string field {ITEM}#{FIELD}")
+    source = HOME / ".stado" / f".{NAME}.{os.getpid()}.source"
+    descriptor = os.open(source, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(value)
+        done = subprocess.run(
+            [str(STADO), "host", "install-secret", TARGET, str(source), NAME],
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        print("fallback:", "owner-key install-secret")
+    finally:
+        source.unlink(missing_ok=True)
 print("target:", TARGET, "item:", ITEM, "field:", FIELD, "name:", NAME)
 print("exit:", done.returncode)
 for line in (done.stdout or "").splitlines():
