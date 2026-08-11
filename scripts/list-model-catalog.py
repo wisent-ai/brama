@@ -29,4 +29,13 @@ request = urllib.request.Request(f"{base}/v1/models", headers=headers)
 with urllib.request.urlopen(request, timeout=30) as response:
     payload = json.load(response)
 models = payload.get("data", []) if isinstance(payload, dict) else []
-print(json.dumps({"models": [model.get("id") for model in models]}, indent=2))
+available = [
+    {
+        "id": model.get("id"),
+        "owned_by": model.get("owned_by"),
+        "perf": model.get("perf"),
+    }
+    for model in models
+    if model.get("available") is True
+]
+print(json.dumps({"available": available, "catalog_size": len(models)}, indent=2))
