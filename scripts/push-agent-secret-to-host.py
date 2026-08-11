@@ -68,6 +68,7 @@ if done.returncode and ("403" in detail or "not authorized" in detail):
             CONSUMER,
             "--capabilities",
             capabilities,
+            "--replace-capabilities",
         ],
         capture_output=True,
         text=True,
