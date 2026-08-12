@@ -6,7 +6,7 @@
 # Idempotent: an already-installed revision reports and exits without work.
 set -eu
 
-REVISION=9d3a259753895c0c35d592d4fcc0d860da8a6474
+REVISION='308c19a34853f71627d5c44ac8dfbbb023da4e02'
 REPOSITORY=https://github.com/wisent-ai/brama.git
 BUNDLE="$HOME/.stado/services/brama/current/darwin-arm"
 WORK="$HOME/.stado/build-work/brama-managed"
