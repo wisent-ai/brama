@@ -104,10 +104,13 @@ advertised by the API, MCP server, examples, or release notes.
 
 - **Actor:** an authenticated Wisent service.
 - **Initial state:** the service has its dedicated bearer and the alias maps to a
-  configured direct provider capability.
+  configured direct-provider route, optionally followed by ordered fallback
+  routes.
 - **Outcome:** Brama validates transport, identity, allowlist, and request limits;
-  invokes the mapped provider once; and returns a normalized response.
-- **Safety boundary:** no agent subscription is discovered or charged.
+  invokes the primary, then each fallback only after a failed attempt, and
+  returns the first normalized success or the final normalized failure.
+- **Safety boundary:** no agent subscription is discovered or charged; every
+  fallback names an explicit provider capability.
 
 ### Use an exact agent subscription
 
