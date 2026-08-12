@@ -217,30 +217,29 @@ source_vault_file=$SKARBIEC_VAULT_FILE
   printf '%s\n' "SKARBIEC_VAULT_FILE is not a regular file" >/dev/stderr
   false
 }
-# The workload registration belongs to the durable vault, not to the copy this
-# launcher is about to make: the copy exists for the length of one boot, and a
-# grant written into it is gone by the next one — while `token-mint` refuses to
-# write it there at all, because the copy carries none of the owner material
-# that authorises a change. So provisioning and registration happen against the
-# real vault, above the copy, and the copy then carries the result.
+# The vault is the fleet's, and Brama reads it where it lives.
+#
+# This launcher used to copy it into the per-installation runtime directory and
+# serve the copy. That made Brama a second vault: a capability issued against
+# the durable file was redeemed against a copy that had never heard of it, which
+# is what "redemption denied: no such capability" says, and any write a refresh
+# made landed in a file discarded at the next boot. One Skarbiec holds every
+# level of credential -- separating them is what recipients and grants are for,
+# not a second instance.
 provision_and_register_workload
 # Public recipient keys keep donations recoverable without exposing provider
 # credentials to service configuration.
 gpg --batch --quiet --import "$config_dir/recipient-public-keys.asc"
 
-vault_file="$runtime_dir/vault.json"
-if [ "$source_vault_file" != "$vault_file" ]; then
-  cp "$source_vault_file" "$vault_file"
-fi
-chmod u=rw,go= "$vault_file"
-export SKARBIEC_VAULT_FILE="$vault_file"
+[ -r "$source_vault_file" ] || {
+  printf '%s\n' "SKARBIEC_VAULT_FILE is not readable: $source_vault_file" >/dev/stderr
+  false
+}
+export SKARBIEC_VAULT_FILE="$source_vault_file"
 # The routes table says which vault coordinate a purpose stands for, and the
-# authority looks for it beside the vault it was given. That is now the copy
-# above, in a runtime directory this launcher just made, where the operator's
-# table has never been -- so every resource resolved to nothing and the gateway
-# started with no provider it could authenticate to. Name the real one instead
-# of copying it: one table, beside the vault it belongs to, never a stale
-# duplicate. Absent, the authority keeps its own default.
+# authority looks for it beside the vault it was given. Both now name the same
+# directory as the fleet's own, so the table the operator maintains is the table
+# in force. Absent, the authority keeps its own default.
 if [ -f "${source_vault_file%/*}/capability-routes.json" ]; then
   SKARBIEC_CAPABILITY_ROUTES_FILE="${source_vault_file%/*}/capability-routes.json"
   export SKARBIEC_CAPABILITY_ROUTES_FILE
@@ -267,10 +266,17 @@ export SKARBIEC_CAP_POLICY_SIG="$config_dir/policy.sig"
 export SKARBIEC_WORKLOAD_REGISTRY="$config_dir/registry.json"
 export SKARBIEC_WORKLOAD_REGISTRY_SIG="$config_dir/registry.sig"
 export SKARBIEC_CAP_STATE="$runtime_dir/capability.sqlite"
-export SKARBIEC_CAP_SOCKET="$socket_dir/broker.sock"
+# One socket for this host, not one per installed release. The path used to
+# carry the installation's own hash, so every upgrade introduced a broker that
+# no previously issued capability could be redeemed against, and the old ones
+# stayed behind holding their sockets. The guard below ends a leftover broker of
+# this kind before binding, which is what makes a single stable path safe.
+SKARBIEC_CAP_SOCKET=${BRAMA_CAP_SOCKET:-$HOME/.stado/run/brama-capability.sock}
+export SKARBIEC_CAP_SOCKET
+mkdir -p "$(dirname -- "$SKARBIEC_CAP_SOCKET")"
+chmod u=rwx,g=rx,o= "$(dirname -- "$SKARBIEC_CAP_SOCKET")"
 SKARBIEC_CAP_SOCKET_GID=$(id -g)
 export SKARBIEC_CAP_SOCKET_GID
-chgrp "$SKARBIEC_CAP_SOCKET_GID" "$socket_dir"
 export SKARBIEC_WORM_RECEIPT_DIR="$worm_dir"
 export SKARBIEC_WORM_RECEIPT_COMMAND="$config_dir/worm-receipt"
 export SKARBIEC_WORM_CHECKPOINT="$runtime_dir/checkpoint.json"
