@@ -5,6 +5,29 @@ Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
 ## Unreleased
 
+### Readiness now answers for the credential chain
+
+`GET /health` is liveness and always was: its own body says
+`dependencies: not_probed`. It is nevertheless what every deploy check in this
+repository used as proof that a release worked, and on 2026-08-11 it answered
+`ok` for a full day from a gateway whose every capability redemption was being
+refused. The failure surfaced only when a person asked a model a question.
+
+`GET /readyz` is new and public. It redeems one capability per configured
+provider and returns `503` naming the providers that failed, carrying no secret:
+only the provider name and whether its credential could be obtained. Deploy
+checks and monitors should read it; `/health` proves only that the process is
+running.
+
+A refused redemption is also classified honestly now. It was reported as
+`429 capacity_error` with code `subscription_unavailable` and `retryable: true`,
+while Skarbiec was saying `capability is not issued, has expired, has no uses
+left, or its authorization id does not match`. It is now
+`503 authorization_error`, code `credential_unauthorized`, `retryable: false`.
+No amount of waiting repairs an authorization id that does not match, and the
+old contract sent callers into retries and operators into the subscription
+catalogue.
+
 ### Released under the wrong name
 
 `v0.2.9`, `v0.2.10`, `v0.2.11`, `v0.2.12` and `v0.2.13` were cut from trees that

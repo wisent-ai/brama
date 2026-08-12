@@ -251,7 +251,19 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   measured (`measured`: requests, failures, input and output tokens, first and
   last use), and any rate-limit `block` in force. An empty `limits` array means
   the provider publishes no plan state; it does not mean nothing was used.
-- **Operations:** public `GET /health`; protected `GET /stats`.
+- **Operations:** public `GET /health` and `GET /readyz`; protected `GET /stats`.
+  `/health` is liveness only and says so in its body (`dependencies:
+  not_probed`): it answers `ok` from a gateway whose every credential
+  redemption is being refused. `/readyz` is the one that answers whether the
+  product works: it redeems one capability per configured provider and returns
+  `503` naming the providers that failed, with no secret in the body. Deploy
+  checks and uptime monitors should read `/readyz`; `/health` only proves the
+  process is running.
+- **Error contract:** a refused redemption is `503 authorization_error` with
+  code `credential_unauthorized` and `retryable: false`, never a `429
+  capacity_error`. Waiting does not repair an authorization id that does not
+  match, and classifying it as capacity sends the caller into retries and the
+  operator into the subscription catalogue.
 - **Desktop control plane:** `brama-desktop` alone may call
   `GET /v1/admin/snapshot`, `PUT /v1/admin/routes`, and the `GET`, `POST`, and
   `DELETE` `/v1/admin/subscriptions/:agent_id` family. These endpoints return
