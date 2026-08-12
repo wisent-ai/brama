@@ -20,7 +20,14 @@ const ENTITLEMENTS_ROUTER_BIN_ENV: &str = "ENTITLEMENTS_ROUTER_BIN";
 const DEFAULT_ENTITLEMENTS_ROUTER_BIN: &str = "entitlements-router";
 const REQUEST_SIGN_CAPABILITIES_ENV: &str = "BRAMA_REQUEST_SIGN_CAPABILITY_IDS";
 const REQUEST_SIGN_IDENTITIES_ENV: &str = "BRAMA_REQUEST_SIGN_IDENTITIES";
-const CENTRAL_REQUEST_SIGN_AGENTS: &[&str] = &["echo", "content-platform", "oko", "weles", "lem", "probierz"];
+const CENTRAL_REQUEST_SIGN_AGENTS: &[&str] = &[
+    "echo",
+    "content-platform",
+    "oko",
+    "weles",
+    "lem",
+    "probierz",
+];
 const PROVIDER_CAPABILITIES_ENV: &str = "BRAMA_PROVIDER_CAPABILITY_IDS";
 const SUBSCRIPTION_CATALOG_ENV: &str = "BRAMA_SUBSCRIPTION_CATALOG";
 const DONATED_SUBSCRIPTIONS_FILE_ENV: &str = "BRAMA_DONATED_SUBSCRIPTIONS_FILE";
@@ -363,34 +370,28 @@ fn redeem_provider_resource(capability_id: &str, resource: &str) -> Option<Secre
     }
 }
 
-/// Redeem one subscription credential at the final-use boundary. Expired
-/// provider OAuth grants are refreshed only inside this scoped Brama runtime,
-/// used immediately, and persisted through the local entitlements router when
-/// possible.
-pub async fn subscription_credential(subscription_id: &str, provider: &str) -> Option<Secret> {
+async fn redeem_subscription_credential(subscription_id: &str, provider: &str) -> Option<Secret> {
     let resource = subscription_resource(provider, subscription_id);
     // A capability is single-use and short-lived by contract, and model
     // discovery redeems one at boot, so the id the launcher seeded is spent
-    // before the first request arrives. The provider path already answers that
-    // by asking for a fresh one and, failing that, reading through the
-    // authority's own grant; a subscription had neither, and every call after
-    // startup reported the credential as simply unavailable.
+    // before the first request arrives. Ask for a fresh capability and fall
+    // back to the authority's own grant when the seeded one is gone.
     let seeded = configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id);
-    let credential = match seeded
+    match seeded
         .as_deref()
         .and_then(|capability_id| redeem_provider_resource(capability_id, &resource))
     {
-        Some(credential) => credential,
+        Some(credential) => Some(credential),
         None => match issue_capability(PROVIDER_PURPOSE, &resource).await {
             Some(fresh) => match redeem_provider_resource(&fresh, &resource) {
-                Some(credential) => credential,
+                Some(credential) => Some(credential),
                 None => {
                     warn!(
                         event = "subscription_credential_redeem_failed",
                         provider, %resource,
                         "a freshly issued capability did not redeem; trying the read grant"
                     );
-                    credential_by_grant(&resource).await?
+                    credential_by_grant(&resource).await
                 }
             },
             None => {
@@ -399,39 +400,33 @@ pub async fn subscription_credential(subscription_id: &str, provider: &str) -> O
                     provider, %resource,
                     "the authority would not issue a capability; trying the read grant"
                 );
-                credential_by_grant(&resource).await?
+                credential_by_grant(&resource).await
             }
         },
-    };
-    if !super::oauth_refresh::needs_refresh(&credential, provider) {
-        return Some(credential);
     }
-    drop(credential);
+}
 
+async fn refresh_subscription_credential_inner(
+    subscription_id: &str,
+    provider: &str,
+    force: bool,
+    preserve_on_failure: bool,
+) -> Option<Secret> {
     // Refresh-token rotation is single-flight. Re-reading after the lock lets a
-    // concurrent caller observe the value already written to the vault, and it
-    // goes through the same acquisition as above rather than a binding built
-    // from an id that may since have been spent.
+    // concurrent caller observe the value already written to the vault.
     let _guard = OAUTH_REFRESH_LOCK.lock().await;
-    let seeded = configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id);
-    let credential = match seeded
-        .as_deref()
-        .and_then(|capability_id| redeem_provider_resource(capability_id, &resource))
-    {
-        Some(credential) => credential,
-        None => credential_by_grant(&resource).await?,
-    };
-    if !super::oauth_refresh::needs_refresh(&credential, provider) {
+    let credential = redeem_subscription_credential(subscription_id, provider).await?;
+    if !force && !super::oauth_refresh::needs_refresh(&credential, provider) {
         return Some(credential);
     }
     let mut fresh = match super::oauth_refresh::refresh(&credential, provider).await {
         Ok(fresh) => fresh,
-        Err(_) => {
+        Err(error) => {
             warn!(
                 event = "oauth_refresh_failed",
-                provider, "OAuth refresh failed; preserving the previously redeemed credential"
+                provider, %error, "OAuth refresh failed"
             );
-            return Some(credential);
+            return preserve_on_failure.then_some(credential);
         }
     };
     if put_subscription_credential(subscription_id, provider, &fresh)
@@ -444,6 +439,29 @@ pub async fn subscription_credential(subscription_id: &str, provider: &str) -> O
         );
     }
     Some(Secret::from_bytes(std::mem::take(&mut *fresh)))
+}
+
+/// Redeem one subscription credential at the final-use boundary. Expired
+/// provider OAuth grants are refreshed only inside this scoped Brama runtime,
+/// used immediately, and persisted through the local entitlements router when
+/// possible.
+pub async fn subscription_credential(subscription_id: &str, provider: &str) -> Option<Secret> {
+    let credential = redeem_subscription_credential(subscription_id, provider).await?;
+    if !super::oauth_refresh::needs_refresh(&credential, provider) {
+        return Some(credential);
+    }
+    drop(credential);
+    refresh_subscription_credential_inner(subscription_id, provider, false, true).await
+}
+
+/// Force one OAuth refresh after the provider rejects a grant whose local
+/// expiry still claims it is valid. The rejected grant is not returned when
+/// refresh fails because retrying it would only repeat the provider error.
+pub async fn refresh_subscription_credential(
+    subscription_id: &str,
+    provider: &str,
+) -> Option<Secret> {
+    refresh_subscription_credential_inner(subscription_id, provider, true, false).await
 }
 
 /// Enumerate one agent's subscription metadata through the local entitlements

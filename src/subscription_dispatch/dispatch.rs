@@ -652,6 +652,28 @@ async fn dispatch_subscription_attempt(
         let mut result = provider_registry::dispatch(request, &item, token).await;
         result.attempts = provider_attempts;
         usage::record_call(credential_id, provider, &result);
+
+        if !result.success && result.error.as_deref().is_some_and(is_auth_failure) {
+            if let Some(fresh) =
+                broker::refresh_subscription_credential(credential_id, provider).await
+            {
+                if let Ok(fresh_token) = fresh.expose_utf8() {
+                    provider_attempts = provider_attempts.saturating_add(u32::from(true));
+                    result = provider_registry::dispatch(request, &item, fresh_token).await;
+                    result.attempts = provider_attempts;
+                    usage::record_call(credential_id, provider, &result);
+                    if result.success {
+                        info!(
+                            event = "credential_refreshed",
+                            provider,
+                            credential_index = index,
+                            "provider request succeeded after forced OAuth refresh"
+                        );
+                        return result;
+                    }
+                }
+            }
+        }
         if result.success {
             if index > 0 {
                 info!(
@@ -673,8 +695,16 @@ async fn dispatch_subscription_attempt(
             );
             mark_credential_revoked(credential_id).await;
         }
-        let exhausted = is_auth_failure(&error)
-            || error.contains("hit your limit")
+        if is_auth_failure(&error) {
+            warn!(
+                event = "credential_auth_rejected",
+                provider,
+                credential_index = index,
+                "provider rejected bounded credential after OAuth refresh"
+            );
+            continue;
+        }
+        let exhausted = error.contains("hit your limit")
             || error.contains("usage limit")
             || error.contains("rate_limit")
             || error.contains("429");

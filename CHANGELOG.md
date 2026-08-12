@@ -5,6 +5,14 @@ Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
 ## Unreleased
 
+### OAuth credentials recover from provider rejection
+
+Subscription access grants can be rejected before their local expiry claim.
+Brama now forces one refresh-token exchange after a provider authentication
+failure, persists the rotated credential, and retries the request once. An
+authentication failure that remains after refresh rotates to the next
+credential without being mislabeled as a 15-minute rate-limit block.
+
 ### Probierz vision calls use the Probierz identity
 
 The `probierz-model-router` bearer is now bound to `probierz`, whose dedicated
