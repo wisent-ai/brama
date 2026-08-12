@@ -1468,8 +1468,9 @@ async fn health() -> impl IntoResponse {
 /// credential could be obtained.
 async fn readyz() -> impl IntoResponse {
     let providers: Vec<String> = {
-        let mut names: Vec<String> =
-            crate::gateway::broker::configured_provider_capabilities().into_iter().collect();
+        let mut names: Vec<String> = crate::gateway::broker::configured_provider_capabilities()
+            .into_iter()
+            .collect();
         names.sort();
         names
     };
@@ -1477,7 +1478,9 @@ async fn readyz() -> impl IntoResponse {
     let mut checked = Vec::new();
     let mut denied = Vec::new();
     for provider in &providers {
-        let obtained = crate::gateway::broker::provider_credential(provider).await.is_some();
+        let obtained = crate::gateway::broker::provider_credential(provider)
+            .await
+            .is_some();
         if !obtained {
             denied.push(provider.clone());
         }
