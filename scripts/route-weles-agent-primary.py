@@ -12,7 +12,7 @@ from pathlib import Path
 ROUTES = Path.home() / ".stado" / "inference" / "routes.json"
 ALIAS = "weles/agent/primary"
 OLD_PRIMARY = "local-openai/chat-primary"
-PRIMARY = "codex/gpt-5.6-sol"
+PRIMARY = "featherless/TheDrummer/Cydonia-24B-v4.3"
 FALLBACK = "local-openai/chat-primary"
 
 metadata = ROUTES.lstat()

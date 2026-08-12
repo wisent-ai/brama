@@ -873,14 +873,11 @@ export BRAMA_PROVIDER_CAPABILITY_IDS="$(cat "$capabilities_file")"
 export BRAMA_REQUEST_SIGN_CAPABILITY_IDS="$(cat "$request_capabilities_file")"
 export BRAMA_SUBSCRIPTION_CATALOG="$(cat "$catalog_file")"
 
-# The Mac worker keeps local inference for fallback, while production Weles
-# trajectories use the Codex subscription route. `-best` must be present:
+# Keep the Darwin runtime aligned with the canonical control-plane aliases.
 # `MODEL_ALIASES` in src/core/server.rs requires the exact seven-alias set, so
-# omitting it here fails startup with "must contain the exact named alias set".
-# Subscription routes carry no direct provider capability; the caller's HMAC
-# identity selects the subscription that pays.
+# omitting one fails startup with "must contain the exact named alias set".
 if [ "$(uname -s)" = Darwin ]; then
-  export BRAMA_MODEL_ALIASES='{"-best":"claude-code/claude-opus-4-6","weles/agent/primary":"codex/gpt-5.6-sol","wisent-backend/chat/fallback":"local-openai/chat-primary","wisent-backend/chat/primary":"local-openai/chat-primary","wisent-backend/embeddings":"openai/embeddings","wisent-backend/evaluation":"local-openai/chat-primary","wisent-backend/moderation":"openai/moderation"}'
+  export BRAMA_MODEL_ALIASES='{"-best":"claude-code/claude-opus-4-6","weles/agent/primary":"featherless/TheDrummer/Cydonia-24B-v4.3","wisent-backend/chat/fallback":"local-openai/chat-primary","wisent-backend/chat/primary":"local-openai/chat-primary","wisent-backend/embeddings":"openai/embeddings","wisent-backend/evaluation":"local-openai/chat-primary","wisent-backend/moderation":"openai/moderation"}'
 fi
 
 
