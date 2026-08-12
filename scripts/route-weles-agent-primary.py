@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROUTES = Path.home() / ".stado" / "inference" / "routes.json"
 ALIAS = "weles/agent/primary"
-OLD_PRIMARY = "local-openai/chat-primary"
+OLD_PRIMARIES = {"local-openai/chat-primary", "codex/gpt-5.6-sol"}
 PRIMARY = "featherless/TheDrummer/Cydonia-24B-v4.3"
 FALLBACK = "local-openai/chat-primary"
 
@@ -25,7 +25,7 @@ document = json.loads(ROUTES.read_text(encoding="utf-8"))
 routes = document.setdefault("routes", {})
 fallbacks = document.setdefault("fallbacks", {})
 current = routes.get(ALIAS)
-if current not in {OLD_PRIMARY, PRIMARY}:
+if current not in OLD_PRIMARIES | {PRIMARY}:
     raise SystemExit(f"refusing to replace unexpected {ALIAS} route: {current!r}")
 routes[ALIAS] = PRIMARY
 fallbacks[ALIAS] = [FALLBACK]
