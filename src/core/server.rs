@@ -466,6 +466,7 @@ impl ModelAliases {
             WISENT_CHAT_PRIMARY_ALIAS
                 | WISENT_CHAT_FALLBACK_ALIAS
                 | WISENT_EVALUATION_ALIAS
+                | WELES_AGENT_PRIMARY_ALIAS
                 | BEST_ALIAS
         ) {
             return (None, Vec::new());
