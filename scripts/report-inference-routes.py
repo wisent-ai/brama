@@ -20,8 +20,18 @@ import pathlib
 import subprocess
 import urllib.parse
 
+home = pathlib.Path.home()
+settings = {}
+env_file = home / ".config" / "brama" / "service.env"
+if env_file.is_file():
+    for line in env_file.read_text(errors="replace").splitlines():
+        name, separator, value = line.partition("=")
+        if separator and not name.lstrip().startswith("#"):
+            settings[name.strip()] = value.strip().strip("'\"")
 path = pathlib.Path(
-    os.environ.get("BRAMA_INFERENCE_ROUTES_FILE", pathlib.Path.home() / ".stado/inference/routes.json")
+    os.environ.get("BRAMA_INFERENCE_ROUTES_FILE")
+    or settings.get("BRAMA_INFERENCE_ROUTES_FILE")
+    or (home / ".config" / "brama" / "inference-routes.json")
 )
 
 print(f"file: {path}")
