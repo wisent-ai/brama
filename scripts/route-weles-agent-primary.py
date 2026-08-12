@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Atomically route Weles trajectories to Codex with local inference fallback."""
+"""Atomically route Weles trajectories to Featherless with local fallback."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROUTES = Path.home() / ".stado" / "inference" / "routes.json"
 ALIAS = "weles/agent/primary"
-OLD_PRIMARIES = {"local-openai/chat-primary", "codex/gpt-5.6-sol"}
+OLD_PRIMARIES = {"chat-primary", "local-openai/chat-primary", "codex/gpt-5.6-sol"}
 PRIMARY = "featherless/TheDrummer/Cydonia-24B-v4.3"
 FALLBACK = "local-openai/chat-primary"
 
