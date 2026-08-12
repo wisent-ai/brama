@@ -12,11 +12,11 @@
   {
     "id": "brama-sub-wisent-app-claude-primary",
     "provider": "claude-code",
-    "agents": ["wisent-app"]
+    "agents": ["wisent-app", "probierz"]
   },
   {
     "id": "brama-sub-wisent-app-kimi-primary",
     "provider": "kimi",
-    "agents": ["wisent-app"]
+    "agents": ["wisent-app", "probierz"]
   }
 ]

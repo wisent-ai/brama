@@ -3,9 +3,20 @@ import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sig
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 
-const [, , binaryPath, outputDir, subscriptionsPath, executablePath = binaryPath, workloadUidInput, workloadGidInput] = process.argv;
+const [
+  ,,
+  binaryPath,
+  outputDir,
+  subscriptionsPath,
+  executablePath = binaryPath,
+  workloadUidInput,
+  workloadGidInput,
+  controlConfigInput,
+] = process.argv;
 if (!binaryPath || !outputDir || !subscriptionsPath || !isAbsolute(executablePath)) {
-  throw new Error('usage: generate-skarbiec-config.mjs <brama-binary> <output-dir> <subscriptions-json> [absolute-runtime-binary] [uid] [gid]');
+  throw new Error(
+    'usage: generate-skarbiec-config.mjs <brama-binary> <output-dir> <subscriptions-json> [absolute-runtime-binary] [uid] [gid] [control-config]',
+  );
 }
 
 const workloadUid = 10001;
@@ -43,6 +54,23 @@ for (const subscription of subscriptions) {
   ) {
     throw new Error('subscriptions manifest contains an invalid entry');
   }
+}
+const controlConfigPath = controlConfigInput || process.env.BRAMA_CONTROL_CONFIG;
+let directProviderIds = ['local-openai'];
+if (controlConfigPath) {
+  const controlConfig = JSON.parse(readFileSync(controlConfigPath, 'utf8'));
+  const requiredProviders = controlConfig?.services?.brama?.required_provider_capabilities;
+  if (
+    !Array.isArray(requiredProviders) ||
+    requiredProviders.length === 0 ||
+    requiredProviders.some((provider) => typeof provider !== 'string' || !/^[a-z0-9-]+$/.test(provider)) ||
+    new Set(requiredProviders).size !== requiredProviders.length
+  ) {
+    throw new Error(
+      'services.brama.required_provider_capabilities must be a non-empty unique provider list',
+    );
+  }
+  directProviderIds = [...new Set([...requiredProviders, 'local-openai'])];
 }
 const now = Math.floor(Date.now() / 1000);
 const expiresAt = now + maxTtlSeconds;
@@ -150,7 +178,7 @@ const subscriptionRules = subscriptions.map(({ id, provider }) => ({
   max_uses: maxUses,
   delegation_depth: 0,
 }));
-const directProviderRules = [...new Set([...subscriptions.map(({ provider }) => provider), 'local-openai'])].map((provider) => ({
+const directProviderRules = [...new Set([...subscriptions.map(({ provider }) => provider), ...directProviderIds])].map((provider) => ({
   purpose: 'brama.provider.authenticate',
   resource: `provider:${provider}`,
   target: 'brama',

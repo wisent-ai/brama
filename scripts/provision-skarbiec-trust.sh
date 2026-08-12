@@ -75,6 +75,22 @@ subscriptions="$config_dir/subscriptions.json"
   printf '%s\n' "missing subscriptions manifest: $subscriptions" >/dev/stderr
   false
 }
+control_config=${BRAMA_CONTROL_CONFIG:-}
+if [ -z "$control_config" ]; then
+  for candidate in \
+    "${HOME:-/nonexistent}/.config/brama/control.json" \
+    "${HOME:-/nonexistent}/.config/stado/config.json"
+  do
+    if [ -f "$candidate" ]; then
+      control_config=$candidate
+      break
+    fi
+  done
+fi
+if [ -n "$control_config" ] && [ ! -f "$control_config" ]; then
+  printf '%s\n' "BRAMA_CONTROL_CONFIG is not a regular file: $control_config" >/dev/stderr
+  false
+fi
 
 # The proof key is the one file whose presence means this installation already
 # has an identity. Overwriting it silently would strand every capability the
@@ -111,6 +127,9 @@ BRAMA_PROOF_KEY_FILE=${BRAMA_PROOF_KEY_FILE:-"${HOME:-/nonexistent}/.config/bram
 export BRAMA_PROOF_KEY_FILE
 set -- "$brama_bin" "$config_dir" "$subscriptions" "$runtime_bin" \
   "${BRAMA_WORKLOAD_UID:-$(id -u)}" "${BRAMA_WORKLOAD_GID:-$(id -g)}"
+if [ -n "$control_config" ]; then
+  set -- "$@" "$control_config"
+fi
 "$NODE_BIN" "$generator" "$@"
 
 printf '%s\n' "provisioned Skarbiec trust material for $runtime_bin in $config_dir"

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Report which subscription credentials the gateway is currently skipping.
+"""Report or clear provider-authentication blocks in the subscription ledger.
 
-A credential inside a recorded rate-limit block is skipped before any provider
-call, so a subscription that has just been repaired still looks dead until the
-block expires. The dispatcher says only "all bounded credentials unavailable",
-which reads identically to a missing credential, and the ledger is the only
-place that distinguishes the two.
+A credential inside a recorded block is skipped before any provider call, so a
+subscription that has just been repaired still looks dead until the block
+expires. The dispatcher says only "all bounded credentials unavailable", and
+the ledger is the only place that distinguishes the two.
 
-Read-only. Prints subscription ids, block reasons and reset times; the ledger
-holds no secret values.
+With no arguments this prints non-secret block and usage metadata. Use
+`--clear-auth SUBSCRIPTION_ID` after repairing one credential; the command
+refuses to remove rate-limit or capacity blocks.
 """
 
 from __future__ import annotations
@@ -17,6 +17,9 @@ import datetime
 import json
 import os
 import pathlib
+import stat
+import sys
+import tempfile
 
 LEDGER = (
     pathlib.Path(os.environ.get("XDG_STATE_HOME", pathlib.Path.home() / ".local/state"))
@@ -57,6 +60,41 @@ except json.JSONDecodeError as error:
 entries = ledger.get("subscriptions") if isinstance(ledger, dict) else None
 if not isinstance(entries, dict):
     entries = ledger if isinstance(ledger, dict) else {}
+
+
+clear_aliases = {
+    "clear-brama-codex-primary-auth-block": "brama-sub-wisent-app-codex-primary",
+}
+invocation = pathlib.Path(sys.argv[0]).name
+subscription_id = clear_aliases.get(invocation)
+if len(sys.argv) > 1:
+    if len(sys.argv) != 3 or sys.argv[1] != "--clear-auth":
+        raise SystemExit(f"usage: {sys.argv[0]} [--clear-auth SUBSCRIPTION_ID]")
+    subscription_id = sys.argv[2]
+
+if subscription_id is not None:
+    entry = entries.get(subscription_id)
+    block = entry.get("block") if isinstance(entry, dict) else None
+    reason = block.get("reason") if isinstance(block, dict) else None
+    if not isinstance(reason, str) or not any(
+        marker in reason.lower()
+        for marker in ("authentication", "invalid_grant", "oauth", "token is expired")
+    ):
+        raise SystemExit(f"{subscription_id}: no provider-authentication block to clear")
+    entry["block"] = None
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        delete=False,
+    ) as output:
+        json.dump(ledger, output, indent=2, sort_keys=True)
+        output.write("\n")
+        temporary = pathlib.Path(output.name)
+    temporary.chmod(stat.S_IMODE(path.stat().st_mode))
+    os.replace(temporary, path)
+    print(f"{subscription_id}: cleared provider-authentication block")
 
 # The gateway and this report disagreed once already, with the dispatcher
 # skipping a credential this file called free. Guessing key names is what

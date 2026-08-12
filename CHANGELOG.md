@@ -5,6 +5,23 @@ Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
 ## Unreleased
 
+### Local inference yields to fleet work
+
+Deployment-owned aliases can now fall back from local vLLM to the same
+`TheDrummer/Cydonia-24B-v4.3` model on Featherless. Featherless is a native
+OpenAI-compatible direct provider, and per-installation Skarbiec policy now
+derives its direct-provider grants from the authoritative Brama control
+document instead of an unrelated subscription list.
+
+
+### OAuth credentials recover from provider rejection
+
+Subscription access grants can be rejected before their local expiry claim.
+Brama now forces one refresh-token exchange after a provider authentication
+failure, persists the rotated credential, and retries the request once. An
+authentication failure that remains after refresh rotates to the next
+credential without being mislabeled as a 15-minute rate-limit block.
+
 ### Probierz vision calls use the Probierz identity
 
 The `probierz-model-router` bearer is now bound to `probierz`, whose dedicated

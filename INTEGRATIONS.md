@@ -41,7 +41,7 @@ endpoint, and correct capability.
 
 | Integration | Protocol | Identity | Current capability | Runtime owner |
 |---|---|---|---|---|
-| OpenAI, OpenRouter, Groq, Mistral, xAI, DeepSeek, Cerebras, Fireworks, Together, NVIDIA, Moonshot, Z.AI, Qwen, Hugging Face, Venice, Novita, Synthetic, Kimi | OpenAI Chat compatible | direct API capability or agent subscription | buffered chat; tools where advertised | Brama operator / subscription owner |
+| OpenAI, OpenRouter, Groq, Mistral, xAI, DeepSeek, Cerebras, Fireworks, Together, NVIDIA, Moonshot, Z.AI, Qwen, Hugging Face, Featherless, Venice, Novita, Synthetic, Kimi | OpenAI Chat compatible | direct API capability or agent subscription | buffered chat; tools where advertised | Brama operator / subscription owner |
 | Anthropic and Claude Code | Anthropic Messages | direct API capability or agent OAuth subscription | buffered chat and tool use | Brama operator / subscription owner |
 | Codex | OpenAI Responses event stream consumed internally | agent OAuth subscription | buffered normalized final response and tool calls | subscription owner |
 | Google catalog providers | GenerateContent | per-subscription API capability | buffered chat and tools where advertised | subscription owner |

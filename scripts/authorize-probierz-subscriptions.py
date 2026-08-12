@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Authorize Probierz on the Codex subscriptions declared for it.
+"""Authorize Probierz on every subscription declared for it.
 
 Runs on the Skarbiec owner host. Existing payloads and recipients are preserved;
 only the public brama:agent:probierz tag is added. Secret values stay on stdin to
@@ -18,6 +18,8 @@ VAULT = Path(os.environ.get("SKARBIEC_VAULT_FILE", HOME / ".stado/skarbiec.vault
 ITEMS = (
     "provider:codex:brama-sub-wisent-app-codex-primary",
     "provider:codex:brama-sub-wisent-app-codex-secondary",
+    "provider:claude-code:brama-sub-wisent-app-claude-primary",
+    "provider:kimi:brama-sub-wisent-app-kimi-primary",
 )
 TAG = "brama:agent:probierz"
 ENVIRONMENT = {
