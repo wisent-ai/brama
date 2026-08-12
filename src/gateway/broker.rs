@@ -694,11 +694,7 @@ async fn credential_by_grant(resource: &str) -> Option<Secret> {
             return None;
         }
     };
-    let Some(value) = payload
-        .get("fields")
-        .and_then(|fields| fields.get(&field))
-        .and_then(serde_json::Value::as_str)
-    else {
+    let Some(value) = payload.get("fields").and_then(|fields| fields.get(&field)) else {
         warn!(
             event = "credential_read_field_absent",
             %resource, %item, %field,
@@ -706,7 +702,29 @@ async fn credential_by_grant(resource: &str) -> Option<Secret> {
         );
         return None;
     };
-    Some(Secret::from_bytes(value.as_bytes().to_vec()))
+    let bytes = match value {
+        serde_json::Value::String(value) => value.as_bytes().to_vec(),
+        serde_json::Value::Null => {
+            warn!(
+                event = "credential_read_field_absent",
+                %resource, %item, %field,
+                "the credential document carries a null field"
+            );
+            return None;
+        }
+        value => match serde_json::to_vec(value) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                warn!(
+                    event = "credential_read_field_unserializable",
+                    %resource, %item, %field, %error,
+                    "the credential field could not be preserved as JSON"
+                );
+                return None;
+            }
+        },
+    };
+    Some(Secret::from_bytes(bytes))
 }
 
 /// The same request during startup validation, where there is no runtime to
