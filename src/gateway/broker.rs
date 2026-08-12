@@ -196,46 +196,76 @@ pub async fn get_agent_auth_secret(agent_id: &str) -> Option<Secret> {
         }
     }
 }
-/// The providers this installation can obtain a direct capability for, resolved
-/// in one pass.
+/// The providers this installation can authenticate directly, resolved once.
 ///
-/// `provider_capability_configured` answers for one provider and pays the whole
-/// cost each time: it parses the capability map out of the environment and
-/// rebuilds the client, which opens and parses the workload signing key. A
-/// caller holding a catalogue asks once per model, and this installation's
-/// catalogue carries several thousand of them, so an authenticated `/v1/models`
-/// spent longer rebuilding the same client than any client waits for a reply.
-/// The work does not vary per provider, so it is done once here and the answer
-/// is a set membership test.
+/// Capability redemption and a field-scoped read grant are the two request
+/// paths. The catalogue must describe both; otherwise it hides an alias that
+/// the request path can serve after a stale workload capability falls back to
+/// the still-valid grant.
+fn configured_provider_grants() -> std::collections::HashSet<String> {
+    let Some(path) = std::env::var_os("SKARBIEC_CAPABILITY_ROUTES_FILE") else {
+        return std::collections::HashSet::new();
+    };
+    let Ok(raw) = std::fs::read_to_string(path) else {
+        return std::collections::HashSet::new();
+    };
+    let Ok(table) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return std::collections::HashSet::new();
+    };
+    let Some(routes) = table.as_object() else {
+        return std::collections::HashSet::new();
+    };
+    routes
+        .iter()
+        .filter_map(|(resource, entry)| {
+            let provider = resource.strip_prefix("provider:")?;
+            if provider.is_empty()
+                || provider.contains(':')
+                || entry
+                    .get("item")
+                    .and_then(serde_json::Value::as_str)
+                    .is_none()
+                || entry
+                    .get("field")
+                    .and_then(serde_json::Value::as_str)
+                    .is_none()
+            {
+                return None;
+            }
+            Some(provider.to_owned())
+        })
+        .collect()
+}
+
+/// Resolve provider authentication once for an authenticated model catalogue.
+///
+/// Parsing the capability map and grant routes once avoids rebuilding the
+/// workload client for every model in a catalogue with thousands of entries.
 pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
     let mut configured = LOCAL_PROVIDER_CREDENTIALS
         .get()
         .map(|credentials| credentials.keys().cloned().collect())
         .unwrap_or_default();
+    configured.extend(configured_provider_grants());
     if client().is_none() {
         return configured;
     }
-    let Some(map) = capability_map(PROVIDER_CAPABILITIES_ENV) else {
-        return configured;
-    };
-    for (provider, capability_id) in map {
-        let resource = provider_resource(&provider);
-        if CapabilityRef::provider(&capability_id, &resource).is_ok() {
-            configured.insert(provider);
+    if let Some(map) = capability_map(PROVIDER_CAPABILITIES_ENV) {
+        for (provider, capability_id) in map {
+            let resource = provider_resource(&provider);
+            if CapabilityRef::provider(&capability_id, &resource).is_ok() {
+                configured.insert(provider);
+            }
         }
     }
     configured
 }
 
-/// Return whether this installation can obtain a direct provider capability.
+/// Return whether this installation has a direct capability or read grant.
 ///
-/// Startup validation refuses an alias whose provider has none, so this has to
-/// answer the question the request path will actually ask. It used to read one
-/// environment variable the launcher filled at boot; with capabilities issued
-/// where they are spent, an absent entry means nothing until the broker has
-/// been asked. Asking costs one capability, which is the cheapest possible
-/// proof that the path works, and is far cheaper than a gateway that starts
-/// and refuses every request.
+/// Startup and alias resolution must ask the same question as
+/// [`provider_credential`], which falls back to the exact field-scoped route
+/// when capability issuance or redemption is unavailable.
 pub fn provider_capability_configured(provider: &str) -> bool {
     if LOCAL_PROVIDER_CREDENTIALS
         .get()
@@ -244,6 +274,9 @@ pub fn provider_capability_configured(provider: &str) -> bool {
         return true;
     }
     let resource = provider_resource(provider);
+    if capability_route(&resource).is_some() {
+        return true;
+    }
     if client().is_none() {
         return false;
     }
