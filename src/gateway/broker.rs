@@ -121,6 +121,20 @@ struct BrokerSubscriptionEntry {
     status: Option<String>,
 }
 
+fn configured_subscription_ids() -> std::collections::HashSet<String> {
+    let Some(catalog) = std::env::var(SUBSCRIPTION_CATALOG_ENV)
+        .ok()
+        .and_then(|encoded| serde_json::from_str::<BrokerItems>(&encoded).ok())
+    else {
+        return std::collections::HashSet::new();
+    };
+    catalog
+        .items
+        .into_iter()
+        .filter_map(|entry| entry.id)
+        .collect()
+}
+
 fn capability_map(name: &str) -> Option<HashMap<String, String>> {
     let encoded = std::env::var(name).ok()?;
     let parsed: HashMap<String, String> = serde_json::from_str(&encoded).ok()?;
@@ -252,8 +266,12 @@ pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
     if client().is_none() {
         return configured;
     }
+    let subscription_ids = configured_subscription_ids();
     if let Some(map) = capability_map(PROVIDER_CAPABILITIES_ENV) {
         for (provider, capability_id) in map {
+            if subscription_ids.contains(&provider) {
+                continue;
+            }
             let resource = provider_resource(&provider);
             if CapabilityRef::provider(&capability_id, &resource).is_ok() {
                 configured.insert(provider);
