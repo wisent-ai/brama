@@ -27,6 +27,7 @@ const CENTRAL_REQUEST_SIGN_AGENTS: &[&str] = &[
     "weles",
     "lem",
     "probierz",
+    "wisent-app",
 ];
 const PROVIDER_CAPABILITIES_ENV: &str = "BRAMA_PROVIDER_CAPABILITY_IDS";
 const SUBSCRIPTION_CATALOG_ENV: &str = "BRAMA_SUBSCRIPTION_CATALOG";
