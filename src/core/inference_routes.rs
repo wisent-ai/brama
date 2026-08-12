@@ -155,10 +155,13 @@ pub fn update_route(
     }
     result
 }
-fn tailscale_ipv4(value: &str) -> bool {
+fn safe_inference_host(value: &str) -> bool {
     let Ok(address) = value.parse::<std::net::Ipv4Addr>() else {
         return false;
     };
+    if address.is_loopback() {
+        return true;
+    }
     let octets = address.octets();
     let first = "100".parse::<u8>().expect("static Tailscale prefix");
     let lower = "64".parse::<u8>().expect("static Tailscale range");
@@ -175,9 +178,9 @@ fn resolved_destination(registry: &Registry, destination: &str) -> Result<String
         .iter()
         .find(|deployment| deployment.name == destination)
         .ok_or_else(|| format!("unknown inference deployment '{destination}'"))?;
-    if !tailscale_ipv4(&deployment.endpoint.host) || deployment.endpoint.port == u16::MIN {
+    if !safe_inference_host(&deployment.endpoint.host) || deployment.endpoint.port == u16::MIN {
         return Err(format!(
-            "inference deployment '{destination}' has no safe Tailscale endpoint"
+            "inference deployment '{destination}' has no safe local or Tailscale endpoint"
         ));
     }
     Ok(format!("local-openai/{destination}"))
@@ -227,9 +230,9 @@ pub fn base_url(path: &Path, deployment_name: &str) -> Result<String, String> {
         .iter()
         .find(|deployment| deployment.name == deployment_name)
         .ok_or_else(|| format!("unknown inference deployment '{deployment_name}'"))?;
-    if !tailscale_ipv4(&deployment.endpoint.host) || deployment.endpoint.port == u16::MIN {
+    if !safe_inference_host(&deployment.endpoint.host) || deployment.endpoint.port == u16::MIN {
         return Err(format!(
-            "inference deployment '{deployment_name}' has no safe Tailscale endpoint"
+            "inference deployment '{deployment_name}' has no safe local or Tailscale endpoint"
         ));
     }
     Ok(format!(
@@ -316,7 +319,21 @@ mod tests {
         )
         .expect("replace route fixture");
         let error = base_url(&path, "chat-primary").expect_err("reject LAN origin");
-        assert!(error.contains("safe Tailscale endpoint"));
+        assert!(error.contains("safe local or Tailscale endpoint"));
+        std::fs::remove_file(path).expect("remove fixture");
+    }
+    #[test]
+    fn loopback_origin_is_accepted() {
+        let path = route_file("loopback");
+        std::fs::write(
+            &path,
+            "{\"deployments\":[{\"name\":\"chat-primary\",\"endpoint\":{\"host\":\"127.0.0.1\",\"port\":8001}}],\"routes\":{\"wisent-backend/chat/primary\":\"chat-primary\"}}",
+        )
+        .expect("replace route fixture");
+        assert_eq!(
+            base_url(&path, "chat-primary").expect("origin"),
+            "http://127.0.0.1:8001"
+        );
         std::fs::remove_file(path).expect("remove fixture");
     }
     #[test]
