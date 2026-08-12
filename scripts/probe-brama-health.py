@@ -46,7 +46,10 @@ def probe(url):
 def main():
     port = PORT or settings().get("PORT", "").strip() or "8080"
     report = {}
-    for path in ("/healthz", "/health"):
+    # `/readyz` is included because the other two answer for the process and
+    # this one answers for the product: it redeems a capability per configured
+    # provider and fails naming the ones it could not obtain.
+    for path in ("/healthz", "/health", "/readyz"):
         url = f"http://127.0.0.1:{port}{path}"
         status, body = probe(url)
         report[url] = {"status": status, "body": body[: len("x" * len("xxxxxxxxxx")) * len("xxxxxxxxxx")]}
