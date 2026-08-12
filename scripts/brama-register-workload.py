@@ -37,27 +37,33 @@ for line in env_file.read_text().splitlines():
         settings[name.strip()] = value.strip().strip("'\"")
 
 # The launcher passes these directly, and when it does they are authoritative:
-# it has just provisioned the very directory whose key must be registered.
-# Falling back to the service env keeps the script usable on its own, and the
-# running installation is the last resort because `current` can lag a boot
-# behind what the launcher resolved.
-router = os.environ.get("ENTITLEMENTS_ROUTER_BIN") or settings.get("ENTITLEMENTS_ROUTER_BIN")
+# it has just provisioned the directory whose key must be registered. Outside
+# the launcher, `current` is authoritative for executable and trust material;
+# service.env can retain paths from an older digest after `stado service update`.
+running = (home / ".stado" / "services" / "brama" / "current").resolve()
+architecture = running / "darwin-arm"
+root = architecture if architecture.is_dir() else running
+current_router = root / "bin" / "skarbiec-entitlements-router"
+current_config = root / "etc" / "brama-skarbiec"
+explicit_config = os.environ.get("BRAMA_SKARBIEC_CONFIG_DIR")
+router = (
+    os.environ.get("ENTITLEMENTS_ROUTER_BIN")
+    or (str(current_router) if current_router.is_file() else None)
+    or settings.get("ENTITLEMENTS_ROUTER_BIN")
+)
 vault = os.environ.get("SKARBIEC_VAULT_FILE") or settings.get("SKARBIEC_VAULT_FILE")
-config_dir = os.environ.get("BRAMA_SKARBIEC_CONFIG_DIR") or settings.get(
-    "BRAMA_SKARBIEC_CONFIG_DIR"
+config_dir = (
+    explicit_config
+    or (str(current_config) if current_config.is_dir() else None)
+    or settings.get("BRAMA_SKARBIEC_CONFIG_DIR")
 )
 if not router or not vault:
     raise SystemExit(
         "ENTITLEMENTS_ROUTER_BIN and SKARBIEC_VAULT_FILE must be named by the "
-        "environment or the service env"
+        "running installation, environment, or service env"
     )
 
 registry_path = pathlib.Path(config_dir) / "registry.json" if config_dir else None
-if registry_path is None or not registry_path.is_file():
-    running = (home / ".stado" / "services" / "brama" / "current").resolve()
-    architecture = running / "darwin-arm"
-    root = architecture if architecture.is_dir() else running
-    registry_path = root / "etc" / "brama-skarbiec" / "registry.json"
 if not registry_path.is_file():
     raise SystemExit(f"no workload registry at {registry_path}")
 

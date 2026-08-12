@@ -32,12 +32,13 @@ elif [ -n "${BRAMA_SERVICE_ENV_FILE:-}" ]; then
   false
 fi
 
-# A versioned bundle carries its own executables, and those always win. Trust
-# configuration is host-owned and stable across bundle digests, so an explicit
-# BRAMA_SKARBIEC_CONFIG_DIR remains authoritative.
+# A versioned bundle carries its own executables and trust material; these must
+# move together because registry.json binds capabilities to that exact binary.
+# service.env may retain paths from an older digest after a Stado update.
 if [ "$bundled_installation" -eq 1 ]; then
   BRAMA_BIN="$default_brama_bin"
   ENTITLEMENTS_ROUTER_BIN="$default_router_bin"
+  BRAMA_SKARBIEC_CONFIG_DIR="$default_config_dir"
 else
   if [ -x "$default_brama_bin" ]; then BRAMA_BIN="$default_brama_bin"; fi
   if [ -x "$default_router_bin" ]; then ENTITLEMENTS_ROUTER_BIN="$default_router_bin"; fi
