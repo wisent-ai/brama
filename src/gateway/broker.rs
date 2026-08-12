@@ -212,7 +212,8 @@ fn configured_provider_grants() -> std::collections::HashSet<String> {
     let Ok(table) = serde_json::from_str::<serde_json::Value>(&raw) else {
         return std::collections::HashSet::new();
     };
-    let Some(routes) = table.as_object() else {
+    let routes = table.get("routes").unwrap_or(&table);
+    let Some(routes) = routes.as_object() else {
         return std::collections::HashSet::new();
     };
     routes
@@ -677,7 +678,8 @@ async fn issue_capability(purpose: &str, resource: &str) -> Option<String> {
 fn capability_route(resource: &str) -> Option<(String, String)> {
     let path = std::env::var_os("SKARBIEC_CAPABILITY_ROUTES_FILE")?;
     let raw = std::fs::read_to_string(path).ok()?;
-    let table: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let document: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let table = document.get("routes").unwrap_or(&document);
     let entry = table.get(resource)?;
     let item = entry.get("item")?.as_str()?.to_owned();
     let field = entry.get("field")?.as_str()?.to_owned();
