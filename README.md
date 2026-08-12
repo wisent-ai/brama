@@ -290,8 +290,8 @@ The complete state, error, retry, authorization, and resource contract is in
 - **Dynamic inference routes:** `BRAMA_INFERENCE_ROUTES_FILE` points at an
   owner-only snapshot maintained by the deployment operator. Brama reloads it
   per request, rejects symlinks and group/other-readable files, accepts only
-  Tailscale IPv4 deployment endpoints, fails closed on malformed updates, and
-  attempts centrally declared fallback routes in order.
+  loopback or Tailscale IPv4 deployment endpoints, fails closed on malformed
+  updates, and attempts centrally declared fallback routes in order.
 - **Desktop credentials:** standalone Brama Desktop launches its bundled Brama
   binary on loopback, sends provider credentials once over the child process's
   standard input, and keeps both its router bearer and provider credentials out
