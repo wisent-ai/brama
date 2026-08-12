@@ -186,7 +186,10 @@ def main() -> None:
         text = log.read_text(encoding="utf-8", errors="replace").splitlines()
         lines.extend(line for line in text if any(token in line for token in interesting))
     report["gateway_log"] = {"root": str(log_root), "matching_tail": lines[-400:]}
-    newest = sorted(log_root.glob("brama*"), key=lambda p: p.stat().st_mtime)[-1:]
+    newest = sorted(
+        list(log_root.glob("brama*")) + list(log_root.glob("stado-resolver*")),
+        key=lambda p: p.stat().st_mtime,
+    )[-2:]
     report["gateway_log"]["raw_tail"] = [
         {
             "file": str(log),
