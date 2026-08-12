@@ -62,10 +62,17 @@ if not isinstance(entries, dict):
     entries = ledger if isinstance(ledger, dict) else {}
 
 
+clear_aliases = {
+    "clear-brama-codex-primary-auth-block": "brama-sub-wisent-app-codex-primary",
+}
+invocation = pathlib.Path(sys.argv[0]).name
+subscription_id = clear_aliases.get(invocation)
 if len(sys.argv) > 1:
     if len(sys.argv) != 3 or sys.argv[1] != "--clear-auth":
         raise SystemExit(f"usage: {sys.argv[0]} [--clear-auth SUBSCRIPTION_ID]")
     subscription_id = sys.argv[2]
+
+if subscription_id is not None:
     entry = entries.get(subscription_id)
     block = entry.get("block") if isinstance(entry, dict) else None
     reason = block.get("reason") if isinstance(block, dict) else None
@@ -88,6 +95,7 @@ if len(sys.argv) > 1:
     temporary.chmod(stat.S_IMODE(path.stat().st_mode))
     os.replace(temporary, path)
     print(f"{subscription_id}: cleared provider-authentication block")
+
 # The gateway and this report disagreed once already, with the dispatcher
 # skipping a credential this file called free. Guessing key names is what
 # produced that, so the shape is printed rather than interpreted.
