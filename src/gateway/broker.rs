@@ -242,7 +242,7 @@ fn configured_provider_grants() -> std::collections::HashSet<String> {
 /// Parsing the capability map and grant routes once avoids rebuilding the
 /// workload client for every model in a catalogue with thousands of entries.
 pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
-    let mut configured = LOCAL_PROVIDER_CREDENTIALS
+    let mut configured: std::collections::HashSet<String> = LOCAL_PROVIDER_CREDENTIALS
         .get()
         .map(|credentials| credentials.keys().cloned().collect())
         .unwrap_or_default();
