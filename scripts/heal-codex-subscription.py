@@ -24,6 +24,7 @@ import argparse
 import json
 import os
 import pathlib
+import select
 import subprocess
 import sys
 import time
@@ -39,20 +40,27 @@ AUTH_MARKS = ("authentication", "expired", "unauthorized", "invalid_grant")
 PROBE = "Reply with the single word PROBE."
 
 
-def blocked_codex(ledger: dict) -> list[str]:
+def blocked_codex(ledger: dict) -> dict[str, dict[str, object]]:
+    """Codex subscriptions the provider refused, keyed by subscription.
+
+    The value carries the moment the refusal was recorded, which is what makes
+    one episode distinguishable from the next. A block sits in the ledger until
+    it lapses, and the ledger is rewritten on every request, so without that
+    marker a single standing refusal would buy a token exchange on every write.
+    """
     entries = ledger.get("subscriptions") if isinstance(ledger, dict) else None
     if not isinstance(entries, dict):
         entries = ledger if isinstance(ledger, dict) else {}
-    found = []
+    found: dict[str, dict[str, object]] = {}
     for name, entry in entries.items():
         if "codex" not in name or not isinstance(entry, dict):
             continue
         block = entry.get("block")
         if not isinstance(block, dict):
             continue
-        reason = str(block.get("reason", "")).lower()
-        if any(mark in reason for mark in AUTH_MARKS):
-            found.append(f"{name}: {block.get('reason')}")
+        reason = str(block.get("reason", ""))
+        if any(mark in reason.lower() for mark in AUTH_MARKS):
+            found[name] = {"reason": reason, "recorded_at": block.get("recorded_at_ms")}
     return found
 
 
@@ -83,20 +91,55 @@ def bank() -> bool:
     return result.returncode == os.EX_OK
 
 
+def await_change(path: pathlib.Path) -> None:
+    """Block until the ledger is written, without polling and without a clock.
+
+    A watch-triggered launchd job is invisible to the fleet's health view: its
+    normal state between wakeups is "not running", which every status command
+    reports as a missing service. Staying resident and blocking here costs no
+    cycles while everything works and leaves the unit legible as running.
+
+    The file is rewritten rather than appended, so the descriptor is reopened
+    on every wakeup; watching a deleted inode would go quiet for good.
+    """
+    queue = select.kqueue()
+    descriptor = os.open(str(path), os.O_RDONLY)
+    try:
+        event = select.kevent(
+            descriptor,
+            filter=select.KQ_FILTER_VNODE,
+            flags=select.KQ_EV_ADD | select.KQ_EV_ENABLE | select.KQ_EV_CLEAR,
+            fflags=select.KQ_NOTE_WRITE
+            | select.KQ_NOTE_EXTEND
+            | select.KQ_NOTE_DELETE
+            | select.KQ_NOTE_RENAME,
+        )
+        # Register expecting nothing back, then wait for exactly this one event.
+        queue.control([event], len([]), None)
+        queue.control(None, len([event]), None)
+    finally:
+        os.close(descriptor)
+        queue.close()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    # launchd can wake this on every write to the ledger, which is the exact
-    # moment the dispatcher records a refusal, so the normal installation needs
-    # no interval at all. The polling form stays for a host without WatchPaths.
-    parser.add_argument("--interval", type=int, help="seconds between checks when polling")
+    # Three ways to run, and the bare one is the deployed one: with no flags
+    # this stays resident and blocks until the ledger changes, which is the
+    # exact moment the dispatcher records a refusal. `--once` is for a probe,
+    # `--interval` for a host where the change notification is unavailable.
+    parser.add_argument("--interval", type=int, help="seconds between checks instead of watching")
     parser.add_argument("--once", action="store_true", help="check once and exit")
     options = parser.parse_args()
-    if not options.once and options.interval is None:
-        parser.error("either --once or --interval is required")
 
     if not CODEX.is_file():
         print(f"no codex CLI at {CODEX}; nothing to heal with", flush=True)
         return os.EX_UNAVAILABLE
+
+    # Which refusal episode was already answered, per subscription. A standing
+    # block would otherwise buy an exchange on every ledger write, and the
+    # ledger is written on every request.
+    answered: dict[str, object] = {}
 
     while True:
         try:
@@ -107,15 +150,23 @@ def main() -> int:
             print(f"ledger unreadable: {error}", flush=True)
             ledger = {}
 
-        refused = blocked_codex(ledger)
-        if refused:
-            for line in refused:
-                print(f"refused: {line}", flush=True)
+        fresh = {
+            name: entry
+            for name, entry in blocked_codex(ledger).items()
+            if answered.get(name) != entry["recorded_at"]
+        }
+        if fresh:
+            for name, entry in fresh.items():
+                print(f"refused: {name}: {entry['reason']}", flush=True)
+                answered[name] = entry["recorded_at"]
             if exchange():
                 bank()
         if options.once:
             return os.EX_OK
-        time.sleep(options.interval)
+        if options.interval is None:
+            await_change(LEDGER)
+        else:
+            time.sleep(options.interval)
 
 
 if __name__ == "__main__":

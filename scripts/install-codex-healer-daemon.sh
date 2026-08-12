@@ -6,9 +6,11 @@
 # session to bootstrap into. Every always-on unit in this fleet is therefore a
 # system daemon, and this follows them.
 #
-# The job is not a timer. launchd watches the dispatcher's usage ledger and
-# starts it on every write, which is the exact moment a refusal is recorded, so
-# the healer runs when a credential is actually refused and never on a clock.
+# The job stays resident and blocks on a change notification for the ledger,
+# rather than being started by launchd's WatchPaths. Both react to the same
+# event, but a watch-triggered job is "not running" between wakeups and every
+# fleet status command reads that as a missing service -- a unit that is
+# permanently reported broken teaches operators to ignore the report.
 #
 # Idempotent: re-running replaces the definition and reloads it.
 set -eu
@@ -44,15 +46,12 @@ tmp=$(/usr/bin/mktemp)
     <array>
         <string>${PYTHON}</string>
         <string>${HEALER}</string>
-        <string>--once</string>
     </array>
     <key>UserName</key>
     <string>${owner}</string>
-    <key>WatchPaths</key>
-    <array>
-        <string>${LEDGER}</string>
-    </array>
     <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
     <string>${LOG}</string>
