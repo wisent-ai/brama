@@ -23,7 +23,7 @@ if (
 const maxTtlSeconds = 315_360_000;
 const maxUses = 10_000_000;
 const subscriptions = JSON.parse(readFileSync(subscriptionsPath, 'utf8'));
-const subscriptionAgentIds = ['echo', 'content-platform', 'oko', 'wisent-app', 'lem'];
+const subscriptionAgentIds = ['echo', 'content-platform', 'oko', 'wisent-app', 'lem', 'probierz'];
 const requestSignAgentIds = ['wisent-app'];
 if (!Array.isArray(subscriptions) || subscriptions.length === 0) {
   throw new Error('subscriptions manifest must be a non-empty array');

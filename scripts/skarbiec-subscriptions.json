@@ -2,12 +2,12 @@
   {
     "id": "brama-sub-wisent-app-codex-primary",
     "provider": "codex",
-    "agents": ["wisent-app", "lem"]
+    "agents": ["wisent-app", "lem", "probierz"]
   },
   {
     "id": "brama-sub-wisent-app-codex-secondary",
     "provider": "codex",
-    "agents": ["wisent-app", "lem"]
+    "agents": ["wisent-app", "lem", "probierz"]
   },
   {
     "id": "brama-sub-wisent-app-claude-primary",

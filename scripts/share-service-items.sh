@@ -29,6 +29,7 @@ for item in \
   content-platform-agent-auth \
   oko-model-agent-auth \
   weles-model-agent-auth \
+  probierz-agent-auth \
   brama-weles-reauth
 do
   "$SKARBIEC_BIN" share "$item" "$recipient"

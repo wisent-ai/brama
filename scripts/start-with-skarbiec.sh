@@ -495,7 +495,7 @@ sources = [
     ("weles", "weles-model-router", "weles", weles_models),
     ("weles-keyword-planner", "weles-keyword-planner-model-router", "wisent-app", None),
     ("jeden", "jeden-model-router", None, None),
-    ("probierz", "probierz-model-router", None, None),
+    ("probierz", "probierz-model-router", "probierz", None),
     ("wisent-backend-api", "wisent-backend-api-model-router", None, None),
     ("wisent-app", "wisent-app-model-router", "wisent-app", None),
     ("growth-tactics", "growth-tactics-model-router", None, None),
@@ -596,6 +596,7 @@ sources = {
     "oko": "oko-model-agent-auth",
     "weles": "weles-model-agent-auth",
     "lem": "lem-agent-auth",
+    "probierz": "probierz-agent-auth",
 }
 
 def field(item, name):

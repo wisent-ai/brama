@@ -5,6 +5,14 @@ Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
 ## Unreleased
 
+### Probierz vision calls use the Probierz identity
+
+The `probierz-model-router` bearer is now bound to `probierz`, whose dedicated
+request-signing secret is loaded from `probierz-agent-auth`. The two Codex
+subscription routes admit that identity, so `any-vision-capable` evaluations no
+longer fail after capture with a missing `x-agent-id` header or borrow another
+product's signing identity.
+
 ### Readiness now answers for the credential chain
 
 `GET /health` is liveness and always was: its own body says
