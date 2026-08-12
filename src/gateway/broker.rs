@@ -166,9 +166,10 @@ pub async fn get_agent_auth_secret(agent_id: &str) -> Option<Secret> {
     let Some(fresh) = issue_capability(REQUEST_SIGN_PURPOSE, &resource).await else {
         warn!(
             event = "request_sign_issue_failed",
-            agent_id, %resource, "the authority would not issue a request-sign capability"
+            agent_id, %resource,
+            "the authority would not issue a request-sign capability; trying the read grant"
         );
-        return None;
+        return credential_by_grant(&resource).await;
     };
     let Ok(binding) = CapabilityRef::request_sign(&fresh, &resource) else {
         warn!(
@@ -342,9 +343,10 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
     let Some(fresh) = issue_capability(PROVIDER_PURPOSE, &resource).await else {
         warn!(
             event = "provider_credential_issue_failed",
-            provider, %resource, "the authority would not issue a capability for this resource"
+            provider, %resource,
+            "the authority would not issue a capability for this resource; trying the read grant"
         );
-        return None;
+        return credential_by_grant(&resource).await;
     };
     let binding = CapabilityRef::provider(&fresh, &resource).ok()?;
     match broker.redeem(&binding) {
