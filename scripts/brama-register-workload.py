@@ -109,31 +109,6 @@ print(f"routes:   {routes_path}")
 if not capabilities:
     raise SystemExit(f"{routes_path} maps nothing, so there is nothing to grant")
 
-# When the vault already names this key there is nothing to do, and saying so is
-# not a formality: minting requires the vault owner's secret key, which a running
-# service deliberately does not hold, so an unnecessary attempt fails with a gpg
-# error on every boot and buries the one case that matters. A durable workload
-# seed means this is the normal answer after the first registration.
-already = subprocess.run(
-    [router, "tokens"],
-    capture_output=True,
-    text=True,
-    check=False,
-    env={**os.environ, **settings},
-)
-if already.returncode == int():
-    try:
-        recorded = json.loads(already.stdout)
-    except ValueError:
-        recorded = {}
-    entries = recorded if isinstance(recorded, dict) else {}
-    for agent in agents:
-        entry = entries.get(agent) if isinstance(entries.get(agent), dict) else {}
-        if entry.get("workload_bound") or entry.get("workload_public_key"):
-            print(f"{agent}: already registered")
-            agents = [name for name in agents if name != agent]
-if not agents:
-    raise SystemExit(int())
 
 environment = dict(os.environ)
 environment.update(settings)
