@@ -889,6 +889,18 @@ struct ModelErrorContract {
 
 fn model_error_contract(message: &str) -> ModelErrorContract {
     let normalized = message.to_ascii_lowercase();
+    if normalized.contains("no credits remaining")
+        || normalized.contains("insufficient_quota")
+        || normalized.contains("exceeded your current quota")
+        || normalized.contains("billing hard limit has been reached")
+    {
+        return ModelErrorContract {
+            status: StatusCode::BAD_GATEWAY,
+            error_type: "provider_error",
+            code: "provider_quota_exhausted",
+            retryable: false,
+        };
+    }
     if normalized.starts_with("provider_rate_limited:") {
         return ModelErrorContract {
             status: StatusCode::TOO_MANY_REQUESTS,
