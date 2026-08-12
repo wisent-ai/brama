@@ -171,7 +171,7 @@ Wisent service / Jeden
 
 Skarbiec is authoritative for secret capability redemption. The entitlements
 router is authoritative for live subscription resources. `-best` is an explicit
-deployment alias for `claude-code/claude-opus-4-6`; a caller still needs both an
+deployment alias for `codex/gpt-5.3-codex-spark`; a caller still needs both an
 allowlisted bearer and the HMAC identity that owns the eligible subscription.
 It does not infer quality from prompt text or unlock a direct provider
 credential. Brama's journal stores only retirement markers and task-quality
