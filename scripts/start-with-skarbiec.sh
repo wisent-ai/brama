@@ -579,8 +579,9 @@ rm -f "$identities_file"
 export BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES
 unset BRAMA_ALLOWED_MODELS
 
-# Echo, legacy Content Platform, Oko, Weles, and Lem identities are read from
-# their exact Skarbiec items.
+# Product request-sign identities are projected from their exact Skarbiec items.
+# `wisent-app` is Jeden's public runtime identity and uses the dedicated
+# `agent:wisent-app` item rather than a product-specific `agent_auth_secret`.
 BRAMA_REQUEST_SIGN_IDENTITIES="$(
   "$PYTHON_BIN" - "$ENTITLEMENTS_ROUTER_BIN" <<'PY'
 import json
@@ -598,6 +599,7 @@ sources = {
     "weles": "weles-model-agent-auth",
     "lem": "lem-agent-auth",
     "probierz": "probierz-agent-auth",
+    "wisent-app": "agent:wisent-app",
 }
 
 def field(item, name):
@@ -627,6 +629,9 @@ def field(item, name):
 
 identities = {}
 for expected_id, item in sources.items():
+    if expected_id == "wisent-app":
+        identities[expected_id] = field(item, "value")
+        continue
     actual_id = field(item, "id")
     if actual_id != expected_id:
         raise RuntimeError(f"{item}/id does not match its product identity")

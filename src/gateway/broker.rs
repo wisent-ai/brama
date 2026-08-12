@@ -20,7 +20,15 @@ const ENTITLEMENTS_ROUTER_BIN_ENV: &str = "ENTITLEMENTS_ROUTER_BIN";
 const DEFAULT_ENTITLEMENTS_ROUTER_BIN: &str = "entitlements-router";
 const REQUEST_SIGN_CAPABILITIES_ENV: &str = "BRAMA_REQUEST_SIGN_CAPABILITY_IDS";
 const REQUEST_SIGN_IDENTITIES_ENV: &str = "BRAMA_REQUEST_SIGN_IDENTITIES";
-const CENTRAL_REQUEST_SIGN_AGENTS: &[&str] = &["echo", "content-platform", "oko", "weles", "lem", "probierz"];
+const CENTRAL_REQUEST_SIGN_AGENTS: &[&str] = &[
+    "echo",
+    "content-platform",
+    "oko",
+    "weles",
+    "lem",
+    "probierz",
+    "wisent-app",
+];
 const PROVIDER_CAPABILITIES_ENV: &str = "BRAMA_PROVIDER_CAPABILITY_IDS";
 const SUBSCRIPTION_CATALOG_ENV: &str = "BRAMA_SUBSCRIPTION_CATALOG";
 const DONATED_SUBSCRIPTIONS_FILE_ENV: &str = "BRAMA_DONATED_SUBSCRIPTIONS_FILE";
