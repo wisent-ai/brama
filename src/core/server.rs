@@ -945,6 +945,25 @@ fn model_error_contract(message: &str) -> ModelErrorContract {
             retryable: true,
         };
     }
+    // A refused redemption is not a busy provider. Skarbiec says "capability is
+    // not issued, has expired, has no uses left, or its authorization id does
+    // not match", and every one of those is a broken authorization chain that
+    // no amount of waiting repairs. Reporting it as capacity told the caller to
+    // retry and told the operator to look for a subscription, which is where a
+    // whole day went before the log was read directly.
+    if normalized.contains("redemption denied")
+        || normalized.contains("authorization id does not match")
+        || normalized.contains("capability is not issued")
+        || normalized.contains("no uses left")
+        || normalized.contains("capability redemption denied")
+    {
+        return ModelErrorContract {
+            status: StatusCode::SERVICE_UNAVAILABLE,
+            error_type: "authorization_error",
+            code: "credential_unauthorized",
+            retryable: false,
+        };
+    }
     if normalized.contains("no active")
         || normalized.contains("no working")
         || normalized.contains("all bounded")
@@ -1433,6 +1452,59 @@ async fn health() -> impl IntoResponse {
         "build": crate::build_info::current(),
         "dependencies": "not_probed",
     }))
+}
+
+/// Readiness: does the credential chain actually work right now?
+///
+/// `/health` answers whether the process is up, and all day on 2026-08-11 it
+/// answered `ok` while every redemption on the host was denied — a gateway that
+/// cannot obtain a single credential looked healthy to every deploy check, and
+/// the failure surfaced only when a person asked a model a question. This
+/// redeems one capability per configured provider and reports what the
+/// authority said. It returns no secret: only the provider name and whether its
+/// credential could be obtained.
+async fn readyz() -> impl IntoResponse {
+    let providers: Vec<String> = {
+        let mut names: Vec<String> =
+            crate::gateway::broker::configured_provider_capabilities().into_iter().collect();
+        names.sort();
+        names
+    };
+
+    let mut checked = Vec::new();
+    let mut denied = Vec::new();
+    for provider in &providers {
+        let obtained = crate::gateway::broker::provider_credential(provider).await.is_some();
+        if !obtained {
+            denied.push(provider.clone());
+        }
+        checked.push(json!({ "provider": provider, "credential": obtained }));
+    }
+
+    let ready = denied.is_empty() && !providers.is_empty();
+    let status = if ready {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+    let reason = if providers.is_empty() {
+        "no provider capability is configured"
+    } else if ready {
+        "every configured provider credential was obtained"
+    } else {
+        "a configured provider credential could not be obtained; the authorization chain is broken, not busy"
+    };
+    (
+        status,
+        Json(json!({
+            "ready": ready,
+            "reason": reason,
+            "providers": checked,
+            "denied": denied,
+            "operator_action_required": !ready,
+            "build": crate::build_info::current(),
+        })),
+    )
 }
 
 /// Optional per-model telemetry block, present only when the route has stats.
@@ -2218,6 +2290,7 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
         ));
     let app = Router::new()
         .route("/health", get(health))
+        .route("/readyz", get(readyz))
         .merge(protected)
         .layer(middleware::from_fn(require_secure_transport));
 

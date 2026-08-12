@@ -35,6 +35,7 @@ import time
 BROKER_MARKER = "skarbiec-entitlements-router"
 SERVE_MARKER = "capability-serve"
 SERVER_MARKER = "bin/brama"
+SELF_MARKER = "brama-clear-stale-broker"
 SETTLE = float(len("wait a couple of seconds"))
 
 home = pathlib.Path.home()
@@ -67,10 +68,19 @@ def processes():
         text=True,
         check=False,
     )
+    # This script's own command line contains the product name, so without the
+    # exclusion it reads itself as a serving gateway and refuses to run exactly
+    # when it is needed: with the unit stopped, the only match left was this
+    # process.
+    mine = {os.getpid(), os.getppid()}
     for line in listing.stdout.splitlines():
         identifier, _, command = line.strip().partition(" ")
-        if identifier.isdigit():
-            yield int(identifier), command.strip()
+        if not identifier.isdigit():
+            continue
+        pid = int(identifier)
+        if pid in mine or SELF_MARKER in command:
+            continue
+        yield pid, command.strip()
 
 
 def brokers():
