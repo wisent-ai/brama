@@ -108,7 +108,7 @@ do
   if [ -f "$log" ]
   then
     printf 'modified %s\n' "$(date -r "$log" -u)"
-    tail "$log"
+    tail -n 100 "$log"
   fi
 done
 
