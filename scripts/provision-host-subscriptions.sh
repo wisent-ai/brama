@@ -64,8 +64,19 @@ for subscription_id, provider, source, agents in TARGETS:
         continue
     document = json.loads(read.stdout)
     fields = document.get("fields") or {}
-    if set(fields) != {"value"} or not fields["value"]:
-        print(f"  {subscription_id}: source {source} has an incompatible field shape")
+    value = fields.get("value")
+    # A non-empty dict is truthy, so the old check passed a reauth *config* --
+    # Auth0 and Supabase settings, the recipe for obtaining a credential -- and
+    # banked it as the credential itself. The gateway then reported the item as
+    # "no value at #value" forever, which reads as a missing subscription rather
+    # than a wrong one, and the provisioning run that caused it reported success.
+    # The vault stores a secret as a string; anything else is not a credential.
+    if set(fields) != {"value"} or not isinstance(value, str) or not value.strip():
+        shape = type(value).__name__ if value is not None else "absent"
+        print(
+            f"  {subscription_id}: source {source} carries {shape} at #value,"
+            " not a credential string; refusing to bank it"
+        )
         continue
     document["kind"] = "bundle"
     context = document.get("context")
