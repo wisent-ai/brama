@@ -798,6 +798,8 @@ struct ChatCompletionRequest {
     temperature: f64,
     #[serde(default)]
     tools: Option<Vec<Tool>>,
+    #[serde(default)]
+    tool_choice: Option<serde_json::Value>,
     #[serde(default, rename = "billingTarget")]
     billing_target: Option<BillingTarget>,
 }
@@ -1206,6 +1208,7 @@ async fn chat_completions(
             temperature: req.temperature,
             system,
             tools: req.tools,
+            tool_choice: req.tool_choice,
             billing_target: req.billing_target,
         };
         if let Some(task) = task_subscription.as_deref() {

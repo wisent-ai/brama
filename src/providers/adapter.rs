@@ -1116,6 +1116,49 @@ fn normalized_tools_value<T: serde::Serialize>(tools: &T) -> Value {
     value
 }
 
+fn named_tool_choice(choice: &Value) -> Option<&str> {
+    choice
+        .pointer("/function/name")
+        .or_else(|| choice.get("name"))
+        .and_then(Value::as_str)
+        .filter(|name| !name.is_empty())
+}
+
+fn responses_tool_choice(choice: &Value) -> Value {
+    named_tool_choice(choice)
+        .map(|name| json!({"type": "function", "name": name}))
+        .unwrap_or_else(|| choice.clone())
+}
+
+fn anthropic_tool_choice(choice: &Value) -> Option<Value> {
+    if let Some(name) = named_tool_choice(choice) {
+        return Some(json!({"type": "tool", "name": name}));
+    }
+    match choice.as_str() {
+        Some("auto") => Some(json!({"type": "auto"})),
+        Some("required") => Some(json!({"type": "any"})),
+        Some("none") => None,
+        _ => None,
+    }
+}
+
+fn google_tool_config(choice: &Value) -> Option<Value> {
+    if let Some(name) = named_tool_choice(choice) {
+        return Some(json!({
+            "functionCallingConfig": {
+                "mode": "ANY",
+                "allowedFunctionNames": [name],
+            }
+        }));
+    }
+    match choice.as_str() {
+        Some("auto") => Some(json!({"functionCallingConfig": {"mode": "AUTO"}})),
+        Some("required") => Some(json!({"functionCallingConfig": {"mode": "ANY"}})),
+        Some("none") => Some(json!({"functionCallingConfig": {"mode": "NONE"}})),
+        _ => None,
+    }
+}
+
 fn anthropic_content(message: &Message) -> Value {
     if message.role == "tool" {
         return json!([{
@@ -1264,7 +1307,11 @@ fn responses_payload(request: &ModelRequest, model_id: &str) -> Value {
     }
     if let Some(tools) = responses_tools(request) {
         body["tools"] = json!(tools);
-        body["tool_choice"] = json!("auto");
+        body["tool_choice"] = request
+            .tool_choice
+            .as_ref()
+            .map(responses_tool_choice)
+            .unwrap_or_else(|| json!("auto"));
     }
     body
 }
@@ -1613,6 +1660,9 @@ fn google_payload(request: &ModelRequest) -> Value {
             })).collect::<Vec<_>>()
         }]);
     }
+    if let Some(config) = request.tool_choice.as_ref().and_then(google_tool_config) {
+        body["toolConfig"] = config;
+    }
     body
 }
 
@@ -1727,6 +1777,9 @@ async fn dispatch_catalog(request: &ModelRequest, item: &str, secret: &str) -> M
             if let Some(tools) = &request.tools {
                 body.insert("tools".into(), normalized_tools_value(tools));
             }
+            if let Some(choice) = &request.tool_choice {
+                body.insert("tool_choice".into(), choice.clone());
+            }
             (
                 catalog_endpoint(&base_url, "/chat/completions"),
                 Value::Object(body),
@@ -1744,6 +1797,9 @@ async fn dispatch_catalog(request: &ModelRequest, item: &str, secret: &str) -> M
             }
             if let Some(tools) = anthropic_tools(request) {
                 body["tools"] = json!(tools);
+            }
+            if let Some(choice) = request.tool_choice.as_ref().and_then(anthropic_tool_choice) {
+                body["tool_choice"] = choice;
             }
             (catalog_endpoint(&base_url, "/messages"), body)
         }
@@ -2021,6 +2077,9 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
             if let Some(tools) = &request.tools {
                 body.insert("tools".into(), normalized_tools_value(tools));
             }
+            if let Some(choice) = &request.tool_choice {
+                body.insert("tool_choice".into(), choice.clone());
+            }
             Value::Object(body)
         }
         WireProtocol::AnthropicMessages => {
@@ -2035,6 +2094,9 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
             }
             if let Some(tools) = anthropic_tools(request) {
                 body["tools"] = json!(tools);
+            }
+            if let Some(choice) = request.tool_choice.as_ref().and_then(anthropic_tool_choice) {
+                body["tool_choice"] = choice;
             }
             body
         }

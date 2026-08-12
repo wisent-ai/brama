@@ -159,6 +159,7 @@ async fn main() {
                 temperature: 0.7,
                 system: None,
                 tools: None,
+                tool_choice: None,
                 billing_target: None,
             };
             let resp =

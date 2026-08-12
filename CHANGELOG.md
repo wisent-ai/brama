@@ -80,6 +80,10 @@ behind.
 
 ### Fixed
 
+- `POST /v1/chat/completions` now accepts OpenAI-compatible `tool_choice` and
+  carries forced tool selection through OpenAI Chat, OpenAI Responses,
+  Anthropic Messages, and Google GenerateContent adapters instead of rejecting
+  the request as an unknown field.
 - Documentation asserted that no immutable public release existed while five
   were published. `README.md`, `ONBOARDING.md`, `RELEASE.md`,
   `examples/README.md`, and `examples/recovery/upgrade-and-rollback.md` now give

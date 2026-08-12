@@ -263,6 +263,7 @@ pub async fn run_first_use(
         temperature: 0.7,
         system: None,
         tools: None,
+        tool_choice: None,
         billing_target: None,
     };
     let response =

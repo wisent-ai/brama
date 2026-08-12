@@ -53,6 +53,10 @@ endpoint, and correct capability.
 | GitHub Releases and host service manager | HTTPS assets plus operator-owned installation | GitHub publisher and host operator | immutable publication and versioned host installation | Brama release owner / deployment operator |
 | Weles reauthentication | dedicated HTTPS operation | finite Brama reauth token | refresh of the accepted runtime identity only | Weles operator |
 
+`POST /v1/chat/completions` accepts OpenAI-compatible `tool_choice`. OpenAI Chat
+providers receive it unchanged; the Responses, Anthropic, and Google adapters
+translate a named function choice into their native forced-tool shape.
+
 ## Model providers
 
 ### Outcome
