@@ -45,8 +45,6 @@ pub const POINT_CREDENTIAL_PERSIST: &str = "brama.gateway.credential-persist";
 pub const POINT_CREDENTIAL_REDEEM: &str = "brama.gateway.credential-redeem";
 /// One routed model request, as seen at the HTTP edge.
 pub const POINT_MODEL_REQUEST: &str = "brama.core.model-request";
-/// The point used when a failure point itself could not be built.
-const POINT_UNCLASSIFIED: &str = "brama.core.unclassified";
 
 /// What a refused model request costs its caller.
 pub const IMPACT_MODEL_REQUEST: &str = "one model request";
@@ -57,10 +55,6 @@ pub const IMPACT_CREDENTIAL_PERSIST: &str =
     "the refreshed grant every later request would have reused";
 /// What a block costs: this subscription until the block expires.
 pub const IMPACT_CREDENTIAL_BLOCK: &str = "this subscription until its block expires";
-
-/// Stated when a layer reported a failure without a reason. Nothing should reach
-/// it; an envelope that reaches it is the defect the crate exists to surface.
-const UNSTATED: &str = "the layer below reported no reason";
 
 /// The fleet code for one of Brama's own kinds, or `None` when the text is not
 /// one of them. Callers that hold a kind they trust use [`code_for`].
@@ -107,18 +101,12 @@ pub fn code_for_message(message: &str, contract_code: &str) -> Code {
 
 /// Build one envelope. `detail` is the reason the layer below gave, verbatim.
 ///
-/// Infallible on purpose: a gateway that drops the report because the report
-/// was malformed is back where it started. The failure points and impacts are
-/// constants in this module, so the fallback arm is unreachable unless one of
-/// them is edited into something invalid.
+/// `or_fallback` rather than `new`: this is only ever called from an error path,
+/// and a report that refuses to be made because it was malformed takes the
+/// diagnosis with it. A point this module got wrong is kept verbatim and flagged
+/// in the envelope's own context instead, where someone will see it.
 pub fn envelope(point: &str, code: Code, impact: &str, detail: impl Into<String>) -> Failure {
-    let detail = detail.into();
-    let detail = if detail.trim().is_empty() {
-        UNSTATED
-    } else {
-        detail.as_str()
-    };
-    Failure::new(point, code, SERVICE, impact, detail)
-        .or_else(|_| Failure::new(POINT_UNCLASSIFIED, code, SERVICE, IMPACT_MODEL_REQUEST, detail))
-        .unwrap_or_else(|_| unreachable!("brama.core.unclassified is a valid failure point"))
+    Failure::or_fallback(point, code, SERVICE)
+        .impact(impact)
+        .detail(detail)
 }

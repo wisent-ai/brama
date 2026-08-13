@@ -499,7 +499,7 @@ async fn refresh_subscription_credential_inner(
             warn!(
                 event = "oauth_refresh_failed",
                 provider,
-                error = %refused.detail,
+                error = refused.detail.as_deref().unwrap_or_default(),
                 envelope = %refused.to_json(),
                 "OAuth refresh failed"
             );
@@ -526,7 +526,7 @@ async fn refresh_subscription_credential_inner(
         warn!(
             event = "oauth_refresh_persist_failed",
             provider,
-            error = %unpersisted.detail,
+            error = unpersisted.detail.as_deref().unwrap_or_default(),
             envelope = %unpersisted.to_json(),
             "refreshed OAuth credential could not be persisted; using it in memory"
         );
