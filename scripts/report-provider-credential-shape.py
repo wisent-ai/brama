@@ -28,8 +28,13 @@ ITEMS = (
     "provider:codex:brama-sub-wisent-app-codex-primary",
     "provider:codex:brama-sub-wisent-app-codex-secondary",
     "provider:claude-code:brama-sub-wisent-app-claude-primary",
+    # The reauth orchestrators read these; they are configuration with one
+    # secret in them, and which keys they carry decides whether the runner can
+    # be moved off the store that went away with the GCP account.
+    "claude-reauth-config",
+    "codex-reauth-config",
+    "agent:wisent-app",
 )
-
 
 def read_field(item, field):
     # A helper's environment carries a minimal PATH, and the vault is opened by
@@ -102,16 +107,32 @@ def describe(value):
         for name, value in sorted(document["fields"].items()):
             if isinstance(value, str):
                 lines.append(f"  fields.{name}: {len(value)} chars, {jwt_expiry(value)}")
-            elif isinstance(value, dict):
-                lines.append(f"  fields.{name}: object, keys {sorted(value)}")
-                for inner in ("access_token", "id_token", "refresh_token"):
-                    token = value.get(inner)
-                    if isinstance(token, str):
-                        lines.append(
-                            f"    {inner}: {len(token)} chars, {jwt_expiry(token)}"
-                        )
-            else:
+                continue
+            if not isinstance(value, dict):
                 lines.append(f"  fields.{name}: {type(value).__name__}")
+                continue
+            lines.append(f"  fields.{name}: object, keys {sorted(value)}")
+            for inner in ("access_token", "id_token", "refresh_token"):
+                token = value.get(inner)
+                if isinstance(token, str):
+                    lines.append(f"    {inner}: {len(token)} chars, {jwt_expiry(token)}")
+            payload = value.get("metadata")
+            if isinstance(payload, str):
+                # Stored as a JSON string in some rows and as an object in
+                # others; the reader has to accept both or it reports a config
+                # with no keys and the runner looks unconfigurable.
+                try:
+                    payload = json.loads(payload)
+                except ValueError:
+                    payload = NONE
+            if isinstance(payload, dict):
+                # The orchestrators read this map. Key names decide whether the
+                # runner can be moved off the store that disappeared; the router
+                # address is not a secret and is the one value worth reading out.
+                lines.append(f"    metadata keys {sorted(payload)}")
+                router = payload.get("MODEL_ROUTER_URL")
+                if router:
+                    lines.append(f"    MODEL_ROUTER_URL {router}")
     if "last_refresh" in document:
         lines.append(f"  last_refresh: {document['last_refresh']}")
     return "\n".join(lines)

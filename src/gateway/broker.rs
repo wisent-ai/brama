@@ -831,18 +831,30 @@ async fn put_credential(item_id: &str, secret: &[u8]) -> Result<(), String> {
     use std::process::Stdio;
     use tokio::io::AsyncWriteExt;
 
+    // `credential-put --recipient` was the vault's interface before the
+    // credential lifecycle was rebuilt; the CLI answers `unknown command` to it
+    // now, so every donation failed at the last step and no refreshed
+    // subscription could ever land. `set-json` is the current write, and it
+    // takes the document on stdin -- plaintext still crosses only the pipe.
+    let document = serde_json::json!({
+        "kind": "bundle",
+        "schema": "skarbiec.item.v2",
+        "context": {"source_kind": "donation"},
+        "fields": {"value": String::from_utf8_lossy(secret)},
+    })
+    .to_string();
     let mut child = tokio::process::Command::new(entitlements_router_bin())
-        .arg("credential-put")
+        .arg("set-json")
         .arg(item_id)
-        .arg("--recipient")
-        .arg(donation_recipient())
+        .arg("--type")
+        .arg("bundle")
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| format!("spawn entitlements router: {error}"))?;
     let write_result = match child.stdin.take() {
-        Some(mut stdin) => stdin.write_all(secret).await,
+        Some(mut stdin) => stdin.write_all(document.as_bytes()).await,
         None => return Err("entitlements router stdin is unavailable".to_owned()),
     };
     if write_result.is_err() {
@@ -857,15 +869,24 @@ async fn put_credential(item_id: &str, secret: &[u8]) -> Result<(), String> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let detail_limit: usize = "200".parse().expect("valid credential error detail limit");
         let detail: String = stderr.trim().chars().take(detail_limit).collect();
-        return Err(format!("credential-put failed: {detail}"));
+        return Err(format!("credential write failed: {detail}"));
     }
     Ok(())
 }
 
 /// Store one donated OAuth credential blob through the local entitlements
 /// router; plaintext crosses only the child process stdin pipe.
-pub async fn put_donated_credential(subscription_id: &str, api_key: &str) -> Result<(), String> {
-    let item_id = format!("provider:claude-code:{subscription_id}");
+///
+/// The item is the one the operator's routes table already names for this
+/// subscription. Minting a fresh id per donation produced a credential nothing
+/// could read: reads resolve through that table, and a new id has no entry in
+/// it, so the donation was inert by construction.
+pub async fn put_donated_credential(
+    provider: &str,
+    subscription_id: &str,
+    api_key: &str,
+) -> Result<(), String> {
+    let item_id = format!("provider:{provider}:{subscription_id}");
     put_credential(&item_id, api_key.as_bytes()).await
 }
 

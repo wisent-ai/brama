@@ -1916,10 +1916,12 @@ async fn create_subscription(
     }
     let provider = match request.provider.as_deref().map(str::trim) {
         Some("claude_code" | "claude-code") => "claude-code",
+        Some("codex") => "codex",
+        Some("kimi") => "kimi",
         _ => {
             return Err(api_error(
                 StatusCode::BAD_REQUEST,
-                "provider must be claude_code",
+                "provider must be one of claude_code, codex, kimi",
             ))
         }
     };
@@ -1930,15 +1932,15 @@ async fn create_subscription(
             "api_key must contain 1..8000 characters",
         ));
     }
-    let millis = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis();
+    // One row per agent and provider, refreshed in place. A per-donation id
+    // needed a new entry in the operator's routes table before anything could
+    // read it, so donations accumulated rows that no request could use.
     let subscription_id = format!(
-        "brama-sub-{}-claude-{millis}",
-        crate::gateway::broker::slug(&agent_id)
+        "brama-sub-{}-{}-primary",
+        crate::gateway::broker::slug(&agent_id),
+        crate::gateway::broker::slug(provider)
     );
-    crate::gateway::broker::put_donated_credential(&subscription_id, api_key)
+    crate::gateway::broker::put_donated_credential(provider, &subscription_id, api_key)
         .await
         .map_err(|_| api_error(StatusCode::CONFLICT, "subscription credential was rejected"))?;
     crate::gateway::broker::donated_add(&agent_id, &subscription_id, provider)
@@ -2189,9 +2191,20 @@ async fn donate_subscription(
             )
         }
     };
+    // Every subscription provider this gateway routes for can be donated to,
+    // not only Claude: a Codex or Kimi session refreshed by a reauth runner had
+    // nowhere to land, so the account stayed alive while the subscription read
+    // as dead. The accepted set is the one dispatch already enumerates.
     let provider = match req.provider.as_deref().map(str::trim) {
         Some("claude_code" | "claude-code") => "claude-code",
-        _ => return api_error(StatusCode::BAD_REQUEST, "provider must be claude_code"),
+        Some("codex") => "codex",
+        Some("kimi") => "kimi",
+        _ => {
+            return api_error(
+                StatusCode::BAD_REQUEST,
+                "provider must be one of claude_code, codex, kimi",
+            )
+        }
     };
     let api_key = req.api_key.as_deref().unwrap_or("");
     if api_key.is_empty() || api_key.chars().count() > 8000 {
@@ -2200,16 +2213,15 @@ async fn donate_subscription(
             "api_key must contain 1..8000 characters",
         );
     }
-    let millis = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis();
+    // One row per agent and provider, refreshed in place: reads resolve through
+    // the operator's routes table, and a per-donation id has no entry there.
     let subscription_id = format!(
-        "brama-sub-{}-claude-{millis}",
-        crate::gateway::broker::slug(&agent_id)
+        "brama-sub-{}-{}-primary",
+        crate::gateway::broker::slug(&agent_id),
+        crate::gateway::broker::slug(provider)
     );
     if let Err(message) =
-        crate::gateway::broker::put_donated_credential(&subscription_id, api_key).await
+        crate::gateway::broker::put_donated_credential(provider, &subscription_id, api_key).await
     {
         return api_error(StatusCode::INTERNAL_SERVER_ERROR, &message);
     }
