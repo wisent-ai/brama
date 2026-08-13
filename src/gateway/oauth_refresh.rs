@@ -6,6 +6,20 @@ use serde_json::{json, Value};
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::capability::Secret;
+use crate::core::failure::{self, IMPACT_CREDENTIAL_REFRESH, POINT_OAUTH_REFRESH};
+use wisent_errors::{Code, Failure};
+
+/// One refresh failure, in the fleet's shape. The detail is whatever the layer
+/// below said, word for word: a provider that answers `invalid_grant` is the
+/// only thing that explains the refusal the dispatcher reports later.
+fn refresh_failure(code: Code, detail: impl Into<String>) -> Failure {
+    failure::envelope(
+        POINT_OAUTH_REFRESH,
+        code,
+        IMPACT_CREDENTIAL_REFRESH,
+        detail,
+    )
+}
 
 const EXPIRY_KEYS: &[&str] = &["expiresAt", "expires_at", "expires", "expiry"];
 
@@ -219,23 +233,86 @@ fn parse_refresh_grant(body: &Value) -> Option<RefreshGrant> {
     })
 }
 
+/// The provider's own words for a refused refresh.
+///
+/// OAuth 2.0 states the reason in `error` and `error_description`, and that
+/// pair is the sentence an operator needs: `invalid_grant -- Refresh token not
+/// found or invalid` says the grant is gone, which no retry repairs. A body
+/// shaped some other way is carried through as it stands. Nothing here is
+/// paraphrased; the provider's text is data.
+fn provider_rejection_text(body: &str) -> Option<String> {
+    let parsed = serde_json::from_str::<Value>(body).ok()?;
+    let field = |key: &str| {
+        parsed
+            .get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(str::to_owned)
+    };
+    let code = field("error");
+    let description = field("error_description")
+        .or_else(|| {
+            parsed
+                .pointer("/error/message")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        })
+        .or_else(|| field("message"));
+    match (code, description) {
+        (Some(code), Some(description)) => Some(format!("{code} -- {description}")),
+        (Some(code), None) => Some(code),
+        (None, Some(description)) => Some(description),
+        (None, None) => None,
+    }
+}
+
+/// Read a refused response's body under the same bound the success path uses. A
+/// provider that answers with a megabyte of HTML does not get to fill the log.
+async fn bounded_error_body(response: &mut reqwest::Response) -> String {
+    let mut text = String::new();
+    while let Ok(Some(chunk)) = response.chunk().await {
+        if text.len().saturating_add(chunk.len()) > max_response_bytes() {
+            break;
+        }
+        text.push_str(&String::from_utf8_lossy(&chunk));
+    }
+    text
+}
+
+/// What a refused refresh reports: the fleet's classification of the status the
+/// provider answered with, and the provider's own sentence as the detail.
+///
+/// The status alone was all this used to log, and the status alone is what a day
+/// went into supplementing by hand. The body says which of `invalid_grant`, a
+/// revoked client or a throttle it was, so it travels with the failure.
+pub(super) fn rejection_failure(status: u16, body: &str) -> Failure {
+    let stated = provider_rejection_text(body).unwrap_or_else(|| body.trim().to_owned());
+    let detail = if stated.is_empty() {
+        format!("OAuth refresh rejected with HTTP {status}")
+    } else {
+        format!("OAuth refresh rejected with HTTP {status}: {stated}")
+    };
+    refresh_failure(Code::from_upstream_status(status), detail)
+}
+
 async fn request_refresh_grant(
     config: &OAuthProvider,
     refresh_token: &str,
-) -> Result<RefreshGrant, String> {
+) -> Result<RefreshGrant, Failure> {
     // One client for every refresh. A fresh `Client` per call brings a fresh
     // connection pool with it and strands the previous one's sockets.
-    static REFRESH_CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> =
-        std::sync::OnceLock::new();
-    let client = REFRESH_CLIENT
-        .get_or_init(|| {
+    static REFRESH_CLIENT: std::sync::LazyLock<Result<reqwest::Client, String>> =
+        std::sync::LazyLock::new(|| {
             reqwest::Client::builder()
                 .redirect(reqwest::redirect::Policy::none())
                 .timeout(refresh_timeout())
                 .build()
                 .map_err(|_| "OAuth refresh client configuration failed".to_owned())
-        })
-        .clone()?;
+        });
+    let client = REFRESH_CLIENT
+        .clone()
+        .map_err(|detail| refresh_failure(Code::Config, detail))?;
     let parameters = OAuthRefreshRequest {
         grant_type: "refresh_token",
         refresh_token,
@@ -250,36 +327,54 @@ async fn request_refresh_grant(
     }
     .send()
     .await
-    .map_err(|_| "OAuth refresh transport failure".to_owned())?;
+    .map_err(|error| {
+        let code = if error.is_timeout() {
+            Code::Timeout
+        } else {
+            Code::InfraDown
+        };
+        refresh_failure(code, "OAuth refresh transport failure")
+    })?;
+    // The status alone was all this returned, and the status alone is what a
+    // day went into supplementing by hand. The body says which of `invalid_grant`,
+    // a revoked client or a throttle it was, so it travels with the failure.
     if !response.status().is_success() {
-        return Err(format!(
-            "OAuth refresh rejected with HTTP {}",
-            response.status().as_u16()
-        ));
+        let status = response.status().as_u16();
+        let body = bounded_error_body(&mut response).await;
+        return Err(rejection_failure(status, &body));
     }
     if response
         .content_length()
         .is_some_and(|length| length > max_response_bytes() as u64)
     {
-        return Err("OAuth refresh response is too large".to_owned());
+        return Err(refresh_failure(
+            Code::Unknown,
+            "OAuth refresh response is too large",
+        ));
     }
     let mut encoded = Zeroizing::new(Vec::new());
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|_| "OAuth refresh response read failed".to_owned())?
-    {
+    while let Some(chunk) = response.chunk().await.map_err(|_| {
+        refresh_failure(Code::InfraDown, "OAuth refresh response read failed")
+    })? {
         if encoded.len().saturating_add(chunk.len()) > max_response_bytes() {
-            return Err("OAuth refresh response is too large".to_owned());
+            return Err(refresh_failure(
+                Code::Unknown,
+                "OAuth refresh response is too large",
+            ));
         }
         encoded.extend_from_slice(&chunk);
     }
     let mut body: Value = serde_json::from_slice(&encoded)
-        .map_err(|_| "OAuth refresh response is not JSON".to_owned())?;
+        .map_err(|_| refresh_failure(Code::Unknown, "OAuth refresh response is not JSON"))?;
     encoded.zeroize();
     let grant = parse_refresh_grant(&body);
     zeroize_json_strings(&mut body);
-    grant.ok_or_else(|| "OAuth refresh response has no access token".to_owned())
+    grant.ok_or_else(|| {
+        refresh_failure(
+            Code::Unknown,
+            "OAuth refresh response has no access token",
+        )
+    })
 }
 
 fn patch_oauth_blob(blob: &mut Value, provider: &str, grant: &RefreshGrant, now: i64) -> bool {
@@ -348,36 +443,57 @@ fn zeroize_json_strings(value: &mut Value) {
     }
 }
 
-pub(super) async fn refresh(secret: &Secret, provider: &str) -> Result<Zeroizing<Vec<u8>>, String> {
-    let config = oauth_provider(provider)
-        .ok_or_else(|| "provider does not support OAuth refresh".to_owned())?;
+pub(super) async fn refresh(
+    secret: &Secret,
+    provider: &str,
+) -> Result<Zeroizing<Vec<u8>>, Failure> {
+    // Every arm below describes credential material this deployment stored in a
+    // shape the refresh cannot use, which is `config`: waiting does not change
+    // it and the provider was never asked.
+    let config = oauth_provider(provider).ok_or_else(|| {
+        refresh_failure(Code::Config, "provider does not support OAuth refresh")
+    })?;
     let raw = secret
         .expose_utf8()
-        .map_err(|_| "OAuth credential is not UTF-8".to_owned())?;
-    let mut blob: Value =
-        serde_json::from_str(raw).map_err(|_| "OAuth credential is not JSON".to_owned())?;
+        .map_err(|_| refresh_failure(Code::Config, "OAuth credential is not UTF-8"))?;
+    let mut blob: Value = serde_json::from_str(raw)
+        .map_err(|_| refresh_failure(Code::Config, "OAuth credential is not JSON"))?;
     if !blob.is_object() {
         zeroize_json_strings(&mut blob);
-        return Err("OAuth credential is not an object".to_owned());
+        return Err(refresh_failure(
+            Code::Config,
+            "OAuth credential is not an object",
+        ));
     }
     let refresh_token = match oauth_refresh_token(&blob, provider) {
         Some(token) => token,
         None => {
             zeroize_json_strings(&mut blob);
-            return Err("OAuth credential has no refresh token".to_owned());
+            return Err(refresh_failure(
+                Code::Config,
+                "OAuth credential has no refresh token",
+            ));
         }
     };
     let result = async {
         let grant = request_refresh_grant(&config, &refresh_token).await?;
         if !patch_oauth_blob(&mut blob, provider, &grant, now_seconds()) {
-            return Err("OAuth credential shape mismatch".to_owned());
+            return Err(refresh_failure(
+                Code::Config,
+                "OAuth credential shape mismatch",
+            ));
         }
-        let fresh = Zeroizing::new(
-            serde_json::to_vec(&blob)
-                .map_err(|_| "refreshed OAuth credential is not serializable".to_owned())?,
-        );
+        let fresh = Zeroizing::new(serde_json::to_vec(&blob).map_err(|_| {
+            refresh_failure(
+                Code::Config,
+                "refreshed OAuth credential is not serializable",
+            )
+        })?);
         if fresh.is_empty() || fresh.len() > max_credential_bytes() {
-            return Err("refreshed OAuth credential size is invalid".to_owned());
+            return Err(refresh_failure(
+                Code::Config,
+                "refreshed OAuth credential size is invalid",
+            ));
         }
         Ok(fresh)
     }

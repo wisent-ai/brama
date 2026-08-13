@@ -12,7 +12,10 @@ use std::time::Instant;
 
 use reqwest::{Client, RequestBuilder};
 use serde_json::{json, Map, Value};
+use tracing::warn;
+use wisent_errors::Code;
 
+use crate::core::failure::{self, IMPACT_MODEL_REQUEST, POINT_PROVIDER_CALL};
 use crate::subscription_dispatch::model_catalog::{
     self, CatalogAuth, CatalogProtocol, CatalogProvider,
 };
@@ -2045,6 +2048,9 @@ fn provider_error(route_id: &str, status: reqwest::StatusCode, body: &str) -> Mo
         .chars()
         .take(max_provider_error_chars())
         .collect::<String>();
+    // The kind is what clients read, so it is exactly what it has always been,
+    // 404, 407, 408 and 410 attributed to nothing and 504 called an unreachable
+    // dependency included.
     let kind = if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
         "provider_rate_limited"
     } else if matches!(
@@ -2057,6 +2063,27 @@ fn provider_error(route_id: &str, status: reqwest::StatusCode, body: &str) -> Mo
     } else {
         "provider_failure"
     };
+    // The envelope code is the fleet's, classified from the status by the
+    // catalogue, so `error_code` means the same thing here as everywhere else.
+    // It is coarser in Brama's kind at five statuses -- 404 and 410 are
+    // not-found, 407 is auth, 408 and 504 are timeouts -- and both readings are
+    // logged side by side rather than one quietly standing in for the other.
+    let refused = failure::envelope(
+        POINT_PROVIDER_CALL,
+        Code::from_upstream_status(status.as_u16()),
+        IMPACT_MODEL_REQUEST,
+        detail.as_str(),
+    )
+    .with_context("route", route_id)
+    .with_context("status", status.as_u16().to_string());
+    warn!(
+        event = "provider_rejected",
+        route = route_id,
+        contract_kind = kind,
+        envelope = %refused.to_json(),
+        "{}",
+        refused.render()
+    );
     attempted_failure(route_id, format!("{kind}: {detail}"))
 }
 

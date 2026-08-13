@@ -196,6 +196,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "wisent-errors",
  "wisent-onboarding-client",
  "zeroize",
 ]
@@ -2547,6 +2548,11 @@ name = "windows_x86_64_msvc"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+
+[[package]]
+name = "wisent-errors"
+version = "1.0.0"
+source = "git+https://github.com/wisent-ai/wisent-errors#85f27d15aac21761c37c20cdac35ce8ac4831270"
 
 [[package]]
 name = "wisent-onboarding-client"

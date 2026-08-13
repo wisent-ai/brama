@@ -8,11 +8,63 @@ use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 use tracing::{info, warn};
 
+use crate::core::failure::{
+    self, IMPACT_MODEL_REQUEST, POINT_BOUNDED_ROTATION, POINT_CREDENTIAL_SELECTION,
+    POINT_MODEL_SELECTION,
+};
 use crate::crypto;
 use crate::gateway::broker;
 use crate::providers::adapter as provider_registry;
 use crate::subscription_dispatch::usage;
 use crate::types::{ModelRequest, ModelResponse};
+use wisent_errors::Failure;
+
+/// The envelope for one refused model request: where it broke, what the caller
+/// loses, the reason verbatim, and the failure underneath it when there is one.
+fn refusal_envelope(
+    model: &str,
+    point: &str,
+    message: &str,
+    cause: Option<Failure>,
+) -> Failure {
+    let refusal = failure::envelope(
+        point,
+        // Brama has always told its clients that an unavailable subscription is
+        // worth retrying. The code is looked up from that same kind rather than
+        // chosen here, so it cannot come to mean something else than it does at
+        // the HTTP edge.
+        failure::code_for("subscription_unavailable"),
+        IMPACT_MODEL_REQUEST,
+        message,
+    )
+    .with_context("model", model);
+    match cause {
+        Some(cause) => refusal.caused_by(cause),
+        None => refusal,
+    }
+}
+
+/// Refuse one model request, saying where it broke and what the layer below
+/// said, and hand the caller the sentence it has always been handed.
+///
+/// The message is the envelope's detail and nothing else: clients parse these
+/// strings, so the envelope travels in the log beside them, never inside them.
+fn refuse(
+    request: &ModelRequest,
+    point: &str,
+    message: String,
+    cause: Option<Failure>,
+) -> ModelResponse {
+    let refusal = refusal_envelope(&request.model, point, &message, cause);
+    warn!(
+        event = "dispatch_refused",
+        model = %request.model,
+        envelope = %refusal.to_json(),
+        "{}",
+        refusal.render()
+    );
+    ModelResponse::failure(&request.model, message)
+}
 
 fn max_selector_models() -> usize {
     "3".parse().expect("valid selector model limit")
@@ -388,9 +440,11 @@ async fn dispatch_ranked_models(
             response.error.as_deref().unwrap_or("failed")
         ));
     }
-    let mut failure = ModelResponse::failure(
-        &request.model,
+    let mut failure = refuse(
+        request,
+        POINT_MODEL_SELECTION,
         format!("{failure_context}; tried {}", errors.join("; ")),
+        None,
     );
     failure.attempts = attempts;
     failure
@@ -593,8 +647,9 @@ async fn dispatch_subscription_attempt(
         Err(error) => return ModelResponse::failure(&request.model, error),
     };
     if rows.is_empty() {
-        return ModelResponse::failure(
-            &request.model,
+        return refuse(
+            request,
+            POINT_CREDENTIAL_SELECTION,
             request.billing_target.as_ref().map_or_else(
                 || format!("no active '{provider}' credential for agent"),
                 |target| {
@@ -604,10 +659,14 @@ async fn dispatch_subscription_attempt(
                     )
                 },
             ),
+            None,
         );
     }
 
     let mut provider_attempts = u32::default();
+    // Why this request was refused usually happened here, one layer down: a
+    // refresh the provider rejected. Keeping it means the refusal can say so.
+    let mut refresh_refusal: Option<Failure> = None;
     for (index, entry) in rows.iter().take(max_credential_attempts()).enumerate() {
         let credential_id = &entry.id;
         // A credential inside a recorded block is skipped without a provider
@@ -654,24 +713,28 @@ async fn dispatch_subscription_attempt(
         usage::record_call(credential_id, provider, &result);
 
         if !result.success && result.error.as_deref().is_some_and(is_auth_failure) {
-            if let Some(fresh) =
-                broker::refresh_subscription_credential(credential_id, provider).await
-            {
-                if let Ok(fresh_token) = fresh.expose_utf8() {
-                    provider_attempts = provider_attempts.saturating_add(u32::from(true));
-                    result = provider_registry::dispatch(request, &item, fresh_token).await;
-                    result.attempts = provider_attempts;
-                    usage::record_call(credential_id, provider, &result);
-                    if result.success {
-                        info!(
-                            event = "credential_refreshed",
-                            provider,
-                            credential_index = index,
-                            "provider request succeeded after forced OAuth refresh"
-                        );
-                        return result;
+            match broker::refresh_subscription_credential(credential_id, provider).await {
+                Ok(fresh) => {
+                    if let Ok(fresh_token) = fresh.expose_utf8() {
+                        provider_attempts = provider_attempts.saturating_add(u32::from(true));
+                        result = provider_registry::dispatch(request, &item, fresh_token).await;
+                        result.attempts = provider_attempts;
+                        usage::record_call(credential_id, provider, &result);
+                        if result.success {
+                            info!(
+                                event = "credential_refreshed",
+                                provider,
+                                credential_index = index,
+                                "provider request succeeded after forced OAuth refresh"
+                            );
+                            return result;
+                        }
                     }
                 }
+                // The newest refusal is kept rather than the first: it is the
+                // one that stopped this request, and the earlier credentials
+                // logged theirs on the way past.
+                Err(refused) => refresh_refusal = Some(refused),
             }
         }
         if result.success {
@@ -719,9 +782,11 @@ async fn dispatch_subscription_attempt(
             "provider rejected bounded credential with a rotatable failure"
         );
     }
-    let mut failure = ModelResponse::failure(
-        &request.model,
+    let mut failure = refuse(
+        request,
+        POINT_BOUNDED_ROTATION,
         format!("all bounded '{provider}' credentials unavailable for agent"),
+        refresh_refusal,
     );
     failure.attempts = provider_attempts;
     failure

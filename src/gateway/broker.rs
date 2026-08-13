@@ -15,6 +15,11 @@ use tracing::warn;
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::capability::{CapabilityClient, CapabilityRef, Secret};
+use crate::core::failure::{
+    self, IMPACT_CREDENTIAL_PERSIST, IMPACT_CREDENTIAL_REFRESH, POINT_CREDENTIAL_PERSIST,
+    POINT_CREDENTIAL_REDEEM,
+};
+use wisent_errors::{Code, Failure};
 
 const ENTITLEMENTS_ROUTER_BIN_ENV: &str = "ENTITLEMENTS_ROUTER_BIN";
 const DEFAULT_ENTITLEMENTS_ROUTER_BIN: &str = "entitlements-router";
@@ -466,22 +471,42 @@ async fn refresh_subscription_credential_inner(
     provider: &str,
     force: bool,
     preserve_on_failure: bool,
-) -> Option<Secret> {
+) -> Result<Secret, Failure> {
     // Refresh-token rotation is single-flight. Re-reading after the lock lets a
     // concurrent caller observe the value already written to the vault.
     let _guard = OAUTH_REFRESH_LOCK.lock().await;
-    let credential = redeem_subscription_credential(subscription_id, provider).await?;
+    let credential = redeem_subscription_credential(subscription_id, provider)
+        .await
+        .ok_or_else(|| {
+            failure::envelope(
+                POINT_CREDENTIAL_REDEEM,
+                failure::code_for("credential_unauthorized"),
+                IMPACT_CREDENTIAL_REFRESH,
+                "no capability or read grant produced this subscription's credential",
+            )
+            .with_context("subscription", subscription_id)
+            .with_context("provider", provider)
+        })?;
     if !force && !super::oauth_refresh::needs_refresh(&credential, provider) {
-        return Some(credential);
+        return Ok(credential);
     }
     let mut fresh = match super::oauth_refresh::refresh(&credential, provider).await {
         Ok(fresh) => fresh,
-        Err(error) => {
+        Err(refused) => {
+            let refused = refused
+                .with_context("subscription", subscription_id)
+                .with_context("provider", provider);
             warn!(
                 event = "oauth_refresh_failed",
-                provider, %error, "OAuth refresh failed"
+                provider,
+                error = %refused.detail,
+                envelope = %refused.to_json(),
+                "OAuth refresh failed"
             );
-            return preserve_on_failure.then_some(credential);
+            // The refusal is returned rather than discarded: the dispatcher
+            // hangs it under the request it is about to refuse, which is the
+            // only way the provider's own sentence reaches the caller.
+            return preserve_on_failure.then_some(credential).ok_or(refused);
         }
     };
     // The reason matters more than the fact. A refreshed grant that cannot be
@@ -490,14 +515,23 @@ async fn refresh_subscription_credential_inner(
     // that something went wrong. The default recipient being a key no keyring
     // holds looked identical to a broken vault for a full day.
     if let Err(error) = put_subscription_credential(subscription_id, provider, &fresh).await {
+        let unpersisted = failure::envelope(
+            POINT_CREDENTIAL_PERSIST,
+            Code::Config,
+            IMPACT_CREDENTIAL_PERSIST,
+            error,
+        )
+        .with_context("subscription", subscription_id)
+        .with_context("provider", provider);
         warn!(
             event = "oauth_refresh_persist_failed",
             provider,
-            %error,
+            error = %unpersisted.detail,
+            envelope = %unpersisted.to_json(),
             "refreshed OAuth credential could not be persisted; using it in memory"
         );
     }
-    Some(Secret::from_bytes(std::mem::take(&mut *fresh)))
+    Ok(Secret::from_bytes(std::mem::take(&mut *fresh)))
 }
 
 /// Redeem one subscription credential at the final-use boundary. Expired
@@ -510,16 +544,20 @@ pub async fn subscription_credential(subscription_id: &str, provider: &str) -> O
         return Some(credential);
     }
     drop(credential);
-    refresh_subscription_credential_inner(subscription_id, provider, false, true).await
+    refresh_subscription_credential_inner(subscription_id, provider, false, true)
+        .await
+        .ok()
 }
 
 /// Force one OAuth refresh after the provider rejects a grant whose local
 /// expiry still claims it is valid. The rejected grant is not returned when
-/// refresh fails because retrying it would only repeat the provider error.
+/// refresh fails because retrying it would only repeat the provider error; the
+/// refusal itself is, so the caller can report what the provider said instead
+/// of reporting that something happened.
 pub async fn refresh_subscription_credential(
     subscription_id: &str,
     provider: &str,
-) -> Option<Secret> {
+) -> Result<Secret, Failure> {
     refresh_subscription_credential_inner(subscription_id, provider, true, false).await
 }
 

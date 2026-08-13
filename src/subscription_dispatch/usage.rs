@@ -24,6 +24,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
+use crate::core::failure::{self, IMPACT_CREDENTIAL_BLOCK, POINT_CREDENTIAL_BLOCK};
 use crate::types::{LimitReading, ModelResponse};
 
 const USAGE_FILE_ENV: &str = "BRAMA_SUBSCRIPTION_USAGE_FILE";
@@ -67,6 +68,11 @@ pub struct Block {
     pub blocked_until_ms: i64,
     pub reason: String,
     pub recorded_at_ms: i64,
+    /// The same refusal in the fleet's envelope, as JSON. An extra key rather
+    /// than a replacement: the three above are what other tooling reads out of
+    /// this file, and a reader that does not know this one ignores it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub envelope: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -210,6 +216,17 @@ pub fn record_block(subscription_id: &str, provider: &str, reason: &str, respons
     let until = from_provider
         .unwrap_or(now.saturating_add(DEFAULT_BLOCK_MS))
         .min(now.saturating_add(MAX_BLOCK_MS));
+    // A block is a rate limit the provider stated. The sentence it stated is
+    // kept in `reason` for the tooling that already reads it and in the
+    // envelope for the operator who needs to know it is transient.
+    let blocked = failure::envelope(
+        POINT_CREDENTIAL_BLOCK,
+        failure::code_for("provider_rate_limited"),
+        IMPACT_CREDENTIAL_BLOCK,
+        reason,
+    )
+    .with_context("subscription", subscription_id)
+    .with_context("provider", provider);
     with_ledger(|ledger| {
         let entry = ledger
             .subscriptions
@@ -220,6 +237,7 @@ pub fn record_block(subscription_id: &str, provider: &str, reason: &str, respons
             blocked_until_ms: until,
             reason: reason.chars().take(200).collect(),
             recorded_at_ms: now,
+            envelope: Some(blocked.to_json()),
         });
     });
 }

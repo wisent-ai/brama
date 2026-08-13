@@ -17,6 +17,7 @@ use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 use tracing::{info, warn};
 
+use crate::core::failure::{self, IMPACT_MODEL_REQUEST, POINT_MODEL_REQUEST};
 use crate::subscription_dispatch::{
     authenticate_agent, dispatch_any_subscription, dispatch_any_vision_capable_subscription,
     dispatch_direct_openai_typed, dispatch_direct_with_fallback, dispatch_subscription,
@@ -1039,6 +1040,24 @@ fn model_error_contract(message: &str) -> ModelErrorContract {
     }
 }
 
+/// The same failure in the fleet's envelope, for the operator reading the log.
+///
+/// The contract above is what clients read and nothing here touches it. The
+/// envelope is additional and it stays in the log: a new key in the HTTP error
+/// body is a wire change, and a migration whose whole promise is "no behaviour
+/// change" does not get to make one. Where the two disagree -- the contract is
+/// coarser at a handful of provider statuses -- both are on the line, so an
+/// operator can see that they do.
+fn model_error_envelope(message: &str, contract: ModelErrorContract) -> String {
+    failure::envelope(
+        POINT_MODEL_REQUEST,
+        failure::code_for_message(message, contract.code),
+        IMPACT_MODEL_REQUEST,
+        message,
+    )
+    .to_json()
+}
+
 fn typed_dispatch_attempts(contract: ModelErrorContract) -> u32 {
     if contract.code == "dependency_unavailable" {
         u32::default()
@@ -1262,6 +1281,14 @@ async fn chat_completions(
         TOTAL_FAILURES.fetch_add(u64::from(true), Ordering::Relaxed);
     }
     let failure_contract = resp.error.as_deref().map(model_error_contract);
+    // `error_code` below is Brama's own contract code, unchanged, because log
+    // pipelines read it. `envelope` is the fleet's reading of the same failure.
+    let failure_envelope = resp
+        .error
+        .as_deref()
+        .zip(failure_contract)
+        .map(|(message, contract)| model_error_envelope(message, contract))
+        .unwrap_or_else(|| "none".to_owned());
     info!(
         event = "routing_complete",
         request_id = %request_id,
@@ -1277,6 +1304,7 @@ async fn chat_completions(
         input_tokens = resp.input_tokens,
         output_tokens = resp.output_tokens,
         operator_action_required = failure_contract.is_some_and(|contract| !contract.retryable),
+        envelope = %failure_envelope,
         "routing request completed"
     );
     if !resp.success {
