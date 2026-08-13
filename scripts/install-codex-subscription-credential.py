@@ -8,23 +8,7 @@ import subprocess
 from pathlib import Path
 
 home = Path(os.environ.get("HOME", "."))
-# `stado host install-secret` lands a transferred file at $HOME/.stado/<name>,
-# and that is the only sanctioned way to move a credential between hosts, so a
-# script that knows just the hand-delivered path cannot consume what the fleet's
-# own transfer produces.
-#
-# The host's own live Codex session is the last candidate and the one the pool's
-# reauth runner reaches for first: donating a session this machine already holds
-# is what it does before driving any login. It is read, never consumed -- a
-# delivered file is a copy and is removed once banked, while `~/.codex/auth.json`
-# belongs to the CLI on this host and deleting it would sign the machine out.
-DELIVERED = [
-    home / ".stado/files/codex-auth.json",
-    home / ".stado/codex-auth.json",
-]
-LIVE_SESSION = Path(os.environ.get("CODEX_AUTH_PATH", home / ".codex/auth.json"))
-source = next((path for path in [*DELIVERED, LIVE_SESSION] if path.is_file()), DELIVERED[0])
-consumable = source in DELIVERED
+source = home / ".stado/files/codex-auth.json"
 item = "provider:codex:brama-sub-wisent-app-codex-primary"
 service_env = Path(os.environ.get("BRAMA_SERVICE_ENV_FILE", home / ".config/brama/service.env"))
 settings = {}
@@ -86,8 +70,7 @@ installed = subprocess.run(
 )
 if installed.returncode:
     raise SystemExit("cannot install Codex subscription: " + " ".join(installed.stderr.split()))
-if consumable:
-    source.unlink()
+source.unlink()
 print(
     "installed:",
     item,

@@ -484,13 +484,17 @@ async fn refresh_subscription_credential_inner(
             return preserve_on_failure.then_some(credential);
         }
     };
-    if put_subscription_credential(subscription_id, provider, &fresh)
-        .await
-        .is_err()
-    {
+    // The reason matters more than the fact. A refreshed grant that cannot be
+    // written is used once and lost, so the stale one returns on the next
+    // start and the subscription reads as dead -- while this line said only
+    // that something went wrong. The default recipient being a key no keyring
+    // holds looked identical to a broken vault for a full day.
+    if let Err(error) = put_subscription_credential(subscription_id, provider, &fresh).await {
         warn!(
             event = "oauth_refresh_persist_failed",
-            provider, "refreshed OAuth credential could not be persisted; using it in memory"
+            provider,
+            %error,
+            "refreshed OAuth credential could not be persisted; using it in memory"
         );
     }
     Some(Secret::from_bytes(std::mem::take(&mut *fresh)))

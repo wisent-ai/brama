@@ -34,6 +34,13 @@ KINDS = (
     "capability_issue_refused",
     "redemption denied",
     "carries no such field",
+    # The gateway refreshes an OAuth grant itself when a provider refuses one.
+    # Whether that path ran, and what it said when it failed, is the difference
+    # between a credential nobody can renew and one whose renewal is broken.
+    "oauth_refresh_failed",
+    "oauth_refresh_persist_failed",
+    "credential_refreshed",
+    "credential_retired",
 )
 
 for name in NAMES:
