@@ -325,9 +325,19 @@ impl ModelAliases {
             Ok(encoded) => encoded,
             Err(_) if !require_exact_aliases => "{}".to_owned(),
             Err(_) => {
+                // A bare "is required" sent one supervised process into 3869
+                // restarts against a cause no amount of retrying reaches: the
+                // aliases are assembled by the launcher, so the binary started
+                // on its own can never find them. Name the path that works.
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidInput,
-                    format!("{MODEL_ALIASES_ENV} is required"),
+                    format!(
+                        "{MODEL_ALIASES_ENV} is required and is assembled by \
+                         scripts/start-with-skarbiec.sh from the sealed policy directory. \
+                         Starting the binary directly cannot obtain it: launch the gateway \
+                         through that script, or export the variable yourself. Restarting \
+                         an unlaunched process will not repair this."
+                    ),
                 ));
             }
         };
