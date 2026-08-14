@@ -16,8 +16,15 @@ struct Endpoint {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+struct Adapter {
+    name: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 struct Deployment {
     name: String,
+    #[serde(default)]
+    adapters: Vec<Adapter>,
     endpoint: Endpoint,
 }
 
@@ -169,15 +176,28 @@ fn safe_inference_host(value: &str) -> bool {
     octets[usize::MIN] == first && (lower..upper).contains(&octets[usize::from(true)])
 }
 
+fn deployment_for_model<'a>(registry: &'a Registry, model: &str) -> Result<&'a Deployment, String> {
+    let mut matches = registry.deployments.iter().filter(|deployment| {
+        deployment.name == model
+            || deployment
+                .adapters
+                .iter()
+                .any(|adapter| adapter.name == model)
+    });
+    let deployment = matches
+        .next()
+        .ok_or_else(|| format!("unknown local inference model '{model}'"))?;
+    if matches.next().is_some() {
+        return Err(format!("ambiguous local inference model '{model}'"));
+    }
+    Ok(deployment)
+}
+
 fn resolved_destination(registry: &Registry, destination: &str) -> Result<String, String> {
     if destination.contains('/') {
         return Ok(destination.to_string());
     }
-    let deployment = registry
-        .deployments
-        .iter()
-        .find(|deployment| deployment.name == destination)
-        .ok_or_else(|| format!("unknown inference deployment '{destination}'"))?;
+    let deployment = deployment_for_model(registry, destination)?;
     if !safe_inference_host(&deployment.endpoint.host) || deployment.endpoint.port == u16::MIN {
         return Err(format!(
             "inference deployment '{destination}' has no safe local or Tailscale endpoint"
@@ -223,16 +243,12 @@ pub fn resolved_fallbacks(path: &Path) -> Result<HashMap<String, Vec<String>>, S
     Ok(fallbacks)
 }
 
-pub fn base_url(path: &Path, deployment_name: &str) -> Result<String, String> {
+pub fn base_url(path: &Path, model_name: &str) -> Result<String, String> {
     let registry = read(path)?;
-    let deployment = registry
-        .deployments
-        .iter()
-        .find(|deployment| deployment.name == deployment_name)
-        .ok_or_else(|| format!("unknown inference deployment '{deployment_name}'"))?;
+    let deployment = deployment_for_model(&registry, model_name)?;
     if !safe_inference_host(&deployment.endpoint.host) || deployment.endpoint.port == u16::MIN {
         return Err(format!(
-            "inference deployment '{deployment_name}' has no safe local or Tailscale endpoint"
+            "inference model '{model_name}' has no safe local or Tailscale endpoint"
         ));
     }
     Ok(format!(
