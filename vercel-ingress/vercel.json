@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/:path*",
+      "destination": "https://charless-mac-mini.tail6443b3.ts.net/:path*"
+    }
+  ]
+}
