@@ -38,8 +38,6 @@ const PROVIDER_CAPABILITIES_ENV: &str = "BRAMA_PROVIDER_CAPABILITY_IDS";
 const SUBSCRIPTION_CATALOG_ENV: &str = "BRAMA_SUBSCRIPTION_CATALOG";
 const DONATED_SUBSCRIPTIONS_FILE_ENV: &str = "BRAMA_DONATED_SUBSCRIPTIONS_FILE";
 const DEFAULT_DONATED_SUBSCRIPTIONS_FILE: &str = "/tmp/brama-skarbiec/donated-subscriptions.json";
-const DONATION_RECIPIENT_ENV: &str = "SKARBIEC_DONATION_RECIPIENT";
-const DEFAULT_DONATION_RECIPIENT: &str = "brama-service";
 
 static OAUTH_REFRESH_LOCK: LazyLock<tokio::sync::Mutex<()>> =
     LazyLock::new(|| tokio::sync::Mutex::new(()));
@@ -170,7 +168,7 @@ pub async fn get_agent_auth_secret(agent_id: &str) -> Option<Secret> {
     let resource = format!("agent:{}", slug(agent_id));
     if let Some(capability_id) = configured_capability(REQUEST_SIGN_CAPABILITIES_ENV, agent_id) {
         if let Ok(binding) = CapabilityRef::request_sign(&capability_id, &resource) {
-            if let Some(secret) = client()?.redeem(&binding).ok() {
+            if let Ok(secret) = client()?.redeem(&binding) {
                 return Some(secret);
             }
         }
@@ -858,13 +856,6 @@ fn issue_capability_blocking(purpose: &str, resource: &str) -> Option<String> {
     )
 }
 
-fn donation_recipient() -> String {
-    std::env::var(DONATION_RECIPIENT_ENV)
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| DEFAULT_DONATION_RECIPIENT.to_owned())
-}
-
 async fn put_credential(item_id: &str, secret: &[u8]) -> Result<(), String> {
     use std::process::Stdio;
     use tokio::io::AsyncWriteExt;
@@ -1013,14 +1004,12 @@ fn parse_live_subscriptions(output: &[u8], agent_id: &str) -> Result<Vec<Subscri
         .collect())
 }
 
+type LiveSubscriptionsCache = Mutex<HashMap<String, (Instant, Vec<SubscriptionEntry>)>>;
+
 /// Live discovery results per agent. Entries are stored only after a
 /// successful listing so a failed shell never poisons the cache.
-fn live_subscriptions_cache() -> &'static Mutex<HashMap<String, (Instant, Vec<SubscriptionEntry>)>>
-{
-    static CACHE: OnceLock<Mutex<HashMap<String, (Instant, Vec<SubscriptionEntry>)>>> =
-        OnceLock::new();
-    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
-}
+static LIVE_SUBSCRIPTIONS_CACHE: LazyLock<LiveSubscriptionsCache> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 const LIVE_SUBSCRIPTIONS_CACHE_TTL: Duration = Duration::from_secs(60);
 
@@ -1033,7 +1022,7 @@ async fn live_subscriptions(
     bypass_cache: bool,
 ) -> Result<Vec<SubscriptionEntry>, ()> {
     if !bypass_cache {
-        if let Ok(cache) = live_subscriptions_cache().lock() {
+        if let Ok(cache) = LIVE_SUBSCRIPTIONS_CACHE.lock() {
             if let Some((fetched_at, entries)) = cache.get(agent_id) {
                 if fetched_at.elapsed() < LIVE_SUBSCRIPTIONS_CACHE_TTL {
                     return Ok(entries.clone());
@@ -1042,7 +1031,7 @@ async fn live_subscriptions(
         }
     }
     let entries = list_subscriptions_live(broker, agent_id).await?;
-    if let Ok(mut cache) = live_subscriptions_cache().lock() {
+    if let Ok(mut cache) = LIVE_SUBSCRIPTIONS_CACHE.lock() {
         cache.insert(agent_id.to_owned(), (Instant::now(), entries.clone()));
     }
     Ok(entries)

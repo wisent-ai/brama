@@ -21,12 +21,7 @@ use wisent_errors::Failure;
 
 /// The envelope for one refused model request: where it broke, what the caller
 /// loses, the reason verbatim, and the failure underneath it when there is one.
-fn refusal_envelope(
-    model: &str,
-    point: &str,
-    message: &str,
-    cause: Option<Failure>,
-) -> Failure {
+fn refusal_envelope(model: &str, point: &str, message: &str, cause: Option<Failure>) -> Failure {
     let refusal = failure::envelope(
         point,
         // Brama has always told its clients that an unavailable subscription is

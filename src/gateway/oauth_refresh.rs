@@ -13,12 +13,7 @@ use wisent_errors::{Code, Failure};
 /// below said, word for word: a provider that answers `invalid_grant` is the
 /// only thing that explains the refusal the dispatcher reports later.
 fn refresh_failure(code: Code, detail: impl Into<String>) -> Failure {
-    failure::envelope(
-        POINT_OAUTH_REFRESH,
-        code,
-        IMPACT_CREDENTIAL_REFRESH,
-        detail,
-    )
+    failure::envelope(POINT_OAUTH_REFRESH, code, IMPACT_CREDENTIAL_REFRESH, detail)
 }
 
 const EXPIRY_KEYS: &[&str] = &["expiresAt", "expires_at", "expires", "expiry"];
@@ -353,9 +348,11 @@ async fn request_refresh_grant(
         ));
     }
     let mut encoded = Zeroizing::new(Vec::new());
-    while let Some(chunk) = response.chunk().await.map_err(|_| {
-        refresh_failure(Code::InfraDown, "OAuth refresh response read failed")
-    })? {
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|_| refresh_failure(Code::InfraDown, "OAuth refresh response read failed"))?
+    {
         if encoded.len().saturating_add(chunk.len()) > max_response_bytes() {
             return Err(refresh_failure(
                 Code::Unknown,
@@ -369,12 +366,8 @@ async fn request_refresh_grant(
     encoded.zeroize();
     let grant = parse_refresh_grant(&body);
     zeroize_json_strings(&mut body);
-    grant.ok_or_else(|| {
-        refresh_failure(
-            Code::Unknown,
-            "OAuth refresh response has no access token",
-        )
-    })
+    grant
+        .ok_or_else(|| refresh_failure(Code::Unknown, "OAuth refresh response has no access token"))
 }
 
 fn patch_oauth_blob(blob: &mut Value, provider: &str, grant: &RefreshGrant, now: i64) -> bool {
@@ -450,9 +443,8 @@ pub(super) async fn refresh(
     // Every arm below describes credential material this deployment stored in a
     // shape the refresh cannot use, which is `config`: waiting does not change
     // it and the provider was never asked.
-    let config = oauth_provider(provider).ok_or_else(|| {
-        refresh_failure(Code::Config, "provider does not support OAuth refresh")
-    })?;
+    let config = oauth_provider(provider)
+        .ok_or_else(|| refresh_failure(Code::Config, "provider does not support OAuth refresh"))?;
     let raw = secret
         .expose_utf8()
         .map_err(|_| refresh_failure(Code::Config, "OAuth credential is not UTF-8"))?;

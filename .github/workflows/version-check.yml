@@ -28,7 +28,9 @@ permissions:
 
 jobs:
   rust-gates:
-    uses: wisent-ai/quality-control/.github/workflows/rust-gates.yml@2de57851b29b57da01fff370817a45ad121c93bc
+    uses: wisent-ai/quality-control/.github/workflows/rust-gates.yml@5de58cebb190c04e752337da7c96244311d0a75c
+    secrets:
+      repository_token: ${{ secrets.ECHO_WEB_REPOSITORY_TOKEN }}
 
   contract:
     uses: wisent-ai/quality-control/.github/workflows/rust-autoversion.yml@2de57851b29b57da01fff370817a45ad121c93bc
