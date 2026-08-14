@@ -123,7 +123,20 @@ runtime_bin=$(CDPATH= cd -- "$(dirname -- "$brama_bin")" && pwd)/$(basename -- "
 # new key needs a fresh vault grant, and the service cannot authorise one because
 # the vault is encrypted to the owner. Carrying the key across installations is
 # what lets the operator's single registration keep working.
-BRAMA_PROOF_KEY_FILE=${BRAMA_PROOF_KEY_FILE:-"${HOME:-/nonexistent}/.config/brama/brama-proof.key"}
+# The launcher's location is canonical, because the launcher is what runs on
+# every start and exports it. This default disagreed with it, so a provision
+# run outside the launcher minted a second identity in a second place and the
+# vault kept the public half of a key nothing signed with. Prefer the canonical
+# file, keep the older path as a fallback for installations that still hold it.
+canonical_proof_key="${HOME:-/nonexistent}/.stado/brama-proof.key"
+legacy_proof_key="${HOME:-/nonexistent}/.config/brama/brama-proof.key"
+if [ -z "${BRAMA_PROOF_KEY_FILE:-}" ]; then
+  if [ -f "$canonical_proof_key" ] || [ ! -f "$legacy_proof_key" ]; then
+    BRAMA_PROOF_KEY_FILE="$canonical_proof_key"
+  else
+    BRAMA_PROOF_KEY_FILE="$legacy_proof_key"
+  fi
+fi
 export BRAMA_PROOF_KEY_FILE
 set -- "$brama_bin" "$config_dir" "$subscriptions" "$runtime_bin" \
   "${BRAMA_WORKLOAD_UID:-$(id -u)}" "${BRAMA_WORKLOAD_GID:-$(id -g)}"

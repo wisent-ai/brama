@@ -707,6 +707,11 @@ async fn dispatch_subscription_attempt(
         result.attempts = provider_attempts;
         usage::record_call(credential_id, provider, &result);
 
+        // Whether the provider refused a token it had just handed us. The
+        // string matcher below cannot see that: the message is the same
+        // "invalid authentication" either way, and only the sequence says the
+        // credential is dead rather than stale.
+        let mut rejected_with_fresh_token = false;
         if !result.success && result.error.as_deref().is_some_and(is_auth_failure) {
             match broker::refresh_subscription_credential(credential_id, provider).await {
                 Ok(fresh) => {
@@ -724,6 +729,8 @@ async fn dispatch_subscription_attempt(
                             );
                             return result;
                         }
+                        rejected_with_fresh_token =
+                            result.error.as_deref().is_some_and(is_auth_failure);
                     }
                 }
                 // The newest refusal is kept rather than the first: it is the
@@ -750,6 +757,20 @@ async fn dispatch_subscription_attempt(
                 provider,
                 credential_index = index,
                 "provider permanently rejected bounded credential"
+            );
+            mark_credential_revoked(credential_id).await;
+        }
+        if rejected_with_fresh_token {
+            // Retried forever otherwise: the refusal reads as an ordinary auth
+            // failure, so the next request refreshes and is refused again. One
+            // host wrote 275,468 of these lines against a single subscription
+            // while every request paid for two provider round trips first.
+            warn!(
+                event = "credential_retired",
+                provider,
+                credential_index = index,
+                "provider refused a token it had just issued; the subscription needs \
+                 re-authorization and is retired until it is granted"
             );
             mark_credential_revoked(credential_id).await;
         }

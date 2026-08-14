@@ -172,10 +172,27 @@ PY
 # redemption is refused. Keep the private half in one stable place and let the
 # generator reuse it; only the very first provision mints one.
 stable_proof_key=${BRAMA_PROOF_KEY_FILE:-"${HOME:-/nonexistent}/.stado/brama-proof.key"}
-if [ -f "$stable_proof_key" ]; then
-  BRAMA_PROOF_KEY_FILE="$stable_proof_key"
-  export BRAMA_PROOF_KEY_FILE
+# The self-healing below is conditional on inputs that ship inside the release
+# while `config_dir` is deliberately outside it, so on a host whose durable
+# directory was never seeded the condition is false, provisioning is skipped
+# without a word, and every redemption is refused for as long as nobody looks.
+# Seed it from the bundle instead: these two files are release content, not
+# identity, and copying them is what makes the next update self-heal.
+if [ "$bundled_installation" -eq 1 ] && [ ! -f "$config_dir/subscriptions.json" ]; then
+  for seed in subscriptions.json recipient-public-keys.asc; do
+    if [ -f "$bundle_root/etc/brama-skarbiec/$seed" ]; then
+      mkdir -p "$config_dir"
+      chmod u=rwx,go= "$config_dir"
+      cp "$bundle_root/etc/brama-skarbiec/$seed" "$config_dir/$seed"
+      printf '%s\n' "seeded $seed into $config_dir from this release" >/dev/stderr
+    fi
+  done
 fi
+# Authoritative for the provision below, whether or not it exists yet: the
+# generator's own default lives elsewhere, so leaving this unset is how a first
+# provision mints the identity in a second location and the vault ends up
+# holding the public half of a key nothing signs with.
+export BRAMA_PROOF_KEY_FILE="$stable_proof_key"
 if ! registry_describes_this_installation; then
   if [ -x "$provision_hint" ] && [ -f "$config_dir/subscriptions.json" ]; then
     printf '%s\n' "provisioning this installation's Skarbiec identity in $config_dir" >/dev/stderr
