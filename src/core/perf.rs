@@ -67,7 +67,7 @@ fn load() -> HashMap<String, PerfStats> {
         .unwrap_or_default();
     if map.len() > MAX_MODELS {
         let mut entries: Vec<(String, PerfStats)> = map.into_iter().collect();
-        entries.sort_by(|a, b| b.1.count.cmp(&a.1.count));
+        entries.sort_by_key(|entry| std::cmp::Reverse(entry.1.count));
         entries.truncate(MAX_MODELS);
         map = entries.into_iter().collect();
     }

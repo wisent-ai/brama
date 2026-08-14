@@ -1323,7 +1323,7 @@ async fn chat_completions(
     // Alias telemetry stays attached to the stable logical selector.
     crate::core::perf::record(requested_model, resp.latency_ms, resp.output_tokens);
 
-    let has_tool_calls = resp.tool_calls.as_ref().map_or(false, |tc| !tc.is_empty());
+    let has_tool_calls = resp.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty());
     let finish_reason = if has_tool_calls { "tool_calls" } else { "stop" };
 
     let response_model = alias_source
