@@ -46,7 +46,6 @@ DATA = {
     "libexec/brama-route-probe.py": scripts / "brama-route-probe.py",
     "libexec/brama-clear-stale-broker.py": scripts / "brama-clear-stale-broker.py",
     "libexec/brama-repair-inference-routes.py": scripts / "brama-repair-inference-routes.py",
-    "etc/brama-skarbiec/subscriptions.json": scripts / "skarbiec-subscriptions.json",
     "etc/brama-skarbiec/recipient-public-keys.asc": scripts / "skarbiec-recipient-public-keys.asc",
     "LICENSE": repository / "LICENSE",
 }

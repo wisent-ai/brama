@@ -78,7 +78,6 @@ shutil.copy(
 
 config = staging / "etc" / "brama-skarbiec"
 config.mkdir(parents=True)
-shutil.copy(ROOT / "scripts" / "skarbiec-subscriptions.json", config / "subscriptions.json")
 shutil.copy(
     ROOT / "scripts" / "skarbiec-recipient-public-keys.asc",
     config / "recipient-public-keys.asc",

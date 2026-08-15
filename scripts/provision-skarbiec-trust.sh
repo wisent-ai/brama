@@ -70,11 +70,12 @@ command -v "$NODE_BIN" >/dev/null 2>&1 || {
   false
 }
 
-subscriptions="$config_dir/subscriptions.json"
-[ -f "$subscriptions" ] || {
-  printf '%s\n' "missing subscriptions manifest: $subscriptions" >/dev/stderr
-  false
-}
+# No subscriptions manifest is read or required. Which subscriptions exist is a
+# fact about the vault, and the generator reads it there: every item
+# `provider:<provider>:brama-sub-<agent>-*` is one, which is the same rule the
+# gateway itself uses to discover them. A hand-written list beside that rule could
+# only ever disagree with it, and did -- a paid Claude account was missing from the
+# list and therefore from the policy, so the gateway could not use it.
 control_config=${BRAMA_CONTROL_CONFIG:-}
 if [ -z "$control_config" ]; then
   for candidate in \
@@ -138,7 +139,7 @@ if [ -z "${BRAMA_PROOF_KEY_FILE:-}" ]; then
   fi
 fi
 export BRAMA_PROOF_KEY_FILE
-set -- "$brama_bin" "$config_dir" "$subscriptions" "$runtime_bin" \
+set -- "$brama_bin" "$config_dir" "$runtime_bin" \
   "${BRAMA_WORKLOAD_UID:-$(id -u)}" "${BRAMA_WORKLOAD_GID:-$(id -g)}"
 if [ -n "$control_config" ]; then
   set -- "$@" "$control_config"

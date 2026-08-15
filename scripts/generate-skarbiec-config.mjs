@@ -7,17 +7,35 @@ const [
   ,,
   binaryPath,
   outputDir,
-  subscriptionsPath,
   executablePath = binaryPath,
   workloadUidInput,
   workloadGidInput,
   controlConfigInput,
 ] = process.argv;
-if (!binaryPath || !outputDir || !subscriptionsPath || !isAbsolute(executablePath)) {
+if (!binaryPath || !outputDir || !isAbsolute(executablePath)) {
   throw new Error(
-    'usage: generate-skarbiec-config.mjs <brama-binary> <output-dir> <subscriptions-json> [absolute-runtime-binary] [uid] [gid] [control-config]',
+    'usage: generate-skarbiec-config.mjs <brama-binary> <output-dir> [absolute-runtime-binary] [uid] [gid] [control-config]',
   );
 }
+
+// Which subscriptions exist is read out of the vault, not out of a manifest.
+//
+// It used to take a hand-written JSON list and emit one policy rule per entry, so
+// a subscription the operator paid for was invisible to the gateway until someone
+// remembered to add a line -- and one of them, a second Claude account, sat unused
+// in the pool for weeks because nobody did.
+//
+// The vault already says it, on the item: `brama:subscription` marks one,
+// `brama:provider:<p>` and `brama:id:<id>` name it, and one `brama:agent:<a>` tag
+// per agent that may use it. That is the same material the gateway reads, so the
+// policy and the gateway can no longer disagree about what exists.
+const vaultPath = process.env.SKARBIEC_VAULT_FILE
+  || join(process.env.HOME || '/nonexistent', '.stado', 'skarbiec.vault.json');
+const MARK = 'brama:subscription';
+const tagValue = (tags, prefix) => {
+  const found = tags.find((tag) => tag.startsWith(prefix));
+  return found === undefined ? null : found.slice(prefix.length);
+};
 
 const workloadUid = 10001;
 const workloadGid = 10001;
@@ -33,27 +51,40 @@ if (
 }
 const maxTtlSeconds = 315_360_000;
 const maxUses = 10_000_000;
-const subscriptions = JSON.parse(readFileSync(subscriptionsPath, 'utf8'));
 const subscriptionAgentIds = ['echo', 'content-platform', 'oko', 'wisent-app', 'lem', 'probierz'];
 const requestSignAgentIds = ['wisent-app'];
-if (!Array.isArray(subscriptions) || subscriptions.length === 0) {
-  throw new Error('subscriptions manifest must be a non-empty array');
-}
-for (const subscription of subscriptions) {
-  if (
-    !subscription ||
-    typeof subscription.id !== 'string' ||
-    typeof subscription.provider !== 'string' ||
-    !subscriptionAgentIds.some((agentId) => subscription.id.startsWith(`brama-sub-${agentId}-`)) ||
-    !/^[a-z0-9-]+$/.test(subscription.provider) ||
-    (subscription.agents !== undefined && (
-      !Array.isArray(subscription.agents) ||
-      subscription.agents.length === 0 ||
-      subscription.agents.some((agentId) => !subscriptionAgentIds.includes(agentId))
-    ))
-  ) {
-    throw new Error('subscriptions manifest contains an invalid entry');
-  }
+
+// An agent allowlist stays: it bounds which agents may hold subscriptions at all,
+// which is a policy decision. What is gone is the list of the subscriptions
+// themselves, which was a copy of the vault kept by hand.
+// An image build has no vault, and that is a true statement about an image: it
+// cannot know which subscriptions a host holds. It bakes a policy with no
+// subscription rules, and the launcher provisions the real one at start from the
+// vault it is given -- which is better than baking a list that is stale the day
+// the image is pushed.
+const vault = existsSync(vaultPath)
+  ? JSON.parse(readFileSync(vaultPath, 'utf8'))
+  : (process.stderr.write(`no vault at ${vaultPath}; the policy will grant no subscriptions\n`), {});
+const subscriptions = Object.values(vault?.items ?? {})
+  .filter((item) => Array.isArray(item?.tags) && item.tags.includes(MARK))
+  .map((item) => ({
+    id: tagValue(item.tags, 'brama:id:'),
+    provider: tagValue(item.tags, 'brama:provider:'),
+    agents: item.tags
+      .filter((tag) => tag.startsWith('brama:agent:'))
+      .map((tag) => tag.slice('brama:agent:'.length)),
+  }))
+  .filter(({ id, provider }) => typeof id === 'string' && typeof provider === 'string'
+    && /^[a-z0-9-]+$/.test(provider)
+    && subscriptionAgentIds.some((agentId) => id.startsWith(`brama-sub-${agentId}-`)))
+  .sort((left, right) => left.id.localeCompare(right.id));
+
+// No subscription in the vault is a fact, not a failure: a host can be provisioned
+// before any credential is banked. The old code threw on an empty manifest, which
+// is why an empty list was never a state anyone saw -- it was a state that stopped
+// provisioning.
+if (subscriptions.length === 0) {
+  process.stderr.write(`no brama-sub-* subscription items in ${vaultPath}; the policy will grant none\n`);
 }
 const controlConfigPath = controlConfigInput || process.env.BRAMA_CONTROL_CONFIG;
 let directProviderIds = ['local-openai'];

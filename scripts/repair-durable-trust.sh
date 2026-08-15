@@ -28,17 +28,15 @@ printf 'durable trust:   %s\n' "$config_dir"
 
 mkdir -p "$config_dir"
 chmod u=rwx,go= "$config_dir"
-for seed in subscriptions.json recipient-public-keys.asc; do
+for seed in recipient-public-keys.asc; do
   source_file="$architecture/etc/brama-skarbiec/$seed"
   if [ -f "$source_file" ] && [ ! -f "$config_dir/$seed" ]; then
     cp "$source_file" "$config_dir/$seed"
     printf 'seeded: %s\n' "$seed"
   fi
 done
-if [ ! -f "$config_dir/subscriptions.json" ]; then
-  printf '%s\n' "the running release ships no subscriptions.json to seed from" >/dev/stderr
-  false
-fi
+# No subscriptions manifest is seeded or required: which subscriptions exist is
+# read off the vault items themselves, by the same tags the gateway reads.
 
 # Provisioning signs the policy and registry with Node, and a helper runs with a
 # minimal PATH. Resolve it the way the launcher does -- from the service

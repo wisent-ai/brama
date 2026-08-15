@@ -40,7 +40,6 @@ REQUIRED = (
     "bin/start-with-skarbiec",
     "bin/provision-skarbiec-trust",
     "libexec/generate-skarbiec-config.mjs",
-    "etc/brama-skarbiec/subscriptions.json",
 )
 
 

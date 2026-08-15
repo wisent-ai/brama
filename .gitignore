@@ -11,3 +11,6 @@ build/
 # Added by cargo
 
 /target
+
+# Worktrees are working copies, not repository content.
+.worktrees/

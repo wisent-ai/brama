@@ -176,11 +176,17 @@ stable_proof_key=${BRAMA_PROOF_KEY_FILE:-"${HOME:-/nonexistent}/.stado/brama-pro
 # while `config_dir` is deliberately outside it, so on a host whose durable
 # directory was never seeded the condition is false, provisioning is skipped
 # without a word, and every redemption is refused for as long as nobody looks.
-# Seed it from the bundle instead: these two files are release content, not
-# identity, and copying them is what makes the next update self-heal.
-if [ "$bundled_installation" -eq 1 ] && [ ! -f "$config_dir/subscriptions.json" ]; then
-  for seed in subscriptions.json recipient-public-keys.asc; do
-    if [ -f "$bundle_root/etc/brama-skarbiec/$seed" ]; then
+# Seed it from the bundle instead: this file is release content, not identity, and
+# copying it is what makes the next update self-heal.
+#
+# Only the recipient keys are seeded now. A subscriptions manifest used to ship
+# beside them and gate the provision below, so a host with no manifest silently
+# skipped provisioning and refused every redemption -- while the vault it would
+# have read held the subscriptions all along. What exists is a fact about the
+# vault, so nothing is copied to declare it.
+if [ "$bundled_installation" -eq 1 ]; then
+  for seed in recipient-public-keys.asc; do
+    if [ -f "$bundle_root/etc/brama-skarbiec/$seed" ] && [ ! -f "$config_dir/$seed" ]; then
       mkdir -p "$config_dir"
       chmod u=rwx,go= "$config_dir"
       cp "$bundle_root/etc/brama-skarbiec/$seed" "$config_dir/$seed"
@@ -194,7 +200,7 @@ fi
 # holding the public half of a key nothing signs with.
 export BRAMA_PROOF_KEY_FILE="$stable_proof_key"
 if ! registry_describes_this_installation; then
-  if [ -x "$provision_hint" ] && [ -f "$config_dir/subscriptions.json" ]; then
+  if [ -x "$provision_hint" ]; then
     printf '%s\n' "provisioning this installation's Skarbiec identity in $config_dir" >/dev/stderr
     BRAMA_SKARBIEC_CONFIG_DIR="$config_dir" \
     BRAMA_BIN="$BRAMA_BIN" \
@@ -691,7 +697,6 @@ catalog_file="$runtime_dir/subscription-catalog.json"
   "$ENTITLEMENTS_ROUTER_BIN" \
   "$subscriptions_file" \
   "$config_dir/policy.json" \
-  "$bundle_root/etc/brama-skarbiec/subscriptions.json" \
   "$capabilities_file" \
   "$request_capabilities_file" \
   "$catalog_file" <<'PY'
@@ -705,7 +710,6 @@ import sys
     router,
     available_path,
     policy_path,
-    manifest_path,
     capabilities_path,
     request_capabilities_path,
     catalog_path,
@@ -714,8 +718,30 @@ with open(available_path, encoding="utf-8") as source:
     available_items = json.load(source)
 with open(policy_path, encoding="utf-8") as source:
     policy = json.load(source)
-with open(manifest_path, encoding="utf-8") as source:
-    subscription_manifest = json.load(source)
+
+# Which agents may use a subscription is read off the item, not out of a manifest.
+#
+# The item carries it: `brama:subscription` marks one and one `brama:agent:<id>`
+# tag names each agent. A JSON list beside that was a second answer to the same
+# question, and it disagreed -- the list on this host declared twenty-four
+# subscriptions over twenty providers while the vault held six, and a paid Claude
+# account was in the vault and missing from the list.
+with open(os.environ["SKARBIEC_VAULT_FILE"], encoding="utf-8") as source:
+    vault_items = (json.load(source).get("items") or {}).values()
+manifest_agents = {}
+for item in vault_items:
+    tags = item.get("tags") or []
+    if "brama:subscription" not in tags:
+        continue
+    subscription_id = next(
+        (tag[len("brama:id:"):] for tag in tags if tag.startswith("brama:id:")),
+        None,
+    )
+    if subscription_id is None:
+        continue
+    agents = [tag[len("brama:agent:"):] for tag in tags if tag.startswith("brama:agent:")]
+    if agents:
+        manifest_agents[subscription_id] = agents
 
 rules = policy.get("roles", {}).get("brama-runtime", [])
 allowed = {
@@ -730,11 +756,6 @@ request_sign_agents = sorted(
     and isinstance(resource, str)
     and resource.startswith("agent:")
 )
-manifest_agents = {
-    entry["id"]: entry["agents"]
-    for entry in subscription_manifest
-    if isinstance(entry, dict) and isinstance(entry.get("agents"), list)
-}
 subscription_agents = sorted({
     *request_sign_agents,
     "echo",

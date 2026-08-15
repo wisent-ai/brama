@@ -81,8 +81,6 @@ for asset in \
   brama-repair-inference-routes.py; do
   install -m 0644 "$source_dir/scripts/$asset" "$stage/libexec/$asset"
 done
-install -m 0644 "$source_dir/scripts/skarbiec-subscriptions.json" \
-  "$stage/etc/brama-skarbiec/subscriptions.json"
 install -m 0644 "$source_dir/scripts/skarbiec-recipient-public-keys.asc" \
   "$stage/etc/brama-skarbiec/recipient-public-keys.asc"
 install -m 0644 "$source_dir/LICENSE" "$stage/LICENSE"

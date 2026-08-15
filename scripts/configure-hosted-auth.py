@@ -34,14 +34,16 @@ def main() -> None:
             (
                 manifest.parent
                 for manifest in (Path.home() / ".stado" / "services" / "brama").glob(
-                    "*/darwin-arm/etc/brama-skarbiec/subscriptions.json"
+                    "*/darwin-arm/etc/brama-skarbiec/recipient-public-keys.asc"
                 )
             ),
-            key=lambda candidate: (candidate / "subscriptions.json").stat().st_mtime,
+            key=lambda candidate: (candidate / "recipient-public-keys.asc").stat().st_mtime,
             reverse=True,
         )
     )
-    for manifest_name in ("subscriptions.json", "recipient-public-keys.asc"):
+    # Only the recipient keys are release content now; the subscriptions manifest
+    # is gone, because what exists is read off the vault items themselves.
+    for manifest_name in ("recipient-public-keys.asc",):
         target = trust_dir / manifest_name
         if target.exists():
             continue
