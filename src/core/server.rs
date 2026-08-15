@@ -989,6 +989,18 @@ fn model_error_contract(message: &str) -> ModelErrorContract {
             retryable: false,
         };
     }
+    // A pool the provider rejected is not a pool that is busy. Waiting cannot
+    // reach it: somebody has to authorize the subscription again, and saying
+    // `429 capacity_error, retryable: true` sent this workstation's agent into
+    // retries for hours against a credential the provider had already burnt.
+    if normalized.contains("re-authorization required") {
+        return ModelErrorContract {
+            status: StatusCode::SERVICE_UNAVAILABLE,
+            error_type: "authorization_error",
+            code: "subscription_reauthorization_required",
+            retryable: false,
+        };
+    }
     if normalized.contains("no active")
         || normalized.contains("no working")
         || normalized.contains("all bounded")

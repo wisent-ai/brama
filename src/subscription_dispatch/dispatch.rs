@@ -662,6 +662,10 @@ async fn dispatch_subscription_attempt(
     // Why this request was refused usually happened here, one layer down: a
     // refresh the provider rejected. Keeping it means the refusal can say so.
     let mut refresh_refusal: Option<Failure> = None;
+    // Set when a provider refused a credential outright, as opposed to being out
+    // of quota: the two empty the pool for different reasons and the caller has
+    // to be told which.
+    let mut saw_auth_rejection = false;
     for (index, entry) in rows.iter().take(max_credential_attempts()).enumerate() {
         let credential_id = &entry.id;
         // A credential inside a recorded block is skipped without a provider
@@ -775,6 +779,7 @@ async fn dispatch_subscription_attempt(
             mark_credential_revoked(credential_id).await;
         }
         if is_auth_failure(&error) {
+            saw_auth_rejection = true;
             warn!(
                 event = "credential_auth_rejected",
                 provider,
@@ -798,12 +803,20 @@ async fn dispatch_subscription_attempt(
             "provider rejected bounded credential with a rotatable failure"
         );
     }
-    let mut failure = refuse(
-        request,
-        POINT_BOUNDED_ROTATION,
-        format!("all bounded '{provider}' credentials unavailable for agent"),
-        refresh_refusal,
-    );
+    // Which cause emptied the pool decides what the caller is told. Every
+    // exhausted credential is capacity and waiting helps; a provider that
+    // rejected the credential is an authorization failure that waiting cannot
+    // reach, and callers used to retry it as `429 capacity_error` while the
+    // subscription sat burnt waiting for someone to log in.
+    let summary = if saw_auth_rejection {
+        format!(
+            "all bounded '{provider}' credentials were rejected by the provider; \
+             re-authorization required"
+        )
+    } else {
+        format!("all bounded '{provider}' credentials unavailable for agent")
+    };
+    let mut failure = refuse(request, POINT_BOUNDED_ROTATION, summary, refresh_refusal);
     failure.attempts = provider_attempts;
     failure
 }
