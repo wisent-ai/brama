@@ -34,6 +34,10 @@ ITEMS = (
     "claude-reauth-config",
     "codex-reauth-config",
     "agent:wisent-app",
+    # The login helpers read account material from these; the field names decide
+    # whether a runner can be moved off the store that went away.
+    "kimi-lukasz-google-sso",
+    "claude-wisent-google-sso",
 )
 
 def read_field(item, field):

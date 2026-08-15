@@ -70,7 +70,10 @@ def rows(table: str, query: str) -> list | None:
 
 
 for table, select in (
-    ("trade_agent_subscriptions", "select=*"),
+    # Filtered and newest first, because the table keeps every revocation: an
+    # unfiltered first page returned fifty rows, all of them revoked, and none of
+    # the six that are actually live. The report read like a pool of dead keys.
+    ("trade_agent_subscriptions", "status=eq.active&select=*&order=updated_at.desc"),
     ("trade_service_credentials", "select=id,updated_at"),
     ("service_credentials", "select=id,updated_at"),
 ):
@@ -83,7 +86,12 @@ for table, select in (
             continue
         shown = {
             column: row.get(column)
-            for column in ("id", "label", "provider", "agent_id", "status", "revoked", "updated_at", "created_at")
+            # `key_label` is the column that carries the account a donated
+            # credential belongs to, and `donor_id` who gave it. This report asked
+            # for `label`, which the table does not have, so it printed every row
+            # without ever naming the account -- and that is the one fact needed to
+            # tell which paid subscription sits in which vault position.
+            for column in ("id", "key_label", "donor_id", "provider", "status", "updated_at", "created_at")
             if row.get(column) is not None
         }
         print("  " + ", ".join(f"{column}={item}" for column, item in shown.items()))
