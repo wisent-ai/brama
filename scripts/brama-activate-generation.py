@@ -7,9 +7,10 @@ and only then repoint the service manager. Repointing first is what leaves a
 gateway that answers /health and serves nothing.
 
 The generation is chosen by property rather than by name: the newest
-installation that ships its own provisioner, generator and subscriptions
-manifest, because those are exactly what an installation needs to hold an
-identity of its own instead of borrowing another one's.
+installation that ships its own provisioner and generator, because those are
+exactly what an installation needs to hold an identity of its own instead of
+borrowing another one's. It used to require a subscriptions manifest too; that
+file is gone, because which subscriptions exist is read off the vault items.
 
 Everything replaced is saved beside the original and the undo is printed.
 """
