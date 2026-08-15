@@ -663,40 +663,24 @@ PY
 export BRAMA_REQUEST_SIGN_IDENTITIES
 
 
-# Weles reauth uses one dedicated Skarbiec item and one accepted runtime name.
-# It is not the Weles console token and has no general Weles API scope.
-: "${WELES_URL:=https://weles.wisent.ai}"
-
-BRAMA_WELES_REAUTH_TOKEN="$(
-  "$PYTHON_BIN" - "$ENTITLEMENTS_ROUTER_BIN" <<'PY'
-import json
-import os
-import subprocess
-import sys
-
-arguments = iter(sys.argv)
-next(arguments)
-router = next(arguments)
-result = subprocess.run(
-    [router, "get", "brama-weles-reauth"],
-    check=True,
-    capture_output=True,
-    text=True,
-    env=os.environ,
-)
-payload = json.loads(result.stdout)
-if payload.get("schema") != "skarbiec.item.v2":
-    raise RuntimeError("brama-weles-reauth did not return a Skarbiec v2 item")
-fields = payload.get("fields")
-if not isinstance(fields, dict):
-    raise RuntimeError("brama-weles-reauth did not return a fields object")
-value = fields.get("token")
-if not isinstance(value, str) or not value or value.strip() != value:
-    raise RuntimeError("brama-weles-reauth/token is empty or malformed")
-sys.stdout.write(value)
-PY
-)"
-export WELES_URL BRAMA_WELES_REAUTH_TOKEN
+# Weles reauth is not wired here any more, and this is the note that says why so
+# the next person does not restore it by reflex.
+#
+# This block redeemed `brama-weles-reauth` at every start and exported
+# WELES_URL and BRAMA_WELES_REAUTH_TOKEN. The gateway reads neither: the only
+# occurrences of "weles" in the crate are the `weles/agent/primary` model alias.
+# So every start spent a capability on a token nothing presented, and a refused
+# subscription credential had no path back -- the documented self-healing was an
+# export.
+#
+# The reauth surface that does exist is Weles's own worker API on the host that
+# runs it: `POST /reauth {"provider":"codex"|"claude"|"kimi"}` in
+# `weles/scripts/worker/weles-api-server.mjs`, guarded by WELES_API_TOKEN. That
+# token is not `brama-weles-reauth` -- presenting this one returns 401 -- and no
+# vault scope in `weles/scripts/worker/deploy/skarbiec-acquisition-scopes.conf`
+# provides it. Wiring a client here needs that scope to exist first; until then
+# a credential the provider refuses with a token it just issued is retired by
+# `subscription_dispatch`, which says re-authorization is what unblocks it.
 
 subscriptions_file="$runtime_dir/subscriptions.json"
 capabilities_file="$runtime_dir/provider-capabilities.json"
