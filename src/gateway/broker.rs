@@ -544,7 +544,19 @@ async fn refresh_subscription_credential_inner(
             provider,
             error = unpersisted.detail.as_deref().unwrap_or_default(),
             envelope = %unpersisted.to_json(),
-            "refreshed OAuth credential could not be persisted; using it in memory"
+            "refreshed OAuth credential could not be persisted; the rotated grant is lost \
+             and the stored one is already dead at the provider"
+        );
+        // Using it once and moving on is what turned working accounts into
+        // permanent `invalid_grant`: the provider rotated the refresh token, the
+        // new one was never written, and the vault kept a grant the provider had
+        // already invalidated. Record that this credential needs a
+        // re-authorization so the renewal path runs instead of every later
+        // request failing on a credential nobody can repair by retrying.
+        crate::subscription_dispatch::usage::record_reauthorization_needed(
+            subscription_id,
+            provider,
+            "the refreshed grant could not be persisted; the stored refresh token is stale",
         );
     }
     Ok(Secret::from_bytes(std::mem::take(&mut *fresh)))

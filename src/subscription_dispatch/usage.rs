@@ -30,6 +30,11 @@ use crate::types::{LimitReading, ModelResponse};
 const USAGE_FILE_ENV: &str = "BRAMA_SUBSCRIPTION_USAGE_FILE";
 const DEFAULT_BLOCK_MS: i64 = 15 * 60 * 1_000;
 const MAX_BLOCK_MS: i64 = 7 * 24 * 60 * 60 * 1_000;
+// Long enough that a renewal has a chance to run, short enough that a renewed
+// credential is not gated by the record of the one it replaced.
+const REAUTHORIZATION_BLOCK_MS: i64 = 30 * 60 * 1_000;
+// The stored reason is a sentence for an operator, not a payload.
+const REASON_LIMIT: usize = 200;
 
 static LEDGER: Mutex<Option<Ledger>> = Mutex::new(None);
 
@@ -238,6 +243,40 @@ pub fn record_block(subscription_id: &str, provider: &str, reason: &str, respons
             reason: reason.chars().take(200).collect(),
             recorded_at_ms: now,
             envelope: Some(blocked.to_json()),
+        });
+    });
+}
+
+/// Record that a credential can no longer be renewed on its own, because the
+/// rotated grant was lost.
+///
+/// A provider that rotates refresh tokens invalidates the previous one the
+/// moment it issues a new one. If that new grant is not written back, the copy
+/// in the vault is already dead and every later use fails with `invalid_grant`
+/// no matter how healthy the account is. This is not a rate limit and it is not
+/// transient: it needs a re-authorization, and the window is short so that a
+/// successful renewal is not gated by a stale record.
+pub fn record_reauthorization_needed(subscription_id: &str, provider: &str, reason: &str) {
+    let now = now_ms();
+    let recorded = failure::envelope(
+        POINT_CREDENTIAL_BLOCK,
+        failure::code_for("credential_unauthorized"),
+        IMPACT_CREDENTIAL_BLOCK,
+        reason,
+    )
+    .with_context("subscription", subscription_id)
+    .with_context("provider", provider);
+    with_ledger(|ledger| {
+        let entry = ledger
+            .subscriptions
+            .entry(subscription_id.to_string())
+            .or_default();
+        entry.provider = provider.to_string();
+        entry.block = Some(Block {
+            blocked_until_ms: now.saturating_add(REAUTHORIZATION_BLOCK_MS),
+            reason: reason.chars().take(REASON_LIMIT).collect(),
+            recorded_at_ms: now,
+            envelope: Some(recorded.to_json()),
         });
     });
 }
