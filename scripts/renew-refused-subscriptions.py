@@ -18,13 +18,25 @@ subscription's vault bundle stands at a higher revision than before, so a new
 credential was actually written, and a probe attempted after the login now
 succeeds. Both are read back here.
 
+A bundle that records no account is learned rather than skipped. Which of several
+subscriptions one login mints is written down nowhere and cannot be read out of
+the vault - the account is only visible in what a sign-in writes - so when a
+provider has exactly one account no bundle is attributed to, this snapshots every
+unmapped bundle's revision, signs that account in once, and writes
+`brama:login:<login-item>` on whichever bundles the sign-in actually advanced,
+through Skarbiec's own mapping script so every tag already on them is preserved.
+Two accounts nothing is attributed to means nothing is written: the observation
+would not say which one was responsible.
+
 Safe to run repeatedly and from a timer:
-  * a subscription with no `brama:login:` tag is reported unmapped and never
-    attempted, because the account it belongs to is not recorded and signing
-    into the wrong one is worse than leaving it refused;
-  * a provider whose Weles reauthentication surface chooses the account itself
-    from several is reported unattributable and never attempted, for the same
-    reason;
+  * a subscription with no `brama:login:` tag is never signed in on a guess, and
+    no longer left unrenewable either: the loop learns which account mints it by
+    watching one sign-in of the single account of that provider no bundle is
+    attributed to yet, and writes `brama:login:` on whichever bundles that
+    sign-in actually advanced;
+  * a provider with two or more accounts no bundle is attributed to is reported
+    ambiguous, both named, and left unmapped, because a sign-in there would not
+    say which of them minted a bundle;
   * a subscription whose recorded block is still in force is left alone until it
     lifts, so this never spends a sign-in on an account the gateway is not
     allowed to use yet;
@@ -52,6 +64,7 @@ schedule and where is the fleet's decision, not this script's.
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import hmac
 import json
@@ -107,22 +120,41 @@ LOGIN_HELPER_SOURCE = HERE / "renew-subscription-login.sh"
 LOGIN_HELPER_PREFIX = "brama-renew-login-"
 LOGIN_TAG_PREFIX = "brama:login:"
 SUBSCRIPTION_ID_TAG_PREFIX = "brama:id:"
+# The tag write belongs to the script that owns tag preservation, which lives in
+# the Skarbiec checkout beside this one. It is installed on the host with the
+# proven pairs pinned into it, exactly as the login helper is.
+MAPPING_HELPER = "map-subscription-logins"
+MAPPING_HELPER_SOURCE = pathlib.Path(
+    os.environ.get("BRAMA_SKARBIEC_SCRIPTS_DIR") or HERE.parent.parent / "skarbiec/scripts"
+) / "map-subscription-logins.py"
+PROVEN_TOKEN = "@PROVEN@"
 
 # Brama's provider ids and the names Weles's reauthentication surface knows them
 # by.
 WELES_PROVIDERS = {"claude-code": "claude", "codex": "codex", "kimi": "kimi"}
 
-# Which accounts each provider has on this fleet. Weles's `POST /reauth` selects
-# the account itself - `claude/reauth.mjs` takes the least recently updated of
-# the rows whose display name begins with "Claude" - so a reauthentication can
-# only be attributed to a named account when the provider has exactly one. Claude
-# has two logins on the vault and three sign-in rows in Weles, which is why a
-# claude subscription is reported rather than renewed until that surface can be
-# told which account to use.
+# Which accounts each provider has on this fleet. Weles's `POST /reauth` takes
+# the account by its vault login item id, so a sign-in is for a named account and
+# the answer echoes which one it drove; this table is what a `brama:login:` tag is
+# checked against, so a tag naming an account this fleet does not have is refused
+# instead of sent. It is also how the learning pass knows a provider has exactly
+# one account left to attribute.
 LOGINS_BY_PROVIDER = {
     "claude-code": ("claude-wisent-google-sso", "claude_controlyourai"),
     "codex": ("codex-wisent-google-sso",),
     "kimi": ("kimi-lukasz-google-sso",),
+}
+
+# Accounts whose subscription is no longer in service, and the bundle whose
+# absence from the live vault says so. `claude_controlyourai` minted the
+# subscription of the same name and that bundle is in the vault's trash, so no
+# live bundle records the account and no tag ever will - Skarbiec's mapping
+# script writes none on a trashed bundle. Without this, the account would read as
+# still unattributed and every claude sign-in would look ambiguous. The fact is
+# checked rather than trusted: if that bundle is live again, the account is a
+# candidate again and the ambiguity is reported instead.
+RETIRED_ACCOUNTS = {
+    "claude_controlyourai": "provider:claude-code:brama-sub-wisent-app-claude-controlyourai",
 }
 
 # A probe detail begins with the provider adapter's own failure kind. Only this
@@ -278,8 +310,13 @@ def run_helper(stado: str, host: str, name: str, source: pathlib.Path, run_id: s
     return str(report.get("stdout") or "")
 
 
-def host_vault_state(stado: str, host: str, run_id: str) -> dict:
-    """Every subscription bundle on the host's vault, with revision and tags."""
+def host_vault_state(stado: str, host: str, run_id: str) -> tuple[dict, dict]:
+    """This host's subscription bundles, live ones and trashed ones apart.
+
+    Both carry revision and tags. The trashed ones settle no renewal - nothing
+    serves from them - but they say which accounts still have a subscription in
+    service, which is what keeps a retired account out of the learning pass.
+    """
     output = run_helper(stado, host, STATE_HELPER, STATE_HELPER_SOURCE, run_id)
     try:
         document = json.loads(output.strip().splitlines()[LAST])
@@ -288,12 +325,13 @@ def host_vault_state(stado: str, host: str, run_id: str) -> dict:
             f"{host} did not report its subscription bundles as JSON: {output.strip()[:DETAIL]}"
         ) from None
     items = document.get("items")
+    trashed = document.get("trashed")
     if not isinstance(items, dict) or not items:
         raise Prerequisite(
             f"the vault at {document.get('vault')} on {host} holds no subscription "
             "bundles, so it is not the vault this gateway serves from"
         )
-    return items
+    return items, trashed if isinstance(trashed, dict) else {}
 
 
 def bundle_for(items: dict, subscription_id: str, provider: str) -> tuple[str, dict] | None:
@@ -318,6 +356,31 @@ def login_of(entry: dict) -> str | None:
         if tag.startswith(LOGIN_TAG_PREFIX):
             return tag[len(LOGIN_TAG_PREFIX):]
     return None
+
+
+def revision_of(entry: dict | None) -> int:
+    """The revision a bundle stands at; a bundle that is not there stands at none."""
+    return int((entry or {}).get("revision") or NONE)
+
+
+def unattributed_logins(provider: str, live: dict, trashed: dict) -> list[str]:
+    """This provider's accounts that no bundle on this vault is attributed to.
+
+    An account is attributed when some bundle records it in a `brama:login:` tag,
+    live or trashed, and accounted for when the bundle it was established against
+    is no longer live. Anything left is an account a sign-in could still turn out
+    to belong to, and learning is only sound when exactly one is left.
+    """
+    recorded = {
+        login_of(entry)
+        for entry in (*live.values(), *trashed.values())
+        if login_of(entry)
+    }
+    return [
+        login
+        for login in LOGINS_BY_PROVIDER.get(provider, ())
+        if login not in recorded and RETIRED_ACCOUNTS.get(login, "") not in trashed
+    ]
 
 
 def is_auth_refusal(detail: str) -> bool:
@@ -387,6 +450,7 @@ class AccountLock:
 
     def __init__(self, account: str) -> None:
         STATE_DIR.mkdir(parents=True, exist_ok=True)
+        self.account = account
         self.path = STATE_DIR / f"{account}.lock"
         self.held = False
 
@@ -451,6 +515,307 @@ def sign_in(stado: str, host: str, provider: str, login_item: str, run_id: str) 
         return {"ok": False, "detail": output.strip()[:DETAIL] or "the login helper said nothing"}
 
 
+def cooling_down(persisted: dict, login_item: str) -> int:
+    """Seconds left before this account may be signed in again, or none."""
+    history = persisted.get(login_item) or {}
+    since = time.time() - (history.get("last_attempt_ms") or NONE) / MS_PER_SECOND
+    return max(NONE, int(COOLDOWN_SECONDS - since))
+
+
+def attempt_sign_in(
+    stado: str,
+    host: str,
+    provider: str,
+    login_item: str,
+    persisted: dict,
+    run_id: str,
+) -> tuple[int, dict | None]:
+    """Record that this account was signed in, then sign it in.
+
+    The attempt is written down before it is made, so a run that dies inside a
+    sign-in still leaves the cooldown that keeps the next run from repeating it.
+    """
+    started_ms = now_ms()
+    persisted[login_item] = {
+        "last_attempt_ms": started_ms,
+        "provider": provider,
+        "run": run_id,
+    }
+    write_state_record(persisted)
+    try:
+        return started_ms, sign_in(stado, host, provider, login_item, run_id)
+    except Prerequisite as error:
+        print(f"    the sign-in could not run: {error}")
+        return started_ms, None
+
+
+def record_logins(stado: str, host: str, pairs: list[tuple[str, str]], run_id: str) -> dict:
+    """Write the `brama:login:` tag for pairs a sign-in proved.
+
+    The write happens where the vault is, through Skarbiec's own mapping script,
+    which preserves every existing tag and goes through `retag` so no payload is
+    rewritten. The pairs are pinned into the file that is installed, because
+    `run-helper` carries no arguments.
+    """
+    if not MAPPING_HELPER_SOURCE.is_file():
+        raise Prerequisite(
+            f"no mapping script at {MAPPING_HELPER_SOURCE}; set "
+            "BRAMA_SKARBIEC_SCRIPTS_DIR to the skarbiec checkout that carries it, "
+            "because the tag write belongs to the script that owns tag preservation"
+        )
+    body = MAPPING_HELPER_SOURCE.read_text()
+    if PROVEN_TOKEN not in body:
+        raise Prerequisite(
+            f"{MAPPING_HELPER_SOURCE} carries no {PROVEN_TOKEN} to pin, so a proven "
+            "mapping cannot be handed to it"
+        )
+    proven = ",".join(f"{bundle}={login}" for bundle, login in pairs)
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    rendered = STATE_DIR / MAPPING_HELPER_SOURCE.name
+    rendered.write_text(body.replace(PROVEN_TOKEN, proven))
+    rendered.chmod(OWNER_ONLY_PROGRAM)
+    output = run_helper(stado, host, MAPPING_HELPER, rendered, run_id)
+    try:
+        return json.loads(output.strip().splitlines()[LAST])
+    except (IndexError, ValueError):
+        raise Prerequisite(
+            f"{host} did not report the tag write as JSON: {output.strip()[:DETAIL]}"
+        ) from None
+
+
+def learn_logins(
+    stado: str,
+    host: str,
+    origin: str,
+    agent: str,
+    bearer: str,
+    secret: str,
+    provider: str,
+    candidates: list[tuple[str, str, dict, bool]],
+    persisted: dict,
+    run_id: str,
+) -> int:
+    """Settle which unmapped subscriptions an account mints, by watching a sign-in.
+
+    Nothing on the vault says which of several subscriptions one login was minted
+    from, and no amount of reading will say: the account is only visible in what a
+    sign-in writes. So snapshot every candidate bundle, sign in the one account of
+    this provider no bundle is attributed to yet, and attribute it to whichever
+    candidates advanced a revision - all of them, because one account may
+    legitimately mint several. If none advanced, the sign-in produced no
+    credential and nothing is written. If two accounts could be responsible, both
+    are named and nothing is written: a wrong tag would send every later renewal
+    to an account the subscription does not belong to.
+
+    Returns how many refused subscriptions this pass leaves unclosed. A candidate
+    that was not refused is never counted: learning which account it belongs to is
+    not a repair, and nothing about it was broken.
+    """
+    print(f"--- learning which {provider} subscriptions an unattributed account mints")
+    # The baseline is read here, not at the start of the run: the attempt pass may
+    # already have advanced a bundle with a sign-in of its own, and comparing
+    # against a stale revision would credit this account with that write.
+    try:
+        baseline, discarded = host_vault_state(stado, host, run_id)
+    except Prerequisite as error:
+        print(f"    the host stopped answering before the sign-in: {error}")
+        return sum(FIRST for *_, repairable in candidates if repairable)
+    watched = [
+        (identifier, bundle, baseline[bundle], repairable)
+        for identifier, bundle, _, repairable in candidates
+        if bundle in baseline and not login_of(baseline[bundle])
+    ]
+    if not watched:
+        print("    every unmapped candidate is either gone from the vault or now mapped")
+        return NONE
+    refused = sum(FIRST for *_, repairable in watched if repairable)
+    if not refused:
+        # Nothing here is broken, so nothing here is worth a real sign-in. The
+        # mapping is learned on the run that finds one of these refused, which is
+        # exactly when it is needed.
+        print(
+            f"    no unmapped {provider} subscription is refused, so there is nothing "
+            "to repair and no sign-in is spent on learning one"
+        )
+        return NONE
+    accounts = LOGINS_BY_PROVIDER.get(provider, ())
+    if not accounts:
+        # A provider whose accounts this loop does not record cannot be signed in
+        # at all, let alone attributed. Named rather than treated as ambiguous, so
+        # the answer is "add it here", not "resolve a conflict".
+        print(
+            f"    this fleet records no {provider} account, so there is no sign-in to "
+            "watch; add the provider's accounts to this loop before a subscription of "
+            "it can be renewed"
+        )
+        return refused
+    unattributed = unattributed_logins(provider, baseline, discarded)
+    if not unattributed:
+        # Every account is already attributed to a bundle, so no sign-in can say
+        # which account these were minted from: whatever minted them is either an
+        # account this fleet does not record or one already recorded elsewhere.
+        # A refusal here is not repairable by this loop and is reported as such.
+        print(
+            f"    unlearnable: every {provider} account this fleet records is already "
+            "attributed to a bundle, so no sign-in would say which one minted "
+            + ", ".join(bundle for _, bundle, _, _ in watched)
+        )
+        return refused
+    if len(unattributed) != FIRST:
+        print(
+            f"    ambiguous: {len(unattributed)} {provider} accounts are attributed to "
+            f"no bundle on this vault ({', '.join(unattributed)}), so a sign-in would "
+            "not say which of them minted a bundle; nothing is written"
+        )
+        return refused
+    login_item = unattributed[NONE]
+    remaining = cooling_down(persisted, login_item)
+    if remaining:
+        # A deferral, not a failure, for the same reason as in the attempt pass.
+        print(f"    cooling down: {login_item} is not signed in again for {remaining}s")
+        return NONE
+
+    with contextlib.ExitStack() as stack:
+        # Every account of this provider is locked, not only the one being signed
+        # in: an observation is sound only while no sibling account's login can
+        # advance one of these bundles inside the window being watched.
+        locks = [
+            stack.enter_context(AccountLock(name))
+            for name in sorted(accounts)
+        ]
+        busy = [lock.account for lock in locks if not lock.held]
+        if busy:
+            print(
+                f"    another run is signing in {', '.join(busy)}; a revision that "
+                f"moves now could be that run's write, so {login_item} is left to it"
+            )
+            return NONE
+        current = baseline
+        started_ms = now_ms()
+        advanced: list[tuple[str, str, dict]] = []
+        for attempt in range(MAX_ATTEMPTS_PER_ACCOUNT):
+            started_ms, answer = attempt_sign_in(
+                stado, host, provider, login_item, persisted, run_id
+            )
+            if answer is None:
+                return refused
+            print(
+                f"    attempt {attempt + FIRST}: signed in {login_item}: "
+                f"ok={bool(answer.get('ok'))} confirmed={bool(answer.get('confirmed'))} "
+                f"account={answer.get('account') or ACCOUNT_UNCONFIRMED} "
+                f"run={answer.get('run_id')} "
+                f"detail={str(answer.get('detail') or '')[:DETAIL]}"
+            )
+            if answer.get("ok") and not answer.get("confirmed"):
+                # An unconfirmed run may have signed into any account of this
+                # provider, so whatever it wrote proves nothing about who minted
+                # it. A release that ignores the selector will ignore it on the
+                # next attempt too, so this stops instead of spending another.
+                print(
+                    "    the run was not confirmed as this account, so nothing is "
+                    "attributed; deploy the Weles release that echoes login_item"
+                )
+                return refused
+            if not answer.get("ok"):
+                continue
+            try:
+                current, _ = host_vault_state(stado, host, run_id)
+            except Prerequisite as error:
+                print(f"    the host stopped answering after the sign-in: {error}")
+                return refused
+            advanced = [
+                (identifier, bundle, entry)
+                for identifier, bundle, entry, _ in watched
+                if revision_of(current.get(bundle)) > revision_of(entry)
+            ]
+            # A bundle that already records this account and advanced too is worth
+            # saying out loud: it is the same credential write, and it confirms the
+            # account rather than adding a mapping.
+            for bundle, entry in sorted(baseline.items()):
+                if login_of(entry) != login_item:
+                    continue
+                if revision_of(current.get(bundle)) > revision_of(entry):
+                    print(f"    {bundle} advanced too, and already records this account")
+            if advanced:
+                break
+        if not advanced:
+            print(
+                f"    the sign-in for {login_item} produced no credential: no candidate "
+                "bundle advanced a revision, so nothing is attributed and no tag is written"
+            )
+            return refused
+
+        # Between the snapshot and the write, another run may have attributed one
+        # of these bundles. A bundle that now names a different account is left
+        # alone: two accounts cannot both have minted it, and nothing observed here
+        # says the record already on it is the wrong one.
+        conflicted = {
+            bundle: login_of(current[bundle])
+            for _, bundle, _ in advanced
+            if login_of(current.get(bundle) or {}) not in (None, login_item)
+        }
+        for bundle, other in sorted(conflicted.items()):
+            print(
+                f"    conflict: {bundle} advanced, but it now records "
+                f"{LOGIN_TAG_PREFIX}{other}, which is not the account this sign-in "
+                "drove; leaving its tag alone"
+            )
+        provable = [
+            (identifier, bundle, entry)
+            for identifier, bundle, entry in advanced
+            if bundle not in conflicted
+        ]
+        if not provable:
+            print("    every bundle this sign-in advanced is already attributed elsewhere")
+            return refused
+        try:
+            written = record_logins(
+                stado, host, [(bundle, login_item) for _, bundle, _ in provable], run_id
+            )
+        except Prerequisite as error:
+            print(f"    the tag write could not run: {error}")
+            return refused
+        for conflict in written.get("conflicts") or []:
+            print(f"    {conflict}")
+        wrote = set(written.get("written") or [])
+        already = set(written.get("already") or [])
+        for _, bundle, _ in provable:
+            if bundle in wrote:
+                print(f"    wrote {LOGIN_TAG_PREFIX}{login_item} on {bundle}")
+            elif bundle in already:
+                print(f"    {bundle} already recorded {LOGIN_TAG_PREFIX}{login_item}")
+        missing = [bundle for _, bundle, _ in provable if bundle not in wrote | already]
+        for bundle in missing:
+            print(
+                f"    {bundle} was proven to belong to {login_item}, but the tag write "
+                "did not report it, so it stays unmapped and unrenewable"
+            )
+
+        # Only the candidates that were actually refused are put through the
+        # renewal verification: a subscription nobody refused has nothing to close,
+        # and waiting for its next probe would report a failure that is not one.
+        broken = {identifier for identifier, _, _, repairable in watched if repairable}
+        renewed = [
+            (identifier, bundle, entry)
+            for identifier, bundle, entry in provable
+            if identifier in broken
+        ]
+        if not renewed:
+            return refused + len(missing)
+        closed = verify(
+            stado,
+            host,
+            origin,
+            agent,
+            bearer,
+            secret,
+            {"provider": provider, "subscriptions": renewed},
+            started_ms,
+            run_id,
+        )
+        return refused - closed + len(missing)
+
+
 def main() -> int:
     arguments = sys.argv[FIRST:]
     if len(arguments) not in (len(["origin", "agent"]), len(["origin", "agent", "host"])):
@@ -477,7 +842,7 @@ def main() -> int:
     try:
         stado = resolved_stado()
         listing = gateway_listing(origin, agent, bearer, secret)
-        vault_before = host_vault_state(stado, host, run_id)
+        vault_before, _ = host_vault_state(stado, host, run_id)
     except Prerequisite as error:
         print(str(error), file=sys.stderr)
         return len(["prerequisite"])
@@ -488,50 +853,60 @@ def main() -> int:
 
     persisted = read_state_record()
     attempted: dict[str, dict] = {}
+    unmapped: dict[str, list[tuple[str, str, dict, bool]]] = {}
     unclosed = NONE
 
     for subscription in sorted(listing["subscriptions"], key=lambda entry: str(entry.get("id"))):
         identifier = str(subscription.get("id"))
         provider = str(subscription.get("provider"))
         state = state_of(subscription)
-        print(f"=== {identifier} ({provider})")
-        if state != STATE_REFUSED:
-            print(f"    {state}: nothing to renew")
-            continue
         detail = probe_detail(subscription)
-        if not is_auth_refusal(detail):
+        repairable = state == STATE_REFUSED and is_auth_refusal(detail)
+        print(f"=== {identifier} ({provider})")
+        found = bundle_for(vault_before, identifier, provider)
+        if state == STATE_REFUSED and not repairable:
             print(f"    refused for a reason a sign-in does not repair: {detail[:DETAIL]}")
             continue
-        found = bundle_for(vault_before, identifier, provider)
         if not found:
-            print(
-                "    refused, but no vault bundle on this host serves it, so there is "
-                "nothing to renew and nothing to verify"
-            )
-            unclosed += FIRST
+            if repairable:
+                print(
+                    "    refused, but no vault bundle on this host serves it, so there "
+                    "is nothing to renew and nothing to verify"
+                )
+                unclosed += FIRST
+            else:
+                print(f"    {state}: nothing to renew")
             continue
         bundle, entry = found
         login_item = login_of(entry)
         if not login_item:
+            # A candidate for the learning pass: which account mints it is exactly
+            # what a sign-in can settle, and until it is settled no login is
+            # attempted on its behalf. A blocked subscription is not a candidate:
+            # the loop acts on no account while a block is in force, and a block
+            # lifts long before an account stops existing.
+            if state == STATE_BLOCKED:
+                print(
+                    f"    unmapped and blocked: {bundle} carries no {LOGIN_TAG_PREFIX} "
+                    "tag, and nothing is signed in for it while the block is in force"
+                )
+                continue
+            unmapped.setdefault(provider, []).append((identifier, bundle, entry, repairable))
             print(
                 f"    unmapped: {bundle} carries no {LOGIN_TAG_PREFIX} tag, so the "
-                "account it signs in with is unknown and no login is attempted"
+                f"account it signs in with is not recorded yet ({state}); one sign-in "
+                "of the account nothing is attributed to yet would settle it"
             )
             continue
-        accounts = LOGINS_BY_PROVIDER.get(provider, ())
-        if login_item not in accounts:
+        if not repairable:
+            print(f"    {state}: nothing to renew; account {login_item}")
+            continue
+        if login_item not in LOGINS_BY_PROVIDER.get(provider, ()):
             print(
                 f"    unattributable: {bundle} names account {login_item}, which is "
                 f"not one this fleet records for {provider}; refusing to sign in"
             )
             unclosed += FIRST
-            continue
-        if len(accounts) != FIRST:
-            print(
-                f"    unattributable: Weles chooses the account itself when it "
-                f"reauthenticates {provider}, which has {len(accounts)} accounts on "
-                f"this fleet, so a sign-in cannot be attributed to {login_item}"
-            )
             continue
         attempted.setdefault(
             login_item,
@@ -543,16 +918,12 @@ def main() -> int:
         plan = attempted[login_item]
         provider = plan["provider"]
         print(f"--- signing in {login_item} for {provider}")
-        history = persisted.get(login_item) or {}
-        since_last = time.time() - (history.get("last_attempt_ms") or NONE) / MS_PER_SECOND
-        if since_last < COOLDOWN_SECONDS:
+        remaining = cooling_down(persisted, login_item)
+        if remaining:
             # A deferral, not a failure: the previous run already reported what it
             # found, and a timer that alerted on every run inside the cooldown
             # would alert for an hour about one refusal.
-            print(
-                f"    cooling down: last attempt {int(since_last)}s ago, and this "
-                f"account is not signed in again for {COOLDOWN_SECONDS}s"
-            )
+            print(f"    cooling down: this account is not signed in again for {remaining}s")
             continue
         with AccountLock(login_item) as lock:
             if not lock.held:
@@ -560,22 +931,16 @@ def main() -> int:
                 continue
             closed = NONE
             for attempt in range(MAX_ATTEMPTS_PER_ACCOUNT):
-                started_ms = now_ms()
-                persisted[login_item] = {
-                    "last_attempt_ms": started_ms,
-                    "provider": provider,
-                    "run": run_id,
-                }
-                write_state_record(persisted)
-                try:
-                    answer = sign_in(stado, host, provider, login_item, run_id)
-                except Prerequisite as error:
-                    print(f"    attempt {attempt + FIRST} could not run: {error}")
+                started_ms, answer = attempt_sign_in(
+                    stado, host, provider, login_item, persisted, run_id
+                )
+                if answer is None:
                     break
-                account = answer.get("account") or ACCOUNT_UNCONFIRMED
                 print(
                     f"    attempt {attempt + FIRST}: ok={bool(answer.get('ok'))} "
-                    f"account={account} run={answer.get('run_id')} "
+                    f"confirmed={bool(answer.get('confirmed'))} "
+                    f"account={answer.get('account') or ACCOUNT_UNCONFIRMED} "
+                    f"run={answer.get('run_id')} "
                     f"detail={str(answer.get('detail') or '')[:DETAIL]}"
                 )
                 closed = verify(
@@ -584,6 +949,25 @@ def main() -> int:
                 if closed == len(plan["subscriptions"]):
                     break
             unclosed += len(plan["subscriptions"]) - closed
+
+    # Learning comes last, and takes its own snapshot: the attempt pass may have
+    # advanced a bundle already, and a candidate that is now mapped is no longer a
+    # candidate. The two passes never sign the same account in twice in one run -
+    # the attempt pass only signs in accounts a bundle already records, and
+    # learning only signs in an account no bundle records at all.
+    for provider in sorted(unmapped):
+        unclosed += learn_logins(
+            stado,
+            host,
+            origin,
+            agent,
+            bearer,
+            secret,
+            provider,
+            unmapped[provider],
+            persisted,
+            run_id,
+        )
 
     return NONE if unclosed == NONE else len(["unclosed"])
 
@@ -625,16 +1009,15 @@ def verify(
         time.sleep(POLL_SECONDS)
 
     try:
-        vault_after = host_vault_state(stado, host, run_id)
+        vault_after, _ = host_vault_state(stado, host, run_id)
     except Prerequisite as error:
         print(f"    the host stopped answering while verifying: {error}")
         return NONE
 
     closed = NONE
     for identifier, bundle, before in plan["subscriptions"]:
-        after = vault_after.get(bundle) or {}
-        was = before.get("revision") or NONE
-        now = after.get("revision") or NONE
+        was = revision_of(before)
+        now = revision_of(vault_after.get(bundle))
         subscription = fresh.get(identifier)
         if subscription is None:
             print(

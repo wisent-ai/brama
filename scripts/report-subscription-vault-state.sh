@@ -1,12 +1,13 @@
 #!/bin/sh
 # Report this host's Brama subscription bundles as JSON: revision and tags.
 #
-# The renewal loop needs two facts this host alone holds. The `brama:login:`
-# tag says which account a subscription signs in with, and the item revision
-# says whether a login actually wrote a new credential: a login that reports
-# success but leaves the bundle at the revision it started from renewed
-# nothing. Retagging never advances a revision, so a revision that moved is a
-# payload that was rewritten.
+# The renewal loop needs three facts this host alone holds. The `brama:login:`
+# tag says which account a subscription signs in with, the item revision says
+# whether a login actually wrote a new credential - a login that reports success
+# but leaves the bundle at the revision it started from renewed nothing - and the
+# vault's trash says which accounts still have a subscription in service at all.
+# Retagging never advances a revision, so a revision that moved is a payload that
+# was rewritten.
 #
 # Metadata only - item ids, revisions and tags, never a field value. Read-only:
 # nothing here writes to the vault. Installed and run through Stado:
@@ -45,21 +46,32 @@ SKARBIEC_VAULT_FILE=${SKARBIEC_VAULT_FILE:-"$HOME/.stado/skarbiec.vault.json"}
 }
 export SKARBIEC_VAULT_FILE
 
-"$ROUTER" list | /usr/bin/python3 -c '
+# `--all` includes the trash, reported apart from the live bundles. A login item
+# whose only subscription bundle was trashed is still an account this fleet
+# holds, and the loop has to tell that account from one no bundle has ever been
+# attributed to: without the trash, every claude sign-in would read as ambiguous
+# and no mapping would ever be learned. A trashed bundle serves no traffic, so it
+# is never a renewal candidate and never mixed in with the live ones.
+"$ROUTER" list --all | /usr/bin/python3 -c '
 import json, os, sys
 
 # One JSON object, so the caller parses an answer rather than scraping a report.
 rows = json.load(sys.stdin)
 items = {}
+trashed = {}
 for row in rows:
     identifier = row.get("id") or ""
-    if row.get("deleted") or not identifier.startswith("provider:"):
+    if not identifier.startswith("provider:"):
         continue
-    items[identifier] = {
+    where = trashed if row.get("deleted") else items
+    where[identifier] = {
         "revision": row.get("revision"),
         "tags": row.get("tags") or [],
         "updated_at": row.get("updated_at"),
     }
-json.dump({"vault": os.environ["SKARBIEC_VAULT_FILE"], "items": items}, sys.stdout)
+json.dump(
+    {"vault": os.environ["SKARBIEC_VAULT_FILE"], "items": items, "trashed": trashed},
+    sys.stdout,
+)
 sys.stdout.write("\n")
 '
