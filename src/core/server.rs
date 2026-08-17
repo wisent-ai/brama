@@ -1968,11 +1968,16 @@ fn account_agent_id(identity: &ModelClientIdentity) -> Result<String, ApiError> 
 }
 
 /// One subscription as every reader sees it: identity, plan windows the
-/// provider reported, what Brama measured, and any block in force.
+/// provider reported, what Brama measured, any block in force, when this record
+/// last changed, and what the newest proactive probe learned.
 ///
-/// `limits` is empty when the provider publishes no plan state; that is a fact
-/// about the provider, not a zero, and readers must render it as unknown rather
-/// than as "nothing used".
+/// `limits` being empty is not one state but four, and the last two fields are
+/// what separate them. Windows present: render them, aged by the newest
+/// `recorded_at_ms`. Empty with a refused probe: the credential or the provider
+/// said no, and `probe.detail` is its sentence. Empty with no probe and nothing
+/// measured: nothing has ever gone through this subscription. Empty with a
+/// successful probe: the provider genuinely publishes no plan window, and only
+/// this state may be rendered as such. A zero is never one of the four.
 fn subscription_view(entry: &crate::gateway::broker::SubscriptionEntry) -> Value {
     let recorded = crate::subscription_dispatch::usage::usage_for(&entry.id);
     let limits = recorded
@@ -1986,6 +1991,8 @@ fn subscription_view(entry: &crate::gateway::broker::SubscriptionEntry) -> Value
         "limits": limits,
         "measured": recorded.as_ref().map(|usage| &usage.measured),
         "block": recorded.as_ref().and_then(|usage| usage.block.clone()),
+        "observed_at_ms": recorded.as_ref().and_then(|usage| usage.updated_at_ms),
+        "probe": recorded.as_ref().and_then(|usage| usage.probe.clone()),
     })
 }
 
@@ -2388,6 +2395,10 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
         models = crate::core::perf::tracked_count(),
         "perf registry loaded"
     );
+    // Plan usage is learned on a timer rather than only from whatever traffic
+    // happens to arrive, so a subscription nobody routed through today still
+    // reports what its plan says.
+    crate::subscription_dispatch::probe::spawn();
 
     let protected = Router::new()
         .route("/v1/chat/completions", post(chat_completions))

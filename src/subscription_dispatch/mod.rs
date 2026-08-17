@@ -1,5 +1,6 @@
 pub mod dispatch;
 pub mod model_catalog;
+pub mod probe;
 pub mod quality;
 pub mod usage;
 

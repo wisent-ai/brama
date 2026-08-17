@@ -154,6 +154,15 @@ pub struct LimitReading {
     pub used_fraction: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resets_at_ms: Option<i64>,
+    /// When Brama read this window off a provider answer.
+    ///
+    /// A fraction without an instant cannot be aged: "100% used" is a different
+    /// fact five minutes and five days after the provider said it, and a reader
+    /// that cannot tell them apart shows a stale window as the current one.
+    /// Absent in ledgers written before this field existed, which deserialize
+    /// to zero and are backfilled from the ledger file's own timestamp.
+    #[serde(default)]
+    pub recorded_at_ms: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -11,6 +11,12 @@
 //! which this credential must not be tried again, so the dispatcher stops
 //! guessing from error strings on every call.
 //!
+//! A fourth fact was added once it became clear that the first three cannot be
+//! told apart when they are all absent: the verdict of the last proactive probe.
+//! An empty set of windows means one of three unrelated things -- the provider
+//! publishes none, nothing ever reached this account, or the credential is
+//! refused -- and the probe verdict is what names which.
+//!
 //! The file is written atomically and is not a cache. It survives restarts
 //! because the question it answers -- "how much of this month is gone" -- is not
 //! answerable from a process that started ten seconds ago.
@@ -50,6 +56,22 @@ pub struct SubscriptionUsage {
     pub limits: BTreeMap<String, LimitReading>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub block: Option<Block>,
+    /// When anything in this record last changed.
+    ///
+    /// A reader cannot otherwise tell a subscription nobody has touched for a
+    /// week from one that answered a second ago, because both render as the same
+    /// set of numbers. Absent only for records written before this field
+    /// existed; every mutation below sets it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at_ms: Option<i64>,
+    /// The newest proactive usage probe, when one has run.
+    ///
+    /// This is what separates the three reasons a subscription reports no plan
+    /// window. Without it, a provider that publishes nothing, an account no
+    /// traffic ever reached, and a credential the provider rejects are one
+    /// indistinguishable blank.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub probe: Option<Probe>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -78,6 +100,21 @@ pub struct Block {
     /// this file, and a reader that does not know this one ignores it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub envelope: Option<String>,
+}
+
+/// The outcome of one proactive usage probe.
+///
+/// `ok` is about the provider call, not about the plan: a provider that answered
+/// and publishes no window at all is a successful probe with no readings, and
+/// that is precisely the state no reader could name before.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Probe {
+    pub attempted_at_ms: i64,
+    pub ok: bool,
+    /// The provider's own sentence when it refused, trimmed like every other
+    /// stored reason here. Absent on success, where there is nothing to explain.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -109,6 +146,11 @@ fn usage_path() -> Option<PathBuf> {
     )
 }
 
+/// Read the ledger, tolerating anything the file might be.
+///
+/// A ledger that will not parse yields an empty one rather than an error: this
+/// file is a record, not a configuration, and a gateway that refuses to start
+/// because a usage number is malformed trades every request for one statistic.
 fn load() -> Ledger {
     let Some(path) = usage_path() else {
         return Ledger::default();
@@ -116,7 +158,36 @@ fn load() -> Ledger {
     let Ok(text) = fs::read_to_string(&path) else {
         return Ledger::default();
     };
-    serde_json::from_str(&text).unwrap_or_default()
+    let mut ledger: Ledger = serde_json::from_str(&text).unwrap_or_default();
+    backfill_reading_times(&mut ledger, &path);
+    ledger
+}
+
+/// Give readings written before `recorded_at_ms` existed the ledger file's own
+/// timestamp.
+///
+/// Those readings were observed at some point before the file was last written,
+/// so the file's modification time is the tightest upper bound available and is
+/// closer to the truth than the epoch. It is an upper bound, not a measurement,
+/// which is why it is only ever applied to a reading that carries no instant of
+/// its own.
+fn backfill_reading_times(ledger: &mut Ledger, path: &std::path::Path) {
+    let fallback = fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+        .and_then(|elapsed| i64::try_from(elapsed.as_millis()).ok())
+        .unwrap_or_default();
+    if fallback == 0 {
+        return;
+    }
+    for usage in ledger.subscriptions.values_mut() {
+        for reading in usage.limits.values_mut() {
+            if reading.recorded_at_ms == 0 {
+                reading.recorded_at_ms = fallback;
+            }
+        }
+    }
 }
 
 /// Write through a private temporary file in the same directory and rename, so
@@ -176,6 +247,7 @@ pub fn record_call(subscription_id: &str, provider: &str, response: &ModelRespon
             .entry(subscription_id.to_string())
             .or_default();
         entry.provider = provider.to_string();
+        entry.updated_at_ms = Some(now);
         entry.measured.since_ms.get_or_insert(now);
         entry.measured.last_used_ms = Some(now);
         entry.measured.requests = entry.measured.requests.saturating_add(1);
@@ -238,9 +310,10 @@ pub fn record_block(subscription_id: &str, provider: &str, reason: &str, respons
             .entry(subscription_id.to_string())
             .or_default();
         entry.provider = provider.to_string();
+        entry.updated_at_ms = Some(now);
         entry.block = Some(Block {
             blocked_until_ms: until,
-            reason: reason.chars().take(200).collect(),
+            reason: reason.chars().take(REASON_LIMIT).collect(),
             recorded_at_ms: now,
             envelope: Some(blocked.to_json()),
         });
@@ -272,11 +345,42 @@ pub fn record_reauthorization_needed(subscription_id: &str, provider: &str, reas
             .entry(subscription_id.to_string())
             .or_default();
         entry.provider = provider.to_string();
+        entry.updated_at_ms = Some(now);
         entry.block = Some(Block {
             blocked_until_ms: now.saturating_add(REAUTHORIZATION_BLOCK_MS),
             reason: reason.chars().take(REASON_LIMIT).collect(),
             recorded_at_ms: now,
             envelope: Some(recorded.to_json()),
+        });
+    });
+}
+
+/// Record what a proactive usage probe learned about one subscription.
+///
+/// The probe exists because a plan window only ever appeared for the one account
+/// that happened to serve a request, which left every other row indistinguishable
+/// from a provider that publishes nothing. Storing the attempt -- including a
+/// refused one, with the provider's own sentence -- is what makes the difference
+/// readable. Any readings the probe's answer carried are recorded by
+/// [`record_call`] on the same path real traffic takes; this only adds the
+/// verdict.
+pub fn record_probe(subscription_id: &str, provider: &str, ok: bool, detail: Option<&str>) {
+    let now = now_ms();
+    let detail = detail
+        .map(str::trim)
+        .filter(|detail| !detail.is_empty())
+        .map(|detail| detail.chars().take(REASON_LIMIT).collect::<String>());
+    with_ledger(|ledger| {
+        let entry = ledger
+            .subscriptions
+            .entry(subscription_id.to_string())
+            .or_default();
+        entry.provider = provider.to_string();
+        entry.updated_at_ms = Some(now);
+        entry.probe = Some(Probe {
+            attempted_at_ms: now,
+            ok,
+            detail,
         });
     });
 }

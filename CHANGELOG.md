@@ -5,6 +5,24 @@ Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
 ## Unreleased
 
+### Plan usage is measured, and a blank row says why it is blank
+
+A provider states its plan windows in the headers of an answer, so before this
+change a window existed only for the account that happened to serve a request:
+of seven subscriptions on the fleet exactly one reported a plan, and the other
+six were indistinguishable blanks. Brama now spends one deliberately minimal
+completion per active subscription every `BRAMA_USAGE_PROBE_INTERVAL_SECS`
+seconds (default 900, `0` disables the task) and records what it learned.
+
+A subscription row now also carries the instant each reading was taken
+(`recorded_at_ms`), when the record last changed (`observed_at_ms`), and the
+newest probe verdict (`probe`), so a reader can finally tell apart the three
+reasons a plan can be blank: the provider publishes none, nothing has ever gone
+through this account, or the credential is being refused -- with the provider's
+own sentence for the last one. Subscriptions inside a recorded rate-limit block
+are never probed, the probe rotates to no other credential and retires nothing,
+and a ledger written by an older gateway still loads.
+
 ### Local inference yields to fleet work
 
 Deployment-owned aliases can now fall back from local vLLM to the same

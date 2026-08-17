@@ -349,6 +349,36 @@ pub fn supports_moderation_route(value: &str) -> bool {
     value == "openai/moderation" && route(value).is_some()
 }
 
+/// The model each provider's plan state is cheapest to ask for.
+///
+/// A provider states its plan windows in the headers of an ordinary completion,
+/// so learning them costs one completion. Which model that completion names
+/// changes the price and nothing else, so the smallest one the provider offers
+/// is named here; the entry is the provider's own cheapest, not a default a
+/// caller would ever be routed to. Providers absent from this table publish no
+/// plan headers worth spending a request on, or name no model without a catalog
+/// call, and are not probed.
+const PLAN_PROBE_MODELS: &[(&str, &str)] = &[
+    ("anthropic", "claude-haiku-4-5"),
+    ("claude-code", "claude-haiku-4-5"),
+    ("codex", "gpt-5.3-codex-spark"),
+    ("kimi", "kimi-for-coding"),
+    ("deepseek", "deepseek-chat"),
+];
+
+/// The route to spend one request on to learn a provider's plan state, when
+/// there is one worth spending.
+pub fn plan_probe_route(provider_id: &str) -> Option<String> {
+    let model_id = PLAN_PROBE_MODELS
+        .iter()
+        .find(|(candidate, _)| *candidate == provider_id)
+        .map(|(_, model_id)| *model_id)?;
+    let candidate = format!("{provider_id}/{model_id}");
+    // Built from a table rather than parsed from a caller, and still checked:
+    // a typo here would otherwise reach a provider as a model it does not have.
+    route(&candidate).is_some().then_some(candidate)
+}
+
 fn valid_model_id(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 512
@@ -1938,6 +1968,18 @@ fn header_number(headers: &HashMap<String, String>, name: &str) -> Option<f64> {
     headers.get(name)?.trim().parse::<f64>().ok()
 }
 
+/// The wall-clock instant a provider answer was read, in milliseconds.
+///
+/// `Instant` is used everywhere else in this file because everything else here
+/// is a duration. A limit reading is stored and read back by another process,
+/// so it needs an epoch timestamp its reader can compare against its own clock.
+fn observed_at_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX))
+        .unwrap_or_default()
+}
+
 /// Turn one provider's plan headers into limit readings.
 ///
 /// Anthropic publishes a utilization fraction and a reset instant per named
@@ -1946,6 +1988,10 @@ fn header_number(headers: &HashMap<String, String>, name: &str) -> Option<f64> {
 /// neither -- an absent reading is absent, not zero.
 fn limit_readings(provider_id: &str, headers: &HashMap<String, String>) -> Vec<LimitReading> {
     let seconds_to_ms = |seconds: f64| (seconds * 1_000.0).round() as i64;
+    // One instant for every reading off one answer: they were all read from the
+    // same set of headers, so a per-reading clock call would only invent
+    // differences the provider never stated.
+    let recorded_at_ms = observed_at_ms();
     match provider_id {
         "claude-code" | "anthropic" => ["5h", "7d"]
             .into_iter()
@@ -1967,6 +2013,7 @@ fn limit_readings(provider_id: &str, headers: &HashMap<String, String>) -> Vec<L
                     }),
                     used_fraction: used.clamp(0.0, 1.0),
                     resets_at_ms: resets,
+                    recorded_at_ms,
                 })
             })
             .collect(),
@@ -1984,6 +2031,7 @@ fn limit_readings(provider_id: &str, headers: &HashMap<String, String>) -> Vec<L
                     window_label: minutes.map(window_label_from_minutes),
                     used_fraction: (percent / 100.0).clamp(0.0, 1.0),
                     resets_at_ms: resets,
+                    recorded_at_ms,
                 })
             })
             .collect(),

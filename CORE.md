@@ -114,6 +114,7 @@ past `max_models`.
 | Public model metadata | models.dev | memory and replaceable `/tmp` cache | Degraded catalog is observable; never credential authority |
 | Performance telemetry | Brama process | bounded map and replaceable `/tmp` file | Best effort; not business authority |
 | Donated-subscription metadata | Brama overlay | owner-only atomic JSON rewrite | Credential remains in entitlements authority |
+| Plan usage and probe verdict | Provider's own answer headers | owner-only atomic ledger with each reading's instant | Refreshed by traffic and by the timed usage probe; an unparsable ledger is treated as empty |
 
 Journal credentials, encrypted secret overlays, and raw provider responses are
 prohibited. The journal schema is append-only; incompatible interpretation
@@ -211,6 +212,10 @@ A routing event records bounded fields:
 - success/failure class, retryability, latency, and token totals;
 - whether operator action is required.
 
+The timed plan usage probe is logged under its own `usage_probe_*` events,
+naming the subscription, the provider, and the provider's refusal when there was
+one, so a request nobody made is never read as a caller's traffic.
+
 Do not log bearer values, HMAC signatures, capability IDs, raw credentials,
 request bodies, prompt text, raw provider payloads, or donated secrets. `/stats`
 is bearer-protected. Process telemetry is not durable billing evidence.
@@ -224,6 +229,10 @@ is bearer-protected. Process telemetry is not durable billing evidence.
 - model and credential attempts are finite;
 - the perf registry tracks at most 500 model keys;
 - catalog and subscription caches have explicit TTLs;
+- the timed plan usage probe is bounded: one attempt per active subscription per
+  interval, no retry, no rotation to another credential, subscriptions inside a
+  recorded block skipped, and the whole task disabled by setting
+  `BRAMA_USAGE_PROBE_INTERVAL_SECS` to `0`;
 - no unbounded background retry, queue, or provider worker exists;
 - append-only journal growth is operator-monitored until a versioned compaction
   contract exists.

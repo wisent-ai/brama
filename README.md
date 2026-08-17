@@ -250,10 +250,20 @@ operator paths. Runnable, risk-labeled workflows are indexed in
 - **Subscription lifecycle:** `GET`, `POST`, and `DELETE`
   `/v1/subscriptions/:agent_id`; always bearer- and HMAC-protected. A `GET`
   returns, per subscription, the plan windows the provider itself reported
-  (`limits`: `used_fraction`, `window_label`, `resets_at_ms`), what Brama
-  measured (`measured`: requests, failures, input and output tokens, first and
-  last use), and any rate-limit `block` in force. An empty `limits` array means
-  the provider publishes no plan state; it does not mean nothing was used.
+  (`limits`: `used_fraction`, `window_label`, `resets_at_ms`, and the
+  `recorded_at_ms` the reading was taken at), what Brama measured (`measured`:
+  requests, failures, input and output tokens, first and last use), any
+  rate-limit `block` in force, when the record last changed
+  (`observed_at_ms`), and the newest proactive plan probe (`probe`:
+  `attempted_at_ms`, `ok`, and `detail` when it was refused).
+- **What an empty `limits` array means:** one of four states, and the last two
+  fields are what tell them apart. Windows present: render them, aged by the
+  newest `recorded_at_ms`. Empty with `probe.ok` false: the credential or the
+  provider refused, and `probe.detail` is its own sentence. Empty with no
+  `probe` and nothing measured: nothing has ever gone through this
+  subscription. Empty with `probe.ok` true: the provider genuinely publishes no
+  plan state. Only the last of those may be shown as "no plan window", and none
+  of them is a zero.
 - **Operations:** public `GET /health` and `GET /readyz`; protected `GET /stats`.
   `/health` is liveness only and says so in its body (`dependencies:
   not_probed`): it answers `ok` from a gateway whose every credential
@@ -301,8 +311,12 @@ The complete state, error, retry, authorization, and resource contract is in
   records. `$BRAMA_SUBSCRIPTION_USAGE_FILE`, by default
   `~/.config/brama/subscription-usage.json` and owner-readable only, holds the
   per-subscription usage ledger: measured counters, the newest plan reading per
-  window, and any block. It is written atomically and is not a cache — the
-  question it answers spans months, not process lifetimes. `/tmp/brama-perf.json`
+  window with the instant it was read, any block, and the newest plan probe
+  verdict. It is written atomically and is not a cache — the
+  question it answers spans months, not process lifetimes. A ledger written by
+  an older gateway still loads: readings that carry no instant of their own are
+  given the ledger file's modification time, and a ledger that will not parse
+  yields an empty one rather than stopping the gateway. `/tmp/brama-perf.json`
   contains replaceable process telemetry. The entitlements router owns encrypted
   subscription credential storage in managed deployments.
 - **Subscription discovery:** a provider subscription is a Skarbiec item tagged
@@ -313,6 +327,16 @@ The complete state, error, retry, authorization, and resource contract is in
   writes the owner vault and `scripts/provision-host-subscriptions.sh` writes a
   managed host's vault; both are idempotent and derive their tags from
   `scripts/skarbiec-subscriptions.json`.
+- **Plan usage probing:** a provider states its plan windows in the headers of
+  an ordinary answer, so a subscription that serves no traffic reports no
+  window. Every `BRAMA_USAGE_PROBE_INTERVAL_SECS` seconds (default 900, `0`
+  disables it) the gateway spends one minimal completion per active
+  subscription to learn its plan state and records the verdict as `probe`. A
+  subscription inside a recorded block is never probed: the block already says
+  the account is out of quota, and re-reading that sentence is what the block
+  exists to prevent. The probe rotates to no other credential, retires nothing,
+  and is logged under its own `usage_probe_*` events so it is never mistaken
+  for a caller's request.
 - **Credentials:** callers use dedicated bearer items. Request-sign identities
   and provider capabilities remain separate. Secrets are redeemed at final use
   and are not written to JSON configuration, logs, or Brama state. Standalone
