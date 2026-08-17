@@ -1549,7 +1549,59 @@ async fn readyz() -> impl IntoResponse {
         checked.push(json!({ "provider": provider, "credential": obtained }));
     }
 
-    let ready = denied.is_empty() && !providers.is_empty();
+    // Obtaining a credential is only the first half. A subscription whose model
+    // discovery yields nothing is active, its credential redeems, and it still
+    // cannot be routed to -- and `registry_models_for_agent` only reports a
+    // discovery failure when *every* provider failed, so one working provider
+    // hides the rest. That is how a fleet ends up believing it has six
+    // subscriptions while every request goes to one.
+    let mut routable = Vec::new();
+    let mut unroutable = Vec::new();
+    for agent in crate::gateway::broker::configured_request_sign_agents() {
+        let subscribed: Vec<String> = crate::gateway::broker::list_subscriptions(&agent)
+            .await
+            .into_iter()
+            .filter(|entry| entry.status == "active")
+            .map(|entry| entry.provider.trim().to_string())
+            .collect();
+        match crate::subscription_dispatch::dispatch::registry_models_for_agent(&agent).await {
+            Ok(models) => {
+                let mut per_provider: std::collections::BTreeMap<String, usize> =
+                    std::collections::BTreeMap::new();
+                for model in &models {
+                    let provider =
+                        crate::subscription_dispatch::dispatch::provider_for(&model.route_id)
+                            .unwrap_or("unattributed")
+                            .to_string();
+                    *per_provider.entry(provider).or_default() += usize::from(true);
+                }
+                for provider in &subscribed {
+                    if !per_provider.contains_key(provider) {
+                        unroutable.push(json!({
+                            "agent": agent,
+                            "provider": provider,
+                            "reason": "active subscription, no model discovered",
+                        }));
+                    }
+                }
+                routable.push(json!({
+                    "agent": agent,
+                    "models": models.len(),
+                    "by_provider": per_provider,
+                }));
+            }
+            Err(error) => {
+                unroutable.push(json!({
+                    "agent": agent,
+                    "provider": "all",
+                    "reason": error,
+                }));
+            }
+        }
+    }
+
+    // A credential nobody can route to is not readiness. Both halves count.
+    let ready = denied.is_empty() && !providers.is_empty() && unroutable.is_empty();
     let status = if ready {
         StatusCode::OK
     } else {
@@ -1557,10 +1609,12 @@ async fn readyz() -> impl IntoResponse {
     };
     let reason = if providers.is_empty() {
         "no provider capability is configured"
-    } else if ready {
-        "every configured provider credential was obtained"
-    } else {
+    } else if !denied.is_empty() {
         "a configured provider credential could not be obtained; the authorization chain is broken, not busy"
+    } else if !unroutable.is_empty() {
+        "every credential was obtained, and at least one active subscription contributes no model: it cannot be routed to"
+    } else {
+        "every configured provider credential was obtained and every active subscription contributes a model"
     };
     (
         status,
@@ -1569,6 +1623,8 @@ async fn readyz() -> impl IntoResponse {
             "reason": reason,
             "providers": checked,
             "denied": denied,
+            "routing": routable,
+            "unroutable": unroutable,
             "operator_action_required": !ready,
             "build": crate::build_info::current(),
         })),

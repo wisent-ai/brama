@@ -151,6 +151,24 @@ fn configured_capability(name: &str, key: &str) -> Option<String> {
     capability_map(name)?.remove(key)
 }
 
+/// Every agent this installation is configured to sign for, so a readiness
+/// check can ask what each of them could actually route. Readiness had no way
+/// to name an agent, which is why it could only report the direct-API providers
+/// and said nothing about the subscription-backed ones.
+pub fn configured_request_sign_agents() -> Vec<String> {
+    let mut agents: Vec<String> = capability_map(REQUEST_SIGN_CAPABILITIES_ENV)
+        .map(|map| map.into_keys().collect())
+        .unwrap_or_default();
+    for agent in CENTRAL_REQUEST_SIGN_AGENTS {
+        if capability_map(REQUEST_SIGN_IDENTITIES_ENV).is_some_and(|map| map.contains_key(*agent)) {
+            agents.push((*agent).to_string());
+        }
+    }
+    agents.sort();
+    agents.dedup();
+    agents
+}
+
 fn client() -> Option<CapabilityClient> {
     CapabilityClient::from_env().ok()
 }
