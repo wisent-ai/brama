@@ -2387,7 +2387,13 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
     let ingress_auth = ModelIngressAuth::from_env()?;
     if !standalone {
         ingress_auth.requires_exact_aliases("wisent-backend", WISENT_MODEL_ALIASES)?;
-        ingress_auth.requires_exact_aliases("weles", &[WELES_AGENT_PRIMARY_ALIAS])?;
+        // Weles drafts browser trajectories, which needs a frontier
+        // instruction-following model rather than whatever local deployment
+        // happens to be up. `-best` is the subscription route: the caller's
+        // HMAC identity selects the subscription that pays, and it is the only
+        // alias exempt from `alias_requires_direct_capability`, so it is also
+        // the only way this client can reach a subscription-funded model.
+        ingress_auth.requires_exact_aliases("weles", &[BEST_ALIAS])?;
     }
     let aliases = ModelAliases::from_env(!standalone)?;
     // Touch the perf registry so persisted stats load at startup, not on first use.
