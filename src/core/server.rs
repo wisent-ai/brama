@@ -53,7 +53,7 @@ const WISENT_EVALUATION_ALIAS: &str = "wisent-backend/evaluation";
 const WISENT_EMBEDDING_ALIAS: &str = "wisent-backend/embeddings";
 const WISENT_MODERATION_ALIAS: &str = "wisent-backend/moderation";
 const WELES_AGENT_PRIMARY_ALIAS: &str = "weles/agent/primary";
-const BEST_ALIAS: &str = "-best";
+pub const BEST_ALIAS: &str = "-best";
 const WISENT_MODEL_ALIASES: &[&str] = &[
     WISENT_CHAT_PRIMARY_ALIAS,
     WISENT_CHAT_FALLBACK_ALIAS,
@@ -358,18 +358,29 @@ impl ModelAliases {
             effective_fallbacks = crate::core::inference_routes::resolved_fallbacks(path)
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
         }
-        let expected = MODEL_ALIASES
+        // The named aliases are a contract with callers that ship against them,
+        // so every one must be present. Equality went further and forbade any
+        // additional name, which is why an operator could not add `smol` or
+        // `best-vision` without editing this binary: the gateway refused to
+        // start on the very alias the operator had just declared. Require the
+        // named set, permit the rest.
+        let required = MODEL_ALIASES
             .iter()
             .copied()
             .map(str::to_string)
             .collect::<HashSet<_>>();
-        if require_exact_aliases
-            && effective_routes.keys().cloned().collect::<HashSet<_>>() != expected
-        {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("{MODEL_ALIASES_ENV} must contain the exact named alias set"),
-            ));
+        if require_exact_aliases {
+            let declared = effective_routes.keys().cloned().collect::<HashSet<_>>();
+            let missing = required.difference(&declared).cloned().collect::<Vec<_>>();
+            if !missing.is_empty() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!(
+                        "{MODEL_ALIASES_ENV} is missing required alias(es): {}",
+                        missing.join(", ")
+                    ),
+                ));
+            }
         }
         if effective_fallbacks
             .keys()
@@ -410,7 +421,7 @@ impl ModelAliases {
             // gateway at all. Start, serve what is serviceable, and let the
             // aliases that have no credential resolve to nothing, exactly as an
             // alias nobody declared already does.
-            if alias_requires_direct_capability(alias.as_str())
+            if alias_requires_direct_capability(alias.as_str(), route)
                 && !crate::providers::adapter::provider_id_from_route(route)
                     .is_some_and(crate::gateway::broker::provider_capability_configured)
             {
@@ -437,7 +448,7 @@ impl ModelAliases {
     /// anyway would send a caller to a provider this gateway holds no
     /// credential for, and report it as that provider's refusal.
     fn serviceable(alias: &str, route: String) -> Option<String> {
-        if !alias_requires_direct_capability(alias) {
+        if !alias_requires_direct_capability(alias, &route) {
             return Some(route);
         }
         if crate::providers::adapter::provider_id_from_route(&route)
@@ -1826,26 +1837,42 @@ fn require_brama_desktop(identity: &ModelClientIdentity) -> Result<(), ApiError>
 
 /// Which alias may carry which kind of route. `-best` is a chat route like the
 /// other chat aliases; what differs is who pays for it, not what it is.
+///
+/// The five `wisent-backend/*` aliases keep exact shapes because their names
+/// are a promise to the caller: whoever asks for `embeddings` must never be
+/// handed a chat model. Every other name is the operator's to invent — `smol`,
+/// `dumb`, `best-vision` — and carries no such promise, so it is accepted on
+/// the general-purpose shape. Rejecting unknown names outright, as this did,
+/// made every new alias a Rust change and a gateway release.
+///
+/// A route naming `-best` is delegation rather than a provider: the alias hands
+/// the choice to subscription dispatch, which resolves it per caller identity.
 fn alias_route_shape_supported(alias: &str, route: &str) -> bool {
+    if route == BEST_ALIAS {
+        return alias != WISENT_EMBEDDING_ALIAS && alias != WISENT_MODERATION_ALIAS;
+    }
     match alias {
-        WISENT_CHAT_PRIMARY_ALIAS
-        | WISENT_CHAT_FALLBACK_ALIAS
-        | WISENT_EVALUATION_ALIAS
-        | WELES_AGENT_PRIMARY_ALIAS
-        | BEST_ALIAS => crate::providers::adapter::supports_chat_route(route),
         WISENT_EMBEDDING_ALIAS => crate::providers::adapter::supports_embedding_route(route),
         WISENT_MODERATION_ALIAS => crate::providers::adapter::supports_moderation_route(route),
-        _ => false,
+        _ => crate::providers::adapter::supports_chat_route(route),
     }
 }
 
+/// Whether this alias must resolve to a provider Brama holds a direct
+/// credential for.
+///
 /// `-best` resolves to a subscription route: the caller's HMAC identity selects
 /// the subscription that pays, and Brama deliberately holds no direct provider
 /// credential for it. Requiring a configured direct capability would reject the
-/// only configuration the alias is ever meant to have. Every other alias names
-/// a capability Brama itself owns.
-fn alias_requires_direct_capability(alias: &str) -> bool {
-    alias != BEST_ALIAS
+/// only configuration the alias is ever meant to have.
+///
+/// The same is true of any alias whose route delegates to `-best`, which is why
+/// this asks about the route as well as the name: an operator-defined alias
+/// pointing at the subscription route owns no direct credential either, and
+/// keying the exemption on the alias name alone made `-best` the only alias that
+/// could ever reach a subscription-funded model.
+fn alias_requires_direct_capability(alias: &str, route: &str) -> bool {
+    alias != BEST_ALIAS && route != BEST_ALIAS
 }
 
 fn route_supported(alias: &str, route: &str) -> bool {
@@ -1857,7 +1884,7 @@ fn route_supported(alias: &str, route: &str) -> bool {
         return false;
     }
     alias_route_shape_supported(alias, route)
-        && (!alias_requires_direct_capability(alias)
+        && (!alias_requires_direct_capability(alias, route)
             || crate::providers::adapter::provider_id_from_route(route)
                 .is_some_and(crate::gateway::broker::provider_capability_configured))
 }
