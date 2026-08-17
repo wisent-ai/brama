@@ -917,6 +917,28 @@ while [ ! -S "$SKARBIEC_CAP_SOCKET" ]; do
 done
 
 
+# Renewal runs here because nothing else runs it. A subscription credential that
+# the provider rejects is repaired by a real sign-in through Weles, and until now
+# that repair waited for a person: the fleet carried five days of refused
+# subscriptions that only surfaced when an operator looked at a screen. A
+# separate launchd unit would be the tidier home, but a new unit cannot be
+# bootstrapped through the fleet channel on this host, so the loop lives beside
+# the capability broker and shares the gateway's lifecycle. It sweeps, sleeps and
+# spends nothing when there is nothing refused; its own cooldown, not the sweep
+# interval, decides how often one account is signed in again.
+RENEWAL_LOOP=${BRAMA_RENEWAL_LOOP_BIN:-"$bundle_root/bin/renewal-loop-service"}
+if [ "${BRAMA_RENEWAL_ENABLED:-1}" != 0 ] && [ -x "$RENEWAL_LOOP" ]; then
+  BRAMA_RENEWAL_SWEEP_COMMAND=${BRAMA_RENEWAL_SWEEP_COMMAND:-"$bundle_root/bin/renew-refused-subscriptions"}
+  BRAMA_RENEWAL_ROUTER_BIN=${BRAMA_RENEWAL_ROUTER_BIN:-"$ENTITLEMENTS_ROUTER_BIN"}
+  export BRAMA_RENEWAL_SWEEP_COMMAND BRAMA_RENEWAL_ROUTER_BIN
+  "$RENEWAL_LOOP" &
+  renewal_pid=$!
+  trap 'kill "$broker_pid" "$renewal_pid" 2>/dev/null || true' EXIT INT TERM
+  printf '%s\n' "renewal loop started as pid $renewal_pid"
+else
+  printf '%s\n' "renewal loop not started (enabled=${BRAMA_RENEWAL_ENABLED:-1}, path $RENEWAL_LOOP)"
+fi
+
 # `exec` on purpose. Supervising the gateway from this shell instead looked
 # tidier -- a trap could then stop the capability broker -- but it put a shell
 # between the supervisor and the process that matters. The supervisor stops the

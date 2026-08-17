@@ -45,6 +45,21 @@ binaries = {
 scripts = {
     "start-with-skarbiec": ROOT / "scripts" / "start-with-skarbiec.sh",
     "provision-skarbiec-trust": ROOT / "scripts" / "provision-skarbiec-trust.sh",
+    # The renewal loop belongs in the release for the same reason the launcher
+    # does: it runs on the always-on host and must survive a restart, and a new
+    # launchd unit cannot be bootstrapped through the fleet channel on macOS
+    # because the remote session may not switch audit sessions. Shipped here,
+    # the launcher starts it beside the capability broker and it inherits the
+    # gateway's own lifecycle.
+    "renewal-loop-service": ROOT / "scripts" / "renewal-loop-service.sh",
+    "renew-refused-subscriptions": ROOT / "scripts" / "renew-refused-subscriptions.py",
+    "report-subscription-vault-state": ROOT / "scripts" / "report-subscription-vault-state.sh",
+    "renew-subscription-login": ROOT / "scripts" / "renew-subscription-login.sh",
+    # The tag write lives in Skarbiec's checkout because that is where tag
+    # preservation is owned, and the renewal loop cannot learn an account's
+    # subscriptions without it. A release that carries the loop and not this
+    # script can renew what is already mapped and nothing else.
+    "map-subscription-logins": ROOT.parent / "skarbiec" / "scripts" / "map-subscription-logins.py",
 }
 for name, source in {**binaries, **scripts}.items():
     if not source.exists():

@@ -115,8 +115,24 @@ GATEWAY_TIMEOUT_SECONDS = float(os.environ.get("BRAMA_RENEWAL_GATEWAY_TIMEOUT_SE
 HELPER_TIMEOUT_SECONDS = float(os.environ.get("BRAMA_RENEWAL_HELPER_TIMEOUT_SECONDS", "2400"))
 
 STATE_HELPER = "report-subscription-vault-state"
-STATE_HELPER_SOURCE = HERE / "report-subscription-vault-state.sh"
-LOGIN_HELPER_SOURCE = HERE / "renew-subscription-login.sh"
+
+
+# The helpers sit beside this file, and where that is decides their names. In the
+# repository they carry their extension; in a release bundle every program is
+# installed under its bare name, because that is the shape `stado service update`
+# unpacks and the unit's program path expects. Resolving only the repository name
+# made the loop exit at once inside the release with "no helper to install", and
+# nothing on the schedule ever ran.
+def beside(*names: str) -> pathlib.Path:
+    for name in names:
+        candidate = HERE / name
+        if candidate.exists():
+            return candidate
+    return HERE / names[0]
+
+
+STATE_HELPER_SOURCE = beside("report-subscription-vault-state.sh", STATE_HELPER)
+LOGIN_HELPER_SOURCE = beside("renew-subscription-login.sh", "renew-subscription-login")
 LOGIN_HELPER_PREFIX = "brama-renew-login-"
 LOGIN_TAG_PREFIX = "brama:login:"
 SUBSCRIPTION_ID_TAG_PREFIX = "brama:id:"
@@ -124,9 +140,15 @@ SUBSCRIPTION_ID_TAG_PREFIX = "brama:id:"
 # the Skarbiec checkout beside this one. It is installed on the host with the
 # proven pairs pinned into it, exactly as the login helper is.
 MAPPING_HELPER = "map-subscription-logins"
-MAPPING_HELPER_SOURCE = pathlib.Path(
-    os.environ.get("BRAMA_SKARBIEC_SCRIPTS_DIR") or HERE.parent.parent / "skarbiec/scripts"
-) / "map-subscription-logins.py"
+MAPPING_HELPER_SOURCE = (
+    pathlib.Path(os.environ["BRAMA_SKARBIEC_SCRIPTS_DIR"]) / "map-subscription-logins.py"
+    if os.environ.get("BRAMA_SKARBIEC_SCRIPTS_DIR")
+    else beside(
+        "map-subscription-logins.py",
+        MAPPING_HELPER,
+        str(HERE.parent.parent / "skarbiec/scripts/map-subscription-logins.py"),
+    )
+)
 PROVEN_TOKEN = "@PROVEN@"
 
 # Brama's provider ids and the names Weles's reauthentication surface knows them
