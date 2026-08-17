@@ -42,7 +42,6 @@
         "stage/libexec/brama-route-probe.py": "libexec/brama-route-probe.py",
         "stage/libexec/brama-clear-stale-broker.py": "libexec/brama-clear-stale-broker.py",
         "stage/libexec/brama-repair-inference-routes.py": "libexec/brama-repair-inference-routes.py",
-        "stage/etc/brama-skarbiec/subscriptions.json": "etc/brama-skarbiec/subscriptions.json",
         "stage/etc/brama-skarbiec/recipient-public-keys.asc": "etc/brama-skarbiec/recipient-public-keys.asc",
         "stage/LICENSE": "LICENSE"
       },
@@ -75,7 +74,6 @@
         "stage/libexec/brama-route-probe.py": "libexec/brama-route-probe.py",
         "stage/libexec/brama-clear-stale-broker.py": "libexec/brama-clear-stale-broker.py",
         "stage/libexec/brama-repair-inference-routes.py": "libexec/brama-repair-inference-routes.py",
-        "stage/etc/brama-skarbiec/subscriptions.json": "etc/brama-skarbiec/subscriptions.json",
         "stage/etc/brama-skarbiec/recipient-public-keys.asc": "etc/brama-skarbiec/recipient-public-keys.asc",
         "stage/LICENSE": "LICENSE"
       },
