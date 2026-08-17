@@ -7,6 +7,17 @@ platform=${WISENT_PLATFORM:?WISENT_PLATFORM is required}
 version=${WISENT_VERSION:?WISENT_VERSION is required}
 skarbiec_source=${WISENT_INPUT_SKARBIEC_DIR:?WISENT_INPUT_SKARBIEC_DIR is required}
 
+# Same reason as the quality gate: the worker's PATH is not a login shell's, and
+# the Linux builder keeps cargo under `$HOME/.cargo/bin`.
+if ! command -v cargo >/dev/null; then
+  PATH="$HOME/.cargo/bin:$PATH"
+  export PATH
+fi
+command -v cargo >/dev/null || {
+  printf 'cargo is not installed for this builder\n' >&2
+  exit 69
+}
+
 case "$platform" in
   darwin-arm64)
     expected_os=Darwin
