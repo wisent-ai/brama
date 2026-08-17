@@ -42,6 +42,13 @@ Usage: printf '%s\\n%s\\n' "$bearer" "$secret" |
 Exit status is zero when nothing needed renewing or everything attempted closed,
 and non-zero when a prerequisite is missing or an attempted subscription is
 still refused - which is what a Stado-managed timer should alert on.
+
+A Stado-managed unit runs exactly that command on a schedule, with the two lines
+of standard input coming from an owner-only file the unit reads and the knobs
+below coming from its environment - BRAMA_RENEWAL_COOLDOWN_SECONDS is the one
+that decides how often a refused account is actually signed in again, so a unit
+may run far more often than it acts. No unit is installed by this file: what to
+schedule and where is the fleet's decision, not this script's.
 """
 from __future__ import annotations
 
