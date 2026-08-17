@@ -482,15 +482,15 @@ impl ModelAliases {
             .and_then(|route| Self::serviceable(alias, route))
     }
 
+    /// The chat route for one alias, plus its fallback chain.
+    ///
+    /// Only the two aliases that promise a different capability are refused
+    /// here. This was an allowlist of five chat names, which meant an
+    /// operator-defined alias passed startup validation and then served
+    /// nothing: `alias_route_shape_supported` accepted it and this returned
+    /// `None` for it, so the alias existed and was permanently unroutable.
     fn chat_route(&self, alias: &str) -> (Option<String>, Vec<String>) {
-        if !matches!(
-            alias,
-            WISENT_CHAT_PRIMARY_ALIAS
-                | WISENT_CHAT_FALLBACK_ALIAS
-                | WISENT_EVALUATION_ALIAS
-                | WELES_AGENT_PRIMARY_ALIAS
-                | BEST_ALIAS
-        ) {
+        if matches!(alias, WISENT_EMBEDDING_ALIAS | WISENT_MODERATION_ALIAS) {
             return (None, Vec::new());
         }
         if let Some(path) = self.routes_file.as_deref() {
