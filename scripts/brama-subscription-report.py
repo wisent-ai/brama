@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Say what the gateway would charge a `-best` request to, and what is missing.
+"""Say what the gateway would charge a `best` request to, and what is missing.
 
-`-best` resolves to a subscription route, so it needs an active subscription
+`best` resolves to a subscription route, so it needs an active subscription
 credential owned by the calling agent. When there is none the answer is
 `429 no active 'claude-code' credential for agent` — which says nothing about
 whether the catalog is empty, the vault holds no such item, or a credential

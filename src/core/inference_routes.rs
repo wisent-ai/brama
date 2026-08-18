@@ -193,11 +193,11 @@ fn deployment_for_model<'a>(registry: &'a Registry, model: &str) -> Result<&'a D
     Ok(deployment)
 }
 
-/// A destination naming `-best` is delegation, not a local deployment: the
+/// A destination naming `best` is delegation, not a local deployment: the
 /// operator is saying "whatever the subscription route picks", so it passes
 /// through untouched and subscription dispatch resolves it per caller identity.
 ///
-/// Without this, `-best` carries no slash, falls into the deployment lookup
+/// Without this, `best` carries no slash, falls into the deployment lookup
 /// below and is rejected as an unknown local model. That forced every route to
 /// name one fixed provider and model, and left no way to point an alias at the
 /// subscription that pays.

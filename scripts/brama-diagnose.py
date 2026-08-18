@@ -41,7 +41,7 @@ SERVICE_LABEL = "com.wisent.always-on.brama"
 CAPABILITY_VERB = "capability-issue"
 REFUSAL = "unknown command"
 BOOT_MARKER = "Starting server"
-BEST_ALIAS = "-best"
+BEST_ALIAS = "best"
 REQUIRED_FILES = (
     "bin/brama",
     "bin/skarbiec-entitlements-router",
@@ -246,7 +246,7 @@ if routes_path.is_file():
     for alias, route in sorted(entries.items()):
         provider = route.split("/")[len([])]
         if alias.startswith(BEST_ALIAS):
-            verdict = "exempt: a subscription pays for -best"
+            verdict = "exempt: a subscription pays for best"
         elif "/" not in route:
             verdict = "REFUSED: names no provider"
         elif provider in issued:

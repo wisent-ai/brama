@@ -405,7 +405,7 @@ except (KeyError, TypeError) as error:
     raise SystemExit(f"services.brama policy is incomplete: {error}") from error
 
 expected_alias_routes = {
-    "-best": "codex/gpt-5.3-codex-spark",
+    "best": "codex/gpt-5.3-codex-spark",
     "wisent-backend/chat/primary": "featherless/TheDrummer/Cydonia-24B-v4.3",
     "wisent-backend/chat/fallback": "featherless/TheDrummer/Cydonia-24B-v4.3",
     "wisent-backend/evaluation": "openai/default",
@@ -500,7 +500,7 @@ router = next(arguments)
 all_models = os.environ["BRAMA_ALLOWED_MODELS"].split(",")
 backend_models = [model for model in all_models if model.startswith("wisent-backend/")]
 weles_models = ["weles/agent/primary"]
-tama_models = ["-best"]
+tama_models = ["best"]
 # Lem's figure pipeline asks for a capability, not a vendor: `any-vision-capable`
 # for judging a rendered figure and `any` for drafting one. Pinning the client to
 # a model name dated the allowlist to whatever was current the day it was written
@@ -899,7 +899,7 @@ export BRAMA_SUBSCRIPTION_CATALOG="$(cat "$catalog_file")"
 # `MODEL_ALIASES` in src/core/server.rs requires the exact seven-alias set, so
 # omitting one fails startup with "must contain the exact named alias set".
 if [ "$(uname -s)" = Darwin ]; then
-  export BRAMA_MODEL_ALIASES='{"-best":"codex/gpt-5.3-codex-spark","weles/agent/primary":"featherless/TheDrummer/Cydonia-24B-v4.3","wisent-backend/chat/fallback":"local-openai/chat-primary","wisent-backend/chat/primary":"local-openai/chat-primary","wisent-backend/embeddings":"openai/embeddings","wisent-backend/evaluation":"local-openai/chat-primary","wisent-backend/moderation":"openai/moderation"}'
+  export BRAMA_MODEL_ALIASES='{"best":"codex/gpt-5.3-codex-spark","weles/agent/primary":"featherless/TheDrummer/Cydonia-24B-v4.3","wisent-backend/chat/fallback":"local-openai/chat-primary","wisent-backend/chat/primary":"local-openai/chat-primary","wisent-backend/embeddings":"openai/embeddings","wisent-backend/evaluation":"local-openai/chat-primary","wisent-backend/moderation":"openai/moderation"}'
 fi
 
 

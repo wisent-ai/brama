@@ -10,7 +10,7 @@ import tempfile
 HOME = pathlib.Path.home()
 SERVICE_ENV = HOME / ".config" / "brama" / "service.env"
 ALIASES = {
-    "-best": "codex/gpt-5.3-codex-spark",
+    "best": "codex/gpt-5.3-codex-spark",
     "wisent-backend/chat/primary": "featherless/TheDrummer/Cydonia-24B-v4.3",
     "wisent-backend/chat/fallback": "featherless/TheDrummer/Cydonia-24B-v4.3",
     "wisent-backend/evaluation": "openai/default",

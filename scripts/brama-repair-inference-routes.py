@@ -2,7 +2,7 @@
 """Qualify every operator route with the provider that actually serves it.
 
 `inference-routes.json` overrides the launch aliases, and the server requires
-each route except `-best` to name a provider it holds a capability for. A bare
+each route except `best` to name a provider it holds a capability for. A bare
 route like `chat-primary` names a deployment, not a provider, so
 `provider_id_from_route` yields nothing and the gateway refuses to start with a
 message naming one alias at a time.

@@ -53,7 +53,7 @@ const WISENT_EVALUATION_ALIAS: &str = "wisent-backend/evaluation";
 const WISENT_EMBEDDING_ALIAS: &str = "wisent-backend/embeddings";
 const WISENT_MODERATION_ALIAS: &str = "wisent-backend/moderation";
 const WELES_AGENT_PRIMARY_ALIAS: &str = "weles/agent/primary";
-pub const BEST_ALIAS: &str = "-best";
+pub const BEST_ALIAS: &str = "best";
 const WISENT_MODEL_ALIASES: &[&str] = &[
     WISENT_CHAT_PRIMARY_ALIAS,
     WISENT_CHAT_FALLBACK_ALIAS,
@@ -1835,7 +1835,7 @@ fn require_brama_desktop(identity: &ModelClientIdentity) -> Result<(), ApiError>
     }
 }
 
-/// Which alias may carry which kind of route. `-best` is a chat route like the
+/// Which alias may carry which kind of route. `best` is a chat route like the
 /// other chat aliases; what differs is who pays for it, not what it is.
 ///
 /// The five `wisent-backend/*` aliases keep exact shapes because their names
@@ -1845,7 +1845,7 @@ fn require_brama_desktop(identity: &ModelClientIdentity) -> Result<(), ApiError>
 /// the general-purpose shape. Rejecting unknown names outright, as this did,
 /// made every new alias a Rust change and a gateway release.
 ///
-/// A route naming `-best` is delegation rather than a provider: the alias hands
+/// A route naming `best` is delegation rather than a provider: the alias hands
 /// the choice to subscription dispatch, which resolves it per caller identity.
 fn alias_route_shape_supported(alias: &str, route: &str) -> bool {
     if route == BEST_ALIAS {
@@ -1861,15 +1861,15 @@ fn alias_route_shape_supported(alias: &str, route: &str) -> bool {
 /// Whether this alias must resolve to a provider Brama holds a direct
 /// credential for.
 ///
-/// `-best` resolves to a subscription route: the caller's HMAC identity selects
+/// `best` resolves to a subscription route: the caller's HMAC identity selects
 /// the subscription that pays, and Brama deliberately holds no direct provider
 /// credential for it. Requiring a configured direct capability would reject the
 /// only configuration the alias is ever meant to have.
 ///
-/// The same is true of any alias whose route delegates to `-best`, which is why
+/// The same is true of any alias whose route delegates to `best`, which is why
 /// this asks about the route as well as the name: an operator-defined alias
 /// pointing at the subscription route owns no direct credential either, and
-/// keying the exemption on the alias name alone made `-best` the only alias that
+/// keying the exemption on the alias name alone made `best` the only alias that
 /// could ever reach a subscription-funded model.
 fn alias_requires_direct_capability(alias: &str, route: &str) -> bool {
     alias != BEST_ALIAS && route != BEST_ALIAS
@@ -2416,7 +2416,7 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
         ingress_auth.requires_exact_aliases("wisent-backend", WISENT_MODEL_ALIASES)?;
         // Weles drafts browser trajectories, which needs a frontier
         // instruction-following model rather than whatever local deployment
-        // happens to be up. `-best` is the subscription route: the caller's
+        // happens to be up. `best` is the subscription route: the caller's
         // HMAC identity selects the subscription that pays, and it is the only
         // alias exempt from `alias_requires_direct_capability`, so it is also
         // the only way this client can reach a subscription-funded model.

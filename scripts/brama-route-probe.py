@@ -80,10 +80,10 @@ for authority in dict.fromkeys(candidates):
 if not base:
     raise SystemExit("no candidate address served /health")
 
-BEST = "-best"
+BEST = "best"
 ALIASES = (BEST, "local-openai/chat-primary", "wisent-backend/chat/primary")
 
-# A direct or alias route needs the bearer only. `-best` is the subscription
+# A direct or alias route needs the bearer only. `best` is the subscription
 # route: the agent identity selects the subscription that pays, so the gateway
 # wants the signed trio — id, timestamp, and an HMAC-SHA256 over
 # `{agent}:{timestamp}:{sha256(body)}` keyed by that agent's request-sign
