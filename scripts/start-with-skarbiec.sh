@@ -403,6 +403,7 @@ control_config=${control_config:-${HOME:-/nonexistent}/.config/brama/control.jso
   printf '%s\n' "BRAMA_CONTROL_CONFIG is not a regular file: $control_config" >/dev/stderr
   false
 }
+printf '%s\n' "control:  $control_config" >/dev/stderr
 policy_dir=$(mktemp -d "$runtime_dir/policy.XXXXXX")
 trap 'rm -rf "$policy_dir"' EXIT HUP INT TERM
 "$PYTHON_BIN" - "$control_config" "$policy_dir/allowed-models" "$policy_dir/model-aliases" <<'PY'
@@ -440,7 +441,29 @@ if (
     or len(allowed_models) != len(set(allowed_models))
     or set(allowed_models) != expected_aliases
 ):
-    raise SystemExit("services.brama.allowed_models must contain the exact closed Brama alias set")
+    # Four conditions share one sentence, and the sentence named none of them. A
+    # candidate failed this check on a host whose configured file held exactly the
+    # expected set, and the only way to tell which condition fired was to add this.
+    # Aliases are not secrets.
+    if not isinstance(allowed_models, list):
+        raise SystemExit(
+            f"services.brama.allowed_models must be a list, found {type(allowed_models).__name__}"
+            f" in {config_path}"
+        )
+    malformed = [
+        value
+        for value in allowed_models
+        if not isinstance(value, str) or not value or value.strip() != value
+    ]
+    duplicates = sorted({value for value in allowed_models if allowed_models.count(value) > 1})
+    raise SystemExit(
+        "services.brama.allowed_models must contain the exact closed Brama alias set"
+        f"; file={config_path}"
+        f"; missing={sorted(expected_aliases - set(allowed_models))}"
+        f"; unexpected={sorted(set(allowed_models) - expected_aliases)}"
+        f"; malformed={malformed}"
+        f"; duplicated={duplicates}"
+    )
 
 
 if (
