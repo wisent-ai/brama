@@ -210,7 +210,9 @@ Public errors use this envelope:
 | 409 | `state_conflict` | requested mutation conflicts with current state | Read current state before retry |
 | 426 | `secure_transport_required` | neither loopback nor trusted HTTPS peer | Use approved HTTPS ingress |
 | 429 | `provider_rate_limited` | bounded provider quota/rate attempts exhausted | Wait or choose an explicit authorized target |
-| 429 | `subscription_unavailable` | no usable agent credential in bound attempts | Repair intended subscription or wait |
+| 429 | `subscription_unavailable` | no usable agent credential in bound attempts, and at least one was actually tried | Repair intended subscription or wait |
+| 503 | `credential_unauthorized` | redemption was refused, or no capability, read grant, or installation trust material could produce a credential at all | Repair the authorization chain; waiting does not reach it |
+| 503 | `subscription_reauthorization_required` | every bounded credential was refused by the provider | Sign the subscription in again |
 | 502 | `provider_failure` | provider returned permanent/malformed failure | Inspect provider classification; retry only if stated |
 | 503 | `dependency_unavailable` | required catalog, broker, vault, or provider unavailable | Restore named dependency |
 | 504 | `dependency_timeout` | whole Brama request deadline expired | Inspect dependency; retry only when safe |

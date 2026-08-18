@@ -21,14 +21,21 @@ use wisent_errors::Failure;
 
 /// The envelope for one refused model request: where it broke, what the caller
 /// loses, the reason verbatim, and the failure underneath it when there is one.
-fn refusal_envelope(model: &str, point: &str, message: &str, cause: Option<Failure>) -> Failure {
+fn refusal_envelope(
+    model: &str,
+    point: &str,
+    kind: &str,
+    message: &str,
+    cause: Option<Failure>,
+) -> Failure {
     let refusal = failure::envelope(
         point,
-        // Brama has always told its clients that an unavailable subscription is
-        // worth retrying. The code is looked up from that same kind rather than
-        // chosen here, so it cannot come to mean something else than it does at
-        // the HTTP edge.
-        failure::code_for("subscription_unavailable"),
+        // The kind is the caller's own answer, passed in rather than assumed:
+        // an envelope that says `rate_limit` beside a `503 credential_
+        // unauthorized` body sends the operator looking for a busy provider
+        // while the actual break is an authorization chain. The code is looked
+        // up from that kind, so the two readings cannot drift apart.
+        failure::code_for(kind),
         IMPACT_MODEL_REQUEST,
         message,
     )
@@ -50,7 +57,18 @@ fn refuse(
     message: String,
     cause: Option<Failure>,
 ) -> ModelResponse {
-    let refusal = refusal_envelope(&request.model, point, &message, cause);
+    refuse_as(request, point, "subscription_unavailable", message, cause)
+}
+
+/// The same refusal, naming the kind the HTTP edge will answer with.
+fn refuse_as(
+    request: &ModelRequest,
+    point: &str,
+    kind: &str,
+    message: String,
+    cause: Option<Failure>,
+) -> ModelResponse {
+    let refusal = refusal_envelope(&request.model, point, kind, &message, cause);
     warn!(
         event = "dispatch_refused",
         model = %request.model,
@@ -59,6 +77,20 @@ fn refuse(
         refusal.render()
     );
     ModelResponse::failure(&request.model, message)
+}
+
+/// Which kind an emptied credential pool is, so the log envelope and the HTTP
+/// answer say the same thing.
+///
+/// A provider that refused every credential and a vault that produced none are
+/// both authorization failures no wait repairs; only a genuinely exhausted pool
+/// is capacity.
+fn rotation_failure_kind(saw_auth_rejection: bool, saw_unredeemable_credential: bool) -> &'static str {
+    if saw_auth_rejection || saw_unredeemable_credential {
+        "credential_unauthorized"
+    } else {
+        "subscription_unavailable"
+    }
 }
 
 fn max_selector_models() -> usize {
@@ -927,6 +959,11 @@ async fn dispatch_subscription_attempt(
     // of quota: the two empty the pool for different reasons and the caller has
     // to be told which.
     let mut saw_auth_rejection = false;
+    // Set when the vault produced no credential at all -- no capability, no
+    // grant, nothing to present. No provider was ever asked, so this is neither
+    // capacity nor a provider refusal, and the caller must not be told to wait
+    // for it.
+    let mut saw_unredeemable_credential = false;
     for (index, entry) in rows.iter().take(max_credential_attempts()).enumerate() {
         let credential_id = &entry.id;
         // A credential inside a recorded block is skipped without a provider
@@ -945,6 +982,7 @@ async fn dispatch_subscription_attempt(
         let token = match broker::subscription_credential(credential_id, provider).await {
             Some(token) => token,
             None => {
+                saw_unredeemable_credential = true;
                 warn!(
                     event = "credential_unavailable",
                     provider,
@@ -957,6 +995,7 @@ async fn dispatch_subscription_attempt(
         let token = match token.expose_utf8() {
             Ok(token) => token,
             Err(_) => {
+                saw_unredeemable_credential = true;
                 warn!(
                     event = "credential_invalid_encoding",
                     provider,
@@ -1081,15 +1120,32 @@ async fn dispatch_subscription_attempt(
     // rejected the credential is an authorization failure that waiting cannot
     // reach, and callers used to retry it as `429 capacity_error` while the
     // subscription sat burnt waiting for someone to log in.
+    // Three different reasons empty one pool, and the caller acts on each
+    // differently: a provider that refused needs a sign-in, a vault that
+    // produced nothing needs a capability or grant repaired, and everything
+    // else is quota worth waiting out. Only the last one is retryable, and
+    // reporting the first two as capacity is what sends an agent into hours of
+    // retries against a chain no waiting can mend.
     let summary = if saw_auth_rejection {
         format!(
             "all bounded '{provider}' credentials were rejected by the provider; \
              re-authorization required"
         )
+    } else if saw_unredeemable_credential {
+        format!(
+            "no '{provider}' credential could be redeemed for agent; a capability, \
+             read grant, or this installation's trust material is missing"
+        )
     } else {
         format!("all bounded '{provider}' credentials unavailable for agent")
     };
-    let mut failure = refuse(request, POINT_BOUNDED_ROTATION, summary, refresh_refusal);
+    let mut failure = refuse_as(
+        request,
+        POINT_BOUNDED_ROTATION,
+        rotation_failure_kind(saw_auth_rejection, saw_unredeemable_credential),
+        summary,
+        refresh_refusal,
+    );
     failure.attempts = provider_attempts;
     failure
 }
@@ -1260,6 +1316,7 @@ async fn dispatch_subscription_attempt_stream(
     let mut provider_attempts = u32::default();
     let mut refresh_refusal: Option<Failure> = None;
     let mut saw_auth_rejection = false;
+    let mut saw_unredeemable_credential = false;
     for (index, entry) in rows.iter().take(max_credential_attempts()).enumerate() {
         let credential_id = &entry.id;
         if usage::is_blocked(credential_id) {
@@ -1274,6 +1331,7 @@ async fn dispatch_subscription_attempt_stream(
         let token = match broker::subscription_credential(credential_id, provider).await {
             Some(token) => token,
             None => {
+                saw_unredeemable_credential = true;
                 warn!(
                     event = "credential_unavailable",
                     provider,
@@ -1286,6 +1344,7 @@ async fn dispatch_subscription_attempt_stream(
         let token = match token.expose_utf8() {
             Ok(token) => token,
             Err(_) => {
+                saw_unredeemable_credential = true;
                 warn!(
                     event = "credential_invalid_encoding",
                     provider,
@@ -1409,15 +1468,32 @@ async fn dispatch_subscription_attempt_stream(
             "provider rejected bounded credential with a rotatable failure"
         );
     }
+    // Three different reasons empty one pool, and the caller acts on each
+    // differently: a provider that refused needs a sign-in, a vault that
+    // produced nothing needs a capability or grant repaired, and everything
+    // else is quota worth waiting out. Only the last one is retryable, and
+    // reporting the first two as capacity is what sends an agent into hours of
+    // retries against a chain no waiting can mend.
     let summary = if saw_auth_rejection {
         format!(
             "all bounded '{provider}' credentials were rejected by the provider; \
              re-authorization required"
         )
+    } else if saw_unredeemable_credential {
+        format!(
+            "no '{provider}' credential could be redeemed for agent; a capability, \
+             read grant, or this installation's trust material is missing"
+        )
     } else {
         format!("all bounded '{provider}' credentials unavailable for agent")
     };
-    let mut failure = refuse(request, POINT_BOUNDED_ROTATION, summary, refresh_refusal);
+    let mut failure = refuse_as(
+        request,
+        POINT_BOUNDED_ROTATION,
+        rotation_failure_kind(saw_auth_rejection, saw_unredeemable_credential),
+        summary,
+        refresh_refusal,
+    );
     failure.attempts = provider_attempts;
     Err(failure)
 }

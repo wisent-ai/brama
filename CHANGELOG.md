@@ -5,6 +5,28 @@ Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
 ## Unreleased
 
+### A credential that never existed is no longer reported as a busy provider
+
+Running the first-use journey on a workstation with no capability and no read
+grant produced `429 capacity_error`, `retryable: true`, and the sentence "all
+bounded 'codex' credentials unavailable for agent". No provider had been asked
+anything. The vault produced nothing to present, which is a broken
+authorization chain -- a missing capability, a missing read grant, or missing
+installation trust material -- and no amount of waiting mends one.
+
+That pool-emptying reason is now its own answer: `503 authorization_error` with
+code `credential_unauthorized` and `retryable: false`, saying which of the
+three links is missing. The two other reasons keep their own verdicts: a
+provider that refused every credential still answers
+`subscription_reauthorization_required`, and a genuinely exhausted pool still
+answers `429 subscription_unavailable`, which is the only one of the three that
+is worth waiting out.
+
+This is the third time the same shape has been fixed here -- refused
+redemption, refused grant, and now absent credential were all reported as
+capacity -- so the classification is now keyed on which link broke rather than
+on the sentence the last layer happened to write.
+
 ### Callers can stream, and a committed stream is never re-run
 
 Brama answered every generation in one piece. A caller waiting on a model
