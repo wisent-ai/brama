@@ -4,6 +4,7 @@ use axum::http::HeaderMap;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::io::Read;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 use tracing::{info, warn};
@@ -168,26 +169,66 @@ pub async fn registry_models_for_agent(
     discover_subscription_models(entries).await
 }
 
-/// Models discovered for every active subscription this deployment holds,
-/// whichever agent owns it.
+/// Models already discovered for this deployment's subscriptions and its
+/// directly-keyed providers, for the desktop console.
 ///
-/// The desktop console authenticates with a bearer, not an agent signature, so
-/// it has no agent identity to discover against. Without this its catalogue
-/// carried the public vendor list alone -- which knows `openai` but not that a
-/// `codex` subscription sits in front of it -- so a subscription's own screen
-/// could not name a single model it pays for.
+/// The console authenticates with a bearer, not an agent signature, so it has
+/// no agent identity to discover against. Without this its catalogue carried
+/// the public vendor list alone -- which knows `openai` but not that a `codex`
+/// subscription is what pays for those models here -- so a subscription's own
+/// screen could not name a single model it pays for.
+///
+/// This reads caches and never waits on a provider. Discovering ten providers
+/// inline, several holding credentials their vendor has since revoked, took
+/// longer than the console's own request deadline: the catalogue answered with
+/// a timeout, which is worse than answering with the part that is known. A cold
+/// cache is filled by one background pass instead, so the first read is fast
+/// and thin and the next is complete.
 pub async fn registry_models_for_console()
 -> Result<Vec<provider_registry::RegistryModel>, String> {
-    let entries = broker::list_all_subscriptions()
-        .await
-        .into_iter()
-        .filter(|entry| entry.status == "active" && !crate::journal::is_retired(&entry.id))
-        .collect::<Vec<_>>();
-    let mut models = discover_subscription_models(entries).await?;
-    models.extend(discover_direct_provider_models().await);
+    let mut models = cached_registry_models();
+    spawn_console_discovery();
     models.sort_by(|left, right| left.route_id.cmp(&right.route_id));
     models.dedup_by(|left, right| left.route_id == right.route_id);
     Ok(models)
+}
+
+/// Everything currently held in the discovery cache, whatever put it there.
+fn cached_registry_models() -> Vec<provider_registry::RegistryModel> {
+    let Ok(cache) = REGISTRY_MODEL_CACHE.lock() else {
+        return Vec::new();
+    };
+    cache
+        .values()
+        .filter(|item| item.fetched.elapsed() < MODEL_CACHE_TTL)
+        .flat_map(|item| item.models.clone())
+        .collect()
+}
+
+/// One background discovery pass at a time. A console that refreshes every few
+/// seconds must not stack a provider sweep per click.
+static CONSOLE_DISCOVERY_RUNNING: AtomicBool = AtomicBool::new(false);
+
+fn spawn_console_discovery() {
+    if CONSOLE_DISCOVERY_RUNNING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    tokio::spawn(async move {
+        let entries = broker::list_all_subscriptions()
+            .await
+            .into_iter()
+            .filter(|entry| entry.status == "active" && !crate::journal::is_retired(&entry.id))
+            .collect::<Vec<_>>();
+        if let Err(error) = discover_subscription_models(entries).await {
+            tracing::warn!(
+                %error,
+                event = "console_subscription_discovery_failed",
+                "no subscription published models for the console catalogue"
+            );
+        }
+        discover_direct_provider_models().await;
+        CONSOLE_DISCOVERY_RUNNING.store(false, Ordering::SeqCst);
+    });
 }
 
 /// Models for the providers this gateway holds a direct credential for.
