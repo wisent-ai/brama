@@ -165,6 +165,54 @@ for name, value in expected.items():
 PY
 }
 
+policy_describes_current_subscriptions() {
+  [ -f "$config_dir/policy.json" ] || return
+  SKARBIEC_VAULT_FILE="$SKARBIEC_VAULT_FILE" "$PYTHON_BIN" - "$config_dir/policy.json" <<'PY'
+import json
+import os
+import sys
+
+MARK = "brama:subscription"
+PURPOSE = "brama.provider.authenticate"
+
+with open(os.environ["SKARBIEC_VAULT_FILE"], encoding="utf-8") as source:
+    vault = json.load(source)
+with open(sys.argv[-1], encoding="utf-8") as source:
+    policy = json.load(source)
+
+expected = set()
+for item in (vault.get("items") or {}).values():
+    tags = item.get("tags") or []
+    if MARK not in tags:
+        continue
+    provider = next(
+        (tag.removeprefix("brama:provider:") for tag in tags if tag.startswith("brama:provider:")),
+        None,
+    )
+    subscription = next(
+        (tag.removeprefix("brama:id:") for tag in tags if tag.startswith("brama:id:")),
+        None,
+    )
+    if provider and subscription:
+        expected.add(f"provider:{provider}:{subscription}")
+
+actual = {
+    rule.get("resource")
+    for rule in policy.get("roles", {}).get("brama-runtime", [])
+    if rule.get("purpose") == PURPOSE
+    and isinstance(rule.get("resource"), str)
+    and rule["resource"].count(":") == 2
+}
+if actual != expected:
+    missing = sorted(expected - actual)
+    stale = sorted(actual - expected)
+    raise SystemExit(
+        "subscription policy differs from the vault: "
+        f"missing={missing}, stale={stale}"
+    )
+PY
+}
+
 # The workload identity belongs to this host's gateway, not to a bundle
 # version. The vault holds its public half, and the broker verifies every
 # redemption against that, so a key minted fresh in each new digest directory
@@ -199,7 +247,7 @@ fi
 # provision mints the identity in a second location and the vault ends up
 # holding the public half of a key nothing signs with.
 export BRAMA_PROOF_KEY_FILE="$stable_proof_key"
-if ! registry_describes_this_installation; then
+if ! registry_describes_this_installation || ! policy_describes_current_subscriptions; then
   if [ -x "$provision_hint" ]; then
     printf '%s\n' "provisioning this installation's Skarbiec identity in $config_dir" >/dev/stderr
     BRAMA_SKARBIEC_CONFIG_DIR="$config_dir" \
