@@ -391,7 +391,12 @@ fi
 # Reading the same `service.env` the service is configured from makes candidate
 # and stable share one declaration instead of two that silently disagree.
 control_config=${BRAMA_CONTROL_CONFIG:-}
-brama_service_env=${BRAMA_SERVICE_ENV:-${HOME:-/nonexistent}/.config/brama/service.env}
+# `BRAMA_SERVICE_ENV_FILE` is the fleet's name for this path: four other scripts
+# here read it, and the registry's product policy passes it to every candidate.
+# My first version of this fallback invented `BRAMA_SERVICE_ENV`, which would have
+# been a second name for one thing in the middle of a change whose whole subject is
+# that such pairs stop agreeing.
+brama_service_env=${BRAMA_SERVICE_ENV_FILE:-${HOME:-/nonexistent}/.config/brama/service.env}
 if [ -z "$control_config" ] && [ -f "$brama_service_env" ]; then
   control_config=$(
     sed -n 's/^[[:space:]]*BRAMA_CONTROL_CONFIG[[:space:]]*=[[:space:]]*//p' "$brama_service_env" \
