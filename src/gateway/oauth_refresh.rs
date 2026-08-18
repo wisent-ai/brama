@@ -171,24 +171,109 @@ fn jwt_expiry(token: &str) -> Option<i64> {
     expiry
 }
 
-pub(super) fn needs_refresh(secret: &Secret, provider: &str) -> bool {
-    if oauth_provider(provider).is_none() {
-        return false;
-    }
-    let raw = match secret.expose_utf8() {
-        Ok(raw) => raw,
-        Err(_) => return false,
-    };
+/// The instant this credential says its access token stops working, in epoch
+/// seconds, or `None` when it says nothing an expiry can be read from.
+///
+/// One reader for three questions -- is a refresh due now, is one due inside a
+/// sweep's skew window, and until when is this grant good -- because a second
+/// copy of this parsing is a second answer that disagrees with the first.
+fn expiry_epoch(secret: &Secret, provider: &str) -> Option<i64> {
+    oauth_provider(provider)?;
+    let raw = secret.expose_utf8().ok()?;
     let mut blob: Value = match serde_json::from_str(raw) {
         Ok(Value::Object(fields)) => Value::Object(fields),
-        _ => return false,
+        _ => return None,
     };
     let expiry =
         expiry_in_value(&blob).or_else(|| access_token(&blob, provider).and_then(jwt_expiry));
     zeroize_json_strings(&mut blob);
     expiry
-        .map(|expiry| now_seconds() + expiry_margin_seconds() >= expiry)
-        .unwrap_or(false)
+}
+
+pub(super) fn needs_refresh(secret: &Secret, provider: &str) -> bool {
+    expiry_epoch(secret, provider)
+        .is_some_and(|expiry| now_seconds() + expiry_margin_seconds() >= expiry)
+}
+
+/// Whether this access token dies inside `skew`.
+///
+/// The refresh-ahead sweep asks a wider question than the request path does:
+/// the margin above is the last moment a token can still be used, while the
+/// skew is how far ahead of that moment the grant should already have been
+/// replaced.
+pub(super) fn expires_within(secret: &Secret, provider: &str, skew: Duration) -> bool {
+    let skew_seconds = i64::try_from(skew.as_secs()).unwrap_or(i64::MAX);
+    expiry_epoch(secret, provider)
+        .is_some_and(|expiry| now_seconds().saturating_add(skew_seconds) >= expiry)
+}
+
+/// The instant this credential's access token stops working, in epoch
+/// milliseconds, so a reader can compare it against its own clock.
+pub(super) fn access_token_expiry_ms(secret: &Secret, provider: &str) -> Option<i64> {
+    expiry_epoch(secret, provider)
+        .map(|expiry| expiry.saturating_mul(millis_per_second_i64()))
+}
+
+/// The words a provider uses when a refresh token is gone for good.
+///
+/// Matched as text rather than by status alone because OAuth 2.0 states the
+/// definitive answer in the body of an HTTP 400: a classifier that reads only
+/// the status calls `invalid_grant` a mystery and keeps presenting a dead grant
+/// every minute for as long as nobody reads the log.
+const DEFINITIVE_REFUSALS: &[&str] = &[
+    "invalid_grant",
+    "invalid_token",
+    "revoked",
+    // The OAuth code for a client that may not use this refresh token, which is
+    // the same repair as a refusal of the token itself: sign in again.
+    "unauthorized_client",
+];
+
+/// Whether a refused refresh is the provider disowning the grant, or a blip.
+pub(super) enum RefreshRefusal {
+    /// The provider will not accept this grant again. Only a sign-in that
+    /// replaces it repairs this, so the credential must stop being presented.
+    Definitive,
+    /// Nothing was learned about the grant. The next sweep asks again.
+    Transient,
+}
+
+/// Classify one refused refresh.
+///
+/// The asymmetry is deliberate: a refusal is only called definitive on evidence
+/// the provider itself produced, and everything else is left for the next
+/// sweep. Disabling a healthy credential costs an account until someone signs
+/// in again, while waiting one more minute costs a minute.
+pub(super) fn classify_refusal(failure: &Failure) -> RefreshRefusal {
+    // A transport failure carries no opinion about the grant: the request never
+    // reached the provider, so the provider disowned nothing. Timeouts,
+    // refused connections and DNS failures all arrive here.
+    if matches!(failure.code, Code::Timeout | Code::InfraDown) {
+        return RefreshRefusal::Transient;
+    }
+    let detail = failure
+        .detail
+        .as_deref()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if DEFINITIVE_REFUSALS
+        .iter()
+        .any(|refusal| detail.contains(refusal))
+    {
+        return RefreshRefusal::Definitive;
+    }
+    // A 401 or 403 that got here answered without naming a reason, and an
+    // endpoint refusing the refresh token it was given is the reason. The
+    // transport arm above already took the network blips that never got a
+    // status at all.
+    if matches!(failure.code, Code::Auth) {
+        return RefreshRefusal::Definitive;
+    }
+    // What is left is Brama's own configuration and shape refusals, and a body
+    // that named nothing recognisable. None of them is the provider saying the
+    // grant is dead, and a subscription that stores a plain API key reaches
+    // exactly here, so none of them may demand a sign-in.
+    RefreshRefusal::Transient
 }
 
 fn oauth_refresh_token(blob: &Value, provider: &str) -> Option<Zeroizing<String>> {

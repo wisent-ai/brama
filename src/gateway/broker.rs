@@ -519,6 +519,7 @@ async fn refresh_subscription_credential_inner(
                 envelope = %refused.to_json(),
                 "OAuth refresh failed"
             );
+            record_refusal(subscription_id, provider, &refused);
             // The refusal is returned rather than discarded: the dispatcher
             // hangs it under the request it is about to refuse, which is the
             // only way the provider's own sentence reaches the caller.
@@ -550,16 +551,71 @@ async fn refresh_subscription_credential_inner(
         // Using it once and moving on is what turned working accounts into
         // permanent `invalid_grant`: the provider rotated the refresh token, the
         // new one was never written, and the vault kept a grant the provider had
-        // already invalidated. Record that this credential needs a
-        // re-authorization so the renewal path runs instead of every later
-        // request failing on a credential nobody can repair by retrying.
+        // already invalidated. So this is a failed refresh rather than a
+        // successful one with a warning attached: the grant is dropped here
+        // instead of being spent from memory, and the subscription is recorded
+        // as needing a re-authorization so the renewal path runs.
         crate::subscription_dispatch::usage::record_reauthorization_needed(
             subscription_id,
             provider,
             "the refreshed grant could not be persisted; the stored refresh token is stale",
         );
+        return Err(unpersisted);
     }
-    Ok(Secret::from_bytes(std::mem::take(&mut *fresh)))
+    let refreshed = Secret::from_bytes(std::mem::take(&mut *fresh));
+    // What the vault now holds, said in the ledger rather than left to be
+    // rediscovered: a reader asking why a token died early needs the instant it
+    // was rotated and the instant it expires, and neither is in the vault.
+    let expires_at_ms = super::oauth_refresh::access_token_expiry_ms(&refreshed, provider);
+    crate::subscription_dispatch::usage::record_credential_active(
+        subscription_id,
+        provider,
+        expires_at_ms,
+        true,
+    );
+    Ok(refreshed)
+}
+
+/// Put a refused refresh in the ledger when the provider disowned the grant,
+/// and leave the record alone when nothing about the grant was learned.
+///
+/// Both refresh paths classify here -- the sweep ahead of expiry and the forced
+/// refresh a rejected request triggers -- so a credential cannot read as dead on
+/// one path and healthy on the other.
+fn record_refusal(subscription_id: &str, provider: &str, refused: &Failure) {
+    // The provider's own sentence, or a stand-in when it refused without one:
+    // the ledger's cause is what an operator reads, and an empty cause is a row
+    // that says a sign-in is needed without saying why.
+    let detail = refused
+        .detail
+        .as_deref()
+        .unwrap_or("the provider refused this credential's refresh without saying why");
+    match super::oauth_refresh::classify_refusal(refused) {
+        super::oauth_refresh::RefreshRefusal::Definitive => {
+            warn!(
+                event = "credential_refresh_refused_definitively",
+                subscription = %subscription_id,
+                provider,
+                error = detail,
+                "the provider will not accept this grant again; only a sign-in repairs it"
+            );
+            crate::subscription_dispatch::usage::record_reauthorization_needed(
+                subscription_id,
+                provider,
+                detail,
+            );
+        }
+        super::oauth_refresh::RefreshRefusal::Transient => {
+            warn!(
+                event = "credential_refresh_transient_skipped",
+                subscription = %subscription_id,
+                provider,
+                error = detail,
+                "the refresh failed without the provider disowning the grant; the \
+                 credential is left as it stands for the next sweep"
+            );
+        }
+    }
 }
 
 /// Redeem one subscription credential at the final-use boundary. Expired
@@ -587,6 +643,64 @@ pub async fn refresh_subscription_credential(
     provider: &str,
 ) -> Result<Secret, Failure> {
     refresh_subscription_credential_inner(subscription_id, provider, true, false).await
+}
+
+/// What one refresh-ahead attempt concluded, for a caller that never holds the
+/// credential itself.
+pub enum RefreshAhead {
+    /// This grant has more than the skew window left, or the provider is not one
+    /// whose credentials Brama refreshes at all. `expires_at_ms` is present only
+    /// when the credential states an expiry.
+    NotDue { expires_at_ms: Option<i64> },
+    /// The grant was refreshed and the new one is in the vault.
+    Refreshed { expires_at_ms: Option<i64> },
+    /// The refresh was refused, or the refreshed grant could not be stored.
+    /// The ledger already carries the verdict; this is the sentence to log.
+    Refused(Failure),
+    /// No capability and no read grant produced a credential to look at, so
+    /// nothing is known about the grant behind it.
+    Unavailable(Failure),
+}
+
+/// Replace one subscription's access token before it expires, when it expires
+/// inside `skew`.
+///
+/// The credential is read twice on the path that does refresh, and that is not
+/// an oversight: the expiry has to be read before deciding, and the refresh
+/// below deliberately re-reads under the rotation lock so a caller that waited
+/// for a concurrent refresh observes what that refresh wrote instead of
+/// rotating a grant the provider has already invalidated. Only a credential
+/// that is genuinely due pays for the second read.
+pub async fn refresh_subscription_credential_ahead(
+    subscription_id: &str,
+    provider: &str,
+    skew: Duration,
+) -> RefreshAhead {
+    let Some(credential) = redeem_subscription_credential(subscription_id, provider).await else {
+        return RefreshAhead::Unavailable(
+            failure::envelope(
+                POINT_CREDENTIAL_REDEEM,
+                failure::code_for("credential_unauthorized"),
+                IMPACT_CREDENTIAL_REFRESH,
+                "no capability or read grant produced this subscription's credential",
+            )
+            .with_context("subscription", subscription_id)
+            .with_context("provider", provider),
+        );
+    };
+    let expires_at_ms = super::oauth_refresh::access_token_expiry_ms(&credential, provider);
+    if !super::oauth_refresh::expires_within(&credential, provider, skew) {
+        return RefreshAhead::NotDue { expires_at_ms };
+    }
+    // Dropped before the refresh so this token is not held in memory across the
+    // wait for the rotation lock and the provider's answer.
+    drop(credential);
+    match refresh_subscription_credential_inner(subscription_id, provider, true, false).await {
+        Ok(refreshed) => RefreshAhead::Refreshed {
+            expires_at_ms: super::oauth_refresh::access_token_expiry_ms(&refreshed, provider),
+        },
+        Err(refused) => RefreshAhead::Refused(refused),
+    }
 }
 
 /// Enumerate one agent's subscription metadata through the local entitlements
@@ -946,7 +1060,14 @@ pub async fn put_donated_credential(
     api_key: &str,
 ) -> Result<(), String> {
     let item_id = format!("provider:{provider}:{subscription_id}");
-    put_credential(&item_id, api_key.as_bytes()).await
+    put_credential(&item_id, api_key.as_bytes()).await?;
+    // A stored credential is the sign-in that a `needs_reauthorization` waits
+    // for, and nothing else clears that state. Without this the console would
+    // keep demanding a re-authorization that an operator has already done, and
+    // the recorded cause would go on describing a grant that is no longer in
+    // the vault.
+    crate::subscription_dispatch::usage::record_credential_signed_in(subscription_id, provider);
+    Ok(())
 }
 
 async fn put_subscription_credential(

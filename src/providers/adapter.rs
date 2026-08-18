@@ -349,15 +349,16 @@ pub fn supports_moderation_route(value: &str) -> bool {
     value == "openai/moderation" && route(value).is_some()
 }
 
-/// The model each provider's plan state is cheapest to ask for.
+/// The model each provider's plan state is cheapest to ask for, when an
+/// operator asks for it.
 ///
 /// A provider states its plan windows in the headers of an ordinary completion,
-/// so learning them costs one completion. Which model that completion names
-/// changes the price and nothing else, so the smallest one the provider offers
-/// is named here; the entry is the provider's own cheapest, not a default a
-/// caller would ever be routed to. Providers absent from this table publish no
-/// plan headers worth spending a request on, or name no model without a catalog
-/// call, and are not probed.
+/// so learning them this way costs one completion. Which model that completion
+/// names changes the price and nothing else, so the smallest one the provider
+/// offers is named here; the entry is the provider's own cheapest, not a default
+/// a caller would ever be routed to. Nothing spends this on a timer: the free
+/// usage reports in [`PLAN_USAGE_ENDPOINTS`] are what keeps a row current, and
+/// this table only serves the on-demand check an operator triggers.
 const PLAN_PROBE_MODELS: &[(&str, &str)] = &[
     ("anthropic", "claude-haiku-4-5"),
     ("claude-code", "claude-haiku-4-5"),
@@ -377,6 +378,433 @@ pub fn plan_probe_route(provider_id: &str) -> Option<String> {
     // Built from a table rather than parsed from a caller, and still checked:
     // a typo here would otherwise reach a provider as a model it does not have.
     route(&candidate).is_some().then_some(candidate)
+}
+
+/// How one provider publishes what its plan has left.
+///
+/// A usage report is the provider's own statement about the quota it owns, and
+/// reading it spends none of that quota: no completion, no output tokens, no
+/// line in anybody's bill. Each shape names the fields this gateway reads out of
+/// one provider's report, so the reader never guesses at a field the provider
+/// does not publish.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PlanUsageShape {
+    /// Anthropic's OAuth usage report: `five_hour`, `seven_day`,
+    /// `seven_day_opus` and `seven_day_sonnet`, each an object carrying a
+    /// `utilization` percentage and an RFC 3339 `resets_at`.
+    AnthropicOauth,
+    /// The ChatGPT backend's usage report: `rate_limit.primary_window` and
+    /// `rate_limit.secondary_window`, each carrying `used_percent`,
+    /// `limit_window_seconds`, and either `reset_at` or `reset_after_seconds`.
+    CodexWham,
+    /// Kimi's coding-plan report: a `usage` object and a `limits` array, each
+    /// entry a `limit` with a `used` or a `remaining`, and an optional `window`
+    /// naming its duration and its reset.
+    KimiUsages,
+}
+
+/// One provider's usage report route, declared beside its chat route above so
+/// both endpoints of a provider are read in one place.
+struct PlanUsageEndpoint {
+    provider_id: &'static str,
+    /// Absolute, because a usage report is not always a sibling of the chat
+    /// route: Codex answers chat under `/backend-api/codex` and publishes usage
+    /// under `/backend-api/wham`. Only the path is used when a deployment
+    /// overrides the provider's base URL.
+    url: &'static str,
+    shape: PlanUsageShape,
+}
+
+/// The usage reports the providers on this fleet actually publish.
+///
+/// Each is issued to exactly the OAuth credential the chat route already
+/// presents, so nothing new is provisioned to learn a plan window. Every other
+/// provider in [`PROVIDERS`] publishes no usage report at all -- including the
+/// API-key `anthropic` route, whose report is issued to OAuth credentials only
+/// -- and for those the absence is a recorded fact about the provider rather
+/// than a failed read.
+const PLAN_USAGE_ENDPOINTS: &[PlanUsageEndpoint] = &[
+    PlanUsageEndpoint {
+        provider_id: "claude-code",
+        url: "https://api.anthropic.com/api/oauth/usage",
+        shape: PlanUsageShape::AnthropicOauth,
+    },
+    PlanUsageEndpoint {
+        provider_id: "codex",
+        url: "https://chatgpt.com/backend-api/wham/usage",
+        shape: PlanUsageShape::CodexWham,
+    },
+    PlanUsageEndpoint {
+        provider_id: "kimi",
+        url: "https://api.kimi.com/coding/v1/usages",
+        shape: PlanUsageShape::KimiUsages,
+    },
+];
+
+/// What one provider's own usage report said.
+#[derive(Debug)]
+pub enum PlanUsage {
+    /// The provider answered. No readings means it published no window this
+    /// time, which is an answer and not a failure.
+    Report(Vec<LimitReading>),
+    /// This provider publishes no usage report, so there is nothing to read and
+    /// nothing is wrong.
+    Unpublished,
+    /// The provider was asked and refused, in its own words, classified exactly
+    /// as a refused model request is: a reader that acts on
+    /// `provider_authentication` keeps acting on the same sentence.
+    Refused(String),
+}
+
+/// Whether this provider publishes a usage report at all.
+pub fn publishes_plan_usage(provider_id: &str) -> bool {
+    plan_usage_endpoint(provider_id).is_some()
+}
+
+fn plan_usage_endpoint(provider_id: &str) -> Option<&'static PlanUsageEndpoint> {
+    PLAN_USAGE_ENDPOINTS
+        .iter()
+        .find(|endpoint| endpoint.provider_id == provider_id)
+}
+
+/// The usage route to call, with this deployment's own override respected.
+///
+/// The declared entry carries the path; the origin comes from the same
+/// validated, override-aware base the chat route uses, so a host that points a
+/// provider at a proxy does not keep one of that provider's two endpoints
+/// pointed at the open internet, and the trusted-host policy is enforced on
+/// both. Joining an absolute path replaces the base path, which is what makes
+/// Codex work at all: its chat route and its usage route are siblings, not
+/// parent and child.
+fn plan_usage_url(
+    descriptor: &ProviderDescriptor,
+    endpoint: &PlanUsageEndpoint,
+) -> Result<String, String> {
+    let declared = reqwest::Url::parse(endpoint.url).map_err(|error| {
+        format!(
+            "provider `{}` has an invalid usage report URL: {error}",
+            descriptor.id
+        )
+    })?;
+    let base = reqwest::Url::parse(&provider_base_url(descriptor)?).map_err(|error| {
+        format!(
+            "provider `{}` has an invalid base URL: {error}",
+            descriptor.id
+        )
+    })?;
+    base.join(declared.path())
+        .map(|url| url.to_string())
+        .map_err(|error| {
+            format!(
+                "provider `{}` usage report URL cannot be resolved: {error}",
+                descriptor.id
+            )
+        })
+}
+
+/// Read one subscription's plan windows from the provider's own usage report.
+///
+/// `item` is the vault coordinate the credential was redeemed from and is named
+/// in a refusal for the reason the request path names it: the repair to an
+/// unusable credential is always at the coordinate it came from. The
+/// authorization is the chat route's, header for header, because these reports
+/// are issued to exactly the credential the chat route presents.
+pub async fn read_plan_usage(provider_id: &str, item: &str, secret: &str) -> PlanUsage {
+    let Some(endpoint) = plan_usage_endpoint(provider_id) else {
+        return PlanUsage::Unpublished;
+    };
+    let Some(descriptor) = provider(provider_id) else {
+        // Both tables are static, so this is a typo in one of them rather than
+        // anything a provider did.
+        return PlanUsage::Refused(format!(
+            "provider_failure: provider `{provider_id}` publishes a usage report but is not \
+             registered"
+        ));
+    };
+    let url = match plan_usage_url(descriptor, endpoint) {
+        Ok(url) => url,
+        Err(message) => return PlanUsage::Refused(format!("provider_failure: {message}")),
+    };
+    let key = match credential_key(item, secret) {
+        Ok(key) => key,
+        Err(message) => return PlanUsage::Refused(format!("provider_authentication: {message}")),
+    };
+    let client = match control_client() {
+        Ok(client) => client,
+        Err(message) => return PlanUsage::Refused(format!("provider_failure: {message}")),
+    };
+    let builder = client.get(&url).header("accept", "application/json");
+    let response = match authorize_provider(builder, descriptor, &key, secret)
+        .send()
+        .await
+    {
+        Ok(response) => response,
+        Err(error) => return PlanUsage::Refused(transport_error_message(&error)),
+    };
+    let (status, _plan, text) = match bounded_response_text(response).await {
+        Ok(parts) => parts,
+        Err(message) => return PlanUsage::Refused(message),
+    };
+    if !status.is_success() {
+        let (kind, detail) = provider_refusal(status, &text);
+        warn!(
+            event = "plan_usage_refused",
+            provider = provider_id,
+            status = status.as_u16(),
+            contract_kind = kind,
+            "the provider refused its own usage report: {detail}"
+        );
+        return PlanUsage::Refused(format!("{kind}: {detail}"));
+    }
+    let Ok(body) = serde_json::from_str::<Value>(&text) else {
+        return PlanUsage::Refused(
+            "provider_failure: the provider's usage report is not JSON".to_string(),
+        );
+    };
+    PlanUsage::Report(plan_usage_readings(
+        endpoint.shape,
+        &body,
+        observed_at_ms(),
+    ))
+}
+
+/// The windows Anthropic's usage report names, mapped onto the very limit ids
+/// its response headers produce, so one account's five-hour window stays one row
+/// however it was read.
+const ANTHROPIC_USAGE_WINDOWS: &[(&str, &str, &str, &str)] = &[
+    ("five_hour", "anthropic:5h", "Claude 5 hour", "5 hours"),
+    ("seven_day", "anthropic:7d", "Claude 7 day", "7 days"),
+    (
+        "seven_day_opus",
+        "anthropic:7d-opus",
+        "Claude 7 day (Opus)",
+        "7 days",
+    ),
+    (
+        "seven_day_sonnet",
+        "anthropic:7d-sonnet",
+        "Claude 7 day (Sonnet)",
+        "7 days",
+    ),
+];
+
+/// The usage reports state utilization as a percentage, while the response
+/// headers state the same quantity as a fraction; a reading is stored as a
+/// fraction, so one of the two has to be divided.
+const PERCENT_SCALE: f64 = 100.0;
+const MS_PER_SECOND: f64 = 1_000.0;
+const SECONDS_PER_MINUTE: f64 = 60.0;
+const MINUTES_PER_HOUR: f64 = 60.0;
+const MINUTES_PER_DAY: f64 = 24.0 * MINUTES_PER_HOUR;
+const DAYS_PER_WEEK: f64 = 7.0;
+/// Above this an epoch value can only be milliseconds: epoch seconds do not
+/// reach it for another thirty thousand years.
+const EPOCH_MILLISECONDS_FLOOR: f64 = 1e12;
+
+/// A number a provider may have written as a number or as a decimal string.
+fn json_number(value: Option<&Value>) -> Option<f64> {
+    match value? {
+        Value::Number(number) => number.as_f64(),
+        Value::String(text) => text.trim().parse::<f64>().ok(),
+        _ => None,
+    }
+}
+
+/// An instant a provider may state as an RFC 3339 string, as epoch seconds, or
+/// as epoch milliseconds. All three appear across these three reports.
+fn instant_ms(value: Option<&Value>) -> Option<i64> {
+    match value? {
+        Value::String(text) => chrono::DateTime::parse_from_rfc3339(text.trim())
+            .ok()
+            .map(|instant| instant.timestamp_millis()),
+        other => {
+            let number = json_number(Some(other)).filter(|number| *number > 0.0)?;
+            Some(if number >= EPOCH_MILLISECONDS_FLOOR {
+                number.round() as i64
+            } else {
+                (number * MS_PER_SECOND).round() as i64
+            })
+        }
+    }
+}
+
+/// Turn one provider's usage report into limit readings.
+///
+/// The limit ids are the ones the header path already writes, so a window read
+/// from a report and the same window read from a later answer are one row in the
+/// ledger rather than two that disagree.
+fn plan_usage_readings(
+    shape: PlanUsageShape,
+    body: &Value,
+    recorded_at_ms: i64,
+) -> Vec<LimitReading> {
+    match shape {
+        PlanUsageShape::AnthropicOauth => ANTHROPIC_USAGE_WINDOWS
+            .iter()
+            .filter_map(|(field, limit_id, label, window_label)| {
+                let window = body.get(field)?;
+                let used = json_number(window.get("utilization"))?;
+                Some(LimitReading {
+                    limit_id: (*limit_id).to_string(),
+                    label: (*label).to_string(),
+                    window_label: Some((*window_label).to_string()),
+                    used_fraction: (used / PERCENT_SCALE).clamp(0.0, 1.0),
+                    resets_at_ms: instant_ms(window.get("resets_at")),
+                    recorded_at_ms,
+                })
+            })
+            .collect(),
+        PlanUsageShape::CodexWham => ["primary", "secondary"]
+            .into_iter()
+            .filter_map(|meter| {
+                let window = body.pointer(&format!("/rate_limit/{meter}_window"))?;
+                let used = json_number(window.get("used_percent"))?;
+                let minutes = json_number(window.get("limit_window_seconds"))
+                    .map(|seconds| seconds / SECONDS_PER_MINUTE);
+                // The report states one or the other, and a delay is only
+                // meaningful against the instant the report was read.
+                let resets = instant_ms(window.get("reset_at")).or_else(|| {
+                    json_number(window.get("reset_after_seconds"))
+                        .map(|seconds| recorded_at_ms + (seconds * MS_PER_SECOND).round() as i64)
+                });
+                Some(LimitReading {
+                    limit_id: format!("codex:{meter}"),
+                    label: format!("Codex {meter} window"),
+                    window_label: minutes.map(window_label_from_minutes),
+                    used_fraction: (used / PERCENT_SCALE).clamp(0.0, 1.0),
+                    resets_at_ms: resets,
+                    recorded_at_ms,
+                })
+            })
+            .collect(),
+        PlanUsageShape::KimiUsages => kimi_usage_readings(body, recorded_at_ms),
+    }
+}
+
+/// Kimi states a quota as a count rather than a fraction: a `limit` with a
+/// `used` or a `remaining`. The whole-plan `usage` object and every entry of the
+/// `limits` array carry that same shape, so both go through one reader.
+fn kimi_usage_readings(body: &Value, recorded_at_ms: i64) -> Vec<LimitReading> {
+    let mut readings = Vec::new();
+    if let Some(reading) = kimi_reading(
+        body.get("usage"),
+        "kimi:usage",
+        "Kimi plan quota",
+        recorded_at_ms,
+    ) {
+        readings.push(reading);
+    }
+    let entries = body
+        .get("limits")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    for (index, entry) in entries.iter().enumerate() {
+        // The position is the id because the report names its windows in prose:
+        // keying on that prose would turn a reworded label into a second row for
+        // the same quota.
+        let label = ["name", "title", "scope"]
+            .into_iter()
+            .filter_map(|field| entry.get(field).and_then(Value::as_str))
+            .map(str::trim)
+            .find(|label| !label.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("Kimi quota {}", index + 1));
+        if let Some(reading) = kimi_reading(
+            Some(entry),
+            &format!("kimi:limit-{index}"),
+            &label,
+            recorded_at_ms,
+        ) {
+            readings.push(reading);
+        }
+    }
+    readings
+}
+
+fn kimi_reading(
+    value: Option<&Value>,
+    limit_id: &str,
+    label: &str,
+    recorded_at_ms: i64,
+) -> Option<LimitReading> {
+    let value = value?;
+    // The counters sit either directly on the entry or one level in under
+    // `detail`; the report uses both spellings for the same thing.
+    let counters = value
+        .get("detail")
+        .filter(|detail| detail.is_object())
+        .unwrap_or(value);
+    let limit = json_number(counters.get("limit"))?;
+    // A quota of zero is not a window, and it is also the one value a fraction
+    // cannot be computed against.
+    if limit <= 0.0 {
+        return None;
+    }
+    let used = json_number(counters.get("used")).or_else(|| {
+        json_number(counters.get("remaining")).map(|remaining| limit - remaining)
+    })?;
+    let window = value.get("window").filter(|window| window.is_object());
+    Some(LimitReading {
+        limit_id: limit_id.to_string(),
+        label: label.to_string(),
+        window_label: window.and_then(kimi_window_label),
+        used_fraction: (used / limit).clamp(0.0, 1.0),
+        resets_at_ms: kimi_resets_at_ms(value, window, recorded_at_ms),
+        recorded_at_ms,
+    })
+}
+
+/// When a Kimi window resets, whichever of the report's spellings carries it.
+///
+/// The window object is preferred over the entry because it is the more specific
+/// statement; an absolute instant is preferred over a delay because a delay is
+/// only true at the moment it was read.
+fn kimi_resets_at_ms(entry: &Value, window: Option<&Value>, recorded_at_ms: i64) -> Option<i64> {
+    const RESET_INSTANT_FIELDS: &[&str] = &["reset_at", "resetAt", "reset_time", "resetTime"];
+    const RESET_DELAY_FIELDS: &[&str] = &["reset_in", "resetIn", "ttl"];
+    for source in [window, Some(entry)].into_iter().flatten() {
+        if let Some(instant) = RESET_INSTANT_FIELDS
+            .iter()
+            .find_map(|field| instant_ms(source.get(*field)))
+        {
+            return Some(instant);
+        }
+        if let Some(delay) = RESET_DELAY_FIELDS
+            .iter()
+            .find_map(|field| json_number(source.get(*field)))
+            .filter(|delay| *delay > 0.0)
+        {
+            return Some(recorded_at_ms + (delay * MS_PER_SECOND).round() as i64);
+        }
+    }
+    None
+}
+
+/// The human label for a Kimi window, from the duration and unit it states.
+fn kimi_window_label(window: &Value) -> Option<String> {
+    let duration = json_number(window.get("duration"))?;
+    let unit = window
+        .get("timeUnit")
+        .or_else(|| window.get("time_unit"))
+        .and_then(Value::as_str)?
+        .to_ascii_uppercase();
+    let minutes = if unit.contains("MINUTE") {
+        duration
+    } else if unit.contains("HOUR") {
+        duration * MINUTES_PER_HOUR
+    } else if unit.contains("DAY") {
+        duration * MINUTES_PER_DAY
+    } else if unit.contains("WEEK") {
+        duration * DAYS_PER_WEEK * MINUTES_PER_DAY
+    } else if unit.contains("SECOND") {
+        duration / SECONDS_PER_MINUTE
+    } else {
+        // An unknown unit is not a label. The reading still stands; it just does
+        // not claim a window length the provider did not name.
+        return None;
+    };
+    Some(window_label_from_minutes(minutes))
 }
 
 fn valid_model_id(value: &str) -> bool {
@@ -2081,7 +2509,14 @@ fn attempted_failure(route_id: &str, message: String) -> ModelResponse {
     failure
 }
 
-fn provider_error(route_id: &str, status: reqwest::StatusCode, body: &str) -> ModelResponse {
+/// Classify one refused provider answer: the contract kind clients read, and the
+/// provider's own sentence, bounded like every other stored reason.
+///
+/// Shared by the model request path and the usage report reader so a credential
+/// the provider refuses reads the same either way. A reader that acts on
+/// `provider_authentication` -- the renewal loop does -- must not have to know
+/// which of the two calls noticed first.
+fn provider_refusal(status: reqwest::StatusCode, body: &str) -> (&'static str, String) {
     let detail = serde_json::from_str::<Value>(body)
         .ok()
         .and_then(|value| {
@@ -2111,6 +2546,11 @@ fn provider_error(route_id: &str, status: reqwest::StatusCode, body: &str) -> Mo
     } else {
         "provider_failure"
     };
+    (kind, detail)
+}
+
+fn provider_error(route_id: &str, status: reqwest::StatusCode, body: &str) -> ModelResponse {
+    let (kind, detail) = provider_refusal(status, body);
     // The envelope code is the fleet's, classified from the status by the
     // catalogue, so `error_code` means the same thing here as everywhere else.
     // It is coarser in Brama's kind at five statuses -- 404 and 410 are

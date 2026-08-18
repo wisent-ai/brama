@@ -87,8 +87,16 @@ fn is_auth_failure(error: &str) -> bool {
         || is_permanent_auth_failure(&error)
 }
 
-async fn mark_credential_revoked(credential_id: &str) {
+/// Retire one credential the provider has permanently refused, and say so in the
+/// ledger.
+///
+/// The journal is what stops this credential being selected again; the ledger
+/// record is what lets a reader see that it was retired, when, and why. Without
+/// the second one a retired subscription and a subscription nobody has used all
+/// month render as the same row.
+async fn mark_credential_revoked(credential_id: &str, provider: &str, cause: &str) {
     crate::journal::retire(credential_id);
+    usage::record_credential_disabled(credential_id, provider, cause);
 }
 
 struct CachedRegistryModels {
@@ -525,7 +533,8 @@ pub async fn dispatch_subscription_for_agent(
     dispatch_subscription_attempt(provider, agent_id, request).await
 }
 
-/// Spend one provider call on exactly one subscription, for the usage probe.
+/// Spend one provider call on exactly one subscription, for the on-demand usage
+/// probe.
 ///
 /// Three differences from the request path, each of them deliberate. It never
 /// rotates: a probe asks a named account what its plan says, and answering with
@@ -533,14 +542,16 @@ pub async fn dispatch_subscription_for_agent(
 /// one account's quota to another. It returns the provider's own sentence rather
 /// than the rotation summary, because the sentence -- "OAuth access token has
 /// been revoked" against "token is expired" -- is the entire reason the probe
-/// exists. And it neither forces a refresh nor retires anything: a background
-/// timer must not change which credentials the router will pick. An access token
-/// that merely expired is still renewed, because redemption does that for every
-/// caller before the call is made.
+/// exists. And it neither forces a refresh nor retires anything: a check an
+/// operator asked for must not change which credentials the router will pick. An
+/// access token that merely expired is still renewed, because redemption does
+/// that for every caller before the call is made.
 ///
 /// What it shares is the part that matters: the same provider dispatch and the
-/// same [`usage::record_call`], so a probe's plan windows are recorded exactly as
-/// a real request's are.
+/// same ledger path real traffic writes to, so a probe's plan windows are
+/// recorded exactly as a request's are -- attributed to the probe, because a
+/// window somebody asked for and a window a caller's work revealed are not the
+/// same statement about the account.
 pub async fn probe_subscription_usage(
     subscription_id: &str,
     provider: &str,
@@ -559,7 +570,12 @@ pub async fn probe_subscription_usage(
     let item = broker::subscription_resource(provider, subscription_id);
     let mut result = provider_registry::dispatch(request, &item, token).await;
     result.attempts = u32::from(true);
-    usage::record_call(subscription_id, provider, &result);
+    usage::record_call_from(
+        subscription_id,
+        provider,
+        &result,
+        usage::UsageSource::Probe,
+    );
     result
 }
 
@@ -800,7 +816,12 @@ async fn dispatch_subscription_attempt(
                 credential_index = index,
                 "provider permanently rejected bounded credential"
             );
-            mark_credential_revoked(credential_id).await;
+            mark_credential_revoked(
+                credential_id,
+                provider,
+                "the provider permanently rejected this credential",
+            )
+            .await;
         }
         if rejected_with_fresh_token {
             // Retried forever otherwise: the refusal reads as an ordinary auth
@@ -814,7 +835,12 @@ async fn dispatch_subscription_attempt(
                 "provider refused a token it had just issued; the subscription needs \
                  re-authorization and is retired until it is granted"
             );
-            mark_credential_revoked(credential_id).await;
+            mark_credential_revoked(
+                credential_id,
+                provider,
+                "the provider refused a token it had just issued",
+            )
+            .await;
         }
         if is_auth_failure(&error) {
             saw_auth_rejection = true;

@@ -254,16 +254,35 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   `recorded_at_ms` the reading was taken at), what Brama measured (`measured`:
   requests, failures, input and output tokens, first and last use), any
   rate-limit `block` in force, when the record last changed
-  (`observed_at_ms`), and the newest proactive plan probe (`probe`:
-  `attempted_at_ms`, `ok`, and `detail` when it was refused).
-- **What an empty `limits` array means:** one of four states, and the last two
-  fields are what tell them apart. Windows present: render them, aged by the
-  newest `recorded_at_ms`. Empty with `probe.ok` false: the credential or the
-  provider refused, and `probe.detail` is its own sentence. Empty with no
-  `probe` and nothing measured: nothing has ever gone through this
-  subscription. Empty with `probe.ok` true: the provider genuinely publishes no
-  plan state. Only the last of those may be shown as "no plan window", and none
-  of them is a zero.
+  (`observed_at_ms`), where the newest window came from and whether it is still
+  current (`usage_source`: `provider`, `traffic` or `probe`, and `stale`), the
+  newest proactive check (`probe`: `attempted_at_ms`, `ok`, `detail` when there
+  is something to explain, and `source` -- `usage_report` or `completion`), and
+  where the credential itself stands (`credential`: `state` -- `active`,
+  `needs_reauthorization` or `disabled` -- with `cause`, `recorded_at_ms`,
+  `expires_at_ms` and `refreshed_at_ms`; `null` while nothing has been recorded
+  about the grant). `credential.state` is what separates a subscription that is
+  quiet from one whose sign-in is overdue, and `cause` is the provider's own
+  sentence for the refusal.
+- **How fresh a plan window is:** `usage_source` names which statement the
+  newest window is -- the provider's own usage report, the headers of real
+  traffic, or an operator's probe -- and is `null` when there is no window to
+  attribute. `stale` is true once the newest reading has aged past the freshness
+  window (`BRAMA_PLAN_USAGE_TTL_SECS`, default 300). A stale reading is still
+  served, because a number that says when it was taken is information and an
+  empty plan is not; a reading older than the retention window
+  (`BRAMA_PLAN_USAGE_RETENTION_SECS`, default 86400) stops being served, because
+  a fraction of a five-hour window that has since reset several times describes
+  nothing.
+- **What an empty `limits` array means:** one of four states, and the newest
+  check is what tells them apart. Windows present: render them, aged by the
+  newest `recorded_at_ms`, and say "as of" only when `stale` is false. Empty with
+  `probe.ok` false: the credential or the provider refused, and `probe.detail` is
+  its own sentence. Empty with no `probe` and nothing measured: nothing has ever
+  gone through this subscription. Empty with `probe.ok` true: the provider
+  genuinely publishes no plan state, and `probe.detail` says so when the provider
+  publishes no usage report at all. Only the last of those may be shown as "no
+  plan window", and none of them is a zero.
 - **Operations:** public `GET /health` and `GET /readyz`; protected `GET /stats`.
   `/health` is liveness only and says so in its body (`dependencies:
   not_probed`): it answers `ok` from a gateway whose every credential
@@ -278,10 +297,12 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   match, and classifying it as capacity sends the caller into retries and the
   operator into the subscription catalogue.
 - **Desktop control plane:** `brama-desktop` alone may call
-  `GET /v1/admin/snapshot`, `PUT /v1/admin/routes`, and the `GET`, `POST`, and
-  `DELETE` `/v1/admin/subscriptions/:agent_id` family. These endpoints return
-  identifiers, usage and status only; subscription credentials remain
-  write-only.
+  `GET /v1/admin/snapshot`, `PUT /v1/admin/routes`, the `GET`, `POST`, and
+  `DELETE` `/v1/admin/subscriptions/:agent_id` family, and
+  `POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe`, which is the
+  only endpoint in the product that deliberately spends plan quota. These
+  endpoints return identifiers, usage and status only; subscription credentials
+  remain write-only.
 - **CLI:** `serve`, `version`, `detect`, `test`, `collect-task-quality`, and
   `mcp`. Billable commands require an explicit cost acknowledgement.
 - **MCP:** read-only stdio JSON-RPC exposing `brama_detect` only. Model execution,
@@ -311,8 +332,9 @@ The complete state, error, retry, authorization, and resource contract is in
   records. `$BRAMA_SUBSCRIPTION_USAGE_FILE`, by default
   `~/.config/brama/subscription-usage.json` and owner-readable only, holds the
   per-subscription usage ledger: measured counters, the newest plan reading per
-  window with the instant it was read, any block, and the newest plan probe
-  verdict. It is written atomically and is not a cache — the
+  window with the instant it was read and where it came from, when the provider's
+  usage report was last checked, any block, and the newest check verdict. It is
+  written atomically and is not a cache — the
   question it answers spans months, not process lifetimes. A ledger written by
   an older gateway still loads: readings that carry no instant of their own are
   given the ledger file's modification time, and a ledger that will not parse
@@ -327,16 +349,57 @@ The complete state, error, retry, authorization, and resource contract is in
   writes the owner vault and `scripts/provision-host-subscriptions.sh` writes a
   managed host's vault; both are idempotent and derive their tags from
   `scripts/skarbiec-subscriptions.json`.
-- **Plan usage probing:** a provider states its plan windows in the headers of
-  an ordinary answer, so a subscription that serves no traffic reports no
-  window. Every `BRAMA_USAGE_PROBE_INTERVAL_SECS` seconds (default 900, `0`
-  disables it) the gateway spends one minimal completion per active
-  subscription to learn its plan state and records the verdict as `probe`. A
-  subscription inside a recorded block is never probed: the block already says
-  the account is out of quota, and re-reading that sentence is what the block
-  exists to prevent. The probe rotates to no other credential, retires nothing,
-  and is logged under its own `usage_probe_*` events so it is never mistaken
-  for a caller's request.
+- **Plan usage from the provider's own report:** every provider that rations a
+  subscription publishes a report of how much of the ration is gone, and reading
+  it spends no quota at all. `claude-code` publishes
+  `GET /api/oauth/usage` on `api.anthropic.com` (`five_hour`, `seven_day`,
+  `seven_day_opus` and `seven_day_sonnet`, each a utilization percentage with a
+  reset instant), `codex` publishes `GET /backend-api/wham/usage` on
+  `chatgpt.com` (`rate_limit.primary_window` and `.secondary_window`, each a
+  used percentage with its window length and reset), and `kimi` publishes
+  `GET /coding/v1/usages` on `api.kimi.com` (a `usage` object and a `limits`
+  array of limit/used/remaining counts with their windows). Every other provider
+  publishes nothing, and that absence is recorded as the provider's own answer
+  rather than left as an unexplained blank. Each subscription's report is read at
+  most once per `BRAMA_PLAN_USAGE_TTL_SECS` (default 300), spread by up to a
+  quarter either way from the subscription's own id so a fan-out of accounts on
+  one host never becomes one burst against a provider that rate-limits usage
+  reads per address, and single-flighted per subscription. The sweep that notices
+  aged-out rows runs every `BRAMA_PLAN_USAGE_SWEEP_SECS` (default 60, `0`
+  disables it) and is logged under `plan_usage_*`. A failed read never blanks a
+  row: the last good reading is kept, served with `stale` true, and dropped only
+  once it is older than `BRAMA_PLAN_USAGE_RETENTION_SECS` (default 86400).
+- **The one check that costs quota, and only on request:** whether a provider
+  will actually serve a credential can only be answered by a real request, so
+  `POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe` spends one
+  minimal completion against one named subscription and records the verdict as
+  `probe` with `source` `completion`. Nothing triggers it on a timer: with default
+  configuration no timer performs a quota-consuming request. It is a route rather
+  than a subcommand because redeeming the credential needs the capabilities and
+  identities the launcher installed in the serving process, and a standalone
+  desktop install holds its provider credentials only in that process's memory. A
+  subscription inside a recorded block is refused with `409` rather than probed:
+  the block already says the account is out of quota, and re-reading that sentence
+  is what the block exists to prevent. The probe rotates to no other credential,
+  retires nothing, and is logged under its own `usage_probe_*` events so it is
+  never mistaken for a caller's request.
+- **Refreshing ahead of expiry:** an access token is replaced before it dies
+  rather than when a request trips over it. Every
+  `BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS` seconds (default 60, `0` disables it)
+  the gateway refreshes every active subscription credential that expires within
+  `BRAMA_CREDENTIAL_REFRESH_SKEW_SECS` (default 300), single-flighted per
+  subscription so a slow refresh is never started twice. Refreshing costs no plan
+  quota: a token endpoint is not a metered endpoint. A refusal is classified. A
+  definitive one -- `invalid_grant`, `invalid_token`, a revoked or unauthorized
+  refresh token, or a 401/403 that is not a transport failure -- is recorded as
+  `credential.state` `needs_reauthorization` with the provider's own sentence as
+  `credential.cause`, and that credential is left alone until a sign-in replaces
+  it. A transient one -- a timeout, a refused connection, any transport failure --
+  changes nothing and is retried by the next sweep. A refreshed grant that cannot
+  be written back to the vault is a failed refresh, not a success: the rotated
+  grant is dropped rather than spent from memory, because the provider has
+  already invalidated the one still in the vault. Events are `credential_refresh_*`
+  and `credential_refreshed_ahead`.
 - **Credentials:** callers use dedicated bearer items. Request-sign identities
   and provider capabilities remain separate. Secrets are redeemed at final use
   and are not written to JSON configuration, logs, or Brama state. Standalone

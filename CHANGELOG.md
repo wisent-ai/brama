@@ -5,23 +5,82 @@ Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
 ## Unreleased
 
-### Plan usage is measured, and a blank row says why it is blank
+### A credential is refreshed before it dies, and a refused one says so
 
-A provider states its plan windows in the headers of an answer, so before this
-change a window existed only for the account that happened to serve a request:
-of seven subscriptions on the fleet exactly one reported a plan, and the other
-six were indistinguishable blanks. Brama now spends one deliberately minimal
-completion per active subscription every `BRAMA_USAGE_PROBE_INTERVAL_SECS`
-seconds (default 900, `0` disables the task) and records what it learned.
+Brama refreshed an OAuth grant at exactly one moment: inside a request, after
+the local expiry said the token was spent or after the provider rejected it.
+Nothing at all happened for a subscription no request reached, so four
+credentials whose refresh tokens their providers had already disowned sat in the
+vault reading as active for five days while every request that touched them
+failed.
 
-A subscription row now also carries the instant each reading was taken
-(`recorded_at_ms`), when the record last changed (`observed_at_ms`), and the
-newest probe verdict (`probe`), so a reader can finally tell apart the three
-reasons a plan can be blank: the provider publishes none, nothing has ever gone
-through this account, or the credential is being refused -- with the provider's
-own sentence for the last one. Subscriptions inside a recorded rate-limit block
-are never probed, the probe rotates to no other credential and retires nothing,
-and a ledger written by an older gateway still loads.
+Brama now refreshes every active subscription credential that expires within
+`BRAMA_CREDENTIAL_REFRESH_SKEW_SECS` (default 300) every
+`BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS` seconds (default 60, `0` disables the
+task), single-flighted per subscription so a slow refresh is never started
+twice. Refreshing spends no plan quota, because a token endpoint is not a
+metered endpoint.
+
+Every refresh failure is now classified rather than logged and forgotten. A
+definitive refusal -- `invalid_grant`, `invalid_token`, a revoked or
+unauthorized refresh token, or a 401/403 that is not a transport failure -- is
+recorded against that subscription, which is left alone until a sign-in replaces
+it. A transient failure -- a timeout, a refused connection, any transport
+failure -- changes nothing and is retried by the next sweep. A refreshed grant
+that cannot be written back to the vault is now a failed refresh rather than a
+success with a warning attached: the rotated grant is dropped instead of being
+spent from memory, because the provider has already invalidated the one still
+stored.
+
+A subscription row therefore carries a new `credential` object: `state`
+(`active`, `needs_reauthorization`, `disabled`), the provider's own sentence as
+`cause`, and `recorded_at_ms`, `expires_at_ms` and `refreshed_at_ms` when they
+are known. The object is absent while nothing has been recorded about a grant,
+every field is optional for older readers, and a ledger written by an older
+gateway still loads.
+
+### Plan usage is read from the provider, not bought with a completion
+
+A provider states its plan windows in the headers of an answer, so a window used
+to exist only for the account that happened to serve a request: of seven
+subscriptions on the fleet exactly one reported a plan and the other six were
+indistinguishable blanks. The first fix for that spent one deliberately minimal
+completion per active subscription every quarter hour -- it bought the statistic
+with the quota it was measuring. That timer is gone, and with default
+configuration no timer performs a quota-consuming request at all.
+
+Brama now reads each provider's own usage report, which costs no quota:
+`claude-code` from `GET /api/oauth/usage` on `api.anthropic.com`, `codex` from
+`GET /backend-api/wham/usage` on `chatgpt.com`, and `kimi` from
+`GET /coding/v1/usages` on `api.kimi.com`. A provider that publishes no report is
+recorded as publishing none, which is a fact about the vendor rather than an
+error. Each subscription is read at most once per `BRAMA_PLAN_USAGE_TTL_SECS`
+(default 300), spread by up to a quarter either way from the subscription's own
+id so seven accounts on one host never fan out into one burst against a provider
+that rate-limits usage reads per address, and single-flighted per subscription;
+the sweep that notices aged-out rows runs every `BRAMA_PLAN_USAGE_SWEEP_SECS`
+(default 60, `0` disables it). A failed read never blanks a row: the last good
+reading is kept and served with `stale` true, and is dropped only once it is
+older than `BRAMA_PLAN_USAGE_RETENTION_SECS` (default 86400).
+
+A subscription row therefore says where its newest window came from and how fresh
+it is: `usage_source` is `provider`, `traffic` or `probe`, and `stale` is true
+once the newest reading has aged past the freshness window. Together with the
+instant each reading was taken (`recorded_at_ms`), when the record last changed
+(`observed_at_ms`) and the newest check verdict (`probe`, now carrying `source`:
+`usage_report` or `completion`), a reader can tell apart the reasons a plan can be
+blank -- the provider publishes none, nothing has ever gone through this account,
+or the credential is being refused -- with the provider's own sentence for the
+last one.
+
+The paid check still exists, because a free report cannot say whether a provider
+will actually serve a credential. It is now an explicit operator action:
+`POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe`, reachable by the
+desktop console's identity, spends one minimal completion against one named
+subscription and returns the verdict it recorded as `probe`. A subscription inside
+a recorded rate-limit block is refused with `409` rather than probed, the probe
+rotates to no other credential and retires nothing, and a ledger written by an
+older gateway still loads.
 
 ### Local inference yields to fleet work
 

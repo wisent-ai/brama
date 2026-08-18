@@ -1995,31 +1995,78 @@ fn account_agent_id(identity: &ModelClientIdentity) -> Result<String, ApiError> 
 }
 
 /// One subscription as every reader sees it: identity, plan windows the
-/// provider reported, what Brama measured, any block in force, when this record
-/// last changed, and what the newest proactive probe learned.
+/// provider reported, where those windows came from and whether they are still
+/// current, what Brama measured, any block in force, when this record last
+/// changed, what the newest proactive check learned, and where its credential
+/// stands with the provider.
 ///
-/// `limits` being empty is not one state but four, and the last two fields are
-/// what separate them. Windows present: render them, aged by the newest
-/// `recorded_at_ms`. Empty with a refused probe: the credential or the provider
-/// said no, and `probe.detail` is its sentence. Empty with no probe and nothing
-/// measured: nothing has ever gone through this subscription. Empty with a
-/// successful probe: the provider genuinely publishes no plan window, and only
-/// this state may be rendered as such. A zero is never one of the four.
+/// `limits` being empty is not one state but four, and the newest check and the
+/// record instant are what separate them. Windows present: render them, aged by
+/// the newest `recorded_at_ms`, and say "as of" only when `stale` is false.
+/// Empty with a failed check: the credential or the provider said no, and
+/// `probe.detail` is its sentence. Empty with no check and nothing measured:
+/// nothing has ever gone through this subscription. Empty with a successful
+/// check: the provider genuinely publishes no plan window, and only this state
+/// may be rendered as such. A zero is never one of the four.
+///
+/// `usage_source` says which of the three statements the newest window is -- the
+/// provider's own usage report, the headers of real traffic, or an operator's
+/// probe -- and is null when there is no window to attribute. `stale` says the
+/// newest window has aged past the freshness window; a stale reading is still
+/// served, because a number with its own instant beside it is information and an
+/// empty plan is not.
 fn subscription_view(entry: &crate::gateway::broker::SubscriptionEntry) -> Value {
     let recorded = crate::subscription_dispatch::usage::usage_for(&entry.id);
-    let limits = recorded
-        .as_ref()
-        .map(|usage| usage.limits.values().cloned().collect::<Vec<_>>())
-        .unwrap_or_default();
+    let windows = crate::subscription_dispatch::usage::plan_windows(recorded.as_ref());
     json!({
         "id": entry.id,
         "provider": entry.provider,
         "status": entry.status,
-        "limits": limits,
+        "limits": windows.limits,
         "measured": recorded.as_ref().map(|usage| &usage.measured),
         "block": recorded.as_ref().and_then(|usage| usage.block.clone()),
         "observed_at_ms": recorded.as_ref().and_then(|usage| usage.updated_at_ms),
         "probe": recorded.as_ref().and_then(|usage| usage.probe.clone()),
+        "credential": credential_view(entry, recorded.as_ref()),
+        "usage_source": windows.source.map(|source| source.as_str()),
+        "stale": windows.stale,
+    })
+}
+
+/// Where one subscription's credential stands, or `null` when nothing has ever
+/// been recorded about its grant.
+///
+/// A retirement outranks whatever the last refresh concluded. An operator who
+/// retired a subscription said it must not be used, and reporting it as
+/// `needs_reauthorization` would invite a sign-in that changes nothing; a
+/// retirement recorded by an older build left no credential record at all, which
+/// is the case this override exists for.
+///
+/// Every field is present whenever the object is, and `state` is the only one
+/// that is never null: a reader that has to guess which of the three states an
+/// absent field meant is exactly the reading that let four refused credentials
+/// pass for quiet ones.
+fn credential_view(
+    entry: &crate::gateway::broker::SubscriptionEntry,
+    recorded: Option<&crate::subscription_dispatch::usage::SubscriptionUsage>,
+) -> Value {
+    use crate::subscription_dispatch::usage::CredentialState;
+
+    let Some(credential) = recorded.and_then(|usage| usage.credential.as_ref()) else {
+        return Value::Null;
+    };
+    let retired = entry.status != "active" || crate::journal::is_retired(&entry.id);
+    let state = if retired {
+        CredentialState::Disabled
+    } else {
+        credential.state
+    };
+    json!({
+        "state": state.as_str(),
+        "cause": credential.cause,
+        "recorded_at_ms": credential.recorded_at_ms,
+        "expires_at_ms": credential.expires_at_ms,
+        "refreshed_at_ms": credential.refreshed_at_ms,
     })
 }
 
@@ -2092,11 +2139,19 @@ async fn retire_managed_subscription(
     let owned = crate::gateway::broker::list_subscriptions(&agent_id)
         .await
         .into_iter()
-        .any(|entry| entry.id == subscription_id);
-    if !owned {
+        .find(|entry| entry.id == subscription_id);
+    let Some(owned) = owned else {
         return Err(api_error(StatusCode::NOT_FOUND, "subscription not found"));
-    }
+    };
     crate::journal::retire(&subscription_id);
+    // Retirement is recorded in the ledger as well as the journal, so a row can
+    // say `disabled` with the instant and the reason it happened rather than
+    // leaving a reader to infer a retirement from an absence.
+    crate::subscription_dispatch::usage::record_credential_disabled(
+        &subscription_id,
+        &owned.provider,
+        "retired by its owning agent",
+    );
     crate::gateway::broker::donated_remove(&subscription_id)
         .map_err(|_| api_error(StatusCode::CONFLICT, "subscription retirement failed"))?;
     Ok(Json(json!({"ok": true})))
@@ -2145,6 +2200,43 @@ async fn retire_admin_subscription(
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
     retire_managed_subscription(agent_id, subscription_id).await
+}
+
+/// Spend one minimal completion against one subscription, because an operator
+/// asked whether the provider will actually serve it.
+///
+/// Nothing else in the gateway spends quota to learn a statistic: plan windows
+/// arrive from each provider's own free usage report. This is the deliberate
+/// exception, and it is a route rather than a subcommand because redeeming the
+/// credential needs the capabilities and identities the launcher installed in
+/// this serving process -- a standalone desktop install holds its provider
+/// credentials only in this process's memory -- and because the console that
+/// renders the verdict is where the question is asked.
+///
+/// A refusal to spend is a `409`, not a `500`: an account inside a recorded
+/// rate-limit block already told us it is out of quota, and the block exists to
+/// stop us paying to hear it twice.
+async fn probe_admin_subscription(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Path((agent_id, subscription_id)): Path<(String, String)>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    if !valid_agent_id(&agent_id) {
+        return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
+    }
+    let entry = crate::gateway::broker::list_subscriptions(&agent_id)
+        .await
+        .into_iter()
+        .find(|entry| entry.id == subscription_id)
+        .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "subscription not found"))?;
+    let probe = crate::subscription_dispatch::probe::probe_once(&entry.id, &entry.provider)
+        .await
+        .map_err(|message| api_error(StatusCode::CONFLICT, &message))?;
+    Ok(Json(json!({
+        "ok": true,
+        "probe": probe,
+        "subscription": subscription_view(&entry),
+    })))
 }
 
 async fn get_stats() -> impl IntoResponse {
@@ -2398,11 +2490,18 @@ async fn retire_subscription(
     let owned = crate::gateway::broker::list_subscriptions(&agent_id)
         .await
         .into_iter()
-        .any(|entry| entry.id == subscription_id);
-    if !owned {
+        .find(|entry| entry.id == subscription_id);
+    let Some(owned) = owned else {
         return api_error(StatusCode::NOT_FOUND, "subscription not found");
-    }
+    };
     crate::journal::retire(subscription_id);
+    // The same record the managed path writes: a retired row states `disabled`
+    // with the instant it happened instead of an empty credential object.
+    crate::subscription_dispatch::usage::record_credential_disabled(
+        subscription_id,
+        &owned.provider,
+        "retired by an operator",
+    );
     if let Err(message) = crate::gateway::broker::donated_remove(subscription_id) {
         return api_error(StatusCode::INTERNAL_SERVER_ERROR, &message);
     }
@@ -2428,10 +2527,15 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
         models = crate::core::perf::tracked_count(),
         "perf registry loaded"
     );
-    // Plan usage is learned on a timer rather than only from whatever traffic
-    // happens to arrive, so a subscription nobody routed through today still
-    // reports what its plan says.
-    crate::subscription_dispatch::probe::spawn();
+    // Plan usage is read from each provider's own usage report on a timer rather
+    // than only from whatever traffic happens to arrive, so a subscription
+    // nobody routed through today still reports what its plan says -- and no
+    // timer spends a completion to find out.
+    crate::subscription_dispatch::plan_usage::spawn();
+    // A grant is replaced before it expires rather than when a request trips
+    // over it, and a grant the provider has disowned is recorded the first time
+    // it says so instead of being rediscovered by every later request.
+    crate::subscription_dispatch::refresh_sweep::spawn();
 
     let protected = Router::new()
         .route("/v1/chat/completions", post(chat_completions))
@@ -2462,6 +2566,10 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
         .route(
             "/v1/admin/subscriptions/:agent_id/:subscription_id",
             delete(retire_admin_subscription),
+        )
+        .route(
+            "/v1/admin/subscriptions/:agent_id/:subscription_id/probe",
+            post(probe_admin_subscription),
         )
         .layer(Extension(aliases))
         .layer(middleware::from_fn_with_state(

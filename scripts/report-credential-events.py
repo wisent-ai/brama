@@ -41,6 +41,15 @@ KINDS = (
     "oauth_refresh_persist_failed",
     "credential_refreshed",
     "credential_retired",
+    # The refresh-ahead sweep. The first two are the whole point of it: a
+    # definitive refusal names a credential that needs a sign-in, and a
+    # transient one names a credential that is simply waiting for the next
+    # sweep. Reading them apart is what a host could not do at all before.
+    "credential_refresh_refused_definitively",
+    "credential_refresh_transient_skipped",
+    "credential_refreshed_ahead",
+    "credential_refresh_sweep_finished",
+    "credential_refresh_sweep_disabled",
 )
 
 for name in NAMES:

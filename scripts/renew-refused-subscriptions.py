@@ -1043,9 +1043,11 @@ def verify(
         subscription = fresh.get(identifier)
         if subscription is None:
             print(
-                f"    {identifier}: the gateway has not probed it since the login "
-                f"(waited {PROBE_WAIT_SECONDS}s); revision {was} -> {now}. Set "
-                "BRAMA_USAGE_PROBE_INTERVAL_SECS on the gateway if probing is off"
+                f"    {identifier}: the gateway has not checked it since the login "
+                f"(waited {PROBE_WAIT_SECONDS}s); revision {was} -> {now}. The gateway reads "
+                "each provider's own usage report on a timer; set "
+                "BRAMA_PLAN_USAGE_SWEEP_SECS if that sweep is off, or trigger the paid check "
+                "with POST /v1/admin/subscriptions/<agent>/<subscription>/probe"
             )
             continue
         advanced = now > was
