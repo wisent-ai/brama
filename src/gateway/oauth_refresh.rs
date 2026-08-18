@@ -51,6 +51,16 @@ fn oauth_provider(provider: &str) -> Option<OAuthProvider> {
     }
 }
 
+/// Whether this provider's credentials are OAuth grants Brama can refresh at
+/// all.
+///
+/// A caller that sweeps every subscription asks this before reading anything:
+/// an API-key subscription has no access token that expires, so redeeming its
+/// credential to discover that costs a vault read and learns nothing.
+pub(super) fn supports_refresh(provider: &str) -> bool {
+    oauth_provider(provider).is_some()
+}
+
 #[derive(Serialize)]
 struct OAuthRefreshRequest<'a> {
     grant_type: &'static str,

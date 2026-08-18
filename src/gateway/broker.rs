@@ -645,6 +645,12 @@ pub async fn refresh_subscription_credential(
     refresh_subscription_credential_inner(subscription_id, provider, true, false).await
 }
 
+/// Whether this provider's subscription credentials are OAuth grants that can be
+/// refreshed, rather than API keys that never expire.
+pub fn supports_oauth_refresh(provider: &str) -> bool {
+    super::oauth_refresh::supports_refresh(provider)
+}
+
 /// What one refresh-ahead attempt concluded, for a caller that never holds the
 /// credential itself.
 pub enum RefreshAhead {

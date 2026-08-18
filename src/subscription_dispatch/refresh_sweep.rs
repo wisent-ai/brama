@@ -165,6 +165,13 @@ async fn sweep(skew: Duration) {
             if entry.status != "active" || crate::journal::is_retired(&entry.id) {
                 continue;
             }
+            // Only a provider whose credentials are OAuth grants has anything to
+            // do here. An API key has no access token that expires, so reading
+            // one to discover that would cost a vault read every minute and
+            // learn nothing.
+            if !broker::supports_oauth_refresh(&entry.provider) {
+                continue;
+            }
             // A subscription two agents share is one account with one grant, and
             // refreshing it twice would rotate a refresh token the first pass
             // has already replaced.
