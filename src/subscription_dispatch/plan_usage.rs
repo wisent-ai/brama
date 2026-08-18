@@ -163,7 +163,8 @@ async fn sweep() {
 async fn refresh_isolated(subscription_id: String, provider: String) {
     let logged_id = subscription_id.clone();
     let logged_provider = provider.clone();
-    if let Err(error) = tokio::spawn(async move { refresh(&subscription_id, &provider).await }).await
+    if let Err(error) =
+        tokio::spawn(async move { refresh(&subscription_id, &provider).await }).await
     {
         warn!(
             event = "plan_usage_panicked",

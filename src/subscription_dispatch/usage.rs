@@ -862,8 +862,7 @@ pub enum RefreshHint {
 /// answers [`RefreshHint::Read`], so a host whose ledger file was just created
 /// refreshes normally instead of skipping every account on it.
 pub fn credential_refresh_hint(subscription_id: &str, within: Duration) -> RefreshHint {
-    let horizon =
-        now_ms().saturating_add(i64::try_from(within.as_millis()).unwrap_or(i64::MAX));
+    let horizon = now_ms().saturating_add(i64::try_from(within.as_millis()).unwrap_or(i64::MAX));
     with_ledger(|ledger| {
         let Some(credential) = ledger
             .subscriptions
@@ -938,8 +937,8 @@ pub fn plan_usage_due(subscription_id: &str) -> bool {
         let checked_recently = entry
             .plan_usage_checked_at_ms
             .is_some_and(|checked| now.saturating_sub(checked) < window);
-        let read_recently = newest_reading_ms(entry)
-            .is_some_and(|recorded| now.saturating_sub(recorded) < window);
+        let read_recently =
+            newest_reading_ms(entry).is_some_and(|recorded| now.saturating_sub(recorded) < window);
         !checked_recently && !read_recently
     })
 }

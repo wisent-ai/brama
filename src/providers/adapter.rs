@@ -561,11 +561,7 @@ pub async fn read_plan_usage(provider_id: &str, item: &str, secret: &str) -> Pla
             "provider_failure: the provider's usage report is not JSON".to_string(),
         );
     };
-    PlanUsage::Report(plan_usage_readings(
-        endpoint.shape,
-        &body,
-        observed_at_ms(),
-    ))
+    PlanUsage::Report(plan_usage_readings(endpoint.shape, &body, observed_at_ms()))
 }
 
 /// The windows Anthropic's usage report names, mapped onto the very limit ids
@@ -741,9 +737,8 @@ fn kimi_reading(
     if limit <= 0.0 {
         return None;
     }
-    let used = json_number(counters.get("used")).or_else(|| {
-        json_number(counters.get("remaining")).map(|remaining| limit - remaining)
-    })?;
+    let used = json_number(counters.get("used"))
+        .or_else(|| json_number(counters.get("remaining")).map(|remaining| limit - remaining))?;
     let window = value.get("window").filter(|window| window.is_object());
     Some(LimitReading {
         limit_id: limit_id.to_string(),
@@ -866,13 +861,14 @@ fn dispatch_client() -> Result<Client, String> {
 /// legitimately producing. The stream therefore gets no total budget; the
 /// pump enforces the same 255 seconds between reads instead, which is where
 /// "the provider stopped answering" is actually measurable.
-static STREAM_CLIENT: std::sync::LazyLock<Result<Client, String>> = std::sync::LazyLock::new(|| {
-    Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .no_proxy()
-        .build()
-        .map_err(|error| error.to_string())
-});
+static STREAM_CLIENT: std::sync::LazyLock<Result<Client, String>> =
+    std::sync::LazyLock::new(|| {
+        Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .no_proxy()
+            .build()
+            .map_err(|error| error.to_string())
+    });
 
 fn stream_client() -> Result<Client, String> {
     STREAM_CLIENT.clone()
@@ -2791,7 +2787,10 @@ pub async fn dispatch_stream(
             Err(message) => return Err(attempted_failure(&request.model, message)),
         };
         let limits = limit_readings(descriptor.id, &plan);
-        return Err(with_limits(provider_error(&request.model, status, &text), limits));
+        return Err(with_limits(
+            provider_error(&request.model, status, &text),
+            limits,
+        ));
     }
     let limits = limit_readings(descriptor.id, &plan_headers(response.headers()));
     Ok(crate::providers::stream::ProviderStream {

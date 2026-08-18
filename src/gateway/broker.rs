@@ -732,7 +732,11 @@ pub async fn list_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
 /// capability, so widening the listing widens no access.
 pub async fn list_all_subscriptions() -> Vec<SubscriptionEntry> {
     let broker = entitlements_router_bin();
-    let Ok(output) = tokio::process::Command::new(&broker).arg("list").output().await else {
+    let Ok(output) = tokio::process::Command::new(&broker)
+        .arg("list")
+        .output()
+        .await
+    else {
         return Vec::new();
     };
     if !output.status.success() {

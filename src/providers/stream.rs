@@ -30,10 +30,22 @@ use crate::types::LimitReading;
 #[derive(Clone, Debug)]
 pub enum StreamDelta {
     Text(String),
-    ToolCallStart { index: u32, id: String, name: String },
-    ToolCallArguments { index: u32, delta: String },
-    Finish { reason: Option<String> },
-    Usage { input_tokens: u32, output_tokens: u32 },
+    ToolCallStart {
+        index: u32,
+        id: String,
+        name: String,
+    },
+    ToolCallArguments {
+        index: u32,
+        delta: String,
+    },
+    Finish {
+        reason: Option<String>,
+    },
+    Usage {
+        input_tokens: u32,
+        output_tokens: u32,
+    },
 }
 
 /// What the pump delivers.
@@ -200,10 +212,7 @@ fn openai_chat_items(
                         .to_string(),
                 }));
             }
-            if let Some(arguments) = call
-                .pointer("/function/arguments")
-                .and_then(Value::as_str)
-            {
+            if let Some(arguments) = call.pointer("/function/arguments").and_then(Value::as_str) {
                 if !arguments.is_empty() {
                     items.push(StreamItem::Delta(StreamDelta::ToolCallArguments {
                         index,

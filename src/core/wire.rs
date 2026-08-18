@@ -70,9 +70,7 @@ fn validate(model: &str, max_tokens: u32, temperature: f64) -> Result<(), String
 /// results it carries -- Anthropic puts `tool_result` blocks inside a `user`
 /// message, while the internal shape gives each result its own `tool` role
 /// message, appended after this one.
-fn anthropic_content_in(
-    content: &Value,
-) -> (Value, Option<Vec<Value>>, Vec<Message>) {
+fn anthropic_content_in(content: &Value) -> (Value, Option<Vec<Value>>, Vec<Message>) {
     let mut text = String::new();
     let mut parts: Vec<Value> = Vec::new();
     let mut tool_calls: Vec<Value> = Vec::new();
@@ -87,7 +85,10 @@ fn anthropic_content_in(
     for block in &blocks {
         match block.get("type").and_then(Value::as_str) {
             Some("text") => {
-                let value = block.get("text").and_then(Value::as_str).unwrap_or_default();
+                let value = block
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
                 text.push_str(value);
                 parts.push(json!({ "type": "text", "text": value }));
             }
@@ -98,7 +99,10 @@ fn anthropic_content_in(
                         .get("media_type")
                         .and_then(Value::as_str)
                         .unwrap_or("image/png");
-                    let data = source.get("data").and_then(Value::as_str).unwrap_or_default();
+                    let data = source
+                        .get("data")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
                     parts.push(json!({
                         "type": "image_url",
                         "image_url": { "url": format!("data:{media_type};base64,{data}") },
@@ -330,7 +334,11 @@ pub fn responses_request(body: &[u8]) -> Result<InboundCall, String> {
         }),
         Some(Value::Array(items)) => {
             for item in items {
-                match item.get("type").and_then(Value::as_str).unwrap_or("message") {
+                match item
+                    .get("type")
+                    .and_then(Value::as_str)
+                    .unwrap_or("message")
+                {
                     "message" => {
                         let role = item
                             .get("role")
@@ -340,9 +348,11 @@ pub fn responses_request(body: &[u8]) -> Result<InboundCall, String> {
                         let content = match item.get("content") {
                             Some(Value::String(text)) => Value::String(text.clone()),
                             Some(Value::Array(parts)) => {
-                                let mapped: Vec<Value> = parts
-                                    .iter()
-                                    .filter_map(|part| match part.get("type").and_then(Value::as_str) {
+                                let mapped: Vec<Value> =
+                                    parts
+                                        .iter()
+                                        .filter_map(|part| {
+                                            match part.get("type").and_then(Value::as_str) {
                                         Some("input_text") | Some("output_text") => part
                                             .get("text")
                                             .and_then(Value::as_str)
@@ -355,12 +365,12 @@ pub fn responses_request(body: &[u8]) -> Result<InboundCall, String> {
                                                 "image_url": { "url": url },
                                             })),
                                         _ => None,
-                                    })
-                                    .collect();
-                                if mapped
-                                    .iter()
-                                    .any(|part| part.get("type").and_then(Value::as_str) == Some("image_url"))
-                                {
+                                    }
+                                        })
+                                        .collect();
+                                if mapped.iter().any(|part| {
+                                    part.get("type").and_then(Value::as_str) == Some("image_url")
+                                }) {
                                     Value::Array(mapped)
                                 } else {
                                     Value::String(
@@ -834,8 +844,16 @@ impl futures_core::Stream for AnthropicEventStream {
 /// `response.completed`, which must carry the whole generation again.
 #[derive(Clone)]
 enum ResponsesOutputItem {
-    Message { id: String, text: String },
-    FunctionCall { id: String, call_id: String, name: String, arguments: String },
+    Message {
+        id: String,
+        text: String,
+    },
+    FunctionCall {
+        id: String,
+        call_id: String,
+        name: String,
+        arguments: String,
+    },
 }
 
 /// Encode neutral provider events as an OpenAI Responses event stream.

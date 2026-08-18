@@ -1386,7 +1386,9 @@ async fn anthropic_messages(
             (
                 StatusCode::OK,
                 Json(crate::core::wire::anthropic_response(
-                    &message_id, &model, &resp,
+                    &message_id,
+                    &model,
+                    &resp,
                 )),
             )
                 .into_response()
@@ -1980,10 +1982,8 @@ impl futures_core::Stream for ChatChunkStream {
                     self.pending.push_back(chunk);
                 }
                 StreamItem::Delta(StreamDelta::Finish { reason }) => {
-                    self.finish_reason = Some(openai_finish_reason(
-                        reason.as_deref(),
-                        self.saw_tool_calls,
-                    ));
+                    self.finish_reason =
+                        Some(openai_finish_reason(reason.as_deref(), self.saw_tool_calls));
                 }
                 StreamItem::Delta(StreamDelta::Usage {
                     input_tokens,

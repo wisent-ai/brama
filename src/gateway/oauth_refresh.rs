@@ -220,8 +220,7 @@ pub(super) fn expires_within(secret: &Secret, provider: &str, skew: Duration) ->
 /// The instant this credential's access token stops working, in epoch
 /// milliseconds, so a reader can compare it against its own clock.
 pub(super) fn access_token_expiry_ms(secret: &Secret, provider: &str) -> Option<i64> {
-    expiry_epoch(secret, provider)
-        .map(|expiry| expiry.saturating_mul(millis_per_second_i64()))
+    expiry_epoch(secret, provider).map(|expiry| expiry.saturating_mul(millis_per_second_i64()))
 }
 
 /// The words a provider uses when a refresh token is gone for good.

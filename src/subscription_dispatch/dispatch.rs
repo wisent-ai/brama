@@ -86,7 +86,10 @@ fn refuse_as(
 /// A provider that refused every credential and a vault that produced none are
 /// both authorization failures no wait repairs; only a genuinely exhausted pool
 /// is capacity.
-fn rotation_failure_kind(saw_auth_rejection: bool, saw_unredeemable_credential: bool) -> &'static str {
+fn rotation_failure_kind(
+    saw_auth_rejection: bool,
+    saw_unredeemable_credential: bool,
+) -> &'static str {
     if saw_auth_rejection || saw_unredeemable_credential {
         "credential_unauthorized"
     } else {
@@ -184,8 +187,8 @@ pub async fn registry_models_for_agent(
 /// a timeout, which is worse than answering with the part that is known. A cold
 /// cache is filled by one background pass instead, so the first read is fast
 /// and thin and the next is complete.
-pub async fn registry_models_for_console()
--> Result<Vec<provider_registry::RegistryModel>, String> {
+pub async fn registry_models_for_console() -> Result<Vec<provider_registry::RegistryModel>, String>
+{
     let mut models = cached_registry_models();
     spawn_console_discovery();
     models.sort_by(|left, right| left.route_id.cmp(&right.route_id));
@@ -540,7 +543,11 @@ async fn order_models_by_plan(agent_id: &str, models: &mut [String]) -> Result<(
 /// fractions compare equal and ties stay shuffles rather than sorts.
 fn ordered_float_key(value: f64) -> i64 {
     let bits = value.to_bits() as i64;
-    if bits < 0 { bits ^ i64::MAX } else { bits }
+    if bits < 0 {
+        bits ^ i64::MAX
+    } else {
+        bits
+    }
 }
 
 /// One agent's pinned credential for one provider, process-local.
@@ -1488,7 +1495,8 @@ async fn dispatch_subscription_attempt_stream(
                 Ok(fresh) => {
                     if let Ok(fresh_token) = fresh.expose_utf8() {
                         provider_attempts = provider_attempts.saturating_add(u32::from(true));
-                        result = provider_registry::dispatch_stream(request, &item, fresh_token).await;
+                        result =
+                            provider_registry::dispatch_stream(request, &item, fresh_token).await;
                         rejected_with_fresh_token = result
                             .as_ref()
                             .err()
@@ -1752,9 +1760,12 @@ pub async fn dispatch_direct_stream(request: &ModelRequest) -> Result<RoutedStre
             ))
         }
     };
-    let stream =
-        provider_registry::dispatch_stream(request, &broker::provider_resource(provider), credential)
-            .await?;
+    let stream = provider_registry::dispatch_stream(
+        request,
+        &broker::provider_resource(provider),
+        credential,
+    )
+    .await?;
     Ok(RoutedStream {
         model: request.model.clone(),
         attempts: u32::from(true),
