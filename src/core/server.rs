@@ -1016,6 +1016,18 @@ fn model_error_contract(message: &str) -> ModelErrorContract {
             retryable: false,
         };
     }
+    // A pool that produced no credential at all is the same shape of failure one
+    // layer earlier: no provider was asked, so there is no capacity to wait for.
+    // The chain that would have produced the secret -- capability, read grant,
+    // installation trust material -- is broken, and only an operator repairs it.
+    if normalized.contains("could be redeemed for agent") {
+        return ModelErrorContract {
+            status: StatusCode::SERVICE_UNAVAILABLE,
+            error_type: "authorization_error",
+            code: "credential_unauthorized",
+            retryable: false,
+        };
+    }
     // A pool the provider rejected is not a pool that is busy. Waiting cannot
     // reach it: somebody has to authorize the subscription again, and saying
     // `429 capacity_error, retryable: true` sent this workstation's agent into
@@ -2378,9 +2390,15 @@ async fn list_models(
                 // could list thousands of models and still not say which of
                 // them any one provider or subscription covers: the client had
                 // no field to group them by.
+                //
+                // `route` is sent only when it differs from the id. It matches
+                // for all but a handful of a 6,700-model catalogue, and 276 kB
+                // of repeating the id back is worth more than the symmetry.
                 if let Some(model) = registry {
                     entry["provider"] = json!(model.provider_id);
-                    entry["route"] = json!(model.route_id);
+                    if model.route_id != id {
+                        entry["route"] = json!(model.route_id);
+                    }
                 }
                 if caller_known {
                     if let Some(perf) = perf_json(&id) {
