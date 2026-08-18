@@ -18,11 +18,14 @@ use subtle::ConstantTimeEq;
 use tracing::{info, warn};
 
 use crate::core::failure::{self, IMPACT_MODEL_REQUEST, POINT_MODEL_REQUEST};
+use crate::providers::stream::{StreamDelta, StreamItem};
 use crate::subscription_dispatch::{
-    authenticate_agent, dispatch_any_subscription, dispatch_any_vision_capable_subscription,
-    dispatch_direct_openai_typed, dispatch_direct_with_fallback, dispatch_subscription,
-    dispatch_task_subscription, is_subscription_model, provider_requires_caller_identity,
-    registry_models_for_agent,
+    authenticate_agent, dispatch_any_subscription, dispatch_any_subscription_stream,
+    dispatch_any_vision_capable_subscription, dispatch_any_vision_capable_subscription_stream,
+    dispatch_direct_openai_typed, dispatch_direct_with_fallback,
+    dispatch_direct_with_fallback_stream, dispatch_subscription, dispatch_subscription_stream,
+    dispatch_task_subscription, dispatch_task_subscription_stream, is_subscription_model,
+    provider_requires_caller_identity, registry_models_for_agent, RoutedStream,
 };
 use crate::types::{BillingTarget, Message, ModelRequest, ModelResponse, Tool, ToolCall};
 
@@ -824,6 +827,9 @@ struct ChatCompletionRequest {
     tool_choice: Option<serde_json::Value>,
     #[serde(default, rename = "billingTarget")]
     billing_target: Option<BillingTarget>,
+    /// Ask for server-sent events instead of one buffered completion.
+    #[serde(default)]
+    stream: bool,
 }
 
 fn default_max_tokens() -> u32 {
@@ -1134,21 +1140,23 @@ async fn chat_completions(
     Extension(aliases): Extension<ModelAliases>,
     headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
-) -> impl IntoResponse {
+) -> Response {
     let req: ChatCompletionRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
         Err(error) => {
-            return api_error(StatusCode::BAD_REQUEST, &format!("invalid JSON: {error}"));
+            return api_error(StatusCode::BAD_REQUEST, &format!("invalid JSON: {error}"))
+                .into_response();
         }
     };
     if req.messages.is_empty() {
-        return api_error(StatusCode::BAD_REQUEST, "messages must not be empty");
+        return api_error(StatusCode::BAD_REQUEST, "messages must not be empty").into_response();
     }
     if req.max_tokens == u32::default() || req.max_tokens > max_output_tokens() {
         return api_error(
             StatusCode::BAD_REQUEST,
             &format!("max_tokens must be between one and {}", max_output_tokens()),
-        );
+        )
+        .into_response();
     }
     if !req.temperature.is_finite()
         || req.temperature < f64::default()
@@ -1160,9 +1168,9 @@ async fn chat_completions(
                 "temperature must be finite and between zero and {}",
                 max_temperature()
             ),
-        );
+        )
+        .into_response();
     }
-
     let messages: Vec<Message> = req
         .messages
         .into_iter()
@@ -1176,16 +1184,338 @@ async fn chat_completions(
             tool_calls: m.tool_calls,
         })
         .collect();
-
-    let requested_model = req.model.as_deref().unwrap_or("").trim();
+    let requested_model = req.model.as_deref().unwrap_or("").trim().to_string();
     if requested_model.is_empty() {
-        return api_error(StatusCode::BAD_REQUEST, "missing field `model`");
+        return api_error(StatusCode::BAD_REQUEST, "missing field `model`").into_response();
     }
+    let (system, non_system_messages) = split_system_message(messages);
+    let request = ModelRequest {
+        messages: non_system_messages,
+        model: String::new(),
+        max_tokens: req.max_tokens,
+        temperature: req.temperature,
+        system,
+        tools: req.tools,
+        tool_choice: req.tool_choice,
+        billing_target: req.billing_target,
+    };
+    let (dispatched, meta) = match route_model_call(
+        &client_identity,
+        &aliases,
+        &headers,
+        &body,
+        &requested_model,
+        request,
+        req.stream,
+    )
+    .await
+    {
+        Ok(routed) => routed,
+        Err(response) => return response,
+    };
+    match dispatched {
+        DispatchedCall::Buffered(mut resp) => {
+            tally_and_log_buffered(&mut resp, &client_identity, &meta, &requested_model);
+            if !resp.success {
+                return failure_response(&mut resp);
+            }
+            // Alias telemetry stays attached to the stable logical selector.
+            crate::core::perf::record(&requested_model, resp.latency_ms, resp.output_tokens);
+            let has_tool_calls = resp.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty());
+            let finish_reason = if has_tool_calls { "tool_calls" } else { "stop" };
+            let response_model = meta.reported_model(&requested_model, &resp.model);
+            let body = serde_json::to_value(ChatCompletionResponse {
+                id: meta.request_id.clone(),
+                object: "chat.completion".into(),
+                model: response_model,
+                choices: vec![Choice {
+                    index: 0,
+                    message: ChoiceMessage {
+                        role: "assistant".into(),
+                        content: resp.content,
+                        tool_calls: resp.tool_calls,
+                    },
+                    finish_reason: finish_reason.into(),
+                }],
+                usage: Usage {
+                    prompt_tokens: resp.input_tokens,
+                    completion_tokens: resp.output_tokens,
+                    total_tokens: resp.input_tokens + resp.output_tokens,
+                },
+            })
+            .unwrap_or_default();
+            (StatusCode::OK, Json(body)).into_response()
+        }
+        DispatchedCall::Committed(routed) => {
+            log_stream_commit(&routed, &client_identity, &meta, &requested_model);
+            let stream = ChatChunkStream {
+                rx: routed.events,
+                pending: std::collections::VecDeque::new(),
+                request_id: meta.request_id.clone(),
+                model: meta.reported_model(&requested_model, &routed.model),
+                requested_model,
+                created: epoch_seconds(),
+                started: meta.started,
+                terminated: false,
+                accounted: false,
+                sent_role: false,
+                saw_tool_calls: false,
+                finish_reason: None,
+                usage: None,
+                input_tokens: 0,
+                output_tokens: 0,
+                failed: false,
+            };
+            sse_response(stream)
+        }
+    }
+}
+
+/// One Anthropic Messages request, routed exactly as its chat-completions
+/// sibling is and answered in the format the caller speaks.
+///
+/// Nothing about routing, identity, or billing changes with the wire format:
+/// the model must still be a canonical route or a supported selector, a
+/// subscription still needs the caller's own signed identity, and the same
+/// bounded attempts apply. Only the request and response shapes differ, and
+/// they are translated in [`crate::core::wire`].
+async fn anthropic_messages(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Extension(aliases): Extension<ModelAliases>,
+    headers: axum::http::HeaderMap,
+    body: axum::body::Bytes,
+) -> Response {
+    let call = match crate::core::wire::anthropic_request(&body) {
+        Ok(call) => call,
+        Err(message) => return api_error(StatusCode::BAD_REQUEST, &message).into_response(),
+    };
+    let requested_model = call.model;
+    let (dispatched, meta) = match route_model_call(
+        &client_identity,
+        &aliases,
+        &headers,
+        &body,
+        &requested_model,
+        call.request,
+        call.stream,
+    )
+    .await
+    {
+        Ok(routed) => routed,
+        Err(response) => return response,
+    };
+    let message_id = format!("msg_{}", uuid::Uuid::new_v4().simple());
+    match dispatched {
+        DispatchedCall::Buffered(mut resp) => {
+            tally_and_log_buffered(&mut resp, &client_identity, &meta, &requested_model);
+            if !resp.success {
+                return failure_response(&mut resp);
+            }
+            crate::core::perf::record(&requested_model, resp.latency_ms, resp.output_tokens);
+            let model = meta.reported_model(&requested_model, &resp.model);
+            (
+                StatusCode::OK,
+                Json(crate::core::wire::anthropic_response(
+                    &message_id, &model, &resp,
+                )),
+            )
+                .into_response()
+        }
+        DispatchedCall::Committed(routed) => {
+            log_stream_commit(&routed, &client_identity, &meta, &requested_model);
+            let model = meta.reported_model(&requested_model, &routed.model);
+            sse_response(crate::core::wire::AnthropicEventStream::new(
+                routed.events,
+                message_id,
+                model,
+                stream_accounting(requested_model, meta.started),
+            ))
+        }
+    }
+}
+
+/// One OpenAI Responses request, on the same routing decision as every other
+/// format this gateway serves.
+async fn openai_responses(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Extension(aliases): Extension<ModelAliases>,
+    headers: axum::http::HeaderMap,
+    body: axum::body::Bytes,
+) -> Response {
+    let call = match crate::core::wire::responses_request(&body) {
+        Ok(call) => call,
+        Err(message) => return api_error(StatusCode::BAD_REQUEST, &message).into_response(),
+    };
+    let requested_model = call.model;
+    let (dispatched, meta) = match route_model_call(
+        &client_identity,
+        &aliases,
+        &headers,
+        &body,
+        &requested_model,
+        call.request,
+        call.stream,
+    )
+    .await
+    {
+        Ok(routed) => routed,
+        Err(response) => return response,
+    };
+    let response_id = format!("resp_{}", uuid::Uuid::new_v4().simple());
+    match dispatched {
+        DispatchedCall::Buffered(mut resp) => {
+            tally_and_log_buffered(&mut resp, &client_identity, &meta, &requested_model);
+            if !resp.success {
+                return failure_response(&mut resp);
+            }
+            crate::core::perf::record(&requested_model, resp.latency_ms, resp.output_tokens);
+            let model = meta.reported_model(&requested_model, &resp.model);
+            (
+                StatusCode::OK,
+                Json(crate::core::wire::responses_response(
+                    &response_id,
+                    &model,
+                    epoch_seconds(),
+                    &resp,
+                )),
+            )
+                .into_response()
+        }
+        DispatchedCall::Committed(routed) => {
+            log_stream_commit(&routed, &client_identity, &meta, &requested_model);
+            let model = meta.reported_model(&requested_model, &routed.model);
+            sse_response(crate::core::wire::ResponsesEventStream::new(
+                routed.events,
+                response_id,
+                model,
+                stream_accounting(requested_model, meta.started),
+            ))
+        }
+    }
+}
+
+/// Whether this call was answered in one piece or committed as a stream.
+enum DispatchedCall {
+    Buffered(ModelResponse),
+    Committed(RoutedStream),
+}
+
+/// What the routing decision produced besides the call itself, so every
+/// format shapes its answer from the same facts.
+struct RoutedCallMeta {
+    routing_mode: &'static str,
+    alias_source: Option<String>,
+    request_id: String,
+    selected_model: String,
+    started: Instant,
+}
+
+impl RoutedCallMeta {
+    /// The model name the caller should be told about: the alias it asked for
+    /// when one resolved, and the canonical route it actually reached
+    /// otherwise. An alias exists so a caller does not have to know which
+    /// route is behind it today.
+    fn reported_model(&self, requested_model: &str, resolved: &str) -> String {
+        if self.alias_source.is_some() {
+            requested_model.to_string()
+        } else {
+            resolved.to_string()
+        }
+    }
+}
+
+/// Split the OpenAI system-role message out of a conversation.
+///
+/// The stateless provider adapters take the system prompt as its own field, so
+/// the first system-role message becomes that field and the rest of the
+/// conversation travels unchanged.
+fn split_system_message(messages: Vec<Message>) -> (Option<String>, Vec<Message>) {
+    let mut system: Option<String> = None;
+    let mut rest: Vec<Message> = Vec::with_capacity(messages.len());
+    for message in messages {
+        if message.role == "system" && system.is_none() {
+            system = message.content.as_str().map(|value| value.to_string());
+            continue;
+        }
+        rest.push(message);
+    }
+    (system, rest)
+}
+
+fn epoch_seconds() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or_default()
+}
+
+/// Wrap one encoder in the SSE response every streaming format shares.
+///
+/// The keep-alive comment is what stops an idle proxy from closing a stream
+/// that is legitimately silent while the model thinks; it is a comment frame,
+/// so no client parses it as content.
+fn sse_response<S>(stream: S) -> Response
+where
+    S: futures_core::Stream<Item = Result<axum::response::sse::Event, std::convert::Infallible>>
+        + Send
+        + 'static,
+{
+    axum::response::sse::Sse::new(stream)
+        .keep_alive(
+            axum::response::sse::KeepAlive::new()
+                .interval(Duration::from_secs(15))
+                .text("keep-alive"),
+        )
+        .into_response()
+}
+
+/// The closure a wire encoder reports its stream's end through.
+///
+/// Statistics belong to this layer; the encoders in [`crate::core::wire`] know
+/// the numbers but not where they are kept, so they are handed this instead of
+/// a static they would have to reach into.
+fn stream_accounting(
+    requested_model: String,
+    started: Instant,
+) -> crate::core::wire::StreamAccounting {
+    Box::new(move |input_tokens, output_tokens, failed| {
+        TOTAL_INPUT_TOKENS.fetch_add(u64::from(input_tokens), Ordering::Relaxed);
+        TOTAL_OUTPUT_TOKENS.fetch_add(u64::from(output_tokens), Ordering::Relaxed);
+        if failed {
+            TOTAL_FAILURES.fetch_add(u64::from(true), Ordering::Relaxed);
+        } else {
+            crate::core::perf::record(
+                &requested_model,
+                started.elapsed().as_secs_f64() * 1_000.0,
+                output_tokens,
+            );
+        }
+    })
+}
+
+/// Resolve one model call and execute it, buffered or streamed.
+///
+/// This is the whole routing decision, shared by every wire format: selector
+/// detection, the client's model allowlist, alias resolution, whether the call
+/// is caller-scoped -- and therefore billed to the caller's own
+/// subscription -- and the bounded dispatch that follows. `Err` is a refusal
+/// that happened before any provider was contacted; a provider failure comes
+/// back as [`DispatchedCall::Buffered`] carrying it, because that is the same
+/// shape the buffered path has always reported.
+async fn route_model_call(
+    client_identity: &ModelClientIdentity,
+    aliases: &ModelAliases,
+    headers: &HeaderMap,
+    raw_body: &axum::body::Bytes,
+    requested_model: &str,
+    mut request: ModelRequest,
+    stream: bool,
+) -> Result<(DispatchedCall, RoutedCallMeta), Response> {
     let any_subscription = is_any_subscription_selector(requested_model);
     let any_vision_capable_subscription =
         is_any_vision_capable_subscription_selector(requested_model);
     if !client_identity.authorizes_model(requested_model) {
-        return api_error(StatusCode::FORBIDDEN, "forbidden");
+        return Err(api_error(StatusCode::FORBIDDEN, "forbidden").into_response());
     }
     let task_subscription = task_subscription_selector(requested_model);
     let (alias_source, alias_fallbacks) = aliases.chat_route(requested_model);
@@ -1199,10 +1529,11 @@ async fn chat_completions(
         || task_subscription.is_some()
         || canonical_model)
     {
-        return api_error(
+        return Err(api_error(
             StatusCode::BAD_REQUEST,
             "model must be a canonical provider/model route or a supported selector",
-        );
+        )
+        .into_response());
     }
     // Subscription dispatch is for credentials that belong to the caller, and
     // the four tests below say when that is the case: an explicit subscription
@@ -1219,9 +1550,8 @@ async fn chat_completions(
     let caller_scoped_request = any_subscription
         || any_vision_capable_subscription
         || task_subscription.is_some()
-        || req.billing_target.is_some()
+        || request.billing_target.is_some()
         || provider_requires_caller_identity(&selected_model);
-
     let routing_mode = if task_subscription.is_some() {
         "task"
     } else if any_vision_capable_subscription {
@@ -1244,58 +1574,80 @@ async fn chat_completions(
         routing_mode,
         requested_model,
         selected_model = %selected_model,
+        streamed = stream,
         "routing request accepted"
     );
-    let dispatch_started = Instant::now();
-    let dispatch_deadline = request_deadline().saturating_mul(
+    let started = Instant::now();
+    // The deadline bounds route selection, rotation, and the provider's
+    // response headers. For a stream it stops there by design: once events
+    // flow, "how long may this take" is the provider's idle timeout, not a
+    // budget that would cut a generation mid-sentence.
+    let deadline = request_deadline().saturating_mul(
         u32::try_from(alias_fallbacks.len().saturating_add(usize::from(true))).unwrap_or(u32::MAX),
     );
-    let mut resp = match tokio::time::timeout(dispatch_deadline, async {
-        // Preserve the OpenAI system-role message as ModelRequest.system while
-        // the stateless provider adapter receives the remaining conversation.
-        let (system, non_system_messages): (Option<String>, Vec<Message>) = {
-            let mut sys: Option<String> = None;
-            let mut rest: Vec<Message> = Vec::with_capacity(messages.len());
-            for m in messages {
-                if m.role == "system" && sys.is_none() {
-                    sys = m.content.as_str().map(|s| s.to_string());
-                    continue;
-                }
-                rest.push(m);
+    request.model = selected_model.clone();
+    let meta = RoutedCallMeta {
+        routing_mode,
+        alias_source,
+        request_id,
+        selected_model,
+        started,
+    };
+    let dispatched = tokio::time::timeout(deadline, async {
+        if stream {
+            let opened = if let Some(task) = task_subscription.as_deref() {
+                dispatch_task_subscription_stream(headers, &request, raw_body, task).await
+            } else if any_vision_capable_subscription {
+                dispatch_any_vision_capable_subscription_stream(headers, &request, raw_body).await
+            } else if any_subscription {
+                dispatch_any_subscription_stream(headers, &request, raw_body).await
+            } else if caller_scoped_request {
+                dispatch_subscription_stream(headers, &request, raw_body).await
+            } else {
+                dispatch_direct_with_fallback_stream(&request, &alias_fallbacks).await
+            };
+            match opened {
+                Ok(routed) => DispatchedCall::Committed(routed),
+                Err(failure) => DispatchedCall::Buffered(failure),
             }
-            (sys, rest)
-        };
-        let dispatch_req = ModelRequest {
-            messages: non_system_messages,
-            model: selected_model.clone(),
-            max_tokens: req.max_tokens,
-            temperature: req.temperature,
-            system,
-            tools: req.tools,
-            tool_choice: req.tool_choice,
-            billing_target: req.billing_target,
-        };
-        if let Some(task) = task_subscription.as_deref() {
-            dispatch_task_subscription(&headers, &dispatch_req, &body, task).await
+        } else if let Some(task) = task_subscription.as_deref() {
+            DispatchedCall::Buffered(
+                dispatch_task_subscription(headers, &request, raw_body, task).await,
+            )
         } else if any_vision_capable_subscription {
-            dispatch_any_vision_capable_subscription(&headers, &dispatch_req, &body).await
+            DispatchedCall::Buffered(
+                dispatch_any_vision_capable_subscription(headers, &request, raw_body).await,
+            )
         } else if any_subscription {
-            dispatch_any_subscription(&headers, &dispatch_req, &body).await
+            DispatchedCall::Buffered(dispatch_any_subscription(headers, &request, raw_body).await)
         } else if caller_scoped_request {
-            dispatch_subscription(&headers, &dispatch_req, &body).await
+            DispatchedCall::Buffered(dispatch_subscription(headers, &request, raw_body).await)
         } else {
-            dispatch_direct_with_fallback(&dispatch_req, &alias_fallbacks).await
+            DispatchedCall::Buffered(
+                dispatch_direct_with_fallback(&request, &alias_fallbacks).await,
+            )
         }
     })
     .await
-    {
-        Ok(response) => response,
-        Err(_) => ModelResponse::failure(&selected_model, "whole request deadline exceeded".into()),
-    };
-    if resp.latency_ms == f64::default() {
-        resp.latency_ms = dispatch_started.elapsed().as_millis() as f64;
-    }
+    .unwrap_or_else(|_| {
+        DispatchedCall::Buffered(ModelResponse::failure(
+            &meta.selected_model,
+            "whole request deadline exceeded".into(),
+        ))
+    });
+    Ok((dispatched, meta))
+}
 
+/// Fold one buffered answer into the process statistics and the request log.
+fn tally_and_log_buffered(
+    resp: &mut ModelResponse,
+    client_identity: &ModelClientIdentity,
+    meta: &RoutedCallMeta,
+    requested_model: &str,
+) {
+    if resp.latency_ms == f64::default() {
+        resp.latency_ms = meta.started.elapsed().as_millis() as f64;
+    }
     TOTAL_REQUESTS.fetch_add(1, Ordering::Relaxed);
     TOTAL_INPUT_TOKENS.fetch_add(resp.input_tokens as u64, Ordering::Relaxed);
     TOTAL_OUTPUT_TOKENS.fetch_add(resp.output_tokens as u64, Ordering::Relaxed);
@@ -1314,14 +1666,15 @@ async fn chat_completions(
         .unwrap_or_else(|| "none".to_owned());
     info!(
         event = "routing_complete",
-        request_id = %request_id,
+        request_id = %meta.request_id,
         client_id = %client_identity.client_id,
-        routing_mode,
+        routing_mode = meta.routing_mode,
         requested_model,
         selected_model = %resp.model,
         attempts = resp.attempts,
         success = resp.success,
-        elapsed_ms = dispatch_started.elapsed().as_millis() as u64,
+        streamed = false,
+        elapsed_ms = meta.started.elapsed().as_millis() as u64,
         error_code = failure_contract.map(|contract| contract.code).unwrap_or("none"),
         retryable = failure_contract.is_some_and(|contract| contract.retryable),
         input_tokens = resp.input_tokens,
@@ -1330,50 +1683,268 @@ async fn chat_completions(
         envelope = %failure_envelope,
         "routing request completed"
     );
-    if !resp.success {
-        let message = resp.error.take().unwrap_or_default();
-        let contract = model_error_contract(&message);
-        return error_response(
-            contract.status,
-            contract.error_type,
-            contract.code,
-            &message,
-            contract.retryable,
-            resp.attempts,
-        );
+}
+
+/// Shape one refused call as this gateway's normalized error document.
+///
+/// Every format shares it: a caller that cannot get its generation needs the
+/// contract code and retryability, and those are Brama's, not the wire's.
+fn failure_response(resp: &mut ModelResponse) -> Response {
+    let message = resp.error.take().unwrap_or_default();
+    let contract = model_error_contract(&message);
+    error_response(
+        contract.status,
+        contract.error_type,
+        contract.code,
+        &message,
+        contract.retryable,
+        resp.attempts,
+    )
+    .into_response()
+}
+
+/// Record that a stream committed: statistics that are already final, and the
+/// one log line that says a generation is on its way.
+fn log_stream_commit(
+    routed: &RoutedStream,
+    client_identity: &ModelClientIdentity,
+    meta: &RoutedCallMeta,
+    requested_model: &str,
+) {
+    TOTAL_REQUESTS.fetch_add(u64::from(true), Ordering::Relaxed);
+    TOTAL_PROVIDER_ATTEMPTS.fetch_add(u64::from(routed.attempts), Ordering::Relaxed);
+    info!(
+        event = "routing_complete",
+        request_id = %meta.request_id,
+        client_id = %client_identity.client_id,
+        routing_mode = meta.routing_mode,
+        requested_model,
+        selected_model = %routed.model,
+        attempts = routed.attempts,
+        success = true,
+        streamed = true,
+        elapsed_ms = meta.started.elapsed().as_millis() as u64,
+        error_code = "none",
+        "streaming request committed"
+    );
+}
+
+/// Map a provider stop reason onto the OpenAI finish vocabulary.
+fn openai_finish_reason(reason: Option<&str>, saw_tool_calls: bool) -> String {
+    match reason {
+        Some("end_turn") | Some("stop_sequence") | Some("stop") => "stop",
+        Some("max_tokens") => "length",
+        Some("tool_use") | Some("tool_calls") => "tool_calls",
+        Some("length") | Some("content_filter") => reason.unwrap_or("stop"),
+        Some(other) if other.starts_with("incomplete") => {
+            if other.contains("max_output_tokens") {
+                "length"
+            } else {
+                "stop"
+            }
+        }
+        _ => {
+            if saw_tool_calls {
+                "tool_calls"
+            } else {
+                "stop"
+            }
+        }
+    }
+    .to_string()
+}
+
+/// One caller-facing SSE stream built from neutral provider events.
+///
+/// Process statistics are accounted here, at the stream's end, because that
+/// is when the numbers exist; the subscription ledger is accounted one layer
+/// down, where the credential that paid is known.
+struct ChatChunkStream {
+    rx: tokio::sync::mpsc::Receiver<StreamItem>,
+    pending: std::collections::VecDeque<axum::response::sse::Event>,
+    request_id: String,
+    model: String,
+    requested_model: String,
+    created: u64,
+    started: Instant,
+    terminated: bool,
+    accounted: bool,
+    sent_role: bool,
+    saw_tool_calls: bool,
+    finish_reason: Option<String>,
+    usage: Option<(u32, u32)>,
+    input_tokens: u32,
+    output_tokens: u32,
+    failed: bool,
+}
+
+impl ChatChunkStream {
+    fn chunk(&self, delta: Value, finish_reason: Option<&str>) -> axum::response::sse::Event {
+        let mut choice = json!({ "index": 0, "delta": delta });
+        match finish_reason {
+            Some(reason) => choice["finish_reason"] = json!(reason),
+            None => choice["finish_reason"] = Value::Null,
+        }
+        axum::response::sse::Event::default().data(
+            serde_json::to_string(&json!({
+                "id": self.request_id,
+                "object": "chat.completion.chunk",
+                "created": self.created,
+                "model": self.model,
+                "choices": [choice],
+            }))
+            .unwrap_or_default(),
+        )
     }
 
-    // Alias telemetry stays attached to the stable logical selector.
-    crate::core::perf::record(requested_model, resp.latency_ms, resp.output_tokens);
+    fn role_chunk(&self) -> axum::response::sse::Event {
+        self.chunk(json!({ "role": "assistant" }), None)
+    }
 
-    let has_tool_calls = resp.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty());
-    let finish_reason = if has_tool_calls { "tool_calls" } else { "stop" };
+    fn usage_chunk(&self, input_tokens: u32, output_tokens: u32) -> axum::response::sse::Event {
+        axum::response::sse::Event::default().data(
+            serde_json::to_string(&json!({
+                "id": self.request_id,
+                "object": "chat.completion.chunk",
+                "created": self.created,
+                "model": self.model,
+                "choices": [],
+                "usage": {
+                    "prompt_tokens": input_tokens,
+                    "completion_tokens": output_tokens,
+                    "total_tokens": input_tokens + output_tokens,
+                },
+            }))
+            .unwrap_or_default(),
+        )
+    }
 
-    let response_model = alias_source
-        .map(|_| requested_model.to_string())
-        .unwrap_or_else(|| resp.model.clone());
-    let body = serde_json::to_value(ChatCompletionResponse {
-        id: request_id,
-        object: "chat.completion".into(),
-        model: response_model,
-        choices: vec![Choice {
-            index: 0,
-            message: ChoiceMessage {
-                role: "assistant".into(),
-                content: resp.content,
-                tool_calls: resp.tool_calls,
-            },
-            finish_reason: finish_reason.into(),
-        }],
-        usage: Usage {
-            prompt_tokens: resp.input_tokens,
-            completion_tokens: resp.output_tokens,
-            total_tokens: resp.input_tokens + resp.output_tokens,
-        },
-    })
-    .unwrap_or_default();
+    /// Fold this stream's end into the process statistics, exactly once.
+    fn account(&mut self) {
+        if self.accounted {
+            return;
+        }
+        self.accounted = true;
+        TOTAL_INPUT_TOKENS.fetch_add(u64::from(self.input_tokens), Ordering::Relaxed);
+        TOTAL_OUTPUT_TOKENS.fetch_add(u64::from(self.output_tokens), Ordering::Relaxed);
+        if self.failed {
+            TOTAL_FAILURES.fetch_add(u64::from(true), Ordering::Relaxed);
+        } else {
+            crate::core::perf::record(
+                &self.requested_model,
+                self.started.elapsed().as_secs_f64() * 1_000.0,
+                self.output_tokens,
+            );
+        }
+    }
+}
 
-    (StatusCode::OK, Json(body))
+impl futures_core::Stream for ChatChunkStream {
+    type Item = Result<axum::response::sse::Event, std::convert::Infallible>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        use std::task::Poll;
+        loop {
+            if let Some(event) = self.pending.pop_front() {
+                return Poll::Ready(Some(Ok(event)));
+            }
+            if self.terminated {
+                self.account();
+                return Poll::Ready(None);
+            }
+            let item = match self.rx.poll_recv(cx) {
+                Poll::Pending => return Poll::Pending,
+                // The recorder closed the channel without a terminal item: an
+                // abnormal end, signalled the same way as a mid-stream failure
+                // -- the stream simply stops, without `data: [DONE]`.
+                Poll::Ready(None) => {
+                    self.terminated = true;
+                    self.failed = true;
+                    continue;
+                }
+                Poll::Ready(Some(item)) => item,
+            };
+            match item {
+                StreamItem::Delta(StreamDelta::Text(text)) => {
+                    if !self.sent_role {
+                        self.sent_role = true;
+                        let role = self.role_chunk();
+                        self.pending.push_back(role);
+                    }
+                    return Poll::Ready(Some(Ok(self.chunk(json!({ "content": text }), None))));
+                }
+                StreamItem::Delta(StreamDelta::ToolCallStart { index, id, name }) => {
+                    self.saw_tool_calls = true;
+                    if !self.sent_role {
+                        self.sent_role = true;
+                        let role = self.role_chunk();
+                        self.pending.push_back(role);
+                    }
+                    let delta = json!({
+                        "tool_calls": [{
+                            "index": index,
+                            "id": id,
+                            "type": "function",
+                            "function": { "name": name, "arguments": "" },
+                        }],
+                    });
+                    return Poll::Ready(Some(Ok(self.chunk(delta, None))));
+                }
+                StreamItem::Delta(StreamDelta::ToolCallArguments { index, delta }) => {
+                    let delta = json!({
+                        "tool_calls": [{
+                            "index": index,
+                            "function": { "arguments": delta },
+                        }],
+                    });
+                    return Poll::Ready(Some(Ok(self.chunk(delta, None))));
+                }
+                StreamItem::Delta(StreamDelta::Finish { reason }) => {
+                    self.finish_reason = Some(openai_finish_reason(
+                        reason.as_deref(),
+                        self.saw_tool_calls,
+                    ));
+                }
+                StreamItem::Delta(StreamDelta::Usage {
+                    input_tokens,
+                    output_tokens,
+                }) => {
+                    self.usage = Some((input_tokens, output_tokens));
+                    self.input_tokens = input_tokens;
+                    self.output_tokens = output_tokens;
+                }
+                StreamItem::Done => {
+                    let reason = self
+                        .finish_reason
+                        .clone()
+                        .unwrap_or_else(|| openai_finish_reason(None, self.saw_tool_calls));
+                    let finish = self.chunk(json!({}), Some(&reason));
+                    self.pending.push_back(finish);
+                    if let Some((input_tokens, output_tokens)) = self.usage {
+                        let usage = self.usage_chunk(input_tokens, output_tokens);
+                        self.pending.push_back(usage);
+                    }
+                    self.pending
+                        .push_back(axum::response::sse::Event::default().data("[DONE]"));
+                    self.terminated = true;
+                }
+                StreamItem::Failed(message) => {
+                    warn!(
+                        event = "stream_failed_mid_flight",
+                        request_id = %self.request_id,
+                        model = %self.model,
+                        error = %message,
+                        "provider stream failed after commit; ending without [DONE]"
+                    );
+                    self.terminated = true;
+                    self.failed = true;
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -1717,6 +2288,26 @@ async fn list_models(
             }
         }
     }
+    // The desktop console holds a bearer, not an agent signature, so the branch
+    // above never runs for it and its catalogue arrived carrying the public
+    // vendor list alone. That list knows `openai`; it does not know that a
+    // `codex` subscription is what pays for those models here, so no screen in
+    // the console could name what a subscription covers.
+    if client_identity.client_id == BRAMA_DESKTOP_CLIENT_ID {
+        match crate::subscription_dispatch::dispatch::registry_models_for_console().await {
+            Ok(models) => {
+                for model in models {
+                    available.insert(model.route_id.clone());
+                    model_ids.push(model.route_id.clone());
+                    registry_metadata.insert(model.route_id.clone(), model);
+                }
+            }
+            Err(error) => {
+                degraded = true;
+                warn!(%error, "console provider model discovery failed");
+            }
+        }
+    }
     for alias in MODEL_ALIASES {
         if client_identity.authorizes_model(alias) && aliases.source(alias).is_some() {
             model_ids.push((*alias).to_string());
@@ -1766,6 +2357,14 @@ async fn list_models(
                     "fallback": [],
                     "promotion": [],
                 });
+                // Which provider serves this id. Its absence is why a console
+                // could list thousands of models and still not say which of
+                // them any one provider or subscription covers: the client had
+                // no field to group them by.
+                if let Some(model) = registry {
+                    entry["provider"] = json!(model.provider_id);
+                    entry["route"] = json!(model.route_id);
+                }
                 if caller_known {
                     if let Some(perf) = perf_json(&id) {
                         entry["perf"] = perf;
@@ -2539,6 +3138,10 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
 
     let protected = Router::new()
         .route("/v1/chat/completions", post(chat_completions))
+        // The two first-party formats callers already speak. Same routing
+        // decision, same identities, same bounded attempts as the line above.
+        .route("/v1/messages", post(anthropic_messages))
+        .route("/v1/responses", post(openai_responses))
         .route("/v1/embeddings", post(embeddings))
         .route("/v1/moderations", post(moderations))
         .route("/v1/models", get(list_models))

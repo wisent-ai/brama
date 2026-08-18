@@ -5,3 +5,4 @@
 //! bounded HTTP execution, and normalized provider responses.
 
 pub mod adapter;
+pub mod stream;

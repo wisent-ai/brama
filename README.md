@@ -49,6 +49,11 @@ provider attempts, normalized errors, and auditable routing decisions.
 ### Included
 
 - OpenAI-compatible chat completions, embeddings, moderations, and model catalog.
+- Native Anthropic Messages and OpenAI Responses ingress on the same routing
+  decision, so a caller that speaks one of those two first-party formats needs
+  no shim in front of Brama.
+- Server-sent event streaming on all three chat formats, with every retry
+  bounded to the time before the first caller byte.
 - Canonical `provider/model` routing and deployment-owned logical aliases,
   including `-best` for the strongest operator-approved subscription route.
 - Agent-scoped selectors: `any`, `any-vision-capable`, and `task:<task-name>`.
@@ -77,8 +82,9 @@ provider attempts, normalized errors, and auditable routing decisions.
 - Silent fallback across products, agents, provider accounts, credentials, or
   storage authorities.
 - Owning production DNS, ingress, host registration, orchestration, or Skarbiec grants.
-- Streaming OpenAI responses to callers. The current HTTP contract returns one
-  buffered completion.
+- Continuing a cut generation. Once a stream has committed, a provider failure
+  ends that stream; Brama never resumes it on another credential, because a
+  second attempt would double both the bill and the text.
 
 ### Supported environments and current capability
 
@@ -90,7 +96,7 @@ provider attempts, normalized errors, and auditable routing decisions.
 | Agent subscription routing | Jeden HMAC identity plus delegated capability | Implemented |
 | Claude Code donation endpoint | Authorized agent and entitlements router | Implemented |
 | Deployment-managed local inference routing | Linux GPU target over Tailscale | Implemented |
-| Outbound response streaming | — | Not supported |
+| Outbound response streaming | Chat completions, Anthropic Messages, OpenAI Responses | Implemented |
 | Immutable public release | Canonical Stado channels for `linux-amd64` and `darwin-arm64` | Implemented; `released-surface.json` names the newest recorded release |
 | Per-installation Skarbiec trust material | Operator-managed host | Implemented; `bin/provision-skarbiec-trust` generates it and the launcher refuses to start without it |
 | Declared 1.0 contract stability | — | Not yet declared |
@@ -238,8 +244,21 @@ operator paths. Runnable, risk-labeled workflows are indexed in
 
 ## Primary interfaces
 
-- **HTTP inference:** `POST /v1/chat/completions`, `/v1/embeddings`, and
-  `/v1/moderations` are the canonical model-execution interfaces.
+- **HTTP inference:** `POST /v1/chat/completions`, `/v1/messages`,
+  `/v1/responses`, `/v1/embeddings`, and `/v1/moderations` are the canonical
+  model-execution interfaces. The three chat formats share one routing
+  decision, one identity contract, and one attempt budget; they differ only in
+  the shape of the request and the answer.
+- **Streaming:** any of the three chat formats streams when the request asks
+  for it -- `"stream": true` on chat completions and Anthropic Messages,
+  `"stream": true` on Responses. The response is `text/event-stream` in the
+  caller's own dialect: `chat.completion.chunk` frames closed by
+  `data: [DONE]`, Anthropic `message_start`/`content_block_*`/`message_stop`
+  events, or `response.*` events closed by `response.completed`. A stream that
+  ends without its terminal event is a generation that was cut after it
+  committed; the caller holds an incomplete answer and Brama has already
+  stopped. Rotation across models and credentials happens only before the
+  first byte, so a committed stream is never silently re-run.
 - **Account subscriptions:** authenticated Wisent users use
   `GET|POST /v1/account/subscriptions` and
   `DELETE /v1/account/subscriptions/:subscription_id`. Brama derives the
@@ -369,6 +388,26 @@ The complete state, error, retry, authorization, and resource contract is in
   disables it) and is logged under `plan_usage_*`. A failed read never blanks a
   row: the last good reading is kept, served with `stale` true, and dropped only
   once it is older than `BRAMA_PLAN_USAGE_RETENTION_SECS` (default 86400).
+- **Routing by what the plans have left:** the readings above are not only for
+  reading. A selector orders its candidate routes by the freest usable
+  subscription behind each one, and an explicit route orders its bounded
+  credentials the same way, both from the ledger and neither costing a provider
+  call. Chance still breaks exact ties, so accounts at equal utilization stay
+  decorrelated, but an account the provider says is 90 percent spent is no
+  longer tried ahead of one at 10 percent. A window whose own reset instant has
+  passed counts as empty; a subscription with no reading counts as free,
+  because its first call writes the reading that corrects the placement.
+- **One agent, one account, for the length of a window:** the credential that
+  served an agent is remembered per provider and tried first on that agent's
+  next request, until the tightest window it reported resets (five hours when
+  the provider named no reset, capped at a day). Two things depend on it: a
+  provider's prompt cache lives behind one account, so scattering an agent's
+  turns across a pool throws the cache away, and one conversation's spend
+  belongs in one account's ledger rather than smeared across every account the
+  agent owns. It is a preference and never a grant -- it is consulted after
+  eligibility, skipped for a credential inside a block or reporting a full
+  window, and it cannot outlive the process, because a pin whose window has
+  passed is worth nothing anyway.
 - **The one check that costs quota, and only on request:** whether a provider
   will actually serve a credential can only be answered by a real request, so
   `POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe` spends one

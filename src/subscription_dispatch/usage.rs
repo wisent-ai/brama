@@ -1022,6 +1022,58 @@ pub fn is_blocked(subscription_id: &str) -> bool {
     })
 }
 
+/// The earliest future reset instant across this subscription's served windows.
+///
+/// A pin on this credential should die with its tightest window, and this is
+/// that window's end. `None` means no served reading names a future reset, so
+/// the caller falls back to its own default rather than treating the pin as
+/// immortal.
+pub fn next_reset_ms(subscription_id: &str) -> Option<i64> {
+    let entry = usage_for(subscription_id)?;
+    let windows = plan_windows(Some(&entry));
+    let now = now_ms();
+    windows
+        .limits
+        .iter()
+        .filter_map(|reading| reading.resets_at_ms)
+        .filter(|resets_at_ms| *resets_at_ms > now)
+        .min()
+}
+
+/// How much of this subscription's tightest current plan window is spent.
+///
+/// This is the routing view of the ledger: the maximum used fraction across
+/// the windows [`plan_windows`] still serves, with one adjustment -- a window
+/// whose own reset instant has passed counts as empty, because the provider's
+/// clock says it rolled and charging its last reading against the account
+/// would freeze a credential that is free again. Readings past the retention
+/// window are already absent from the projection, so they cannot route
+/// anything either.
+///
+/// `None` means nothing usable is recorded, which is not the same statement as
+/// a known-empty plan: it covers a subscription no traffic ever reached and a
+/// provider that publishes no windows at all. Callers placing candidates treat
+/// it as fully available, because the first real call writes the reading that
+/// corrects the placement.
+pub fn used_fraction(subscription_id: &str) -> Option<f64> {
+    let entry = usage_for(subscription_id)?;
+    let windows = plan_windows(Some(&entry));
+    if windows.limits.is_empty() {
+        return None;
+    }
+    let now = now_ms();
+    Some(
+        windows
+            .limits
+            .iter()
+            .map(|reading| match reading.resets_at_ms {
+                Some(resets_at_ms) if resets_at_ms <= now => 0.0,
+                _ => reading.used_fraction,
+            })
+            .fold(0.0_f64, f64::max),
+    )
+}
+
 /// The recorded state of one subscription, if anything was ever recorded.
 pub fn usage_for(subscription_id: &str) -> Option<SubscriptionUsage> {
     with_ledger(|ledger| ledger.subscriptions.get(subscription_id).cloned())

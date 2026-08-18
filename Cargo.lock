@@ -183,6 +183,7 @@ dependencies = [
  "clap",
  "ed25519-dalek",
  "futures-core",
+ "futures-util",
  "hex",
  "hmac",
  "libc",

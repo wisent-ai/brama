@@ -5,6 +5,98 @@ Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
 ## Unreleased
 
+### Callers can stream, and a committed stream is never re-run
+
+Brama answered every generation in one piece. A caller waiting on a model
+therefore waited for all of it, which made the gateway unusable for anything
+interactive and made Brama the only model router on this fleet that could not
+do what every provider behind it already does.
+
+`POST /v1/chat/completions` now streams when the request says `"stream": true`,
+as `text/event-stream` carrying `chat.completion.chunk` frames closed by
+`data: [DONE]`, with a keep-alive comment frame every 15 seconds so an idle
+proxy does not close a stream that is legitimately silent while the model
+thinks.
+
+The retry contract is what needed deciding, and the boundary is the provider's
+response status. Before it commits, everything documented in
+[`CORE.md`](CORE.md) still applies: three model candidates for a selector, two
+bounded credentials each, one forced OAuth refresh on an auth refusal, the
+300-second whole-request deadline, and a refusal is an ordinary error document
+because the caller has received nothing. After it commits, nothing is retried
+at all. A provider that fails, stalls for more than 255 seconds between reads,
+or ends without its terminal event ends the caller's stream without one too --
+no `data: [DONE]` -- because a second attempt on another credential would
+duplicate both the bill and the emitted text. The whole-request deadline stops
+applying at that same moment: a total budget cannot tell a model that is
+thinking from a socket that has died, and the per-read timeout can.
+
+Subscription spend is recorded once per stream whichever way it ends, including
+a stream the caller abandoned: the tokens the provider reported and the plan
+windows its headers carried are ledger facts regardless of who stopped
+listening. Kimi streams carry no token meter, because its coding endpoint's
+field set is pinned and publishes none; that absence is recorded as absence
+rather than filled in with an estimate.
+
+### Anthropic Messages and OpenAI Responses are accepted at the ingress
+
+Brama spoke one dialect, OpenAI chat completions. Every client that speaks
+Anthropic Messages or OpenAI Responses -- which includes the agent runtimes
+whose subscriptions this gateway holds -- needed a translating proxy in front,
+which is one more process holding one more copy of the routing policy.
+
+`POST /v1/messages` and `POST /v1/responses` are now served directly, buffered
+or streamed, in the caller's own format: Anthropic `message_start`,
+`content_block_*`, `message_delta` and `message_stop` events, or `response.*`
+events closed by `response.completed`.
+
+They are one workflow with the chat endpoint, not three. Client identity, model
+allowlist, alias resolution, selector semantics, caller-scoped subscription
+ownership, attempt bounds, ledger accounting and the error contract are shared
+line for line; only the shape of the request and the answer differs. Each still
+requires a canonical `provider/model` route or a supported selector, because a
+bare vendor model name is not a routing decision Brama is willing to guess.
+
+Inbound translation keeps only what a provider-neutral request can hold. Stop
+sequences, cache-control hints, reasoning options, stored-response identifiers
+and non-function tool types are accepted and dropped rather than approximated,
+and outbound translation states only what the provider actually reported.
+
+### Routing reads the plan windows it already collects
+
+Brama has been reading each subscription's plan windows from the providers'
+own free usage reports for a while, and then choosing which subscription to
+spend by shuffling. An account the provider said was 95 percent spent was as
+likely to be picked as an idle one, so a fleet with four Claude subscriptions
+still walked into 429s it could have seen coming.
+
+Selection now orders candidates by what their plans have left, from the ledger
+and at no provider cost: a selector orders its model candidates by the freest
+usable subscription behind each route, and an explicit route orders its bounded
+credentials the same way. Chance now only breaks exact ties, so accounts at
+equal utilization still decorrelate. A window whose own reset instant has
+passed counts as empty, because the provider's clock says it rolled; a
+subscription with no reading counts as free, because its first call writes the
+reading that corrects the placement. Quality still outranks quota: inside one
+`task:` score, plan headroom is the tiebreak, not the ranking.
+
+### One agent stays on one account for the length of a window
+
+Consecutive requests from one agent could land on a different subscription each
+time. Two things were quietly lost: a provider's prompt cache lives behind one
+account, so scattering an agent's turns across a pool threw the cache away on
+every turn, and one conversation's spend was smeared across every account the
+agent owned instead of accumulating where an operator could read it.
+
+The credential that served an agent is now remembered per provider and tried
+first on that agent's next request, until the tightest window it reported
+resets -- five hours when the provider named no reset, capped at a day. It is a
+preference and never a grant: it is consulted after eligibility, skipped for a
+credential inside a block or reporting a full window, never overrides
+`billingTarget`, and never widens the bounded attempt count. It lives in the
+serving process only, because a pin whose window has passed is worth nothing to
+the process that starts next.
+
 ### A credential is refreshed before it dies, and a refused one says so
 
 Brama refreshed an OAuth grant at exactly one moment: inside a request, after

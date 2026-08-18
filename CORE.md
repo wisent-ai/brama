@@ -20,6 +20,53 @@ and external model services are integrations. They may implement a core seam but
 must not redefine client identity, ownership, limits, state authority, or public
 error semantics.
 
+## Accepted wire formats
+
+Three chat request formats are accepted and are one workflow, not three:
+OpenAI chat completions at `POST /v1/chat/completions`, Anthropic Messages at
+`POST /v1/messages`, and OpenAI Responses at `POST /v1/responses`. The format
+decides only how a request is read and how an answer is written. Client
+identity, model allowlist, alias resolution, selector semantics,
+caller-scoped ownership, attempt bounds, ledger accounting, and the error
+contract are identical across all three, and every one of them requires a
+canonical `provider/model` route or a supported selector -- no format is
+allowed to guess a provider from a bare vendor model name.
+
+Inbound translation keeps only what the provider-neutral request can hold.
+Stop sequences, cache-control hints, reasoning options, stored-response
+identifiers, and non-function tool types are accepted and dropped rather than
+approximated. Outbound translation states only what the provider reported: a
+stream whose provider published no token meter yields no token numbers.
+
+## Streaming
+
+Any of the three chat formats streams when its request asks for it. The
+response is `text/event-stream` in the caller's own dialect: `chat.completion.chunk`
+frames closed by `data: [DONE]`, Anthropic `message_start`, `content_block_*`,
+`message_delta` and `message_stop` events, or `response.*` events closed by
+`response.completed`.
+
+One rule governs it. A stream is either committed or it is not, and the
+boundary is the provider's response status:
+
+- before commit, every bound in this document applies unchanged -- model
+  candidates, credential rotation, one forced OAuth refresh, the whole-request
+  deadline -- because the caller has received nothing and a refusal is still an
+  ordinary error document;
+- after commit, nothing is retried. A provider that fails, stalls for longer
+  than the per-attempt timeout, or ends without its terminal event ends the
+  caller's stream without one too. Brama does not continue that generation on
+  another credential, because a second attempt would duplicate both cost and
+  emitted text.
+
+A caller that receives no terminal event holds an incomplete generation. It may
+start a new request; Brama will not have done so on its behalf.
+
+Subscription spend is recorded once per stream, whether it completed, failed
+mid-flight, or was abandoned by the caller: the tokens the provider reported
+and the plan windows its headers carried are ledger facts regardless of who
+stopped listening.
+
 ## Public workflow: direct route or alias
 
 ### Inputs
@@ -36,7 +83,8 @@ Brama validates transport, bearer, allowlist, request shape, and limits before
 redeeming a provider capability. An alias resolves to one deployment-owned
 canonical route. A generic canonical request with no caller-scoped fields uses
 Brama's direct provider capability and performs at most one provider attempt.
-The result is one buffered OpenAI-compatible response or one normalized error.
+The result is one buffered OpenAI-compatible response, one committed event
+stream, or one normalized error, as the request asked.
 
 No subscription credential is eligible for this workflow.
 
@@ -59,18 +107,34 @@ subscription.
 - `subscriptionId` must resolve to an active non-retired resource owned by the
   signed agent.
 
-An explicit subscription route tries at most two eligible credentials. A
-credential is redeemed immediately before each provider call. Authentication,
-quota, and rate-limit failures may rotate; other provider failures return
-immediately because replay could duplicate cost or tool effects.
+An explicit subscription route tries at most two eligible credentials, ordered
+by what their plans have left: the maximum used fraction the provider itself
+reported across that credential's current windows, freest first, read from the
+ledger and costing no provider call. A window whose reset instant has passed
+counts as empty; a credential with no reading counts as free. The agent's
+pinned credential, when it has one that is eligible and not reporting a full
+window, is tried first within that same bound. A credential is redeemed
+immediately before each provider call. Authentication, quota, and rate-limit
+failures may rotate; other provider failures return immediately because replay
+could duplicate cost or tool effects.
+
+### Credential pinning
+
+The credential that last served one agent on one provider is remembered in
+process and preferred for that agent's later requests until the earliest reset
+instant its windows reported, defaulting to five hours when the provider named
+none and capped at 24 hours. The pin reorders eligible candidates and nothing
+else: it never adds a credential, never survives a block, retirement, or a
+full reported window, and never overrides `billingTarget`.
 
 ## Public workflow: selectors
 
 ### `any`
 
-Select active agent-owned stateless routes, randomize equivalent candidates, and
-try at most three model candidates. Each candidate may try at most two
-credentials. The whole request therefore performs at most six provider calls.
+Select active agent-owned stateless routes, order them by the freest usable
+subscription behind each route, randomize exact ties, and try at most three
+model candidates. Each candidate may try at most two credentials. The whole
+request therefore performs at most six provider calls.
 
 ### `any-vision-capable`
 
@@ -80,7 +144,8 @@ modalities include `image`.
 ### `task:<task-name>`
 
 Use the latest active quality observation per active model. Sort by score
-highest first and observation time newest first; randomize exact-score ties.
+highest first and observation time newest first; inside one score order by
+plan headroom and randomize exact ties.
 Try at most three model candidates and six provider calls total.
 
 Selectors stop at the first successful result. They do not infer task names,
@@ -157,8 +222,13 @@ count included in the envelope.
 
 ## Cancellation, timeout, and retry
 
-- One HTTP inference request has a 300-second whole-request deadline.
-- One provider HTTP attempt has a 255-second timeout.
+- One buffered HTTP inference request has a 300-second whole-request deadline.
+- One streaming request has that same deadline up to the moment its provider
+  stream commits, and none after: a committed generation is bounded by the
+  per-read timeout below, because a total budget cannot tell a model that is
+  thinking from a socket that has died.
+- One buffered provider HTTP attempt has a 255-second timeout. A streaming
+  attempt applies those same 255 seconds between reads.
 - Model catalog calls have a 30-second timeout.
 - Provider model discovery has a 20-second timeout.
 - OAuth refresh has a 15-second timeout and bounded response size.
@@ -168,6 +238,8 @@ count included in the envelope.
 - Brama does not retry arbitrary 5xx or malformed results automatically.
 - Dropping the client connection cancels the in-process future where the HTTP
   stack propagates cancellation; Brama has no durable job to resume.
+- A stream that has committed is never retried, on any credential, for any
+  failure class.
 - A caller must treat an ambiguous provider outcome as potentially billable and
   must not replay automatically unless the returned code is retryable.
 

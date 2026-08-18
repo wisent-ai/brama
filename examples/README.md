@@ -57,7 +57,7 @@ examples require the owning human operator's explicit approval before use.
 | Release operator | Upgrade one immutable runtime | Verified GitHub Release archive | Recovery mutation | [`recovery/upgrade-and-rollback.md`](recovery/upgrade-and-rollback.md) | Controlled qualification required |
 | Release operator | Roll back and prove previous identity | Versioned host installation | Recovery mutation | [`recovery/upgrade-and-rollback.md`](recovery/upgrade-and-rollback.md) | Controlled qualification required |
 | Developer | Execute local inference in Brama | — | — | Not supported; see README non-goals | Not supported |
-| Caller | Stream completion tokens | — | — | Not supported; buffered response only | Not supported |
+| Caller | Stream completion tokens | `POST /v1/chat/completions`, `/v1/messages`, `/v1/responses` with `"stream": true` | Provider-billable generation | [`inference/stream-a-completion.md`](inference/stream-a-completion.md) | Documented; not executed |
 
 ## Shared rules
 

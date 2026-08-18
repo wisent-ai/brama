@@ -859,6 +859,25 @@ fn dispatch_client() -> Result<Client, String> {
         .clone()
 }
 
+/// Streaming dispatch, which cannot carry a whole-body timeout.
+///
+/// `Client::builder().timeout` bounds the response *body* read too, which
+/// would cut every generation that runs longer than the budget while
+/// legitimately producing. The stream therefore gets no total budget; the
+/// pump enforces the same 255 seconds between reads instead, which is where
+/// "the provider stopped answering" is actually measurable.
+static STREAM_CLIENT: std::sync::LazyLock<Result<Client, String>> = std::sync::LazyLock::new(|| {
+    Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
+        .build()
+        .map_err(|error| error.to_string())
+});
+
+fn stream_client() -> Result<Client, String> {
+    STREAM_CLIENT.clone()
+}
+
 /// A typed envelope is exactly a `type` and a `value`, and nothing else. An
 /// object that merely carries a `type` beside its own fields -- a reauth
 /// document does -- is a credential, not a container.
@@ -2575,26 +2594,16 @@ fn provider_error(route_id: &str, status: reqwest::StatusCode, body: &str) -> Mo
     attempted_failure(route_id, format!("{kind}: {detail}"))
 }
 
-pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> ModelResponse {
-    let Some((descriptor, model_id)) = route(&request.model) else {
-        return dispatch_catalog(request, item, secret).await;
-    };
-    let key = match credential_key(item, secret) {
-        Ok(key) => key,
-        Err(error) => return ModelResponse::failure(&request.model, error),
-    };
-    let base_url = match provider_base_url_for(descriptor, &model_id) {
-        Ok(base_url) => base_url,
-        Err(error) => return ModelResponse::failure(&request.model, error),
-    };
-    let client = match dispatch_client() {
-        Ok(client) => client,
-        Err(error) => return ModelResponse::failure(&request.model, error),
-    };
-    let payload = match descriptor.wire {
+/// The non-streaming chat payload for one wire protocol.
+///
+/// This is the exact body [`dispatch`] has always sent; both dispatch paths
+/// build from it so a streaming request differs from a buffered one only by
+/// the flags [`streaming_chat_payload`] adds.
+fn chat_payload(descriptor: &ProviderDescriptor, model_id: &str, request: &ModelRequest) -> Value {
+    match descriptor.wire {
         WireProtocol::OpenAiChat => {
             let mut body = Map::new();
-            body.insert("model".into(), json!(model_id.as_ref()));
+            body.insert("model".into(), json!(model_id));
             body.insert("messages".into(), Value::Array(openai_messages(request)));
             body.insert("max_tokens".into(), json!(request.max_tokens));
             // kimi-for-coding pins temperature to 1 and rejects any other value.
@@ -2627,8 +2636,57 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
             }
             body
         }
-        WireProtocol::OpenAiResponses => responses_payload(request, model_id.as_ref()),
+        WireProtocol::OpenAiResponses => responses_payload(request, model_id),
+    }
+}
+
+/// The same payload asking the provider to stream.
+///
+/// Anthropic and the Responses backend stream on one flag. The chat wire
+/// additionally asks for the terminal usage chunk -- except Kimi, whose
+/// coding endpoint's accepted field set is pinned and whose streams therefore
+/// carry no usage at all; the ledger records what a Kimi stream measured as
+/// no reading rather than an invented one.
+fn streaming_chat_payload(
+    descriptor: &ProviderDescriptor,
+    model_id: &str,
+    request: &ModelRequest,
+) -> Value {
+    let mut body = chat_payload(descriptor, model_id, request);
+    match descriptor.wire {
+        WireProtocol::OpenAiChat => {
+            body["stream"] = json!(true);
+            if descriptor.id != "kimi" {
+                body["stream_options"] = json!({ "include_usage": true });
+            }
+        }
+        WireProtocol::AnthropicMessages => {
+            body["stream"] = json!(true);
+        }
+        // The Responses payload is streamed by construction already; the
+        // buffered path parses its buffered event body.
+        WireProtocol::OpenAiResponses => {}
+    }
+    body
+}
+
+pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> ModelResponse {
+    let Some((descriptor, model_id)) = route(&request.model) else {
+        return dispatch_catalog(request, item, secret).await;
     };
+    let key = match credential_key(item, secret) {
+        Ok(key) => key,
+        Err(error) => return ModelResponse::failure(&request.model, error),
+    };
+    let base_url = match provider_base_url_for(descriptor, &model_id) {
+        Ok(base_url) => base_url,
+        Err(error) => return ModelResponse::failure(&request.model, error),
+    };
+    let client = match dispatch_client() {
+        Ok(client) => client,
+        Err(error) => return ModelResponse::failure(&request.model, error),
+    };
+    let payload = chat_payload(descriptor, model_id.as_ref(), request);
     let started = Instant::now();
     let response = match authorize_provider(
         client.post(endpoint(&base_url, descriptor.chat_path)),
@@ -2679,6 +2737,67 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
         },
         limits,
     )
+}
+
+/// Open one streaming provider generation.
+///
+/// `Ok` is the commit point: the provider answered with a success status, the
+/// plan windows its headers carried are in `limits`, and generation events
+/// arrive on `events`. `Err` is the same failure the buffered path would have
+/// returned, made a different type because nothing was sent to any caller yet
+/// and rotation is still possible. After `Ok` nothing in this process retries:
+/// bytes may already be with the caller, and a second attempt would double
+/// both the bill and the text.
+pub async fn dispatch_stream(
+    request: &ModelRequest,
+    item: &str,
+    secret: &str,
+) -> Result<crate::providers::stream::ProviderStream, ModelResponse> {
+    let Some((descriptor, model_id)) = route(&request.model) else {
+        return Err(ModelResponse::failure(
+            &request.model,
+            "streaming is supported for provider routes only".to_string(),
+        ));
+    };
+    let key = match credential_key(item, secret) {
+        Ok(key) => key,
+        Err(error) => return Err(ModelResponse::failure(&request.model, error)),
+    };
+    let base_url = match provider_base_url_for(descriptor, &model_id) {
+        Ok(base_url) => base_url,
+        Err(error) => return Err(ModelResponse::failure(&request.model, error)),
+    };
+    let client = match stream_client() {
+        Ok(client) => client,
+        Err(error) => return Err(ModelResponse::failure(&request.model, error)),
+    };
+    let payload = streaming_chat_payload(descriptor, model_id.as_ref(), request);
+    let response = match authorize_provider(
+        client.post(endpoint(&base_url, descriptor.chat_path)),
+        descriptor,
+        &key,
+        secret,
+    )
+    .json(&payload)
+    .send()
+    .await
+    {
+        Ok(response) => response,
+        Err(error) => return Err(transport_failure(&request.model, &error)),
+    };
+    if !response.status().is_success() {
+        let (status, plan, text) = match bounded_response_text(response).await {
+            Ok(result) => result,
+            Err(message) => return Err(attempted_failure(&request.model, message)),
+        };
+        let limits = limit_readings(descriptor.id, &plan);
+        return Err(with_limits(provider_error(&request.model, status, &text), limits));
+    }
+    let limits = limit_readings(descriptor.id, &plan_headers(response.headers()));
+    Ok(crate::providers::stream::ProviderStream {
+        limits,
+        events: crate::providers::stream::spawn(descriptor.wire, response),
+    })
 }
 
 pub async fn dispatch_openai_typed(
