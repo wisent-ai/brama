@@ -183,7 +183,82 @@ pub async fn registry_models_for_console()
         .into_iter()
         .filter(|entry| entry.status == "active" && !crate::journal::is_retired(&entry.id))
         .collect::<Vec<_>>();
-    discover_subscription_models(entries).await
+    let mut models = discover_subscription_models(entries).await?;
+    models.extend(discover_direct_provider_models().await);
+    models.sort_by(|left, right| left.route_id.cmp(&right.route_id));
+    models.dedup_by(|left, right| left.route_id == right.route_id);
+    Ok(models)
+}
+
+/// Models for the providers this gateway holds a direct credential for.
+///
+/// A subscription is not the only way a provider gets paid for, and the console
+/// showed the consequence: `featherless` sat there marked available with a model
+/// count of zero, because nothing discovered a provider unless a subscription
+/// pointed at it and the public vendor list has no `featherless` in it at all.
+///
+/// A provider that cannot be reached contributes nothing and says so in the
+/// log; it does not fail the catalogue for the others.
+async fn discover_direct_provider_models() -> Vec<provider_registry::RegistryModel> {
+    let mut discovered = Vec::new();
+    for provider in broker::configured_provider_capabilities() {
+        let cache_key = format!("{provider}:direct");
+        if let Some(models) = REGISTRY_MODEL_CACHE.lock().ok().and_then(|cache| {
+            cache
+                .get(&cache_key)
+                .filter(|item| item.fetched.elapsed() < MODEL_CACHE_TTL)
+                .map(|item| item.models.clone())
+        }) {
+            discovered.extend(models);
+            continue;
+        }
+        if REGISTRY_MODEL_FAILURE_CACHE
+            .lock()
+            .ok()
+            .and_then(|cache| {
+                cache
+                    .get(&cache_key)
+                    .filter(|(fetched, _)| fetched.elapsed() < MODEL_FAILURE_CACHE_TTL)
+                    .cloned()
+            })
+            .is_some()
+        {
+            continue;
+        }
+        let Some(secret) = broker::provider_credential(&provider).await else {
+            continue;
+        };
+        let Ok(secret) = secret.expose_utf8() else {
+            continue;
+        };
+        let resource = broker::provider_resource(&provider);
+        match provider_registry::discover_models(&provider, &resource, secret).await {
+            Ok(models) => {
+                if let Ok(mut cache) = REGISTRY_MODEL_CACHE.lock() {
+                    cache.insert(
+                        cache_key,
+                        CachedRegistryModels {
+                            fetched: Instant::now(),
+                            models: models.clone(),
+                        },
+                    );
+                }
+                discovered.extend(models);
+            }
+            Err(error) => {
+                if let Ok(mut cache) = REGISTRY_MODEL_FAILURE_CACHE.lock() {
+                    cache.insert(cache_key, (Instant::now(), error.clone()));
+                }
+                tracing::warn!(
+                    %provider,
+                    %error,
+                    event = "direct_provider_discovery_failed",
+                    "a provider with a direct credential published no models"
+                );
+            }
+        }
+    }
+    discovered
 }
 
 async fn discover_subscription_models(
