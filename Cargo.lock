@@ -174,7 +174,7 @@ dependencies = [
 
 [[package]]
 name = "brama"
-version = "0.2.23"
+version = "0.2.24"
 dependencies = [
  "async-trait",
  "axum",
