@@ -725,6 +725,22 @@ pub async fn list_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
     entries
 }
 
+/// Every active subscription this deployment holds, whichever agent owns it.
+///
+/// Metadata only, exactly as the per-agent listing: an id, a provider and a
+/// status. Using any credential behind these still requires redeeming its own
+/// capability, so widening the listing widens no access.
+pub async fn list_all_subscriptions() -> Vec<SubscriptionEntry> {
+    let broker = entitlements_router_bin();
+    let Ok(output) = tokio::process::Command::new(&broker).arg("list").output().await else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    parse_live_subscriptions_any_agent(&output.stdout).unwrap_or_default()
+}
+
 /// Path of the donated-subscriptions overlay file.
 pub fn donated_subscriptions_path() -> PathBuf {
     std::env::var(DONATED_SUBSCRIPTIONS_FILE_ENV)
@@ -1148,6 +1164,28 @@ fn parse_live_subscriptions(output: &[u8], agent_id: &str) -> Result<Vec<Subscri
             item.tags.iter().any(|tag| tag == "brama:subscription")
                 && item.tags.iter().any(|tag| tag == &agent_tag)
         })
+        .filter_map(|item| {
+            Some(SubscriptionEntry {
+                id: subscription_tag_value(&item.tags, "brama:id:")?.to_owned(),
+                provider: subscription_tag_value(&item.tags, "brama:provider:")?
+                    .trim()
+                    .to_lowercase()
+                    .replace('_', "-"),
+                status: "active".to_owned(),
+            })
+        })
+        .collect())
+}
+
+/// The same mapping without the owning-agent filter, for the console listing.
+/// One subscription tag is the whole test: an item that carries it is a
+/// subscription no matter which agent's tag sits beside it.
+fn parse_live_subscriptions_any_agent(output: &[u8]) -> Result<Vec<SubscriptionEntry>, ()> {
+    let items: Vec<VaultListItem> = serde_json::from_slice(output).map_err(|_| ())?;
+    Ok(items
+        .into_iter()
+        .filter(|item| !item.deleted)
+        .filter(|item| item.tags.iter().any(|tag| tag == "brama:subscription"))
         .filter_map(|item| {
             Some(SubscriptionEntry {
                 id: subscription_tag_value(&item.tags, "brama:id:")?.to_owned(),
