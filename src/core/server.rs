@@ -1118,6 +1118,11 @@ fn model_error_contract(message: &str) -> ModelErrorContract {
         || normalized.contains("invalid provider/model")
         || normalized.contains("unsupported selector")
         || normalized.contains("no quality checks")
+        // Asking to stream a route this gateway can only buffer is a request
+        // this gateway cannot serve, not a provider that failed: nothing
+        // upstream was contacted, and `502 provider_failure` sent the caller
+        // looking at a provider that never saw the request.
+        || normalized.contains("streaming is supported for")
     {
         return ModelErrorContract {
             status: StatusCode::BAD_REQUEST,

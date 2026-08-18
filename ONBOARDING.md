@@ -158,8 +158,10 @@ Use the packaged `start-with-skarbiec` launcher. It owns these steps:
 
 Use loopback HTTP only from an authenticated local caller. A generic bearer-only
 `GET /v1/models` is the first non-billable machine workflow. Do not use
-`/v1/chat/completions` until the intended provider, account, attempt limit, and
-cost are explicit.
+`/v1/chat/completions`, `/v1/messages`, or `/v1/responses` until the intended
+provider, account, attempt limit, and cost are explicit: the three formats are
+one workflow and every one of them spends real quota, whether it answers in one
+piece or as a stream.
 
 ## Production path
 

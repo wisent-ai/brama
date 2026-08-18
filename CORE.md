@@ -41,10 +41,15 @@ stream whose provider published no token meter yields no token numbers.
 ## Streaming
 
 Any of the three chat formats streams when its request asks for it. The
-response is `text/event-stream` in the caller's own dialect: `chat.completion.chunk`
-frames closed by `data: [DONE]`, Anthropic `message_start`, `content_block_*`,
-`message_delta` and `message_stop` events, or `response.*` events closed by
-`response.completed`.
+response is `text/event-stream` in the caller's own dialect:
+`chat.completion.chunk` frames closed by `data: [DONE]`, Anthropic
+`message_start`, `content_block_*`, `message_delta` and `message_stop` events,
+or `response.*` events closed by `response.completed`.
+
+Streaming requires a route this gateway owns a protocol for. A model reached
+only through the shared catalogue is buffered by construction, so asking to
+stream one is refused as `400 invalid_request` before any provider is
+contacted, rather than reported as a provider failure.
 
 One rule governs it. A stream is either committed or it is not, and the
 boundary is the provider's response status:
