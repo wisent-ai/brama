@@ -290,6 +290,49 @@ impl ModelIngressAuth {
             ))
         }
     }
+    /// Like [`Self::requires_exact_aliases`], but satisfied by any client
+    /// whose set CONTAINS the required aliases.
+    ///
+    /// An exact set is the right check for a client whose every alias is
+    /// load-bearing. It is the wrong one for a client that needs a second
+    /// route to survive its first one expiring: demanding exactness there
+    /// means the only way to add a fallback is to refuse startup, so the
+    /// fallback never gets added and one empty credential pool takes the
+    /// client down with it.
+    fn requires_aliases_including(
+        &self,
+        client_id: &str,
+        aliases: &[&str],
+    ) -> Result<(), std::io::Error> {
+        if self.credentials.is_empty() {
+            return Ok(());
+        }
+        let required = aliases
+            .iter()
+            .copied()
+            .map(str::to_string)
+            .collect::<HashSet<_>>();
+        let valid = self.credentials.iter().any(|credential| {
+            credential.identity.client_id == client_id
+                && credential
+                    .identity
+                    .allowed_models
+                    .as_ref()
+                    .is_some_and(|allowed| required.is_subset(allowed))
+        });
+        if valid {
+            Ok(())
+        } else {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "{MODEL_ROUTER_CLIENT_IDENTITIES_ENV} must give `{client_id}` at least the aliases {}",
+                    aliases.join(", ")
+                ),
+            ))
+        }
+    }
+
     fn identity_for(&self, headers: &HeaderMap) -> Option<ModelClientIdentity> {
         let mut values = headers.get_all(AUTHORIZATION).iter();
         let value = values.next()?;
@@ -3153,7 +3196,15 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
         // HMAC identity selects the subscription that pays, and it is the only
         // alias exempt from `alias_requires_direct_capability`, so it is also
         // the only way this client can reach a subscription-funded model.
-        ingress_auth.requires_exact_aliases("weles", &[BEST_ALIAS])?;
+        //
+        // It is not the only alias this client may hold. Pinning it to `best`
+        // alone made every browser job in the company hostage to one
+        // subscription pool: when both of its credentials burnt, Weles answered
+        // `429 subscription_unavailable`, and the login that would renew them
+        // is itself a browser job. `weles/agent/primary` is the second route
+        // out of that circle, so the requirement is a floor, not an equality.
+        ingress_auth
+            .requires_aliases_including("weles", &[BEST_ALIAS, WELES_AGENT_PRIMARY_ALIAS])?;
     }
     let aliases = ModelAliases::from_env(!standalone)?;
     // Touch the perf registry so persisted stats load at startup, not on first use.

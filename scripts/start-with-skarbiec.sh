@@ -547,11 +547,13 @@ next(arguments)
 router = next(arguments)
 all_models = os.environ["BRAMA_ALLOWED_MODELS"].split(",")
 backend_models = [model for model in all_models if model.startswith("wisent-backend/")]
-# `requires_exact_aliases("weles", &[BEST_ALIAS])` in src/core/server.rs: the
-# worker drafts browser trajectories, so its identity is granted the
-# subscription alias and nothing else. Granting `weles/agent/primary` here
-# refuses startup with "must give `weles` its exact required alias set".
-weles_models = ["best"]
+# `requires_aliases_including("weles", &[BEST_ALIAS, WELES_AGENT_PRIMARY_ALIAS])`
+# in src/core/server.rs: the worker drafts browser trajectories, so `best` is
+# its subscription route, and `weles/agent/primary` is the route that still
+# answers when that subscription pool is empty. Granting only `best` left the
+# worker with no second route, and renewing the burnt subscription needs a
+# browser job -- which is the thing that could not run.
+weles_models = ["best", "weles/agent/primary"]
 tama_models = ["best"]
 # Lem's figure pipeline asks for a capability, not a vendor: `any-vision-capable`
 # for judging a rendered figure and `any` for drafting one. Pinning the client to
@@ -950,8 +952,12 @@ export BRAMA_SUBSCRIPTION_CATALOG="$(cat "$catalog_file")"
 # Keep the Darwin runtime aligned with the canonical control-plane aliases.
 # `MODEL_ALIASES` in src/core/server.rs requires the exact seven-alias set, so
 # omitting one fails startup with "must contain the exact named alias set".
+#
+# `weles/agent/primary` routes to the same deployment the backend chat aliases
+# use. It pointed at Featherless, whose key this host's Skarbiec consumer is not
+# granted, so the fallback route was unservable here exactly when it was needed.
 if [ "$(uname -s)" = Darwin ]; then
-  export BRAMA_MODEL_ALIASES='{"best":"codex/gpt-5.3-codex-spark","weles/agent/primary":"featherless/TheDrummer/Cydonia-24B-v4.3","wisent-backend/chat/fallback":"local-openai/chat-primary","wisent-backend/chat/primary":"local-openai/chat-primary","wisent-backend/embeddings":"openai/embeddings","wisent-backend/evaluation":"local-openai/chat-primary","wisent-backend/moderation":"openai/moderation"}'
+  export BRAMA_MODEL_ALIASES='{"best":"codex/gpt-5.3-codex-spark","weles/agent/primary":"local-openai/chat-primary","wisent-backend/chat/fallback":"local-openai/chat-primary","wisent-backend/chat/primary":"local-openai/chat-primary","wisent-backend/embeddings":"openai/embeddings","wisent-backend/evaluation":"local-openai/chat-primary","wisent-backend/moderation":"openai/moderation"}'
 fi
 
 
