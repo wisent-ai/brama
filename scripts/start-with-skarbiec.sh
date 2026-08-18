@@ -519,7 +519,11 @@ next(arguments)
 router = next(arguments)
 all_models = os.environ["BRAMA_ALLOWED_MODELS"].split(",")
 backend_models = [model for model in all_models if model.startswith("wisent-backend/")]
-weles_models = ["weles/agent/primary"]
+# `requires_exact_aliases("weles", &[BEST_ALIAS])` in src/core/server.rs: the
+# worker drafts browser trajectories, so its identity is granted the
+# subscription alias and nothing else. Granting `weles/agent/primary` here
+# refuses startup with "must give `weles` its exact required alias set".
+weles_models = ["best"]
 tama_models = ["best"]
 # Lem's figure pipeline asks for a capability, not a vendor: `any-vision-capable`
 # for judging a rendered figure and `any` for drafting one. Pinning the client to
