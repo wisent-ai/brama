@@ -11,20 +11,17 @@ set -u
 
 PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 export PATH
+
 RUNTIME="${BRAMA_RUNTIME_DIR:-$HOME/.stado/run/brama}"
-runtime_candidates="$RUNTIME $HOME/.config/brama/runtime $HOME/.stado/services/brama/current/darwin-arm/var $HOME/.brama"
-for candidate in /tmp/brama-skarbiec-*; do
-  [ -d "$candidate" ] && runtime_candidates="$runtime_candidates $candidate"
-done
 echo "runtime dir candidates:"
-for candidate in $runtime_candidates; do
+for candidate in "$RUNTIME" "$HOME/.config/brama/runtime" "$HOME/.stado/services/brama/current/darwin-arm/var" "$HOME/.brama"; do
   [ -d "$candidate" ] && echo "  $candidate"
 done
 
 echo
 echo "=== catalogue files found ==="
 found=""
-for base in $runtime_candidates "$HOME/.config/brama"; do
+for base in "$RUNTIME" "$HOME/.config/brama/runtime" "$HOME/.config/brama" "$HOME/.stado/run/brama"; do
   for name in subscription-catalog.json subscriptions.json provider-capabilities.json; do
     [ -f "$base/$name" ] || continue
     found=yes
@@ -35,7 +32,7 @@ done
 
 echo
 echo "=== providers named in any catalogue ==="
-for base in $runtime_candidates "$HOME/.config/brama"; do
+for base in "$RUNTIME" "$HOME/.config/brama/runtime" "$HOME/.config/brama" "$HOME/.stado/run/brama"; do
   file="$base/subscription-catalog.json"
   [ -f "$file" ] || continue
   echo "  $file"
@@ -46,11 +43,7 @@ from collections import Counter
 
 path = sys.argv.pop()
 document = json.load(open(path))
-rows = (
-    document
-    if isinstance(document, list)
-    else document.get("items") or document.get("models") or document.get("routes") or []
-)
+rows = document if isinstance(document, list) else document.get("models") or document.get("routes") or []
 if isinstance(rows, dict):
     rows = list(rows.values())
 providers = Counter()
@@ -62,23 +55,5 @@ for row in rows:
 print(f"    entries: {len(rows)}")
 for provider, count in providers.most_common():
     print(f"    {provider}: {count}")
-PY
-done
-
-echo
-echo "=== Kimi policy rules ==="
-for policy in "$HOME/.config/brama/trust/policy.json" "$HOME/.stado/services/brama/current/darwin-arm/config/policy.json"; do
-  [ -f "$policy" ] || continue
-  echo "  $policy"
-  /usr/bin/python3 - "$policy" <<'PY'
-import json
-import sys
-
-document = json.load(open(sys.argv[-1]))
-rules = document.get("roles", {}).get("brama-runtime", [])
-for rule in rules:
-    resource = str(rule.get("resource") or "")
-    if "kimi" in resource:
-        print(f"    {rule.get('purpose')}: {resource}")
 PY
 done
