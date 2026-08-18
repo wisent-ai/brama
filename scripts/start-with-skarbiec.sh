@@ -378,7 +378,27 @@ fi
 # The product-owned control document is the sole source of Brama's nonsecret
 # ingress and provider policy. Service env files may select the document but may
 # not override individual policy values.
-control_config=${BRAMA_CONTROL_CONFIG:-${HOME:-/nonexistent}/.config/brama/control.json}
+# A release candidate is launched by the Stado release agent, which passes only
+# `runtime.environment` from this product's manifest -- and the manifest declares
+# none, so `BRAMA_CONTROL_CONFIG` arrives unset. The old fallback was
+# `~/.config/brama/control.json`, a path that does not exist on the host that runs
+# this service: the running process is configured through `service.env`, which
+# names `~/.stado/brama-28b-control.json`. So every candidate started with no
+# policy at all, failed the alias-set check the stable process passes, never
+# became ready, and had its digest quarantined -- twice, twelve days apart, with
+# the agent reporting only "candidate did not become ready before deadline".
+#
+# Reading the same `service.env` the service is configured from makes candidate
+# and stable share one declaration instead of two that silently disagree.
+control_config=${BRAMA_CONTROL_CONFIG:-}
+brama_service_env=${BRAMA_SERVICE_ENV:-${HOME:-/nonexistent}/.config/brama/service.env}
+if [ -z "$control_config" ] && [ -f "$brama_service_env" ]; then
+  control_config=$(
+    sed -n 's/^[[:space:]]*BRAMA_CONTROL_CONFIG[[:space:]]*=[[:space:]]*//p' "$brama_service_env" \
+      | tail -1 | tr -d "\"'"
+  )
+fi
+control_config=${control_config:-${HOME:-/nonexistent}/.config/brama/control.json}
 [ -f "$control_config" ] || {
   printf '%s\n' "BRAMA_CONTROL_CONFIG is not a regular file: $control_config" >/dev/stderr
   false
