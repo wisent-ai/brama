@@ -1869,12 +1869,17 @@ impl futures_core::Stream for ChatChunkStream {
             };
             match item {
                 StreamItem::Delta(StreamDelta::Text(text)) => {
+                    // Queued rather than returned: the role chunk may be
+                    // waiting in front of it, and a caller that receives
+                    // content before the role it belongs to is reading a
+                    // different conversation than the one being sent.
                     if !self.sent_role {
                         self.sent_role = true;
                         let role = self.role_chunk();
                         self.pending.push_back(role);
                     }
-                    return Poll::Ready(Some(Ok(self.chunk(json!({ "content": text }), None))));
+                    let content = self.chunk(json!({ "content": text }), None);
+                    self.pending.push_back(content);
                 }
                 StreamItem::Delta(StreamDelta::ToolCallStart { index, id, name }) => {
                     self.saw_tool_calls = true;
@@ -1891,7 +1896,8 @@ impl futures_core::Stream for ChatChunkStream {
                             "function": { "name": name, "arguments": "" },
                         }],
                     });
-                    return Poll::Ready(Some(Ok(self.chunk(delta, None))));
+                    let chunk = self.chunk(delta, None);
+                    self.pending.push_back(chunk);
                 }
                 StreamItem::Delta(StreamDelta::ToolCallArguments { index, delta }) => {
                     let delta = json!({
@@ -1900,7 +1906,8 @@ impl futures_core::Stream for ChatChunkStream {
                             "function": { "arguments": delta },
                         }],
                     });
-                    return Poll::Ready(Some(Ok(self.chunk(delta, None))));
+                    let chunk = self.chunk(delta, None);
+                    self.pending.push_back(chunk);
                 }
                 StreamItem::Delta(StreamDelta::Finish { reason }) => {
                     self.finish_reason = Some(openai_finish_reason(
