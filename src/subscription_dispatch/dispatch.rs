@@ -117,6 +117,15 @@ fn bounded_unavailable_summary(provider: &str) -> String {
     format!("all bounded '{provider}' credentials unavailable for agent")
 }
 
+/// The request path's own sentence for a pool every one of whose credentials
+/// the provider itself refused.
+fn auth_rejected_summary(provider: &str) -> String {
+    format!(
+        "all bounded '{provider}' credentials were rejected by the provider; \
+         re-authorization required"
+    )
+}
+
 /// The request path's own sentence for an agent with no active credential of
 /// this provider at all -- the answer a subscription whose vault item lost its
 /// `brama:agent:` tag produces, because discovery can no longer see it.
@@ -700,20 +709,27 @@ fn apply_pin(rows: &mut [broker::SubscriptionEntry], agent_id: &str, provider: &
     }
 }
 
-async fn any_subscription_models(
-    headers: &HeaderMap,
-    raw_body: &[u8],
+/// The candidate list `best` walks: every subscription model this agent can be
+/// served from, freest plan first, with the alias's configured route promoted
+/// to the head when the agent actually holds it.
+///
+/// The configured route is a preference, not the whole list. An operator
+/// pointing `best` at `codex/gpt-5.3-codex-spark` is naming the model they want
+/// first, not consenting to a fleet outage every time one provider's credential
+/// chain breaks.
+async fn best_subscription_models(
+    agent_id: &str,
+    preferred: Option<&str>,
 ) -> Result<Vec<String>, String> {
-    let agent_id = authenticate_agent(headers, raw_body).await?;
-    active_supported_models_for_agent(&agent_id).await
-}
-
-async fn any_vision_capable_subscription_models(
-    headers: &HeaderMap,
-    raw_body: &[u8],
-) -> Result<Vec<String>, String> {
-    let agent_id = authenticate_agent(headers, raw_body).await?;
-    active_vision_capable_models_for_agent(&agent_id).await
+    let mut models = active_supported_models_for_agent(agent_id).await?;
+    if let Some(position) =
+        preferred.and_then(|preferred| models.iter().position(|model| model == preferred))
+    {
+        // Rotate rather than swap: everything behind the preferred route keeps
+        // the plan order the ledger just computed for it.
+        models[..=position].rotate_right(1);
+    }
+    Ok(models)
 }
 
 pub async fn active_supported_models_for_agent(agent_id: &str) -> Result<Vec<String>, String> {
@@ -828,59 +844,184 @@ async fn task_quality_models(agent_id: &str, task: &str) -> Result<Vec<String>, 
     Ok(ordered)
 }
 
-/// `model: "any"` selects among active stateless provider routes for the
-/// signed agent and rotates across credentials on provider exhaustion.
-async fn dispatch_ranked_models(
-    headers: &HeaderMap,
-    request: &ModelRequest,
-    raw_body: &[u8],
-    models: Vec<String>,
-    failure_context: String,
-) -> ModelResponse {
-    let mut attempts = u32::default();
-    let mut errors = Vec::new();
-    for model in models.into_iter().take(max_selector_models()) {
-        let mut candidate = request.clone();
-        candidate.model = model.clone();
-        let mut response = dispatch_subscription(headers, &candidate, raw_body).await;
-        attempts = attempts.saturating_add(response.attempts);
-        response.attempts = attempts;
-        if response.success {
-            return response;
-        }
-        errors.push(format!(
-            "{}: {}",
-            model,
-            response.error.as_deref().unwrap_or("failed")
-        ));
-    }
-    let mut failure = refuse(
-        request,
-        POINT_MODEL_SELECTION,
-        format!("{failure_context}; tried {}", errors.join("; ")),
-        None,
-    );
-    failure.attempts = attempts;
-    failure
+/// The sentence a selector that walked its whole candidate list opens with.
+/// One string per selector, shared by the buffered and streaming walks, so the
+/// two cannot drift into describing the same exhausted list differently.
+const ANY_SUBSCRIPTION_CONTEXT: &str = "no working subscription model for signed agent";
+const ANY_VISION_CONTEXT: &str = "no working vision-capable subscription model for signed agent";
+
+/// What one ranked walk has spent and what refused it so far.
+///
+/// A ranked selector is a list of routes, and several of those routes belong to
+/// the same provider. When a provider's whole credential pool empties, every
+/// remaining route of that provider will be refused for the identical reason,
+/// so re-dispatching them buys nothing and -- because the model budget is
+/// small -- costs the caller every candidate that could still have served. That
+/// is exactly how `best` answered `503` naming codex with `attempts: 0` while
+/// kimi was serving in the same second.
+///
+/// So the walk remembers three things: which providers have already emptied,
+/// how many provider round trips have actually been paid for, and what each
+/// refusal said. A refusal that never reached a provider costs no budget --
+/// there is nothing to bound -- and a provider named once is not named twice.
+#[derive(Default)]
+struct RankedWalk {
+    attempts: u32,
+    provider_calls: usize,
+    refusals: Vec<String>,
+    emptied: Vec<String>,
 }
 
+impl RankedWalk {
+    /// Whether this candidate belongs to a provider that has already refused
+    /// everything it holds for this agent.
+    fn already_emptied(&self, provider: &str) -> bool {
+        self.emptied.iter().any(|seen| seen == provider)
+    }
+
+    /// Whether the walk has paid for as many provider round trips as one
+    /// selector is allowed to spend.
+    fn budget_spent(&self) -> bool {
+        self.provider_calls >= max_selector_models()
+    }
+
+    /// Record one refused candidate: its cost, its reason, and -- when the
+    /// refusal was the provider's whole pool rather than this one route -- the
+    /// fact that the rest of that provider's routes need not be asked.
+    fn refused(&mut self, model: &str, provider: &str, response: &ModelResponse, emptied: bool) {
+        self.attempts = self.attempts.saturating_add(response.attempts);
+        if response.attempts > u32::default() {
+            self.provider_calls = self.provider_calls.saturating_add(usize::from(true));
+        }
+        let reason = response.error.as_deref().unwrap_or("failed");
+        warn!(
+            event = "ranked_candidate_refused",
+            model,
+            provider,
+            pool_emptied = emptied,
+            attempts = response.attempts,
+            reason,
+            "ranked selector walked past a refused candidate"
+        );
+        if emptied {
+            if self.already_emptied(provider) {
+                return;
+            }
+            self.emptied.push(provider.to_owned());
+            // The provider's name, not the route's: the pool refused every
+            // model behind it, and naming one of them would read as if the
+            // others were untried.
+            self.refusals.push(format!("{provider} refused ({reason})"));
+            return;
+        }
+        self.refusals.push(format!("{model} refused ({reason})"));
+    }
+
+    /// Note a candidate skipped without a provider call, so the log shows the
+    /// walk passing it rather than never reaching it.
+    fn skipped(&self, model: &str, provider: &str) {
+        info!(
+            event = "ranked_candidate_skipped",
+            model,
+            provider,
+            "provider pool already emptied for this request; candidate skipped unasked"
+        );
+    }
+
+    /// The refusal an exhausted candidate list answers with: every provider
+    /// that was walked past, each with the reason it gave, and the number of
+    /// provider attempts that were really made.
+    fn into_failure(self, request: &ModelRequest, context: &str) -> ModelResponse {
+        let message = if self.refusals.is_empty() {
+            context.to_owned()
+        } else {
+            format!("{context}; {}", self.refusals.join(", "))
+        };
+        let mut failure = refuse(request, POINT_MODEL_SELECTION, message, None);
+        failure.attempts = self.attempts;
+        failure
+    }
+}
+
+/// Walk a ranked candidate list until one of them serves.
+///
+/// A candidate that cannot be redeemed is walked past, not fatal: only an
+/// exhausted list is a failed request, and the failure names every provider
+/// the walk went past and what each of them said.
+async fn dispatch_ranked_models(
+    agent_id: &str,
+    request: &ModelRequest,
+    models: Vec<String>,
+    failure_context: &str,
+) -> ModelResponse {
+    let mut walk = RankedWalk::default();
+    for model in models {
+        let Some(provider) = provider_for(&model) else {
+            walk.refusals
+                .push(format!("{model} refused (unknown provider/model route)"));
+            continue;
+        };
+        if walk.already_emptied(provider) {
+            walk.skipped(&model, provider);
+            continue;
+        }
+        if walk.budget_spent() {
+            break;
+        }
+        let mut candidate = request.clone();
+        candidate.model = model.clone();
+        let attempt = attempt_subscription(provider, agent_id, &candidate).await;
+        match attempt.opened {
+            Ok(mut served) => {
+                served.attempts = walk.attempts.saturating_add(served.attempts);
+                return served;
+            }
+            Err(response) => walk.refused(&model, provider, &response, attempt.pool_emptied),
+        }
+    }
+    walk.into_failure(request, failure_context)
+}
+
+/// `model: "any"` selects among active stateless provider routes for the
+/// signed agent and rotates across credentials on provider exhaustion.
 pub async fn dispatch_any_subscription(
     headers: &HeaderMap,
     request: &ModelRequest,
     raw_body: &[u8],
 ) -> ModelResponse {
-    let models = match any_subscription_models(headers, raw_body).await {
+    let agent_id = match authenticate_agent(headers, raw_body).await {
+        Ok(agent_id) => agent_id,
+        Err(e) => return ModelResponse::failure(&request.model, e),
+    };
+    let models = match active_supported_models_for_agent(&agent_id).await {
         Ok(models) => models,
         Err(e) => return ModelResponse::failure(&request.model, e),
     };
-    dispatch_ranked_models(
-        headers,
-        request,
-        raw_body,
-        models,
-        "no working subscription model for signed agent".into(),
-    )
-    .await
+    dispatch_ranked_models(&agent_id, request, models, ANY_SUBSCRIPTION_CONTEXT).await
+}
+
+/// `best` is a selector, not a route: it means the best subscription model this
+/// signed caller can actually be served from right now.
+///
+/// The alias resolves to one configured provider route and that route leads the
+/// list, but it has never been the only thing `best` may answer with. Dispatching
+/// it alone is what turned one unredeemable codex credential into a `503` for a
+/// fleet holding three live subscription providers.
+pub async fn dispatch_best_subscription(
+    headers: &HeaderMap,
+    request: &ModelRequest,
+    raw_body: &[u8],
+    preferred: Option<&str>,
+) -> ModelResponse {
+    let agent_id = match authenticate_agent(headers, raw_body).await {
+        Ok(agent_id) => agent_id,
+        Err(e) => return ModelResponse::failure(&request.model, e),
+    };
+    let models = match best_subscription_models(&agent_id, preferred).await {
+        Ok(models) => models,
+        Err(e) => return ModelResponse::failure(&request.model, e),
+    };
+    dispatch_ranked_models(&agent_id, request, models, ANY_SUBSCRIPTION_CONTEXT).await
 }
 
 /// `model: "any-vision-capable"` selects an active stateless provider route
@@ -890,18 +1031,15 @@ pub async fn dispatch_any_vision_capable_subscription(
     request: &ModelRequest,
     raw_body: &[u8],
 ) -> ModelResponse {
-    let models = match any_vision_capable_subscription_models(headers, raw_body).await {
+    let agent_id = match authenticate_agent(headers, raw_body).await {
+        Ok(agent_id) => agent_id,
+        Err(e) => return ModelResponse::failure(&request.model, e),
+    };
+    let models = match active_vision_capable_models_for_agent(&agent_id).await {
         Ok(models) => models,
         Err(e) => return ModelResponse::failure(&request.model, e),
     };
-    dispatch_ranked_models(
-        headers,
-        request,
-        raw_body,
-        models,
-        "no working vision-capable subscription model for signed agent".into(),
-    )
-    .await
+    dispatch_ranked_models(&agent_id, request, models, ANY_VISION_CONTEXT).await
 }
 
 /// `model: "task:<name>"` means: use measured quality evidence for `<name>`.
@@ -922,11 +1060,10 @@ pub async fn dispatch_task_subscription(
         Err(e) => return ModelResponse::failure(&request.model, e),
     };
     dispatch_ranked_models(
-        headers,
+        &agent_id,
         request,
-        raw_body,
         models,
-        format!("no working quality-ranked model for task '{task}'"),
+        &format!("no working quality-ranked model for task '{task}'"),
     )
     .await
 }
@@ -1093,21 +1230,75 @@ pub async fn dispatch_subscription(
     dispatch_subscription_attempt(provider, &agent_id, request).await
 }
 
+/// One provider's answer to one candidate route, and whether the refusal
+/// emptied that provider's whole pool for this agent rather than failing this
+/// one route.
+///
+/// A ranked walk needs the distinction and cannot recover it from the sentence:
+/// an emptied pool refuses every remaining route of the provider identically,
+/// while a route the provider rejected on its own merits says nothing about the
+/// provider's other models.
+struct RouteAttempt<T> {
+    opened: Result<T, ModelResponse>,
+    pool_emptied: bool,
+}
+
+impl<T> RouteAttempt<T> {
+    fn served(opened: T) -> Self {
+        Self {
+            opened: Ok(opened),
+            pool_emptied: false,
+        }
+    }
+
+    /// A refusal that belongs to this route alone.
+    fn refused(failure: ModelResponse) -> Self {
+        Self {
+            opened: Err(failure),
+            pool_emptied: false,
+        }
+    }
+
+    /// A refusal that is this provider's pool having nothing left for the agent.
+    fn pool_empty(failure: ModelResponse) -> Self {
+        Self {
+            opened: Err(failure),
+            pool_emptied: true,
+        }
+    }
+}
+
 async fn dispatch_subscription_attempt(
     provider: &str,
     agent_id: &str,
     request: &ModelRequest,
 ) -> ModelResponse {
+    match attempt_subscription(provider, agent_id, request)
+        .await
+        .opened
+    {
+        Ok(served) => served,
+        Err(failure) => failure,
+    }
+}
+
+async fn attempt_subscription(
+    provider: &str,
+    agent_id: &str,
+    request: &ModelRequest,
+) -> RouteAttempt<ModelResponse> {
     let mut rows = match eligible_subscription_entries(
         broker::list_subscriptions(agent_id).await,
         provider,
         request.billing_target.as_ref(),
     ) {
         Ok(rows) => rows,
-        Err(error) => return ModelResponse::failure(&request.model, error),
+        Err(error) => {
+            return RouteAttempt::pool_empty(ModelResponse::failure(&request.model, error))
+        }
     };
     if rows.is_empty() {
-        return refuse(
+        return RouteAttempt::pool_empty(refuse(
             request,
             POINT_CREDENTIAL_SELECTION,
             request.billing_target.as_ref().map_or_else(
@@ -1120,7 +1311,7 @@ async fn dispatch_subscription_attempt(
                 },
             ),
             None,
-        );
+        ));
     }
 
     // Freest plan first, the ledger's own numbers rather than list order; the
@@ -1216,7 +1407,7 @@ async fn dispatch_subscription_attempt(
                                 "provider request succeeded after forced OAuth refresh"
                             );
                             pin_credential(agent_id, provider, credential_id);
-                            return result;
+                            return RouteAttempt::served(result);
                         }
                         rejected_with_fresh_token =
                             result.error.as_deref().is_some_and(is_auth_failure);
@@ -1238,7 +1429,7 @@ async fn dispatch_subscription_attempt(
                 );
             }
             pin_credential(agent_id, provider, credential_id);
-            return result;
+            return RouteAttempt::served(result);
         }
         let error = result.error.clone().unwrap_or_default();
         if is_permanent_auth_failure(&error) {
@@ -1289,7 +1480,11 @@ async fn dispatch_subscription_attempt(
             || error.contains("rate_limit")
             || error.contains("429");
         if !exhausted {
-            return result;
+            // The provider answered and refused this request in particular --
+            // a malformed body, a model it does not serve. Its other
+            // credentials would answer identically, and its other models might
+            // not, so this refusal condemns the route and not the pool.
+            return RouteAttempt::refused(result);
         }
         usage::record_block(credential_id, provider, &error, &result);
         warn!(
@@ -1311,10 +1506,7 @@ async fn dispatch_subscription_attempt(
     // reporting the first two as capacity is what sends an agent into hours of
     // retries against a chain no waiting can mend.
     let summary = if saw_auth_rejection {
-        format!(
-            "all bounded '{provider}' credentials were rejected by the provider; \
-             re-authorization required"
-        )
+        auth_rejected_summary(provider)
     } else if saw_unredeemable_credential {
         unredeemable_credential_summary(provider)
     } else {
@@ -1328,7 +1520,7 @@ async fn dispatch_subscription_attempt(
         refresh_refusal,
     );
     failure.attempts = provider_attempts;
-    failure
+    RouteAttempt::pool_empty(failure)
 }
 
 fn string_field(row: &Value, key: &str) -> String {
@@ -1454,24 +1646,28 @@ pub async fn dispatch_subscription_stream(
         Ok(agent_id) => agent_id,
         Err(error) => return Err(ModelResponse::failure(&request.model, error)),
     };
-    dispatch_subscription_attempt_stream(provider, &agent_id, request).await
+    attempt_subscription_stream(provider, &agent_id, request)
+        .await
+        .opened
 }
 
-async fn dispatch_subscription_attempt_stream(
+async fn attempt_subscription_stream(
     provider: &str,
     agent_id: &str,
     request: &ModelRequest,
-) -> Result<RoutedStream, ModelResponse> {
+) -> RouteAttempt<RoutedStream> {
     let mut rows = match eligible_subscription_entries(
         broker::list_subscriptions(agent_id).await,
         provider,
         request.billing_target.as_ref(),
     ) {
         Ok(rows) => rows,
-        Err(error) => return Err(ModelResponse::failure(&request.model, error)),
+        Err(error) => {
+            return RouteAttempt::pool_empty(ModelResponse::failure(&request.model, error))
+        }
     };
     if rows.is_empty() {
-        return Err(refuse(
+        return RouteAttempt::pool_empty(refuse(
             request,
             POINT_CREDENTIAL_SELECTION,
             request.billing_target.as_ref().map_or_else(
@@ -1576,7 +1772,7 @@ async fn dispatch_subscription_attempt_stream(
                     );
                 }
                 pin_credential(agent_id, provider, credential_id);
-                return Ok(RoutedStream {
+                return RouteAttempt::served(RoutedStream {
                     model: request.model.clone(),
                     attempts: provider_attempts,
                     events: spawn_stream_recorder(
@@ -1640,7 +1836,9 @@ async fn dispatch_subscription_attempt_stream(
             || error.contains("rate_limit")
             || error.contains("429");
         if !exhausted {
-            return Err(failure);
+            // As in the buffered path: the provider answered and refused this
+            // one route, which says nothing about its other models.
+            return RouteAttempt::refused(failure);
         }
         usage::record_block(credential_id, provider, &error, &failure);
         warn!(
@@ -1657,10 +1855,7 @@ async fn dispatch_subscription_attempt_stream(
     // reporting the first two as capacity is what sends an agent into hours of
     // retries against a chain no waiting can mend.
     let summary = if saw_auth_rejection {
-        format!(
-            "all bounded '{provider}' credentials were rejected by the provider; \
-             re-authorization required"
-        )
+        auth_rejected_summary(provider)
     } else if saw_unredeemable_credential {
         unredeemable_credential_summary(provider)
     } else {
@@ -1674,47 +1869,44 @@ async fn dispatch_subscription_attempt_stream(
         refresh_refusal,
     );
     failure.attempts = provider_attempts;
-    Err(failure)
+    RouteAttempt::pool_empty(failure)
 }
 
 /// The streaming counterpart of [`dispatch_ranked_models`]: the first model
 /// whose stream commits wins, and a model that fails before its first byte
 /// costs the caller nothing but an attempt count.
 async fn dispatch_ranked_models_stream(
-    headers: &HeaderMap,
+    agent_id: &str,
     request: &ModelRequest,
-    raw_body: &[u8],
     models: Vec<String>,
-    failure_context: String,
+    failure_context: &str,
 ) -> Result<RoutedStream, ModelResponse> {
-    let mut attempts = u32::default();
-    let mut errors = Vec::new();
-    for model in models.into_iter().take(max_selector_models()) {
+    let mut walk = RankedWalk::default();
+    for model in models {
+        let Some(provider) = provider_for(&model) else {
+            walk.refusals
+                .push(format!("{model} refused (unknown provider/model route)"));
+            continue;
+        };
+        if walk.already_emptied(provider) {
+            walk.skipped(&model, provider);
+            continue;
+        }
+        if walk.budget_spent() {
+            break;
+        }
         let mut candidate = request.clone();
         candidate.model = model.clone();
-        match dispatch_subscription_stream(headers, &candidate, raw_body).await {
+        let attempt = attempt_subscription_stream(provider, agent_id, &candidate).await;
+        match attempt.opened {
             Ok(mut routed) => {
-                routed.attempts = routed.attempts.saturating_add(attempts);
+                routed.attempts = routed.attempts.saturating_add(walk.attempts);
                 return Ok(routed);
             }
-            Err(response) => {
-                attempts = attempts.saturating_add(response.attempts);
-                errors.push(format!(
-                    "{}: {}",
-                    model,
-                    response.error.as_deref().unwrap_or("failed")
-                ));
-            }
+            Err(response) => walk.refused(&model, provider, &response, attempt.pool_emptied),
         }
     }
-    let mut failure = refuse(
-        request,
-        POINT_MODEL_SELECTION,
-        format!("{failure_context}; tried {}", errors.join("; ")),
-        None,
-    );
-    failure.attempts = attempts;
-    Err(failure)
+    Err(walk.into_failure(request, failure_context))
 }
 
 pub async fn dispatch_any_subscription_stream(
@@ -1722,18 +1914,35 @@ pub async fn dispatch_any_subscription_stream(
     request: &ModelRequest,
     raw_body: &[u8],
 ) -> Result<RoutedStream, ModelResponse> {
-    let models = match any_subscription_models(headers, raw_body).await {
+    let agent_id = match authenticate_agent(headers, raw_body).await {
+        Ok(agent_id) => agent_id,
+        Err(e) => return Err(ModelResponse::failure(&request.model, e)),
+    };
+    let models = match active_supported_models_for_agent(&agent_id).await {
         Ok(models) => models,
         Err(e) => return Err(ModelResponse::failure(&request.model, e)),
     };
-    dispatch_ranked_models_stream(
-        headers,
-        request,
-        raw_body,
-        models,
-        "no working subscription model for signed agent".into(),
-    )
-    .await
+    dispatch_ranked_models_stream(&agent_id, request, models, ANY_SUBSCRIPTION_CONTEXT).await
+}
+
+/// The streaming counterpart of [`dispatch_best_subscription`]: the configured
+/// route leads, and a provider that cannot open a stream is walked past exactly
+/// as the buffered path walks past one that cannot answer.
+pub async fn dispatch_best_subscription_stream(
+    headers: &HeaderMap,
+    request: &ModelRequest,
+    raw_body: &[u8],
+    preferred: Option<&str>,
+) -> Result<RoutedStream, ModelResponse> {
+    let agent_id = match authenticate_agent(headers, raw_body).await {
+        Ok(agent_id) => agent_id,
+        Err(e) => return Err(ModelResponse::failure(&request.model, e)),
+    };
+    let models = match best_subscription_models(&agent_id, preferred).await {
+        Ok(models) => models,
+        Err(e) => return Err(ModelResponse::failure(&request.model, e)),
+    };
+    dispatch_ranked_models_stream(&agent_id, request, models, ANY_SUBSCRIPTION_CONTEXT).await
 }
 
 pub async fn dispatch_any_vision_capable_subscription_stream(
@@ -1741,18 +1950,15 @@ pub async fn dispatch_any_vision_capable_subscription_stream(
     request: &ModelRequest,
     raw_body: &[u8],
 ) -> Result<RoutedStream, ModelResponse> {
-    let models = match any_vision_capable_subscription_models(headers, raw_body).await {
+    let agent_id = match authenticate_agent(headers, raw_body).await {
+        Ok(agent_id) => agent_id,
+        Err(e) => return Err(ModelResponse::failure(&request.model, e)),
+    };
+    let models = match active_vision_capable_models_for_agent(&agent_id).await {
         Ok(models) => models,
         Err(e) => return Err(ModelResponse::failure(&request.model, e)),
     };
-    dispatch_ranked_models_stream(
-        headers,
-        request,
-        raw_body,
-        models,
-        "no working vision-capable subscription model for signed agent".into(),
-    )
-    .await
+    dispatch_ranked_models_stream(&agent_id, request, models, ANY_VISION_CONTEXT).await
 }
 
 pub async fn dispatch_task_subscription_stream(
@@ -1770,11 +1976,10 @@ pub async fn dispatch_task_subscription_stream(
         Err(e) => return Err(ModelResponse::failure(&request.model, e)),
     };
     dispatch_ranked_models_stream(
-        headers,
+        &agent_id,
         request,
-        raw_body,
         models,
-        format!("no working quality-ranked model for task '{task}'"),
+        &format!("no working quality-ranked model for task '{task}'"),
     )
     .await
 }

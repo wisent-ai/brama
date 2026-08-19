@@ -22,10 +22,11 @@ use crate::providers::stream::{StreamDelta, StreamItem};
 use crate::subscription_dispatch::{
     authenticate_agent, dispatch_any_subscription, dispatch_any_subscription_stream,
     dispatch_any_vision_capable_subscription, dispatch_any_vision_capable_subscription_stream,
-    dispatch_direct_openai_typed, dispatch_direct_with_fallback,
-    dispatch_direct_with_fallback_stream, dispatch_subscription, dispatch_subscription_stream,
-    dispatch_task_subscription, dispatch_task_subscription_stream, is_subscription_model,
-    provider_requires_caller_identity, registry_models_for_agent, RoutedStream,
+    dispatch_best_subscription, dispatch_best_subscription_stream, dispatch_direct_openai_typed,
+    dispatch_direct_with_fallback, dispatch_direct_with_fallback_stream, dispatch_subscription,
+    dispatch_subscription_stream, dispatch_task_subscription, dispatch_task_subscription_stream,
+    is_subscription_model, provider_requires_caller_identity, registry_models_for_agent,
+    RoutedStream,
 };
 use crate::types::{BillingTarget, Message, ModelRequest, ModelResponse, Tool, ToolCall};
 
@@ -1548,13 +1549,30 @@ async fn route_model_call(
     }
     let task_subscription = task_subscription_selector(requested_model);
     let (alias_source, alias_fallbacks) = aliases.chat_route(requested_model);
+    // `best` is a selector, not a route. The alias resolves to one configured
+    // provider route and that route is the caller's first choice, but the name
+    // means "the best subscription model this caller can be served from", so
+    // the rest of the caller's ranked routes stand behind it. Dispatching the
+    // configured route alone is what answered `503` naming codex, with
+    // `attempts: 0`, in a second when the same agent's kimi subscription was
+    // serving: one refused redemption and the request was over.
+    let best_subscription = requested_model == BEST_ALIAS
+        || alias_source
+            .as_deref()
+            .is_some_and(|route| route == BEST_ALIAS);
     let selected_model = alias_source
         .as_deref()
         .unwrap_or(requested_model)
         .to_string();
+    // A route that delegates to `best` again names no provider, so it is a
+    // preference nothing can be preferred to.
+    let preferred_route = Some(selected_model.as_str())
+        .filter(|route| is_subscription_model(route))
+        .map(str::to_owned);
     let canonical_model = is_subscription_model(&selected_model);
     if !(any_subscription
         || any_vision_capable_subscription
+        || best_subscription
         || task_subscription.is_some()
         || canonical_model)
     {
@@ -1578,6 +1596,7 @@ async fn route_model_call(
     // callers. Proving more identity cannot grant less access.
     let caller_scoped_request = any_subscription
         || any_vision_capable_subscription
+        || best_subscription
         || task_subscription.is_some()
         || request.billing_target.is_some()
         || provider_requires_caller_identity(&selected_model);
@@ -1587,6 +1606,8 @@ async fn route_model_call(
         "any-vision-capable"
     } else if any_subscription {
         "any"
+    } else if best_subscription {
+        "best"
     } else if caller_scoped_request {
         "subscription"
     } else if alias_source.is_some() {
@@ -1630,6 +1651,14 @@ async fn route_model_call(
                 dispatch_any_vision_capable_subscription_stream(headers, &request, raw_body).await
             } else if any_subscription {
                 dispatch_any_subscription_stream(headers, &request, raw_body).await
+            } else if best_subscription {
+                dispatch_best_subscription_stream(
+                    headers,
+                    &request,
+                    raw_body,
+                    preferred_route.as_deref(),
+                )
+                .await
             } else if caller_scoped_request {
                 dispatch_subscription_stream(headers, &request, raw_body).await
             } else {
@@ -1649,6 +1678,11 @@ async fn route_model_call(
             )
         } else if any_subscription {
             DispatchedCall::Buffered(dispatch_any_subscription(headers, &request, raw_body).await)
+        } else if best_subscription {
+            DispatchedCall::Buffered(
+                dispatch_best_subscription(headers, &request, raw_body, preferred_route.as_deref())
+                    .await,
+            )
         } else if caller_scoped_request {
             DispatchedCall::Buffered(dispatch_subscription(headers, &request, raw_body).await)
         } else {
@@ -2187,8 +2221,7 @@ async fn readyz() -> impl IntoResponse {
     let mut unroutable = Vec::new();
     // Every active subscription, once, whichever agents can see it: two agents
     // sharing one account must not cost two redemptions of the same credential.
-    let mut active: std::collections::BTreeMap<String, String> =
-        std::collections::BTreeMap::new();
+    let mut active: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
     for agent in crate::gateway::broker::configured_request_sign_agents() {
         let mut subscribed: Vec<String> = Vec::new();
         for entry in crate::gateway::broker::list_subscriptions(&agent).await {

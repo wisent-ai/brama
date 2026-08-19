@@ -5,6 +5,44 @@ Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
 ## Unreleased
 
+### `best` walks its candidate list instead of stopping at the first refusal
+
+On 2026-08-18 a signed `best` call answered `503 credential_unauthorized` with
+"no 'codex' credential could be redeemed for agent; a capability, read grant, or
+this installation's trust material is missing" and `attempts: 0`, in a second
+when the same agent's kimi subscription was serving `200` on a canonical route.
+The alias resolves to one configured provider route -- here
+`codex/gpt-5.3-codex-spark` -- and that route was the whole candidate list. One
+refused redemption ended the request, and the eleven other subscription models
+the caller held were never asked. `best` is the only alias exempt from the
+direct-capability rule, so for the clients that hold it there was no second way
+out.
+
+`best` is now a selector rather than a route. The configured route leads the
+list, because an operator naming a model is naming a preference, and behind it
+stand the rest of that caller's subscription models in the order the ledger
+already ranks them. Only an exhausted list is a failed request.
+
+The walk itself changed for every ranked selector -- `best`, `any`,
+`any-vision-capable` and `task:<name>` share one loop, buffered and streaming
+alike. A refusal that empties a provider's whole credential pool -- nothing the
+vault would redeem, every credential inside a recorded block, every credential
+the provider itself rejected -- now retires that provider for the rest of the
+request: its remaining routes are skipped unasked instead of being re-dispatched
+to collect the identical sentence. That distinction is carried as structure, not
+re-parsed from the message, so a provider that answered and refused one route on
+its own merits still leaves its other models eligible. The model budget is spent
+on provider round trips that actually happened, so a candidate refused before
+any provider was reached costs the caller nothing and never displaces a
+candidate that could still serve.
+
+A failed request now names everything it walked past instead of handing one
+provider's sentence to the whole fleet: "no working subscription model for
+signed agent; codex refused (no 'codex' credential could be redeemed for agent;
+a capability, read grant, or this installation's trust material is missing),
+kimi refused (...)". `attempts` counts what was really attempted, so `0` again
+means no provider was ever asked.
+
 ### Readiness performs the act instead of reading a declaration about it
 
 All morning on 2026-08-18 `/readyz` answered `ready: true` with "every
