@@ -21,7 +21,7 @@ use crate::subscription_dispatch::model_catalog::{
 };
 use crate::types::{LimitReading, Message, ModelRequest, ModelResponse, ToolCall};
 
-const QWEN_DEFAULT_MODEL: &str = "qwen2.5-72b-instruct";
+const QWEN_DEFAULT_MODEL: &str = "qwen-max";
 const OPENAI_DEFAULT_MODEL: &str = "gpt-5.4";
 const OPENAI_EMBEDDING_MODEL: &str = "text-embedding-3-small";
 const OPENAI_MODERATION_MODEL: &str = "omni-moderation-latest";
