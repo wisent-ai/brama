@@ -1,6 +1,7 @@
 use std::io::Read;
 
 use clap::{Parser, Subcommand};
+use serde_json::Value;
 use tracing::info;
 
 use brama::subscription_dispatch::{collect_task_quality, TaskQualityOptions};
@@ -56,6 +57,16 @@ enum Commands {
     Detect,
     /// Serve the read-only stdio MCP server (agent surface)
     Mcp,
+    /// Report the subscription pool this gateway routes over
+    Subscriptions {
+        #[command(subcommand)]
+        command: SubscriptionsCommand,
+    },
+    /// Act on one provider's subscription credentials
+    Subscription {
+        #[command(subcommand)]
+        command: SubscriptionCommand,
+    },
     /// Collect deterministic task-quality checks for active provider routes
     CollectTaskQuality {
         /// Jeden agent/client id whose provider credentials should be checked
@@ -82,6 +93,31 @@ enum Commands {
         /// Acknowledge that this command performs billable provider requests
         #[arg(long, default_value_t = false)]
         allow_provider_cost: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum SubscriptionsCommand {
+    /// List every subscription in the pool with the state of its credential
+    List {
+        /// Print the report as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum SubscriptionCommand {
+    /// Refresh this provider's subscription credentials now
+    Refresh {
+        /// The provider whose grants should be refreshed (`codex`, `claude-code`, `kimi`)
+        provider: String,
+        /// Why this refresh is being run; recorded in the journal beside the verdict
+        #[arg(long)]
+        reason: String,
+        /// Print the verdict as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
     },
 }
 
@@ -196,6 +232,44 @@ async fn main() {
         Commands::Mcp => {
             brama::mcp::serve();
         }
+        Commands::Subscriptions { command } => match command {
+            SubscriptionsCommand::List { json } => {
+                let report = brama::subscription_dispatch::pool::report().await;
+                if json {
+                    print_json(&report);
+                } else {
+                    print_pool(&report);
+                }
+            }
+        },
+        Commands::Subscription { command } => match command {
+            SubscriptionCommand::Refresh {
+                provider,
+                reason,
+                json,
+            } => match brama::subscription_dispatch::pool::refresh_provider(&provider, &reason)
+                .await
+            {
+                Ok(verdict) => {
+                    if json {
+                        print_json(&verdict);
+                    } else {
+                        print_refresh(&verdict);
+                    }
+                    // A refresh that obtained nothing exits non-zero after
+                    // reporting, because the caller that runs this is trying to
+                    // repair an empty pool and needs to know from the status
+                    // whether it is still empty.
+                    if text(&verdict, "result") != Some("refreshed") {
+                        std::process::exit(1);
+                    }
+                }
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(1);
+                }
+            },
+        },
         Commands::CollectTaskQuality {
             agent_id,
             task,
@@ -231,4 +305,69 @@ async fn main() {
             }
         }
     }
+}
+
+/// One report as the desktop console consumes it.
+fn print_json(report: &Value) {
+    println!(
+        "{}",
+        serde_json::to_string_pretty(report).unwrap_or_else(|_| "{}".into())
+    );
+}
+
+/// The subscription pool as lines a person reads.
+///
+/// The count leads because it is the question that gets this command run: how
+/// many credentials can still serve a `best` call. Nothing but a state, a
+/// provider and an id is printed per row unless there is something more to say,
+/// so a healthy pool is short and a broken one is where the sentences are.
+fn print_pool(report: &Value) {
+    let rows: &[Value] = report
+        .get("providers")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    let live = rows
+        .iter()
+        .filter(|row| text(row, "state") == Some("live"))
+        .count();
+    println!("{live} of {} subscription credentials are live", rows.len());
+    for row in rows {
+        println!(
+            "{:<8} {:<14} {}",
+            text(row, "state").unwrap_or_default(),
+            text(row, "provider").unwrap_or_default(),
+            text(row, "subscription_id").unwrap_or_default()
+        );
+        if let Some(expires_at) = text(row, "expires_at") {
+            println!("    expires_at: {expires_at}");
+        }
+        if let Some(error) = text(row, "last_redeem_error") {
+            println!("    last_redeem_error: {error}");
+        }
+    }
+}
+
+/// What one refresh came to, as lines.
+fn print_refresh(verdict: &Value) {
+    println!(
+        "provider: {}",
+        text(verdict, "provider").unwrap_or_default()
+    );
+    println!(
+        "attempted: {}",
+        verdict
+            .get("attempted")
+            .and_then(Value::as_u64)
+            .unwrap_or_default()
+    );
+    println!("result: {}", text(verdict, "result").unwrap_or_default());
+    println!("detail: {}", text(verdict, "detail").unwrap_or_default());
+}
+
+/// One string field, absent when the report states nothing there. A `null` reads
+/// as absent, which is what the pool report writes for an expiry a credential
+/// does not state and for a refusal there has not been.
+fn text<'a>(report: &'a Value, key: &str) -> Option<&'a str> {
+    report.get(key).and_then(Value::as_str)
 }

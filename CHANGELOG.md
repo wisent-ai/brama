@@ -5,6 +5,46 @@ Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
 ## Unreleased
 
+### The subscription pool can be read and refreshed from the CLI
+
+Browser automation across the company stopped for most of a working day because
+this pool was empty. Both codex subscription credentials were burnt at the same
+time, every `best`-aliased call answered `429 subscription_unavailable`, and the
+product would not say which of the two possible reasons was true. The gateway had
+known since its first refresh sweep -- the ledger carried `needs_reauthorization`
+against both grants with the provider's own sentence beside them -- and the only
+way to reach that was to grep `brama-always-on.err` for the code and read
+timestamps by hand. Repairing it was worse: a burnt grant is never inside the
+refresh timer's skew window, so the timer that exists to replace grants was
+precisely the thing that would not touch these, and there was no command to make
+it.
+
+`brama subscriptions list` now reports the pool as the gateway sees it: one row
+per subscription with its provider, its `state` -- `live`, `expired`, `burnt` or
+`unknown` -- the provider's stated expiry, and the refusal standing in its way in
+the words of whatever refused it. It is read-only in the strict sense: no
+provider is contacted, no capability is redeemed, and the ledger is read without
+being written back, so it is safe against a gateway that is serving traffic. The
+rows come from the deployment's subscription listing joined to the ledger,
+because either source alone hides accounts the other holds -- and a listing that
+needs the entitlements router on `PATH` answers nothing at all from the shell an
+operator diagnoses an empty pool from.
+
+`brama subscription refresh <provider> --reason <text>` runs the same refresh the
+timer runs, for one provider, now, and reports whether a credential was obtained.
+It shares the sweep's code path, so a grant cannot come back alive here and dead
+there and every refusal is classified once. `--reason` is required, because
+rotating a grant invalidates the previous refresh token, and the reason is
+appended to the journal beside the verdict. An attempt that cannot proceed says
+which of three reasons it was -- no usable subscription in the pool, a provider
+whose credentials are API keys and have no refresh path, or no usable credential
+source in this environment -- rather than reporting a broken account. A retired
+subscription is left alone.
+
+Both commands support `--json` for the desktop console. Neither can print
+credential material: the listing reads a ledger that has never held any, and the
+refresh drops the credential it obtains without looking at it.
+
 ### A credential that never existed is no longer reported as a busy provider
 
 Running the first-use journey on a workstation with no capability and no read

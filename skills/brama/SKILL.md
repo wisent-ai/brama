@@ -33,6 +33,8 @@ brama version                        # print product and build identity as JSON
 brama serve --port <port>            # start the authenticated HTTP gateway
 brama test --allow-provider-cost …   # execute one billable inference
 brama detect                         # local hardware; no provider or credential
+brama subscriptions list [--json]    # pool state per credential; reads nothing but the ledger
+brama subscription refresh <provider> --reason <text> # rotate that provider's grants now
 brama collect-task-quality --allow-provider-cost … # bounded billable collection
 brama mcp                            # read-only stdio MCP server
 ```

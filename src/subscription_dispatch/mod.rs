@@ -1,6 +1,7 @@
 pub mod dispatch;
 pub mod model_catalog;
 pub mod plan_usage;
+pub mod pool;
 pub mod probe;
 pub mod quality;
 pub mod refresh_sweep;

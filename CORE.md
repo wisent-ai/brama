@@ -185,6 +185,7 @@ past `max_models`.
 | Performance telemetry | Brama process | bounded map and replaceable `/tmp` file | Best effort; not business authority |
 | Donated-subscription metadata | Brama overlay | owner-only atomic JSON rewrite | Credential remains in entitlements authority |
 | Plan usage, its source, and the newest check verdict | Provider's own usage report, plus the answer headers of real traffic | owner-only atomic ledger with each reading's instant | Refreshed by the free usage report sweep and by traffic; a last good reading is served while stale and dropped past `BRAMA_PLAN_USAGE_RETENTION_SECS`; an unparsable ledger is treated as empty |
+| Operator credential refresh | Brama journal | Append-only `subscription_refresh` record naming provider, reason, verdict and how many grants were tried | Audit only; never consulted by routing, and never holds credential material |
 
 Journal credentials, encrypted secret overlays, and raw provider responses are
 prohibited. The journal schema is append-only; incompatible interpretation

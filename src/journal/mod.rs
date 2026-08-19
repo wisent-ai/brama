@@ -71,6 +71,35 @@ pub fn is_retired(item_id: &str) -> bool {
         .any(|r| field(r, "kind") == "retire" && field(r, "id") == item_id)
 }
 
+/// Record one operator-run credential refresh, with the reason they gave.
+///
+/// A refresh mutates state every later request depends on: the provider
+/// invalidates the previous refresh token the moment it issues a new one, so a
+/// grant rotated by hand is a grant nothing else can go back to. The reason is
+/// stored beside the verdict because the question after a pool recovers -- or
+/// stays empty -- is who asked for this and what the product told them, and
+/// neither the provider's logs nor the ledger can answer that.
+///
+/// Every attempt is recorded, including one that found nothing to refresh. No
+/// credential material is written here, exactly as everywhere else in this file.
+pub fn record_subscription_refresh(
+    provider: &str,
+    reason: &str,
+    result: &str,
+    attempted: usize,
+    detail: &str,
+) {
+    append(json!({
+        "kind": "subscription_refresh",
+        "provider": provider,
+        "reason": reason,
+        "result": result,
+        "attempted": attempted,
+        "detail": detail,
+        "at": now(),
+    }));
+}
+
 /// Append one task-quality observation.
 #[allow(clippy::too_many_arguments)]
 pub fn record_check(

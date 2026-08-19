@@ -1077,3 +1077,18 @@ pub fn used_fraction(subscription_id: &str) -> Option<f64> {
 pub fn usage_for(subscription_id: &str) -> Option<SubscriptionUsage> {
     with_ledger(|ledger| ledger.subscriptions.get(subscription_id).cloned())
 }
+
+/// Every subscription this ledger file describes, read without writing it back.
+///
+/// Deliberately not routed through [`with_ledger`], which persists after every
+/// call including a read. An operator listing the pool while the gateway is
+/// serving would otherwise rewrite the file from a snapshot taken before the
+/// gateway's own next write, so looking at the ledger could lose a record --
+/// and looking is the whole purpose of the command that calls this.
+///
+/// The ledger is asked to enumerate rather than to answer about one id because
+/// an operator diagnosing an empty pool does not know which subscriptions
+/// exist; that is part of what they are asking.
+pub fn recorded_subscriptions() -> BTreeMap<String, SubscriptionUsage> {
+    load().subscriptions
+}
