@@ -2144,6 +2144,18 @@ async fn health() -> impl IntoResponse {
 /// redeems one capability per configured provider and reports what the
 /// authority said. It returns no secret: only the provider name and whether its
 /// credential could be obtained.
+///
+/// Discovery is a declaration too. On 2026-08-18 this endpoint answered
+/// `ready: true` with "every configured provider credential was obtained and
+/// every active subscription contributes a model" while every live call was
+/// refused — codex `503 credential_unauthorized`, claude-code `429 all bounded
+/// credentials unavailable`, kimi `429 no active credential for agent` — because
+/// a catalogue entry proves that a model was once listed, not that anything can
+/// be presented to the provider now. So the last half performs the act: one
+/// redemption per active subscription, through the same broker call a request
+/// makes, reported in the request path's own words. It ends with the accounts
+/// discovery cannot see at all, because the listing that lost them is the one
+/// thing that can never report them missing.
 async fn readyz() -> impl IntoResponse {
     let providers: Vec<String> = {
         let mut names: Vec<String> = crate::gateway::broker::configured_provider_capabilities()
@@ -2173,13 +2185,20 @@ async fn readyz() -> impl IntoResponse {
     // subscriptions while every request goes to one.
     let mut routable = Vec::new();
     let mut unroutable = Vec::new();
+    // Every active subscription, once, whichever agents can see it: two agents
+    // sharing one account must not cost two redemptions of the same credential.
+    let mut active: std::collections::BTreeMap<String, String> =
+        std::collections::BTreeMap::new();
     for agent in crate::gateway::broker::configured_request_sign_agents() {
-        let subscribed: Vec<String> = crate::gateway::broker::list_subscriptions(&agent)
-            .await
-            .into_iter()
-            .filter(|entry| entry.status == "active")
-            .map(|entry| entry.provider.trim().to_string())
-            .collect();
+        let mut subscribed: Vec<String> = Vec::new();
+        for entry in crate::gateway::broker::list_subscriptions(&agent).await {
+            if entry.status != "active" {
+                continue;
+            }
+            let provider = entry.provider.trim().to_string();
+            subscribed.push(provider.clone());
+            active.entry(entry.id).or_insert(provider);
+        }
         match crate::subscription_dispatch::dispatch::registry_models_for_agent(&agent).await {
             Ok(models) => {
                 let mut per_provider: std::collections::BTreeMap<String, usize> =
@@ -2216,8 +2235,62 @@ async fn readyz() -> impl IntoResponse {
         }
     }
 
-    // A credential nobody can route to is not readiness. Both halves count.
-    let ready = denied.is_empty() && !providers.is_empty() && unroutable.is_empty();
+    // The act itself. One redemption per active subscription, at the boundary a
+    // request redeems at, and the refusal is whatever refused it -- not a
+    // sentence this endpoint composed about a chain it did not walk.
+    let mut subscriptions = Vec::new();
+    let mut unredeemable = Vec::new();
+    for (subscription, provider) in &active {
+        let refusal = crate::subscription_dispatch::dispatch::probe_subscription_redemption(
+            subscription,
+            provider,
+        )
+        .await
+        .err();
+        if refusal.is_some() {
+            unredeemable.push(subscription.clone());
+        }
+        subscriptions.push(json!({
+            "id": subscription,
+            "provider": provider,
+            "redeemable": refusal.is_none(),
+            "reason": refusal.unwrap_or_else(|| "the credential redeemed".to_string()),
+        }));
+    }
+
+    // And the accounts no listing above could have mentioned. A vault item that
+    // loses its `brama:agent:` tag keeps a working credential and stops being
+    // discoverable, so it is neither active nor refused nor retired -- it is
+    // absent, and absence is what every screen in this fleet reported as health.
+    let untagged: Vec<Value> = crate::gateway::broker::list_unroutable_accounts()
+        .await
+        .into_iter()
+        .map(|account| {
+            let refusal = crate::subscription_dispatch::dispatch::no_active_credential_summary(
+                &account.provider,
+            );
+            json!({
+                "id": account.id,
+                "provider": account.provider,
+                "item": account.item,
+                "routable": false,
+                "reason": format!(
+                    "the vault holds this account and its item carries no 'brama:agent:' tag, \
+                     so subscription discovery cannot see it and no agent can route to it; \
+                     every request for this provider answers '{refusal}'"
+                ),
+            })
+        })
+        .collect();
+
+    // A credential nobody can route to is not readiness, and neither is a
+    // catalogue entry behind a credential that will not redeem. Every half
+    // counts, and the reason names the one that is blocking.
+    let ready = !providers.is_empty()
+        && denied.is_empty()
+        && unredeemable.is_empty()
+        && untagged.is_empty()
+        && unroutable.is_empty();
     let status = if ready {
         StatusCode::OK
     } else {
@@ -2227,10 +2300,14 @@ async fn readyz() -> impl IntoResponse {
         "no provider capability is configured"
     } else if !denied.is_empty() {
         "a configured provider credential could not be obtained; the authorization chain is broken, not busy"
+    } else if !unredeemable.is_empty() {
+        "an active subscription's credential did not redeem just now, so the next request that needs it will be refused whatever the catalogue lists"
+    } else if !untagged.is_empty() {
+        "the vault holds a subscription account whose item carries no agent tag: it is unroutable, and no subscription listing can report it"
     } else if !unroutable.is_empty() {
         "every credential was obtained, and at least one active subscription contributes no model: it cannot be routed to"
     } else {
-        "every configured provider credential was obtained and every active subscription contributes a model"
+        "every configured provider credential was obtained, every active subscription redeemed, and every vault account carries the agent tag that makes it routable"
     };
     (
         status,
@@ -2241,6 +2318,9 @@ async fn readyz() -> impl IntoResponse {
             "denied": denied,
             "routing": routable,
             "unroutable": unroutable,
+            "subscriptions": subscriptions,
+            "unredeemable": unredeemable,
+            "unroutable_accounts": untagged,
             "operator_action_required": !ready,
             "build": crate::build_info::current(),
         })),

@@ -110,6 +110,21 @@ pub struct SubscriptionEntry {
     pub status: String,
 }
 
+/// One subscription account the vault holds that no agent tag points at.
+///
+/// Deliberately not a [`SubscriptionEntry`]: these are precisely the accounts
+/// the per-agent listing cannot produce, and giving them the routable type
+/// would invite a caller to route to one.
+#[derive(Debug, Clone)]
+pub struct UnroutableAccount {
+    /// The subscription id, as its coordinate or its `brama:id:` tag spells it.
+    pub id: String,
+    /// The provider whose account this is.
+    pub provider: String,
+    /// The vault item it lives in, so the repair has an address.
+    pub item: String,
+}
+
 #[derive(Debug, Deserialize)]
 struct BrokerItems {
     #[serde(default)]
@@ -745,6 +760,33 @@ pub async fn list_all_subscriptions() -> Vec<SubscriptionEntry> {
     parse_live_subscriptions_any_agent(&output.stdout).unwrap_or_default()
 }
 
+/// Every subscription account in the vault that carries no `brama:agent:` tag.
+///
+/// Discovery finds an account by that tag, so an item that loses it stops
+/// existing for every caller and every screen while its credential stays
+/// perfectly valid. It is the one failure this deployment had no way to see:
+/// the account is not expired, not refused and not retired -- it is simply not
+/// looked at, and nothing that lists subscriptions can say so, because the
+/// listing is the thing that lost it.
+///
+/// Read through the same `list` the per-agent discovery already shells, so
+/// nothing here becomes a second reader of the vault, and metadata only: an
+/// item id, a provider and a subscription id, never a value.
+pub async fn list_unroutable_accounts() -> Vec<UnroutableAccount> {
+    let broker = entitlements_router_bin();
+    let Ok(output) = tokio::process::Command::new(&broker)
+        .arg("list")
+        .output()
+        .await
+    else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    parse_unroutable_accounts(&output.stdout).unwrap_or_default()
+}
+
 /// Path of the donated-subscriptions overlay file.
 pub fn donated_subscriptions_path() -> PathBuf {
     std::env::var(DONATED_SUBSCRIPTIONS_FILE_ENV)
@@ -1140,6 +1182,11 @@ fn configured_subscriptions(agent_id: &str) -> Option<Result<Vec<SubscriptionEnt
 /// One vault item row from the entitlements router's bare `list` command.
 #[derive(Debug, Deserialize)]
 struct VaultListItem {
+    /// The coordinate the item lives at. Discovery reads tags, not ids -- but
+    /// an item that has lost every tag still has this, and it is the only
+    /// thing left to recognise a subscription account by.
+    #[serde(default)]
+    id: String,
     #[serde(default)]
     tags: Vec<String>,
     #[serde(default)]
@@ -1171,10 +1218,10 @@ fn parse_live_subscriptions(output: &[u8], agent_id: &str) -> Result<Vec<Subscri
         .filter_map(|item| {
             Some(SubscriptionEntry {
                 id: subscription_tag_value(&item.tags, "brama:id:")?.to_owned(),
-                provider: subscription_tag_value(&item.tags, "brama:provider:")?
-                    .trim()
-                    .to_lowercase()
-                    .replace('_', "-"),
+                provider: normalized_provider(subscription_tag_value(
+                    &item.tags,
+                    "brama:provider:",
+                )?),
                 status: "active".to_owned(),
             })
         })
@@ -1193,14 +1240,72 @@ fn parse_live_subscriptions_any_agent(output: &[u8]) -> Result<Vec<SubscriptionE
         .filter_map(|item| {
             Some(SubscriptionEntry {
                 id: subscription_tag_value(&item.tags, "brama:id:")?.to_owned(),
-                provider: subscription_tag_value(&item.tags, "brama:provider:")?
-                    .trim()
-                    .to_lowercase()
-                    .replace('_', "-"),
+                provider: normalized_provider(subscription_tag_value(
+                    &item.tags,
+                    "brama:provider:",
+                )?),
                 status: "active".to_owned(),
             })
         })
         .collect())
+}
+
+/// Normalize a provider name the way both live parsers above do, so one
+/// account cannot be `claude_code` on one listing and `claude-code` on another.
+fn normalized_provider(value: &str) -> String {
+    value.trim().to_lowercase().replace('_', "-")
+}
+
+/// The subscription id and provider a bare coordinate stands for.
+///
+/// [`subscription_resource`] writes `provider:<provider>:<subscription>`, and
+/// the authority's routes table reads it back, so the coordinate identifies an
+/// account even when nothing else about the item does. A two-part id is a
+/// direct provider credential rather than a subscription and is not one of
+/// these.
+fn subscription_coordinate(item_id: &str) -> Option<(String, String)> {
+    let mut parts = item_id.splitn(3, ':');
+    let ("provider", Some(provider), Some(subscription)) =
+        (parts.next()?, parts.next(), parts.next())
+    else {
+        return None;
+    };
+    let provider = normalized_provider(provider);
+    let subscription = subscription.trim();
+    (!provider.is_empty() && !subscription.is_empty())
+        .then(|| (provider, subscription.to_owned()))
+}
+
+/// Map the router's full vault listing to the accounts no agent tag reaches.
+///
+/// The tag loss comes in two depths and both hide an account the same way. An
+/// item that still carries `brama:subscription` and `brama:provider:` names
+/// itself and is missing only the agent it belongs to; an item stripped bare --
+/// `provider:kimi:brama-sub-wisent-app-kimi-primary` sat at revision 144 with
+/// no tags at all while its credential kept working -- is recognised by the
+/// coordinate it lives at. An item carrying any `brama:agent:` tag is routable
+/// and is not reported here, whichever agent that tag names.
+fn parse_unroutable_accounts(output: &[u8]) -> Result<Vec<UnroutableAccount>, ()> {
+    let items: Vec<VaultListItem> = serde_json::from_slice(output).map_err(|_| ())?;
+    let mut accounts: Vec<UnroutableAccount> = items
+        .into_iter()
+        .filter(|item| !item.deleted)
+        .filter(|item| subscription_tag_value(&item.tags, "brama:agent:").is_none())
+        .filter_map(|item| {
+            let tagged = subscription_tag_value(&item.tags, "brama:id:").and_then(|id| {
+                subscription_tag_value(&item.tags, "brama:provider:")
+                    .map(|provider| (normalized_provider(provider), id.to_owned()))
+            });
+            let (provider, id) = tagged.or_else(|| subscription_coordinate(&item.id))?;
+            Some(UnroutableAccount {
+                id,
+                provider,
+                item: item.id,
+            })
+        })
+        .collect();
+    accounts.sort_by(|left, right| left.item.cmp(&right.item));
+    Ok(accounts)
 }
 
 type LiveSubscriptionsCache = Mutex<HashMap<String, (Instant, Vec<SubscriptionEntry>)>>;

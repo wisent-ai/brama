@@ -5,6 +5,57 @@ Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
 ## Unreleased
 
+### Readiness performs the act instead of reading a declaration about it
+
+All morning on 2026-08-18 `/readyz` answered `ready: true` with "every
+configured provider credential was obtained and every active subscription
+contributes a model" on a gateway that could serve nothing. Every live probe
+that morning was refused: codex `503 credential_unauthorized`, claude-code
+`429 all bounded 'claude-code' credentials unavailable for agent`, kimi
+`429 no active 'kimi' credential for agent`. Both halves the endpoint had were
+declarations. A provider credential obtained once at the top of the check says
+nothing about the subscription credentials every routed request actually
+presents, and a catalogue entry proves a model was listed at some point, not
+that anything can be presented to the provider now. Deploy gates and the
+desktop console both read this endpoint, so the one screen built to notice was
+the screen reporting health.
+
+`/readyz` keeps those two halves and adds a third that performs the act. For
+every active subscription of every configured request-sign agent it redeems the
+credential at the same broker boundary a request redeems at -- one attempt per
+subscription, no model call, the credential dropped unread -- and reports
+`{ id, provider, redeemable, reason }`. The reason is the request path's own
+sentence, not a summary composed here: the three that answer a caller today
+("no '<provider>' credential could be redeemed for agent; a capability, read
+grant, or this installation's trust material is missing", "all bounded
+'<provider>' credentials unavailable for agent", "no active '<provider>'
+credential for agent") are now written once and used by the buffered path, the
+streaming path and this probe, so one broken chain cannot read as two different
+faults depending on which surface an operator looked at. `ready` is false when
+any active subscription is not redeemable, and the reason names that as the
+blocking cause.
+
+The endpoint also reports the accounts nothing could see. On the always-on host
+`provider:kimi:brama-sub-wisent-app-kimi-primary` sat in the vault at revision
+144, state active, with an empty tag list: the pre-fix Skarbiec binary that
+host was running rewrote the item without its tags on every rotation, roughly
+every ten to fifteen minutes. Subscription discovery finds an account by its
+`brama:agent:<id>` tag, so losing that tag removed a paid, working, unexpired
+account from the fleet -- and the state was silent by construction, because the
+listing that lost it is the one thing that can never report it missing.
+`/readyz` now reads the vault through the same entitlements router the gateway
+already shells and names every subscription account that carries no
+`brama:agent:` tag, whether it kept its `brama:subscription` and
+`brama:provider:` tags or was stripped down to the bare
+`provider:<provider>:<subscription>` coordinate it lives at. Such an account is
+reported unroutable with the sentence a request for that provider receives, and
+it makes the gateway not ready.
+
+No secret crosses this endpoint: it answers with names, booleans and refusal
+sentences, and it stays cheap enough to poll -- one redemption per active
+subscription and no provider generation, answering in about two seconds against
+a deployment with three active subscriptions.
+
 ### The subscription pool can be read and refreshed from the CLI
 
 Browser automation across the company stopped for most of a working day because

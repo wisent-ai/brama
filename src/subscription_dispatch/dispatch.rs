@@ -97,6 +97,67 @@ fn rotation_failure_kind(
     }
 }
 
+/// The request path's own sentence for a pool whose credentials the vault
+/// would not produce.
+///
+/// These three sentences are what an operator reads when a call is refused, and
+/// a readiness check that invented its own wording for the same fault would
+/// make one broken chain look like two. They are written once here and used by
+/// the buffered path, the streaming path, and [`probe_subscription_redemption`].
+fn unredeemable_credential_summary(provider: &str) -> String {
+    format!(
+        "no '{provider}' credential could be redeemed for agent; a capability, \
+         read grant, or this installation's trust material is missing"
+    )
+}
+
+/// The request path's own sentence for a pool every one of whose credentials is
+/// inside a recorded rate-limit block.
+fn bounded_unavailable_summary(provider: &str) -> String {
+    format!("all bounded '{provider}' credentials unavailable for agent")
+}
+
+/// The request path's own sentence for an agent with no active credential of
+/// this provider at all -- the answer a subscription whose vault item lost its
+/// `brama:agent:` tag produces, because discovery can no longer see it.
+pub(crate) fn no_active_credential_summary(provider: &str) -> String {
+    format!("no active '{provider}' credential for agent")
+}
+
+/// Perform, for one subscription, the act a health check cannot infer: redeem
+/// its credential and answer in the request path's vocabulary.
+///
+/// Readiness used to ask whether a subscription contributed a model, which is a
+/// declaration -- the catalogue answers it from discovery, and discovery
+/// answered `true` all through the morning of 2026-08-18 while every live call
+/// was refused. This asks the question a request asks, at the same boundary,
+/// through the same broker call, and returns what refused it.
+///
+/// The credential is dropped unread: the caller learns that redemption
+/// succeeded and never what came back.
+pub async fn probe_subscription_redemption(
+    subscription_id: &str,
+    provider: &str,
+) -> Result<(), String> {
+    if crate::journal::is_retired(subscription_id) {
+        return Err(no_active_credential_summary(provider));
+    }
+    // Checked before redeeming, in the request path's own order: a blocked
+    // credential is skipped there without a provider call, so a readiness probe
+    // that redeemed it anyway would report a working credential the router
+    // refuses to use.
+    if usage::is_blocked(subscription_id) {
+        return Err(bounded_unavailable_summary(provider));
+    }
+    match broker::subscription_credential(subscription_id, provider).await {
+        Some(credential) => {
+            drop(credential);
+            Ok(())
+        }
+        None => Err(unredeemable_credential_summary(provider)),
+    }
+}
+
 fn max_selector_models() -> usize {
     "3".parse().expect("valid selector model limit")
 }
@@ -1050,7 +1111,7 @@ async fn dispatch_subscription_attempt(
             request,
             POINT_CREDENTIAL_SELECTION,
             request.billing_target.as_ref().map_or_else(
-                || format!("no active '{provider}' credential for agent"),
+                || no_active_credential_summary(provider),
                 |target| {
                     format!(
                         "selected credential '{}' is not active for provider '{provider}' and agent",
@@ -1255,12 +1316,9 @@ async fn dispatch_subscription_attempt(
              re-authorization required"
         )
     } else if saw_unredeemable_credential {
-        format!(
-            "no '{provider}' credential could be redeemed for agent; a capability, \
-             read grant, or this installation's trust material is missing"
-        )
+        unredeemable_credential_summary(provider)
     } else {
-        format!("all bounded '{provider}' credentials unavailable for agent")
+        bounded_unavailable_summary(provider)
     };
     let mut failure = refuse_as(
         request,
@@ -1417,7 +1475,7 @@ async fn dispatch_subscription_attempt_stream(
             request,
             POINT_CREDENTIAL_SELECTION,
             request.billing_target.as_ref().map_or_else(
-                || format!("no active '{provider}' credential for agent"),
+                || no_active_credential_summary(provider),
                 |target| {
                     format!(
                         "selected credential '{}' is not active for provider '{provider}' and agent",
@@ -1604,12 +1662,9 @@ async fn dispatch_subscription_attempt_stream(
              re-authorization required"
         )
     } else if saw_unredeemable_credential {
-        format!(
-            "no '{provider}' credential could be redeemed for agent; a capability, \
-             read grant, or this installation's trust material is missing"
-        )
+        unredeemable_credential_summary(provider)
     } else {
-        format!("all bounded '{provider}' credentials unavailable for agent")
+        bounded_unavailable_summary(provider)
     };
     let mut failure = refuse_as(
         request,
