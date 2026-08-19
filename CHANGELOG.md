@@ -43,6 +43,43 @@ a capability, read grant, or this installation's trust material is missing),
 kimi refused (...)". `attempts` counts what was really attempted, so `0` again
 means no provider was ever asked.
 
+### The launcher asserts a capability route for every banked subscription
+
+A signed `codex/gpt-5.6-sol` call as `wisent-app` answered `503
+credential_unauthorized` with "no 'codex' credential could be redeemed for
+agent; a capability, read grant, or this installation's trust material is
+missing" and `attempts: 0` on 2026-08-19, in the same minute that the same
+agent's kimi subscription served `200`. Nothing was wrong with the credential.
+A banked subscription is spendable only when four things agree -- the vault
+holds the item, the signed policy allows its resource, the routes table maps
+that resource to an item and a field, and issuance succeeds -- and three of
+those were derived from the vault on every start while the third was written by
+a helper somebody had to remember to run. The ChatGPT seat banked at
+2026-08-18T21:42:04Z therefore had no coordinate: `capability-issue` refused it
+with "no capability route maps provider:codex:brama-sub-wisent-app-codex-zuzanna
+to a vault field", the read-grant fallback had nothing to resolve either, and
+the request path reported the sentence above -- which names three possible
+faults and cannot say which, because at that point the gateway does not know
+one either.
+
+`start-with-skarbiec.sh` now asserts the table at every start from the host's
+own contents, through the packaged `provision-capability-routes.py`. It is
+additive: an existing entry is never repointed or removed, the coordinate is the
+item's own id -- the launcher builds resources from item ids, so the two are the
+same string -- and the field is taken only when the item carries exactly one,
+which is a fact rather than a choice. An ambiguous item is named and skipped
+rather than guessed at, and a failed provisioning pass is reported without
+stopping a gateway that can still serve every other subscription. Adding a
+coordinate widens nothing: redemption is still authorised by the workload key
+the vault registers and by the recipients the item carries, never by this table.
+
+`SKARBIEC_CAPABILITY_ROUTES_FILE` is now exported unconditionally rather than
+only when the file already exists. The gateway's read-grant path resolves
+coordinates through that variable while the authority falls back to its own
+default beside the vault, so an unset variable left the two readers disagreeing
+about which table is in force -- which reaches a caller as a credential that is
+merely "unavailable".
+
 ### Readiness performs the act instead of reading a declaration about it
 
 All morning on 2026-08-18 `/readyz` answered `ready: true` with "every

@@ -87,6 +87,7 @@ for asset in \
   brama-subscription-report.py \
   brama-register-workload.py \
   brama-write-capability-routes.py \
+  provision-capability-routes.py \
   brama-route-probe.py \
   brama-clear-stale-broker.py \
   brama-repair-inference-routes.py; do

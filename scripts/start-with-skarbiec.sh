@@ -261,14 +261,51 @@ gpg --batch --quiet --import "$config_dir/recipient-public-keys.asc"
 }
 export SKARBIEC_VAULT_FILE="$source_vault_file"
 # The routes table says which vault coordinate a purpose stands for, and the
-# authority looks for it beside the vault it was given. Both now name the same
+# authority looks for it beside the vault it was given. Both name the same
 # directory as the fleet's own, so the table the operator maintains is the table
-# in force. Absent, the authority keeps its own default.
-if [ -f "${source_vault_file%/*}/capability-routes.json" ]; then
-  SKARBIEC_CAPABILITY_ROUTES_FILE="${source_vault_file%/*}/capability-routes.json"
-  export SKARBIEC_CAPABILITY_ROUTES_FILE
+# in force.
+#
+# Named unconditionally, not only when the file already exists. The gateway's own
+# read-grant path resolves a coordinate through this variable, so leaving it
+# unset on a host whose table has yet to be written makes the grant fall back to
+# nothing while the authority still resolves against its default -- two readers
+# disagreeing about which table is in force, which reads from the outside as a
+# credential that is simply "unavailable".
+SKARBIEC_CAPABILITY_ROUTES_FILE=${SKARBIEC_CAPABILITY_ROUTES_FILE:-"${source_vault_file%/*}/capability-routes.json"}
+export SKARBIEC_CAPABILITY_ROUTES_FILE
+
+# A banked credential is spendable only when four things agree: the vault holds
+# the item, the signed policy allows its resource, the routes table maps that
+# resource to an item and field, and issuance succeeds. Three of those are
+# derived from the vault every time this script runs. The third was not: the
+# table was written by a helper somebody had to remember to run, so a
+# subscription banked after the last run had no coordinate, `capability-issue`
+# refused it with "no capability route maps <resource> to a vault field", the
+# grant read had nothing to resolve either, and the request path answered "no
+# '<provider>' credential could be redeemed for agent" while the credential
+# itself was perfectly good. One ChatGPT seat sat in exactly that state for a
+# day.
+#
+# So the table is asserted here, at every start, from the host's own contents.
+# Additive only: an existing entry is never repointed and never removed, the
+# coordinate is the item's own id -- the launcher builds resources from item ids
+# below, so the two are the same string -- and the field is taken only when the
+# item carries exactly one, which is a fact rather than a choice. Nothing about
+# this widens what may be redeemed: the table maps names to coordinates, and
+# redemption is still authorised by the workload key the vault registers and the
+# recipients the item itself carries.
+#
+# Non-fatal on purpose. A host that can serve nine subscriptions must not refuse
+# to start because the tenth item leaves a field ambiguous.
+routes_provisioner="$bundle_root/libexec/provision-capability-routes.py"
+if [ -f "$routes_provisioner" ]; then
+  ENTITLEMENTS_ROUTER_BIN="$ENTITLEMENTS_ROUTER_BIN" \
+  SKARBIEC_VAULT_FILE="$SKARBIEC_VAULT_FILE" \
+  SKARBIEC_CAPABILITY_ROUTES_FILE="$SKARBIEC_CAPABILITY_ROUTES_FILE" \
+  "$PYTHON_BIN" "$routes_provisioner" >/dev/stderr || \
+    printf '%s\n' "capability routes were not provisioned: a subscription banked since the last start cannot be redeemed until $SKARBIEC_CAPABILITY_ROUTES_FILE names it" >/dev/stderr
 fi
-unset source_vault_file
+unset source_vault_file routes_provisioner
 
 missing=
 for required in trust.json policy.json policy.sig registry.json registry.sig \

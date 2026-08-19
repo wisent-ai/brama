@@ -2,9 +2,15 @@
 """Write the capability routes this host's own vault already determines.
 
 A resource names a purpose; the routes file says which vault coordinate that
-purpose stands for. Nothing on this host writes it, so every `capability-issue`
-is refused, the gateway starts with no provider it may authenticate to, and it
-dies on the first alias that needed one.
+purpose stands for. Nothing else on this host writes it, so a resource the table
+does not mention is refused at `capability-issue` -- "no capability route maps
+<resource> to a vault field" -- and the gateway's read grant has nothing to
+resolve either, which reaches a caller as a credential that is merely
+"unavailable".
+
+The gateway's launcher runs this at every start, so a subscription banked after
+the last start becomes spendable at the next one instead of waiting for somebody
+to remember a helper.
 
 The design keeps this decision away from the workload for a good reason: a
 gateway that picked its own mapping would be picking which credential its
@@ -16,8 +22,13 @@ records only mappings the host's contents already fix, with no room to choose:
   * the field is taken only when the item carries exactly ONE. Two or more and
     there is a real choice to make, so it refuses and names them for a human.
 
-Create-only: an existing routes file is never touched, so an operator's own
-mapping always wins. Reverse by deleting the file it reports.
+Additive: every entry an existing table carries stays exactly as written, so an
+operator's own mapping always wins and a resource deliberately pointed
+elsewhere is never repointed. Only resources the table does not mention at all
+are added, the previous table is kept beside the new one, and the run reports
+where. Adding a coordinate widens nothing: redemption is authorised by the
+workload key the vault registers and the recipients the item carries, never by
+this table.
 
 Prints item ids and field names, never a value.
 """
