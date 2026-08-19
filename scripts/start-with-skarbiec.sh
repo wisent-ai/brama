@@ -376,12 +376,12 @@ except (KeyError, TypeError) as error:
 
 expected_alias_routes = {
     "-best": "claude-code/claude-opus-4-6",
-    "wisent-backend/chat/primary": "qwen/default",
-    "wisent-backend/chat/fallback": "qwen/default",
+    "wisent-backend/chat/primary": "featherless/TheDrummer/Cydonia-24B-v4.3",
+    "wisent-backend/chat/fallback": "featherless/TheDrummer/Cydonia-24B-v4.3",
     "wisent-backend/evaluation": "openai/default",
     "wisent-backend/embeddings": "openai/embeddings",
     "wisent-backend/moderation": "openai/moderation",
-    "weles/agent/primary": "qwen/default",
+    "weles/agent/primary": "local-openai/chat-primary",
 }
 expected_aliases = set(expected_alias_routes)
 if (
