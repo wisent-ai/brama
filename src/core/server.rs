@@ -2869,9 +2869,20 @@ async fn create_subscription(
         crate::gateway::broker::slug(&agent_id),
         crate::gateway::broker::slug(provider)
     );
+    // A document that carries no credential is the donor's mistake and the vault
+    // was not touched, so it is a 400 naming the shape rather than a conflict:
+    // this coordinate is the only copy of that subscription's credential, and the
+    // previous answer here made destroying it and failing to write it read alike.
     crate::gateway::broker::put_donated_credential(provider, &subscription_id, api_key)
         .await
-        .map_err(|_| api_error(StatusCode::CONFLICT, "subscription credential was rejected"))?;
+        .map_err(|refusal| match refusal {
+            crate::gateway::broker::DonationRefusal::Unusable(detail) => {
+                api_error(StatusCode::BAD_REQUEST, &detail)
+            }
+            crate::gateway::broker::DonationRefusal::Unwritable(_) => {
+                api_error(StatusCode::CONFLICT, "subscription credential was rejected")
+            }
+        })?;
     crate::gateway::broker::donated_add(&agent_id, &subscription_id, provider)
         .map_err(|_| api_error(StatusCode::CONFLICT, "subscription registration failed"))?;
     Ok(Json(json!({
@@ -3194,10 +3205,19 @@ async fn donate_subscription(
         crate::gateway::broker::slug(&agent_id),
         crate::gateway::broker::slug(provider)
     );
-    if let Err(message) =
+    // The donor learns which of the two happened: a document carrying no
+    // credential leaves the stored one untouched and is the caller's to fix,
+    // while a failed write is this installation's.
+    if let Err(refusal) =
         crate::gateway::broker::put_donated_credential(provider, &subscription_id, api_key).await
     {
-        return api_error(StatusCode::INTERNAL_SERVER_ERROR, &message);
+        let status = match refusal {
+            crate::gateway::broker::DonationRefusal::Unusable(_) => StatusCode::BAD_REQUEST,
+            crate::gateway::broker::DonationRefusal::Unwritable(_) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+        };
+        return api_error(status, refusal.detail());
     }
     if let Err(message) = crate::gateway::broker::donated_add(&agent_id, &subscription_id, provider)
     {

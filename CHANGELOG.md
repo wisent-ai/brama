@@ -43,6 +43,33 @@ a capability, read grant, or this installation's trust material is missing),
 kimi refused (...)". `attempts` counts what was really attempted, so `0` again
 means no provider was ever asked.
 
+### A donation that carries no credential is refused instead of banked
+
+The vault item `provider:codex:brama-sub-wisent-app-codex-primary` -- the codex
+account with 11,123 recorded requests -- held this at revision 318 on
+2026-08-19: a browser context options document with the fields
+`deviceScaleFactor`, `extraHTTPHeaders`, `recordHar`, `recordVideo` and
+`viewport`. The gateway's own plan-usage read at 01:26:11Z reported it verbatim
+("provider_authentication: Skarbiec item `provider:codex:...` holds a JSON
+object with fields [...], which carries no credential"), so the coordinate
+redeemed perfectly and the thing at it was a re-authentication trajectory's
+configuration object rather than a credential. The ledger read `active` the
+whole time, because storing a donation is what clears `needs_reauthorization`.
+
+`POST /v1/subscriptions/:agent_id` and `POST /v1/account/subscriptions` bounded
+a donated credential by length alone -- 1..8000 characters, which any JSON
+document satisfies -- and wrote it to the one coordinate that provider's
+`-primary` subscription is read from. There is no second copy, so a donation
+that carried anything else destroyed a working credential and then recorded the
+destruction as a successful sign-in.
+
+A donation is now reduced to a bearer before anything is written, by the same
+reduction the request path performs, so nothing a request could have presented
+is refused. A document that carries no credential answers `400` naming the
+shape it had and the fields it could have carried, and the stored credential is
+left exactly as it was. A failed write still answers as this installation's
+fault, which is a different repair and now a different answer.
+
 ### The launcher asserts a capability route for every banked subscription
 
 A signed `codex/gpt-5.6-sol` call as `wisent-app` answered `503

@@ -1115,6 +1115,26 @@ async fn put_credential(item_id: &str, secret: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+/// Why a donated credential was not banked.
+///
+/// The two are different repairs and different answers to the caller: a
+/// document that carries no credential is the donor's to fix and left the vault
+/// untouched, while a failed write is this installation's.
+pub enum DonationRefusal {
+    /// The document carries no credential the request path could present.
+    Unusable(String),
+    /// The vault write itself failed.
+    Unwritable(String),
+}
+
+impl DonationRefusal {
+    pub fn detail(&self) -> &str {
+        match self {
+            Self::Unusable(detail) | Self::Unwritable(detail) => detail,
+        }
+    }
+}
+
 /// Store one donated OAuth credential blob through the local entitlements
 /// router; plaintext crosses only the child process stdin pipe.
 ///
@@ -1122,13 +1142,39 @@ async fn put_credential(item_id: &str, secret: &[u8]) -> Result<(), String> {
 /// subscription. Minting a fresh id per donation produced a credential nothing
 /// could read: reads resolve through that table, and a new id has no entry in
 /// it, so the donation was inert by construction.
+///
+/// A donation is refused unless the document reduces to a bearer, because this
+/// write lands on the one coordinate a provider's `-primary` subscription is
+/// read from and there is no second copy. On 2026-08-19 the vault item
+/// `provider:codex:brama-sub-wisent-app-codex-primary` -- an account with 11,123
+/// recorded requests -- held a browser context options document
+/// (`deviceScaleFactor`, `extraHTTPHeaders`, `recordHar`, `recordVideo`,
+/// `viewport`) at revision 318, so every call routed to it was refused by the
+/// provider-authentication check while the ledger read `active`: the sign-in
+/// this records had marked it so. The only length bound the boundary applied was
+/// 1..8000 characters, which a re-authentication trajectory's own configuration
+/// object satisfies. The predicate is the request path's own reduction, so
+/// nothing a request could have presented is refused here.
 pub async fn put_donated_credential(
     provider: &str,
     subscription_id: &str,
     api_key: &str,
-) -> Result<(), String> {
+) -> Result<(), DonationRefusal> {
     let item_id = format!("provider:{provider}:{subscription_id}");
-    put_credential(&item_id, api_key.as_bytes()).await?;
+    // The bearer is derived only to prove one can be, and dropped unread.
+    if let Err(detail) = crate::providers::adapter::credential_key(&item_id, api_key) {
+        warn!(
+            event = "donated_credential_unusable",
+            provider,
+            subscription = subscription_id,
+            %detail,
+            "a donated document carries no credential; the stored one is left as it is"
+        );
+        return Err(DonationRefusal::Unusable(detail));
+    }
+    put_credential(&item_id, api_key.as_bytes())
+        .await
+        .map_err(DonationRefusal::Unwritable)?;
     // A stored credential is the sign-in that a `needs_reauthorization` waits
     // for, and nothing else clears that state. Without this the console would
     // keep demanding a re-authorization that an operator has already done, and

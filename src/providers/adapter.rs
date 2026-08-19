@@ -941,7 +941,11 @@ fn credential_shape(document: &Value) -> String {
 ///
 /// `item` is the vault coordinate the secret was redeemed from, and it is in
 /// the failure message because the repair is always at that coordinate.
-fn credential_key(item: &str, secret: &str) -> Result<String, String> {
+///
+/// Also the donation boundary's predicate: a document this cannot reduce is a
+/// document no request could have presented, so banking it can only destroy the
+/// credential already at that coordinate.
+pub(crate) fn credential_key(item: &str, secret: &str) -> Result<String, String> {
     let trimmed = secret.trim();
     if trimmed.is_empty() {
         return Err(format!("Skarbiec item `{item}` holds an empty credential"));
