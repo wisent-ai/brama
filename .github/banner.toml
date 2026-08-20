@@ -1,11 +1,13 @@
 [automation]
 managed = true
-source_fingerprint = "e8ca2b50bf763e1b"
+source_fingerprint = "30d9184d6f663fcc"
 category = "gateway"
+copy_status = "approved"
+approved_in = "019fe3db-84a1-7000-bf79-c5455aefd43f@2026-08-09T23:59:29Z"
 
 [banner]
-title = "Route every model through one gateway."
-description = "Authenticated multi-provider LLM routing with fallback chains and local inference."
+title = "Brama: Keep All Your Models Accessible Through One Endpoint"
+description = ""
 product = "Wisent"
 url = "wisent.com"
 theme = "dark"
