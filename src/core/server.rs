@@ -24,9 +24,10 @@ use crate::subscription_dispatch::{
     dispatch_any_vision_capable_subscription, dispatch_any_vision_capable_subscription_stream,
     dispatch_best_subscription, dispatch_best_subscription_stream, dispatch_direct_openai_typed,
     dispatch_direct_with_fallback, dispatch_direct_with_fallback_stream, dispatch_subscription,
-    dispatch_subscription_stream, dispatch_task_subscription, dispatch_task_subscription_stream,
-    is_subscription_model, provider_requires_caller_identity, registry_models_for_agent,
-    RoutedStream,
+    dispatch_subscription_for_agent, dispatch_subscription_stream,
+    dispatch_subscription_stream_for_agent, dispatch_task_subscription,
+    dispatch_task_subscription_stream, is_subscription_model, provider_requires_caller_identity,
+    registry_models_for_agent, RoutedStream,
 };
 use crate::types::{BillingTarget, Message, ModelRequest, ModelResponse, Tool, ToolCall};
 
@@ -1544,7 +1545,8 @@ async fn route_model_call(
     let any_subscription = is_any_subscription_selector(requested_model);
     let any_vision_capable_subscription =
         is_any_vision_capable_subscription_selector(requested_model);
-    if !client_identity.authorizes_model(requested_model) {
+    let account_agent = account_agent_for_route(client_identity, requested_model).await;
+    if !client_identity.authorizes_model(requested_model) && account_agent.is_none() {
         return Err(api_error(StatusCode::FORBIDDEN, "forbidden").into_response());
     }
     let task_subscription = task_subscription_selector(requested_model);
@@ -1594,7 +1596,8 @@ async fn route_model_call(
     // credential for agent" the moment it proved who it was. The catalogue said
     // the opposite in the same breath, marking those models available to agent
     // callers. Proving more identity cannot grant less access.
-    let caller_scoped_request = any_subscription
+    let caller_scoped_request = account_agent.is_some()
+        || any_subscription
         || any_vision_capable_subscription
         || best_subscription
         || task_subscription.is_some()
@@ -1620,7 +1623,11 @@ async fn route_model_call(
         event = "routing_decision",
         request_id = %request_id,
         client_id = %client_identity.client_id,
-        agent_id = client_identity.agent_id.as_deref().unwrap_or("none"),
+        agent_id = client_identity
+            .agent_id
+            .as_deref()
+            .or(account_agent.as_deref())
+            .unwrap_or("none"),
         routing_mode,
         requested_model,
         selected_model = %selected_model,
@@ -1659,6 +1666,8 @@ async fn route_model_call(
                     preferred_route.as_deref(),
                 )
                 .await
+            } else if let Some(account_agent) = account_agent.as_deref() {
+                dispatch_subscription_stream_for_agent(account_agent, &request).await
             } else if caller_scoped_request {
                 dispatch_subscription_stream(headers, &request, raw_body).await
             } else {
@@ -1683,6 +1692,8 @@ async fn route_model_call(
                 dispatch_best_subscription(headers, &request, raw_body, preferred_route.as_deref())
                     .await,
             )
+        } else if let Some(account_agent) = account_agent.as_deref() {
+            DispatchedCall::Buffered(dispatch_subscription_for_agent(account_agent, &request).await)
         } else if caller_scoped_request {
             DispatchedCall::Buffered(dispatch_subscription(headers, &request, raw_body).await)
         } else {
@@ -2378,21 +2389,21 @@ async fn list_models(
     Extension(aliases): Extension<ModelAliases>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let catalog_agent = if has_caller_auth_headers(&headers) {
+    let account_agent = account_agent_id(&client_identity).ok();
+    let signed_catalog_agent = if account_agent.is_none() && has_caller_auth_headers(&headers) {
         Some(authorize_caller(&client_identity, &headers, &[], None).await?)
     } else {
         None
     };
+    let account_catalog = account_agent.is_some();
+    let catalog_agent = account_agent.clone().or(signed_catalog_agent);
     // The same condition decides two disclosures: performance history and
     // whether a model can actually be served. Both are answers about the
-    // caller, so neither is given to a request that has not said who it is.
+    // caller, so neither is given to an unknown caller.
     let caller_known = catalog_agent.is_some();
-    // Resolved once, not once per model: the per-provider question costs a
-    // capability-map parse and a client rebuild, and this catalogue carries
-    // thousands of entries. Asking inside the loop made an authenticated
-    // catalogue take longer than a client's timeout, so the request that
-    // proves a caller's identity was the only one that never returned.
-    let configured_providers = if catalog_agent.is_some() {
+    // Deployment-owned capabilities never make a route available to a user
+    // account. Account availability comes only from that account's stored key.
+    let configured_providers = if !account_catalog && catalog_agent.is_some() {
         crate::gateway::broker::configured_provider_capabilities()
     } else {
         HashSet::new()
@@ -2463,7 +2474,12 @@ async fn list_models(
     }
     model_ids.sort();
     model_ids.dedup();
-    model_ids.retain(|model| client_identity.authorizes_model(model));
+    if account_catalog {
+        model_ids
+            .retain(|model| crate::providers::adapter::provider_id_from_route(model).is_some());
+    } else {
+        model_ids.retain(|model| client_identity.authorizes_model(model));
+    }
 
     if headers.contains_key("x-jeden-schema-min") {
         let models = model_ids
@@ -2518,7 +2534,7 @@ async fn list_models(
                         entry["route"] = json!(model.route_id);
                     }
                 }
-                if caller_known {
+                if caller_known && available.contains(&id) {
                     if let Some(perf) = perf_json(&id) {
                         entry["perf"] = perf;
                     }
@@ -2746,6 +2762,20 @@ fn account_agent_id(identity: &ModelClientIdentity) -> Result<String, ApiError> 
     Ok(format!("user-{}", user_id.replace('-', "")))
 }
 
+async fn account_agent_for_route(identity: &ModelClientIdentity, route: &str) -> Option<String> {
+    let agent_id = account_agent_id(identity).ok()?;
+    let provider = crate::providers::adapter::provider_id_from_route(route)?;
+    crate::gateway::broker::list_subscriptions(&agent_id)
+        .await
+        .into_iter()
+        .any(|entry| {
+            entry.provider.eq_ignore_ascii_case(provider)
+                && entry.status == "active"
+                && !crate::journal::is_retired(&entry.id)
+        })
+        .then_some(agent_id)
+}
+
 /// One subscription as every reader sees it: identity, plan windows the
 /// provider reported, where those windows came from and whether they are still
 /// current, what Brama measured, any block in force, when this record last
@@ -2836,6 +2866,27 @@ async fn list_subscriptions(agent_id: String) -> Result<Json<Value>, ApiError> {
     ))
 }
 
+async fn account_credential_provider(value: Option<&str>) -> Option<String> {
+    let provider = match value.map(str::trim) {
+        Some("claude_code") => "claude-code",
+        Some(provider) if !provider.is_empty() => provider,
+        _ => return None,
+    };
+    if provider == "local-openai" {
+        return None;
+    }
+    if crate::providers::adapter::provider(provider).is_some() {
+        return Some(provider.to_string());
+    }
+    crate::subscription_dispatch::model_catalog::snapshot()
+        .await
+        .ok()?
+        .providers
+        .get(provider)
+        .filter(|provider| provider.executable())
+        .map(|provider| provider.id.clone())
+}
+
 async fn create_subscription(
     agent_id: String,
     request: DonateSubscriptionRequest,
@@ -2843,17 +2894,14 @@ async fn create_subscription(
     if !valid_agent_id(&agent_id) {
         return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
     }
-    let provider = match request.provider.as_deref().map(str::trim) {
-        Some("claude_code" | "claude-code") => "claude-code",
-        Some("codex") => "codex",
-        Some("kimi") => "kimi",
-        _ => {
-            return Err(api_error(
+    let provider = account_credential_provider(request.provider.as_deref())
+        .await
+        .ok_or_else(|| {
+            api_error(
                 StatusCode::BAD_REQUEST,
-                "provider must be one of claude_code, codex, kimi",
-            ))
-        }
-    };
+                "provider must name a supported remote API or subscription provider",
+            )
+        })?;
     let api_key = request.api_key.as_deref().unwrap_or("");
     if api_key.is_empty() || api_key.chars().count() > 8000 {
         return Err(api_error(
@@ -2867,13 +2915,13 @@ async fn create_subscription(
     let subscription_id = format!(
         "brama-sub-{}-{}-primary",
         crate::gateway::broker::slug(&agent_id),
-        crate::gateway::broker::slug(provider)
+        crate::gateway::broker::slug(&provider)
     );
     // A document that carries no credential is the donor's mistake and the vault
     // was not touched, so it is a 400 naming the shape rather than a conflict:
     // this coordinate is the only copy of that subscription's credential, and the
     // previous answer here made destroying it and failing to write it read alike.
-    crate::gateway::broker::put_donated_credential(provider, &subscription_id, api_key)
+    crate::gateway::broker::put_donated_credential(&provider, &subscription_id, api_key)
         .await
         .map_err(|refusal| match refusal {
             crate::gateway::broker::DonationRefusal::Unusable(detail) => {
@@ -2883,7 +2931,7 @@ async fn create_subscription(
                 api_error(StatusCode::CONFLICT, "subscription credential was rejected")
             }
         })?;
-    crate::gateway::broker::donated_add(&agent_id, &subscription_id, provider)
+    crate::gateway::broker::donated_add(&agent_id, &subscription_id, &provider)
         .map_err(|_| api_error(StatusCode::CONFLICT, "subscription registration failed"))?;
     Ok(Json(json!({
         "subscription": {
@@ -3176,18 +3224,15 @@ async fn donate_subscription(
             )
         }
     };
-    // Every subscription provider this gateway routes for can be donated to,
-    // not only Claude: a Codex or Kimi session refreshed by a reauth runner had
-    // nowhere to land, so the account stayed alive while the subscription read
-    // as dead. The accepted set is the one dispatch already enumerates.
-    let provider = match req.provider.as_deref().map(str::trim) {
-        Some("claude_code" | "claude-code") => "claude-code",
-        Some("codex") => "codex",
-        Some("kimi") => "kimi",
-        _ => {
+    // Account and agent credentials share one provider contract. A provider
+    // accepted here is executable by the same static or catalogue adapter the
+    // request path will later use.
+    let provider = match account_credential_provider(req.provider.as_deref()).await {
+        Some(provider) => provider,
+        None => {
             return api_error(
                 StatusCode::BAD_REQUEST,
-                "provider must be one of claude_code, codex, kimi",
+                "provider must name a supported remote API or subscription provider",
             )
         }
     };
@@ -3203,13 +3248,13 @@ async fn donate_subscription(
     let subscription_id = format!(
         "brama-sub-{}-{}-primary",
         crate::gateway::broker::slug(&agent_id),
-        crate::gateway::broker::slug(provider)
+        crate::gateway::broker::slug(&provider)
     );
     // The donor learns which of the two happened: a document carrying no
     // credential leaves the stored one untouched and is the caller's to fix,
     // while a failed write is this installation's.
     if let Err(refusal) =
-        crate::gateway::broker::put_donated_credential(provider, &subscription_id, api_key).await
+        crate::gateway::broker::put_donated_credential(&provider, &subscription_id, api_key).await
     {
         let status = match refusal {
             crate::gateway::broker::DonationRefusal::Unusable(_) => StatusCode::BAD_REQUEST,
@@ -3219,7 +3264,8 @@ async fn donate_subscription(
         };
         return api_error(status, refusal.detail());
     }
-    if let Err(message) = crate::gateway::broker::donated_add(&agent_id, &subscription_id, provider)
+    if let Err(message) =
+        crate::gateway::broker::donated_add(&agent_id, &subscription_id, &provider)
     {
         return api_error(StatusCode::INTERNAL_SERVER_ERROR, &message);
     }

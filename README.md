@@ -259,13 +259,16 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   committed; the caller holds an incomplete answer and Brama has already
   stopped. Rotation across models and credentials happens only before the
   first byte, so a committed stream is never silently re-run.
-- **Account subscriptions:** authenticated Wisent users use
+- **Account API keys and subscriptions:** authenticated Wisent users use
   `GET|POST /v1/account/subscriptions` and
-  `DELETE /v1/account/subscriptions/:subscription_id`. Brama derives the
-  subscription owner from the verified Wisent session; the caller never
-  supplies an account or agent identifier.
-- **HTTP discovery:** `GET /v1/models`; bearer-only discovery is public catalog
-  scope, while signed discovery includes agent-owned availability.
+  `DELETE /v1/account/subscriptions/:subscription_id`. Brama derives the owner
+  from the verified Wisent session; the caller never supplies an account or
+  agent identifier. `POST` accepts an API key for any supported remote provider,
+  stores it through Skarbiec without returning it, and makes that account's
+  canonical `provider/model` routes available for buffered and streamed calls.
+- **HTTP discovery:** `GET /v1/models`; account discovery combines public
+  catalog metadata with models executable by that account's stored keys, while
+  signed agent discovery includes agent-owned subscriptions.
 - **Subscription lifecycle:** `GET`, `POST`, and `DELETE`
   `/v1/subscriptions/:agent_id`; always bearer- and HMAC-protected. A `GET`
   returns, per subscription, the plan windows the provider itself reported

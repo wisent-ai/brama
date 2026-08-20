@@ -5,6 +5,20 @@ Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
 ## Unreleased
 
+### Wisent accounts can route models through their own provider API keys
+
+`POST /v1/account/subscriptions` now accepts credentials for every supported
+remote provider, including OpenAI and Anthropic, instead of limiting the account
+surface to Claude Code, Codex and Kimi subscriptions. The verified Wisent session
+owns the stored coordinate; plaintext crosses only the request and Skarbiec
+write pipe and is never returned.
+
+Canonical `provider/model` calls made with that session now use only the
+account's active credential, for buffered and streaming responses alike.
+`GET /v1/models` combines public metadata with availability discovered through
+those keys. Deployment credentials, another user's keys and loopback
+`local-openai` are never eligible.
+
 ### `best` walks its candidate list instead of stopping at the first refusal
 
 On 2026-08-18 a signed `best` call answered `503 credential_unauthorized` with

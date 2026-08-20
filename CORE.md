@@ -93,16 +93,39 @@ stream, or one normalized error, as the request asked.
 
 No subscription credential is eligible for this workflow.
 
+## Public workflow: account-owned API key
+
+An authenticated Wisent user stores a remote provider credential with
+`POST /v1/account/subscriptions`. The verified session determines the internal
+owner; account and agent identifiers in the request are neither accepted nor
+trusted. The provider must be a supported built-in adapter or an executable
+models.dev provider. `local-openai` is refused because an account credential
+must never select the gateway host's loopback services.
+
+The plaintext credential crosses only the request and the local Skarbiec write
+pipe. Brama returns its generated subscription ID, provider, status and optional
+label, never the key. A later canonical `provider/model` request made with the
+same Wisent session selects only active, non-retired credentials owned by that
+account; it never falls through to the deployment's provider capability or
+another account. The same owner selection applies before buffered and streamed
+dispatch, and `GET /v1/models` marks availability from that account's keys.
+
+Replacing a provider key writes the same account/provider coordinate. Deleting
+the returned subscription ID retires it immediately. API keys have no OAuth
+refresh path and no invented expiry; provider authentication, quota and
+rate-limit failures follow the same bounded credential-attempt policy as agent
+subscriptions.
+
+
 ## Public workflow: exact agent subscription
 
 The caller supplies the three agent HMAC headers over the exact raw request body.
 The bearer-bound agent, signed agent, and path agent must agree where present.
 
-The deployment alias `-best` resolves to
-`claude-code/claude-opus-4-6`. It is accepted only for bearers whose model
-allowlist names `-best`; the HMAC identity still selects the subscription owner.
-The alias never authorizes a direct Claude credential or another agent's
-subscription.
+The deployment alias `best` resolves to an operator-selected subscription route.
+It is accepted only for bearers whose model allowlist names `best`; the HMAC
+identity still selects the subscription owner. The alias never authorizes a
+direct provider credential or another agent's subscription.
 
 `billingTarget` contains `providerId`, `accountId`, and `subscriptionId`:
 

@@ -41,10 +41,10 @@ endpoint, and correct capability.
 
 | Integration | Protocol | Identity | Current capability | Runtime owner |
 |---|---|---|---|---|
-| OpenAI, OpenRouter, Groq, Mistral, xAI, DeepSeek, Cerebras, Fireworks, Together, NVIDIA, Moonshot, Z.AI, Qwen, Hugging Face, Featherless, Venice, Novita, Synthetic, Kimi | OpenAI Chat compatible | direct API capability or agent subscription | buffered or streamed chat; tools where advertised; Kimi streams publish no token meter | Brama operator / subscription owner |
-| Anthropic and Claude Code | Anthropic Messages | direct API capability or agent OAuth subscription | buffered or streamed chat and tool use | Brama operator / subscription owner |
-| Codex | OpenAI Responses event stream | agent OAuth subscription | streamed to the caller, or the same event stream consumed internally for a buffered answer; tool calls either way | subscription owner |
-| Google catalog providers | GenerateContent | per-subscription API capability | buffered chat and tools where advertised | subscription owner |
+| OpenAI, OpenRouter, Groq, Mistral, xAI, DeepSeek, Cerebras, Fireworks, Together, NVIDIA, Moonshot, Z.AI, Qwen, Hugging Face, Featherless, Venice, Novita, Synthetic, Kimi | OpenAI Chat compatible | direct API capability, account-owned API key, or agent subscription | buffered or streamed chat; tools where advertised; Kimi streams publish no token meter | Brama operator / credential owner |
+| Anthropic and Claude Code | Anthropic Messages | direct API capability, account-owned Anthropic key, or agent OAuth subscription | buffered or streamed chat and tool use | Brama operator / credential owner |
+| Codex | OpenAI Responses event stream | account- or agent-owned OAuth subscription | streamed to the caller, or the same event stream consumed internally for a buffered answer; tool calls either way | subscription owner |
+| Google catalog providers | GenerateContent | account- or agent-owned API capability | buffered chat and tools where advertised | credential owner |
 | OpenAI embeddings | OpenAI embeddings | direct OpenAI capability | alias-only typed endpoint | Brama operator |
 | OpenAI moderation | OpenAI moderation | direct OpenAI capability | alias-only typed endpoint | Brama operator |
 | models.dev | HTTPS JSON catalog | no credential | public metadata and protocol discovery | models.dev; cached by Brama |
@@ -68,8 +68,10 @@ caller.
 ### Configuration and identity
 
 - direct capabilities use key `provider:<slugged-provider>`;
-- subscription capabilities use internal subscription ID and resource
+- account and agent credentials use internal subscription ID and resource
   `provider:<provider>:<subscription>`;
+- account API keys are written through the local Skarbiec boundary and selected
+  only by the verified Wisent account that owns them;
 - endpoint overrides are namespaced by provider and accept HTTPS approved hosts
   or explicit loopback only;
 - ambient proxy, redirects, metadata identity, and unrelated provider

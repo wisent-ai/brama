@@ -1081,6 +1081,24 @@ pub async fn dispatch_subscription_for_agent(
     dispatch_subscription_attempt(provider, agent_id, request).await
 }
 
+pub async fn dispatch_subscription_stream_for_agent(
+    agent_id: &str,
+    request: &ModelRequest,
+) -> Result<RoutedStream, ModelResponse> {
+    let provider = match provider_for(&request.model) {
+        Some(provider) => provider,
+        None => {
+            return Err(ModelResponse::failure(
+                &request.model,
+                "unknown provider/model route".into(),
+            ))
+        }
+    };
+    attempt_subscription_stream(provider, agent_id, request)
+        .await
+        .opened
+}
+
 /// Spend one provider call on exactly one subscription, for the on-demand usage
 /// probe.
 ///
