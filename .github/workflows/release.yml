@@ -110,7 +110,6 @@ jobs:
           cp skarbiec-source/target/release/skarbiec "$stage/bin/skarbiec-entitlements-router"
           cp scripts/start-with-skarbiec.sh "$stage/bin/start-with-skarbiec"
           cp scripts/provision-skarbiec-trust.sh "$stage/bin/provision-skarbiec-trust"
-          cp scripts/skarbiec-subscriptions.json "$stage/etc/brama-skarbiec/subscriptions.json"
           cp scripts/skarbiec-recipient-public-keys.asc "$stage/etc/brama-skarbiec/recipient-public-keys.asc"
           cp LICENSE "$stage/"
           # The trust material is NOT generated here. It pins the absolute path

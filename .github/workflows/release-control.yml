@@ -45,17 +45,14 @@ jobs:
           ref: ${{ vars.STADO_RELEASE_CLI_REVISION }}
           path: stado-source
       - uses: dtolnay/rust-toolchain@stable
-      - name: Materialize ephemeral release credentials
+      - name: Materialize qualification evidence
         env:
-          BRAMA_RELEASE_SIGNING_KEY_B64: ${{ secrets.BRAMA_RELEASE_SIGNING_KEY_B64 }}
           BRAMA_RELEASE_QUALIFICATION_JSON_B64: ${{ secrets.BRAMA_RELEASE_QUALIFICATION_JSON_B64 }}
         run: |
           umask 077
           mkdir -p "$RUNNER_TEMP/release-control"
           if [ "${{ inputs.action }}" = prepare ]; then
-            : "${BRAMA_RELEASE_SIGNING_KEY_B64:?BRAMA_RELEASE_SIGNING_KEY_B64 is required for prepare}"
             : "${BRAMA_RELEASE_QUALIFICATION_JSON_B64:?BRAMA_RELEASE_QUALIFICATION_JSON_B64 is required for prepare}"
-            printf '%s' "$BRAMA_RELEASE_SIGNING_KEY_B64" | base64 --decode > "$RUNNER_TEMP/release-control/brama-release.pk8"
             printf '%s' "$BRAMA_RELEASE_QUALIFICATION_JSON_B64" | base64 --decode > "$RUNNER_TEMP/release-control/qualification.json"
           fi
       - name: Build pinned Stado release client
@@ -89,10 +86,15 @@ jobs:
         env:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
           STADO_BIN: ${{ github.workspace }}/stado-source/stado-rs/target/release/stado
-          SIGNING_KEY: ${{ runner.temp }}/release-control/brama-release.pk8
           QUALIFICATION: ${{ runner.temp }}/release-control/qualification.json
         run: |
           source_revision="$(git rev-parse HEAD)"
+          source_archive="$RUNNER_TEMP/release-control/brama-source.tar.gz"
+          git archive --format=tar HEAD | gzip -9 -n > "$source_archive"
+          source_sha256="$(openssl dgst -sha256 "$source_archive")"
+          source_sha256="${source_sha256##* }"
+          pipeline_manifest_sha256="$(openssl dgst -sha256 .wisent-release.json)"
+          pipeline_manifest_sha256="${pipeline_manifest_sha256##* }"
           compatibility=()
           if [ -n "${{ inputs.rollback_compatible_with }}" ]; then
             compatibility=(--rollback-compatible-with "${{ inputs.rollback_compatible_with }}")
@@ -103,8 +105,10 @@ jobs:
               --source-revision "$source_revision" \
               --binary bin/brama \
               --launcher bin/start-with-skarbiec \
-              --signing-key "$SIGNING_KEY" \
+              --signing-key-item stado-release-signing \
               --key-id brama-release-2026-08 \
+              --source-sha256 "$source_sha256" \
+              --pipeline-manifest-sha256 "$pipeline_manifest_sha256" \
               --qualification "$QUALIFICATION" \
               --minimum-stado-version 0.5.1 \
               "${compatibility[@]}" \
