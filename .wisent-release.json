@@ -9,8 +9,8 @@
   },
   "inputs": {
     "skarbiec": {
-      "uri": "stado://sources/skarbiec/df6954797afc146b80da364e248d1238527172d762966480caf0307f3cbb9947/source.tar.gz",
-      "sha256": "df6954797afc146b80da364e248d1238527172d762966480caf0307f3cbb9947",
+      "uri": "stado://sources/skarbiec/c612d0ea2a5718274c0c8c3a2c5672517fb2f849286327a9dce173a5425d6fa5/source.tar.gz",
+      "sha256": "c612d0ea2a5718274c0c8c3a2c5672517fb2f849286327a9dce173a5425d6fa5",
       "mount": "skarbiec"
     }
   },

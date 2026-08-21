@@ -14,3 +14,4 @@ build/
 
 # Worktrees are working copies, not repository content.
 .worktrees/
+.release-inputs/
