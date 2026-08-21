@@ -69,7 +69,7 @@ CARGO_TARGET_DIR="$build_root/skarbiec" \
   cargo build --locked --release --bin skarbiec \
     --manifest-path "$skarbiec_source/Cargo.toml"
 
-python3 "$source_dir/scripts/check-router-verbs.py" \
+python3 -S "$source_dir/scripts/check-router-verbs.py" \
   "$source_dir/scripts/start-with-skarbiec.sh" \
   "$build_root/skarbiec/release/skarbiec"
 
