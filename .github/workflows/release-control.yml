@@ -46,9 +46,15 @@ jobs:
           path: stado-source
       - uses: dtolnay/rust-toolchain@stable
       - name: Prepare ephemeral release workspace
+        env:
+          BRAMA_RELEASE_SIGNING_KEY_B64: ${{ secrets.BRAMA_RELEASE_SIGNING_KEY_B64 }}
         run: |
           umask 077
           mkdir -p "$RUNNER_TEMP/release-control"
+          if [ "${{ inputs.action }}" = prepare ]; then
+            : "${BRAMA_RELEASE_SIGNING_KEY_B64:?BRAMA_RELEASE_SIGNING_KEY_B64 is required for prepare}"
+            printf '%s' "$BRAMA_RELEASE_SIGNING_KEY_B64" | base64 --decode > "$RUNNER_TEMP/release-control/brama-release.pk8"
+          fi
       - name: Build pinned Stado release client
         working-directory: stado-source/stado-rs
         run: cargo build --locked --release --bin stado
@@ -125,7 +131,7 @@ jobs:
               --source-revision "$source_revision" \
               --binary bin/brama \
               --launcher bin/start-with-skarbiec \
-              --signing-key-item stado-release-signing \
+              --signing-key-file "$RUNNER_TEMP/release-control/brama-release.pk8" \
               --key-id brama-release-2026-08 \
               --source-sha256 "$source_sha256" \
               --pipeline-manifest-sha256 "$pipeline_manifest_sha256" \
