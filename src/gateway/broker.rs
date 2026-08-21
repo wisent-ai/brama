@@ -1318,8 +1318,7 @@ fn subscription_coordinate(item_id: &str) -> Option<(String, String)> {
     };
     let provider = normalized_provider(provider);
     let subscription = subscription.trim();
-    (!provider.is_empty() && !subscription.is_empty())
-        .then(|| (provider, subscription.to_owned()))
+    (!provider.is_empty() && !subscription.is_empty()).then(|| (provider, subscription.to_owned()))
 }
 
 /// Map the router's full vault listing to the accounts no agent tag reaches.
