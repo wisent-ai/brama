@@ -9,6 +9,7 @@ on:
         type: choice
         options:
           - prepare
+          - submit-stable
           - promote-candidate
           - promote-stable
           - status
@@ -60,6 +61,17 @@ jobs:
       - name: Build pinned Stado release client
         working-directory: stado-source/stado-rs
         run: cargo build --locked --release --bin stado
+      - name: Build and publish through the Stado release pipeline
+        if: inputs.action == 'submit-stable'
+        env:
+          STADO_CONFIG: /Users/charles/.config/stado/config.json
+          STADO_BIN: ${{ github.workspace }}/stado-source/stado-rs/target/release/stado
+        run: |
+          "$STADO_BIN" release submit \
+            --source "$GITHUB_WORKSPACE/brama-source" \
+            --version "${{ inputs.version }}" \
+            --channel stable \
+            --json
       - name: Download exact GitHub release bytes
         if: inputs.action == 'prepare'
         working-directory: brama-source
