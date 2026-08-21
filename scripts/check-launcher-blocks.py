@@ -10,10 +10,7 @@ looking for matching`.
     check-launcher-blocks.py <launcher>
 """
 
-import re
 import sys
-
-BLOCK = re.compile(r"<<'PY'\n(.*?)\nPY\n", re.DOTALL)
 
 arguments = iter(sys.argv)
 next(arguments)
@@ -22,8 +19,21 @@ try:
 except ValueError:
     raise SystemExit("usage: check-launcher-blocks.py <launcher>")
 
-text = open(launcher_path, encoding="utf-8").read()
-blocks = BLOCK.findall(text)
+lines = open(launcher_path, encoding="utf-8").read().splitlines()
+blocks = []
+current = None
+for line in lines:
+    if current is None:
+        if line.endswith("<<'PY'"):
+            current = []
+        continue
+    if line == "PY":
+        blocks.append("\n".join(current))
+        current = None
+    else:
+        current.append(line)
+if current is not None:
+    raise SystemExit(f"{launcher_path} contains an unterminated embedded Python block")
 if not blocks:
     raise SystemExit(
         f"{launcher_path} contains no embedded Python block this check can see; "
@@ -31,6 +41,7 @@ if not blocks:
     )
 
 for number, block in enumerate(blocks, start=len([None])):
+    print(f"compiling embedded Python block {number}", file=sys.stderr, flush=True)
     try:
         compile(block, f"{launcher_path}: embedded block {number}", "exec")
     except SyntaxError as failure:

@@ -36,5 +36,5 @@ fi
 cargo fmt --manifest-path "$manifest" -- --check
 sh -n "$source_dir/scripts/start-with-skarbiec.sh"
 sh -n "$source_dir/scripts/provision-skarbiec-trust.sh"
-python3 "$source_dir/scripts/check-launcher-blocks.py" \
+python3 -S "$source_dir/scripts/check-launcher-blocks.py" \
   "$source_dir/scripts/start-with-skarbiec.sh"
