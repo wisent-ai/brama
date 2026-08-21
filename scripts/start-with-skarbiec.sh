@@ -467,16 +467,15 @@ try:
 except (KeyError, TypeError) as error:
     raise SystemExit(f"services.brama policy is incomplete: {error}") from error
 
-expected_alias_routes = {
-    "best": "codex/gpt-5.3-codex-spark",
-    "wisent-backend/chat/primary": "featherless/TheDrummer/Cydonia-24B-v4.3",
-    "wisent-backend/chat/fallback": "featherless/TheDrummer/Cydonia-24B-v4.3",
-    "wisent-backend/evaluation": "openai/default",
-    "wisent-backend/embeddings": "openai/embeddings",
-    "wisent-backend/moderation": "openai/moderation",
-    "weles/agent/primary": "local-openai/chat-primary",
+expected_aliases = {
+    "best",
+    "wisent-backend/chat/primary",
+    "wisent-backend/chat/fallback",
+    "wisent-backend/evaluation",
+    "wisent-backend/embeddings",
+    "wisent-backend/moderation",
+    "weles/agent/primary",
 }
-expected_aliases = set(expected_alias_routes)
 if (
     not isinstance(allowed_models, list)
     or any(not isinstance(value, str) or not value or value.strip() != value for value in allowed_models)
@@ -507,12 +506,26 @@ if (
         f"; duplicated={duplicates}"
     )
 
-
-if (
-    not isinstance(aliases, dict)
-    or aliases != expected_alias_routes
-):
-    raise SystemExit("services.brama.model_aliases must map every exact alias to one provider/model route")
+if not isinstance(aliases, dict) or set(aliases) != expected_aliases:
+    raise SystemExit(
+        "services.brama.model_aliases must contain the exact closed Brama alias set"
+        f"; file={config_path}"
+        f"; missing={sorted(expected_aliases - set(aliases) if isinstance(aliases, dict) else expected_aliases)}"
+        f"; unexpected={sorted(set(aliases) - expected_aliases) if isinstance(aliases, dict) else []}"
+    )
+malformed_routes = {
+    alias: route
+    for alias, route in aliases.items()
+    if not isinstance(route, str)
+    or not route
+    or route.strip() != route
+    or "/" not in route
+}
+if malformed_routes:
+    raise SystemExit(
+        "services.brama.model_aliases contains malformed provider/model routes"
+        f"; file={config_path}; malformed={malformed_routes}"
+    )
 expected_providers = {"featherless", "openai"}
 if (
     not isinstance(required_providers, list)
