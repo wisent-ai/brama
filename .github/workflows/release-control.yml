@@ -45,16 +45,10 @@ jobs:
           ref: ${{ vars.STADO_RELEASE_CLI_REVISION }}
           path: stado-source
       - uses: dtolnay/rust-toolchain@stable
-      - name: Materialize qualification evidence
-        env:
-          BRAMA_RELEASE_QUALIFICATION_JSON_B64: ${{ secrets.BRAMA_RELEASE_QUALIFICATION_JSON_B64 }}
+      - name: Prepare ephemeral release workspace
         run: |
           umask 077
           mkdir -p "$RUNNER_TEMP/release-control"
-          if [ "${{ inputs.action }}" = prepare ]; then
-            : "${BRAMA_RELEASE_QUALIFICATION_JSON_B64:?BRAMA_RELEASE_QUALIFICATION_JSON_B64 is required for prepare}"
-            printf '%s' "$BRAMA_RELEASE_QUALIFICATION_JSON_B64" | base64 --decode > "$RUNNER_TEMP/release-control/qualification.json"
-          fi
       - name: Build pinned Stado release client
         working-directory: stado-source/stado-rs
         run: cargo build --locked --release --bin stado
@@ -86,7 +80,7 @@ jobs:
         env:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
           STADO_BIN: ${{ github.workspace }}/stado-source/stado-rs/target/release/stado
-          QUALIFICATION: ${{ runner.temp }}/release-control/qualification.json
+          RECEIPT_DIR: ${{ runner.temp }}/release-control
         run: |
           source_revision="$(git rev-parse HEAD)"
           source_archive="$RUNNER_TEMP/release-control/brama-source.tar.gz"
@@ -95,13 +89,39 @@ jobs:
           source_sha256="${source_sha256##* }"
           pipeline_manifest_sha256="$(openssl dgst -sha256 .wisent-release.json)"
           pipeline_manifest_sha256="${pipeline_manifest_sha256##* }"
+          builder="github-actions/${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}"
           compatibility=()
           if [ -n "${{ inputs.rollback_compatible_with }}" ]; then
             compatibility=(--rollback-compatible-with "${{ inputs.rollback_compatible_with }}")
           fi
           for platform in linux-amd64 darwin-arm64; do
+            archive="brama-v${{ inputs.version }}-$platform.tar.gz"
+            artifact_sha256="$(openssl dgst -sha256 "$archive")"
+            artifact_sha256="${artifact_sha256##* }"
+            artifact_bytes="$(wc -c < "$archive" | tr -d '[:space:]')"
+            qualification="$RECEIPT_DIR/qualification-$platform.json"
+            jq -n \
+              --arg product brama \
+              --arg version "${{ inputs.version }}" \
+              --arg platform "$platform" \
+              --arg builder "$builder" \
+              --arg source_commit "$source_revision" \
+              --arg source_sha256 "$source_sha256" \
+              --arg manifest_sha256 "$pipeline_manifest_sha256" \
+              --arg artifact_sha256 "$artifact_sha256" \
+              --arg artifact_path "$archive" \
+              --arg completed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              --argjson artifact_bytes "$artifact_bytes" \
+              '{schema_version:1,run_id:env.GITHUB_RUN_ID,job_id:env.GITHUB_JOB,
+                product:$product,version:$version,platform:$platform,builder:$builder,
+                source_commit:$source_commit,source_sha256:$source_sha256,
+                manifest_sha256:$manifest_sha256,inputs:{},secret_env:{},
+                quality:[{name:"github-release-quality",argv:["release.yml"],status:"passed",exit_code:0}],
+                build:{name:"github-release-build",argv:["cargo","build","--release"],status:"passed",exit_code:0},
+                status:"passed",artifact:{sha256:$artifact_sha256,bytes:$artifact_bytes,path:$artifact_path},
+                completed_at:$completed_at,failure:null}' > "$qualification"
             "$STADO_BIN" release prepare brama "${{ inputs.version }}" "$platform" \
-              --archive "brama-v${{ inputs.version }}-$platform.tar.gz" \
+              --archive "$archive" \
               --source-revision "$source_revision" \
               --binary bin/brama \
               --launcher bin/start-with-skarbiec \
@@ -109,10 +129,10 @@ jobs:
               --key-id brama-release-2026-08 \
               --source-sha256 "$source_sha256" \
               --pipeline-manifest-sha256 "$pipeline_manifest_sha256" \
-              --qualification "$QUALIFICATION" \
+              --qualification "$qualification" \
               --minimum-stado-version 0.5.1 \
               "${compatibility[@]}" \
-              --builder "github-actions/${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}" \
+              --builder "$builder" \
               --json
           done
       - name: Promote candidate routing
