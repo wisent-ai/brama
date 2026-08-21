@@ -12,6 +12,7 @@ on:
           - submit-stable
           - promote-candidate
           - promote-stable
+          - activate-stable
           - status
           - rollback
       version:
@@ -153,6 +154,19 @@ jobs:
         run: |
           stado-source/stado-rs/target/release/stado release promote brama "${{ inputs.version }}" --channel stable --json
           stado-source/stado-rs/scripts/reconcile-release-funnel-host.sh
+      - name: Activate stable release with unified observed state
+        if: inputs.action == 'activate-stable'
+        env:
+          STADO_CONFIG: /Users/charles/.config/stado/config.json
+        run: |
+          stado-source/stado-rs/target/release/stado service release \
+            com.wisent.always-on.brama \
+            --host charless-mac-mini \
+            --product brama \
+            --version "${{ inputs.version }}" \
+            --readiness-url http://127.0.0.1:8080/health \
+            --readiness-timeout-seconds 90 \
+            --json
       - name: Read rollout status
         if: inputs.action == 'status'
         env:
