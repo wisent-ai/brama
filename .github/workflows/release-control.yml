@@ -150,7 +150,9 @@ jobs:
         if: inputs.action == 'promote-stable'
         env:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
-        run: stado-source/stado-rs/target/release/stado release promote brama "${{ inputs.version }}" --channel stable --json
+        run: |
+          stado-source/stado-rs/target/release/stado release promote brama "${{ inputs.version }}" --channel stable --json
+          stado-source/stado-rs/scripts/reconcile-release-funnel-host.sh
       - name: Read rollout status
         if: inputs.action == 'status'
         env:
