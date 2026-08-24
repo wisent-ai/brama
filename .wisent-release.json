@@ -9,8 +9,8 @@
   },
   "inputs": {
     "skarbiec": {
-      "uri": "stado://sources/skarbiec/c612d0ea2a5718274c0c8c3a2c5672517fb2f849286327a9dce173a5425d6fa5/source.tar.gz",
-      "sha256": "c612d0ea2a5718274c0c8c3a2c5672517fb2f849286327a9dce173a5425d6fa5",
+      "uri": "stado://sources/skarbiec/971b63e7d26822d249c76d549ee279c066d8e8ed0aebc1b3ab4b30a93dadf87d/source.tar.gz",
+      "sha256": "971b63e7d26822d249c76d549ee279c066d8e8ed0aebc1b3ab4b30a93dadf87d",
       "mount": "skarbiec"
     }
   },
@@ -38,7 +38,6 @@
         "stage/libexec/brama-diagnose.py": "libexec/brama-diagnose.py",
         "stage/libexec/brama-subscription-report.py": "libexec/brama-subscription-report.py",
         "stage/libexec/brama-register-workload.py": "libexec/brama-register-workload.py",
-        "stage/libexec/brama-write-capability-routes.py": "libexec/brama-write-capability-routes.py",
         "stage/libexec/brama-route-probe.py": "libexec/brama-route-probe.py",
         "stage/libexec/brama-clear-stale-broker.py": "libexec/brama-clear-stale-broker.py",
         "stage/libexec/brama-repair-inference-routes.py": "libexec/brama-repair-inference-routes.py",
@@ -70,7 +69,6 @@
         "stage/libexec/brama-diagnose.py": "libexec/brama-diagnose.py",
         "stage/libexec/brama-subscription-report.py": "libexec/brama-subscription-report.py",
         "stage/libexec/brama-register-workload.py": "libexec/brama-register-workload.py",
-        "stage/libexec/brama-write-capability-routes.py": "libexec/brama-write-capability-routes.py",
         "stage/libexec/brama-route-probe.py": "libexec/brama-route-probe.py",
         "stage/libexec/brama-clear-stale-broker.py": "libexec/brama-clear-stale-broker.py",
         "stage/libexec/brama-repair-inference-routes.py": "libexec/brama-repair-inference-routes.py",

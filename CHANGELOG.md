@@ -4,6 +4,14 @@ All notable Brama changes are documented here. Brama follows Semantic
 Versioning and the pre-one compatibility policy in [`RELEASE.md`](RELEASE.md).
 
 ## Unreleased
+### Skarbiec owns capability route mapping
+
+Brama no longer writes `capability-routes.json` or chooses provider credential
+fields. At startup it asks the bundled Skarbiec binary to reconcile identity
+routes from the live vault; Skarbiec validates the item schema, preserves every
+existing mapping, records a backup and audit entry, and reports ambiguous items
+without guessing.
+
 
 ### Wisent accounts can route models through their own provider API keys
 

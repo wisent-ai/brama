@@ -40,7 +40,6 @@ EXECUTABLES = {
 DATA = {
     "libexec/generate-skarbiec-config.mjs": scripts / "generate-skarbiec-config.mjs",
     "libexec/brama-register-workload.py": scripts / "brama-register-workload.py",
-    "libexec/brama-write-capability-routes.py": scripts / "brama-write-capability-routes.py",
     "libexec/brama-diagnose.py": scripts / "brama-diagnose.py",
     "libexec/brama-subscription-report.py": scripts / "brama-subscription-report.py",
     "libexec/brama-route-probe.py": scripts / "brama-route-probe.py",

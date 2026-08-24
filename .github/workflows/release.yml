@@ -130,7 +130,6 @@ jobs:
           # in the vault for the public key the provisioner just minted, so a
           # bundle that cannot register cannot redeem.
           cp scripts/brama-register-workload.py "$stage/libexec/brama-register-workload.py"
-          cp scripts/brama-write-capability-routes.py "$stage/libexec/brama-write-capability-routes.py"
           cp scripts/brama-route-probe.py "$stage/libexec/brama-route-probe.py"
           cp scripts/brama-clear-stale-broker.py "$stage/libexec/brama-clear-stale-broker.py"
           cp scripts/brama-repair-inference-routes.py "$stage/libexec/brama-repair-inference-routes.py"

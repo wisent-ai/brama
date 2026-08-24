@@ -274,38 +274,15 @@ export SKARBIEC_VAULT_FILE="$source_vault_file"
 SKARBIEC_CAPABILITY_ROUTES_FILE=${SKARBIEC_CAPABILITY_ROUTES_FILE:-"${source_vault_file%/*}/capability-routes.json"}
 export SKARBIEC_CAPABILITY_ROUTES_FILE
 
-# A banked credential is spendable only when four things agree: the vault holds
-# the item, the signed policy allows its resource, the routes table maps that
-# resource to an item and field, and issuance succeeds. Three of those are
-# derived from the vault every time this script runs. The third was not: the
-# table was written by a helper somebody had to remember to run, so a
-# subscription banked after the last run had no coordinate, `capability-issue`
-# refused it with "no capability route maps <resource> to a vault field", the
-# grant read had nothing to resolve either, and the request path answered "no
-# '<provider>' credential could be redeemed for agent" while the credential
-# itself was perfectly good. One ChatGPT seat sat in exactly that state for a
-# day.
-#
-# So the table is asserted here, at every start, from the host's own contents.
-# Additive only: an existing entry is never repointed and never removed, the
-# coordinate is the item's own id -- the launcher builds resources from item ids
-# below, so the two are the same string -- and the field is taken only when the
-# item carries exactly one, which is a fact rather than a choice. Nothing about
-# this widens what may be redeemed: the table maps names to coordinates, and
-# redemption is still authorised by the workload key the vault registers and the
-# recipients the item itself carries.
-#
-# Non-fatal on purpose. A host that can serve nine subscriptions must not refuse
-# to start because the tenth item leaves a field ambiguous.
-routes_provisioner="$bundle_root/libexec/provision-capability-routes.py"
-if [ -f "$routes_provisioner" ]; then
-  ENTITLEMENTS_ROUTER_BIN="$ENTITLEMENTS_ROUTER_BIN" \
-  SKARBIEC_VAULT_FILE="$SKARBIEC_VAULT_FILE" \
-  SKARBIEC_CAPABILITY_ROUTES_FILE="$SKARBIEC_CAPABILITY_ROUTES_FILE" \
-  "$PYTHON_BIN" "$routes_provisioner" >/dev/stderr || \
-    printf '%s\n' "capability routes were not provisioned: a subscription banked since the last start cannot be redeemed until $SKARBIEC_CAPABILITY_ROUTES_FILE names it" >/dev/stderr
-fi
-unset source_vault_file routes_provisioner
+# Skarbiec owns the mapping from capability resources to vault coordinates.
+# Provider and agent resources are item ids, so its reconcile command can add
+# identity mappings without Brama reading or writing the routes table. Existing
+# mappings are never repointed; ambiguous items are reported and skipped.
+SKARBIEC_VAULT_FILE="$SKARBIEC_VAULT_FILE" \
+SKARBIEC_CAPABILITY_ROUTES_FILE="$SKARBIEC_CAPABILITY_ROUTES_FILE" \
+"$ENTITLEMENTS_ROUTER_BIN" routes reconcile >/dev/stderr || \
+  printf '%s\n' "Skarbiec could not reconcile capability routes; newly banked credentials may remain unavailable" >/dev/stderr
+unset source_vault_file
 
 missing=
 for required in trust.json policy.json policy.sig registry.json registry.sig \
