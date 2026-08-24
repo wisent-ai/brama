@@ -22,7 +22,8 @@ aliases whose shapes are a promise (an embeddings alias is never handed a
 chat model), operator-invented aliases, the subscription alias `best`, and
 canonical `provider/model` routes. Agent callers may also use the selectors
 `any`, `any-vision-capable`, and `task:<task-name>`. The declarations are in
-[clients and aliases](clients-and-aliases.md).
+[concepts/client-identity](concepts/client-identity.md) and
+[concepts/alias](concepts/alias.md).
 
 ## Capabilities and subscriptions pay
 
@@ -36,8 +37,9 @@ deployment's provider capability, `best` and the selectors spend a
 subscription owned by the caller's signed HMAC identity, and `billingTarget`
 names an exact subscription. There is no silent fallback across providers,
 agents, accounts, or credentials. The two pools are
-[providers and capabilities](providers-and-capabilities.md) and
-[subscriptions](subscriptions.md).
+[concepts/capability](concepts/capability.md) and
+[concepts/subscription](concepts/subscription.md); who may spend what is
+[concepts/entitlement](concepts/entitlement.md).
 
 ## Bounded dispatch records
 
@@ -51,7 +53,8 @@ selected route, attempts, and outcome in the fleet's `wisent-errors`
 envelope; the subscription usage ledger keeps measured tokens and the plan
 windows each provider itself reported; the append-only journal keeps
 retirement and task-quality records and never credential material. The
-contracts are in [errors](errors.md) and [subscriptions](subscriptions.md).
+contracts are in [errors](errors.md), [concepts/envelope](concepts/envelope.md),
+and [concepts/subscription](concepts/subscription.md).
 
 ## What Brama is not
 
@@ -63,7 +66,8 @@ secret store: Skarbiec is the authority for credentials, and Brama receives
 only capability handles until the final-use seam. It is not an identity
 provider, billing ledger, or system of record for provider accounts, and it
 never infers task intent from prompt text — `task:` uses previously recorded,
-explicitly named quality evidence only.
+explicitly named quality evidence only. The boundaries and data flow are
+drawn in [architecture](architecture.md).
 
 ## The first three commands
 
@@ -91,4 +95,7 @@ The one that answers whether the product works. It redeems one capability per
 configured provider and one credential per active subscription, and returns
 `503` naming what failed, with no secret in the body. The full path from
 nothing to a first completion is [quick-start](quick-start.md); the whole
-HTTP surface is [http-api](http-api.md).
+HTTP surface is [http-api](http-api.md); two executed end-to-end scenarios
+are [walkthrough-standalone-stub](walkthrough-standalone-stub.md) and
+[walkthrough-subscriptions](walkthrough-subscriptions.md); and when
+something looks wrong, start from the [runbook](runbook.md).

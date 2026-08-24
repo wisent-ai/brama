@@ -55,7 +55,9 @@ operator into the wrong catalogue.
 `src/core/failure.rs` is the one place Brama's own vocabulary becomes the
 fleet's, using the `wisent-errors` crate for everything derivable and
 deciding nothing itself. Every envelope carries service `brama`, one failure
-point, an impact, and the reason the layer below gave, verbatim:
+point, an impact, and the reason the layer below gave, verbatim — the field
+shape and a captured example are in [concepts/envelope](concepts/envelope.md)
+and [concepts/failure-point](concepts/failure-point.md):
 
 | Failure point | Raised when |
 |---|---|
