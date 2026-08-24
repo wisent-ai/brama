@@ -1,16 +1,77 @@
 {
   "schemaVersion": 1,
-  "documents": {
-    "docs/what-is-brama.md": {},
-    "docs/quick-start.md": {},
-    "docs/http-api.md": {},
-    "docs/clients-and-aliases.md": {},
-    "docs/providers-and-capabilities.md": {},
-    "docs/subscriptions.md": {},
-    "docs/errors.md": {},
-    "docs/configuration.md": {},
-    "docs/cli.md": {}
-  },
-  "sources": ["src/", "README.md"],
-  "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
+  "documents": [
+    {
+      "output": "docs/what-is-brama.md",
+      "sources": [
+        "src",
+        "README.md"
+      ],
+      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
+    },
+    {
+      "output": "docs/quick-start.md",
+      "sources": [
+        "src",
+        "README.md"
+      ],
+      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
+    },
+    {
+      "output": "docs/http-api.md",
+      "sources": [
+        "src",
+        "README.md"
+      ],
+      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
+    },
+    {
+      "output": "docs/clients-and-aliases.md",
+      "sources": [
+        "src",
+        "README.md"
+      ],
+      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
+    },
+    {
+      "output": "docs/providers-and-capabilities.md",
+      "sources": [
+        "src",
+        "README.md"
+      ],
+      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
+    },
+    {
+      "output": "docs/subscriptions.md",
+      "sources": [
+        "src",
+        "README.md"
+      ],
+      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
+    },
+    {
+      "output": "docs/errors.md",
+      "sources": [
+        "src",
+        "README.md"
+      ],
+      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
+    },
+    {
+      "output": "docs/configuration.md",
+      "sources": [
+        "src",
+        "README.md"
+      ],
+      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
+    },
+    {
+      "output": "docs/cli.md",
+      "sources": [
+        "src",
+        "README.md"
+      ],
+      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
+    }
+  ]
 }
