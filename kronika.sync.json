@@ -3,75 +3,123 @@
   "documents": [
     {
       "output": "docs/what-is-brama.md",
-      "sources": [
-        "src",
-        "README.md"
-      ],
-      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
+      "sources": ["src", "README.md", "CORE.md"],
+      "instruction": "The three-part mental model (identities and aliases declare, capabilities and subscriptions pay, bounded dispatch records) must stay true to the ingress in src/core/server.rs, the dispatch bounds in src/subscription_dispatch/dispatch.rs, and the product boundaries stated in README.md and CORE.md."
     },
     {
       "output": "docs/quick-start.md",
-      "sources": [
-        "src",
-        "README.md"
-      ],
-      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
+      "sources": ["src/main.rs", "src/core/server.rs", "scripts/start-with-skarbiec.sh", "RELEASE.md"],
+      "instruction": "Every command, flag, endpoint, and pasted output on the happy path must match the CLI in src/main.rs, the routes in src/core/server.rs, and the launcher contract in scripts/start-with-skarbiec.sh, including the exact bare-serve refusal sentence."
+    },
+    {
+      "output": "docs/architecture.md",
+      "sources": ["src/core/server.rs", "src/gateway", "src/subscription_dispatch", "CORE.md"],
+      "instruction": "The ownership boundaries, request-path pipeline, trust-boundary table, /health-versus-/readyz evidence rule, and state-on-disk table must track src/core/server.rs (transport guard, routers, readyz probes), src/gateway (credential seams), and the state paths the process actually writes."
     },
     {
       "output": "docs/http-api.md",
-      "sources": [
-        "src",
-        "README.md"
-      ],
-      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
-    },
-    {
-      "output": "docs/clients-and-aliases.md",
-      "sources": [
-        "src",
-        "README.md"
-      ],
-      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
-    },
-    {
-      "output": "docs/providers-and-capabilities.md",
-      "sources": [
-        "src",
-        "README.md"
-      ],
-      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
-    },
-    {
-      "output": "docs/subscriptions.md",
-      "sources": [
-        "src",
-        "README.md"
-      ],
-      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
-    },
-    {
-      "output": "docs/errors.md",
-      "sources": [
-        "src",
-        "README.md"
-      ],
-      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
-    },
-    {
-      "output": "docs/configuration.md",
-      "sources": [
-        "src",
-        "README.md"
-      ],
-      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
+      "sources": ["src/core/server.rs", "src/core/wire.rs"],
+      "instruction": "All 19 routes with their request and response shapes, status codes, and quoted error bodies must match the handlers and error_response/api_error mapping in src/core/server.rs and the dialect translation in src/core/wire.rs."
     },
     {
       "output": "docs/cli.md",
-      "sources": [
-        "src",
-        "README.md"
-      ],
-      "instruction": "The docs must stay true to the routes, flags, aliases, error codes, and configuration names defined in src/ (server routes in src/core/server.rs, CLI in src/main.rs, envelope in src/core/failure.rs) and to the product boundaries stated in README.md and CORE.md."
+      "sources": ["src/main.rs", "src/subscription_dispatch/pool.rs", "src/subscription_dispatch/quality.rs"],
+      "instruction": "Every subcommand, flag, default, exit code, and pasted output must match the clap definitions and match arms in src/main.rs and the verdict/report shapes in src/subscription_dispatch/pool.rs and quality.rs."
+    },
+    {
+      "output": "docs/errors.md",
+      "sources": ["src/core/server.rs", "src/core/failure.rs"],
+      "instruction": "The client error-code table must match api_error in src/core/server.rs, and the operator envelope tables (failure points, kind-to-fleet-code mapping) must match src/core/failure.rs exactly."
+    },
+    {
+      "output": "docs/configuration.md",
+      "sources": ["src", "scripts/start-with-skarbiec.sh", "deploy"],
+      "instruction": "Every variable name, default, and reader location must correspond to an env read in src/ or a launcher input in scripts/start-with-skarbiec.sh; a knob that no code reads must not be listed."
+    },
+    {
+      "output": "docs/runbook.md",
+      "sources": ["src/core/server.rs", "src/subscription_dispatch", "src/gateway", "src/core/inference_routes.rs"],
+      "instruction": "Every symptom entry quotes an error sentence that exists verbatim in src/ (readyz reasons, dispatch refusals, refresh verdict details, routes-file guards, transport guard) and pairs it with the repair the code implies; no invented strings."
+    },
+    {
+      "output": "docs/walkthrough-standalone-stub.md",
+      "sources": ["src/main.rs", "src/core/server.rs", "src/providers/adapter.rs", "docs/examples/stub-provider.py"],
+      "instruction": "Every console block is genuinely captured from a running gateway against the loopback stub in docs/examples/stub-provider.py; re-execute the sequence and re-paste when the routes, error bodies, or provider override validation change."
+    },
+    {
+      "output": "docs/walkthrough-subscriptions.md",
+      "sources": ["src/main.rs", "src/subscription_dispatch/pool.rs", "src/journal", "src/crypto/hmac_auth.rs"],
+      "instruction": "Every console block is genuinely captured (pool report, empty-pool refresh, journal record, signed listing, admin surface); re-execute and re-paste when the pool report shape, refresh verdict, journal schema, or HMAC contract changes."
+    },
+    {
+      "output": "docs/concepts/client-identity.md",
+      "sources": ["src/core/server.rs", "src/gateway/broker.rs"],
+      "instruction": "The identity fields, bearer resolution order, five-second verdict cache, special brama-desktop/brama-user identities, and quoted 401/403 refusals must match the ingress auth in src/core/server.rs."
+    },
+    {
+      "output": "docs/concepts/alias.md",
+      "sources": ["src/core/server.rs", "src/core/inference_routes.rs"],
+      "instruction": "The four-part model-name vocabulary, required alias set, routes-file schema, and every quoted guard sentence must match src/core/server.rs and src/core/inference_routes.rs verbatim."
+    },
+    {
+      "output": "docs/concepts/capability.md",
+      "sources": ["src/gateway/broker.rs"],
+      "instruction": "The purpose/resource/agent shape, issue limits, read-grant fallback, standalone in-memory map, and final-use invariants must match src/gateway/broker.rs, including the coordinate formats provider:<slug> and provider:<slug>:<slug>."
+    },
+    {
+      "output": "docs/concepts/provider.md",
+      "sources": ["src/providers/adapter.rs", "src/subscription_dispatch/model_catalog.rs"],
+      "instruction": "The 23-descriptor table, pinned default models, base-URL override validation sentences, plan-usage endpoints, and timeout/size bounds must match src/providers/adapter.rs exactly."
+    },
+    {
+      "output": "docs/concepts/subscription.md",
+      "sources": ["src/gateway/broker.rs", "src/gateway/oauth_refresh.rs", "src/subscription_dispatch/pool.rs", "src/subscription_dispatch/usage.rs"],
+      "instruction": "The vault-tag discovery contract, four pool states, last_redeem_error precedence, ledger semantics, block durations, definitive-refusal word list, and donation/retirement rules must match the named source files."
+    },
+    {
+      "output": "docs/concepts/entitlement.md",
+      "sources": ["src/subscription_dispatch/dispatch.rs", "src/crypto/hmac_auth.rs", "src/gateway/broker.rs"],
+      "instruction": "The HMAC message format, central agent list, pool-payment table, attempt bounds (2 credentials, 3 selector models), pinning rules, and every quoted refusal sentence must match src/subscription_dispatch/dispatch.rs and src/crypto/hmac_auth.rs."
+    },
+    {
+      "output": "docs/concepts/failure-point.md",
+      "sources": ["src/core/failure.rs"],
+      "instruction": "The nine failure points and four impact statements must match the constants in src/core/failure.rs verbatim, and the example envelope must remain one genuinely captured from a running gateway."
+    },
+    {
+      "output": "docs/concepts/envelope.md",
+      "sources": ["src/core/failure.rs"],
+      "instruction": "The envelope fields, kind-to-fleet-code table, prefix classification rule, and rendering/secret constraints must match src/core/failure.rs and the wisent-errors derivation it delegates to."
+    },
+    {
+      "output": "docs/examples/README.md",
+      "sources": ["docs/examples", "src/main.rs", "src/core/server.rs"],
+      "instruction": "The index must list exactly the scripts present in docs/examples/ with their env knobs and cost statements, and every claim about what a script exercises must match the script body."
+    },
+    {
+      "output": "docs/examples/stub-provider.py",
+      "sources": ["src/providers/adapter.rs", "src/core/wire.rs"],
+      "instruction": "The stub must keep speaking the OpenAI chat shape the openai adapter consumes (models list, chat.completion, chat.completion.chunk SSE with [DONE], 401 and 429 error bodies) so the walkthrough captures stay reproducible."
+    },
+    {
+      "output": "docs/examples/signed-agent-listing.sh",
+      "sources": ["src/crypto/hmac_auth.rs", "src/core/server.rs"],
+      "instruction": "The HMAC computation must stay byte-compatible with verify_agent_hmac in src/crypto/hmac_auth.rs: HMAC-SHA256 hex over {agent}:{timestamp}:{body_sha256_hex} with the empty string for a bodyless GET and a ±300-second window."
+    },
+    {
+      "output": "docs/examples/standalone-serve-with-stub.sh",
+      "sources": ["src/main.rs", "src/gateway/broker.rs", "src/providers/adapter.rs"],
+      "instruction": "The launch sequence must keep matching brama serve --local-credentials-stdin (JSON map over stdin, zeroized) and the loopback-only BRAMA_PROVIDER_OPENAI_BASE_URL override validation."
+    },
+    {
+      "output": "docs/examples/health-then-ready.sh",
+      "sources": ["src/core/server.rs"],
+      "instruction": "The script must keep encoding the evidence rule: /health is liveness only (dependencies not_probed) and /readyz is the readiness verdict whose 503 reason names the failing half."
+    },
+    {
+      "output": "docs/examples/subscription-pool-report.sh",
+      "sources": ["src/main.rs", "src/subscription_dispatch/pool.rs"],
+      "instruction": "The script must keep to the read-only pool surfaces (brama subscriptions list, GET /v1/admin/subscription-pool) and its output expectations must match the pool report shape in src/subscription_dispatch/pool.rs."
     }
   ]
 }
