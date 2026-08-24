@@ -1,0 +1,36 @@
+name: funnel-keepalive
+
+# Brama's public endpoint is the host's Tailscale Funnel, and the funnel rule
+# lives in the Tailscale app's state on charless-mac-mini — where it has been
+# lost twice without any beacon noticing, because a beacon proves a brama
+# process exists, not that its published endpoint answers. This workflow runs
+# scripts/brama-funnel-publisher.sh on that same host every few minutes so a
+# lost rule heals itself inside one schedule interval instead of waiting for an
+# operator who remembers configure-hosted-funnel.sh.
+#
+# The runner label is the release-control runner, which is the mini itself:
+# the script must run ON the machine whose tailscaled owns the funnel.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: funnel-keepalive
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: [self-hosted, macOS, ARM64, stado-release]
+    timeout-minutes: 5
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Publish and verify the Brama funnel
+        run: ./scripts/brama-funnel-publisher.sh
