@@ -3049,6 +3049,39 @@ async fn probe_admin_subscription(
         "subscription": subscription_view(&entry),
     })))
 }
+/// The dispatch pool exactly as the process that dispatches requests believes
+/// it: the same document `pool::report` builds for the operator-facing
+/// listing, served by the process that owns the ledger instead of a second
+/// process asked to reconstruct it.
+///
+/// It is not mounted under `/v1/admin/subscriptions/pool` because this
+/// router's matcher (matchit 0.7) refuses a static segment beside the
+/// `:agent_id` parameter already registered there.
+async fn admin_subscription_pool(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    Ok(Json(crate::subscription_dispatch::pool::report().await))
+}
+
+/// One operator-driven refresh of a provider's pooled grants, run by the
+/// serving process so the attempt shares the sweep's code path and its audit
+/// record. A verdict whose result is not `refreshed` is still a 200: the body
+/// is the report the operator came for, and the failure it names belongs to
+/// the provider, not to this endpoint.
+async fn refresh_admin_subscription_pool(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Json(request): Json<RefreshSubscriptionPoolRequest>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    crate::subscription_dispatch::pool::refresh_provider(
+        &request.provider.unwrap_or_default(),
+        &request.reason.unwrap_or_default(),
+    )
+    .await
+    .map(Json)
+    .map_err(|message| api_error(StatusCode::BAD_REQUEST, &message))
+}
 
 async fn get_stats() -> impl IntoResponse {
     let provider_descriptors = crate::providers::adapter::providers();
@@ -3117,6 +3150,12 @@ struct DonateSubscriptionRequest {
 #[serde(deny_unknown_fields)]
 struct RetireSubscriptionRequest {
     subscription_id: Option<String>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RefreshSubscriptionPoolRequest {
+    provider: Option<String>,
+    reason: Option<String>,
 }
 
 type ApiError = (StatusCode, Json<serde_json::Value>);
@@ -3397,6 +3436,11 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
         .route(
             "/v1/admin/subscriptions/:agent_id/:subscription_id/probe",
             post(probe_admin_subscription),
+        )
+        .route("/v1/admin/subscription-pool", get(admin_subscription_pool))
+        .route(
+            "/v1/admin/subscription-pool/refresh",
+            post(refresh_admin_subscription_pool),
         )
         .layer(Extension(aliases))
         .layer(middleware::from_fn_with_state(
