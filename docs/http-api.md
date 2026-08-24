@@ -4,7 +4,8 @@ Brama serves one HTTP listener, loopback by default (`127.0.0.1:8080`, port
 from `brama serve --port`, address from `BRAMA_BIND_ADDRESS`). Every route —
 including `/health` — sits behind the transport guard; every route except
 `/health` and `/readyz` additionally requires a bearer. Errors on all routes
-use the envelope in [errors](errors.md).
+use the envelope in [errors](errors.md); example bodies below were captured
+from a running 0.2.38 gateway.
 
 ## Route table
 
@@ -25,7 +26,7 @@ use the envelope in [errors](errors.md).
 | POST | `/v1/account/subscriptions` | Wisent user session | store a provider API key |
 | DELETE | `/v1/account/subscriptions/:subscription_id` | Wisent user session | retire an account key |
 | GET | `/stats` | bearer | bounded process telemetry |
-| GET | `/v1/admin/snapshot` | `brama-desktop` only | routes and subscription snapshot |
+| GET | `/v1/admin/snapshot` | `brama-desktop` only | routes and provider snapshot |
 | PUT | `/v1/admin/routes` | `brama-desktop` only | update one alias route |
 | GET | `/v1/admin/subscriptions/:agent_id` | `brama-desktop` only | list an agent's subscriptions |
 | POST | `/v1/admin/subscriptions/:agent_id` | `brama-desktop` only | store a subscription credential |
@@ -40,8 +41,15 @@ A request is accepted only when its peer is loopback, the address the gateway
 itself bound, a peer named in `BRAMA_ENCRYPTED_PEER_IPS` (a mesh hop that is
 already encrypted), or a proxy named in `BRAMA_TRUSTED_PROXY_IPS` whose
 `Forwarded`/`X-Forwarded-Proto` headers state `https`. Anything else answers
-`426` with `HTTPS is required except for direct loopback requests`. Forwarded
-headers from an unlisted peer are never trusted.
+(captured):
+
+```json
+{"error":{"attempts":0,"code":"secure_transport_required",
+ "message":"HTTPS is required except for direct loopback requests",
+ "retryable":false,"type":"transport_error"}}
+```
+
+with status `426`. Forwarded headers from an unlisted peer are never trusted.
 
 ## Authentication
 
@@ -54,112 +62,245 @@ closed, and the verdict is cached for five seconds so revocation stays
 effective without a restart. A model-scoped bearer (one carrying
 `allowed_models`) may reach only the six inference and discovery paths plus
 the account routes; anything else is `403`. Agent-scoped operations
-additionally sign the exact raw body with the HMAC trio described in
-[subscriptions](subscriptions.md).
+additionally sign the exact raw body with the HMAC trio
+([concepts/entitlement](concepts/entitlement.md)); a missing header on a
+route that needs one answers, for example,
+`401 {"message":"missing x-agent-id header"}` (captured on `model:"best"`).
 
-## `/health` versus `/readyz`
+## `GET /health`
 
-`/health` is liveness only and says so in its body:
+Liveness only, no request fields. Captured:
 
 ```json
-{"status": "ok", "build": {...}, "dependencies": "not_probed"}
+{"build":{"built_at":"...","platform":"...","product":"brama",
+ "source_revision":"...","version":"0.2.38"},
+ "dependencies":"not_probed","status":"ok"}
 ```
 
 It never redeems a credential, lists subscriptions, or contacts a provider —
-it answers `ok` from a gateway whose every redemption is being refused.
+it answers `ok` from a gateway whose every redemption is being refused
+([architecture](architecture.md#health-versus-readyz)).
 
-`/readyz` is the only evidence that the product works. Per request it:
+## `GET /readyz`
 
-1. redeems one capability per configured provider, through the same broker
-   call the request path makes;
-2. checks that every active subscription contributes at least one
-   discoverable model;
-3. redeems one credential per active subscription;
-4. reports vault subscription accounts that carry no `brama:agent:` tag —
-   accounts no listing can see and no agent can route to.
+The only evidence that the product works. Per request it: (1) redeems one
+capability per configured provider through the same broker call the request
+path makes; (2) checks every active subscription contributes at least one
+discoverable model; (3) redeems one credential per active subscription;
+(4) reports vault subscription accounts carrying no `brama:agent:` tag.
+Captured healthy body:
 
-`ready` is true only when all four pass and at least one provider capability
-is configured. Otherwise the status is `503` and `reason` names the failing
-half; the body carries `providers` (per-provider `credential` verdicts),
-`denied`, `routing`, `unroutable`, `subscriptions` (per-subscription
-`redeemable` and the refusal in the words of whatever refused),
-`unredeemable`, `unroutable_accounts`, `operator_action_required`, and
-`build` — never a secret. Deploy checks and uptime monitors read `/readyz`;
-`/health` only proves the process is running.
+```json
+{"build":{...},"denied":[],"operator_action_required":false,
+ "providers":[{"credential":true,"provider":"openai"}],
+ "ready":true,
+ "reason":"every configured provider credential was obtained, every active subscription redeemed, and every vault account carries the agent tag that makes it routable",
+ "routing":[],"subscriptions":[],"unredeemable":[],"unroutable":[],
+ "unroutable_accounts":[]}
+```
 
-## Inference
+Otherwise status `503` with `ready: false` and `reason` naming the failing
+half — the five sentences and their repairs are in the
+[runbook](runbook.md#readyz-answers-503). `subscriptions[]` rows carry
+per-subscription `redeemable` and the refusal in the words of whatever
+refused; never a secret.
 
-The three chat formats are one workflow: identity, allowlist, alias
-resolution, selector semantics, billing ownership, attempt bounds, and the
-error contract are identical; only the request and answer shapes differ. Each
-requires a `model` naming an allowed alias, a canonical `provider/model`
-route, or a selector (`best` via alias, `any`, `any-vision-capable`,
-`task:<task-name>`); a missing model is `400 missing field `model``. No
-format may guess a provider from a bare vendor model name.
+## The three inference dialects
 
-`POST /v1/chat/completions` accepts exactly: `model`, `messages`,
-`max_tokens` (default 1024, bounded at 32768), `temperature` (default 0.7,
-maximum 2), `tools`, `tool_choice`, `billingTarget`
-(`providerId`/`accountId`/`subscriptionId`), and `stream`. Unknown fields are
-refused. The Anthropic and Responses formats accept their own dialects;
-fields the provider-neutral request cannot hold (stop sequences,
-cache-control hints, reasoning options, stored-response identifiers,
-non-function tool types) are accepted and dropped rather than approximated.
+`POST /v1/chat/completions`, `POST /v1/messages`, and `POST /v1/responses`
+are one workflow: identity, allowlist, alias resolution, selector semantics,
+billing ownership, attempt bounds, and the error contract are identical;
+only the request and answer shapes differ. Each requires a `model` naming an
+allowed alias, a canonical `provider/model` route, or a selector; a missing
+model is `400 missing field `model``, and a bare vendor name is
+`400 model must be a canonical provider/model route or a supported selector`
+(both captured). Shared validation: `max_tokens` default 1024, refused
+outside 1..32768 (`max_tokens must be between one and 32768`); `temperature`
+default 0.7, refused unless finite and ≤ 2 (`temperature must be finite and
+between zero and 2`); `messages must not be empty`.
 
-With `"stream": true` the response is `text/event-stream` in the caller's own
-dialect: `chat.completion.chunk` frames closed by `data: [DONE]`, Anthropic
-`message_start`/`content_block_*`/`message_stop` events, or `response.*`
-events closed by `response.completed`. Rotation across models and credentials
-happens only before the first byte; a stream that ends without its terminal
-event was cut after commit, and Brama has already stopped — it never resumes
-a committed generation on another credential. Streaming a model reachable
-only through the shared catalogue is refused as `400 invalid_request` before
-any provider is contacted.
+### `POST /v1/chat/completions`
 
-`POST /v1/embeddings` and `POST /v1/moderations` are typed alias-only
-endpoints on the `wisent-backend/embeddings` and `wisent-backend/moderation`
-routes.
+Accepts exactly: `model`, `messages`, `max_tokens`, `temperature`, `tools`,
+`tool_choice`, `billingTarget` (`providerId`/`accountId`/`subscriptionId`),
+`stream`. Unknown fields are refused with the deserializer's own sentence
+(captured):
 
-`GET /v1/models` combines public catalog metadata with what the caller can
-execute: account discovery marks models executable by that account's stored
-keys, and signed agent discovery includes agent-owned subscriptions.
+```text
+400 invalid JSON: unknown field `frequency_penalty`, expected one of `model`,
+`messages`, `max_tokens`, `temperature`, `tools`, `tool_choice`,
+`billingTarget`, `stream` at line 1 column 93
+```
 
-## Subscription lifecycle
+Success (captured):
 
-`GET|POST|DELETE /v1/subscriptions/:agent_id` are always bearer- and
-HMAC-protected: the bearer-bound agent, the signed agent, and the path agent
-must agree. A `GET` returns, per subscription, the provider-reported plan
-windows (`limits`), what Brama measured (`measured`), any rate-limit `block`
-in force, `observed_at_ms`, `usage_source` and `stale`, the newest `probe`
-verdict, and where the credential stands (`credential.state`: `active`,
-`needs_reauthorization`, or `disabled`, with `cause` and instants). `POST`
-donates a credential — the value crosses only the request body and the local
-entitlements-router stdin pipe, and is never returned. `DELETE` retires a
-subscription. Field semantics live in [subscriptions](subscriptions.md).
+```json
+{"choices":[{"finish_reason":"stop","index":0,
+  "message":{"content":"...","role":"assistant"}}],
+ "id":"chatcmpl-...","model":"<route>","object":"chat.completion",
+ "usage":{"completion_tokens":7,"prompt_tokens":9,"total_tokens":16}}
+```
+
+With `"stream": true`: `text/event-stream` of `chat.completion.chunk`
+frames — a role delta first, then content deltas, a `finish_reason` frame, a
+usage frame, closed by `data: [DONE]` (captured in
+[the walkthrough](walkthrough-standalone-stub.md#4-one-routed-completion)).
+
+### `POST /v1/messages`
+
+The Anthropic Messages dialect over the same routing decision. Accepts the
+Anthropic request shape (`model`, `max_tokens`, `messages`, system, tools,
+streaming); fields the provider-neutral request cannot hold (stop sequences,
+cache-control hints, non-function tool types) are accepted and dropped
+rather than approximated. Success (captured):
+
+```json
+{"content":[{"text":"...","type":"text"}],"id":"msg_...",
+ "model":"<route>","role":"assistant","stop_reason":"end_turn",
+ "stop_sequence":null,"type":"message",
+ "usage":{"input_tokens":9,"output_tokens":7}}
+```
+
+Streaming emits `message_start` / `content_block_*` / `message_delta` /
+`message_stop` events, no `[DONE]`.
+
+### `POST /v1/responses`
+
+The OpenAI Responses dialect (`input` in place of `messages`; reasoning
+options and stored-response identifiers are dropped). Success (captured):
+
+```json
+{"created_at":...,"id":"resp_...","model":"<route>","object":"response",
+ "output":[{"content":[{"annotations":[],"text":"...","type":"output_text"}],
+   "id":"msg_...","role":"assistant","status":"completed","type":"message"}],
+ "status":"completed",
+ "usage":{"input_tokens":9,"output_tokens":7,"total_tokens":16}}
+```
+
+Streaming emits `response.*` events closed by `response.completed`.
+
+### Streaming commit rule
+
+Rotation across models and credentials happens only before the first byte; a
+stream that ends without its terminal event was cut after commit, and Brama
+has already stopped — it never resumes a committed generation on another
+credential. Streaming a model reachable only through the shared catalogue is
+refused as `400 invalid_request` before any provider is contacted.
+
+## `POST /v1/embeddings`
+
+Typed alias-only endpoint on the `wisent-backend/embeddings` route. Accepts
+exactly `model`, `input`, `encoding_format` (`float` or `base64`),
+`dimensions`, `user`; refusals include `invalid embedding input` and
+`invalid embedding encoding format`. On a deployment without the embeddings
+alias the captured answer is `500 {"code":"internal_error","message":
+"embedding alias missing"}`. Success is the OpenAI embeddings shape
+(`object: "list"`, `data[].embedding`, `usage`).
+
+## `POST /v1/moderations`
+
+Typed alias-only endpoint on `wisent-backend/moderation`; requires `model`
+and `input` (`invalid moderation input` on shape errors). Success is the
+OpenAI moderations shape.
+
+## `GET /v1/models`
+
+Combines public catalog metadata with what the caller can execute: account
+discovery marks models executable by that account's stored keys, and signed
+agent discovery includes agent-owned subscriptions. Captured shape:
+
+```json
+{"data":[{"id":"<provider>/<model>","object":"model","owned_by":"<provider>"}, ...]}
+```
+
+## Subscription lifecycle (agent-signed)
+
+All three verbs on `/v1/subscriptions/:agent_id` require bearer + HMAC, and
+the bearer-bound agent, signed agent, and path agent must agree
+(`403 forbidden` on any mismatch — captured). Field semantics are in
+[concepts/subscription](concepts/subscription.md).
+
+- **GET** → `{"subscriptions": [...]}` (captured empty:
+  `{"subscriptions":[]}`). Each row is the subscription view: `id`,
+  `provider`, `status`, `limits` (provider-reported plan windows),
+  `measured`, `block`, `observed_at_ms`, `probe`, `credential`
+  (`state`: `active` | `needs_reauthorization` | `disabled`, with `cause`
+  and instants), `usage_source` (`provider` | `traffic` | `probe`), `stale`
+  (`src/core/server.rs:2800`).
+- **POST** — body `{"provider", "label"?, "api_key"}` (unknown fields
+  refused). Refusals: `provider must name a supported remote API or
+  subscription provider` (400), `api_key must contain 1..8000 characters`
+  (400), a document that does not reduce to a bearer (400, donor's to fix),
+  a failed vault write (500, this installation's). Success:
+  `{"subscription": {"id": "brama-sub-<agent>-<provider>-primary",
+  "provider", "agent_id", "status": "active", "label"}}`. The credential
+  value is never returned.
+- **DELETE** — body `{"subscription_id"}`; `subscription_id is required`
+  (400), `subscription not found` (404) for a target the signed agent does
+  not own. Success `{"ok": true}`. Retirement is a journal record that
+  outranks whatever the last refresh concluded, never a vault deletion.
+
+## Account lifecycle (Wisent user session)
 
 The `/v1/account/subscriptions` family is the same lifecycle for
 authenticated Wisent users: the owner is derived from the verified session,
 never from a caller-supplied account or agent identifier, and `POST` accepts
-an API key for any supported remote provider except `local-openai`.
+an API key for any supported remote provider except `local-openai`. A plain
+service bearer is refused (`403 forbidden`, captured).
+
+## `GET /stats`
+
+Bearer-protected, no dependency probing. Captured keys: `build`,
+`configuredDirectProviders`, `dependencyPolicy` (`{"capabilityBroker":
+"final-use","catalog":"lazy","subscriptions":"lazy"}`), `limits`
+(`{"maxOutputTokens":32768,"requestDeadlineSeconds":300}`), `models[]`
+(per-model `count`, `latencyMs`, `lastLatencyMs`, `tps`, `lastTps`),
+`perfModels`, `providers[]` (per-descriptor `id`, `displayName`,
+`wireProtocol`, `configured`), plus cumulative `total_requests`,
+`total_failures`, `total_provider_attempts`, `total_input_tokens`,
+`total_output_tokens`, and `uptimeSeconds`. Process telemetry is not durable
+billing evidence.
 
 ## Admin surface
 
 The `/v1/admin/*` family answers only a `brama-desktop` identity with no
-model allowlist; every other caller gets `403`. Responses carry identifiers,
-usage, and status only; subscription credentials remain write-only.
-`POST .../probe` is the one endpoint in the product that deliberately spends
-plan quota: one minimal completion against one named subscription, recorded
-as a `probe` with source `completion`, refused with `409` when the
-subscription is inside a recorded block, and never triggered by any timer.
-`GET /v1/admin/subscription-pool` serves the same report as
-`brama subscriptions list`; `POST /v1/admin/subscription-pool/refresh` runs
-the same audited refresh as `brama subscription refresh` (see [cli](cli.md)).
+model allowlist; every other caller gets `403 forbidden` (captured).
+Responses carry identifiers, usage, and status only; subscription
+credentials remain write-only.
 
-## `/stats`
-
-Bearer-protected, no dependency probing. Returns build identity, cumulative
-`total_requests`, `total_failures`, `total_provider_attempts`,
-`total_input_tokens`, `total_output_tokens`, `uptimeSeconds`, per-provider
-descriptors with a `configured` flag, per-model latency/throughput telemetry,
-the request limits, and the dependency policy. Process telemetry is not
-durable billing evidence.
+- **GET `/v1/admin/snapshot`** — captured keys: `schemaVersion` (1),
+  `automaticRollback` (true), `boundaries`
+  (`{"credentials":"skarbiec","releases":"stado","routing":"brama"}`),
+  `providers[]` (as `/stats`), `routes`
+  (`{"deployments":[],"routes":{},"fallbacks":{}}` from the routes file).
+  `503 route registry unavailable` when the configured file will not read.
+- **PUT `/v1/admin/routes`** — body exactly
+  `{"alias", "primary", "fallbacks"}` (an unknown field is refused with the
+  deserializer sentence, captured). Refusals: `409 runtime route registry is
+  not configured` (captured — no routes file in effect), `400 unknown route
+  alias`, `400 route chain is unsupported, duplicated, or unavailable`,
+  `409 route update was rejected`. Success `{"ok": true, "routes": ...}`;
+  the write is atomic and validated before rename.
+- **GET `/v1/admin/subscriptions/:agent_id`** — captured:
+  `{"agentId":"<agent>","subscriptions":[]}`; rows are the same
+  subscription view as the signed listing.
+- **POST `/v1/admin/subscriptions/:agent_id`** — same body and refusals as
+  the agent-signed donation, authenticated by the desktop identity instead
+  of the HMAC trio.
+- **DELETE `/v1/admin/subscriptions/:agent_id/:subscription_id`** — retire;
+  `404 subscription not found` for an unknown target.
+- **POST `.../probe`** — the one endpoint in the product that deliberately
+  spends plan quota: one minimal completion against one named subscription,
+  recorded as a `probe` with source `completion`, refused with `409` when
+  the subscription is inside a recorded block, `404 subscription not found`
+  otherwise absent (captured), and never triggered by any timer. Success
+  `{"ok": true, "probe": {...}, "subscription": {...}}`.
+- **GET `/v1/admin/subscription-pool`** — the same report as
+  `brama subscriptions list --json` (captured empty:
+  `{"providers":[]}`).
+- **POST `/v1/admin/subscription-pool/refresh`** — body
+  `{"provider", "reason"}`; runs the same audited refresh as
+  `brama subscription refresh` and answers the verdict with status 200
+  (captured: `{"attempted":0,"detail":"no usable `codex` subscription is in
+  this deployment's pool, ...","provider":"codex","result":"failed"}`); the
+  verdict is the answer — only the CLI maps `failed` to a non-zero exit.
