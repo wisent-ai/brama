@@ -47,6 +47,13 @@ fi
 BRAMA_BIN=${BRAMA_BIN:-"$default_brama_bin"}
 ENTITLEMENTS_ROUTER_BIN=${ENTITLEMENTS_ROUTER_BIN:-"$default_router_bin"}
 config_dir=${BRAMA_SKARBIEC_CONFIG_DIR:-"$default_config_dir"}
+if [ -n "${BRAMA_BIN_OVERRIDE:-}" ]; then
+  [ -x "$BRAMA_BIN_OVERRIDE" ] || {
+    printf '%s\n' "BRAMA_BIN_OVERRIDE is not executable: $BRAMA_BIN_OVERRIDE" >/dev/stderr
+    false
+  }
+  BRAMA_BIN="$BRAMA_BIN_OVERRIDE"
+fi
 PYTHON_BIN=${PYTHON_BIN:-python3}
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || {
   printf '%s\n' "PYTHON_BIN is not executable: $PYTHON_BIN" >/dev/stderr
@@ -1001,6 +1008,16 @@ while [ ! -S "$SKARBIEC_CAP_SOCKET" ]; do
   fi
   sleep 0.05
 done
+
+# The same trust, routes and short-lived capabilities serve administrative CLI
+# journeys. Keeping that setup here prevents `brama onboard` from silently
+# falling back to an unconfigured in-process router while the service itself is
+# healthy. A command exits through the trap above, so its temporary broker is
+# removed; the long-running service path below still uses `exec`.
+if [ "$#" -gt 0 ]; then
+  "$BRAMA_BIN" "$@"
+  exit $?
+fi
 
 
 # Renewal runs here because nothing else runs it. A subscription credential that
