@@ -63,14 +63,7 @@ jobs:
       - name: Verify managed Stado release client
         run: /Users/charles/.stado/bin/stado --version
       - name: Keep the release credential service responsive
-        env:
-          STADO_CONFIG: /Users/charles/.config/stado/config.json
-          STADO_BIN: /Users/charles/.stado/bin/stado
-        run: |
-          "$STADO_BIN" host install-helper charless-mac-mini \
-            "$GITHUB_WORKSPACE/release-control-source/scripts/ensure-skarbiec-responsive.sh" \
-            ensure-skarbiec-responsive
-          "$STADO_BIN" host run-helper charless-mac-mini ensure-skarbiec-responsive
+        run: release-control-source/scripts/ensure-skarbiec-responsive.sh
       - name: Build and publish through the Stado release pipeline
         if: inputs.action == 'submit-stable'
         env:
