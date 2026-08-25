@@ -50,7 +50,6 @@ jobs:
           repository: ${{ vars.STADO_REPOSITORY }}
           ref: ${{ vars.STADO_RELEASE_CLI_REVISION }}
           path: stado-source
-      - uses: dtolnay/rust-toolchain@stable
       - name: Prepare ephemeral release workspace
         env:
           BRAMA_RELEASE_SIGNING_KEY_B64: ${{ secrets.BRAMA_RELEASE_SIGNING_KEY_B64 }}
@@ -61,13 +60,12 @@ jobs:
             : "${BRAMA_RELEASE_SIGNING_KEY_B64:?BRAMA_RELEASE_SIGNING_KEY_B64 is required for prepare}"
             printf '%s' "$BRAMA_RELEASE_SIGNING_KEY_B64" | base64 --decode > "$RUNNER_TEMP/release-control/brama-release.pk8"
           fi
-      - name: Build pinned Stado release client
-        working-directory: stado-source/stado-rs
-        run: cargo build --locked --release --bin stado
+      - name: Verify managed Stado release client
+        run: /Users/charles/.stado/bin/stado --version
       - name: Keep the release credential service responsive
         env:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
-          STADO_BIN: ${{ github.workspace }}/stado-source/stado-rs/target/release/stado
+          STADO_BIN: /Users/charles/.stado/bin/stado
         run: |
           "$STADO_BIN" host install-helper charless-mac-mini \
             "$GITHUB_WORKSPACE/release-control-source/scripts/ensure-skarbiec-responsive.sh" \
@@ -77,7 +75,7 @@ jobs:
         if: inputs.action == 'submit-stable'
         env:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
-          STADO_BIN: ${{ github.workspace }}/stado-source/stado-rs/target/release/stado
+          STADO_BIN: /Users/charles/.stado/bin/stado
         run: |
           release-control-source/scripts/run-retryable-stado.sh "$STADO_BIN" release submit \
             --source "$GITHUB_WORKSPACE/brama-source" \
@@ -100,7 +98,7 @@ jobs:
         working-directory: brama-source
         env:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
-          STADO_BIN: ${{ github.workspace }}/stado-source/stado-rs/target/release/stado
+          STADO_BIN: /Users/charles/.stado/bin/stado
           RECEIPT_DIR: ${{ runner.temp }}/release-control
         run: |
           source_revision="$(git rev-parse HEAD)"
@@ -160,13 +158,13 @@ jobs:
         if: inputs.action == 'promote-candidate'
         env:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
-        run: release-control-source/scripts/run-retryable-stado.sh stado-source/stado-rs/target/release/stado release promote brama "${{ inputs.version }}" --channel candidate --json
+        run: release-control-source/scripts/run-retryable-stado.sh /Users/charles/.stado/bin/stado release promote brama "${{ inputs.version }}" --channel candidate --json
       - name: Promote stable routing
         if: inputs.action == 'promote-stable'
         env:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
         run: |
-          release-control-source/scripts/run-retryable-stado.sh stado-source/stado-rs/target/release/stado release promote brama "${{ inputs.version }}" --channel stable --json
+          release-control-source/scripts/run-retryable-stado.sh /Users/charles/.stado/bin/stado release promote brama "${{ inputs.version }}" --channel stable --json
           stado-source/stado-rs/scripts/reconcile-release-funnel-host.sh
       - name: Reconcile public release origin only
         if: inputs.action == 'reconcile-origin'
@@ -176,7 +174,7 @@ jobs:
         env:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
         run: |
-          release-control-source/scripts/run-retryable-stado.sh stado-source/stado-rs/target/release/stado service release \
+          release-control-source/scripts/run-retryable-stado.sh /Users/charles/.stado/bin/stado service release \
             com.wisent.always-on.brama \
             --host charless-mac-mini \
             --product brama \
@@ -188,12 +186,12 @@ jobs:
         if: inputs.action == 'status'
         env:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
-        run: release-control-source/scripts/run-retryable-stado.sh stado-source/stado-rs/target/release/stado release status brama --json
+        run: release-control-source/scripts/run-retryable-stado.sh /Users/charles/.stado/bin/stado release status brama --json
       - name: Request rollback
         if: inputs.action == 'rollback'
         env:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
-        run: release-control-source/scripts/run-retryable-stado.sh stado-source/stado-rs/target/release/stado release rollback brama --json
+        run: release-control-source/scripts/run-retryable-stado.sh /Users/charles/.stado/bin/stado release rollback brama --json
       - name: Remove ephemeral release credentials
         if: always()
         run: rm -rf "$RUNNER_TEMP/release-control"
