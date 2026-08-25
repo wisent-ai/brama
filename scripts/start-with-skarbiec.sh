@@ -1059,8 +1059,8 @@ fi
 # release was quarantined even though its own process model was correct. Retire
 # only an exact stale managed executable: never kill an arbitrary listener.
 brama_port=${BRAMA_PORT_OVERRIDE:-${PORT:-8080}}
-if command -v lsof >/dev/null 2>&1; then
-  for stale_pid in $(lsof -nP -tiTCP:"$brama_port" -sTCP:LISTEN 2>/dev/null || true); do
+if [ -x /usr/sbin/lsof ]; then
+  for stale_pid in $(/usr/sbin/lsof -nP -tiTCP:"$brama_port" -sTCP:LISTEN 2>/dev/null || true); do
     stale_bin=$(ps -p "$stale_pid" -o comm= 2>/dev/null || true)
     case "$stale_bin" in
       "${HOME:-/nonexistent}/.stado/services/brama/sha256-"*/darwin-arm/bin/brama)
