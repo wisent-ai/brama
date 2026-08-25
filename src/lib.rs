@@ -1,3 +1,8 @@
+// Response and failure envelopes are intentionally returned by value across the
+// existing public API. Boxing them would be a breaking type change; Rust 1.98
+// began warning about their size after this contract was published.
+#![allow(clippy::result_large_err)]
+
 pub mod build_info;
 pub mod capability;
 pub mod core;
