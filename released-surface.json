@@ -1,12 +1,14 @@
 {
-  "version": "0.2.8",
-  "source": "github-release:v0.2.8 -- immutable archives and checksums published by the repository release workflow",
+  "version": "0.2.36",
+  "source": "github-release:v0.2.36 -- immutable archives and checksums published by the repository release workflow",
   "surface": [
     "collect-task-quality",
     "detect",
     "mcp",
     "onboard",
     "serve",
+    "subscription",
+    "subscriptions",
     "test",
     "version"
   ]

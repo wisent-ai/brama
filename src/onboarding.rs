@@ -11,6 +11,10 @@ use wisent_onboarding_client::{
     JourneyBundle, JourneyClient, JourneyError, ProgressStatus, RuntimeEvent, ScopeKind, Transport,
 };
 
+use crate::providers::adapter::provider_id_from_route;
+use crate::subscription_dispatch::{
+    dispatch_direct_with_fallback, dispatch_subscription_for_agent, is_subscription_model,
+};
 use crate::{Message, ModelRequest};
 
 const PRODUCT_ID: &str = "brama";
@@ -266,8 +270,13 @@ pub async fn run_first_use(
         tool_choice: None,
         billing_target: None,
     };
-    let response =
-        crate::subscription_dispatch::dispatch_subscription_for_agent(&agent_id, &request).await;
+    let direct_provider = provider_id_from_route(&request.model)
+        .is_some_and(crate::gateway::broker::provider_capability_configured);
+    let response = if is_subscription_model(&request.model) && !direct_provider {
+        dispatch_subscription_for_agent(&agent_id, &request).await
+    } else {
+        dispatch_direct_with_fallback(&request, &[]).await
+    };
     if !response.success {
         eprintln!(
             "Model request failed: {}",
