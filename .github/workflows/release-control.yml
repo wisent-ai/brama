@@ -162,6 +162,12 @@ jobs:
       - name: Reconcile public release origin only
         if: inputs.action == 'reconcile-origin'
         run: stado-source/stado-rs/scripts/reconcile-release-funnel-host.sh
+      - name: Ensure the Brama LaunchDaemon is loaded
+        if: inputs.action == 'activate-stable'
+        run: |
+          if ! sudo launchctl print system/com.wisent.always-on.brama >/dev/null 2>&1; then
+            sudo launchctl bootstrap system /Library/LaunchDaemons/com.wisent.always-on.brama.plist
+          fi
       - name: Activate stable release with unified observed state
         if: inputs.action == 'activate-stable'
         env:
