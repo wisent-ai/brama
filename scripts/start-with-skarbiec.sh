@@ -31,6 +31,7 @@ elif [ -n "${BRAMA_SERVICE_ENV_FILE:-}" ]; then
   printf '%s\n' "BRAMA_SERVICE_ENV_FILE is not a regular file: $service_env_file" >/dev/stderr
   false
 fi
+configured_config_dir=${BRAMA_SKARBIEC_CONFIG_DIR:-}
 
 # A versioned bundle carries its own executables and trust material; these must
 # move together because registry.json binds capabilities to that exact binary.
@@ -53,6 +54,14 @@ if [ -n "${BRAMA_BIN_OVERRIDE:-}" ]; then
     false
   }
   BRAMA_BIN="$BRAMA_BIN_OVERRIDE"
+  # A source-tree binary is not a system installation. Provision its generated
+  # trust beside the user's service state unless the caller named another
+  # directory; /etc is both shared with production and unwritable in a normal
+  # development or Probierz journey.
+  if [ -z "$configured_config_dir" ]; then
+    BRAMA_SKARBIEC_CONFIG_DIR="${HOME:-/nonexistent}/.config/brama/trust"
+    config_dir="$BRAMA_SKARBIEC_CONFIG_DIR"
+  fi
 fi
 PYTHON_BIN=${PYTHON_BIN:-python3}
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || {
@@ -192,14 +201,15 @@ stable_proof_key=${BRAMA_PROOF_KEY_FILE:-"${HOME:-/nonexistent}/.stado/brama-pro
 # have read held the subscriptions all along. What exists is a fact about the
 # vault, so nothing is copied to declare it.
 if [ "$bundled_installation" -eq 1 ]; then
-  for seed in recipient-public-keys.asc; do
-    if [ -f "$bundle_root/etc/brama-skarbiec/$seed" ] && [ ! -f "$config_dir/$seed" ]; then
-      mkdir -p "$config_dir"
-      chmod u=rwx,go= "$config_dir"
-      cp "$bundle_root/etc/brama-skarbiec/$seed" "$config_dir/$seed"
-      printf '%s\n' "seeded $seed into $config_dir from this release" >/dev/stderr
-    fi
-  done
+  seed_source="$bundle_root/etc/brama-skarbiec/recipient-public-keys.asc"
+else
+  seed_source="$bundle_root/scripts/skarbiec-recipient-public-keys.asc"
+fi
+if [ -f "$seed_source" ] && [ ! -f "$config_dir/recipient-public-keys.asc" ]; then
+  mkdir -p "$config_dir"
+  chmod u=rwx,go= "$config_dir"
+  cp "$seed_source" "$config_dir/recipient-public-keys.asc"
+  printf '%s\n' "seeded recipient-public-keys.asc into $config_dir" >/dev/stderr
 fi
 # Authoritative for the provision below, whether or not it exists yet: the
 # generator's own default lives elsewhere, so leaving this unset is how a first
@@ -451,7 +461,7 @@ try:
 except (KeyError, TypeError) as error:
     raise SystemExit(f"services.brama policy is incomplete: {error}") from error
 
-expected_aliases = {
+required_aliases = {
     "best",
     "wisent-backend/chat/primary",
     "wisent-backend/chat/fallback",
@@ -460,42 +470,40 @@ expected_aliases = {
     "wisent-backend/moderation",
     "weles/agent/primary",
 }
-if (
-    not isinstance(allowed_models, list)
-    or any(not isinstance(value, str) or not value or value.strip() != value for value in allowed_models)
-    or len(allowed_models) != len(set(allowed_models))
-    or set(allowed_models) != expected_aliases
-):
-    # Four conditions share one sentence, and the sentence named none of them. A
-    # candidate failed this check on a host whose configured file held exactly the
-    # expected set, and the only way to tell which condition fired was to add this.
-    # Aliases are not secrets.
-    if not isinstance(allowed_models, list):
-        raise SystemExit(
-            f"services.brama.allowed_models must be a list, found {type(allowed_models).__name__}"
-            f" in {config_path}"
-        )
-    malformed = [
-        value
-        for value in allowed_models
-        if not isinstance(value, str) or not value or value.strip() != value
-    ]
-    duplicates = sorted({value for value in allowed_models if allowed_models.count(value) > 1})
+if not isinstance(allowed_models, list):
     raise SystemExit(
-        "services.brama.allowed_models must contain the exact closed Brama alias set"
+        f"services.brama.allowed_models must be a list, found {type(allowed_models).__name__}"
+        f" in {config_path}"
+    )
+malformed = [
+    value
+    for value in allowed_models
+    if not isinstance(value, str) or not value or value.strip() != value
+]
+duplicates = sorted({value for value in allowed_models if allowed_models.count(value) > 1})
+alias_names = set(aliases) if isinstance(aliases, dict) else set()
+allowed_names = {value for value in allowed_models if isinstance(value, str)}
+if (
+    malformed
+    or duplicates
+    or allowed_names != alias_names
+    or not required_aliases.issubset(allowed_names)
+):
+    raise SystemExit(
+        "services.brama.allowed_models must match model_aliases and include the required aliases"
         f"; file={config_path}"
-        f"; missing={sorted(expected_aliases - set(allowed_models))}"
-        f"; unexpected={sorted(set(allowed_models) - expected_aliases)}"
+        f"; missing_required={sorted(required_aliases - allowed_names)}"
+        f"; missing_from_allowed={sorted(alias_names - allowed_names)}"
+        f"; missing_from_aliases={sorted(allowed_names - alias_names)}"
         f"; malformed={malformed}"
         f"; duplicated={duplicates}"
     )
 
-if not isinstance(aliases, dict) or set(aliases) != expected_aliases:
+if not isinstance(aliases, dict) or not required_aliases.issubset(set(aliases)):
     raise SystemExit(
-        "services.brama.model_aliases must contain the exact closed Brama alias set"
+        "services.brama.model_aliases must contain every required Brama alias"
         f"; file={config_path}"
-        f"; missing={sorted(expected_aliases - set(aliases) if isinstance(aliases, dict) else expected_aliases)}"
-        f"; unexpected={sorted(set(aliases) - expected_aliases) if isinstance(aliases, dict) else []}"
+        f"; missing={sorted(required_aliases - set(aliases) if isinstance(aliases, dict) else required_aliases)}"
     )
 malformed_routes = {
     alias: route
@@ -510,14 +518,17 @@ if malformed_routes:
         "services.brama.model_aliases contains malformed provider/model routes"
         f"; file={config_path}; malformed={malformed_routes}"
     )
-expected_providers = {"featherless", "openai"}
 if (
     not isinstance(required_providers, list)
-    or set(required_providers) != expected_providers
-    or len(required_providers) != len(expected_providers)
+    or not required_providers
+    or any(
+        not isinstance(provider, str) or not provider or provider.strip() != provider
+        for provider in required_providers
+    )
+    or len(required_providers) != len(set(required_providers))
 ):
     raise SystemExit(
-        "services.brama.required_provider_capabilities must contain the exact direct provider set"
+        "services.brama.required_provider_capabilities must be a non-empty unique provider list"
     )
 
 def write_policy(path, value):
