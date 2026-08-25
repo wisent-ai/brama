@@ -168,7 +168,7 @@ jobs:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
         run: |
           release-control-source/scripts/run-retryable-stado.sh /Users/charles/.stado/bin/stado service release \
-            com.wisent.always-on.brama \
+            com.wisent.compute.service.brama \
             --host charless-mac-mini \
             --product brama \
             --version "${{ inputs.version }}" \
