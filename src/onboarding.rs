@@ -16,10 +16,6 @@ use crate::subscription_dispatch::{
     dispatch_direct_with_fallback, dispatch_subscription_for_agent, is_subscription_model,
 };
 use crate::{Message, ModelRequest};
-use crate::providers::adapter::provider_id_from_route;
-use crate::subscription_dispatch::{
-    dispatch_direct_with_fallback, dispatch_subscription_for_agent, is_subscription_model,
-};
 
 const PRODUCT_ID: &str = "brama";
 const JOURNEY_ID: &str = "first-use";
