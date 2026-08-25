@@ -1,0 +1,53 @@
+name: provider-reauth
+
+# Brama's codex, claude-code and kimi subscription pools burn out when a
+# provider refresh token dies, and each has a checked-in reauth runner in the
+# weles repository designed to run hourly on charless-mac-mini
+# (scripts/worker/deploy/<provider>-reauth/reauth-launch.sh). Their launchd
+# scheduling is gone from the mini, so the pools stayed burnt behind a
+# healthy-looking beacon until Jeden failed with
+# subscription_reauthorization_required. This workflow restores the tick: the
+# stado-release runner is the mini itself, and it executes the same launchers
+# from the host's own managed weles checkout on an hourly schedule.
+#
+# Every runner is self-guarding: it probes its pool first, exits 0 when
+# healthy, never triggers a fresh browser login on a quota-burnt tick, and only
+# donates or logs in through the credentials its own Skarbiec items describe. A
+# green run therefore costs nothing, and a red one names the pool that needs an
+# operator.
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      providers:
+        description: "Comma-separated subset of pools to run (default: all)"
+        required: false
+        default: "codex,claude,kimi"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-reauth
+  cancel-in-progress: false
+
+jobs:
+  reauth:
+    runs-on: [self-hosted, macOS, ARM64, stado-release]
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [codex, claude, kimi]
+    steps:
+      - name: Skip providers not requested in this dispatch
+        if: >-
+          ${{ github.event_name == 'workflow_dispatch' &&
+              !contains(format(',{0},', github.event.inputs.providers),
+                        format(',{0},', matrix.provider)) }}
+        run: echo "skipped=1" >> "$GITHUB_ENV"
+      - name: Run the ${{ matrix.provider }} reauth launcher from the managed checkout
+        if: env.skipped != '1'
+        run: bash "$HOME/weles/scripts/worker/deploy/${{ matrix.provider }}-reauth/reauth-launch.sh"
