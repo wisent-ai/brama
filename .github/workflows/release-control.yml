@@ -66,7 +66,7 @@ jobs:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
           STADO_BIN: ${{ github.workspace }}/stado-source/stado-rs/target/release/stado
         run: |
-          "$STADO_BIN" release submit \
+          scripts/run-retryable-stado.sh "$STADO_BIN" release submit \
             --source "$GITHUB_WORKSPACE/brama-source" \
             --version "${{ inputs.version }}" \
             --channel stable \
@@ -128,7 +128,7 @@ jobs:
                 build:{name:"github-release-build",argv:["cargo","build","--release"],status:"passed",exit_code:0},
                 status:"passed",artifact:{sha256:$artifact_sha256,bytes:$artifact_bytes,path:$artifact_path},
                 completed_at:$completed_at,failure:null}' > "$qualification"
-            "$STADO_BIN" release prepare brama "${{ inputs.version }}" "$platform" \
+            scripts/run-retryable-stado.sh "$STADO_BIN" release prepare brama "${{ inputs.version }}" "$platform" \
               --archive "$archive" \
               --source-revision "$source_revision" \
               --binary bin/brama \
@@ -147,13 +147,13 @@ jobs:
         if: inputs.action == 'promote-candidate'
         env:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
-        run: stado-source/stado-rs/target/release/stado release promote brama "${{ inputs.version }}" --channel candidate --json
+        run: scripts/run-retryable-stado.sh stado-source/stado-rs/target/release/stado release promote brama "${{ inputs.version }}" --channel candidate --json
       - name: Promote stable routing
         if: inputs.action == 'promote-stable'
         env:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
         run: |
-          stado-source/stado-rs/target/release/stado release promote brama "${{ inputs.version }}" --channel stable --json
+          scripts/run-retryable-stado.sh stado-source/stado-rs/target/release/stado release promote brama "${{ inputs.version }}" --channel stable --json
           stado-source/stado-rs/scripts/reconcile-release-funnel-host.sh
       - name: Reconcile public release origin only
         if: inputs.action == 'reconcile-origin'
@@ -163,7 +163,7 @@ jobs:
         env:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
         run: |
-          stado-source/stado-rs/target/release/stado service release \
+          scripts/run-retryable-stado.sh stado-source/stado-rs/target/release/stado service release \
             com.wisent.always-on.brama \
             --host charless-mac-mini \
             --product brama \
@@ -175,12 +175,12 @@ jobs:
         if: inputs.action == 'status'
         env:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
-        run: stado-source/stado-rs/target/release/stado release status brama --json
+        run: scripts/run-retryable-stado.sh stado-source/stado-rs/target/release/stado release status brama --json
       - name: Request rollback
         if: inputs.action == 'rollback'
         env:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
-        run: stado-source/stado-rs/target/release/stado release rollback brama --json
+        run: scripts/run-retryable-stado.sh stado-source/stado-rs/target/release/stado release rollback brama --json
       - name: Remove ephemeral release credentials
         if: always()
         run: rm -rf "$RUNNER_TEMP/release-control"
