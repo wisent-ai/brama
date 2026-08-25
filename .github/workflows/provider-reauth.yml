@@ -48,6 +48,21 @@ jobs:
               !contains(format(',{0},', github.event.inputs.providers),
                         format(',{0},', matrix.provider)) }}
         run: echo "skipped=1" >> "$GITHUB_ENV"
+      # The launchers read scripts and account material from the host's managed
+      # weles checkout, and the auto-deploy unit that kept that checkout on
+      # main is gone from the mini; the vault-backed login material main added
+      # (weles@06135cc6) is exactly what a burnt pool needs. Advance the
+      # checkout fast-forward only: an uncommitted working tree fails this step
+      # red and is never reset or overwritten by us.
+      - name: Advance the managed weles checkout to main (fast-forward only)
+        if: env.skipped != '1'
+        run: |
+          set -eu
+          repo="$HOME/weles"
+          [ -d "$repo/.git" ] || { echo "managed weles checkout missing at $repo"; exit 1; }
+          git -C "$repo" fetch origin main
+          git -C "$repo" merge --ff-only origin/main
+          git -C "$repo" log --oneline -1
       - name: Run the ${{ matrix.provider }} reauth launcher from the managed checkout
         if: env.skipped != '1'
         run: bash "$HOME/weles/scripts/worker/deploy/${{ matrix.provider }}-reauth/reauth-launch.sh"
