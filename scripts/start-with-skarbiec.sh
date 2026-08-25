@@ -1053,6 +1053,35 @@ else
   printf '%s\n' "renewal loop not started (enabled=${BRAMA_RENEWAL_ENABLED:-1}, path $RENEWAL_LOOP)"
 fi
 
+
+# Releases before this launcher handed the gateway to a child shell. Stopping
+# the launchd job therefore left that child alive on port 8080, and every newer
+# release was quarantined even though its own process model was correct. Retire
+# only an exact stale managed executable: never kill an arbitrary listener.
+brama_port=${BRAMA_PORT_OVERRIDE:-${PORT:-8080}}
+if command -v lsof >/dev/null 2>&1; then
+  for stale_pid in $(lsof -nP -tiTCP:"$brama_port" -sTCP:LISTEN 2>/dev/null || true); do
+    stale_bin=$(ps -p "$stale_pid" -o comm= 2>/dev/null || true)
+    case "$stale_bin" in
+      "${HOME:-/nonexistent}/.stado/services/brama/sha256-"*/darwin-arm/bin/brama)
+        if [ "$(realpath "$stale_bin")" != "$(realpath "$BRAMA_BIN")" ]; then
+          printf '%s\n' "retiring stale managed Brama process $stale_pid from $stale_bin" >/dev/stderr
+          kill "$stale_pid"
+          attempt=0
+          while kill -0 "$stale_pid" 2>/dev/null; do
+            attempt=$((attempt + 1))
+            if [ "$attempt" -ge 100 ]; then
+              printf '%s\n' "stale managed Brama process $stale_pid did not stop" >/dev/stderr
+              exit 1
+            fi
+            sleep 0.05
+          done
+        fi
+        ;;
+    esac
+  done
+fi
+
 # `exec` on purpose. Supervising the gateway from this shell instead looked
 # tidier -- a trap could then stop the capability broker -- but it put a shell
 # between the supervisor and the process that matters. The supervisor stops the
