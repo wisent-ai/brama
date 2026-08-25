@@ -48,21 +48,21 @@ jobs:
               !contains(format(',{0},', github.event.inputs.providers),
                         format(',{0},', matrix.provider)) }}
         run: echo "skipped=1" >> "$GITHUB_ENV"
-      # The launchers read scripts and account material from the host's managed
-      # weles checkout, and the auto-deploy unit that kept that checkout on
-      # main is gone from the mini; the vault-backed login material main added
-      # (weles@06135cc6) is exactly what a burnt pool needs. Advance the
-      # checkout fast-forward only: an uncommitted working tree fails this step
-      # red and is never reset or overwritten by us.
-      - name: Advance the managed weles checkout to main (fast-forward only)
+      # The host's ~/weles is a deployed copy without .git, so it cannot be
+      # advanced here — and the auto-deploy unit that kept it current is gone.
+      # Run the pinned main revision instead, the same way release-control.yml
+      # already clones a second private repository on this runner: vault-backed
+      # login material (weles@06135cc6) is exactly what a burnt pool needs, and
+      # a pinned checkout never drifts behind the store it must reach.
+      - name: Check out the weles runners at main
         if: env.skipped != '1'
-        run: |
-          set -eu
-          repo="$HOME/weles"
-          [ -d "$repo/.git" ] || { echo "managed weles checkout missing at $repo"; exit 1; }
-          git -C "$repo" fetch origin main
-          git -C "$repo" merge --ff-only origin/main
-          git -C "$repo" log --oneline -1
-      - name: Run the ${{ matrix.provider }} reauth launcher from the managed checkout
+        uses: actions/checkout@v4
+        with:
+          repository: wisent-ai/weles
+          path: weles-source
+      - name: Run the ${{ matrix.provider }} reauth launcher
         if: env.skipped != '1'
-        run: bash "$HOME/weles/scripts/worker/deploy/${{ matrix.provider }}-reauth/reauth-launch.sh"
+        env:
+          WELES_DIR: ${{ github.workspace }}/weles-source
+          REAUTH_ENTRY: ${{ github.workspace }}/weles-source/scripts/trajectories/${{ matrix.provider }}/reauth.mjs
+        run: bash "weles-source/scripts/worker/deploy/${{ matrix.provider }}-reauth/reauth-launch.sh"
