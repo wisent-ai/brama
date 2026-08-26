@@ -16,6 +16,32 @@ async fn add_replace_probe_and_delete_subscription_uses_real_provider_path() {
     assert_eq!(status, 200, "{body}");
     assert_eq!(body["subscriptions"], json!([]));
 
+    let (status, body) = brama
+        .admin(
+            Method::POST,
+            collection,
+            Some(json!({"provider":"anthropic","label":"invalid","api_key":""})),
+        )
+        .await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(
+        body["error"]["message"],
+        "api_key must contain 1..8000 characters"
+    );
+
+    let (status, body) = brama
+        .admin(
+            Method::POST,
+            collection,
+            Some(json!({"provider":"unknown-provider","api_key":"unused"})),
+        )
+        .await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(
+        body["error"]["message"],
+        "provider must name a supported remote API or subscription provider"
+    );
+
     let (status, created) = brama
         .admin(
             Method::POST,

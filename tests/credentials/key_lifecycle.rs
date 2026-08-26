@@ -21,6 +21,32 @@ async fn add_replace_and_delete_provider_key_changes_real_dispatch() {
         .admin(
             Method::PUT,
             "/v1/admin/credentials",
+            Some(json!({"provider":"openai","credential":""})),
+        )
+        .await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(
+        body["error"]["message"],
+        "provider and credential must contain valid values"
+    );
+
+    let (status, body) = brama
+        .admin(
+            Method::PUT,
+            "/v1/admin/credentials",
+            Some(json!({"provider":"unknown-provider","credential":"unused"})),
+        )
+        .await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(
+        body["error"]["message"],
+        "provider must name a supported remote API provider"
+    );
+
+    let (status, body) = brama
+        .admin(
+            Method::PUT,
+            "/v1/admin/credentials",
             Some(json!({"provider":"openai","credential":"first-key"})),
         )
         .await;

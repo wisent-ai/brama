@@ -23,6 +23,33 @@ async fn add_edit_and_delete_alias_changes_real_routing_registry() {
         .admin(
             Method::PUT,
             "/v1/admin/routes",
+            Some(json!({"alias":"Bad Alias","primary":"openai/default","fallbacks":[]})),
+        )
+        .await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["error"]["message"], "invalid route alias");
+
+    let (status, body) = brama
+        .admin(
+            Method::PUT,
+            "/v1/admin/routes",
+            Some(json!({
+                "alias":"qa/chat",
+                "primary":"openai/default",
+                "fallbacks":["openai/default"]
+            })),
+        )
+        .await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(
+        body["error"]["message"],
+        "route chain is unsupported, duplicated, or unavailable"
+    );
+
+    let (status, body) = brama
+        .admin(
+            Method::PUT,
+            "/v1/admin/routes",
             Some(json!({"alias":"qa/chat","primary":"openai/default","fallbacks":[]})),
         )
         .await;
