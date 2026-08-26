@@ -318,6 +318,45 @@ stored in the vault before this command has anything to act on
 Exit status is non-zero unless a credential was obtained. A retired
 subscription is never refreshed. The journal record it appends is shown in
 <a href="/docs/walkthrough-subscriptions#2-refreshing-an-empty-pool-tells-you-it-is-empty">walkthrough-subscriptions</a>.</p>
+<h2 id="brama-subscription-sign-in-provider-reason-text-json"><code>brama subscription sign-in &lt;provider&gt; --reason &lt;text&gt; [--login-item &lt;id&gt;] [--json]</code><a class="headerlink" href="#brama-subscription-sign-in-provider-reason-text-json" title="Link to this section">&para;</a></h2>
+<p>The repair a refused grant actually needs. A credential the provider disowned
+(<code>burnt</code>, <code>needs_reauthorization</code>) is only replaced by a real sign-in, and
+for <code>claude-code</code> and <code>kimi</code> no local CLI can perform one. Weles owns that
+sign-in, drives it in its own browser on its own host, and exposes it as
+<code>POST /reauth</code> on its worker API — so this command runs on the host Weles
+runs on, asks Weles to drive one named account, and then proves the repair
+the way the <a href="/docs/runbook#a-subscription-reads-burnt">runbook</a> does: by
+running the same refresh <code>brama subscription refresh</code> runs and reporting
+whether it answered <code>refreshed</code>. Nothing here opens a browser on the calling
+machine and no credential material is read or printed; the worker API token
+is read from Weles's own environment files (<code>WELES_API_TOKEN</code> or
+<code>WELES_CONSOLE_API_TOKEN</code>, environment variable first) and travels only as a
+request header.</p>
+<p>Before a browser opens, everything that can be known is checked: the worker
+must answer its own <code>/healthz</code>, the release must advertise the
+<code>login_item</code> selector, and the account must exist as a Weles sign-in row.
+Without <code>--login-item</code> the single row Weles holds for the provider is used;
+zero rows and two-or-more rows are both refusals, verbatim — an unnamed
+sign-in is never guessed between accounts. Confirmation is Weles echoing back
+the exact row asked for; a run it does not confirm is reported <code>failed</code>
+even when a credential may have been minted. Captured refusals (exit 1):</p>
+<pre><code class="language-console">$ brama subscription sign-in openai --reason &quot;docs: exercise the provider guard&quot;
+Weles signs in claude-code, codex and kimi; `openai` is not one of them
+
+$ brama subscription sign-in codex --reason &quot;docs: exercise the no-worker path&quot;
+Weles worker API does not answer its own health check at http://127.0.0.1:8788/healthz
+(error sending request for url (http://127.0.0.1:8788/healthz)); start it before
+signing an account in
+</code></pre>
+<p>The verdict reports <code>provider</code>, <code>login_item</code>, <code>account</code> (Weles's own row
+name), <code>result</code> (<code>signed_in</code> or <code>failed</code>), <code>detail</code>, and the full
+<code>refresh</code> verdict nested beside it. Exit status is non-zero unless the
+sign-in was confirmed and the refresh obtained a credential. Every run is
+journaled as a <code>subscription_sign_in</code> record with its reason, verbatim.
+<code>--login-timeout-ms</code> (default 900000) bounds how long Weles may drive the
+browser; <code>WELES_API_HOST</code>/<code>WELES_API_PORT</code> (default <code>127.0.0.1:8788</code>) name
+the worker API when Weles serves it elsewhere.</p>
+
 <h2 id="brama-collect-task-quality"><code>brama collect-task-quality</code><a class="headerlink" href="#brama-collect-task-quality" title="Link to this section">&para;</a></h2>
 <p>Collects deterministic task-quality checks for active provider routes; the
 observations later serve <code>model="task:&lt;task&gt;"</code> selection

@@ -100,6 +100,30 @@ pub fn record_subscription_refresh(
     }));
 }
 
+/// Record one operator-run subscription sign-in, with the reason they gave.
+///
+/// A sign-in replaces a grant somebody may still be counting on, so the record
+/// carries who asked (the reason), which account Weles drove, and what the
+/// product answered. No credential material is written here, exactly as
+/// everywhere else in this file.
+pub fn record_subscription_sign_in(
+    provider: &str,
+    login_item: &str,
+    reason: &str,
+    result: &str,
+    detail: &str,
+) {
+    append(json!({
+        "kind": "subscription_sign_in",
+        "provider": provider,
+        "login_item": login_item,
+        "reason": reason,
+        "result": result,
+        "detail": detail,
+        "at": now(),
+    }));
+}
+
 /// Append one task-quality observation.
 #[allow(clippy::too_many_arguments)]
 pub fn record_check(

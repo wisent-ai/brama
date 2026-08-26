@@ -229,7 +229,13 @@ definitive provider refusal (<code>invalid_grant</code>, <code>invalid_token</co
 <code>credential.state: needs_reauthorization</code> with the provider's own sentence
 as <code>cause</code>, and the credential is left alone until a sign-in replaces it —
 the refresh timer will not resurrect it, and a 30-minute block keeps the
-dispatcher off it. Repair: sign the subscription in again (Desktop or a
+dispatcher off it. Repair: on the host Weles runs on, one command does the
+whole sequence — the sign-in through Weles and the refresh that proves it:</p>
+<pre><code class="language-console">$ brama subscription sign-in &lt;provider&gt; --reason &quot;&lt;why&gt;&quot;
+</code></pre>
+<p>Exit 0 with <code>result: signed_in</code> is the proof
+(<a href="/docs/cli#brama-subscription-sign-in-provider-reason-text-json">cli</a>).
+Where Weles is not reachable, sign the subscription in by hand (Desktop or a
 donation), then:</p>
 <pre><code class="language-console">$ brama subscription refresh &lt;provider&gt; --reason &quot;&lt;why&gt;&quot;
 </code></pre>

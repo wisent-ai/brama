@@ -125,6 +125,17 @@ footer a { color: var(--muted); text-decoration: none; }
 <p>All notable Brama changes are documented here. Brama follows Semantic
 Versioning and the pre-one compatibility policy in <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
 <h2 id="unreleased">Unreleased<a class="headerlink" href="#unreleased" title="Link to this section">&para;</a></h2>
+<h3 id="brama-subscription-sign-in-closes-the-runbooks-repair-loop"><code>brama subscription sign-in</code> closes the runbook's repair loop<a class="headerlink" href="#brama-subscription-sign-in-closes-the-runbooks-repair-loop" title="Link to this section">&para;</a></h3>
+<p>The runbook's repair for a <code>burnt</code> credential — "sign the subscription in
+again, then refresh" — had no command. <code>brama subscription sign-in
+&lt;provider&gt; --reason &quot;&lt;why&gt;&quot;</code> is that command: on the host Weles runs on, it
+asks Weles's worker API to drive one named sign-in row (<code>--login-item</code>, or
+the single row the provider has; two or more are refused by name, never
+guessed between), confirms Weles echoed the exact row asked for, runs the
+same refresh <code>brama subscription refresh</code> runs, and reports
+<code>signed_in</code>/<code>failed</code> with the refresh verdict nested beside it. Every run
+is journaled as <code>subscription_sign_in</code> with its reason, verbatim. No browser
+opens on the calling machine and no credential material is read or printed.</p>
 <h3 id="skarbiec-owns-capability-route-mapping">Skarbiec owns capability route mapping<a class="headerlink" href="#skarbiec-owns-capability-route-mapping" title="Link to this section">&para;</a></h3>
 <p>Brama no longer writes <code>capability-routes.json</code> or chooses provider credential
 fields. At startup it asks the bundled Skarbiec binary to reconcile identity

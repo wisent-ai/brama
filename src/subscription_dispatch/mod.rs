@@ -3,6 +3,7 @@ pub mod model_catalog;
 pub mod plan_usage;
 pub mod pool;
 pub mod probe;
+pub mod sign_in;
 pub mod quality;
 pub mod refresh_sweep;
 pub mod usage;

@@ -225,7 +225,11 @@ produced — a body containing <code>invalid_grant</code>, <code>invalid_token</
 else is <strong>transient</strong>, left for the next sweep. A definitive refusal is
 recorded as <code>credential.state: needs_reauthorization</code> with the provider's
 own sentence as <code>cause</code>, and the credential is left alone until a sign-in
-replaces it. A refreshed grant that cannot be written back to the vault is a
+replaces it — on the host Weles runs on, <code>brama subscription sign-in
+&lt;provider&gt; --reason &quot;&lt;why&gt;&quot;</code> performs that sign-in and proves it by the
+refresh that follows
+(<a href="/docs/cli#brama-subscription-sign-in-provider-reason-text-json">cli</a>).
+A refreshed grant that cannot be written back to the vault is a
 failed refresh — the rotated grant is dropped, because the provider already
 invalidated the one still stored. A provider rejecting a grant whose local
 expiry still claims validity triggers one forced refresh on the request
