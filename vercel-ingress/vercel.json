@@ -50,6 +50,14 @@
       "destination": "/docs/cli.html"
     },
     {
+      "source": "/docs/providers",
+      "destination": "/docs/providers.html"
+    },
+    {
+      "source": "/docs/providers/:slug",
+      "destination": "/docs/providers/:slug.html"
+    },
+    {
       "source": "/docs/concepts/alias",
       "destination": "/docs/concepts/alias.html"
     },
