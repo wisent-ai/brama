@@ -37,8 +37,12 @@ name = "routing_registry_security"
 path = "tests/routing/registry_security.rs"
 
 [[test]]
-name = "codex_subscription_real"
-path = "tests/providers/codex_subscription_real.rs"
+name = "subscription_real"
+path = "tests/providers/subscription_real.rs"
+
+[[test]]
+name = "capability_real"
+path = "tests/providers/capability_real.rs"
 
 [[test]]
 name = "provider_contracts"
