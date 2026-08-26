@@ -16,7 +16,7 @@
 //! the request is a real billable completion:
 //!
 //! ```console
-//! $ scripts/start-with-skarbiec.sh env cargo test --test capability_real
+//! $ scripts/start-with-skarbiec.sh --exec cargo test --test capability_real
 //! ```
 //!
 //! Which providers appear here is not taste: `/readyz` on the deployment
@@ -52,7 +52,9 @@ fn fresh_state_dir(story: &str) -> std::path::PathBuf {
 /// proven by the journey recording `model_response_received` from a real
 /// response: exit 0 with `--allow-provider-cost` happens on no other path.
 fn capability_serves_a_real_completion(provider: &str, model_route: &str) {
-    let _capability = REAL_CAPABILITY.lock().expect("real-capability lock");
+    let _capability = REAL_CAPABILITY
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let state_dir = fresh_state_dir(&format!("onboard-{provider}"));
 
     let output = Command::new(env!("CARGO_BIN_EXE_brama"))

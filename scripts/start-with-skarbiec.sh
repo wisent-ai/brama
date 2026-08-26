@@ -1021,10 +1021,22 @@ while [ ! -S "$SKARBIEC_CAP_SOCKET" ]; do
 done
 
 # The same trust, routes and short-lived capabilities serve administrative CLI
-# journeys. Keeping that setup here prevents `brama onboard` from silently
-# falling back to an unconfigured in-process router while the service itself is
-# healthy. A command exits through the trap above, so its temporary broker is
+# journeys and real product tests. Keeping that setup here prevents `brama
+# onboard` from silently falling back to an unconfigured in-process router while
+# the service itself is healthy. `--exec` runs a named program inside the exact
+# launcher environment while trust remains pinned to BRAMA_BIN_OVERRIDE; this is
+# how Cargo's real-binary journeys run without teaching the service launcher
+# about Cargo. A command exits through the trap above, so its temporary broker is
 # removed; the long-running service path below still uses `exec`.
+if [ "${1:-}" = "--exec" ]; then
+  shift
+  [ "$#" -gt 0 ] || {
+    printf '%s\n' 'start-with-skarbiec.sh --exec requires a command' >/dev/stderr
+    exit 2
+  }
+  "$@"
+  exit $?
+fi
 if [ "$#" -gt 0 ]; then
   "$BRAMA_BIN" "$@"
   exit $?

@@ -15,7 +15,7 @@
 //! launcher's environment and must run inside it:
 //!
 //! ```console
-//! $ scripts/start-with-skarbiec.sh env cargo test --test http_api_real
+//! $ scripts/start-with-skarbiec.sh --exec cargo test --test http_api_real
 //! ```
 //!
 //! Only the caller's side is test-owned: each serve gets one client identity
@@ -82,14 +82,22 @@ impl RealGateway {
     fn start(story: &str, allowed_route: &str) -> Self {
         let port = available_port();
         let scratch = scratch(story);
-        let identities = json!([{
+        let mut identities: Vec<Value> = serde_json::from_str(
+            &std::env::var("BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES")
+                .expect("the launcher must provide its real client identity table"),
+        )
+        .expect("the launcher client identity table must be JSON");
+        identities.push(json!({
             "client_id": "http-api-real-test",
             "token": BEARER,
             "allowed_models": [allowed_route],
-        }]);
+        }));
         let child = Command::new(env!("CARGO_BIN_EXE_brama"))
             .args(["serve", "--port", &port.to_string()])
-            .env("BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES", identities.to_string())
+            .env(
+                "BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES",
+                serde_json::to_string(&identities).expect("serialize client identity table"),
+            )
             .env("BRAMA_STATE_DIR", scratch.join("state"))
             .env("BRAMA_PERF_PATH", scratch.join("perf.json"))
             .stdout(Stdio::piped())
