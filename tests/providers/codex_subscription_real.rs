@@ -10,12 +10,11 @@
 //! deployment's own vault, the launcher-installed capability environment, and
 //! (for the sign-in) the host Weles runs on -- exactly the real components the
 //! flows use in production, which is why nothing here is isolated into a
-//! tempdir. That also means they are not part of the ordinary suite: each is
-//! `#[ignore]` and runs only when an operator deliberately asks, serially,
-//! because they mutate one shared real account:
+//! tempdir. They mutate one shared real account, so a lock inside this file
+//! serializes them whatever thread count the runner uses:
 //!
 //! ```console
-//! $ scripts/start-with-skarbiec.sh env cargo test --test codex_subscription_real -- --ignored --test-threads=1
+//! $ scripts/start-with-skarbiec.sh env cargo test --test codex_subscription_real
 //! ```
 //!
 //! Two of these tests have real-world costs, stated here so nobody discovers
@@ -42,6 +41,11 @@ const AGENT: &str = "wisent-app";
 fn brama() -> Command {
     Command::new(env!("CARGO_BIN_EXE_brama"))
 }
+
+/// One real account, one flow at a time: every test holds this for its whole
+/// story, so the runner's thread count cannot interleave two mutations of the
+/// same subscription.
+static REAL_ACCOUNT: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// The usage ledger the deployment actually writes, resolved exactly the way
 /// the product resolves it.
@@ -104,9 +108,8 @@ fn total_requests(rows: &[(String, Value)]) -> u64 {
 }
 
 #[test]
-#[ignore = "real provider flow: spends ChatGPT plan quota; needs the deployment vault and \
-            launcher capability environment"]
 fn the_codex_subscription_serves_a_real_completion() {
+    let _account = REAL_ACCOUNT.lock().expect("real-account lock");
     let before = codex_rows();
     assert!(
         !before.is_empty(),
@@ -152,9 +155,8 @@ fn the_codex_subscription_serves_a_real_completion() {
 }
 
 #[test]
-#[ignore = "real provider flow: rotates the real ChatGPT refresh token at auth.openai.com; run \
-            only against the vault the serving gateway reads"]
 fn refresh_rotates_the_real_codex_grant() {
+    let _account = REAL_ACCOUNT.lock().expect("real-account lock");
     let before = codex_rows();
     assert!(
         !before.is_empty(),
@@ -212,9 +214,8 @@ fn refresh_rotates_the_real_codex_grant() {
 }
 
 #[test]
-#[ignore = "real provider flow: drives a real browser sign-in through Weles; runs only on the \
-            host Weles runs on"]
 fn sign_in_reauthorizes_the_real_codex_account() {
+    let _account = REAL_ACCOUNT.lock().expect("real-account lock");
     let output = brama()
         .args([
             "subscription",
