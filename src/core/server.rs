@@ -2466,6 +2466,21 @@ async fn list_models(
             }
         }
     }
+    // A bearer may be intentionally restricted to a small set of canonical
+    // direct routes. Those routes remain real and dispatchable even when the
+    // optional public catalogue is unavailable, so the authenticated model list
+    // must not become empty while inference still works.
+    if let Some(allowed_models) = client_identity.allowed_models.as_ref() {
+        for route in allowed_models {
+            if crate::providers::adapter::provider_id_from_route(route)
+                .is_some_and(crate::gateway::broker::provider_capability_configured)
+            {
+                model_ids.push(route.clone());
+                available.insert(route.clone());
+            }
+        }
+    }
+
     for alias in MODEL_ALIASES {
         if client_identity.authorizes_model(alias) && aliases.source(alias).is_some() {
             model_ids.push((*alias).to_string());
@@ -2666,6 +2681,31 @@ struct AdminRouteUpdate {
     fallbacks: Vec<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AdminRouteDelete {
+    alias: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AdminCredentialMutation {
+    provider: String,
+    #[serde(default)]
+    credential: Option<String>,
+}
+
+fn valid_alias(alias: &str) -> bool {
+    !alias.is_empty()
+        && alias.len() <= 128
+        && alias.trim() == alias
+        && alias.bytes().all(|byte| {
+            byte.is_ascii_lowercase()
+                || byte.is_ascii_digit()
+                || matches!(byte, b'-' | b'_' | b'.' | b'/')
+        })
+}
+
 async fn admin_snapshot(
     Extension(client_identity): Extension<ModelClientIdentity>,
     Extension(aliases): Extension<ModelAliases>,
@@ -2715,8 +2755,8 @@ async fn update_admin_route(
     Json(request): Json<AdminRouteUpdate>,
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
-    if !MODEL_ALIASES.contains(&request.alias.as_str()) {
-        return Err(api_error(StatusCode::BAD_REQUEST, "unknown route alias"));
+    if !valid_alias(&request.alias) {
+        return Err(api_error(StatusCode::BAD_REQUEST, "invalid route alias"));
     }
     let mut seen = HashSet::from([request.primary.as_str()]);
     if !route_supported(&request.alias, &request.primary)
@@ -2744,6 +2784,91 @@ async fn update_admin_route(
     )
     .map_err(|_| api_error(StatusCode::CONFLICT, "route update was rejected"))?;
     Ok(Json(json!({"ok": true, "routes": routes})))
+}
+
+async fn delete_admin_route(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Extension(aliases): Extension<ModelAliases>,
+    Json(request): Json<AdminRouteDelete>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    if !valid_alias(&request.alias) {
+        return Err(api_error(StatusCode::BAD_REQUEST, "invalid route alias"));
+    }
+    if MODEL_ALIASES.contains(&request.alias.as_str()) {
+        return Err(api_error(
+            StatusCode::CONFLICT,
+            "required route aliases cannot be deleted",
+        ));
+    }
+    let path = aliases.routes_file.as_deref().ok_or_else(|| {
+        api_error(
+            StatusCode::CONFLICT,
+            "runtime route registry is not configured",
+        )
+    })?;
+    let routes =
+        crate::core::inference_routes::delete_route(path, &request.alias).map_err(|error| {
+            if error == "route alias not found" {
+                api_error(StatusCode::NOT_FOUND, &error)
+            } else {
+                api_error(StatusCode::CONFLICT, "route deletion was rejected")
+            }
+        })?;
+    Ok(Json(json!({"ok": true, "routes": routes})))
+}
+
+async fn list_admin_credentials(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    let providers = crate::gateway::broker::local_provider_names().map_err(|_| {
+        api_error(
+            StatusCode::CONFLICT,
+            "standalone credential store is not enabled",
+        )
+    })?;
+    Ok(Json(json!({"providers": providers})))
+}
+
+async fn put_admin_credential(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Json(request): Json<AdminCredentialMutation>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    let provider = account_credential_provider(Some(&request.provider))
+        .await
+        .ok_or_else(|| {
+            api_error(
+                StatusCode::BAD_REQUEST,
+                "provider must name a supported remote API provider",
+            )
+        })?;
+    let credential = request.credential.as_deref().unwrap_or("");
+    crate::gateway::broker::put_local_provider_credential(&provider, credential)
+        .map_err(|error| api_error(StatusCode::BAD_REQUEST, &error))?;
+    Ok(Json(json!({"ok": true, "provider": provider})))
+}
+
+async fn delete_admin_credential(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Json(request): Json<AdminCredentialMutation>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    let removed = crate::gateway::broker::remove_local_provider_credential(&request.provider)
+        .map_err(|_| {
+            api_error(
+                StatusCode::CONFLICT,
+                "standalone credential store is not enabled",
+            )
+        })?;
+    if !removed {
+        return Err(api_error(
+            StatusCode::NOT_FOUND,
+            "provider credential not found",
+        ));
+    }
+    Ok(Json(json!({"ok": true, "provider": request.provider})))
 }
 
 fn valid_agent_id(agent_id: &str) -> bool {
@@ -2804,6 +2929,7 @@ fn subscription_view(entry: &crate::gateway::broker::SubscriptionEntry) -> Value
         "id": entry.id,
         "provider": entry.provider,
         "status": entry.status,
+        "label": entry.label,
         "limits": windows.limits,
         "measured": recorded.as_ref().map(|usage| &usage.measured),
         "block": recorded.as_ref().and_then(|usage| usage.block.clone()),
@@ -2931,8 +3057,13 @@ async fn create_subscription(
                 api_error(StatusCode::CONFLICT, "subscription credential was rejected")
             }
         })?;
-    crate::gateway::broker::donated_add(&agent_id, &subscription_id, &provider)
-        .map_err(|_| api_error(StatusCode::CONFLICT, "subscription registration failed"))?;
+    crate::gateway::broker::donated_add(
+        &agent_id,
+        &subscription_id,
+        &provider,
+        request.label.as_deref(),
+    )
+    .map_err(|_| api_error(StatusCode::CONFLICT, "subscription registration failed"))?;
     Ok(Json(json!({
         "subscription": {
             "id": subscription_id,
@@ -2965,6 +3096,14 @@ async fn retire_managed_subscription(
     );
     crate::gateway::broker::donated_remove(&subscription_id)
         .map_err(|_| api_error(StatusCode::CONFLICT, "subscription retirement failed"))?;
+    crate::gateway::broker::remove_donated_credential(&owned.provider, &subscription_id).map_err(
+        |_| {
+            api_error(
+                StatusCode::CONFLICT,
+                "subscription credential retirement failed",
+            )
+        },
+    )?;
     Ok(Json(json!({"ok": true})))
 }
 
@@ -3303,9 +3442,12 @@ async fn donate_subscription(
         };
         return api_error(status, refusal.detail());
     }
-    if let Err(message) =
-        crate::gateway::broker::donated_add(&agent_id, &subscription_id, &provider)
-    {
+    if let Err(message) = crate::gateway::broker::donated_add(
+        &agent_id,
+        &subscription_id,
+        &provider,
+        req.label.as_deref(),
+    ) {
         return api_error(StatusCode::INTERNAL_SERVER_ERROR, &message);
     }
     (
@@ -3360,6 +3502,11 @@ async fn retire_subscription(
         "retired by an operator",
     );
     if let Err(message) = crate::gateway::broker::donated_remove(subscription_id) {
+        return api_error(StatusCode::INTERNAL_SERVER_ERROR, &message);
+    }
+    if let Err(message) =
+        crate::gateway::broker::remove_donated_credential(&owned.provider, subscription_id)
+    {
         return api_error(StatusCode::INTERNAL_SERVER_ERROR, &message);
     }
     (StatusCode::OK, Json(json!({"ok": true})))
@@ -3424,7 +3571,16 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
         )
         .route("/stats", get(get_stats))
         .route("/v1/admin/snapshot", get(admin_snapshot))
-        .route("/v1/admin/routes", put(update_admin_route))
+        .route(
+            "/v1/admin/routes",
+            put(update_admin_route).delete(delete_admin_route),
+        )
+        .route(
+            "/v1/admin/credentials",
+            get(list_admin_credentials)
+                .put(put_admin_credential)
+                .delete(delete_admin_credential),
+        )
         .route(
             "/v1/admin/subscriptions/:agent_id",
             get(list_admin_subscriptions).post(create_admin_subscription),

@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{LazyLock, Mutex, OnceLock};
+use std::sync::{LazyLock, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
@@ -41,7 +41,10 @@ const DEFAULT_DONATED_SUBSCRIPTIONS_FILE: &str = "/tmp/brama-skarbiec/donated-su
 
 static OAUTH_REFRESH_LOCK: LazyLock<tokio::sync::Mutex<()>> =
     LazyLock::new(|| tokio::sync::Mutex::new(()));
-static LOCAL_PROVIDER_CREDENTIALS: OnceLock<HashMap<String, Zeroizing<Vec<u8>>>> = OnceLock::new();
+static LOCAL_PROVIDER_CREDENTIALS: LazyLock<RwLock<Option<HashMap<String, Zeroizing<Vec<u8>>>>>> =
+    LazyLock::new(|| RwLock::new(None));
+static LOCAL_SUBSCRIPTION_CREDENTIALS: LazyLock<RwLock<HashMap<String, Zeroizing<Vec<u8>>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// Fold an identifier into the stable resource alphabet used by deployment
 /// bindings. The original identifier remains the lookup key in trusted config.
@@ -77,14 +80,69 @@ pub fn install_local_provider_credentials(encoded: &mut String) -> Result<(), St
         );
         value.zeroize();
     }
+    let mut installed = LOCAL_PROVIDER_CREDENTIALS
+        .write()
+        .map_err(|_| "local provider credential lock is poisoned".to_owned())?;
+    if installed.is_some() {
+        return Err("local provider credentials were already installed".to_owned());
+    }
+    *installed = Some(credentials);
+    Ok(())
+}
+
+pub fn local_provider_credentials_enabled() -> bool {
     LOCAL_PROVIDER_CREDENTIALS
-        .set(credentials)
-        .map_err(|_| "local provider credentials were already installed".to_owned())
+        .read()
+        .is_ok_and(|credentials| credentials.is_some())
+}
+
+pub fn local_provider_names() -> Result<Vec<String>, String> {
+    let credentials = LOCAL_PROVIDER_CREDENTIALS
+        .read()
+        .map_err(|_| "local provider credential lock is poisoned".to_owned())?;
+    let mut names = credentials
+        .as_ref()
+        .ok_or_else(|| "standalone credential store is not enabled".to_owned())?
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    names.sort();
+    Ok(names)
+}
+
+pub fn put_local_provider_credential(provider: &str, credential: &str) -> Result<(), String> {
+    let provider = provider.trim();
+    if provider.is_empty() || credential.is_empty() || credential.chars().count() > 8000 {
+        return Err("provider and credential must contain valid values".to_owned());
+    }
+    let mut credentials = LOCAL_PROVIDER_CREDENTIALS
+        .write()
+        .map_err(|_| "local provider credential lock is poisoned".to_owned())?;
+    let credentials = credentials
+        .as_mut()
+        .ok_or_else(|| "standalone credential store is not enabled".to_owned())?;
+    credentials.insert(
+        provider.to_owned(),
+        Zeroizing::new(credential.as_bytes().to_vec()),
+    );
+    Ok(())
+}
+
+pub fn remove_local_provider_credential(provider: &str) -> Result<bool, String> {
+    let mut credentials = LOCAL_PROVIDER_CREDENTIALS
+        .write()
+        .map_err(|_| "local provider credential lock is poisoned".to_owned())?;
+    let credentials = credentials
+        .as_mut()
+        .ok_or_else(|| "standalone credential store is not enabled".to_owned())?;
+    Ok(credentials.remove(provider).is_some())
 }
 
 fn local_provider_credential(provider: &str) -> Option<Secret> {
     LOCAL_PROVIDER_CREDENTIALS
-        .get()?
+        .read()
+        .ok()?
+        .as_ref()?
         .get(provider)
         .map(|value| Secret::from_bytes(value.as_slice().to_vec()))
 }
@@ -108,6 +166,8 @@ pub struct SubscriptionEntry {
     pub id: String,
     pub provider: String,
     pub status: String,
+    #[serde(default)]
+    pub label: Option<String>,
 }
 
 /// One subscription account the vault holds that no agent tag points at.
@@ -137,6 +197,8 @@ struct BrokerSubscriptionEntry {
     provider: Option<String>,
     agent_id: Option<String>,
     status: Option<String>,
+    #[serde(default)]
+    label: Option<String>,
 }
 
 fn configured_subscription_ids() -> std::collections::HashSet<String> {
@@ -295,8 +357,13 @@ fn configured_provider_grants() -> std::collections::HashSet<String> {
 /// workload client for every model in a catalogue with thousands of entries.
 pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
     let mut configured: std::collections::HashSet<String> = LOCAL_PROVIDER_CREDENTIALS
-        .get()
-        .map(|credentials| credentials.keys().cloned().collect())
+        .read()
+        .ok()
+        .and_then(|credentials| {
+            credentials
+                .as_ref()
+                .map(|values| values.keys().cloned().collect())
+        })
         .unwrap_or_default();
     configured.extend(configured_provider_grants());
     if client().is_none() {
@@ -323,10 +390,11 @@ pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
 /// [`provider_credential`], which falls back to the exact field-scoped route
 /// when capability issuance or redemption is unavailable.
 pub fn provider_capability_configured(provider: &str) -> bool {
-    if LOCAL_PROVIDER_CREDENTIALS
-        .get()
-        .is_some_and(|credentials| credentials.contains_key(provider))
-    {
+    if LOCAL_PROVIDER_CREDENTIALS.read().is_ok_and(|credentials| {
+        credentials
+            .as_ref()
+            .is_some_and(|values| values.contains_key(provider))
+    }) {
         return true;
     }
     let resource = provider_resource(provider);
@@ -463,6 +531,17 @@ fn redeem_provider_resource(capability_id: &str, resource: &str) -> Option<Secre
 
 async fn redeem_subscription_credential(subscription_id: &str, provider: &str) -> Option<Secret> {
     let resource = subscription_resource(provider, subscription_id);
+    if let Some(credential) = LOCAL_SUBSCRIPTION_CREDENTIALS
+        .read()
+        .ok()
+        .and_then(|credentials| {
+            credentials
+                .get(&resource)
+                .map(|value| value.as_slice().to_vec())
+        })
+    {
+        return Some(Secret::from_bytes(credential));
+    }
     // A capability is single-use and short-lived by contract, and model
     // discovery redeems one at boot, so the id the launcher seeded is spent
     // before the first request arrives. Ask for a fresh capability and fall
@@ -843,7 +922,12 @@ fn update_donated_items(update: impl FnOnce(&mut Vec<Value>)) -> Result<(), Stri
 }
 
 /// Record one donated subscription in the overlay file.
-pub fn donated_add(agent_id: &str, id: &str, provider: &str) -> Result<(), String> {
+pub fn donated_add(
+    agent_id: &str,
+    id: &str,
+    provider: &str,
+    label: Option<&str>,
+) -> Result<(), String> {
     update_donated_items(|items| {
         items.retain(|item| item.get("id").and_then(Value::as_str) != Some(id));
         items.push(json!({
@@ -851,6 +935,7 @@ pub fn donated_add(agent_id: &str, id: &str, provider: &str) -> Result<(), Strin
             "provider": provider,
             "agent_id": agent_id,
             "status": "active",
+            "label": label,
         }));
     })
 }
@@ -1115,6 +1200,14 @@ async fn put_credential(item_id: &str, secret: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+fn put_local_subscription_credential(item_id: &str, secret: &[u8]) -> Result<(), String> {
+    LOCAL_SUBSCRIPTION_CREDENTIALS
+        .write()
+        .map_err(|_| "local subscription credential lock is poisoned".to_owned())?
+        .insert(item_id.to_owned(), Zeroizing::new(secret.to_vec()));
+    Ok(())
+}
+
 /// Why a donated credential was not banked.
 ///
 /// The two are different repairs and different answers to the caller: a
@@ -1172,9 +1265,14 @@ pub async fn put_donated_credential(
         );
         return Err(DonationRefusal::Unusable(detail));
     }
-    put_credential(&item_id, api_key.as_bytes())
-        .await
-        .map_err(DonationRefusal::Unwritable)?;
+    if local_provider_credentials_enabled() {
+        put_local_subscription_credential(&item_id, api_key.as_bytes())
+            .map_err(DonationRefusal::Unwritable)?;
+    } else {
+        put_credential(&item_id, api_key.as_bytes())
+            .await
+            .map_err(DonationRefusal::Unwritable)?;
+    }
     // A stored credential is the sign-in that a `needs_reauthorization` waits
     // for, and nothing else clears that state. Without this the console would
     // keep demanding a re-authorization that an operator has already done, and
@@ -1184,13 +1282,28 @@ pub async fn put_donated_credential(
     Ok(())
 }
 
+pub fn remove_donated_credential(provider: &str, subscription_id: &str) -> Result<(), String> {
+    if !local_provider_credentials_enabled() {
+        return Ok(());
+    }
+    LOCAL_SUBSCRIPTION_CREDENTIALS
+        .write()
+        .map_err(|_| "local subscription credential lock is poisoned".to_owned())?
+        .remove(&subscription_resource(provider, subscription_id));
+    Ok(())
+}
+
 async fn put_subscription_credential(
     subscription_id: &str,
     provider: &str,
     credential: &[u8],
 ) -> Result<(), String> {
     let item_id = format!("provider:{}:{}", slug(provider), slug(subscription_id));
-    put_credential(&item_id, credential).await
+    if local_provider_credentials_enabled() {
+        put_local_subscription_credential(&item_id, credential)
+    } else {
+        put_credential(&item_id, credential).await
+    }
 }
 
 fn complete_field(value: Option<String>) -> Option<String> {
@@ -1215,6 +1328,7 @@ fn parse_subscriptions(output: &[u8], agent_id: &str) -> Result<Vec<Subscription
                 id,
                 provider,
                 status,
+                label: entry.label.and_then(|value| complete_field(Some(value))),
             })
         })
         .collect())
@@ -1269,6 +1383,7 @@ fn parse_live_subscriptions(output: &[u8], agent_id: &str) -> Result<Vec<Subscri
                     "brama:provider:",
                 )?),
                 status: "active".to_owned(),
+                label: None,
             })
         })
         .collect())
@@ -1291,6 +1406,7 @@ fn parse_live_subscriptions_any_agent(output: &[u8]) -> Result<Vec<SubscriptionE
                     "brama:provider:",
                 )?),
                 status: "active".to_owned(),
+                label: None,
             })
         })
         .collect())

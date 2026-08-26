@@ -332,6 +332,100 @@ operator paths. Runnable, risk-labeled workflows are indexed in
 - **MCP:** read-only stdio JSON-RPC exposing `brama_detect` only. Model execution,
   credential discovery, collection, and mutation are deliberately excluded.
 
+## Complete administration lifecycles
+
+Every mutable Brama resource has one owner, one full create/read/update/delete
+path, and one equivalent Brama Desktop surface. The desktop bearer may call the
+administration endpoints; ordinary model clients may not. Credential values are
+write-only and never appear in list, snapshot, stats, readiness, or error
+responses.
+
+### Route aliases
+
+Read the registry with `GET /v1/admin/snapshot`. Create an alias with:
+
+```http
+PUT /v1/admin/routes
+Authorization: Bearer <brama-desktop bearer>
+Content-Type: application/json
+
+{"alias":"support/chat","primary":"openai/gpt-5.4","fallbacks":["anthropic/claude-sonnet-4-6"]}
+```
+
+Send another `PUT` for the same alias to replace its primary and ordered
+fallback chain. Delete it with
+`DELETE /v1/admin/routes` and `{"alias":"support/chat"}`. Names must use
+lowercase ASCII letters, digits, `-`, `_`, `.`, or `/`; every route must be
+available and support the alias's request shape; duplicate routes are refused.
+The required product aliases cannot be deleted. Brama Desktop exposes the same
+create, replace, and delete lifecycle under **Routing**: **Add alias…**, select a
+user-owned alias and **Edit this alias…**, or **Delete this alias…**.
+
+### Standalone provider keys
+
+This lifecycle exists only when Brama was started with its standalone
+in-memory credential store:
+
+```http
+GET /v1/admin/credentials
+PUT /v1/admin/credentials
+{"provider":"openai","credential":"<new key>"}
+DELETE /v1/admin/credentials
+{"provider":"openai"}
+```
+
+`GET` returns provider names only. The first `PUT` adds the key; another `PUT`
+for that provider atomically replaces it; `DELETE` removes it. An empty,
+unsupported, local-only, or absent provider is refused without changing the
+store. Brama Desktop exposes the same lifecycle under **Subscriptions** →
+**Local provider keys**: **Add local key…**, select the provider and **Replace
+this provider key…**, or **Remove this provider key…**. The desktop app keeps
+the durable copy in macOS Keychain and sends the current set to its private
+Brama process over standard input.
+
+### Managed agent subscriptions
+
+List one agent's subscriptions with
+`GET /v1/admin/subscriptions/:agent_id`. Add one with:
+
+```http
+POST /v1/admin/subscriptions/wisent-app
+Authorization: Bearer <brama-desktop bearer>
+Content-Type: application/json
+
+{"provider":"openai","label":"primary","api_key":"<credential>"}
+```
+
+Brama maintains one deterministic subscription per agent and provider. Repeating
+the `POST` for that provider replaces the credential and label in place instead
+of creating an unroutable duplicate. A deliberate provider check is
+`POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe`; it performs one
+minimal real completion and therefore spends provider quota. Retire the
+subscription and its credential with
+`DELETE /v1/admin/subscriptions/:agent_id/:subscription_id`. Listing, probing,
+and deleting never return the credential.
+
+Brama Desktop exposes this lifecycle under **Subscriptions** → **Managed
+agent**: **Connect a subscription** adds an agent/provider subscription,
+**Replace this subscription credential…** replaces the credential and optional
+label, **Verify with provider…** runs the deliberate one-request probe, and
+**Retire this subscription…** removes it. Under **My account**, the same
+add-or-replace and retire semantics are scoped by the signed-in Wisent identity
+through `GET`/`POST /v1/account/subscriptions` and
+`DELETE /v1/account/subscriptions/:subscription_id`; an account can never read
+or mutate another account's subscriptions.
+
+### Subscription pool
+
+`GET /v1/admin/subscription-pool` and `brama subscriptions list` expose the
+same secret-free pool states. Refresh one provider through
+`POST /v1/admin/subscription-pool/refresh` with
+`{"provider":"codex","reason":"<operator reason>"}`, or through
+`brama subscription refresh codex --reason '<operator reason>'`. Brama Desktop
+exposes both under **Subscription Pool**. A non-empty reason is required, the
+result is appended to the operational journal, and no credential value is
+returned.
+
 The complete state, error, retry, authorization, and resource contract is in
 [`CORE.md`](https://brama.wisent.com/docs/core). Provider capability and lifecycle contracts are in
 [`INTEGRATIONS.md`](https://brama.wisent.com/docs/integrations).

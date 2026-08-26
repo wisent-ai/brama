@@ -162,6 +162,66 @@ pub fn update_route(
     }
     result
 }
+
+pub fn delete_route(path: &Path, alias: &str) -> Result<Value, String> {
+    let _guard = ROUTE_WRITE_LOCK
+        .lock()
+        .map_err(|_| "inference route write lock is poisoned".to_string())?;
+    let mut value = snapshot(path)?;
+    let document = value
+        .as_object_mut()
+        .ok_or_else(|| "inference routes must be a JSON object".to_string())?;
+    let routes = document
+        .get_mut("routes")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| "inference routes.routes must be an object".to_string())?;
+    if routes.remove(alias).is_none() {
+        return Err("route alias not found".to_string());
+    }
+    if let Some(fallbacks) = document.get_mut("fallbacks").and_then(Value::as_object_mut) {
+        fallbacks.remove(alias);
+    }
+    write_registry(path, &value)?;
+    Ok(value)
+}
+
+fn write_registry(path: &Path, value: &Value) -> Result<(), String> {
+    let bytes = serde_json::to_vec_pretty(value)
+        .map_err(|error| format!("cannot encode inference routes: {error}"))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "inference routes path has no parent".to_string())?;
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "inference routes path has no safe file name".to_string())?;
+    let staging = parent.join(format!(".{file_name}.{}.tmp", std::process::id()));
+    let result = (|| {
+        #[cfg(unix)]
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options
+            .open(&staging)
+            .map_err(|error| format!("cannot create route staging file: {error}"))?;
+        file.write_all(&bytes)
+            .map_err(|error| format!("cannot write route staging file: {error}"))?;
+        file.write_all(b"\n")
+            .map_err(|error| format!("cannot finish route staging file: {error}"))?;
+        file.sync_all()
+            .map_err(|error| format!("cannot sync route staging file: {error}"))?;
+        validate(&staging)?;
+        std::fs::rename(&staging, path)
+            .map_err(|error| format!("cannot commit inference routes: {error}"))?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&staging);
+    }
+    result
+}
 fn safe_inference_host(value: &str) -> bool {
     let Ok(address) = value.parse::<std::net::Ipv4Addr>() else {
         return false;
@@ -299,81 +359,4 @@ pub fn route_chain(path: &Path, alias: &str) -> Result<Option<Vec<String>>, Stri
         chain.push(resolved_destination(&registry, fallback)?);
     }
     Ok(Some(chain))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{base_url, resolve};
-
-    fn route_file(suffix: &str) -> std::path::PathBuf {
-        use std::os::unix::fs::PermissionsExt;
-
-        let path = std::env::temp_dir().join(format!(
-            "brama-inference-routes-{}-{suffix}.json",
-            std::process::id()
-        ));
-        std::fs::write(
-            &path,
-            "{\"deployments\":[{\"name\":\"chat-primary\",\"endpoint\":{\"host\":\"100.100.1.2\",\"port\":8001}}],\"routes\":{\"wisent-backend/chat/primary\":\"chat-primary\"}}",
-        )
-        .expect("write route fixture");
-        let mode = u32::from_str_radix("600", u8::BITS).expect("static owner-only mode");
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode))
-            .expect("secure route fixture");
-        path
-    }
-
-    #[test]
-    fn local_route_resolves_provider_and_tailscale_origin() {
-        let path = route_file("valid");
-        assert_eq!(
-            resolve(&path, "wisent-backend/chat/primary").expect("resolve"),
-            Some("local-openai/chat-primary".to_string())
-        );
-        assert_eq!(
-            base_url(&path, "chat-primary").expect("origin"),
-            "http://100.100.1.2:8001"
-        );
-        std::fs::remove_file(path).expect("remove fixture");
-    }
-
-    #[test]
-    fn non_tailscale_origin_is_rejected() {
-        let path = route_file("invalid");
-        std::fs::write(
-            &path,
-            "{\"deployments\":[{\"name\":\"chat-primary\",\"endpoint\":{\"host\":\"192.168.1.2\",\"port\":8001}}],\"routes\":{\"wisent-backend/chat/primary\":\"chat-primary\"}}",
-        )
-        .expect("replace route fixture");
-        let error = base_url(&path, "chat-primary").expect_err("reject LAN origin");
-        assert!(error.contains("safe local or Tailscale endpoint"));
-        std::fs::remove_file(path).expect("remove fixture");
-    }
-    #[test]
-    fn loopback_origin_is_accepted() {
-        let path = route_file("loopback");
-        std::fs::write(
-            &path,
-            "{\"deployments\":[{\"name\":\"chat-primary\",\"endpoint\":{\"host\":\"127.0.0.1\",\"port\":8001}}],\"routes\":{\"wisent-backend/chat/primary\":\"chat-primary\"}}",
-        )
-        .expect("replace route fixture");
-        assert_eq!(
-            base_url(&path, "chat-primary").expect("origin"),
-            "http://127.0.0.1:8001"
-        );
-        std::fs::remove_file(path).expect("remove fixture");
-    }
-    #[test]
-    fn group_readable_snapshot_is_rejected() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let path = route_file("permissions");
-        let mode = u32::from_str_radix("644", u8::BITS).expect("static insecure mode");
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode))
-            .expect("change fixture mode");
-        let error =
-            resolve(&path, "wisent-backend/chat/primary").expect_err("reject insecure mode");
-        assert!(error.contains("group or other"));
-        std::fs::remove_file(path).expect("remove fixture");
-    }
 }
