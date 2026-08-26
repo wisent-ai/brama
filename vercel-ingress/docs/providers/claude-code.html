@@ -121,15 +121,88 @@ footer a { color: var(--muted); text-decoration: none; }
     <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a class="active" aria-current="page" href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
     <main>
 <h1 id="claude-code">Claude Code (subscription) <code>claude-code</code><a class="headerlink" href="#claude-code" title="Link to this section">&para;</a></h1>
-<p>A protocol adapter (<a href="/docs/concepts/provider">provider</a>) reached as <code>claude-code/&lt;model&gt;</code>, speaking <code>anthropic-messages</code>. It is a <a href="/docs/concepts/subscription">subscription</a> provider: its credentials are agent-owned OAuth grants from the pool, never the deployment&#x27;s own spend. The descriptor says what the gateway can speak; a catalog entry never unlocks a credential or manufactures availability.</p>
-<h2 id="endpoints">Endpoints and auth<a class="headerlink" href="#endpoints" title="Link to this section">&para;</a></h2>
-<table><thead><tr><th></th><th></th></tr></thead><tbody><tr><td>Base URL</td><td><code>https://api.anthropic.com</code></td></tr><tr><td>Trusted host</td><td><code>api.anthropic.com</code></td></tr><tr><td>Chat endpoint</td><td><code>https://api.anthropic.com/v1/messages</code></td></tr><tr><td>Model discovery</td><td><code>https://api.anthropic.com/v1/models</code></td></tr><tr><td>Wire protocol</td><td><code>anthropic-messages</code></td></tr><tr><td>Auth header</td><td><code>Authorization: Bearer &lt;OAuth access token&gt;</code> with <code>anthropic-version: 2023-06-01</code> and <code>anthropic-beta: oauth-2025-04-20</code></td></tr><tr><td>Base URL override</td><td><code>BRAMA_PROVIDER_CLAUDE_CODE_BASE_URL</code></td></tr></tbody></table>
-<p>Provider clients require approved HTTPS hosts, disable redirects, and bypass ambient proxies. The override is validated with the exact refusals listed in <a href="/docs/concepts/provider#endpoint-trust-and-overrides">provider</a>; a non-loopback override outside the trusted host above is refused as <code>host &lt;host&gt; is not trusted</code>.</p>
-<h2 id="models">Models<a class="headerlink" href="#models" title="Link to this section">&para;</a></h2>
-<p>Pinned catalog rows (live discovery through the models endpoint widens, never replaces, these):</p><ul><li><code>claude-code/claude-haiku-4-5</code></li><li><code>claude-code/claude-opus-4-6</code></li><li><code>claude-code/claude-sonnet-4-6</code></li></ul>
-<h2 id="credential-lifecycle">Credential lifecycle<a class="headerlink" href="#credential-lifecycle" title="Link to this section">&para;</a></h2>
-<p>Credentials are OAuth grants held in the vault at <code>provider:claude-code:&lt;subscription&gt;</code> and refreshed ahead of expiry against <code>https://claude.ai/v1/oauth/token</code> (<a href="/docs/concepts/subscription#credential-lifecycle">subscription</a>). A grant the provider disowned is only replaced by a real sign-in: <code>brama subscription sign-in claude-code --reason &quot;&lt;why&gt;&quot;</code> drives one through Weles and proves it by the refresh that follows, and <code>brama subscription refresh claude-code --reason &quot;&lt;why&gt;&quot;</code> forces the refresh alone (<a href="/docs/cli#brama-subscription-sign-in-provider-reason-text-json">cli</a>).</p>
-<p>This provider publishes a free plan-usage report at <code>https://api.anthropic.com/api/oauth/usage</code>, issued to exactly the OAuth credential the chat route already presents; the ledger records it per window (<a href="/docs/concepts/subscription#the-usage-ledger">subscription</a>).</p>
+<p>The Anthropic API spoken with an agent-owned Claude subscription instead of the
+deployment&#x27;s API key. Routes are <code>claude-code/&lt;model&gt;</code> over
+<code>anthropic-messages</code>; who may spend the account is the
+<a href="/docs/concepts/entitlement">entitlement</a> decision, and the account itself is a
+<a href="/docs/concepts/subscription">subscription</a>. This page is how we sign in, what the
+grant looks like, and how a request presents it.</p>
+<h2 id="how-we-sign-in">How we sign in<a class="headerlink" href="#how-we-sign-in" title="Link to this section">&para;</a></h2>
+<p>Claude offers no headless path to a subscription credential: the grant comes out of a
+real OAuth sign-in — the claude.ai login, in a browser, through SSO and a consent
+screen. On this fleet that browser is Weles&#x27;s, on Weles&#x27;s own host, never the
+operator&#x27;s: Weles exposes the sign-in as <code>POST /reauth</code> on its worker API,
+drives its stored sign-in row for the account, and writes the minted grant into the
+Skarbiec vault at the coordinate <code>provider:claude-code:&lt;subscription&gt;</code>. The
+proof a sign-in worked is never the login&#x27;s own exit status — it is the vault bundle
+standing at a higher revision than before, and a refresh that now answers
+<code>refreshed</code>.</p>
+<p>Three callers drive that sign-in: <code>brama subscription sign-in claude-code --reason
+&quot;&lt;why&gt;&quot;</code> on the host Weles runs on
+(<a href="/docs/cli#brama-subscription-sign-in-provider-reason-text-json">cli</a>), the renewal
+loop that watches the pool for authentication refusals and signs the mapped account in
+without a human, and Brama Desktop. A grant can also arrive without any sign-in on this
+fleet at all: a signed donation through <code>POST /v1/subscriptions/:agent_id</code> banks a
+credential minted elsewhere
+(<a href="/docs/examples/operations/manage-subscriptions">donation</a>).</p>
+<h2 id="the-grant-on-disk">The grant on disk<a class="headerlink" href="#the-grant-on-disk" title="Link to this section">&para;</a></h2>
+<p>The vault item is the same document the Claude Code CLI writes for itself — one JSON
+object with a <code>claudeAiOauth</code> block:</p>
+<pre><code class="language-json">{"claudeAiOauth": {
+  "accessToken":  "&lt;short-lived bearer&gt;",
+  "refreshToken": "&lt;rotating refresh token&gt;",
+  "expiresAt":    1756150000000
+}}
+</code></pre>
+<p><code>accessToken</code> is what a request presents; <code>refreshToken</code> is what mints the
+next one; <code>expiresAt</code> is epoch milliseconds, written back on every refresh from the
+token endpoint&#x27;s own <code>expires_in</code>. The gateway reads expiry from the blob&#x27;s
+own keys (<code>expiresAt</code>, <code>expires_at</code>, <code>expires</code>, <code>expiry</code>)
+and, when the blob states none, from the access token&#x27;s JWT <code>exp</code> claim
+(<code>src/gateway/oauth_refresh.rs</code>). The item carries the discovery tags
+(<code>brama:subscription</code>, <code>brama:agent:&lt;agent&gt;</code>,
+<code>brama:provider:claude-code</code>, <code>brama:id:&lt;id&gt;</code>) — losing the agent tag
+makes the account unroutable, and <code>/readyz</code> reports it under
+<code>unroutable_accounts</code>.</p>
+<h2 id="how-a-request-presents-it">How a request presents it<a class="headerlink" href="#how-a-request-presents-it" title="Link to this section">&para;</a></h2>
+<p>At final use the gateway redeems the vault item through the local entitlements router,
+reduces the document to the access token, and sends it as
+<code>Authorization: Bearer &lt;accessToken&gt;</code> with
+<code>anthropic-version: 2023-06-01</code> and <code>anthropic-beta: oauth-2025-04-20</code> —
+the OAuth beta header is what makes api.anthropic.com accept a subscription bearer where
+the plain <code>anthropic</code> route sends an <code>x-api-key</code>. No copy of the token
+outlives the request.</p>
+<h2 id="refresh">Refresh<a class="headerlink" href="#refresh" title="Link to this section">&para;</a></h2>
+<p>Ahead of expiry the gateway posts <code>grant_type=refresh_token</code> with the stored
+<code>refreshToken</code> and the public client id
+<code>9d1c250a-e61b-44d9-88ed-5944d1962f5e</code> to
+<code>https://claude.ai/v1/oauth/token</code>, as JSON, bounded at 15 seconds and a 64&nbsp;KiB
+answer. The sweep runs every <code>BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS</code> (60) and
+refreshes every active credential expiring within
+<code>BRAMA_CREDENTIAL_REFRESH_SKEW_SECS</code> (300), single-flighted per subscription; a
+token is considered dead 60 seconds before its stated expiry. Anthropic rotates the
+refresh token on issue — the moment a new grant is minted, the previous refresh token is
+invalid — which is why a refreshed grant that cannot be written back to the vault is a
+failed refresh, and why <code>brama subscription refresh claude-code</code> demands a
+<code>--reason</code> and journals it. Refreshing costs no plan quota.</p>
+<h2 id="when-the-provider-disowns-the-grant">When the provider disowns the grant<a class="headerlink" href="#when-the-provider-disowns-the-grant" title="Link to this section">&para;</a></h2>
+<p>A refused refresh is definitive only on the provider&#x27;s own evidence — a body naming
+<code>invalid_grant</code>, <code>invalid_token</code>, <code>revoked</code>,
+<code>unauthorized_client</code>, or a 401/403 with no stated reason. That records
+<code>credential.state: needs_reauthorization</code> with the provider&#x27;s sentence as
+<code>cause</code>, blocks the account for 30 minutes, and leaves it alone: the sweep will
+not resurrect it, the pool lists it <code>burnt</code>, and the one repair is the sign-in
+above. Everything else is transient and simply waits for the next sweep. The full state
+machine is in <a href="/docs/concepts/subscription#states">subscription</a>, the repair
+sequence in the <a href="/docs/runbook#a-subscription-reads-burnt">runbook</a>.</p>
+<h2 id="plan-usage">Plan usage<a class="headerlink" href="#plan-usage" title="Link to this section">&para;</a></h2>
+<p>Claude publishes a free usage report at
+<code>https://api.anthropic.com/api/oauth/usage</code>, issued to exactly the OAuth bearer
+the chat route already presents — reading it costs no quota and provisions nothing new.
+The ledger records each window with its instant and source
+(<a href="/docs/concepts/subscription#the-usage-ledger">subscription</a>).</p>
+<h2 id="endpoints">Endpoints<a class="headerlink" href="#endpoints" title="Link to this section">&para;</a></h2>
+<table><thead><tr><th></th><th></th></tr></thead><tbody><tr><td>Chat</td><td><code>https://api.anthropic.com/v1/messages</code></td></tr><tr><td>Model discovery</td><td><code>https://api.anthropic.com/v1/models</code>, widening the pinned rows <code>claude-haiku-4-5</code>, <code>claude-opus-4-6</code>, <code>claude-sonnet-4-6</code></td></tr><tr><td>Token endpoint</td><td><code>https://claude.ai/v1/oauth/token</code> (JSON wire)</td></tr><tr><td>Usage report</td><td><code>https://api.anthropic.com/api/oauth/usage</code></td></tr><tr><td>Trusted host</td><td><code>api.anthropic.com</code></td></tr><tr><td>Base URL override</td><td><code>BRAMA_PROVIDER_CLAUDE_CODE_BASE_URL</code>, validated with the refusals in <a href="/docs/concepts/provider#endpoint-trust-and-overrides">provider</a></td></tr></tbody></table>
 </main>
   </div>
 </body>

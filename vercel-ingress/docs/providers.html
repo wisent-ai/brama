@@ -121,7 +121,29 @@ footer a { color: var(--muted); text-decoration: none; }
     <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a class="active" aria-current="page" href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
     <main>
 <h1 id="providers">Providers<a class="headerlink" href="#providers" title="Link to this section">&para;</a></h1>
-<p>One page per provider descriptor, generated from <code>src/providers/adapter.rs</code> by <code>scripts/generate-provider-docs.py</code> — the table in the source is the truth and these pages follow it. What a provider is, and what it deliberately is not, is defined once in <a href="/docs/concepts/provider">concepts/provider</a>.</p>
+<p>One page per provider, written against <code>src/providers/adapter.rs</code> — the
+descriptor table in the source is the truth and these pages follow it. What a provider is
+at all, and what it deliberately is not, is defined once in
+<a href="/docs/concepts/provider">concepts/provider</a>; this catalog is about the part
+that differs per provider: how we authenticate to each one.</p>
+<h2 id="three-ways-in">Three ways in<a class="headerlink" href="#three-ways-in" title="Link to this section">&para;</a></h2>
+<p><strong>Subscriptions (OAuth).</strong> <code>claude-code</code>, <code>codex</code> and
+<code>kimi</code> are agent-owned provider accounts. The credential is an OAuth grant — an
+access token, a rotating refresh token, and an expiry — minted by a real browser sign-in
+that Weles drives on its own host and writes into the Skarbiec vault at
+<code>provider:&lt;provider&gt;:&lt;subscription&gt;</code>. The gateway refreshes the grant
+ahead of expiry against the provider&#x27;s own token endpoint and never opens a browser
+itself; a grant the provider disowns waits for the next sign-in
+(<a href="/docs/concepts/subscription">subscription</a>, each provider&#x27;s page for the
+exact token shape).</p>
+<p><strong>Deployment API keys.</strong> Every other remote provider is paid by the
+deployment&#x27;s own long-lived API key, stored once in the vault and redeemed at final
+use through a <a href="/docs/concepts/capability">capability</a>. There is no login flow, no
+refresh and no invented expiry — the key works until the provider revokes it or an
+operator replaces it.</p>
+<p><strong>The routes file.</strong> <code>local-openai</code> is the deployment&#x27;s own
+inference: its endpoint resolves per request through the routes file and only loopback or
+Tailscale IPv4 endpoints are accepted (<a href="/docs/concepts/alias">alias</a>).</p>
 <table><thead><tr><th>id</th><th>Display name</th><th>Wire protocol</th><th>Credentials</th><th>Plan usage</th></tr></thead><tbody>
 <tr><td><a href="/docs/providers/anthropic"><code>anthropic</code></a></td><td>Anthropic</td><td><code>anthropic-messages</code></td><td>capability (API key)</td><td>—</td></tr>
 <tr><td><a href="/docs/providers/claude-code"><code>claude-code</code></a></td><td>Claude Code (subscription)</td><td><code>anthropic-messages</code></td><td>subscription (OAuth) + refresh</td><td>yes</td></tr>

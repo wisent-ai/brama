@@ -121,16 +121,84 @@ footer a { color: var(--muted); text-decoration: none; }
     <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a class="active" aria-current="page" href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
     <main>
 <h1 id="codex">Codex (ChatGPT subscription) <code>codex</code><a class="headerlink" href="#codex" title="Link to this section">&para;</a></h1>
-<p>A protocol adapter (<a href="/docs/concepts/provider">provider</a>) reached as <code>codex/&lt;model&gt;</code>, speaking <code>openai-responses</code>. It is a <a href="/docs/concepts/subscription">subscription</a> provider: its credentials are agent-owned OAuth grants from the pool, never the deployment&#x27;s own spend. The descriptor says what the gateway can speak; a catalog entry never unlocks a credential or manufactures availability.</p>
-<h2 id="endpoints">Endpoints and auth<a class="headerlink" href="#endpoints" title="Link to this section">&para;</a></h2>
-<table><thead><tr><th></th><th></th></tr></thead><tbody><tr><td>Base URL</td><td><code>https://chatgpt.com/backend-api/codex</code></td></tr><tr><td>Trusted host</td><td><code>chatgpt.com</code></td></tr><tr><td>Chat endpoint</td><td><code>https://chatgpt.com/backend-api/codex/responses</code></td></tr><tr><td>Model discovery</td><td><code>https://chatgpt.com/backend-api/codex/models</code></td></tr><tr><td>Wire protocol</td><td><code>openai-responses</code></td></tr><tr><td>Auth header</td><td><code>Authorization: Bearer &lt;credential&gt;</code></td></tr><tr><td>Base URL override</td><td><code>BRAMA_PROVIDER_CODEX_BASE_URL</code></td></tr></tbody></table>
-<p>Provider clients require approved HTTPS hosts, disable redirects, and bypass ambient proxies. The override is validated with the exact refusals listed in <a href="/docs/concepts/provider#endpoint-trust-and-overrides">provider</a>; a non-loopback override outside the trusted host above is refused as <code>host &lt;host&gt; is not trusted</code>.</p>
-<h2 id="models">Models<a class="headerlink" href="#models" title="Link to this section">&para;</a></h2>
-<p>Pinned catalog rows (live discovery through the models endpoint widens, never replaces, these):</p><ul><li><code>codex/gpt-5.6-sol</code></li><li><code>codex/gpt-5.6-luna</code></li><li><code>codex/gpt-5.6-terra</code></li><li><code>codex/gpt-5.5</code></li><li><code>codex/gpt-5.3-codex-spark</code></li></ul>
-<h2 id="credential-lifecycle">Credential lifecycle<a class="headerlink" href="#credential-lifecycle" title="Link to this section">&para;</a></h2>
-<p>Credentials are OAuth grants held in the vault at <code>provider:codex:&lt;subscription&gt;</code> and refreshed ahead of expiry against <code>https://auth.openai.com/oauth/token</code> (<a href="/docs/concepts/subscription#credential-lifecycle">subscription</a>). A grant the provider disowned is only replaced by a real sign-in: <code>brama subscription sign-in codex --reason &quot;&lt;why&gt;&quot;</code> drives one through Weles and proves it by the refresh that follows, and <code>brama subscription refresh codex --reason &quot;&lt;why&gt;&quot;</code> forces the refresh alone (<a href="/docs/cli#brama-subscription-sign-in-provider-reason-text-json">cli</a>).</p>
-<p>This provider publishes a free plan-usage report at <code>https://chatgpt.com/backend-api/wham/usage</code>, issued to exactly the OAuth credential the chat route already presents; the ledger records it per window (<a href="/docs/concepts/subscription#the-usage-ledger">subscription</a>).</p>
-<p>Requests to the ChatGPT-account backend carry extra Codex headers beside the bearer (<code>authorize_provider</code> in <code>src/providers/adapter.rs</code>); every other provider&#x27;s requests stay byte-identical to the descriptor.</p>
+<p>The ChatGPT-account Codex backend — the same one the Codex CLI talks to — spoken with
+an agent-owned ChatGPT subscription. Routes are <code>codex/&lt;model&gt;</code> over
+<code>openai-responses</code> (not <code>openai-chat</code>: this backend serves the Responses
+API only). Who may spend the account is the
+<a href="/docs/concepts/entitlement">entitlement</a> decision; the account itself is a
+<a href="/docs/concepts/subscription">subscription</a>. Not to be confused with
+<a href="/docs/providers/openai"><code>openai</code></a>, which is the platform API paid by the
+deployment&#x27;s own key.</p>
+<h2 id="how-we-sign-in">How we sign in<a class="headerlink" href="#how-we-sign-in" title="Link to this section">&para;</a></h2>
+<p>A ChatGPT subscription credential comes out of the auth.openai.com OAuth sign-in — a
+browser, SSO, a consent screen. On this fleet that browser is Weles&#x27;s, on
+Weles&#x27;s own host: Weles exposes the sign-in as <code>POST /reauth</code> on its worker
+API, drives its stored sign-in row for the account, and writes the minted grant into the
+Skarbiec vault at <code>provider:codex:&lt;subscription&gt;</code>. The proof is never the
+login&#x27;s exit status — it is the vault bundle at a higher revision and a refresh that
+now answers <code>refreshed</code>.</p>
+<p>Three callers drive it: <code>brama subscription sign-in codex --reason
+&quot;&lt;why&gt;&quot;</code> on the host Weles runs on
+(<a href="/docs/cli#brama-subscription-sign-in-provider-reason-text-json">cli</a>), the renewal
+loop that signs refused accounts back in without a human, and Brama Desktop. A signed
+donation through <code>POST /v1/subscriptions/:agent_id</code> banks a grant minted elsewhere
+(<a href="/docs/examples/operations/manage-subscriptions">donation</a>).</p>
+<h2 id="the-grant-on-disk">The grant on disk<a class="headerlink" href="#the-grant-on-disk" title="Link to this section">&para;</a></h2>
+<p>The vault item is the same document the Codex CLI writes as its
+<code>auth.json</code> — a <code>tokens</code> block plus bookkeeping:</p>
+<pre><code class="language-json">{"tokens": {
+  "access_token":  "&lt;short-lived JWT&gt;",
+  "refresh_token": "&lt;rotating refresh token&gt;",
+  "id_token":      "&lt;OpenID identity JWT&gt;",
+  "account_id":    "&lt;ChatGPT account id&gt;"
+ },
+ "last_refresh": "2026-08-25T21:00:00+00:00"}
+</code></pre>
+<p>The blob states no expiry field of its own: the gateway reads expiry from the access
+token&#x27;s JWT <code>exp</code> claim (<code>src/gateway/oauth_refresh.rs</code>). On refresh
+the gateway rewrites <code>access_token</code>, <code>refresh_token</code> and
+<code>id_token</code> in place and stamps <code>last_refresh</code>. The item carries the
+discovery tags (<code>brama:subscription</code>, <code>brama:agent:&lt;agent&gt;</code>,
+<code>brama:provider:codex</code>, <code>brama:id:&lt;id&gt;</code>); an item that loses the
+agent tag keeps a working credential and stops existing for every listing —
+<code>/readyz</code> reports it under <code>unroutable_accounts</code>.</p>
+<h2 id="how-a-request-presents-it">How a request presents it<a class="headerlink" href="#how-a-request-presents-it" title="Link to this section">&para;</a></h2>
+<p>At final use the gateway redeems the vault item through the local entitlements router
+and presents <code>Authorization: Bearer &lt;access_token&gt;</code> — plus the headers the
+ChatGPT backend requires and every other provider never sees:
+<code>OpenAI-Beta: responses=experimental</code>, <code>originator: codex_cli_rs</code>, and
+<code>chatgpt-account-id</code> read from the grant&#x27;s own
+<code>tokens.account_id</code> (<code>authorize_provider</code> in
+<code>src/providers/adapter.rs</code>). No copy of the token outlives the request.</p>
+<h2 id="refresh">Refresh<a class="headerlink" href="#refresh" title="Link to this section">&para;</a></h2>
+<p>Ahead of expiry the gateway posts <code>grant_type=refresh_token</code> with the stored
+refresh token and the public client id <code>app_EMoamEEZ73f0CkXaXp7hrann</code> to
+<code>https://auth.openai.com/oauth/token</code>, form-encoded, bounded at 15 seconds and a
+64&nbsp;KiB answer. The sweep runs every <code>BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS</code>
+(60) and refreshes every active credential expiring within
+<code>BRAMA_CREDENTIAL_REFRESH_SKEW_SECS</code> (300), single-flighted per subscription; a
+token is considered dead 60 seconds before its stated expiry. OpenAI rotates the refresh
+token on issue, so a refreshed grant that cannot be written back to the vault is a failed
+refresh — the provider already invalidated the one still stored. <code>brama subscription
+refresh codex --reason &quot;&lt;why&gt;&quot;</code> forces the same path now and journals the
+reason. Refreshing costs no plan quota.</p>
+<h2 id="when-the-provider-disowns-the-grant">When the provider disowns the grant<a class="headerlink" href="#when-the-provider-disowns-the-grant" title="Link to this section">&para;</a></h2>
+<p>A refused refresh is definitive only on the provider&#x27;s own evidence —
+<code>invalid_grant</code>, <code>invalid_token</code>, <code>revoked</code>,
+<code>unauthorized_client</code>, or a 401/403 with no stated reason. That records
+<code>credential.state: needs_reauthorization</code> with the provider&#x27;s sentence as
+<code>cause</code>, blocks the account for 30 minutes, lists it <code>burnt</code>, and waits
+for the sign-in above. Everything else is transient and left for the next sweep
+(<a href="/docs/concepts/subscription#states">subscription</a>,
+<a href="/docs/runbook#a-subscription-reads-burnt">runbook</a>).</p>
+<h2 id="plan-usage">Plan usage<a class="headerlink" href="#plan-usage" title="Link to this section">&para;</a></h2>
+<p>ChatGPT publishes a free usage report at
+<code>https://chatgpt.com/backend-api/wham/usage</code>, issued to exactly the OAuth bearer
+the chat route already presents — reading it costs no quota. The ledger records each
+window with its instant and source
+(<a href="/docs/concepts/subscription#the-usage-ledger">subscription</a>).</p>
+<h2 id="endpoints">Endpoints<a class="headerlink" href="#endpoints" title="Link to this section">&para;</a></h2>
+<table><thead><tr><th></th><th></th></tr></thead><tbody><tr><td>Chat</td><td><code>https://chatgpt.com/backend-api/codex/responses</code></td></tr><tr><td>Model discovery</td><td><code>https://chatgpt.com/backend-api/codex/models</code>, widening the pinned rows <code>gpt-5.6-sol</code>, <code>gpt-5.6-luna</code>, <code>gpt-5.6-terra</code>, <code>gpt-5.5</code>, <code>gpt-5.3-codex-spark</code></td></tr><tr><td>Token endpoint</td><td><code>https://auth.openai.com/oauth/token</code> (form wire)</td></tr><tr><td>Usage report</td><td><code>https://chatgpt.com/backend-api/wham/usage</code></td></tr><tr><td>Trusted host</td><td><code>chatgpt.com</code></td></tr><tr><td>Base URL override</td><td><code>BRAMA_PROVIDER_CODEX_BASE_URL</code>, validated with the refusals in <a href="/docs/concepts/provider#endpoint-trust-and-overrides">provider</a></td></tr></tbody></table>
 </main>
   </div>
 </body>

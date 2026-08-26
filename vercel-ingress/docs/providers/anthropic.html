@@ -121,14 +121,40 @@ footer a { color: var(--muted); text-decoration: none; }
     <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a class="active" aria-current="page" href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
     <main>
 <h1 id="anthropic">Anthropic <code>anthropic</code><a class="headerlink" href="#anthropic" title="Link to this section">&para;</a></h1>
-<p>A protocol adapter (<a href="/docs/concepts/provider">provider</a>) reached as <code>anthropic/&lt;model&gt;</code>, speaking <code>anthropic-messages</code>. It is a direct provider: requests spend through the deployment&#x27;s own <a href="/docs/concepts/capability">capability</a> credential. The descriptor says what the gateway can speak; a catalog entry never unlocks a credential or manufactures availability.</p>
-<h2 id="endpoints">Endpoints and auth<a class="headerlink" href="#endpoints" title="Link to this section">&para;</a></h2>
-<table><thead><tr><th></th><th></th></tr></thead><tbody><tr><td>Base URL</td><td><code>https://api.anthropic.com</code></td></tr><tr><td>Trusted host</td><td><code>api.anthropic.com</code></td></tr><tr><td>Chat endpoint</td><td><code>https://api.anthropic.com/v1/messages</code></td></tr><tr><td>Model discovery</td><td><code>https://api.anthropic.com/v1/models</code></td></tr><tr><td>Wire protocol</td><td><code>anthropic-messages</code></td></tr><tr><td>Auth header</td><td><code>x-api-key: &lt;credential&gt;</code> with <code>anthropic-version: 2023-06-01</code></td></tr><tr><td>Base URL override</td><td><code>BRAMA_PROVIDER_ANTHROPIC_BASE_URL</code></td></tr></tbody></table>
-<p>Provider clients require approved HTTPS hosts, disable redirects, and bypass ambient proxies. The override is validated with the exact refusals listed in <a href="/docs/concepts/provider#endpoint-trust-and-overrides">provider</a>; a non-loopback override outside the trusted host above is refused as <code>host &lt;host&gt; is not trusted</code>.</p>
+<p>The Anthropic platform API paid by the deployment&#x27;s own key. Routes are
+<code>anthropic/&lt;model&gt;</code> over <code>anthropic-messages</code>. Not to be confused
+with <a href="/docs/providers/claude-code"><code>claude-code</code></a>: same host, same wire
+protocol, entirely different money — <code>claude-code</code> spends an agent&#x27;s Claude
+subscription through an OAuth bearer, this route spends the deployment&#x27;s Anthropic
+account through an API key.</p>
+<h2 id="how-we-authenticate">How we authenticate<a class="headerlink" href="#how-we-authenticate" title="Link to this section">&para;</a></h2>
+<p>There is no login flow here. Anthropic issues a long-lived API key in its console; an
+operator stores it once in the Skarbiec vault, and at final use the gateway redeems the
+deployment&#x27;s <a href="/docs/concepts/capability">capability</a> for this provider
+through the local entitlements router, reduces the stored document to the bare key, and
+sends it as <code>x-api-key: &lt;key&gt;</code> with
+<code>anthropic-version: 2023-06-01</code>. The key has no refresh path and no invented
+expiry — it works until Anthropic revokes it or an operator replaces it in the vault, and
+<code>brama subscription refresh anthropic</code> answers exactly that: API keys have no
+refresh path.</p>
+<p>The two failure shapes point at two different repairs: a
+<code>503 credential_unauthorized</code> means no capability, read grant or trust material
+produced a key at final use — repair the authorization chain
+(<a href="/docs/runbook#a-request-answers-503-credential_unauthorized">runbook</a>); a
+<code>502 provider_failure</code> with
+<code>provider_authentication: Incorrect API key provided: ...</code> means the key was
+produced and Anthropic rejected it — repair the provider account.</p>
 <h2 id="models">Models<a class="headerlink" href="#models" title="Link to this section">&para;</a></h2>
-<p>Pinned catalog rows (live discovery through the models endpoint widens, never replaces, these):</p><ul><li><code>anthropic/claude-haiku-4-5</code></li><li><code>anthropic/claude-opus-4-6</code></li><li><code>anthropic/claude-sonnet-4-6</code></li></ul>
-<h2 id="credential">Credential<a class="headerlink" href="#credential" title="Link to this section">&para;</a></h2>
-<p>An API key redeemed at final use through the deployment&#x27;s <a href="/docs/concepts/capability">capability</a>; it has no refresh path and no invented expiry. The OAuth usage report at <code>api.anthropic.com/api/oauth/usage</code> is issued to OAuth credentials only, so this API-key route publishes no plan state — that absence is recorded as the provider&#x27;s own answer, never as a zero (<a href="/docs/concepts/subscription#the-usage-ledger">subscription</a>).</p>
+<p>Pinned catalog rows, widened (never replaced) by live discovery through the models
+endpoint: <code>anthropic/claude-haiku-4-5</code>, <code>anthropic/claude-opus-4-6</code>,
+<code>anthropic/claude-sonnet-4-6</code>.</p>
+<h2 id="plan-usage">Plan usage<a class="headerlink" href="#plan-usage" title="Link to this section">&para;</a></h2>
+<p>Anthropic&#x27;s free usage report at <code>api.anthropic.com/api/oauth/usage</code> is
+issued to OAuth credentials only, so this API-key route publishes no plan state. The
+ledger records that absence as the provider&#x27;s own answer, never as a zero
+(<a href="/docs/concepts/subscription#the-usage-ledger">subscription</a>).</p>
+<h2 id="endpoints">Endpoints<a class="headerlink" href="#endpoints" title="Link to this section">&para;</a></h2>
+<table><thead><tr><th></th><th></th></tr></thead><tbody><tr><td>Chat</td><td><code>https://api.anthropic.com/v1/messages</code></td></tr><tr><td>Model discovery</td><td><code>https://api.anthropic.com/v1/models</code></td></tr><tr><td>Auth header</td><td><code>x-api-key: &lt;key&gt;</code> with <code>anthropic-version: 2023-06-01</code></td></tr><tr><td>Trusted host</td><td><code>api.anthropic.com</code></td></tr><tr><td>Base URL override</td><td><code>BRAMA_PROVIDER_ANTHROPIC_BASE_URL</code>, validated with the refusals in <a href="/docs/concepts/provider#endpoint-trust-and-overrides">provider</a></td></tr></tbody></table>
 </main>
   </div>
 </body>
