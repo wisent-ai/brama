@@ -45,6 +45,10 @@ name = "capability_real"
 path = "tests/providers/capability_real.rs"
 
 [[test]]
+name = "http_api_real"
+path = "tests/providers/http_api_real.rs"
+
+[[test]]
 name = "provider_contracts"
 path = "tests/providers/provider_contracts.rs"
 
@@ -79,3 +83,5 @@ wisent-onboarding-client = { git = "https://github.com/wisent-ai/echo-web", rev 
 ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }
 libc = "0.2"
 zeroize = "1.8"
+[dev-dependencies]
+reqwest = { version = "0.12", features = ["blocking", "json"] }
