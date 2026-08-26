@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Release and versioning — Brama Docs</title>
+  <meta name="description" content="Release and versioning The root READMEREADME.md defines Brama&#x27;s product contract. This document defines how that contract is versioned, built, published, upgraded, and recovered. C">
+  <link rel="canonical" href="https://brama.wisent.com/docs/release">
+  <style>
+:root {
+  color-scheme: dark;
+  --bg: #080a0d;
+  --panel: #101319;
+  --panel-2: #151922;
+  --line: #282e3a;
+  --muted: #9ba5b5;
+  --text: #f2f5f9;
+  --accent: #b7ff52;
+  --accent-soft: rgba(183, 255, 82, .12);
+  --code: #111723;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 6rem; }
+body { margin: 0; background: radial-gradient(circle at 75% -10%, rgba(69, 108, 89, .24), transparent 32rem), var(--bg); color: var(--text); line-height: 1.65; }
+a { color: inherit; }
+.topbar { position: sticky; top: 0; z-index: 10; height: 4.25rem; display: flex; align-items: center; justify-content: space-between; padding: 0 2rem; border-bottom: 1px solid rgba(255,255,255,.09); background: rgba(8, 10, 13, .86); backdrop-filter: blur(18px); }
+.brand { display: inline-flex; align-items: center; gap: .65rem; font-size: 1.05rem; text-decoration: none; letter-spacing: -.01em; }
+.brand-mark { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .55rem; background: var(--accent); color: #10140b; font-weight: 900; }
+.brand strong { padding: .15rem .5rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+.topbar nav { display: flex; align-items: center; gap: 1.5rem; }
+.topbar nav a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.topbar nav a:hover { color: var(--text); }
+.layout { display: grid; grid-template-columns: 17.5rem minmax(0, 1fr); max-width: 94rem; min-height: calc(100vh - 4.25rem); margin: 0 auto; }
+aside { border-right: 1px solid var(--line); padding: 2rem 1.5rem 4rem; }
+aside > nav { position: sticky; top: 6.25rem; max-height: calc(100vh - 8rem); overflow: auto; scrollbar-width: thin; }
+.nav-group { margin-bottom: 1.75rem; }
+.nav-group h2 { margin: 0 0 .45rem; color: #737f90; font-size: .69rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.nav-group a { display: block; margin: .08rem 0; padding: .36rem .55rem; border-radius: .4rem; color: var(--muted); font-size: .82rem; line-height: 1.35; text-decoration: none; }
+.nav-group a:hover { color: var(--text); background: var(--panel); }
+.nav-group a.active { color: var(--accent); background: var(--accent-soft); }
+.mobile-nav { display: none; }
+main { width: 100%; min-width: 0; max-width: 65rem; padding: 3.5rem clamp(2rem, 6vw, 6rem) 2rem; }
+.source-note { margin: 0 0 1rem; color: #6f7a89; font: 600 .7rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
+.doc > h1:first-child { margin-top: 0; font-size: clamp(2.35rem, 5vw, 4rem); line-height: 1.04; letter-spacing: -.045em; }
+.doc h2 { margin: 3.25rem 0 1rem; padding-top: .5rem; font-size: 1.7rem; line-height: 1.2; letter-spacing: -.025em; }
+.doc h3 { margin: 2.25rem 0 .75rem; font-size: 1.22rem; line-height: 1.3; }
+.doc h4 { margin: 1.75rem 0 .5rem; font-size: 1rem; }
+.doc p, .doc li { color: #c7ced9; }
+.doc p { margin: 1rem 0; }
+.doc a { color: var(--accent); text-underline-offset: .2em; }
+.doc h1 .headerlink, .doc h2 .headerlink, .doc h3 .headerlink, .doc h4 .headerlink { margin-left: .5rem; color: #4d5765; font-size: .65em; text-decoration: none; opacity: 0; }
+.doc h1:hover .headerlink, .doc h2:hover .headerlink, .doc h3:hover .headerlink, .doc h4:hover .headerlink { opacity: 1; }
+.doc blockquote { margin: 1.5rem 0; padding: .85rem 1.1rem; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+.doc blockquote p { margin: .3rem 0; }
+.doc code { padding: .13rem .35rem; border: 1px solid #273143; border-radius: .35rem; background: var(--code); color: #dce7f7; font: .88em/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.doc pre { margin: 1.4rem 0; padding: 1.1rem 1.2rem; overflow: auto; border: 1px solid var(--line); border-radius: .7rem; background: var(--code); box-shadow: 0 18px 55px rgba(0,0,0,.2); }
+.doc pre code { padding: 0; border: 0; background: transparent; color: #dce7f7; overflow-wrap: normal; }
+.doc table { display: block; width: 100%; margin: 1.5rem 0; overflow-x: auto; border-collapse: collapse; font-size: .87rem; }
+.doc th, .doc td { min-width: 8rem; padding: .65rem .75rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.doc th { background: var(--panel-2); color: var(--text); }
+.doc td { color: #bcc5d2; }
+.doc img { max-width: 100%; height: auto; border-radius: .6rem; }
+.doc hr { margin: 3rem 0; border: 0; border-top: 1px solid var(--line); }
+.doc ul, .doc ol { padding-left: 1.4rem; }
+.doc li + li { margin-top: .35rem; }
+footer { display: flex; justify-content: space-between; margin-top: 5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: #6f7a89; font-size: .78rem; }
+footer a { color: var(--muted); text-decoration: none; }
+.hero { padding: clamp(1rem, 5vw, 4.5rem) 0 4rem; }
+.eyebrow { margin: 0 0 .85rem; color: var(--accent) !important; font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.hero h1 { max-width: 14ch; margin: 0; font-size: clamp(3rem, 7vw, 5.8rem); line-height: .96; letter-spacing: -.06em; }
+.hero > p:not(.eyebrow) { max-width: 48rem; margin: 1.5rem 0 0; color: var(--muted); font-size: 1.12rem; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+.button { display: inline-flex; align-items: center; min-height: 2.8rem; padding: .6rem 1rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--panel); text-decoration: none; }
+.button.primary { border-color: var(--accent); background: var(--accent); color: #11160c; font-weight: 750; }
+.featured, .directory { margin-top: 2.5rem; }
+.card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; }
+.card { min-height: 13rem; padding: 1.3rem; border: 1px solid var(--line); border-radius: .75rem; background: linear-gradient(145deg, rgba(21,25,34,.92), rgba(13,16,21,.92)); text-decoration: none; transition: border-color .16s, transform .16s; }
+.card:hover { transform: translateY(-2px); border-color: #526137; }
+.card span { color: var(--accent); font-size: .68rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.card h2 { margin: .9rem 0 .45rem; font-size: 1.3rem; line-height: 1.2; }
+.card p { margin: 0; color: var(--muted); font-size: .85rem; }
+.directory > h2 { margin: 0 0 1.2rem; font-size: 2.2rem; }
+.directory-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 2.5rem; }
+.directory-grid section { padding-top: 1rem; border-top: 1px solid var(--line); }
+.directory-grid h2 { margin: 0 0 .65rem; font-size: 1rem; }
+.directory-grid ul { margin: 0; padding: 0; list-style: none; }
+.directory-grid li { margin: .35rem 0; }
+.directory-grid a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.directory-grid a:hover { color: var(--accent); }
+@media (max-width: 860px) {
+  .topbar { padding: 0 1rem; }
+  .topbar nav a:not(:last-child) { display: none; }
+  .layout { display: block; }
+  aside { display: none; }
+  .mobile-nav { display: block; margin: 1rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--panel); }
+  .mobile-nav summary { padding: .75rem 1rem; cursor: pointer; color: var(--muted); font-size: .85rem; }
+  .mobile-nav nav { max-height: 70vh; overflow: auto; padding: .5rem 1rem 1rem; }
+  main { max-width: none; padding: 2.5rem 1.25rem 2rem; }
+  .doc > h1:first-child { font-size: clamp(2.1rem, 12vw, 3.3rem); }
+  .card-grid, .directory-grid { grid-template-columns: 1fr; }
+  .hero { padding-top: 1rem; }
+  .hero h1 { font-size: clamp(3rem, 15vw, 4.5rem); }
+}
+@media print {
+  .topbar, aside, .mobile-nav, footer { display: none; }
+  body { background: white; color: black; }
+  .layout { display: block; }
+  main { max-width: none; padding: 0; }
+  .doc p, .doc li { color: #222; }
+}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <details class="mobile-nav"><summary>Browse documentation</summary><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a class="active" aria-current="page" href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></details>
+  <div class="layout">
+    <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a class="active" aria-current="page" href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
+    <main>
+      <p class="source-note">Documentation topic: RELEASE.md</p>
+      <article class="doc"><h1 id="release-and-versioning">Release and versioning<a class="headerlink" href="#release-and-versioning" title="Link to this section">&para;</a></h1>
+<p>The <a href="/docs/readme">root README</a> defines Brama's product contract. This document
+defines how that contract is versioned, built, published, upgraded, and
+recovered.</p>
+<h2 id="current-release-state">Current release state<a class="headerlink" href="#current-release-state" title="Link to this section">&para;</a></h2>
+<p>Brama is pre-1.0 and does publish immutable binary releases. <code>main</code> remains
+mutable development source and is never a production coordinate.</p>
+<p>Which release is newest is deliberately not restated here. A version written
+into prose goes stale the moment the next tag lands, which is how this section
+came to claim that no release existed while five were published. Two records
+answer it instead, and a machine maintains both:</p>
+<ul>
+<li><code>released-surface.json</code> names the newest release this repository has recorded;
+  <code>scripts/baseline.py --write</code> regenerates it from that release rather than
+  from the working tree;</li>
+<li>the canonical Stado release receipt names the immutable source snapshot,
+  staged archive, digest, qualification, and promoted channel.</li>
+</ul>
+<p>A tag alone is not a release. Treat a coordinate as installable only after
+Stado has stored the signed release receipt and reconciled its channel.</p>
+<h2 id="canonical-product-version">Canonical product version<a class="headerlink" href="#canonical-product-version" title="Link to this section">&para;</a></h2>
+<p>The <code>version</code> field in <code>Cargo.toml</code> is the only product version source. CLI and
+MCP version output, health output, release manifests, tags, artifact paths, and
+release notes derive from it.</p>
+<p>Product version and source revision are separate:</p>
+<ul>
+<li><code>product_version</code>: SemVer from <code>Cargo.toml</code>;</li>
+<li><code>source_revision</code>: the immutable source snapshot selected by Stado;</li>
+<li><code>platform</code>: target OS and architecture;</li>
+<li><code>artifact_digest</code>: SHA-256 of the immutable runtime archive;</li>
+<li><code>built_at</code>: UTC build timestamp;</li>
+<li><code>provenance</code>: the canonical Stado release receipt.</li>
+</ul>
+<p>A commit SHA must not be presented as the product version. An artifact without
+all five identities is not releasable.</p>
+<h2 id="version-policy-and-public-contract">Version policy and public contract<a class="headerlink" href="#version-policy-and-public-contract" title="Link to this section">&para;</a></h2>
+<p>Brama uses Semantic Versioning. Before <code>1.0.0</code>:</p>
+<ul>
+<li>an incompatible change advances <code>MINOR</code> and resets <code>PATCH</code>;</li>
+<li>an additive or corrective compatible change advances <code>PATCH</code>;</li>
+<li><code>1.0.0</code> is an explicit stability declaration.</li>
+</ul>
+<p>The public contract includes:</p>
+<ul>
+<li>CLI commands, flags, machine-readable output, and exit behavior;</li>
+<li>MCP protocol version, tool names, schemas, and read-only boundary;</li>
+<li>HTTP methods, paths, request and response fields, status codes, error codes,
+  selectors, aliases, and authentication headers;</li>
+<li>environment and generated configuration fields;</li>
+<li>journal record kinds and durable state interpretation;</li>
+<li>capability resource naming and ownership;</li>
+<li>release archive layout and launcher behavior;</li>
+<li>documented limits, retry, cost, compatibility, and recovery behavior.</li>
+</ul>
+<p><code>scripts/surface.py</code> extracts the mechanically visible part of this contract: the
+command list a caller invokes by name. <code>released-surface.json</code> is the immutable
+published baseline, never a candidate regenerated from the same working tree.</p>
+<p>Two entries in the list above — the release archive layout and the launcher's
+behavior — are contract that no extractor can see, so a release owner declares
+that breakage instead of hoping a command list reveals it. The declaration lives
+in <code>declared-breakage.json</code>, naming the version it belongs to and why, and
+<code>version-check</code> passes it to the shared rule as <code>--breaking</code>, which escalates the
+class and can never lower it. It applies only while <code>Cargo.toml</code> still declares
+that version, so it expires on its own rather than becoming a switch left on that
+makes every later release look breaking.</p>
+<h2 id="release-channels">Release channels<a class="headerlink" href="#release-channels" title="Link to this section">&para;</a></h2>
+<ul>
+<li><strong>Development:</strong> <code>main</code>; maintainers only; mutable; no production guarantee.</li>
+<li><strong>Preview:</strong> immutable <code>vX.Y.Z-rc.N</code>; staging and explicit canaries; retained
+  with qualification evidence.</li>
+<li><strong>Stable:</strong> immutable <code>vX.Y.Z</code>; production callers; promoted from the exact
+  preview bytes whenever a preview exists.</li>
+</ul>
+<p>There is no <code>latest</code> production contract. Discovery labels may point to an
+immutable release, but installation and rollback always resolve SemVer,
+revision, platform, and digest.</p>
+<h2 id="release-artifacts">Release artifacts<a class="headerlink" href="#release-artifacts" title="Link to this section">&para;</a></h2>
+<p>A release stores one immutable archive and signed receipt per platform:</p>
+<pre><code class="language-text">stado://releases/brama/X.Y.Z/linux-amd64/release.tar.gz
+stado://releases/brama/X.Y.Z/darwin-arm64/release.tar.gz
+</code></pre>
+<p>Each archive expands to:</p>
+<pre><code class="language-text">bin/brama
+bin/skarbiec-entitlements-router
+bin/start-with-skarbiec
+bin/provision-skarbiec-trust
+libexec/generate-skarbiec-config.mjs
+etc/brama-skarbiec/subscriptions.json
+etc/brama-skarbiec/recipient-public-keys.asc
+LICENSE
+</code></pre>
+<p><code>bin/skarbiec-entitlements-router</code> is a second product's binary. The
+<code>.wisent-release.json</code> input pins its immutable Skarbiec source URI and SHA-256,
+and Stado verifies and mounts that snapshot before invoking the build. Brama
+therefore ships the compatible router without cloning another provider or
+asking an operator to match two versions by hand. Stado records source inputs,
+builder identity, stage paths, and the final archive digest in the release
+receipt.</p>
+<p>An archive never contains the Skarbiec vault, provider credentials, host-specific
+runtime configuration, Brama journal state, or any signing key.
+<code>SKARBIEC_VAULT_FILE</code> must always be supplied by the operator.</p>
+<h3 id="trust-material-is-provisioned-per-installation">Trust material is provisioned per installation<a class="headerlink" href="#trust-material-is-provisioned-per-installation" title="Link to this section">&para;</a></h3>
+<p>The signed policy, workload registry, trust root, WORM receipt command and
+workload proof key are <strong>not</strong> in the archive. <code>bin/provision-skarbiec-trust</code>
+generates them on the host, once, before the first start, and
+<code>bin/start-with-skarbiec</code> refuses to start while any of them is missing.</p>
+<p>Two reasons, and the first is the one that decides it. The registry pins the
+absolute path and the SHA-256 of the binary permitted to redeem a capability, and
+a build machine cannot know where the artifact will be installed. The second is
+that a copy generated at build time would ship one Ed25519 proof seed inside
+every download of that archive, so the workload identity of every installation
+would be a value any downloader already holds.</p>
+<p>Re-provisioning replaces the installation's identity, so
+<code>provision-skarbiec-trust</code> refuses to overwrite existing material unless
+<code>--force</code> is given, and the capabilities bound to the previous key must be
+re-granted afterwards.</p>
+<p>When an installation runs against a registry that does not describe it, the
+symptom is not a startup failure. Brama comes up, <code>/health</code> answers 200, and
+every request needing a provider credential returns <code>503
+dependency_unavailable</code> with <code>capability redemption denied: peer mismatch</code> on
+stderr. The message names none of the four fields it compared, and three of
+them can be right while the fourth is wrong.</p>
+<p>The registry pins <code>executable_path</code>, <code>executable_sha256</code>, <code>uid</code> and <code>gid</code>, and
+on macOS the designated code-signing requirement. The failure seen in practice
+was the uid: <code>generate-skarbiec-config.mjs</code> defaults to the account the
+container image creates, which exists on no host, so an installation
+provisioned before this was fixed pinned a workload nobody could be — while
+the path and digest in the same record matched exactly, which is what made it
+read like a signing or key problem for days. <code>bin/provision-skarbiec-trust</code>
+now always passes the provisioning account's uid and gid, and
+<code>BRAMA_WORKLOAD_UID</code> / <code>BRAMA_WORKLOAD_GID</code> remain the override.</p>
+<p>The launcher now does this itself. When the registry in the installation it is
+about to run does not describe that installation - wrong path, wrong digest,
+wrong account - it provisions before starting rather than refusing, because the
+bundle carries everything the generator needs and the account that runs the
+service is the account the registry must name. Copying an installation to a new
+directory, which is what the fleet does every time it materialises an artifact
+under a digest-named path, therefore heals on the next start instead of
+producing a gateway that answers <code>/health</code> and serves nothing.</p>
+<p><code>scripts/brama-diagnose.py</code> prints that comparison for every installed
+generation, beside the units that start Brama, the capabilities actually issued
+against the providers the policy grants, each alias route against those
+capabilities, where the gateway is reachable and by which scheme, and the
+current boot attempt. Run it before concluding anything about a redemption
+refusal.</p>
+<h2 id="qualification-gate">Qualification gate<a class="headerlink" href="#qualification-gate" title="Link to this section">&para;</a></h2>
+<p>Before promoting a stable Stado release, the release owner records:</p>
+<ul>
+<li>README, onboarding, core, integration, example, and test contracts agree;</li>
+<li>the public-surface decision and required version agree;</li>
+<li>the selected clean revision and builder inputs are immutable;</li>
+<li>the built binary reports the expected product version and source revision;</li>
+<li>archive layout, provenance, and digest are complete;</li>
+<li>approved local, integration, credentialed, recovery, and security evidence is
+  recorded with omitted layers called out;</li>
+<li>upgrade and rollback are actionable for the candidate;</li>
+<li><code>CHANGELOG.md</code> contains user-impact release notes.</li>
+</ul>
+<p>No narrow check qualifies unexecuted layers.</p>
+<h2 id="release-procedure">Release procedure<a class="headerlink" href="#release-procedure" title="Link to this section">&para;</a></h2>
+<ol>
+<li>Select one clean source revision from <code>main</code>.</li>
+<li>Review the full public contract, not only CLI command names.</li>
+<li>Select and commit the required SemVer change in <code>Cargo.toml</code> and lockfile.</li>
+<li>Update <code>CHANGELOG.md</code>, compatibility, migration, and operator actions.</li>
+<li>Submit the immutable source snapshot to Stado.</li>
+<li>Let Stado resolve <code>.wisent-release.json</code>, verify pinned inputs, run the
+   platform recipe, stage the archive, and store the signed release receipt.</li>
+<li>Promote the exact version to <code>candidate</code>.</li>
+<li>Reconcile the candidate on the target service and record qualification.</li>
+<li>Promote the same immutable receipts to <code>stable</code>.</li>
+<li>Update <code>released-surface.json</code> from the complete canonical release.</li>
+</ol>
+<p>Steps that execute validation or contact environments require the explicit
+approval described in <a href="/docs/testing"><code>TESTING.md</code></a>.</p>
+<h2 id="release-notes">Release notes<a class="headerlink" href="#release-notes" title="Link to this section">&para;</a></h2>
+<p>Each release section in <code>CHANGELOG.md</code> states:</p>
+<ul>
+<li>added, changed, corrected, removed, and deprecated behavior;</li>
+<li>security-relevant changes;</li>
+<li>HTTP, CLI, MCP, configuration, state, and capability changes;</li>
+<li>compatibility and migration requirements;</li>
+<li>operator actions before and after upgrade;</li>
+<li>known limitations;</li>
+<li>exact source revision, platforms, artifact digests, and provenance objects.</li>
+</ul>
+<p>Commit titles alone are not release notes.</p>
+<h2 id="compatibility-and-migrations">Compatibility and migrations<a class="headerlink" href="#compatibility-and-migrations" title="Link to this section">&para;</a></h2>
+<p>Every release declares compatibility for:</p>
+<ul>
+<li>callers versus server;</li>
+<li>launcher, packaged router, and Brama binary;</li>
+<li>current and previous configuration documents;</li>
+<li>journal record versions and donated-subscription overlay;</li>
+<li>Skarbiec wire protocol and capability resource naming;</li>
+<li>provider protocols and catalog schema;</li>
+<li>rolling or mixed-version service operation.</li>
+</ul>
+<p>Brama currently has no database migration. Any future durable-state change must
+name preconditions, backup, duration, service impact, retry/resume behavior,
+forward path, and rollback. A release must not silently reinterpret journal
+records.</p>
+<h2 id="upgrade">Upgrade<a class="headerlink" href="#upgrade" title="Link to this section">&para;</a></h2>
+<ol>
+<li>Resolve the target SemVer, platform, archive URI, and digest from Stado.</li>
+<li>Read every intervening release note and required operator action.</li>
+<li>Preserve the append-only journal and any operator-required vault backup.</li>
+<li>Let Stado install the digest-pinned archive under a new versioned directory.</li>
+<li>Reconcile the selected channel to the host service manager.</li>
+<li>Confirm the approved health/version outcome and one authorized catalog path.</li>
+<li>Retain the previous immutable runtime until the rollback window closes.</li>
+</ol>
+<h2 id="rollback-and-recovery">Rollback and recovery<a class="headerlink" href="#rollback-and-recovery" title="Link to this section">&para;</a></h2>
+<p>Rollback identifies the previous SemVer, source revision, platform, digest, and
+staged launcher path. The operator must:</p>
+<ol>
+<li>stop promotion and prevent concurrent launchers from mutating the same
+   overlay;</li>
+<li>preserve journal and capability evidence;</li>
+<li>confirm the previous release can interpret current non-secret state;</li>
+<li>point the host service manager at the previous verified installation;</li>
+<li>confirm build identity and the approved health/version outcome;</li>
+<li>confirm one authorized non-billable discovery path;</li>
+<li>revoke or rotate credentials only when compromise, not code regression,
+   requires it.</li>
+</ol>
+<p>If a release changes durable state incompatibly and no reverse migration is
+qualified, rollback is unsupported and the release must say so before upgrade.</p>
+<h2 id="security-and-ownership">Security and ownership<a class="headerlink" href="#security-and-ownership" title="Link to this section">&para;</a></h2>
+<p>Build, signing, GitHub publication, bearer verification, request-sign, and
+provider runtime identities are separate least-privilege credentials. Runtime
+credentials never enter artifacts, provenance, or GitHub. Release maintainers
+own source/version/provenance; deployment operators own host, network, runtime
+grants, state backup, and rollback execution.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

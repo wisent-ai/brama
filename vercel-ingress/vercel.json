@@ -2,6 +2,174 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/docs",
+      "destination": "/docs/index.html"
+    },
+    {
+      "source": "/docs/changelog",
+      "destination": "/docs/changelog.html"
+    },
+    {
+      "source": "/docs/core",
+      "destination": "/docs/core.html"
+    },
+    {
+      "source": "/docs/integrations",
+      "destination": "/docs/integrations.html"
+    },
+    {
+      "source": "/docs/onboarding",
+      "destination": "/docs/onboarding.html"
+    },
+    {
+      "source": "/docs/readme",
+      "destination": "/docs/readme.html"
+    },
+    {
+      "source": "/docs/release",
+      "destination": "/docs/release.html"
+    },
+    {
+      "source": "/docs/security",
+      "destination": "/docs/security.html"
+    },
+    {
+      "source": "/docs/support",
+      "destination": "/docs/support.html"
+    },
+    {
+      "source": "/docs/testing",
+      "destination": "/docs/testing.html"
+    },
+    {
+      "source": "/docs/architecture",
+      "destination": "/docs/architecture.html"
+    },
+    {
+      "source": "/docs/cli",
+      "destination": "/docs/cli.html"
+    },
+    {
+      "source": "/docs/concepts/alias",
+      "destination": "/docs/concepts/alias.html"
+    },
+    {
+      "source": "/docs/concepts/capability",
+      "destination": "/docs/concepts/capability.html"
+    },
+    {
+      "source": "/docs/concepts/client-identity",
+      "destination": "/docs/concepts/client-identity.html"
+    },
+    {
+      "source": "/docs/concepts/entitlement",
+      "destination": "/docs/concepts/entitlement.html"
+    },
+    {
+      "source": "/docs/concepts/envelope",
+      "destination": "/docs/concepts/envelope.html"
+    },
+    {
+      "source": "/docs/concepts/failure-point",
+      "destination": "/docs/concepts/failure-point.html"
+    },
+    {
+      "source": "/docs/concepts/provider",
+      "destination": "/docs/concepts/provider.html"
+    },
+    {
+      "source": "/docs/concepts/subscription",
+      "destination": "/docs/concepts/subscription.html"
+    },
+    {
+      "source": "/docs/configuration",
+      "destination": "/docs/configuration.html"
+    },
+    {
+      "source": "/docs/errors",
+      "destination": "/docs/errors.html"
+    },
+    {
+      "source": "/docs/runnable-examples",
+      "destination": "/docs/runnable-examples.html"
+    },
+    {
+      "source": "/docs/http-api",
+      "destination": "/docs/http-api.html"
+    },
+    {
+      "source": "/docs/quick-start",
+      "destination": "/docs/quick-start.html"
+    },
+    {
+      "source": "/docs/runbook",
+      "destination": "/docs/runbook.html"
+    },
+    {
+      "source": "/docs/walkthrough-standalone-stub",
+      "destination": "/docs/walkthrough-standalone-stub.html"
+    },
+    {
+      "source": "/docs/walkthrough-subscriptions",
+      "destination": "/docs/walkthrough-subscriptions.html"
+    },
+    {
+      "source": "/docs/what-is-brama",
+      "destination": "/docs/what-is-brama.html"
+    },
+    {
+      "source": "/docs/examples",
+      "destination": "/docs/examples.html"
+    },
+    {
+      "source": "/docs/examples/automation/use-mcp-detect",
+      "destination": "/docs/examples/automation/use-mcp-detect.html"
+    },
+    {
+      "source": "/docs/examples/core/call-agent-selectors",
+      "destination": "/docs/examples/core/call-agent-selectors.html"
+    },
+    {
+      "source": "/docs/examples/core/call-http-api",
+      "destination": "/docs/examples/core/call-http-api.html"
+    },
+    {
+      "source": "/docs/examples/failures/auth-and-transport",
+      "destination": "/docs/examples/failures/auth-and-transport.html"
+    },
+    {
+      "source": "/docs/examples/failures/provider-unavailable",
+      "destination": "/docs/examples/failures/provider-unavailable.html"
+    },
+    {
+      "source": "/docs/examples/getting-started/detect-local-resources",
+      "destination": "/docs/examples/getting-started/detect-local-resources.html"
+    },
+    {
+      "source": "/docs/examples/inference/stream-a-completion",
+      "destination": "/docs/examples/inference/stream-a-completion.html"
+    },
+    {
+      "source": "/docs/examples/operations/collect-task-quality",
+      "destination": "/docs/examples/operations/collect-task-quality.html"
+    },
+    {
+      "source": "/docs/examples/operations/inspect-build-and-health",
+      "destination": "/docs/examples/operations/inspect-build-and-health.html"
+    },
+    {
+      "source": "/docs/examples/operations/manage-subscriptions",
+      "destination": "/docs/examples/operations/manage-subscriptions.html"
+    },
+    {
+      "source": "/docs/examples/recovery/upgrade-and-rollback",
+      "destination": "/docs/examples/recovery/upgrade-and-rollback.html"
+    },
+    {
+      "source": "/docs/agent-skill",
+      "destination": "/docs/agent-skill.html"
+    },
+    {
       "source": "/:path*",
       "destination": "https://charless-mac-mini.tail6443b3.ts.net/:path*"
     }

@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Subscription — Brama Docs</title>
+  <meta name="description" content="Subscription One provider account delegated to one agent: a Skarbiec vault item whose credential Brama redeems at final use and whose plan state Brama reads from the provider&#x27;s own">
+  <link rel="canonical" href="https://brama.wisent.com/docs/concepts/subscription">
+  <style>
+:root {
+  color-scheme: dark;
+  --bg: #080a0d;
+  --panel: #101319;
+  --panel-2: #151922;
+  --line: #282e3a;
+  --muted: #9ba5b5;
+  --text: #f2f5f9;
+  --accent: #b7ff52;
+  --accent-soft: rgba(183, 255, 82, .12);
+  --code: #111723;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 6rem; }
+body { margin: 0; background: radial-gradient(circle at 75% -10%, rgba(69, 108, 89, .24), transparent 32rem), var(--bg); color: var(--text); line-height: 1.65; }
+a { color: inherit; }
+.topbar { position: sticky; top: 0; z-index: 10; height: 4.25rem; display: flex; align-items: center; justify-content: space-between; padding: 0 2rem; border-bottom: 1px solid rgba(255,255,255,.09); background: rgba(8, 10, 13, .86); backdrop-filter: blur(18px); }
+.brand { display: inline-flex; align-items: center; gap: .65rem; font-size: 1.05rem; text-decoration: none; letter-spacing: -.01em; }
+.brand-mark { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .55rem; background: var(--accent); color: #10140b; font-weight: 900; }
+.brand strong { padding: .15rem .5rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+.topbar nav { display: flex; align-items: center; gap: 1.5rem; }
+.topbar nav a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.topbar nav a:hover { color: var(--text); }
+.layout { display: grid; grid-template-columns: 17.5rem minmax(0, 1fr); max-width: 94rem; min-height: calc(100vh - 4.25rem); margin: 0 auto; }
+aside { border-right: 1px solid var(--line); padding: 2rem 1.5rem 4rem; }
+aside > nav { position: sticky; top: 6.25rem; max-height: calc(100vh - 8rem); overflow: auto; scrollbar-width: thin; }
+.nav-group { margin-bottom: 1.75rem; }
+.nav-group h2 { margin: 0 0 .45rem; color: #737f90; font-size: .69rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.nav-group a { display: block; margin: .08rem 0; padding: .36rem .55rem; border-radius: .4rem; color: var(--muted); font-size: .82rem; line-height: 1.35; text-decoration: none; }
+.nav-group a:hover { color: var(--text); background: var(--panel); }
+.nav-group a.active { color: var(--accent); background: var(--accent-soft); }
+.mobile-nav { display: none; }
+main { width: 100%; min-width: 0; max-width: 65rem; padding: 3.5rem clamp(2rem, 6vw, 6rem) 2rem; }
+.source-note { margin: 0 0 1rem; color: #6f7a89; font: 600 .7rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
+.doc > h1:first-child { margin-top: 0; font-size: clamp(2.35rem, 5vw, 4rem); line-height: 1.04; letter-spacing: -.045em; }
+.doc h2 { margin: 3.25rem 0 1rem; padding-top: .5rem; font-size: 1.7rem; line-height: 1.2; letter-spacing: -.025em; }
+.doc h3 { margin: 2.25rem 0 .75rem; font-size: 1.22rem; line-height: 1.3; }
+.doc h4 { margin: 1.75rem 0 .5rem; font-size: 1rem; }
+.doc p, .doc li { color: #c7ced9; }
+.doc p { margin: 1rem 0; }
+.doc a { color: var(--accent); text-underline-offset: .2em; }
+.doc h1 .headerlink, .doc h2 .headerlink, .doc h3 .headerlink, .doc h4 .headerlink { margin-left: .5rem; color: #4d5765; font-size: .65em; text-decoration: none; opacity: 0; }
+.doc h1:hover .headerlink, .doc h2:hover .headerlink, .doc h3:hover .headerlink, .doc h4:hover .headerlink { opacity: 1; }
+.doc blockquote { margin: 1.5rem 0; padding: .85rem 1.1rem; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+.doc blockquote p { margin: .3rem 0; }
+.doc code { padding: .13rem .35rem; border: 1px solid #273143; border-radius: .35rem; background: var(--code); color: #dce7f7; font: .88em/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.doc pre { margin: 1.4rem 0; padding: 1.1rem 1.2rem; overflow: auto; border: 1px solid var(--line); border-radius: .7rem; background: var(--code); box-shadow: 0 18px 55px rgba(0,0,0,.2); }
+.doc pre code { padding: 0; border: 0; background: transparent; color: #dce7f7; overflow-wrap: normal; }
+.doc table { display: block; width: 100%; margin: 1.5rem 0; overflow-x: auto; border-collapse: collapse; font-size: .87rem; }
+.doc th, .doc td { min-width: 8rem; padding: .65rem .75rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.doc th { background: var(--panel-2); color: var(--text); }
+.doc td { color: #bcc5d2; }
+.doc img { max-width: 100%; height: auto; border-radius: .6rem; }
+.doc hr { margin: 3rem 0; border: 0; border-top: 1px solid var(--line); }
+.doc ul, .doc ol { padding-left: 1.4rem; }
+.doc li + li { margin-top: .35rem; }
+footer { display: flex; justify-content: space-between; margin-top: 5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: #6f7a89; font-size: .78rem; }
+footer a { color: var(--muted); text-decoration: none; }
+.hero { padding: clamp(1rem, 5vw, 4.5rem) 0 4rem; }
+.eyebrow { margin: 0 0 .85rem; color: var(--accent) !important; font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.hero h1 { max-width: 14ch; margin: 0; font-size: clamp(3rem, 7vw, 5.8rem); line-height: .96; letter-spacing: -.06em; }
+.hero > p:not(.eyebrow) { max-width: 48rem; margin: 1.5rem 0 0; color: var(--muted); font-size: 1.12rem; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+.button { display: inline-flex; align-items: center; min-height: 2.8rem; padding: .6rem 1rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--panel); text-decoration: none; }
+.button.primary { border-color: var(--accent); background: var(--accent); color: #11160c; font-weight: 750; }
+.featured, .directory { margin-top: 2.5rem; }
+.card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; }
+.card { min-height: 13rem; padding: 1.3rem; border: 1px solid var(--line); border-radius: .75rem; background: linear-gradient(145deg, rgba(21,25,34,.92), rgba(13,16,21,.92)); text-decoration: none; transition: border-color .16s, transform .16s; }
+.card:hover { transform: translateY(-2px); border-color: #526137; }
+.card span { color: var(--accent); font-size: .68rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.card h2 { margin: .9rem 0 .45rem; font-size: 1.3rem; line-height: 1.2; }
+.card p { margin: 0; color: var(--muted); font-size: .85rem; }
+.directory > h2 { margin: 0 0 1.2rem; font-size: 2.2rem; }
+.directory-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 2.5rem; }
+.directory-grid section { padding-top: 1rem; border-top: 1px solid var(--line); }
+.directory-grid h2 { margin: 0 0 .65rem; font-size: 1rem; }
+.directory-grid ul { margin: 0; padding: 0; list-style: none; }
+.directory-grid li { margin: .35rem 0; }
+.directory-grid a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.directory-grid a:hover { color: var(--accent); }
+@media (max-width: 860px) {
+  .topbar { padding: 0 1rem; }
+  .topbar nav a:not(:last-child) { display: none; }
+  .layout { display: block; }
+  aside { display: none; }
+  .mobile-nav { display: block; margin: 1rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--panel); }
+  .mobile-nav summary { padding: .75rem 1rem; cursor: pointer; color: var(--muted); font-size: .85rem; }
+  .mobile-nav nav { max-height: 70vh; overflow: auto; padding: .5rem 1rem 1rem; }
+  main { max-width: none; padding: 2.5rem 1.25rem 2rem; }
+  .doc > h1:first-child { font-size: clamp(2.1rem, 12vw, 3.3rem); }
+  .card-grid, .directory-grid { grid-template-columns: 1fr; }
+  .hero { padding-top: 1rem; }
+  .hero h1 { font-size: clamp(3rem, 15vw, 4.5rem); }
+}
+@media print {
+  .topbar, aside, .mobile-nav, footer { display: none; }
+  body { background: white; color: black; }
+  .layout { display: block; }
+  main { max-width: none; padding: 0; }
+  .doc p, .doc li { color: #222; }
+}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <details class="mobile-nav"><summary>Browse documentation</summary><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a class="active" aria-current="page" href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></details>
+  <div class="layout">
+    <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a class="active" aria-current="page" href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
+    <main>
+      <p class="source-note">Documentation topic: docs/concepts/subscription.md</p>
+      <article class="doc"><h1 id="subscription">Subscription<a class="headerlink" href="#subscription" title="Link to this section">&para;</a></h1>
+<p>One provider account delegated to one agent: a Skarbiec vault item whose
+credential Brama redeems at final use and whose plan state Brama reads from
+the provider's own reports. Who may spend it is the
+<a href="/docs/concepts/entitlement">entitlement</a> model; this page is the object itself —
+discovery, states, the ledger, and the credential lifecycle.</p>
+<h2 id="shape-and-discovery">Shape and discovery<a class="headerlink" href="#shape-and-discovery" title="Link to this section">&para;</a></h2>
+<p>A subscription is a vault item tagged <code>brama:subscription</code> and
+<code>brama:agent:&lt;agent&gt;</code>, carrying its provider in <code>brama:provider:&lt;provider&gt;</code>
+and its subscription id in <code>brama:id:&lt;id&gt;</code>. Both the gateway and Brama
+Desktop filter on those tags, so vault item ids stay opaque and renaming one
+changes nothing. Its credential lives at the coordinate
+<code>provider:&lt;provider&gt;:&lt;subscription&gt;</code> (<code>src/gateway/broker.rs</code>).</p>
+<p>Discovery shells the local entitlements router's <code>list</code> (binary from
+<code>ENTITLEMENTS_ROUTER_BIN</code>, default <code>entitlements-router</code>); successful
+listings are cached per agent for 60 seconds, a failed shell never poisons
+the cache, and a failed live lookup may fall back only to the trusted
+startup catalog (<code>BRAMA_SUBSCRIPTION_CATALOG</code>).</p>
+<p>An item that loses its <code>brama:agent:</code> tag keeps a working credential and
+stops existing for every listing — the one failure the deployment had no way
+to see, which is why <code>/readyz</code> reports such accounts explicitly as
+<code>unroutable_accounts</code> (metadata only, recognised by tags or by the
+coordinate an untagged item lives at).</p>
+<h2 id="states">States<a class="headerlink" href="#states" title="Link to this section">&para;</a></h2>
+<p><code>brama subscriptions list</code> and <code>GET /v1/admin/subscription-pool</code> report one
+of four states per row (<code>src/subscription_dispatch/pool.rs</code>):</p>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>live</code></td>
+<td>credential recorded <code>active</code>, expiry absent (API key) or in the future</td>
+</tr>
+<tr>
+<td><code>expired</code></td>
+<td>credential <code>active</code> but its stated expiry has passed</td>
+</tr>
+<tr>
+<td><code>burnt</code></td>
+<td>the provider disowned the grant (<code>needs_reauthorization</code>) or somebody retired it; the pool serves neither, and <code>last_redeem_error</code> says which</td>
+</tr>
+<tr>
+<td><code>unknown</code></td>
+<td>a subscription whose grant nothing has ever looked at — deliberately not the same statement as a working one</td>
+</tr>
+</tbody>
+</table>
+<p><code>last_redeem_error</code> reports the refusal standing in the way, in the words of
+whatever refused, with fixed precedence: the credential's own <code>cause</code> first
+(set only while the grant is refused; only a sign-in clears it), then a
+block still in force, then the newest failed check. A lapsed block is
+deliberately not reported.</p>
+<h2 id="the-usage-ledger">The usage ledger<a class="headerlink" href="#the-usage-ledger" title="Link to this section">&para;</a></h2>
+<p><code>BRAMA_SUBSCRIPTION_USAGE_FILE</code> (default
+<code>~/.config/brama/subscription-usage.json</code>, owner-readable, written
+atomically) holds per-subscription state: measured counters, the newest plan
+reading per window with its instant and source, any rate-limit block, the
+credential state, and the newest probe verdict. It is not a cache — the
+question it answers spans months. A ledger from an older gateway still
+loads, and one that will not parse yields an empty ledger rather than
+stopping the gateway.</p>
+<p>Plan windows come from each provider's own free usage report
+(<a href="/docs/concepts/provider">provider</a> lists the three endpoints); every other provider
+publishes nothing, and that absence is recorded as the provider's own
+answer. Each subscription's report is read at most once per
+<code>BRAMA_PLAN_USAGE_TTL_SECS</code> (default 300), jittered ±25% derived from the
+subscription id so accounts stay decorrelated across restarts, and
+single-flighted per subscription; the sweep runs every
+<code>BRAMA_PLAN_USAGE_SWEEP_SECS</code> (default 60, <code>0</code> disables). A failed read
+never blanks a row: the last good reading is served with <code>stale: true</code> and
+dropped only past <code>BRAMA_PLAN_USAGE_RETENTION_SECS</code> (default 86400).</p>
+<p>In listings, <code>usage_source</code> names which statement the newest window is —
+<code>provider</code> (the provider's report, no quota), <code>traffic</code> (response headers),
+or <code>probe</code> (the operator's on-demand check) — and an empty <code>limits</code> array is
+one of four states told apart by the newest check: a refused credential, a
+subscription nothing has used, a provider that genuinely publishes no plan
+state, or windows that aged out. Only the third may be rendered as "no plan
+window"; none of them is a zero.</p>
+<h2 id="blocks">Blocks<a class="headerlink" href="#blocks" title="Link to this section">&para;</a></h2>
+<p>A rate-limited provider answer records a block: 15 minutes by default,
+capped at 7 days when the provider states a longer reset, and 30 minutes for
+a credential awaiting re-authorization (<code>src/subscription_dispatch/usage.rs</code>).
+A blocked credential is skipped by ordering, refused by the probe (<code>409</code>),
+and the block stands until its own expiry.</p>
+<h2 id="credential-lifecycle">Credential lifecycle<a class="headerlink" href="#credential-lifecycle" title="Link to this section">&para;</a></h2>
+<p>OAuth subscription credentials (<code>claude-code</code>, <code>codex</code>, <code>kimi</code> — token
+endpoints in <code>src/gateway/oauth_refresh.rs</code>) are refreshed ahead of expiry:
+every <code>BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS</code> (default 60, <code>0</code> disables)
+the gateway refreshes every active credential expiring within
+<code>BRAMA_CREDENTIAL_REFRESH_SKEW_SECS</code> (default 300), single-flighted per
+subscription. Refreshing costs no plan quota. API keys have no refresh path
+and no invented expiry.</p>
+<p>A refusal is classified with deliberate asymmetry
+(<code>classify_refusal</code>): <strong>definitive</strong> only on evidence the provider itself
+produced — a body containing <code>invalid_grant</code>, <code>invalid_token</code>, <code>revoked</code>, or
+<code>unauthorized_client</code>, or a 401/403 that named no reason — and everything
+else is <strong>transient</strong>, left for the next sweep. A definitive refusal is
+recorded as <code>credential.state: needs_reauthorization</code> with the provider's
+own sentence as <code>cause</code>, and the credential is left alone until a sign-in
+replaces it. A refreshed grant that cannot be written back to the vault is a
+failed refresh — the rotated grant is dropped, because the provider already
+invalidated the one still stored. A provider rejecting a grant whose local
+expiry still claims validity triggers one forced refresh on the request
+path.</p>
+<h2 id="donation-and-retirement">Donation and retirement<a class="headerlink" href="#donation-and-retirement" title="Link to this section">&para;</a></h2>
+<p><code>POST /v1/subscriptions/:agent_id</code> (and the account/admin variants) banks a
+credential onto the coordinate the operator's routes table already names for
+that subscription. A donation is refused unless the document reduces to a
+bearer — the same reduction the request path applies — so a non-credential
+document can never overwrite the one copy of a working account. The
+plaintext crosses only the request body and the entitlements-router stdin
+pipe; the overlay file (<code>BRAMA_DONATED_SUBSCRIPTIONS_FILE</code>, default
+<code>/tmp/brama-skarbiec/donated-subscriptions.json</code>, atomic 0600 rewrite) holds
+metadata only.</p>
+<p><code>DELETE</code> retires: an append-only journal record (<code>{"kind":"retire","id",
+"at"}</code> in <code>BRAMA_STATE_DIR/journal.jsonl</code>) that outranks whatever the last
+refresh concluded, never a vault deletion. A retired subscription is never
+refreshed, because rotating its grant would put back what somebody removed.</p>
+<h2 id="not-to-be-confused-with">Not to be confused with<a class="headerlink" href="#not-to-be-confused-with" title="Link to this section">&para;</a></h2>
+<ul>
+<li><strong>A capability.</strong> The <a href="/docs/concepts/capability">capability</a> is the deployment's
+  direct spend; a subscription is an agent's delegated account.</li>
+<li><strong>An entitlement.</strong> Owning the item is not the decision about who may
+  spend it on which request — that is <a href="/docs/concepts/entitlement">entitlement</a>.</li>
+</ul></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brama examples — Brama Docs</title>
+  <meta name="description" content="Brama examples This directory is the canonical catalog of supported Brama user outcomes. Each example states version/status, risk, environment, preconditions, inputs, side effects,">
+  <link rel="canonical" href="https://brama.wisent.com/docs/examples">
+  <style>
+:root {
+  color-scheme: dark;
+  --bg: #080a0d;
+  --panel: #101319;
+  --panel-2: #151922;
+  --line: #282e3a;
+  --muted: #9ba5b5;
+  --text: #f2f5f9;
+  --accent: #b7ff52;
+  --accent-soft: rgba(183, 255, 82, .12);
+  --code: #111723;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 6rem; }
+body { margin: 0; background: radial-gradient(circle at 75% -10%, rgba(69, 108, 89, .24), transparent 32rem), var(--bg); color: var(--text); line-height: 1.65; }
+a { color: inherit; }
+.topbar { position: sticky; top: 0; z-index: 10; height: 4.25rem; display: flex; align-items: center; justify-content: space-between; padding: 0 2rem; border-bottom: 1px solid rgba(255,255,255,.09); background: rgba(8, 10, 13, .86); backdrop-filter: blur(18px); }
+.brand { display: inline-flex; align-items: center; gap: .65rem; font-size: 1.05rem; text-decoration: none; letter-spacing: -.01em; }
+.brand-mark { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .55rem; background: var(--accent); color: #10140b; font-weight: 900; }
+.brand strong { padding: .15rem .5rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+.topbar nav { display: flex; align-items: center; gap: 1.5rem; }
+.topbar nav a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.topbar nav a:hover { color: var(--text); }
+.layout { display: grid; grid-template-columns: 17.5rem minmax(0, 1fr); max-width: 94rem; min-height: calc(100vh - 4.25rem); margin: 0 auto; }
+aside { border-right: 1px solid var(--line); padding: 2rem 1.5rem 4rem; }
+aside > nav { position: sticky; top: 6.25rem; max-height: calc(100vh - 8rem); overflow: auto; scrollbar-width: thin; }
+.nav-group { margin-bottom: 1.75rem; }
+.nav-group h2 { margin: 0 0 .45rem; color: #737f90; font-size: .69rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.nav-group a { display: block; margin: .08rem 0; padding: .36rem .55rem; border-radius: .4rem; color: var(--muted); font-size: .82rem; line-height: 1.35; text-decoration: none; }
+.nav-group a:hover { color: var(--text); background: var(--panel); }
+.nav-group a.active { color: var(--accent); background: var(--accent-soft); }
+.mobile-nav { display: none; }
+main { width: 100%; min-width: 0; max-width: 65rem; padding: 3.5rem clamp(2rem, 6vw, 6rem) 2rem; }
+.source-note { margin: 0 0 1rem; color: #6f7a89; font: 600 .7rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
+.doc > h1:first-child { margin-top: 0; font-size: clamp(2.35rem, 5vw, 4rem); line-height: 1.04; letter-spacing: -.045em; }
+.doc h2 { margin: 3.25rem 0 1rem; padding-top: .5rem; font-size: 1.7rem; line-height: 1.2; letter-spacing: -.025em; }
+.doc h3 { margin: 2.25rem 0 .75rem; font-size: 1.22rem; line-height: 1.3; }
+.doc h4 { margin: 1.75rem 0 .5rem; font-size: 1rem; }
+.doc p, .doc li { color: #c7ced9; }
+.doc p { margin: 1rem 0; }
+.doc a { color: var(--accent); text-underline-offset: .2em; }
+.doc h1 .headerlink, .doc h2 .headerlink, .doc h3 .headerlink, .doc h4 .headerlink { margin-left: .5rem; color: #4d5765; font-size: .65em; text-decoration: none; opacity: 0; }
+.doc h1:hover .headerlink, .doc h2:hover .headerlink, .doc h3:hover .headerlink, .doc h4:hover .headerlink { opacity: 1; }
+.doc blockquote { margin: 1.5rem 0; padding: .85rem 1.1rem; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+.doc blockquote p { margin: .3rem 0; }
+.doc code { padding: .13rem .35rem; border: 1px solid #273143; border-radius: .35rem; background: var(--code); color: #dce7f7; font: .88em/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.doc pre { margin: 1.4rem 0; padding: 1.1rem 1.2rem; overflow: auto; border: 1px solid var(--line); border-radius: .7rem; background: var(--code); box-shadow: 0 18px 55px rgba(0,0,0,.2); }
+.doc pre code { padding: 0; border: 0; background: transparent; color: #dce7f7; overflow-wrap: normal; }
+.doc table { display: block; width: 100%; margin: 1.5rem 0; overflow-x: auto; border-collapse: collapse; font-size: .87rem; }
+.doc th, .doc td { min-width: 8rem; padding: .65rem .75rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.doc th { background: var(--panel-2); color: var(--text); }
+.doc td { color: #bcc5d2; }
+.doc img { max-width: 100%; height: auto; border-radius: .6rem; }
+.doc hr { margin: 3rem 0; border: 0; border-top: 1px solid var(--line); }
+.doc ul, .doc ol { padding-left: 1.4rem; }
+.doc li + li { margin-top: .35rem; }
+footer { display: flex; justify-content: space-between; margin-top: 5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: #6f7a89; font-size: .78rem; }
+footer a { color: var(--muted); text-decoration: none; }
+.hero { padding: clamp(1rem, 5vw, 4.5rem) 0 4rem; }
+.eyebrow { margin: 0 0 .85rem; color: var(--accent) !important; font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.hero h1 { max-width: 14ch; margin: 0; font-size: clamp(3rem, 7vw, 5.8rem); line-height: .96; letter-spacing: -.06em; }
+.hero > p:not(.eyebrow) { max-width: 48rem; margin: 1.5rem 0 0; color: var(--muted); font-size: 1.12rem; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+.button { display: inline-flex; align-items: center; min-height: 2.8rem; padding: .6rem 1rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--panel); text-decoration: none; }
+.button.primary { border-color: var(--accent); background: var(--accent); color: #11160c; font-weight: 750; }
+.featured, .directory { margin-top: 2.5rem; }
+.card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; }
+.card { min-height: 13rem; padding: 1.3rem; border: 1px solid var(--line); border-radius: .75rem; background: linear-gradient(145deg, rgba(21,25,34,.92), rgba(13,16,21,.92)); text-decoration: none; transition: border-color .16s, transform .16s; }
+.card:hover { transform: translateY(-2px); border-color: #526137; }
+.card span { color: var(--accent); font-size: .68rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.card h2 { margin: .9rem 0 .45rem; font-size: 1.3rem; line-height: 1.2; }
+.card p { margin: 0; color: var(--muted); font-size: .85rem; }
+.directory > h2 { margin: 0 0 1.2rem; font-size: 2.2rem; }
+.directory-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 2.5rem; }
+.directory-grid section { padding-top: 1rem; border-top: 1px solid var(--line); }
+.directory-grid h2 { margin: 0 0 .65rem; font-size: 1rem; }
+.directory-grid ul { margin: 0; padding: 0; list-style: none; }
+.directory-grid li { margin: .35rem 0; }
+.directory-grid a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.directory-grid a:hover { color: var(--accent); }
+@media (max-width: 860px) {
+  .topbar { padding: 0 1rem; }
+  .topbar nav a:not(:last-child) { display: none; }
+  .layout { display: block; }
+  aside { display: none; }
+  .mobile-nav { display: block; margin: 1rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--panel); }
+  .mobile-nav summary { padding: .75rem 1rem; cursor: pointer; color: var(--muted); font-size: .85rem; }
+  .mobile-nav nav { max-height: 70vh; overflow: auto; padding: .5rem 1rem 1rem; }
+  main { max-width: none; padding: 2.5rem 1.25rem 2rem; }
+  .doc > h1:first-child { font-size: clamp(2.1rem, 12vw, 3.3rem); }
+  .card-grid, .directory-grid { grid-template-columns: 1fr; }
+  .hero { padding-top: 1rem; }
+  .hero h1 { font-size: clamp(3rem, 15vw, 4.5rem); }
+}
+@media print {
+  .topbar, aside, .mobile-nav, footer { display: none; }
+  body { background: white; color: black; }
+  .layout { display: block; }
+  main { max-width: none; padding: 0; }
+  .doc p, .doc li { color: #222; }
+}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <details class="mobile-nav"><summary>Browse documentation</summary><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a class="active" aria-current="page" href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></details>
+  <div class="layout">
+    <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a class="active" aria-current="page" href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
+    <main>
+      <p class="source-note">Documentation topic: examples/README.md</p>
+      <article class="doc"><h1 id="brama-examples">Brama examples<a class="headerlink" href="#brama-examples" title="Link to this section">&para;</a></h1>
+<p>This directory is the canonical catalog of supported Brama user outcomes. Each
+example states version/status, risk, environment, preconditions, inputs, side
+effects, ordered public-interface steps, expected observable result, failure,
+cleanup, and next action.</p>
+<h2 id="status-and-consent">Status and consent<a class="headerlink" href="#status-and-consent" title="Link to this section">&para;</a></h2>
+<p>This catalog was written against the <code>0.1.0</code> development contract and has not
+been re-checked command by command against the newest published release, so
+treat any version-specific detail below as unverified until it is. The newest
+published release is named by <code>released-surface.json</code> and by the repository's
+GitHub Releases list, never restated here. Examples are <strong>documented, not
+executed</strong>: none was run while creating this catalog because explicit testing or
+provider-execution consent was not provided. Do not treat a documented example
+as qualification evidence.</p>
+<p>Risk labels:</p>
+<ul>
+<li><strong>Local read-only:</strong> no service, credential, provider, or product state.</li>
+<li><strong>Authenticated read-only:</strong> reads secret-free service metadata but requires a
+  dedicated bearer or agent signature.</li>
+<li><strong>Credentialed/provider-facing:</strong> may redeem a capability and contact an
+  external provider.</li>
+<li><strong>Billable:</strong> may consume provider quota or money.</li>
+<li><strong>Security mutation:</strong> donates, retires, rotates, or revokes access.</li>
+<li><strong>Recovery mutation:</strong> changes the deployed immutable runtime.</li>
+</ul>
+<p>Credentialed, billable, security-mutation, recovery, and production-facing
+examples require the owning human operator's explicit approval before use.</p>
+<h2 id="coverage-matrix">Coverage matrix<a class="headerlink" href="#coverage-matrix" title="Link to this section">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Actor</th>
+<th>Outcome</th>
+<th>Interface</th>
+<th>Risk</th>
+<th>Canonical example</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>New maintainer</td>
+<td>Detect local resources and recommendation</td>
+<td>CLI <code>detect</code></td>
+<td>Local read-only</td>
+<td><a href="/docs/examples/getting-started/detect-local-resources"><code>getting-started/detect-local-resources.md</code></a></td>
+<td>Documented; not executed</td>
+</tr>
+<tr>
+<td>Operator</td>
+<td>Read product/build identity</td>
+<td>CLI <code>version</code></td>
+<td>Local read-only</td>
+<td><a href="/docs/examples/operations/inspect-build-and-health"><code>operations/inspect-build-and-health.md</code></a></td>
+<td>Documented; not executed</td>
+</tr>
+<tr>
+<td>Operator</td>
+<td>Read running process health</td>
+<td><code>GET /health</code></td>
+<td>Authenticated transport; endpoint public</td>
+<td><a href="/docs/examples/operations/inspect-build-and-health"><code>operations/inspect-build-and-health.md</code></a></td>
+<td>Documented; not executed</td>
+</tr>
+<tr>
+<td>Service</td>
+<td>List bearer-authorized public catalog</td>
+<td><code>GET /v1/models</code></td>
+<td>Authenticated read-only</td>
+<td><a href="/docs/examples/core/call-http-api"><code>core/call-http-api.md</code></a></td>
+<td>Documented; not executed</td>
+</tr>
+<tr>
+<td>Service</td>
+<td>Execute a direct alias/canonical chat</td>
+<td><code>POST /v1/chat/completions</code></td>
+<td>Credentialed, provider-facing, billable</td>
+<td><a href="/docs/examples/core/call-http-api"><code>core/call-http-api.md</code></a></td>
+<td>Controlled qualification required</td>
+</tr>
+<tr>
+<td>Service</td>
+<td>Create embeddings</td>
+<td><code>POST /v1/embeddings</code></td>
+<td>Credentialed, provider-facing, billable</td>
+<td><a href="/docs/examples/core/call-http-api"><code>core/call-http-api.md</code></a></td>
+<td>Controlled qualification required</td>
+</tr>
+<tr>
+<td>Service</td>
+<td>Moderate text</td>
+<td><code>POST /v1/moderations</code></td>
+<td>Credentialed, provider-facing, billable</td>
+<td><a href="/docs/examples/core/call-http-api"><code>core/call-http-api.md</code></a></td>
+<td>Controlled qualification required</td>
+</tr>
+<tr>
+<td>Jeden runtime</td>
+<td>Use exact subscription billing target</td>
+<td>signed chat API</td>
+<td>Credentialed, provider-facing, billable</td>
+<td><a href="/docs/examples/core/call-agent-selectors"><code>core/call-agent-selectors.md</code></a></td>
+<td>Controlled qualification required</td>
+</tr>
+<tr>
+<td>Jeden runtime</td>
+<td>Select <code>any</code></td>
+<td>signed chat API</td>
+<td>Credentialed, provider-facing, billable</td>
+<td><a href="/docs/examples/core/call-agent-selectors"><code>core/call-agent-selectors.md</code></a></td>
+<td>Controlled qualification required</td>
+</tr>
+<tr>
+<td>Jeden runtime</td>
+<td>Select <code>any-vision-capable</code></td>
+<td>signed chat API</td>
+<td>Credentialed, provider-facing, billable</td>
+<td><a href="/docs/examples/core/call-agent-selectors"><code>core/call-agent-selectors.md</code></a></td>
+<td>Controlled qualification required</td>
+</tr>
+<tr>
+<td>Jeden runtime</td>
+<td>Select <code>task:&lt;name&gt;</code></td>
+<td>signed chat API</td>
+<td>Credentialed, provider-facing, billable</td>
+<td><a href="/docs/examples/core/call-agent-selectors"><code>core/call-agent-selectors.md</code></a></td>
+<td>Controlled qualification required</td>
+</tr>
+<tr>
+<td>Jeden runtime</td>
+<td>List owned subscriptions</td>
+<td>signed <code>GET /v1/subscriptions/:agent</code></td>
+<td>Authenticated read-only</td>
+<td><a href="/docs/examples/operations/manage-subscriptions"><code>operations/manage-subscriptions.md</code></a></td>
+<td>Documented; not executed</td>
+</tr>
+<tr>
+<td>Subscription owner</td>
+<td>Donate Claude Code credential</td>
+<td>signed subscription POST</td>
+<td>Security mutation</td>
+<td><a href="/docs/examples/operations/manage-subscriptions"><code>operations/manage-subscriptions.md</code></a></td>
+<td>Controlled qualification required</td>
+</tr>
+<tr>
+<td>Subscription owner</td>
+<td>Retire delegated subscription</td>
+<td>signed subscription DELETE</td>
+<td>Security mutation</td>
+<td><a href="/docs/examples/operations/manage-subscriptions"><code>operations/manage-subscriptions.md</code></a></td>
+<td>Controlled qualification required</td>
+</tr>
+<tr>
+<td>Operator</td>
+<td>Collect bounded task-quality evidence</td>
+<td>CLI <code>collect-task-quality</code></td>
+<td>Credentialed, billable; optional state mutation</td>
+<td><a href="/docs/examples/operations/collect-task-quality"><code>operations/collect-task-quality.md</code></a></td>
+<td>Controlled qualification required</td>
+</tr>
+<tr>
+<td>Operator</td>
+<td>Run one manual provider diagnostic</td>
+<td>CLI <code>test</code></td>
+<td>Credentialed, billable</td>
+<td><a href="/docs/examples/operations/collect-task-quality"><code>operations/collect-task-quality.md</code></a></td>
+<td>Controlled qualification required</td>
+</tr>
+<tr>
+<td>Agent/tool host</td>
+<td>Detect hardware over MCP</td>
+<td>stdio MCP</td>
+<td>Local read-only</td>
+<td><a href="/docs/examples/automation/use-mcp-detect"><code>automation/use-mcp-detect.md</code></a></td>
+<td>Documented; not executed</td>
+</tr>
+<tr>
+<td>Operator</td>
+<td>Inspect protected process stats</td>
+<td><code>GET /stats</code></td>
+<td>Authenticated read-only</td>
+<td><a href="/docs/examples/operations/inspect-build-and-health"><code>operations/inspect-build-and-health.md</code></a></td>
+<td>Documented; not executed</td>
+</tr>
+<tr>
+<td>Caller</td>
+<td>Diagnose cleartext, bearer, HMAC, allowlist rejection</td>
+<td>HTTP error contract</td>
+<td>Read-only negative path</td>
+<td><a href="/docs/examples/failures/auth-and-transport"><code>failures/auth-and-transport.md</code></a></td>
+<td>Documented; not executed</td>
+</tr>
+<tr>
+<td>Caller</td>
+<td>Diagnose provider limit, timeout, or outage</td>
+<td>HTTP error contract</td>
+<td>Provider-facing failure</td>
+<td><a href="/docs/examples/failures/provider-unavailable"><code>failures/provider-unavailable.md</code></a></td>
+<td>Controlled qualification required</td>
+</tr>
+<tr>
+<td>Release operator</td>
+<td>Upgrade one immutable runtime</td>
+<td>Verified GitHub Release archive</td>
+<td>Recovery mutation</td>
+<td><a href="/docs/examples/recovery/upgrade-and-rollback"><code>recovery/upgrade-and-rollback.md</code></a></td>
+<td>Controlled qualification required</td>
+</tr>
+<tr>
+<td>Release operator</td>
+<td>Roll back and prove previous identity</td>
+<td>Versioned host installation</td>
+<td>Recovery mutation</td>
+<td><a href="/docs/examples/recovery/upgrade-and-rollback"><code>recovery/upgrade-and-rollback.md</code></a></td>
+<td>Controlled qualification required</td>
+</tr>
+<tr>
+<td>Developer</td>
+<td>Execute local inference in Brama</td>
+<td>—</td>
+<td>—</td>
+<td>Not supported; see README non-goals</td>
+<td>Not supported</td>
+</tr>
+<tr>
+<td>Caller</td>
+<td>Stream completion tokens</td>
+<td><code>POST /v1/chat/completions</code>, <code>/v1/messages</code>, <code>/v1/responses</code> with <code>"stream": true</code></td>
+<td>Provider-billable generation</td>
+<td><a href="/docs/examples/inference/stream-a-completion"><code>inference/stream-a-completion.md</code></a></td>
+<td>Documented; not executed</td>
+</tr>
+</tbody>
+</table>
+<h2 id="shared-rules">Shared rules<a class="headerlink" href="#shared-rules" title="Link to this section">&para;</a></h2>
+<ul>
+<li>Use an immutable release and digest when one exists; source checkout is the
+  explicitly labeled pre-release exception.</li>
+<li>Obtain bearer, agent secret, and provider capability only through the owning
+  consumer/broker. Never paste them into an example, URL, shell history, or
+  committed file.</li>
+<li>Keep request bodies in owner-only temporary files when their exact bytes are
+  signed.</li>
+<li>Treat every model call and quality collection as billable even when the
+  provider later returns an error.</li>
+<li>Do not increase <code>max_tokens</code>, candidate count, or retries beyond
+  <a href="/docs/core"><code>CORE.md</code></a>.</li>
+<li>Cleanup only resources created by the example. Retain bounded audit evidence
+  and never delete vault resources as a debugging shortcut.</li>
+<li>Expected output shows shape and stable fields, never invented provider text or
+  real identifiers.</li>
+</ul>
+<h2 id="selecting-an-example">Selecting an example<a class="headerlink" href="#selecting-an-example" title="Link to this section">&para;</a></h2>
+<p>Start with local detection, then inspect build/health, then perform bearer-only
+catalog discovery. Provider-facing and mutation examples come only after the
+operator confirms identity, account, route, limits, spend, side effects, and
+cleanup.</p>
+<p>Return to the <a href="/docs/readme">product contract</a>, <a href="/docs/onboarding">onboarding</a>,
+<a href="/docs/core">core contract</a>, <a href="/docs/integrations">integration contracts</a>, and
+<a href="/docs/testing">qualification contract</a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

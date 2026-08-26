@@ -136,7 +136,7 @@ advertised by the API, MCP server, examples, or release notes.
 - **Outcome:** Brama chooses eligible candidates, applies the documented bounded
   attempt policy, and stops at the first successful provider result.
 - **Cost boundary:** selectors may invoke more than one provider attempt; limits
-  are defined in [`CORE.md`](CORE.md). They never retry without a finite bound.
+  are defined in [`CORE.md`](https://brama.wisent.com/docs/core). They never retry without a finite bound.
 
 ### Operate and recover the gateway
 
@@ -146,7 +146,7 @@ advertised by the API, MCP server, examples, or release notes.
 - **Outcome:** health and version output identify the build; structured routing
   logs and protected stats explain bounded decisions without secret material.
 - **Recovery boundary:** rollback restores one immutable runtime coordinate and
-  compatible non-secret journal state as described in [`RELEASE.md`](RELEASE.md).
+  compatible non-secret journal state as described in [`RELEASE.md`](https://brama.wisent.com/docs/release).
 
 ## How Brama works
 
@@ -213,7 +213,7 @@ tar -xzf "brama-v${version}-${platform}.tar.gz"
 Serving traffic takes more than the archive. Provision this installation's trust
 material once with `bin/provision-skarbiec-trust` — the archive ships no signing
 key and the launcher refuses to start until that material exists — then read
-[`ONBOARDING.md`](ONBOARDING.md) before the first authenticated request.
+[`ONBOARDING.md`](https://brama.wisent.com/docs/onboarding) before the first authenticated request.
 
 Maintainers working on unreleased source run the same command from a checkout,
 which needs Git and the Rust toolchain required by `Cargo.lock` (the production
@@ -238,9 +238,9 @@ Recommended backend: ...
 
 Neither command starts a service. The checkout path may leave build output under
 `target/`; it is a local build cache, not product state. Continue with
-[`ONBOARDING.md`](ONBOARDING.md) for the authenticated loopback and production
+[`ONBOARDING.md`](https://brama.wisent.com/docs/onboarding) for the authenticated loopback and production
 operator paths. Runnable, risk-labeled workflows are indexed in
-[`examples/`](examples/README.md).
+[`examples/`](https://brama.wisent.com/docs/examples).
 
 ## Primary interfaces
 
@@ -333,8 +333,8 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   credential discovery, collection, and mutation are deliberately excluded.
 
 The complete state, error, retry, authorization, and resource contract is in
-[`CORE.md`](CORE.md). Provider capability and lifecycle contracts are in
-[`INTEGRATIONS.md`](INTEGRATIONS.md).
+[`CORE.md`](https://brama.wisent.com/docs/core). Provider capability and lifecycle contracts are in
+[`INTEGRATIONS.md`](https://brama.wisent.com/docs/integrations).
 
 ## Reading and repairing the subscription pool
 
@@ -544,24 +544,24 @@ looking at it.
 - **Observability:** health and `brama version` expose secret-free build identity;
   structured logs record routing mode, selected route, attempts, outcome, and
   remediation class. `/stats` remains bearer-protected.
-- **Upgrade and rollback:** follow [`RELEASE.md`](RELEASE.md). Immutable product
+- **Upgrade and rollback:** follow [`RELEASE.md`](https://brama.wisent.com/docs/release). Immutable product
   version, source revision, platform, digest, and provenance are separate facts.
 - **Qualification:** evidence groups and consent boundaries are defined in
-  [`TESTING.md`](TESTING.md).
+  [`TESTING.md`](https://brama.wisent.com/docs/testing).
 
 ## Project status and support
 
 - **Maturity:** pre-1.0. Public contract changes follow the `0.x` policy in
-  [`RELEASE.md`](RELEASE.md).
+  [`RELEASE.md`](https://brama.wisent.com/docs/release).
 - **Current source version:** the `version` field in `Cargo.toml`, which is the
   single canonical source; this page does not duplicate the number.
 - **Supported source:** public `main` for development; immutable releases are
   built, stored, and promoted through Stado.
 - **Issues and operator support:**
   [`wisent-ai/brama` issues](https://github.com/wisent-ai/brama/issues);
-  see [`SUPPORT.md`](SUPPORT.md).
+  see [`SUPPORT.md`](https://brama.wisent.com/docs/support).
 - **Security reports:** use the private GitHub Security Advisory channel defined
-  in [`SECURITY.md`](SECURITY.md); never put credentials in an issue.
+  in [`SECURITY.md`](https://brama.wisent.com/docs/security); never put credentials in an issue.
 - **License:** Apache License 2.0; see [`LICENSE`](LICENSE).
 
 Rust code defines executable behavior. This README owns the product promise,

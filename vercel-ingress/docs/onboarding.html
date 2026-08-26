@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Onboarding — Brama Docs</title>
+  <meta name="description" content="Onboarding Brama gives Wisent services one authenticated gateway for provider-neutral LLM inference without distributing provider credentials to callers. Choose a path - Safe local">
+  <link rel="canonical" href="https://brama.wisent.com/docs/onboarding">
+  <style>
+:root {
+  color-scheme: dark;
+  --bg: #080a0d;
+  --panel: #101319;
+  --panel-2: #151922;
+  --line: #282e3a;
+  --muted: #9ba5b5;
+  --text: #f2f5f9;
+  --accent: #b7ff52;
+  --accent-soft: rgba(183, 255, 82, .12);
+  --code: #111723;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 6rem; }
+body { margin: 0; background: radial-gradient(circle at 75% -10%, rgba(69, 108, 89, .24), transparent 32rem), var(--bg); color: var(--text); line-height: 1.65; }
+a { color: inherit; }
+.topbar { position: sticky; top: 0; z-index: 10; height: 4.25rem; display: flex; align-items: center; justify-content: space-between; padding: 0 2rem; border-bottom: 1px solid rgba(255,255,255,.09); background: rgba(8, 10, 13, .86); backdrop-filter: blur(18px); }
+.brand { display: inline-flex; align-items: center; gap: .65rem; font-size: 1.05rem; text-decoration: none; letter-spacing: -.01em; }
+.brand-mark { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .55rem; background: var(--accent); color: #10140b; font-weight: 900; }
+.brand strong { padding: .15rem .5rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+.topbar nav { display: flex; align-items: center; gap: 1.5rem; }
+.topbar nav a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.topbar nav a:hover { color: var(--text); }
+.layout { display: grid; grid-template-columns: 17.5rem minmax(0, 1fr); max-width: 94rem; min-height: calc(100vh - 4.25rem); margin: 0 auto; }
+aside { border-right: 1px solid var(--line); padding: 2rem 1.5rem 4rem; }
+aside > nav { position: sticky; top: 6.25rem; max-height: calc(100vh - 8rem); overflow: auto; scrollbar-width: thin; }
+.nav-group { margin-bottom: 1.75rem; }
+.nav-group h2 { margin: 0 0 .45rem; color: #737f90; font-size: .69rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.nav-group a { display: block; margin: .08rem 0; padding: .36rem .55rem; border-radius: .4rem; color: var(--muted); font-size: .82rem; line-height: 1.35; text-decoration: none; }
+.nav-group a:hover { color: var(--text); background: var(--panel); }
+.nav-group a.active { color: var(--accent); background: var(--accent-soft); }
+.mobile-nav { display: none; }
+main { width: 100%; min-width: 0; max-width: 65rem; padding: 3.5rem clamp(2rem, 6vw, 6rem) 2rem; }
+.source-note { margin: 0 0 1rem; color: #6f7a89; font: 600 .7rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
+.doc > h1:first-child { margin-top: 0; font-size: clamp(2.35rem, 5vw, 4rem); line-height: 1.04; letter-spacing: -.045em; }
+.doc h2 { margin: 3.25rem 0 1rem; padding-top: .5rem; font-size: 1.7rem; line-height: 1.2; letter-spacing: -.025em; }
+.doc h3 { margin: 2.25rem 0 .75rem; font-size: 1.22rem; line-height: 1.3; }
+.doc h4 { margin: 1.75rem 0 .5rem; font-size: 1rem; }
+.doc p, .doc li { color: #c7ced9; }
+.doc p { margin: 1rem 0; }
+.doc a { color: var(--accent); text-underline-offset: .2em; }
+.doc h1 .headerlink, .doc h2 .headerlink, .doc h3 .headerlink, .doc h4 .headerlink { margin-left: .5rem; color: #4d5765; font-size: .65em; text-decoration: none; opacity: 0; }
+.doc h1:hover .headerlink, .doc h2:hover .headerlink, .doc h3:hover .headerlink, .doc h4:hover .headerlink { opacity: 1; }
+.doc blockquote { margin: 1.5rem 0; padding: .85rem 1.1rem; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+.doc blockquote p { margin: .3rem 0; }
+.doc code { padding: .13rem .35rem; border: 1px solid #273143; border-radius: .35rem; background: var(--code); color: #dce7f7; font: .88em/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.doc pre { margin: 1.4rem 0; padding: 1.1rem 1.2rem; overflow: auto; border: 1px solid var(--line); border-radius: .7rem; background: var(--code); box-shadow: 0 18px 55px rgba(0,0,0,.2); }
+.doc pre code { padding: 0; border: 0; background: transparent; color: #dce7f7; overflow-wrap: normal; }
+.doc table { display: block; width: 100%; margin: 1.5rem 0; overflow-x: auto; border-collapse: collapse; font-size: .87rem; }
+.doc th, .doc td { min-width: 8rem; padding: .65rem .75rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.doc th { background: var(--panel-2); color: var(--text); }
+.doc td { color: #bcc5d2; }
+.doc img { max-width: 100%; height: auto; border-radius: .6rem; }
+.doc hr { margin: 3rem 0; border: 0; border-top: 1px solid var(--line); }
+.doc ul, .doc ol { padding-left: 1.4rem; }
+.doc li + li { margin-top: .35rem; }
+footer { display: flex; justify-content: space-between; margin-top: 5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: #6f7a89; font-size: .78rem; }
+footer a { color: var(--muted); text-decoration: none; }
+.hero { padding: clamp(1rem, 5vw, 4.5rem) 0 4rem; }
+.eyebrow { margin: 0 0 .85rem; color: var(--accent) !important; font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.hero h1 { max-width: 14ch; margin: 0; font-size: clamp(3rem, 7vw, 5.8rem); line-height: .96; letter-spacing: -.06em; }
+.hero > p:not(.eyebrow) { max-width: 48rem; margin: 1.5rem 0 0; color: var(--muted); font-size: 1.12rem; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+.button { display: inline-flex; align-items: center; min-height: 2.8rem; padding: .6rem 1rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--panel); text-decoration: none; }
+.button.primary { border-color: var(--accent); background: var(--accent); color: #11160c; font-weight: 750; }
+.featured, .directory { margin-top: 2.5rem; }
+.card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; }
+.card { min-height: 13rem; padding: 1.3rem; border: 1px solid var(--line); border-radius: .75rem; background: linear-gradient(145deg, rgba(21,25,34,.92), rgba(13,16,21,.92)); text-decoration: none; transition: border-color .16s, transform .16s; }
+.card:hover { transform: translateY(-2px); border-color: #526137; }
+.card span { color: var(--accent); font-size: .68rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.card h2 { margin: .9rem 0 .45rem; font-size: 1.3rem; line-height: 1.2; }
+.card p { margin: 0; color: var(--muted); font-size: .85rem; }
+.directory > h2 { margin: 0 0 1.2rem; font-size: 2.2rem; }
+.directory-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 2.5rem; }
+.directory-grid section { padding-top: 1rem; border-top: 1px solid var(--line); }
+.directory-grid h2 { margin: 0 0 .65rem; font-size: 1rem; }
+.directory-grid ul { margin: 0; padding: 0; list-style: none; }
+.directory-grid li { margin: .35rem 0; }
+.directory-grid a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.directory-grid a:hover { color: var(--accent); }
+@media (max-width: 860px) {
+  .topbar { padding: 0 1rem; }
+  .topbar nav a:not(:last-child) { display: none; }
+  .layout { display: block; }
+  aside { display: none; }
+  .mobile-nav { display: block; margin: 1rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--panel); }
+  .mobile-nav summary { padding: .75rem 1rem; cursor: pointer; color: var(--muted); font-size: .85rem; }
+  .mobile-nav nav { max-height: 70vh; overflow: auto; padding: .5rem 1rem 1rem; }
+  main { max-width: none; padding: 2.5rem 1.25rem 2rem; }
+  .doc > h1:first-child { font-size: clamp(2.1rem, 12vw, 3.3rem); }
+  .card-grid, .directory-grid { grid-template-columns: 1fr; }
+  .hero { padding-top: 1rem; }
+  .hero h1 { font-size: clamp(3rem, 15vw, 4.5rem); }
+}
+@media print {
+  .topbar, aside, .mobile-nav, footer { display: none; }
+  body { background: white; color: black; }
+  .layout { display: block; }
+  main { max-width: none; padding: 0; }
+  .doc p, .doc li { color: #222; }
+}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <details class="mobile-nav"><summary>Browse documentation</summary><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a class="active" aria-current="page" href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></details>
+  <div class="layout">
+    <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a class="active" aria-current="page" href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
+    <main>
+      <p class="source-note">Documentation topic: ONBOARDING.md</p>
+      <article class="doc"><h1 id="onboarding">Onboarding<a class="headerlink" href="#onboarding" title="Link to this section">&para;</a></h1>
+<p>Brama gives Wisent services one authenticated gateway for provider-neutral LLM
+inference without distributing provider credentials to callers.</p>
+<h2 id="choose-a-path">Choose a path<a class="headerlink" href="#choose-a-path" title="Link to this section">&para;</a></h2>
+<ul>
+<li><strong>Safe local detection:</strong> no credentials, service, state, provider network, or
+  model cost. Every maintainer starts here.</li>
+<li><strong>Authenticated loopback gateway:</strong> real HTTP boundary on one host; requires
+  generated client and Skarbiec capability configuration and may contact a
+  provider only when an inference endpoint is called.</li>
+<li><strong>Production host service:</strong> operator-managed Linux host, immutable GitHub
+  Release, trusted TLS terminator, local service policy, and scoped Skarbiec grants.</li>
+</ul>
+<p>Do not begin with production configuration or a provider call.</p>
+<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this section">&para;</a></h2>
+<p>Required for safe local detection:</p>
+<ul>
+<li>macOS or Linux;</li>
+<li>Git;</li>
+<li>Rust/Cargo compatible with <code>Cargo.lock</code>;</li>
+<li>either the newest published release archive or a source checkout.</li>
+</ul>
+<p>Required for an authenticated loopback gateway:</p>
+<ul>
+<li>all safe-path prerequisites;</li>
+<li>the packaged or explicitly selected <code>entitlements-router</code>;</li>
+<li>GnuPG and an authorized local Skarbiec vault;</li>
+<li>this installation's provisioned trust material and its owner-bound capability
+  socket;</li>
+<li>generated client identities, aliases, and capability maps;</li>
+<li>one free loopback port.</li>
+</ul>
+<p>Additional production prerequisites:</p>
+<ul>
+<li>supported Linux architecture and the runtime shared libraries in the release;</li>
+<li>an operator-owned host service account and service manager;</li>
+<li>HTTPS ingress whose exact peer IP is in <code>BRAMA_TRUSTED_PROXY_IPS</code>;</li>
+<li>access to the selected GitHub Release archive and checksum;</li>
+<li>scoped Skarbiec consumers documented in <code>deploy/*.env.example</code>;</li>
+<li>operator-owned backup and rollback access to the materialized vault and Brama
+  journal.</li>
+</ul>
+<p>Check prerequisites with their own version/help commands. Do not paste tokens or
+private keys into a shell command merely to check them.</p>
+<h2 id="release-selection">Release selection<a class="headerlink" href="#release-selection" title="Link to this section">&para;</a></h2>
+<p>Immutable Brama releases are published. <code>main</code> is development source and must
+never be represented as a release. For which release is newest, read
+<code>released-surface.json</code> or the repository's GitHub Releases list; this page does
+not restate a version it cannot keep current.</p>
+<p>Installation must select:</p>
+<pre><code class="language-text">product version + source revision + platform + archive SHA-256 + provenance
+</code></pre>
+<p>from the GitHub Release described in <a href="/docs/release"><code>RELEASE.md</code></a>, verify the
+digest, and install the packaged binary and launcher. A source checkout is never
+the normal production installation model.</p>
+<h2 id="safe-local-first-success">Safe local first success<a class="headerlink" href="#safe-local-first-success" title="Link to this section">&para;</a></h2>
+<h3 id="starting-state">Starting state<a class="headerlink" href="#starting-state" title="Link to this section">&para;</a></h3>
+<p>Use a clean shell. No Brama, Skarbiec, provider, or agent environment variables
+are required. The command below performs local hardware inspection only.</p>
+<h3 id="run-detection">Run detection<a class="headerlink" href="#run-detection" title="Link to this section">&para;</a></h3>
+<pre><code class="language-bash">git clone https://github.com/wisent-ai/brama.git brama
+cd brama
+cargo run --locked -- detect
+</code></pre>
+<h3 id="observe-the-result">Observe the result<a class="headerlink" href="#observe-the-result" title="Link to this section">&para;</a></h3>
+<p>Expected output has host-specific values and these stable labels:</p>
+<pre><code class="language-text">GPU Type: ...
+GPU Name: ...
+VRAM: ... GB
+RAM: ... GB
+CPU Cores: ...
+CUDA: ...
+Metal: ...
+Recommended model: ...
+Recommended backend: ...
+</code></pre>
+<p>The successful result is the detected resource report and recommendation, not
+merely exit code zero.</p>
+<h3 id="confirm-the-safe-boundary">Confirm the safe boundary<a class="headerlink" href="#confirm-the-safe-boundary" title="Link to this section">&para;</a></h3>
+<p>This path does not:</p>
+<ul>
+<li>start the HTTP service;</li>
+<li>read or create a Brama state directory;</li>
+<li>redeem a capability;</li>
+<li>list subscriptions;</li>
+<li>contact a model or catalog provider;</li>
+<li>incur model cost.</li>
+</ul>
+<h3 id="stop-and-clean-up">Stop and clean up<a class="headerlink" href="#stop-and-clean-up" title="Link to this section">&para;</a></h3>
+<p>No background process is started. Remove the checkout to remove source and
+<code>target/</code> build cache. No product state or provider resource requires cleanup.</p>
+<p>The canonical task is
+<a href="/docs/examples/getting-started/detect-local-resources"><code>examples/getting-started/detect-local-resources.md</code></a>.</p>
+<h2 id="zero-state-behavior">Zero-state behavior<a class="headerlink" href="#zero-state-behavior" title="Link to this section">&para;</a></h2>
+<p>Running <code>brama</code> without a subcommand prints the product purpose, command list,
+and help supplied by Clap. It must not create state or contact external systems.</p>
+<p><code>brama serve</code> intentionally fails closed when required generated configuration
+is absent. The first error identifies the missing configuration category; the
+operator then uses the packaged launcher rather than hand-authoring capability
+maps. A bare service startup is not the safe first-user path.</p>
+<h2 id="authenticated-loopback-path">Authenticated loopback path<a class="headerlink" href="#authenticated-loopback-path" title="Link to this section">&para;</a></h2>
+<p>Provision this installation once, before its first start:</p>
+<pre><code class="language-bash">bin/provision-skarbiec-trust
+</code></pre>
+<p>That writes the signed policy, the workload registry, the trust root, the receipt
+command and the workload proof key into <code>etc/brama-skarbiec</code>. The release archive
+ships none of them, because the registry pins the absolute path and SHA-256 of
+the binary allowed to redeem a capability and a build machine cannot know either.
+Re-running it replaces this installation's identity, so it refuses without
+<code>--force</code>.</p>
+<p>Use the packaged <code>start-with-skarbiec</code> launcher. It owns these steps:</p>
+<ol>
+<li>load the selected service environment file without overriding individual
+   central policy values;</li>
+<li>materialize the authorized encrypted vault;</li>
+<li>import the scoped Brama recipient key into an owner-only runtime directory;</li>
+<li>verify this installation's Skarbiec trust, policy, and workload files are
+   present, and refuse to start when any of them is missing;</li>
+<li>read each accepted client bearer from its dedicated item;</li>
+<li>load central Echo, legacy Content Platform, Oko, and Weles request-sign identities;</li>
+<li>derive provider and agent capability maps from live vault resources;</li>
+<li>start the owner-bound capability socket;</li>
+<li>exec <code>brama serve --port &lt;port&gt;</code>.</li>
+</ol>
+<p>Use loopback HTTP only from an authenticated local caller. A generic bearer-only
+<code>GET /v1/models</code> is the first non-billable machine workflow. Do not use
+<code>/v1/chat/completions</code>, <code>/v1/messages</code>, or <code>/v1/responses</code> until the intended
+provider, account, attempt limit, and cost are explicit: the three formats are
+one workflow and every one of them spends real quota, whether it answers in one
+piece or as a stream.</p>
+<h2 id="production-path">Production path<a class="headerlink" href="#production-path" title="Link to this section">&para;</a></h2>
+<p>Production uses the exact runtime published by the release workflow. The
+operator downloads the platform archive and checksum from GitHub Releases,
+verifies the digest, extracts it under an immutable versioned directory, and
+configures:</p>
+<ul>
+<li>the host service account, immutable installation root, and service manager;</li>
+<li>the local Brama control document containing client allowlists and aliases;</li>
+<li>verifier-only consumers for dedicated client token items;</li>
+<li>request-sign consumers for the exact central identities;</li>
+<li>Brama's provider capability grants;</li>
+<li>the trusted TLS terminator IP list;</li>
+<li>journal backup and rollback retention.</li>
+</ul>
+<p>Ingress, DNS, host registration, vault authorization, and consumer grants remain
+operator-owned prerequisites. The repository does not create them silently.</p>
+<h2 id="machine-onboarding-contract">Machine onboarding contract<a class="headerlink" href="#machine-onboarding-contract" title="Link to this section">&para;</a></h2>
+<p>Automation must use stable machine interfaces:</p>
+<ul>
+<li><code>brama version</code> emits one JSON object with product/build identity;</li>
+<li><code>GET /health</code> emits one secret-free JSON object;</li>
+<li>protected HTTP endpoints use stable status and error codes from
+  <a href="/docs/core"><code>CORE.md</code></a>;</li>
+<li>non-health HTTP uses exactly one bearer authorization value;</li>
+<li>agent-scoped operations additionally sign timestamp, agent ID, and exact body;</li>
+<li>configuration is noninteractive and fails before serving on invalid input.</li>
+</ul>
+<p>Automation must not parse decorative human log output.</p>
+<h2 id="credentials-and-permissions">Credentials and permissions<a class="headerlink" href="#credentials-and-permissions" title="Link to this section">&para;</a></h2>
+<p>Keep these identities separate:</p>
+<ul>
+<li>GitHub release publisher: repository contents permission only for tagged releases;</li>
+<li>host runtime: no GitHub publication permission and only its scoped Skarbiec grants;</li>
+<li>bearer verifier: read only each dedicated client token item;</li>
+<li>request-sign verifier: read only the named central HMAC items;</li>
+<li>Brama workload: redeem only configured Brama capability IDs;</li>
+<li>Weles reauthentication: one dedicated finite token, not a console token;</li>
+<li>caller: one dedicated bearer and, when needed, one exact agent identity.</li>
+</ul>
+<p>Credentials are rotated or revoked at their authority: GitHub, Skarbiec
+capability, or product-owned request-sign item. Never place them in committed
+env files, URLs, request examples, logs, screenshots, or provider payloads.</p>
+<h2 id="common-failures">Common failures<a class="headerlink" href="#common-failures" title="Link to this section">&para;</a></h2>
+<h3 id="missing-brama_model_router_client_identities">Missing <code>BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES</code><a class="headerlink" href="#missing-brama_model_router_client_identities" title="Link to this section">&para;</a></h3>
+<p><strong>Observed:</strong> startup fails before binding the port.</p>
+<p><strong>Meaning:</strong> the verifier registry was not generated.</p>
+<p><strong>Action:</strong> launch through the packaged wrapper and confirm each verifier-only
+Skarbiec consumer can read its dedicated client token item. Do not create a
+shared fallback token.</p>
+<h3 id="missing-or-invalid-model-aliases">Missing or invalid model aliases<a class="headerlink" href="#missing-or-invalid-model-aliases" title="Link to this section">&para;</a></h3>
+<p><strong>Observed:</strong> startup reports that the exact alias set or matching provider
+capability is unavailable.</p>
+<p><strong>Meaning:</strong> central service policy and capability grants disagree.</p>
+<p><strong>Action:</strong> correct the central policy or grant, then restart. Do not hand-edit a
+runtime alias around the policy.</p>
+<h3 id="http-426-secure_transport_required">HTTP 426 <code>secure_transport_required</code><a class="headerlink" href="#http-426-secure_transport_required" title="Link to this section">&para;</a></h3>
+<p><strong>Observed:</strong> a remote request is rejected before auth dispatch.</p>
+<p><strong>Meaning:</strong> the peer is neither loopback nor an approved HTTPS terminator.</p>
+<p><strong>Action:</strong> use HTTPS and configure the exact terminator IP in
+<code>BRAMA_TRUSTED_PROXY_IPS</code>; do not trust arbitrary forwarded headers.</p>
+<h3 id="http-401-unauthenticated">HTTP 401 <code>unauthenticated</code><a class="headerlink" href="#http-401-unauthenticated" title="Link to this section">&para;</a></h3>
+<p><strong>Observed:</strong> bearer or agent HMAC is missing, malformed, expired, or unknown.</p>
+<p><strong>Action:</strong> identify the intended client and agent, rotate or repair that exact
+credential at its authority, and sign the exact transmitted body.</p>
+<h3 id="http-403-forbidden">HTTP 403 <code>forbidden</code><a class="headerlink" href="#http-403-forbidden" title="Link to this section">&para;</a></h3>
+<p><strong>Observed:</strong> identity is valid but not allowed for the requested model, agent,
+or path.</p>
+<p><strong>Action:</strong> inspect the central client binding and model allowlist. Do not use a
+broader client's token.</p>
+<h3 id="http-429-provider_rate_limited-or-subscription_unavailable">HTTP 429 <code>provider_rate_limited</code> or <code>subscription_unavailable</code><a class="headerlink" href="#http-429-provider_rate_limited-or-subscription_unavailable" title="Link to this section">&para;</a></h3>
+<p><strong>Observed:</strong> bounded eligible attempts were exhausted.</p>
+<p><strong>Action:</strong> inspect protected stats and structured routing logs, then wait,
+select an authorized billing target, or repair the intended subscription. Do
+not retry indefinitely.</p>
+<h3 id="http-503-dependency_unavailable">HTTP 503 <code>dependency_unavailable</code><a class="headerlink" href="#http-503-dependency_unavailable" title="Link to this section">&para;</a></h3>
+<p><strong>Observed:</strong> Skarbiec, entitlements router, catalog, or configured provider is
+unavailable.</p>
+<p><strong>Action:</strong> restore that named dependency or use a different explicitly allowed
+route. No credential or storage fallback is permitted.</p>
+<h3 id="port-unavailable">Port unavailable<a class="headerlink" href="#port-unavailable" title="Link to this section">&para;</a></h3>
+<p><strong>Observed:</strong> bind failure on the requested port.</p>
+<p><strong>Action:</strong> stop the conflicting process or select another loopback port. Do not
+bind an unauthenticated alternative interface.</p>
+<h2 id="uninstall-and-reset">Uninstall and reset<a class="headerlink" href="#uninstall-and-reset" title="Link to this section">&para;</a></h2>
+<ul>
+<li>Stop Brama through the operator-owned host service manager.</li>
+<li>Revoke runtime, verifier, request-sign, and GitHub publisher grants independently.</li>
+<li>Retain or securely remove the journal according to operator policy.</li>
+<li>Remove only the immutable staged release being decommissioned after its
+  rollback window closes.</li>
+<li>Remove <code>/tmp/brama-*</code> process caches only when no Brama process uses them.</li>
+<li>Provider vault resources remain owned by Skarbiec/entitlements policy; do not
+  delete them as an uninstall shortcut.</li>
+</ul>
+<p>Continue with <a href="/docs/core"><code>CORE.md</code></a>, <a href="/docs/integrations"><code>INTEGRATIONS.md</code></a>, and the
+risk-labeled <a href="/docs/examples"><code>examples/</code></a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

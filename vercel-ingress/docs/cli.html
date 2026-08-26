@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CLI — Brama Docs</title>
+  <meta name="description" content="CLI The brama binary is the gateway, its diagnostics, and its operator repair commands in one. Billable commands require an explicit cost acknowledgement, and commands that mutate ">
+  <link rel="canonical" href="https://brama.wisent.com/docs/cli">
+  <style>
+:root {
+  color-scheme: dark;
+  --bg: #080a0d;
+  --panel: #101319;
+  --panel-2: #151922;
+  --line: #282e3a;
+  --muted: #9ba5b5;
+  --text: #f2f5f9;
+  --accent: #b7ff52;
+  --accent-soft: rgba(183, 255, 82, .12);
+  --code: #111723;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 6rem; }
+body { margin: 0; background: radial-gradient(circle at 75% -10%, rgba(69, 108, 89, .24), transparent 32rem), var(--bg); color: var(--text); line-height: 1.65; }
+a { color: inherit; }
+.topbar { position: sticky; top: 0; z-index: 10; height: 4.25rem; display: flex; align-items: center; justify-content: space-between; padding: 0 2rem; border-bottom: 1px solid rgba(255,255,255,.09); background: rgba(8, 10, 13, .86); backdrop-filter: blur(18px); }
+.brand { display: inline-flex; align-items: center; gap: .65rem; font-size: 1.05rem; text-decoration: none; letter-spacing: -.01em; }
+.brand-mark { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .55rem; background: var(--accent); color: #10140b; font-weight: 900; }
+.brand strong { padding: .15rem .5rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+.topbar nav { display: flex; align-items: center; gap: 1.5rem; }
+.topbar nav a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.topbar nav a:hover { color: var(--text); }
+.layout { display: grid; grid-template-columns: 17.5rem minmax(0, 1fr); max-width: 94rem; min-height: calc(100vh - 4.25rem); margin: 0 auto; }
+aside { border-right: 1px solid var(--line); padding: 2rem 1.5rem 4rem; }
+aside > nav { position: sticky; top: 6.25rem; max-height: calc(100vh - 8rem); overflow: auto; scrollbar-width: thin; }
+.nav-group { margin-bottom: 1.75rem; }
+.nav-group h2 { margin: 0 0 .45rem; color: #737f90; font-size: .69rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.nav-group a { display: block; margin: .08rem 0; padding: .36rem .55rem; border-radius: .4rem; color: var(--muted); font-size: .82rem; line-height: 1.35; text-decoration: none; }
+.nav-group a:hover { color: var(--text); background: var(--panel); }
+.nav-group a.active { color: var(--accent); background: var(--accent-soft); }
+.mobile-nav { display: none; }
+main { width: 100%; min-width: 0; max-width: 65rem; padding: 3.5rem clamp(2rem, 6vw, 6rem) 2rem; }
+.source-note { margin: 0 0 1rem; color: #6f7a89; font: 600 .7rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
+.doc > h1:first-child { margin-top: 0; font-size: clamp(2.35rem, 5vw, 4rem); line-height: 1.04; letter-spacing: -.045em; }
+.doc h2 { margin: 3.25rem 0 1rem; padding-top: .5rem; font-size: 1.7rem; line-height: 1.2; letter-spacing: -.025em; }
+.doc h3 { margin: 2.25rem 0 .75rem; font-size: 1.22rem; line-height: 1.3; }
+.doc h4 { margin: 1.75rem 0 .5rem; font-size: 1rem; }
+.doc p, .doc li { color: #c7ced9; }
+.doc p { margin: 1rem 0; }
+.doc a { color: var(--accent); text-underline-offset: .2em; }
+.doc h1 .headerlink, .doc h2 .headerlink, .doc h3 .headerlink, .doc h4 .headerlink { margin-left: .5rem; color: #4d5765; font-size: .65em; text-decoration: none; opacity: 0; }
+.doc h1:hover .headerlink, .doc h2:hover .headerlink, .doc h3:hover .headerlink, .doc h4:hover .headerlink { opacity: 1; }
+.doc blockquote { margin: 1.5rem 0; padding: .85rem 1.1rem; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+.doc blockquote p { margin: .3rem 0; }
+.doc code { padding: .13rem .35rem; border: 1px solid #273143; border-radius: .35rem; background: var(--code); color: #dce7f7; font: .88em/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.doc pre { margin: 1.4rem 0; padding: 1.1rem 1.2rem; overflow: auto; border: 1px solid var(--line); border-radius: .7rem; background: var(--code); box-shadow: 0 18px 55px rgba(0,0,0,.2); }
+.doc pre code { padding: 0; border: 0; background: transparent; color: #dce7f7; overflow-wrap: normal; }
+.doc table { display: block; width: 100%; margin: 1.5rem 0; overflow-x: auto; border-collapse: collapse; font-size: .87rem; }
+.doc th, .doc td { min-width: 8rem; padding: .65rem .75rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.doc th { background: var(--panel-2); color: var(--text); }
+.doc td { color: #bcc5d2; }
+.doc img { max-width: 100%; height: auto; border-radius: .6rem; }
+.doc hr { margin: 3rem 0; border: 0; border-top: 1px solid var(--line); }
+.doc ul, .doc ol { padding-left: 1.4rem; }
+.doc li + li { margin-top: .35rem; }
+footer { display: flex; justify-content: space-between; margin-top: 5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: #6f7a89; font-size: .78rem; }
+footer a { color: var(--muted); text-decoration: none; }
+.hero { padding: clamp(1rem, 5vw, 4.5rem) 0 4rem; }
+.eyebrow { margin: 0 0 .85rem; color: var(--accent) !important; font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.hero h1 { max-width: 14ch; margin: 0; font-size: clamp(3rem, 7vw, 5.8rem); line-height: .96; letter-spacing: -.06em; }
+.hero > p:not(.eyebrow) { max-width: 48rem; margin: 1.5rem 0 0; color: var(--muted); font-size: 1.12rem; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+.button { display: inline-flex; align-items: center; min-height: 2.8rem; padding: .6rem 1rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--panel); text-decoration: none; }
+.button.primary { border-color: var(--accent); background: var(--accent); color: #11160c; font-weight: 750; }
+.featured, .directory { margin-top: 2.5rem; }
+.card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; }
+.card { min-height: 13rem; padding: 1.3rem; border: 1px solid var(--line); border-radius: .75rem; background: linear-gradient(145deg, rgba(21,25,34,.92), rgba(13,16,21,.92)); text-decoration: none; transition: border-color .16s, transform .16s; }
+.card:hover { transform: translateY(-2px); border-color: #526137; }
+.card span { color: var(--accent); font-size: .68rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.card h2 { margin: .9rem 0 .45rem; font-size: 1.3rem; line-height: 1.2; }
+.card p { margin: 0; color: var(--muted); font-size: .85rem; }
+.directory > h2 { margin: 0 0 1.2rem; font-size: 2.2rem; }
+.directory-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 2.5rem; }
+.directory-grid section { padding-top: 1rem; border-top: 1px solid var(--line); }
+.directory-grid h2 { margin: 0 0 .65rem; font-size: 1rem; }
+.directory-grid ul { margin: 0; padding: 0; list-style: none; }
+.directory-grid li { margin: .35rem 0; }
+.directory-grid a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.directory-grid a:hover { color: var(--accent); }
+@media (max-width: 860px) {
+  .topbar { padding: 0 1rem; }
+  .topbar nav a:not(:last-child) { display: none; }
+  .layout { display: block; }
+  aside { display: none; }
+  .mobile-nav { display: block; margin: 1rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--panel); }
+  .mobile-nav summary { padding: .75rem 1rem; cursor: pointer; color: var(--muted); font-size: .85rem; }
+  .mobile-nav nav { max-height: 70vh; overflow: auto; padding: .5rem 1rem 1rem; }
+  main { max-width: none; padding: 2.5rem 1.25rem 2rem; }
+  .doc > h1:first-child { font-size: clamp(2.1rem, 12vw, 3.3rem); }
+  .card-grid, .directory-grid { grid-template-columns: 1fr; }
+  .hero { padding-top: 1rem; }
+  .hero h1 { font-size: clamp(3rem, 15vw, 4.5rem); }
+}
+@media print {
+  .topbar, aside, .mobile-nav, footer { display: none; }
+  body { background: white; color: black; }
+  .layout { display: block; }
+  main { max-width: none; padding: 0; }
+  .doc p, .doc li { color: #222; }
+}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <details class="mobile-nav"><summary>Browse documentation</summary><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a class="active" aria-current="page" href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></details>
+  <div class="layout">
+    <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a class="active" aria-current="page" href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
+    <main>
+      <p class="source-note">Documentation topic: docs/cli.md</p>
+      <article class="doc"><h1 id="cli">CLI<a class="headerlink" href="#cli" title="Link to this section">&para;</a></h1>
+<p>The <code>brama</code> binary is the gateway, its diagnostics, and its operator repair
+commands in one. Billable commands require an explicit cost acknowledgement,
+and commands that mutate state require an explicit <code>--reason</code>. Nothing here
+prints credential material. Output below was captured from a development
+build of 0.2.38; the top-level surface is:</p>
+<pre><code class="language-console">$ brama --help
+Multi-provider LLM router
+
+Usage: brama &lt;COMMAND&gt;
+
+Commands:
+  version               Print secret-free product and build identity as JSON
+  serve                 Start the OpenAI-compatible HTTP server
+  onboard               Follow Brama's first-use journey and optionally receive one real model response
+  test                  Run a test inference through the router
+  detect                Detect local hardware capabilities
+  mcp                   Serve the read-only stdio MCP server (agent surface)
+  subscriptions         Report the subscription pool this gateway routes over
+  subscription          Act on one provider's subscription credentials
+  collect-task-quality  Collect deterministic task-quality checks for active provider routes
+  help                  Print this message or the help of the given subcommand(s)
+</code></pre>
+<h2 id="brama-version"><code>brama version</code><a class="headerlink" href="#brama-version" title="Link to this section">&para;</a></h2>
+<p>Prints secret-free product and build identity as one JSON object; exit 0.</p>
+<pre><code class="language-console">$ brama version
+{&quot;product&quot;:&quot;brama&quot;,&quot;version&quot;:&quot;0.2.38&quot;,&quot;source_revision&quot;:&quot;development&quot;,&quot;platform&quot;:&quot;development-host&quot;,&quot;built_at&quot;:&quot;not-recorded&quot;}
+</code></pre>
+<p><code>source_revision</code>, <code>platform</code>, and <code>built_at</code> are baked at compile time from
+<code>BRAMA_SOURCE_REVISION</code>, <code>BRAMA_BUILD_PLATFORM</code>, <code>BRAMA_BUILD_TIMESTAMP</code>;
+a development build reports the placeholders above.</p>
+<h2 id="brama-detect"><code>brama detect</code><a class="headerlink" href="#brama-detect" title="Link to this section">&para;</a></h2>
+<p>Detects local hardware and prints a model recommendation. Performs no
+provider request, reads no credential, creates no state, and costs nothing;
+exit 0.</p>
+<pre><code class="language-console">$ brama detect
+GPU Type: apple_silicon
+GPU Name: Apple M2 Max
+VRAM: 48.0 GB
+RAM: 64.0 GB
+CPU Cores: 12
+CUDA: false
+Metal: true
+
+Recommended model: qwen3-8b
+Recommended backend: local
+</code></pre>
+<h2 id="brama-serve"><code>brama serve</code><a class="headerlink" href="#brama-serve" title="Link to this section">&para;</a></h2>
+<p>Starts the OpenAI-compatible HTTP server (<a href="/docs/http-api">http-api</a>).</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-p, --port &lt;PORT&gt;</code></td>
+<td><code>8080</code></td>
+<td>port to listen on</td>
+</tr>
+<tr>
+<td><code>--local-credentials-stdin</code></td>
+<td>off</td>
+<td>read a standalone provider-to-credential JSON object (<code>{"openai": "sk-...", ...}</code>) from stdin; the input is consumed and zeroized, and the server runs in standalone mode</td>
+</tr>
+</tbody>
+</table>
+<p>In managed deployments, launch through <code>scripts/start-with-skarbiec.sh</code>; a
+bare start fails closed (exit 1) with the exact sentence in the
+<a href="/docs/runbook#brama-serve-refuses-to-start">runbook</a>. A failed stdin read or
+credential install prints <code>Server error: ...</code> and exits 1.</p>
+<h2 id="brama-onboard"><code>brama onboard</code><a class="headerlink" href="#brama-onboard" title="Link to this section">&para;</a></h2>
+<p>Follows the first-use journey and optionally receives one real model
+response.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-m, --model &lt;ROUTE&gt;</code></td>
+<td><code>openai/default</code></td>
+<td>canonical <code>provider/model</code> route for the first real response</td>
+</tr>
+<tr>
+<td><code>--agent-id &lt;ID&gt;</code></td>
+<td><code>wisent-app</code></td>
+<td>workload id whose separately provisioned provider credential is used</td>
+</tr>
+<tr>
+<td><code>--allow-provider-cost</code></td>
+<td>off</td>
+<td>acknowledge one billable provider request</td>
+</tr>
+</tbody>
+</table>
+<p>Without the acknowledgement the journey prints its steps (the routing
+contract, the request/response shapes, the completion criterion) and ends
+(captured, exit 0):</p>
+<pre><code class="language-text">Next: configure provider/auth separately if needed, then re-run this command
+with --allow-provider-cost.
+No provider request was sent and onboarding remains in progress.
+</code></pre>
+<p>Completion is recorded only after a successful real model response — viewing
+the steps or allowing cost is not sufficient. With <code>--allow-provider-cost</code>
+and no successful response the exit status is 1. Progress persists in
+<code>~/.local/state/brama/onboarding.json</code>.</p>
+<h2 id="brama-test"><code>brama test</code><a class="headerlink" href="#brama-test" title="Link to this section">&para;</a></h2>
+<p>Runs one test inference through the subscription dispatch path (the signed
+agent's credentials, not the deployment's direct capability) and prints
+model, response, token counts, latency, and cost. Refuses without the
+acknowledgement (captured, exit 1):</p>
+<pre><code class="language-console">$ brama test
+refusing billable inference without explicit --allow-provider-cost
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-m, --model &lt;ROUTE&gt;</code></td>
+<td><code>openai/default</code></td>
+<td>canonical route to test</td>
+</tr>
+<tr>
+<td><code>--agent-id &lt;ID&gt;</code></td>
+<td><code>wisent-app</code></td>
+<td>agent whose provider credential is used</td>
+</tr>
+<tr>
+<td><code>--allow-provider-cost</code></td>
+<td>off</td>
+<td>acknowledge one billable provider request</td>
+</tr>
+</tbody>
+</table>
+<p>On success (exit 0) it prints <code>Model:</code>, <code>Response:</code>, <code>Tokens: &lt;in&gt; in /
+&lt;out&gt; out</code>, <code>Latency: &lt;n&gt;ms</code>, <code>Cost: $&lt;n&gt;</code>. On refusal it prints the
+dispatch sentence and exits 1 (captured against an empty pool):</p>
+<pre><code class="language-text">Error: no active 'openai' credential for agent
+</code></pre>
+<p>with the operator envelope logged to stderr beside it
+(<a href="/docs/concepts/failure-point">concepts/failure-point</a>).</p>
+<h2 id="brama-subscriptions-list-json"><code>brama subscriptions list [--json]</code><a class="headerlink" href="#brama-subscriptions-list-json" title="Link to this section">&para;</a></h2>
+<p>Read-only pool report. It contacts no provider, redeems no capability, and
+writes nothing: it joins the deployment's subscription listing to the usage
+ledger, so it is safe against a serving gateway. Captured on an empty pool
+(exit 0):</p>
+<pre><code class="language-console">$ brama subscriptions list
+0 of 0 subscription credentials are live
+
+$ brama subscriptions list --json
+{
+  &quot;providers&quot;: []
+}
+</code></pre>
+<p>Per subscription it prints <code>state</code> (<code>live</code>, <code>expired</code>, <code>burnt</code>, <code>unknown</code> —
+<a href="/docs/concepts/subscription#states">concepts/subscription</a>), <code>expires_at</code> (the
+provider's own instant, <code>null</code> for an API key that states none), and
+<code>last_redeem_error</code> (the refusal standing in the way, in the words of
+whatever refused: credential cause first, then a block still in force, then
+the newest failed check; a lapsed block is deliberately not reported).
+Without <code>--json</code> the same report prints as lines, led by how many
+credentials are live — a healthy pool is short, and a broken one is where
+the sentences are.</p>
+<h2 id="brama-subscription-refresh-provider-reason-text-json"><code>brama subscription refresh &lt;provider&gt; --reason &lt;text&gt; [--json]</code><a class="headerlink" href="#brama-subscription-refresh-provider-reason-text-json" title="Link to this section">&para;</a></h2>
+<p>Runs the refresh the gateway's own timer runs, for one provider (<code>codex</code>,
+<code>claude-code</code>, <code>kimi</code>), now — including grants the timer's skew window would
+never try, which is exactly what leaves an empty pool empty. <code>--reason</code> is
+required because this rotates a grant (the provider invalidates the previous
+refresh token on issue), and the reason is appended to the journal beside
+the verdict. Captured on an empty pool (exit 1):</p>
+<pre><code class="language-console">$ brama subscription refresh codex --reason &quot;docs walkthrough: exercise the empty-pool refresh path&quot;
+provider: codex
+attempted: 0
+result: failed
+detail: no usable `codex` subscription is in this deployment's pool, so no
+credential source is configured to refresh: one has to be signed in and
+stored in the vault before this command has anything to act on
+</code></pre>
+<p>The verdict reports <code>provider</code>, <code>attempted</code>, <code>result</code> (<code>refreshed</code> or
+<code>failed</code>), and <code>detail</code> quoting each refusal in the provider's own words.
+Exit status is non-zero unless a credential was obtained. A retired
+subscription is never refreshed. The journal record it appends is shown in
+<a href="/docs/walkthrough-subscriptions#2-refreshing-an-empty-pool-tells-you-it-is-empty">walkthrough-subscriptions</a>.</p>
+<h2 id="brama-collect-task-quality"><code>brama collect-task-quality</code><a class="headerlink" href="#brama-collect-task-quality" title="Link to this section">&para;</a></h2>
+<p>Collects deterministic task-quality checks for active provider routes; the
+observations later serve <code>model="task:&lt;task&gt;"</code> selection
+(<a href="/docs/concepts/entitlement#selectors">concepts/entitlement</a>).</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--agent-id &lt;ID&gt;</code></td>
+<td>required</td>
+<td>agent whose provider credentials are checked</td>
+</tr>
+<tr>
+<td><code>--task &lt;KEY&gt;</code></td>
+<td>required</td>
+<td>task key used later as <code>task:&lt;task&gt;</code></td>
+</tr>
+<tr>
+<td><code>--prompt &lt;TEXT&gt;</code></td>
+<td>required</td>
+<td>prompt sent to each active stateless route</td>
+</tr>
+<tr>
+<td><code>--expected-exact &lt;TEXT&gt;</code></td>
+<td>unset</td>
+<td>exact expected response for score=1</td>
+</tr>
+<tr>
+<td><code>--expected-contains &lt;TEXT&gt;</code></td>
+<td>unset</td>
+<td>expected substring for score=1</td>
+</tr>
+<tr>
+<td><code>--persist</code></td>
+<td>off</td>
+<td>write results into the journal (<code>check</code> records)</td>
+</tr>
+<tr>
+<td><code>--max-models &lt;N&gt;</code></td>
+<td><code>3</code></td>
+<td>maximum active models to check; the library bounds it again to 1..25 (<code>max_models must be between one and 25</code>)</td>
+</tr>
+<tr>
+<td><code>--allow-provider-cost</code></td>
+<td>off</td>
+<td>acknowledge billable provider requests</td>
+</tr>
+</tbody>
+</table>
+<p>Without the acknowledgement it refuses with <code>refusing billable task-quality
+collection without explicit cost acknowledgement</code>
+(<code>src/subscription_dispatch/quality.rs</code>) and exits 1. Each selected model
+receives one request through the real agent subscription path; the report is
+one JSON document (<code>ok</code>, <code>agentId</code>, <code>task</code>, <code>persisted</code>, <code>maxModels</code>,
+per-model <code>checks</code> with status and score, <code>bestModel</code>/<code>bestModels</code>) and
+never expands past <code>max_models</code>.</p>
+<h2 id="brama-mcp"><code>brama mcp</code><a class="headerlink" href="#brama-mcp" title="Link to this section">&para;</a></h2>
+<p>Serves the read-only stdio MCP server (JSON-RPC 2.0, protocol version
+<code>2024-11-05</code>), exposing <code>brama_detect</code> only. Model execution, credential
+discovery, collection, and mutation are deliberately excluded from the MCP
+surface. Captured session:</p>
+<pre><code class="language-console">$ printf '%s\n' '{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:1,&quot;method&quot;:&quot;initialize&quot;,...}' \
+    '{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:2,&quot;method&quot;:&quot;tools/list&quot;}' \
+    '{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:3,&quot;method&quot;:&quot;tools/call&quot;,&quot;params&quot;:{&quot;name&quot;:&quot;brama_detect&quot;,&quot;arguments&quot;:{}}}' | brama mcp
+{&quot;id&quot;:1,&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;result&quot;:{&quot;capabilities&quot;:{&quot;tools&quot;:{}},&quot;protocolVersion&quot;:&quot;2024-11-05&quot;,&quot;serverInfo&quot;:{&quot;name&quot;:&quot;brama&quot;,&quot;version&quot;:&quot;0.2.38&quot;}}}
+{&quot;id&quot;:2,&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;result&quot;:{&quot;tools&quot;:[{&quot;description&quot;:&quot;Detect local compute resources (GPU type/name, VRAM, RAM, CPU cores, CUDA/Metal) and the model + backend brama would recommend for this host. Local only; no network, no credentials, no cost.&quot;,&quot;inputSchema&quot;:{&quot;properties&quot;:{},&quot;required&quot;:[],&quot;type&quot;:&quot;object&quot;},&quot;name&quot;:&quot;brama_detect&quot;}]}}
+{&quot;id&quot;:3,&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;result&quot;:{&quot;content&quot;:[{&quot;text&quot;:&quot;{\n  \&quot;cpu_cores\&quot;: 12,\n  \&quot;gpu_name\&quot;: \&quot;Apple M2 Max\&quot;, ...}&quot;,&quot;type&quot;:&quot;text&quot;}]}}
+</code></pre></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

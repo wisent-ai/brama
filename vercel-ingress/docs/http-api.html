@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HTTP API — Brama Docs</title>
+  <meta name="description" content="HTTP API Brama serves one HTTP listener, loopback by default 127.0.0.1:8080, port from brama serve --port, address from BRAMA_BIND_ADDRESS. Every route — including /health — sits b">
+  <link rel="canonical" href="https://brama.wisent.com/docs/http-api">
+  <style>
+:root {
+  color-scheme: dark;
+  --bg: #080a0d;
+  --panel: #101319;
+  --panel-2: #151922;
+  --line: #282e3a;
+  --muted: #9ba5b5;
+  --text: #f2f5f9;
+  --accent: #b7ff52;
+  --accent-soft: rgba(183, 255, 82, .12);
+  --code: #111723;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 6rem; }
+body { margin: 0; background: radial-gradient(circle at 75% -10%, rgba(69, 108, 89, .24), transparent 32rem), var(--bg); color: var(--text); line-height: 1.65; }
+a { color: inherit; }
+.topbar { position: sticky; top: 0; z-index: 10; height: 4.25rem; display: flex; align-items: center; justify-content: space-between; padding: 0 2rem; border-bottom: 1px solid rgba(255,255,255,.09); background: rgba(8, 10, 13, .86); backdrop-filter: blur(18px); }
+.brand { display: inline-flex; align-items: center; gap: .65rem; font-size: 1.05rem; text-decoration: none; letter-spacing: -.01em; }
+.brand-mark { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .55rem; background: var(--accent); color: #10140b; font-weight: 900; }
+.brand strong { padding: .15rem .5rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+.topbar nav { display: flex; align-items: center; gap: 1.5rem; }
+.topbar nav a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.topbar nav a:hover { color: var(--text); }
+.layout { display: grid; grid-template-columns: 17.5rem minmax(0, 1fr); max-width: 94rem; min-height: calc(100vh - 4.25rem); margin: 0 auto; }
+aside { border-right: 1px solid var(--line); padding: 2rem 1.5rem 4rem; }
+aside > nav { position: sticky; top: 6.25rem; max-height: calc(100vh - 8rem); overflow: auto; scrollbar-width: thin; }
+.nav-group { margin-bottom: 1.75rem; }
+.nav-group h2 { margin: 0 0 .45rem; color: #737f90; font-size: .69rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.nav-group a { display: block; margin: .08rem 0; padding: .36rem .55rem; border-radius: .4rem; color: var(--muted); font-size: .82rem; line-height: 1.35; text-decoration: none; }
+.nav-group a:hover { color: var(--text); background: var(--panel); }
+.nav-group a.active { color: var(--accent); background: var(--accent-soft); }
+.mobile-nav { display: none; }
+main { width: 100%; min-width: 0; max-width: 65rem; padding: 3.5rem clamp(2rem, 6vw, 6rem) 2rem; }
+.source-note { margin: 0 0 1rem; color: #6f7a89; font: 600 .7rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
+.doc > h1:first-child { margin-top: 0; font-size: clamp(2.35rem, 5vw, 4rem); line-height: 1.04; letter-spacing: -.045em; }
+.doc h2 { margin: 3.25rem 0 1rem; padding-top: .5rem; font-size: 1.7rem; line-height: 1.2; letter-spacing: -.025em; }
+.doc h3 { margin: 2.25rem 0 .75rem; font-size: 1.22rem; line-height: 1.3; }
+.doc h4 { margin: 1.75rem 0 .5rem; font-size: 1rem; }
+.doc p, .doc li { color: #c7ced9; }
+.doc p { margin: 1rem 0; }
+.doc a { color: var(--accent); text-underline-offset: .2em; }
+.doc h1 .headerlink, .doc h2 .headerlink, .doc h3 .headerlink, .doc h4 .headerlink { margin-left: .5rem; color: #4d5765; font-size: .65em; text-decoration: none; opacity: 0; }
+.doc h1:hover .headerlink, .doc h2:hover .headerlink, .doc h3:hover .headerlink, .doc h4:hover .headerlink { opacity: 1; }
+.doc blockquote { margin: 1.5rem 0; padding: .85rem 1.1rem; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+.doc blockquote p { margin: .3rem 0; }
+.doc code { padding: .13rem .35rem; border: 1px solid #273143; border-radius: .35rem; background: var(--code); color: #dce7f7; font: .88em/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.doc pre { margin: 1.4rem 0; padding: 1.1rem 1.2rem; overflow: auto; border: 1px solid var(--line); border-radius: .7rem; background: var(--code); box-shadow: 0 18px 55px rgba(0,0,0,.2); }
+.doc pre code { padding: 0; border: 0; background: transparent; color: #dce7f7; overflow-wrap: normal; }
+.doc table { display: block; width: 100%; margin: 1.5rem 0; overflow-x: auto; border-collapse: collapse; font-size: .87rem; }
+.doc th, .doc td { min-width: 8rem; padding: .65rem .75rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.doc th { background: var(--panel-2); color: var(--text); }
+.doc td { color: #bcc5d2; }
+.doc img { max-width: 100%; height: auto; border-radius: .6rem; }
+.doc hr { margin: 3rem 0; border: 0; border-top: 1px solid var(--line); }
+.doc ul, .doc ol { padding-left: 1.4rem; }
+.doc li + li { margin-top: .35rem; }
+footer { display: flex; justify-content: space-between; margin-top: 5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: #6f7a89; font-size: .78rem; }
+footer a { color: var(--muted); text-decoration: none; }
+.hero { padding: clamp(1rem, 5vw, 4.5rem) 0 4rem; }
+.eyebrow { margin: 0 0 .85rem; color: var(--accent) !important; font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.hero h1 { max-width: 14ch; margin: 0; font-size: clamp(3rem, 7vw, 5.8rem); line-height: .96; letter-spacing: -.06em; }
+.hero > p:not(.eyebrow) { max-width: 48rem; margin: 1.5rem 0 0; color: var(--muted); font-size: 1.12rem; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+.button { display: inline-flex; align-items: center; min-height: 2.8rem; padding: .6rem 1rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--panel); text-decoration: none; }
+.button.primary { border-color: var(--accent); background: var(--accent); color: #11160c; font-weight: 750; }
+.featured, .directory { margin-top: 2.5rem; }
+.card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; }
+.card { min-height: 13rem; padding: 1.3rem; border: 1px solid var(--line); border-radius: .75rem; background: linear-gradient(145deg, rgba(21,25,34,.92), rgba(13,16,21,.92)); text-decoration: none; transition: border-color .16s, transform .16s; }
+.card:hover { transform: translateY(-2px); border-color: #526137; }
+.card span { color: var(--accent); font-size: .68rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.card h2 { margin: .9rem 0 .45rem; font-size: 1.3rem; line-height: 1.2; }
+.card p { margin: 0; color: var(--muted); font-size: .85rem; }
+.directory > h2 { margin: 0 0 1.2rem; font-size: 2.2rem; }
+.directory-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 2.5rem; }
+.directory-grid section { padding-top: 1rem; border-top: 1px solid var(--line); }
+.directory-grid h2 { margin: 0 0 .65rem; font-size: 1rem; }
+.directory-grid ul { margin: 0; padding: 0; list-style: none; }
+.directory-grid li { margin: .35rem 0; }
+.directory-grid a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.directory-grid a:hover { color: var(--accent); }
+@media (max-width: 860px) {
+  .topbar { padding: 0 1rem; }
+  .topbar nav a:not(:last-child) { display: none; }
+  .layout { display: block; }
+  aside { display: none; }
+  .mobile-nav { display: block; margin: 1rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--panel); }
+  .mobile-nav summary { padding: .75rem 1rem; cursor: pointer; color: var(--muted); font-size: .85rem; }
+  .mobile-nav nav { max-height: 70vh; overflow: auto; padding: .5rem 1rem 1rem; }
+  main { max-width: none; padding: 2.5rem 1.25rem 2rem; }
+  .doc > h1:first-child { font-size: clamp(2.1rem, 12vw, 3.3rem); }
+  .card-grid, .directory-grid { grid-template-columns: 1fr; }
+  .hero { padding-top: 1rem; }
+  .hero h1 { font-size: clamp(3rem, 15vw, 4.5rem); }
+}
+@media print {
+  .topbar, aside, .mobile-nav, footer { display: none; }
+  body { background: white; color: black; }
+  .layout { display: block; }
+  main { max-width: none; padding: 0; }
+  .doc p, .doc li { color: #222; }
+}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <details class="mobile-nav"><summary>Browse documentation</summary><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a class="active" aria-current="page" href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></details>
+  <div class="layout">
+    <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a class="active" aria-current="page" href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
+    <main>
+      <p class="source-note">Documentation topic: docs/http-api.md</p>
+      <article class="doc"><h1 id="http-api">HTTP API<a class="headerlink" href="#http-api" title="Link to this section">&para;</a></h1>
+<p>Brama serves one HTTP listener, loopback by default (<code>127.0.0.1:8080</code>, port
+from <code>brama serve --port</code>, address from <code>BRAMA_BIND_ADDRESS</code>). Every route —
+including <code>/health</code> — sits behind the transport guard; every route except
+<code>/health</code> and <code>/readyz</code> additionally requires a bearer. Errors on all routes
+use the envelope in <a href="/docs/errors">errors</a>; example bodies below were captured
+from a running 0.2.38 gateway.</p>
+<h2 id="route-table">Route table<a class="headerlink" href="#route-table" title="Link to this section">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Caller</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/health</code></td>
+<td>anyone on an accepted transport</td>
+<td>liveness only</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/readyz</code></td>
+<td>anyone on an accepted transport</td>
+<td>readiness: redeems real credentials</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/v1/chat/completions</code></td>
+<td>bearer</td>
+<td>OpenAI chat completions, buffered or streamed</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/v1/messages</code></td>
+<td>bearer</td>
+<td>Anthropic Messages, same routing decision</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/v1/responses</code></td>
+<td>bearer</td>
+<td>OpenAI Responses, same routing decision</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/v1/embeddings</code></td>
+<td>bearer</td>
+<td>typed embeddings via <code>wisent-backend/embeddings</code></td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/v1/moderations</code></td>
+<td>bearer</td>
+<td>typed moderation via <code>wisent-backend/moderation</code></td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/v1/models</code></td>
+<td>bearer</td>
+<td>model catalog scoped to the caller's identity</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/v1/subscriptions/:agent_id</code></td>
+<td>bearer + agent HMAC</td>
+<td>list one agent's subscriptions</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/v1/subscriptions/:agent_id</code></td>
+<td>bearer + agent HMAC</td>
+<td>donate a subscription credential</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/v1/subscriptions/:agent_id</code></td>
+<td>bearer + agent HMAC</td>
+<td>retire a subscription</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/v1/account/subscriptions</code></td>
+<td>Wisent user session</td>
+<td>list the account's stored keys</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/v1/account/subscriptions</code></td>
+<td>Wisent user session</td>
+<td>store a provider API key</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/v1/account/subscriptions/:subscription_id</code></td>
+<td>Wisent user session</td>
+<td>retire an account key</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/stats</code></td>
+<td>bearer</td>
+<td>bounded process telemetry</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/v1/admin/snapshot</code></td>
+<td><code>brama-desktop</code> only</td>
+<td>routes and provider snapshot</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/v1/admin/routes</code></td>
+<td><code>brama-desktop</code> only</td>
+<td>update one alias route</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/v1/admin/subscriptions/:agent_id</code></td>
+<td><code>brama-desktop</code> only</td>
+<td>list an agent's subscriptions</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/v1/admin/subscriptions/:agent_id</code></td>
+<td><code>brama-desktop</code> only</td>
+<td>store a subscription credential</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/v1/admin/subscriptions/:agent_id/:subscription_id</code></td>
+<td><code>brama-desktop</code> only</td>
+<td>retire a subscription</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/v1/admin/subscriptions/:agent_id/:subscription_id/probe</code></td>
+<td><code>brama-desktop</code> only</td>
+<td>spend one completion to test a credential</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/v1/admin/subscription-pool</code></td>
+<td><code>brama-desktop</code> only</td>
+<td>the dispatch pool as the serving process sees it</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/v1/admin/subscription-pool/refresh</code></td>
+<td><code>brama-desktop</code> only</td>
+<td>refresh one provider's pooled grants now</td>
+</tr>
+</tbody>
+</table>
+<h2 id="transport">Transport<a class="headerlink" href="#transport" title="Link to this section">&para;</a></h2>
+<p>A request is accepted only when its peer is loopback, the address the gateway
+itself bound, a peer named in <code>BRAMA_ENCRYPTED_PEER_IPS</code> (a mesh hop that is
+already encrypted), or a proxy named in <code>BRAMA_TRUSTED_PROXY_IPS</code> whose
+<code>Forwarded</code>/<code>X-Forwarded-Proto</code> headers state <code>https</code>. Anything else answers
+(captured):</p>
+<pre><code class="language-json">{&quot;error&quot;:{&quot;attempts&quot;:0,&quot;code&quot;:&quot;secure_transport_required&quot;,
+ &quot;message&quot;:&quot;HTTPS is required except for direct loopback requests&quot;,
+ &quot;retryable&quot;:false,&quot;type&quot;:&quot;transport_error&quot;}}
+</code></pre>
+<p>with status <code>426</code>. Forwarded headers from an unlisted peer are never trusted.</p>
+<h2 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Link to this section">&para;</a></h2>
+<p>Protected routes take exactly one <code>Authorization: Bearer &lt;token&gt;</code> value. The
+token is checked in constant time against the identities in
+<code>BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES</code>; a bearer not in that table is
+resolved against Skarbiec (the authority that issued it) and, for
+account-scoped desktop routes, against Wisent Identity. Both authorities fail
+closed, and the verdict is cached for five seconds so revocation stays
+effective without a restart. A model-scoped bearer (one carrying
+<code>allowed_models</code>) may reach only the six inference and discovery paths plus
+the account routes; anything else is <code>403</code>. Agent-scoped operations
+additionally sign the exact raw body with the HMAC trio
+(<a href="/docs/concepts/entitlement">concepts/entitlement</a>); a missing header on a
+route that needs one answers, for example,
+<code>401 {"message":"missing x-agent-id header"}</code> (captured on <code>model:"best"</code>).</p>
+<h2 id="get-health"><code>GET /health</code><a class="headerlink" href="#get-health" title="Link to this section">&para;</a></h2>
+<p>Liveness only, no request fields. Captured:</p>
+<pre><code class="language-json">{&quot;build&quot;:{&quot;built_at&quot;:&quot;...&quot;,&quot;platform&quot;:&quot;...&quot;,&quot;product&quot;:&quot;brama&quot;,
+ &quot;source_revision&quot;:&quot;...&quot;,&quot;version&quot;:&quot;0.2.38&quot;},
+ &quot;dependencies&quot;:&quot;not_probed&quot;,&quot;status&quot;:&quot;ok&quot;}
+</code></pre>
+<p>It never redeems a credential, lists subscriptions, or contacts a provider —
+it answers <code>ok</code> from a gateway whose every redemption is being refused
+(<a href="/docs/architecture#health-versus-readyz">architecture</a>).</p>
+<h2 id="get-readyz"><code>GET /readyz</code><a class="headerlink" href="#get-readyz" title="Link to this section">&para;</a></h2>
+<p>The only evidence that the product works. Per request it: (1) redeems one
+capability per configured provider through the same broker call the request
+path makes; (2) checks every active subscription contributes at least one
+discoverable model; (3) redeems one credential per active subscription;
+(4) reports vault subscription accounts carrying no <code>brama:agent:</code> tag.
+Captured healthy body:</p>
+<pre><code class="language-json">{&quot;build&quot;:{...},&quot;denied&quot;:[],&quot;operator_action_required&quot;:false,
+ &quot;providers&quot;:[{&quot;credential&quot;:true,&quot;provider&quot;:&quot;openai&quot;}],
+ &quot;ready&quot;:true,
+ &quot;reason&quot;:&quot;every configured provider credential was obtained, every active subscription redeemed, and every vault account carries the agent tag that makes it routable&quot;,
+ &quot;routing&quot;:[],&quot;subscriptions&quot;:[],&quot;unredeemable&quot;:[],&quot;unroutable&quot;:[],
+ &quot;unroutable_accounts&quot;:[]}
+</code></pre>
+<p>Otherwise status <code>503</code> with <code>ready: false</code> and <code>reason</code> naming the failing
+half — the five sentences and their repairs are in the
+<a href="/docs/runbook#readyz-answers-503">runbook</a>. <code>subscriptions[]</code> rows carry
+per-subscription <code>redeemable</code> and the refusal in the words of whatever
+refused; never a secret.</p>
+<h2 id="the-three-inference-dialects">The three inference dialects<a class="headerlink" href="#the-three-inference-dialects" title="Link to this section">&para;</a></h2>
+<p><code>POST /v1/chat/completions</code>, <code>POST /v1/messages</code>, and <code>POST /v1/responses</code>
+are one workflow: identity, allowlist, alias resolution, selector semantics,
+billing ownership, attempt bounds, and the error contract are identical;
+only the request and answer shapes differ. Each requires a <code>model</code> naming an
+allowed alias, a canonical <code>provider/model</code> route, or a selector; a missing
+model is <code>400 missing field</code>model<code>`, and a bare vendor name is</code>400 model must be a canonical provider/model route or a supported selector<code>(both captured). Shared validation:</code>max_tokens<code>default 1024, refused
+outside 1..32768 (</code>max_tokens must be between one and 32768<code>);</code>temperature<code>default 0.7, refused unless finite and ≤ 2 (</code>temperature must be finite and
+between zero and 2<code>);</code>messages must not be empty`.</p>
+<h3 id="post-v1chatcompletions"><code>POST /v1/chat/completions</code><a class="headerlink" href="#post-v1chatcompletions" title="Link to this section">&para;</a></h3>
+<p>Accepts exactly: <code>model</code>, <code>messages</code>, <code>max_tokens</code>, <code>temperature</code>, <code>tools</code>,
+<code>tool_choice</code>, <code>billingTarget</code> (<code>providerId</code>/<code>accountId</code>/<code>subscriptionId</code>),
+<code>stream</code>. Unknown fields are refused with the deserializer's own sentence
+(captured):</p>
+<pre><code class="language-text">400 invalid JSON: unknown field `frequency_penalty`, expected one of `model`,
+`messages`, `max_tokens`, `temperature`, `tools`, `tool_choice`,
+`billingTarget`, `stream` at line 1 column 93
+</code></pre>
+<p>Success (captured):</p>
+<pre><code class="language-json">{&quot;choices&quot;:[{&quot;finish_reason&quot;:&quot;stop&quot;,&quot;index&quot;:0,
+  &quot;message&quot;:{&quot;content&quot;:&quot;...&quot;,&quot;role&quot;:&quot;assistant&quot;}}],
+ &quot;id&quot;:&quot;chatcmpl-...&quot;,&quot;model&quot;:&quot;&lt;route&gt;&quot;,&quot;object&quot;:&quot;chat.completion&quot;,
+ &quot;usage&quot;:{&quot;completion_tokens&quot;:7,&quot;prompt_tokens&quot;:9,&quot;total_tokens&quot;:16}}
+</code></pre>
+<p>With <code>"stream": true</code>: <code>text/event-stream</code> of <code>chat.completion.chunk</code>
+frames — a role delta first, then content deltas, a <code>finish_reason</code> frame, a
+usage frame, closed by <code>data: [DONE]</code> (captured in
+<a href="/docs/walkthrough-standalone-stub#4-one-routed-completion">the walkthrough</a>).</p>
+<h3 id="post-v1messages"><code>POST /v1/messages</code><a class="headerlink" href="#post-v1messages" title="Link to this section">&para;</a></h3>
+<p>The Anthropic Messages dialect over the same routing decision. Accepts the
+Anthropic request shape (<code>model</code>, <code>max_tokens</code>, <code>messages</code>, system, tools,
+streaming); fields the provider-neutral request cannot hold (stop sequences,
+cache-control hints, non-function tool types) are accepted and dropped
+rather than approximated. Success (captured):</p>
+<pre><code class="language-json">{&quot;content&quot;:[{&quot;text&quot;:&quot;...&quot;,&quot;type&quot;:&quot;text&quot;}],&quot;id&quot;:&quot;msg_...&quot;,
+ &quot;model&quot;:&quot;&lt;route&gt;&quot;,&quot;role&quot;:&quot;assistant&quot;,&quot;stop_reason&quot;:&quot;end_turn&quot;,
+ &quot;stop_sequence&quot;:null,&quot;type&quot;:&quot;message&quot;,
+ &quot;usage&quot;:{&quot;input_tokens&quot;:9,&quot;output_tokens&quot;:7}}
+</code></pre>
+<p>Streaming emits <code>message_start</code> / <code>content_block_*</code> / <code>message_delta</code> /
+<code>message_stop</code> events, no <code>[DONE]</code>.</p>
+<h3 id="post-v1responses"><code>POST /v1/responses</code><a class="headerlink" href="#post-v1responses" title="Link to this section">&para;</a></h3>
+<p>The OpenAI Responses dialect (<code>input</code> in place of <code>messages</code>; reasoning
+options and stored-response identifiers are dropped). Success (captured):</p>
+<pre><code class="language-json">{&quot;created_at&quot;:...,&quot;id&quot;:&quot;resp_...&quot;,&quot;model&quot;:&quot;&lt;route&gt;&quot;,&quot;object&quot;:&quot;response&quot;,
+ &quot;output&quot;:[{&quot;content&quot;:[{&quot;annotations&quot;:[],&quot;text&quot;:&quot;...&quot;,&quot;type&quot;:&quot;output_text&quot;}],
+   &quot;id&quot;:&quot;msg_...&quot;,&quot;role&quot;:&quot;assistant&quot;,&quot;status&quot;:&quot;completed&quot;,&quot;type&quot;:&quot;message&quot;}],
+ &quot;status&quot;:&quot;completed&quot;,
+ &quot;usage&quot;:{&quot;input_tokens&quot;:9,&quot;output_tokens&quot;:7,&quot;total_tokens&quot;:16}}
+</code></pre>
+<p>Streaming emits <code>response.*</code> events closed by <code>response.completed</code>.</p>
+<h3 id="streaming-commit-rule">Streaming commit rule<a class="headerlink" href="#streaming-commit-rule" title="Link to this section">&para;</a></h3>
+<p>Rotation across models and credentials happens only before the first byte; a
+stream that ends without its terminal event was cut after commit, and Brama
+has already stopped — it never resumes a committed generation on another
+credential. Streaming a model reachable only through the shared catalogue is
+refused as <code>400 invalid_request</code> before any provider is contacted.</p>
+<h2 id="post-v1embeddings"><code>POST /v1/embeddings</code><a class="headerlink" href="#post-v1embeddings" title="Link to this section">&para;</a></h2>
+<p>Typed alias-only endpoint on the <code>wisent-backend/embeddings</code> route. Accepts
+exactly <code>model</code>, <code>input</code>, <code>encoding_format</code> (<code>float</code> or <code>base64</code>),
+<code>dimensions</code>, <code>user</code>; refusals include <code>invalid embedding input</code> and
+<code>invalid embedding encoding format</code>. On a deployment without the embeddings
+alias the captured answer is <code>500 {"code":"internal_error","message":
+"embedding alias missing"}</code>. Success is the OpenAI embeddings shape
+(<code>object: "list"</code>, <code>data[].embedding</code>, <code>usage</code>).</p>
+<h2 id="post-v1moderations"><code>POST /v1/moderations</code><a class="headerlink" href="#post-v1moderations" title="Link to this section">&para;</a></h2>
+<p>Typed alias-only endpoint on <code>wisent-backend/moderation</code>; requires <code>model</code>
+and <code>input</code> (<code>invalid moderation input</code> on shape errors). Success is the
+OpenAI moderations shape.</p>
+<h2 id="get-v1models"><code>GET /v1/models</code><a class="headerlink" href="#get-v1models" title="Link to this section">&para;</a></h2>
+<p>Combines public catalog metadata with what the caller can execute: account
+discovery marks models executable by that account's stored keys, and signed
+agent discovery includes agent-owned subscriptions. Captured shape:</p>
+<pre><code class="language-json">{&quot;data&quot;:[{&quot;id&quot;:&quot;&lt;provider&gt;/&lt;model&gt;&quot;,&quot;object&quot;:&quot;model&quot;,&quot;owned_by&quot;:&quot;&lt;provider&gt;&quot;}, ...]}
+</code></pre>
+<h2 id="subscription-lifecycle-agent-signed">Subscription lifecycle (agent-signed)<a class="headerlink" href="#subscription-lifecycle-agent-signed" title="Link to this section">&para;</a></h2>
+<p>All three verbs on <code>/v1/subscriptions/:agent_id</code> require bearer + HMAC, and
+the bearer-bound agent, signed agent, and path agent must agree
+(<code>403 forbidden</code> on any mismatch — captured). Field semantics are in
+<a href="/docs/concepts/subscription">concepts/subscription</a>.</p>
+<ul>
+<li><strong>GET</strong> → <code>{"subscriptions": [...]}</code> (captured empty:
+  <code>{"subscriptions":[]}</code>). Each row is the subscription view: <code>id</code>,
+  <code>provider</code>, <code>status</code>, <code>limits</code> (provider-reported plan windows),
+  <code>measured</code>, <code>block</code>, <code>observed_at_ms</code>, <code>probe</code>, <code>credential</code>
+  (<code>state</code>: <code>active</code> | <code>needs_reauthorization</code> | <code>disabled</code>, with <code>cause</code>
+  and instants), <code>usage_source</code> (<code>provider</code> | <code>traffic</code> | <code>probe</code>), <code>stale</code>
+  (<code>src/core/server.rs:2800</code>).</li>
+<li><strong>POST</strong> — body <code>{"provider", "label"?, "api_key"}</code> (unknown fields
+  refused). Refusals: <code>provider must name a supported remote API or
+  subscription provider</code> (400), <code>api_key must contain 1..8000 characters</code>
+  (400), a document that does not reduce to a bearer (400, donor's to fix),
+  a failed vault write (500, this installation's). Success:
+  <code>{"subscription": {"id": "brama-sub-&lt;agent&gt;-&lt;provider&gt;-primary",
+  "provider", "agent_id", "status": "active", "label"}}</code>. The credential
+  value is never returned.</li>
+<li><strong>DELETE</strong> — body <code>{"subscription_id"}</code>; <code>subscription_id is required</code>
+  (400), <code>subscription not found</code> (404) for a target the signed agent does
+  not own. Success <code>{"ok": true}</code>. Retirement is a journal record that
+  outranks whatever the last refresh concluded, never a vault deletion.</li>
+</ul>
+<h2 id="account-lifecycle-wisent-user-session">Account lifecycle (Wisent user session)<a class="headerlink" href="#account-lifecycle-wisent-user-session" title="Link to this section">&para;</a></h2>
+<p>The <code>/v1/account/subscriptions</code> family is the same lifecycle for
+authenticated Wisent users: the owner is derived from the verified session,
+never from a caller-supplied account or agent identifier, and <code>POST</code> accepts
+an API key for any supported remote provider except <code>local-openai</code>. A plain
+service bearer is refused (<code>403 forbidden</code>, captured).</p>
+<h2 id="get-stats"><code>GET /stats</code><a class="headerlink" href="#get-stats" title="Link to this section">&para;</a></h2>
+<p>Bearer-protected, no dependency probing. Captured keys: <code>build</code>,
+<code>configuredDirectProviders</code>, <code>dependencyPolicy</code> (<code>{"capabilityBroker":
+"final-use","catalog":"lazy","subscriptions":"lazy"}</code>), <code>limits</code>
+(<code>{"maxOutputTokens":32768,"requestDeadlineSeconds":300}</code>), <code>models[]</code>
+(per-model <code>count</code>, <code>latencyMs</code>, <code>lastLatencyMs</code>, <code>tps</code>, <code>lastTps</code>),
+<code>perfModels</code>, <code>providers[]</code> (per-descriptor <code>id</code>, <code>displayName</code>,
+<code>wireProtocol</code>, <code>configured</code>), plus cumulative <code>total_requests</code>,
+<code>total_failures</code>, <code>total_provider_attempts</code>, <code>total_input_tokens</code>,
+<code>total_output_tokens</code>, and <code>uptimeSeconds</code>. Process telemetry is not durable
+billing evidence.</p>
+<h2 id="admin-surface">Admin surface<a class="headerlink" href="#admin-surface" title="Link to this section">&para;</a></h2>
+<p>The <code>/v1/admin/*</code> family answers only a <code>brama-desktop</code> identity with no
+model allowlist; every other caller gets <code>403 forbidden</code> (captured).
+Responses carry identifiers, usage, and status only; subscription
+credentials remain write-only.</p>
+<ul>
+<li><strong>GET <code>/v1/admin/snapshot</code></strong> — captured keys: <code>schemaVersion</code> (1),
+  <code>automaticRollback</code> (true), <code>boundaries</code>
+  (<code>{"credentials":"skarbiec","releases":"stado","routing":"brama"}</code>),
+  <code>providers[]</code> (as <code>/stats</code>), <code>routes</code>
+  (<code>{"deployments":[],"routes":{},"fallbacks":{}}</code> from the routes file).
+  <code>503 route registry unavailable</code> when the configured file will not read.</li>
+<li><strong>PUT <code>/v1/admin/routes</code></strong> — body exactly
+  <code>{"alias", "primary", "fallbacks"}</code> (an unknown field is refused with the
+  deserializer sentence, captured). Refusals: <code>409 runtime route registry is
+  not configured</code> (captured — no routes file in effect), <code>400 unknown route
+  alias</code>, <code>400 route chain is unsupported, duplicated, or unavailable</code>,
+  <code>409 route update was rejected</code>. Success <code>{"ok": true, "routes": ...}</code>;
+  the write is atomic and validated before rename.</li>
+<li><strong>GET <code>/v1/admin/subscriptions/:agent_id</code></strong> — captured:
+  <code>{"agentId":"&lt;agent&gt;","subscriptions":[]}</code>; rows are the same
+  subscription view as the signed listing.</li>
+<li><strong>POST <code>/v1/admin/subscriptions/:agent_id</code></strong> — same body and refusals as
+  the agent-signed donation, authenticated by the desktop identity instead
+  of the HMAC trio.</li>
+<li><strong>DELETE <code>/v1/admin/subscriptions/:agent_id/:subscription_id</code></strong> — retire;
+  <code>404 subscription not found</code> for an unknown target.</li>
+<li><strong>POST <code>.../probe</code></strong> — the one endpoint in the product that deliberately
+  spends plan quota: one minimal completion against one named subscription,
+  recorded as a <code>probe</code> with source <code>completion</code>, refused with <code>409</code> when
+  the subscription is inside a recorded block, <code>404 subscription not found</code>
+  otherwise absent (captured), and never triggered by any timer. Success
+  <code>{"ok": true, "probe": {...}, "subscription": {...}}</code>.</li>
+<li><strong>GET <code>/v1/admin/subscription-pool</code></strong> — the same report as
+  <code>brama subscriptions list --json</code> (captured empty:
+  <code>{"providers":[]}</code>).</li>
+<li><strong>POST <code>/v1/admin/subscription-pool/refresh</code></strong> — body
+  <code>{"provider", "reason"}</code>; runs the same audited refresh as
+  <code>brama subscription refresh</code> and answers the verdict with status 200
+  (captured: <code>{"attempted":0,"detail":"no usable</code>codex<code>subscription is in
+  this deployment's pool, ...","provider":"codex","result":"failed"}</code>); the
+  verdict is the answer — only the CLI maps <code>failed</code> to a non-zero exit.</li>
+</ul></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

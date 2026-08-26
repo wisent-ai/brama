@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Runbook — Brama Docs</title>
+  <meta name="description" content="Runbook Something at the gateway looks wrong — which command do you run first, and what does its answer mean? Each entry starts from the symptom, quotes the exact sentence the prod">
+  <link rel="canonical" href="https://brama.wisent.com/docs/runbook">
+  <style>
+:root {
+  color-scheme: dark;
+  --bg: #080a0d;
+  --panel: #101319;
+  --panel-2: #151922;
+  --line: #282e3a;
+  --muted: #9ba5b5;
+  --text: #f2f5f9;
+  --accent: #b7ff52;
+  --accent-soft: rgba(183, 255, 82, .12);
+  --code: #111723;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 6rem; }
+body { margin: 0; background: radial-gradient(circle at 75% -10%, rgba(69, 108, 89, .24), transparent 32rem), var(--bg); color: var(--text); line-height: 1.65; }
+a { color: inherit; }
+.topbar { position: sticky; top: 0; z-index: 10; height: 4.25rem; display: flex; align-items: center; justify-content: space-between; padding: 0 2rem; border-bottom: 1px solid rgba(255,255,255,.09); background: rgba(8, 10, 13, .86); backdrop-filter: blur(18px); }
+.brand { display: inline-flex; align-items: center; gap: .65rem; font-size: 1.05rem; text-decoration: none; letter-spacing: -.01em; }
+.brand-mark { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .55rem; background: var(--accent); color: #10140b; font-weight: 900; }
+.brand strong { padding: .15rem .5rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+.topbar nav { display: flex; align-items: center; gap: 1.5rem; }
+.topbar nav a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.topbar nav a:hover { color: var(--text); }
+.layout { display: grid; grid-template-columns: 17.5rem minmax(0, 1fr); max-width: 94rem; min-height: calc(100vh - 4.25rem); margin: 0 auto; }
+aside { border-right: 1px solid var(--line); padding: 2rem 1.5rem 4rem; }
+aside > nav { position: sticky; top: 6.25rem; max-height: calc(100vh - 8rem); overflow: auto; scrollbar-width: thin; }
+.nav-group { margin-bottom: 1.75rem; }
+.nav-group h2 { margin: 0 0 .45rem; color: #737f90; font-size: .69rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.nav-group a { display: block; margin: .08rem 0; padding: .36rem .55rem; border-radius: .4rem; color: var(--muted); font-size: .82rem; line-height: 1.35; text-decoration: none; }
+.nav-group a:hover { color: var(--text); background: var(--panel); }
+.nav-group a.active { color: var(--accent); background: var(--accent-soft); }
+.mobile-nav { display: none; }
+main { width: 100%; min-width: 0; max-width: 65rem; padding: 3.5rem clamp(2rem, 6vw, 6rem) 2rem; }
+.source-note { margin: 0 0 1rem; color: #6f7a89; font: 600 .7rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
+.doc > h1:first-child { margin-top: 0; font-size: clamp(2.35rem, 5vw, 4rem); line-height: 1.04; letter-spacing: -.045em; }
+.doc h2 { margin: 3.25rem 0 1rem; padding-top: .5rem; font-size: 1.7rem; line-height: 1.2; letter-spacing: -.025em; }
+.doc h3 { margin: 2.25rem 0 .75rem; font-size: 1.22rem; line-height: 1.3; }
+.doc h4 { margin: 1.75rem 0 .5rem; font-size: 1rem; }
+.doc p, .doc li { color: #c7ced9; }
+.doc p { margin: 1rem 0; }
+.doc a { color: var(--accent); text-underline-offset: .2em; }
+.doc h1 .headerlink, .doc h2 .headerlink, .doc h3 .headerlink, .doc h4 .headerlink { margin-left: .5rem; color: #4d5765; font-size: .65em; text-decoration: none; opacity: 0; }
+.doc h1:hover .headerlink, .doc h2:hover .headerlink, .doc h3:hover .headerlink, .doc h4:hover .headerlink { opacity: 1; }
+.doc blockquote { margin: 1.5rem 0; padding: .85rem 1.1rem; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+.doc blockquote p { margin: .3rem 0; }
+.doc code { padding: .13rem .35rem; border: 1px solid #273143; border-radius: .35rem; background: var(--code); color: #dce7f7; font: .88em/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.doc pre { margin: 1.4rem 0; padding: 1.1rem 1.2rem; overflow: auto; border: 1px solid var(--line); border-radius: .7rem; background: var(--code); box-shadow: 0 18px 55px rgba(0,0,0,.2); }
+.doc pre code { padding: 0; border: 0; background: transparent; color: #dce7f7; overflow-wrap: normal; }
+.doc table { display: block; width: 100%; margin: 1.5rem 0; overflow-x: auto; border-collapse: collapse; font-size: .87rem; }
+.doc th, .doc td { min-width: 8rem; padding: .65rem .75rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.doc th { background: var(--panel-2); color: var(--text); }
+.doc td { color: #bcc5d2; }
+.doc img { max-width: 100%; height: auto; border-radius: .6rem; }
+.doc hr { margin: 3rem 0; border: 0; border-top: 1px solid var(--line); }
+.doc ul, .doc ol { padding-left: 1.4rem; }
+.doc li + li { margin-top: .35rem; }
+footer { display: flex; justify-content: space-between; margin-top: 5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: #6f7a89; font-size: .78rem; }
+footer a { color: var(--muted); text-decoration: none; }
+.hero { padding: clamp(1rem, 5vw, 4.5rem) 0 4rem; }
+.eyebrow { margin: 0 0 .85rem; color: var(--accent) !important; font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.hero h1 { max-width: 14ch; margin: 0; font-size: clamp(3rem, 7vw, 5.8rem); line-height: .96; letter-spacing: -.06em; }
+.hero > p:not(.eyebrow) { max-width: 48rem; margin: 1.5rem 0 0; color: var(--muted); font-size: 1.12rem; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+.button { display: inline-flex; align-items: center; min-height: 2.8rem; padding: .6rem 1rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--panel); text-decoration: none; }
+.button.primary { border-color: var(--accent); background: var(--accent); color: #11160c; font-weight: 750; }
+.featured, .directory { margin-top: 2.5rem; }
+.card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; }
+.card { min-height: 13rem; padding: 1.3rem; border: 1px solid var(--line); border-radius: .75rem; background: linear-gradient(145deg, rgba(21,25,34,.92), rgba(13,16,21,.92)); text-decoration: none; transition: border-color .16s, transform .16s; }
+.card:hover { transform: translateY(-2px); border-color: #526137; }
+.card span { color: var(--accent); font-size: .68rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.card h2 { margin: .9rem 0 .45rem; font-size: 1.3rem; line-height: 1.2; }
+.card p { margin: 0; color: var(--muted); font-size: .85rem; }
+.directory > h2 { margin: 0 0 1.2rem; font-size: 2.2rem; }
+.directory-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 2.5rem; }
+.directory-grid section { padding-top: 1rem; border-top: 1px solid var(--line); }
+.directory-grid h2 { margin: 0 0 .65rem; font-size: 1rem; }
+.directory-grid ul { margin: 0; padding: 0; list-style: none; }
+.directory-grid li { margin: .35rem 0; }
+.directory-grid a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.directory-grid a:hover { color: var(--accent); }
+@media (max-width: 860px) {
+  .topbar { padding: 0 1rem; }
+  .topbar nav a:not(:last-child) { display: none; }
+  .layout { display: block; }
+  aside { display: none; }
+  .mobile-nav { display: block; margin: 1rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--panel); }
+  .mobile-nav summary { padding: .75rem 1rem; cursor: pointer; color: var(--muted); font-size: .85rem; }
+  .mobile-nav nav { max-height: 70vh; overflow: auto; padding: .5rem 1rem 1rem; }
+  main { max-width: none; padding: 2.5rem 1.25rem 2rem; }
+  .doc > h1:first-child { font-size: clamp(2.1rem, 12vw, 3.3rem); }
+  .card-grid, .directory-grid { grid-template-columns: 1fr; }
+  .hero { padding-top: 1rem; }
+  .hero h1 { font-size: clamp(3rem, 15vw, 4.5rem); }
+}
+@media print {
+  .topbar, aside, .mobile-nav, footer { display: none; }
+  body { background: white; color: black; }
+  .layout { display: block; }
+  main { max-width: none; padding: 0; }
+  .doc p, .doc li { color: #222; }
+}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <details class="mobile-nav"><summary>Browse documentation</summary><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a class="active" aria-current="page" href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></details>
+  <div class="layout">
+    <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a class="active" aria-current="page" href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
+    <main>
+      <p class="source-note">Documentation topic: docs/runbook.md</p>
+      <article class="doc"><h1 id="runbook">Runbook<a class="headerlink" href="#runbook" title="Link to this section">&para;</a></h1>
+<p>Something at the gateway looks wrong — which command do you run first, and
+what does its answer mean? Each entry starts from the symptom, quotes the
+exact sentence the product uses (every string below exists in source or was
+captured from a running 0.2.38 gateway), and names the repair. The error
+vocabulary itself is in <a href="/docs/errors">errors</a>.</p>
+<h2 id="brama-serve-refuses-to-start"><code>brama serve</code> refuses to start<a class="headerlink" href="#brama-serve-refuses-to-start" title="Link to this section">&para;</a></h2>
+<p>The sentence, verbatim (exit 1):</p>
+<pre><code class="language-text">Server error: BRAMA_MODEL_ALIASES is required and is assembled by
+scripts/start-with-skarbiec.sh from the sealed policy directory. Starting the
+binary directly cannot obtain it: launch the gateway through that script, or
+export the variable yourself. Restarting an unlaunched process will not
+repair this.
+</code></pre>
+<p>The refusal names its own repair: managed configuration is generated by the
+launcher, and restarting the same bare invocation cannot change the answer.
+Start through <code>scripts/start-with-skarbiec.sh</code>; a standalone desktop
+deployment instead passes <code>--local-credentials-stdin</code>
+(<a href="/docs/configuration">configuration</a>). Other startup refusals in the same
+class — duplicate client tokens, malformed identities, an alias route with
+<code>*</code> or stray whitespace — also fail the process before it binds; the log
+names the offending entry.</p>
+<h2 id="health-is-ok-but-nothing-works"><code>/health</code> is <code>ok</code> but nothing works<a class="headerlink" href="#health-is-ok-but-nothing-works" title="Link to this section">&para;</a></h2>
+<p>That is <code>/health</code> doing its job, not a contradiction: its body says
+<code>"dependencies": "not_probed"</code>, and it answers <code>ok</code> from a gateway whose
+every credential redemption is being refused. The only readiness evidence is
+<code>/readyz</code> (<a href="/docs/architecture#health-versus-readyz">architecture</a>). Point
+deploy checks and uptime monitors at <code>/readyz</code>; treat a monitor on <code>/health</code>
+as a monitor of the process, nothing more.</p>
+<h2 id="readyz-answers-503"><code>/readyz</code> answers 503<a class="headerlink" href="#readyz-answers-503" title="Link to this section">&para;</a></h2>
+<p><code>reason</code> is one of five sentences (<code>src/core/server.rs:2343-2355</code>), each
+naming a different repair:</p>
+<table>
+<thead>
+<tr>
+<th><code>reason</code></th>
+<th>Meaning</th>
+<th>Check</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>no provider capability is configured</code></td>
+<td>zero direct providers — the gateway can route nothing on its own account</td>
+<td>launcher policy: <code>required_provider_capabilities</code>, <code>BRAMA_PROVIDER_CAPABILITY_IDS</code></td>
+</tr>
+<tr>
+<td><code>a configured provider credential could not be obtained; the authorization chain is broken, not busy</code></td>
+<td>a capability or read grant refused just now</td>
+<td><code>denied[]</code> names the providers; check broker socket, workload registry, proof key (<a href="/docs/concepts/capability">concepts/capability</a>)</td>
+</tr>
+<tr>
+<td><code>an active subscription's credential did not redeem just now, so the next request that needs it will be refused whatever the catalogue lists</code></td>
+<td>a subscription is listed but its credential does not redeem</td>
+<td><code>unredeemable[]</code>, then <code>brama subscriptions list</code> for the refusal sentence</td>
+</tr>
+<tr>
+<td><code>the vault holds a subscription account whose item carries no agent tag: it is unroutable, and no subscription listing can report it</code></td>
+<td>an account lost its <code>brama:agent:</code> tag; the credential still works and nothing can route to it</td>
+<td><code>unroutable_accounts[]</code> names item and coordinate; restore the tag in the vault</td>
+</tr>
+<tr>
+<td><code>every credential was obtained, and at least one active subscription contributes no model: it cannot be routed to</code></td>
+<td>a redeemable account whose provider offers it no discoverable model</td>
+<td><code>unroutable[]</code>; check provider model discovery and the account's plan</td>
+</tr>
+</tbody>
+</table>
+<p>Waiting repairs none of these — every 503 here is an authorization or
+inventory statement, not load.</p>
+<h2 id="a-request-answers-503-credential_unauthorized">A request answers <code>503 credential_unauthorized</code><a class="headerlink" href="#a-request-answers-503-credential_unauthorized" title="Link to this section">&para;</a></h2>
+<p>The dispatch sentence behind it is usually
+<code>direct '&lt;provider&gt;' credential is unavailable</code> — no capability, read grant,
+or standalone credential could produce a secret for that provider at
+final use. It is <code>retryable: false</code> on purpose: waiting does not reach an
+authorization that does not match. Check, in order: <code>/readyz</code> (<code>denied[]</code>),
+the launcher's provisioned trust material (<code>bin/provision-skarbiec-trust</code>
+was run once on this installation), and whether the alias's route names a
+provider this host was ever granted (<code>alias_provider_capability_absent</code> in
+the log at startup: "no provider capability was issued for this route; the
+alias will not serve").</p>
+<h2 id="a-request-answers-429-subscription_unavailable">A request answers <code>429 subscription_unavailable</code><a class="headerlink" href="#a-request-answers-429-subscription_unavailable" title="Link to this section">&para;</a></h2>
+<p>The dispatch sentences, from narrowest to widest
+(<a href="/docs/concepts/entitlement#refusal-sentences">concepts/entitlement</a>):</p>
+<ul>
+<li><code>no active '&lt;provider&gt;' credential for agent</code> — the signed agent owns no
+  eligible credential for the provider the route names.</li>
+<li><code>no active stateless provider models for signed agent</code> — a selector found
+  no candidate at all.</li>
+<li><code>no working subscription model for signed agent</code> — the selector walked
+  its whole bounded candidate list; the body's <code>attempts</code> counts the
+  provider calls actually paid for.</li>
+<li><code>all bounded '&lt;provider&gt;' credentials unavailable for agent</code> — every
+  bounded credential was tried or is inside a recorded block.</li>
+</ul>
+<p>First command: <code>brama subscriptions list</code>. <code>0 of 0 subscription credentials
+are live</code> is the whole diagnosis — sign an account in. Rows present but
+refused carry <code>last_redeem_error</code> in the words of whatever refused
+(credential cause first, then a block still in force, then the newest failed
+check; a lapsed block is deliberately not reported).</p>
+<h2 id="a-subscription-reads-burnt">A subscription reads <code>burnt</code><a class="headerlink" href="#a-subscription-reads-burnt" title="Link to this section">&para;</a></h2>
+<p><code>burnt</code> covers both recorded dead states — a grant the provider disowned and
+a subscription somebody retired — and <code>last_redeem_error</code> says which. A
+definitive provider refusal (<code>invalid_grant</code>, <code>invalid_token</code>, <code>revoked</code>,
+<code>unauthorized_client</code>, or an unexplained 401/403) is recorded as
+<code>credential.state: needs_reauthorization</code> with the provider's own sentence
+as <code>cause</code>, and the credential is left alone until a sign-in replaces it —
+the refresh timer will not resurrect it, and a 30-minute block keeps the
+dispatcher off it. Repair: sign the subscription in again (Desktop or a
+donation), then:</p>
+<pre><code class="language-console">$ brama subscription refresh &lt;provider&gt; --reason &quot;&lt;why&gt;&quot;
+</code></pre>
+<p>Exit 0 with <code>result: refreshed</code> is the proof; <code>result: failed</code> quotes each
+refusal in the provider's own words. A retirement outranks everything: a
+retired subscription is never refreshed.</p>
+<h2 id="subscription-refresh-fails-with-attempted-0"><code>subscription refresh</code> fails with <code>attempted: 0</code><a class="headerlink" href="#subscription-refresh-fails-with-attempted-0" title="Link to this section">&para;</a></h2>
+<pre><code class="language-text">detail: no usable `&lt;provider&gt;` subscription is in this deployment's pool, so
+no credential source is configured to refresh: one has to be signed in and
+stored in the vault before this command has anything to act on
+</code></pre>
+<p>Not a fault in the refresher — the pool is empty for that provider. The same
+sentence answers a provider with no OAuth path. Sign an account in first;
+the walkthrough shows the full sequence
+(<a href="/docs/walkthrough-subscriptions">walkthrough-subscriptions</a>).</p>
+<h2 id="an-account-vanished-from-every-listing-but-keeps-paying">An account vanished from every listing but keeps paying<a class="headerlink" href="#an-account-vanished-from-every-listing-but-keeps-paying" title="Link to this section">&para;</a></h2>
+<p>The tag-loss case: discovery finds an account by its <code>brama:agent:</code> tag, so
+an item that loses it stops existing for every caller and every screen while
+its credential stays valid. Nothing that lists subscriptions can say so —
+the listing is the thing that lost it. The one reporter is <code>/readyz</code>:
+<code>unroutable_accounts[]</code> names the item id, provider, and coordinate
+(items stripped bare are recognised by the <code>provider:&lt;provider&gt;:&lt;id&gt;</code>
+coordinate alone). Repair in the vault: restore <code>brama:subscription</code>,
+<code>brama:agent:&lt;agent&gt;</code>, <code>brama:provider:&lt;provider&gt;</code>, <code>brama:id:&lt;id&gt;</code>.</p>
+<h2 id="requests-from-another-machine-answer-426">Requests from another machine answer 426<a class="headerlink" href="#requests-from-another-machine-answer-426" title="Link to this section">&para;</a></h2>
+<pre><code class="language-json">{&quot;error&quot;:{&quot;code&quot;:&quot;secure_transport_required&quot;,
+ &quot;message&quot;:&quot;HTTPS is required except for direct loopback requests&quot;, ...}}
+</code></pre>
+<p>The transport guard accepts loopback, the gateway's own bound address, peers
+in <code>BRAMA_ENCRYPTED_PEER_IPS</code>, and proxies in <code>BRAMA_TRUSTED_PROXY_IPS</code>
+whose forwarded headers state <code>https</code> — nothing else, and forwarded headers
+from an unlisted peer are never trusted (a forged <code>X-Forwarded-Proto: https</code>
+changes nothing; captured). Repair: front the gateway with the approved TLS
+terminator and list that terminator's peer IP, or call over the mesh hop
+that is already encrypted.</p>
+<h2 id="a-provider-refuses-its-own-credential">A provider refuses its own credential<a class="headerlink" href="#a-provider-refuses-its-own-credential" title="Link to this section">&para;</a></h2>
+<p>A direct route whose provider answers 401 returns
+<code>502 provider_failure</code> with the provider's sentence behind the kind prefix:</p>
+<pre><code class="language-json">{&quot;error&quot;:{&quot;attempts&quot;:1,&quot;code&quot;:&quot;provider_failure&quot;,
+ &quot;message&quot;:&quot;provider_authentication: Incorrect API key provided: ...&quot;, ...}}
+</code></pre>
+<p>Distinguish it from <code>503 credential_unauthorized</code>: the 502 means Skarbiec
+(or the standalone map) produced a credential and the <strong>provider</strong> rejected
+it — the repair is at the provider account, not the authorization chain. A
+provider 429 surfaces as <code>429 provider_rate_limited</code> with
+<code>retryable: true</code>; a recorded block (default 15 minutes, provider-stated
+resets capped at 7 days) then keeps ordering away from that account.</p>
+<h2 id="a-route-update-is-refused">A route update is refused<a class="headerlink" href="#a-route-update-is-refused" title="Link to this section">&para;</a></h2>
+<p><code>PUT /v1/admin/routes</code> refusals, verbatim:</p>
+<ul>
+<li><code>runtime route registry is not configured</code> (<code>409</code>) — no
+  <code>BRAMA_INFERENCE_ROUTES_FILE</code> is in effect; configure it (the launcher
+  seeds one) before editing routes at runtime.</li>
+<li><code>unknown route alias</code> / <code>route chain is unsupported, duplicated, or
+  unavailable</code> (<code>400</code>) — the alias or chain fails validation; the routes
+  file guards in <a href="/docs/concepts/alias#dynamic-routes-the-routes-file">concepts/alias</a>
+  list the file-level sentences (<code>inference routes must be a regular
+  non-symlink file</code>, <code>inference routes must not be accessible by group or
+  other</code>, <code>inference fallback route '&lt;alias&gt;' has no primary destination</code>,
+  <code>inference route '&lt;alias&gt;' repeats destination '&lt;destination&gt;'</code>,
+  <code>inference deployment '&lt;name&gt;' has no safe local or Tailscale endpoint</code>).</li>
+</ul>
+<p>The file is re-read per request, so a repaired file needs no restart.</p>
+<h2 id="the-ledger-looks-wrong-not-the-pool">The ledger looks wrong, not the pool<a class="headerlink" href="#the-ledger-looks-wrong-not-the-pool" title="Link to this section">&para;</a></h2>
+<p>An empty <code>limits</code> array in a listing is one of four states told apart by the
+newest check — a refused credential, a subscription nothing has used, a
+provider that publishes no plan state, or windows that aged out
+(<code>BRAMA_PLAN_USAGE_RETENTION_SECS</code>, default 86400). Only the third may be
+read as "no plan window"; none of them is a zero. A reading marked
+<code>stale: true</code> is a served last-good value whose provider report has been
+failing — information, not health
+(<a href="/docs/concepts/subscription#the-usage-ledger">concepts/subscription</a>).</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

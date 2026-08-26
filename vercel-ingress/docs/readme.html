@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brama: Keep All Your Models Accessible Through One Endpoint — Brama Docs</title>
+  <meta name="description" content="&lt;!-- wisent-banner:start -- &lt;p align=&quot;center&quot; &lt;img src=&quot;assets/readme-banner.webp&quot; alt=&quot;brama by Wisent&quot; width=&quot;100%&quot; &lt;/p &lt;!-- wisent-banner:end -- &lt;!-- wisent-readme-signals:start">
+  <link rel="canonical" href="https://brama.wisent.com/docs/readme">
+  <style>
+:root {
+  color-scheme: dark;
+  --bg: #080a0d;
+  --panel: #101319;
+  --panel-2: #151922;
+  --line: #282e3a;
+  --muted: #9ba5b5;
+  --text: #f2f5f9;
+  --accent: #b7ff52;
+  --accent-soft: rgba(183, 255, 82, .12);
+  --code: #111723;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 6rem; }
+body { margin: 0; background: radial-gradient(circle at 75% -10%, rgba(69, 108, 89, .24), transparent 32rem), var(--bg); color: var(--text); line-height: 1.65; }
+a { color: inherit; }
+.topbar { position: sticky; top: 0; z-index: 10; height: 4.25rem; display: flex; align-items: center; justify-content: space-between; padding: 0 2rem; border-bottom: 1px solid rgba(255,255,255,.09); background: rgba(8, 10, 13, .86); backdrop-filter: blur(18px); }
+.brand { display: inline-flex; align-items: center; gap: .65rem; font-size: 1.05rem; text-decoration: none; letter-spacing: -.01em; }
+.brand-mark { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .55rem; background: var(--accent); color: #10140b; font-weight: 900; }
+.brand strong { padding: .15rem .5rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+.topbar nav { display: flex; align-items: center; gap: 1.5rem; }
+.topbar nav a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.topbar nav a:hover { color: var(--text); }
+.layout { display: grid; grid-template-columns: 17.5rem minmax(0, 1fr); max-width: 94rem; min-height: calc(100vh - 4.25rem); margin: 0 auto; }
+aside { border-right: 1px solid var(--line); padding: 2rem 1.5rem 4rem; }
+aside > nav { position: sticky; top: 6.25rem; max-height: calc(100vh - 8rem); overflow: auto; scrollbar-width: thin; }
+.nav-group { margin-bottom: 1.75rem; }
+.nav-group h2 { margin: 0 0 .45rem; color: #737f90; font-size: .69rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.nav-group a { display: block; margin: .08rem 0; padding: .36rem .55rem; border-radius: .4rem; color: var(--muted); font-size: .82rem; line-height: 1.35; text-decoration: none; }
+.nav-group a:hover { color: var(--text); background: var(--panel); }
+.nav-group a.active { color: var(--accent); background: var(--accent-soft); }
+.mobile-nav { display: none; }
+main { width: 100%; min-width: 0; max-width: 65rem; padding: 3.5rem clamp(2rem, 6vw, 6rem) 2rem; }
+.source-note { margin: 0 0 1rem; color: #6f7a89; font: 600 .7rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
+.doc > h1:first-child { margin-top: 0; font-size: clamp(2.35rem, 5vw, 4rem); line-height: 1.04; letter-spacing: -.045em; }
+.doc h2 { margin: 3.25rem 0 1rem; padding-top: .5rem; font-size: 1.7rem; line-height: 1.2; letter-spacing: -.025em; }
+.doc h3 { margin: 2.25rem 0 .75rem; font-size: 1.22rem; line-height: 1.3; }
+.doc h4 { margin: 1.75rem 0 .5rem; font-size: 1rem; }
+.doc p, .doc li { color: #c7ced9; }
+.doc p { margin: 1rem 0; }
+.doc a { color: var(--accent); text-underline-offset: .2em; }
+.doc h1 .headerlink, .doc h2 .headerlink, .doc h3 .headerlink, .doc h4 .headerlink { margin-left: .5rem; color: #4d5765; font-size: .65em; text-decoration: none; opacity: 0; }
+.doc h1:hover .headerlink, .doc h2:hover .headerlink, .doc h3:hover .headerlink, .doc h4:hover .headerlink { opacity: 1; }
+.doc blockquote { margin: 1.5rem 0; padding: .85rem 1.1rem; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+.doc blockquote p { margin: .3rem 0; }
+.doc code { padding: .13rem .35rem; border: 1px solid #273143; border-radius: .35rem; background: var(--code); color: #dce7f7; font: .88em/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.doc pre { margin: 1.4rem 0; padding: 1.1rem 1.2rem; overflow: auto; border: 1px solid var(--line); border-radius: .7rem; background: var(--code); box-shadow: 0 18px 55px rgba(0,0,0,.2); }
+.doc pre code { padding: 0; border: 0; background: transparent; color: #dce7f7; overflow-wrap: normal; }
+.doc table { display: block; width: 100%; margin: 1.5rem 0; overflow-x: auto; border-collapse: collapse; font-size: .87rem; }
+.doc th, .doc td { min-width: 8rem; padding: .65rem .75rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.doc th { background: var(--panel-2); color: var(--text); }
+.doc td { color: #bcc5d2; }
+.doc img { max-width: 100%; height: auto; border-radius: .6rem; }
+.doc hr { margin: 3rem 0; border: 0; border-top: 1px solid var(--line); }
+.doc ul, .doc ol { padding-left: 1.4rem; }
+.doc li + li { margin-top: .35rem; }
+footer { display: flex; justify-content: space-between; margin-top: 5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: #6f7a89; font-size: .78rem; }
+footer a { color: var(--muted); text-decoration: none; }
+.hero { padding: clamp(1rem, 5vw, 4.5rem) 0 4rem; }
+.eyebrow { margin: 0 0 .85rem; color: var(--accent) !important; font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.hero h1 { max-width: 14ch; margin: 0; font-size: clamp(3rem, 7vw, 5.8rem); line-height: .96; letter-spacing: -.06em; }
+.hero > p:not(.eyebrow) { max-width: 48rem; margin: 1.5rem 0 0; color: var(--muted); font-size: 1.12rem; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+.button { display: inline-flex; align-items: center; min-height: 2.8rem; padding: .6rem 1rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--panel); text-decoration: none; }
+.button.primary { border-color: var(--accent); background: var(--accent); color: #11160c; font-weight: 750; }
+.featured, .directory { margin-top: 2.5rem; }
+.card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; }
+.card { min-height: 13rem; padding: 1.3rem; border: 1px solid var(--line); border-radius: .75rem; background: linear-gradient(145deg, rgba(21,25,34,.92), rgba(13,16,21,.92)); text-decoration: none; transition: border-color .16s, transform .16s; }
+.card:hover { transform: translateY(-2px); border-color: #526137; }
+.card span { color: var(--accent); font-size: .68rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.card h2 { margin: .9rem 0 .45rem; font-size: 1.3rem; line-height: 1.2; }
+.card p { margin: 0; color: var(--muted); font-size: .85rem; }
+.directory > h2 { margin: 0 0 1.2rem; font-size: 2.2rem; }
+.directory-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 2.5rem; }
+.directory-grid section { padding-top: 1rem; border-top: 1px solid var(--line); }
+.directory-grid h2 { margin: 0 0 .65rem; font-size: 1rem; }
+.directory-grid ul { margin: 0; padding: 0; list-style: none; }
+.directory-grid li { margin: .35rem 0; }
+.directory-grid a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.directory-grid a:hover { color: var(--accent); }
+@media (max-width: 860px) {
+  .topbar { padding: 0 1rem; }
+  .topbar nav a:not(:last-child) { display: none; }
+  .layout { display: block; }
+  aside { display: none; }
+  .mobile-nav { display: block; margin: 1rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--panel); }
+  .mobile-nav summary { padding: .75rem 1rem; cursor: pointer; color: var(--muted); font-size: .85rem; }
+  .mobile-nav nav { max-height: 70vh; overflow: auto; padding: .5rem 1rem 1rem; }
+  main { max-width: none; padding: 2.5rem 1.25rem 2rem; }
+  .doc > h1:first-child { font-size: clamp(2.1rem, 12vw, 3.3rem); }
+  .card-grid, .directory-grid { grid-template-columns: 1fr; }
+  .hero { padding-top: 1rem; }
+  .hero h1 { font-size: clamp(3rem, 15vw, 4.5rem); }
+}
+@media print {
+  .topbar, aside, .mobile-nav, footer { display: none; }
+  body { background: white; color: black; }
+  .layout { display: block; }
+  main { max-width: none; padding: 0; }
+  .doc p, .doc li { color: #222; }
+}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <details class="mobile-nav"><summary>Browse documentation</summary><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a class="active" aria-current="page" href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></details>
+  <div class="layout">
+    <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a class="active" aria-current="page" href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
+    <main>
+      <p class="source-note">Documentation topic: README.md</p>
+      <article class="doc"><!-- wisent-banner:start -->
+<p align="center">
+  <img src="https://raw.githubusercontent.com/wisent-ai/brama/main/assets/readme-banner.webp" alt="brama by Wisent" width="100%">
+</p>
+<!-- wisent-banner:end -->
+
+<!-- wisent-readme-signals:start -->
+<p><a href="https://github.com/wisent-ai/brama"><img alt="Source" src="https://img.shields.io/badge/GitHub-Source-181717?logo=github"></a> <a href="https://github.com/wisent-ai/brama/issues"><img alt="Issues" src="https://img.shields.io/badge/GitHub-Issues-181717?logo=github"></a> <a href="https://wisent.com"><img alt="Wisent" src="https://img.shields.io/badge/Wisent-Website-0B0B0B"></a> <a href="https://discord.gg/qRjpkthq54"><img alt="Discord" src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&amp;logoColor=white"></a> <a href="https://www.linkedin.com/company/wisent-ai/"><img alt="LinkedIn" src="https://img.shields.io/badge/LinkedIn-Follow-0A66C2?logo=linkedin&amp;logoColor=white"></a> <a href="https://x.com/wisentai"><img alt="X" src="https://img.shields.io/badge/X-Follow-000000?logo=x&amp;logoColor=white"></a> <a href="https://calendly.com/lbartoszcze"><img alt="Enterprise" src="https://img.shields.io/badge/Enterprise-Book%20a%20call-0B0B0B?logo=calendly"></a></p>
+<!-- wisent-readme-signals:end -->
+
+<h1 id="brama-keep-all-your-models-accessible-through-one-endpoint">Brama: Keep All Your Models Accessible Through One Endpoint<a class="headerlink" href="#brama-keep-all-your-models-accessible-through-one-endpoint" title="Link to this section">&para;</a></h1>
+<p>All Models and Providers United in One API.</p>
+<p>Brama is the simplicity your stack needs. One API, one identity, uniting every
+model you own in one API. When you switch from Claude-Cthulu to GPT-Bazillion or
+cancel your subscription, you won’t have to update it everywhere. Define
+heuristics such as best, fast, or cheap to call this endpoint with intelligent
+routing. And every token is attributed, so you can audit where your subscription
+and API money is going. Host it anywhere — even on remote devices.</p>
+<p>Canonical repository: <a href="https://github.com/wisent-ai/brama"><code>wisent-ai/brama</code></a>.
+The product, Rust crate, binary, CLI, MCP server, and service are named <code>brama</code>.</p>
+<h2 id="problem-and-intended-users">Problem and intended users<a class="headerlink" href="#problem-and-intended-users" title="Link to this section">&para;</a></h2>
+<p>Wisent services need models from several providers without copying provider
+credentials into every caller, coupling callers to provider wire formats, or
+silently charging the wrong account. Direct provider integrations also duplicate
+model discovery, OAuth refresh, retry, error handling, and access policy.</p>
+<p>Brama serves four audiences:
+- <strong>Desktop users</strong> run a private Brama process on their own computer and add
+  their own provider credentials or subscriptions.
+- <strong>Wisent service developers</strong> use one OpenAI-compatible API and stable logical
+  aliases instead of provider credentials and provider-specific clients.
+- <strong>Jeden runtimes</strong> use an agent-bound HMAC identity to discover and spend only
+  subscriptions delegated to that exact agent.
+- <strong>Operators</strong> publish immutable runtimes, grant finite Skarbiec capabilities,
+  configure aliases and client allowlists, and diagnose routing without exposing
+  secret material.</p>
+<p>Brama is preferable to direct integrations when the required outcome is one
+least-privilege enforcement point with explicit billing ownership, bounded
+provider attempts, normalized errors, and auditable routing decisions.</p>
+<h2 id="product-boundaries">Product boundaries<a class="headerlink" href="#product-boundaries" title="Link to this section">&para;</a></h2>
+<h3 id="included">Included<a class="headerlink" href="#included" title="Link to this section">&para;</a></h3>
+<ul>
+<li>OpenAI-compatible chat completions, embeddings, moderations, and model catalog.</li>
+<li>Native Anthropic Messages and OpenAI Responses ingress on the same routing
+  decision, so a caller that speaks one of those two first-party formats needs
+  no shim in front of Brama.</li>
+<li>Server-sent event streaming on all three chat formats, with every retry
+  bounded to the time before the first caller byte.</li>
+<li>Canonical <code>provider/model</code> routing and deployment-owned logical aliases,
+  including <code>-best</code> for the strongest operator-approved subscription route.</li>
+<li>Agent-scoped selectors: <code>any</code>, <code>any-vision-capable</code>, and <code>task:&lt;task-name&gt;</code>.</li>
+<li>Direct provider capabilities owned by Brama and subscription capabilities
+  delegated to one agent.</li>
+<li>Final-use secret redemption through the local Skarbiec capability socket in
+  managed deployments, or a zeroizing in-memory credential map in standalone
+  desktop deployments.</li>
+<li>Bounded credential rotation for authentication, quota, and rate-limit failures.</li>
+<li>OAuth refresh for Claude Code, Codex, and Kimi subscription credentials.</li>
+<li>An append-only operational journal for retirement and task-quality evidence.</li>
+<li>Secret-free build identity, health, statistics, hardware detection, and a
+  read-only stdio MCP surface.</li>
+</ul>
+<h3 id="explicit-non-goals">Explicit non-goals<a class="headerlink" href="#explicit-non-goals" title="Link to this section">&para;</a></h3>
+<ul>
+<li>Running Claude Code, Codex, Kimi Code, OpenCode, or any other agent runtime.
+  Jeden is the agent runtime; Brama performs provider HTTP requests only.</li>
+<li>Starting or supervising a local inference engine. The deployment owner controls the
+  digest-pinned vLLM lifecycle; Brama reads its owner-only route snapshot and performs
+  authenticated OpenAI-compatible requests over the target's Tailscale address.</li>
+<li>Acting as a general secret store, identity provider, billing ledger, or system
+  of record for provider accounts.</li>
+<li>Inferring task intent from prompt text. <code>task:</code> uses previously recorded,
+  explicitly named quality evidence only.</li>
+<li>Silent fallback across products, agents, provider accounts, credentials, or
+  storage authorities.</li>
+<li>Owning production DNS, ingress, host registration, orchestration, or Skarbiec grants.</li>
+<li>Continuing a cut generation. Once a stream has committed, a provider failure
+  ends that stream; Brama never resumes it on another credential, because a
+  second attempt would double both the bill and the text.</li>
+</ul>
+<h3 id="supported-environments-and-current-capability">Supported environments and current capability<a class="headerlink" href="#supported-environments-and-current-capability" title="Link to this section">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Environment</th>
+<th>Current state</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>brama detect</code> and read-only MCP detection</td>
+<td>macOS or Linux</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>OpenAI-compatible HTTP gateway</td>
+<td>Linux service host; authenticated loopback is also supported</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Direct API-provider routing</td>
+<td>Provider capability configured in Skarbiec</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Agent subscription routing</td>
+<td>Jeden HMAC identity plus delegated capability</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Claude Code donation endpoint</td>
+<td>Authorized agent and entitlements router</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Deployment-managed local inference routing</td>
+<td>Linux GPU target over Tailscale</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Outbound response streaming</td>
+<td>Chat completions, Anthropic Messages, OpenAI Responses</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Immutable public release</td>
+<td>Canonical Stado channels for <code>linux-amd64</code> and <code>darwin-arm64</code></td>
+<td>Implemented; <code>released-surface.json</code> names the newest recorded release</td>
+</tr>
+<tr>
+<td>Per-installation Skarbiec trust material</td>
+<td>Operator-managed host</td>
+<td>Implemented; <code>bin/provision-skarbiec-trust</code> generates it and the launcher refuses to start without it</td>
+</tr>
+<tr>
+<td>Declared 1.0 contract stability</td>
+<td>—</td>
+<td>Not yet declared</td>
+</tr>
+</tbody>
+</table>
+<p>The current-state column is authoritative. Unavailable capability must not be
+advertised by the API, MCP server, examples, or release notes.</p>
+<h2 id="core-use-cases">Core use cases<a class="headerlink" href="#core-use-cases" title="Link to this section">&para;</a></h2>
+<h3 id="call-a-deployment-owned-model-alias">Call a deployment-owned model alias<a class="headerlink" href="#call-a-deployment-owned-model-alias" title="Link to this section">&para;</a></h3>
+<ul>
+<li><strong>Actor:</strong> an authenticated Wisent service.</li>
+<li><strong>Initial state:</strong> the service has its dedicated bearer and the alias maps to a
+  configured direct-provider route, optionally followed by ordered fallback
+  routes.</li>
+<li><strong>Outcome:</strong> Brama validates transport, identity, allowlist, and request limits;
+  invokes the primary, then each fallback only after a failed attempt, and
+  returns the first normalized success or the final normalized failure.</li>
+<li><strong>Safety boundary:</strong> no agent subscription is discovered or charged; every
+  fallback names an explicit provider capability.</li>
+</ul>
+<h3 id="use-an-exact-agent-subscription">Use an exact agent subscription<a class="headerlink" href="#use-an-exact-agent-subscription" title="Link to this section">&para;</a></h3>
+<ul>
+<li><strong>Actor:</strong> a Jeden runtime with a bearer bound to its <code>agent_id</code>.</li>
+<li><strong>Initial state:</strong> the agent signs the exact request body and owns an active
+  delegated provider capability.</li>
+<li><strong>Outcome:</strong> Brama redeems the selected credential at final use and returns the
+  normalized provider result.</li>
+<li><strong>Safety boundary:</strong> <code>billingTarget</code> must name the same provider and an active
+  subscription belonging to the signed agent.</li>
+</ul>
+<h3 id="select-an-available-or-task-ranked-model">Select an available or task-ranked model<a class="headerlink" href="#select-an-available-or-task-ranked-model" title="Link to this section">&para;</a></h3>
+<ul>
+<li><strong>Actor:</strong> an authenticated Jeden runtime.</li>
+<li><strong>Initial state:</strong> the agent has active subscriptions; <code>task:</code> additionally
+  requires persisted quality observations for the named task.</li>
+<li><strong>Outcome:</strong> Brama chooses eligible candidates, applies the documented bounded
+  attempt policy, and stops at the first successful provider result.</li>
+<li><strong>Cost boundary:</strong> selectors may invoke more than one provider attempt; limits
+  are defined in <a href="/docs/core"><code>CORE.md</code></a>. They never retry without a finite bound.</li>
+</ul>
+<h3 id="operate-and-recover-the-gateway">Operate and recover the gateway<a class="headerlink" href="#operate-and-recover-the-gateway" title="Link to this section">&para;</a></h3>
+<ul>
+<li><strong>Actor:</strong> a Brama operator.</li>
+<li><strong>Initial state:</strong> an immutable runtime and its scoped Skarbiec grants are
+  available on the operator-managed Linux host.</li>
+<li><strong>Outcome:</strong> health and version output identify the build; structured routing
+  logs and protected stats explain bounded decisions without secret material.</li>
+<li><strong>Recovery boundary:</strong> rollback restores one immutable runtime coordinate and
+  compatible non-secret journal state as described in <a href="/docs/release"><code>RELEASE.md</code></a>.</li>
+</ul>
+<h2 id="how-brama-works">How Brama works<a class="headerlink" href="#how-brama-works" title="Link to this section">&para;</a></h2>
+<pre><code class="language-text">Wisent service / Jeden
+        │ HTTPS or authenticated loopback
+        │ dedicated bearer
+        │ optional exact-body agent HMAC
+        ▼
+     Axum ingress ── client binding + model allowlist + request limits
+        │
+        ├── logical alias ──────────────── direct provider capability
+        ├── canonical provider/model ──── direct or agent subscription
+        └── any / vision / task ───────── bounded candidate selection
+                                                │
+                                                ▼
+                            entitlements-router metadata discovery
+                                                │
+                                                ▼
+                         Skarbiec final-use capability redemption
+                                                │
+                                                ▼
+                              provider protocol adapter + timeout
+                                                │
+                                                ▼
+                         normalized response, error, metrics, journal
+</code></pre>
+<p>Skarbiec is authoritative for secret capability redemption. The entitlements
+router is authoritative for live subscription resources. <code>-best</code> is an explicit
+deployment alias for <code>codex/gpt-5.3-codex-spark</code>; a caller still needs both an
+allowlisted bearer and the HMAC identity that owns the eligible subscription.
+It does not infer quality from prompt text or unlock a direct provider
+credential. Brama's journal stores only retirement markers and task-quality
+observations; provider credentials are forbidden. Public model metadata is read
+from models.dev and is never credential authority.</p>
+<h2 id="quick-start">Quick start<a class="headerlink" href="#quick-start" title="Link to this section">&para;</a></h2>
+<p>The normal path is the newest published release. <code>brama detect</code> is the safe first
+command either way: it reads local hardware, performs no provider request, reads
+no credential, creates no Brama state, and incurs no model cost.</p>
+<p>Install the archive for your platform and verify its published checksum before
+extracting it:</p>
+<pre><code class="language-bash"># List published releases and choose one. There is no `latest` production
+# contract, so the version is selected deliberately, never resolved for you.
+curl --fail --silent --proto '=https' --tlsv1.2 \
+  https://api.github.com/repos/wisent-ai/brama/releases | grep '&quot;tag_name&quot;'
+
+version=&lt;chosen SemVer, without the v prefix&gt;
+platform=darwin-arm64   # or linux-amd64
+base=&quot;https://github.com/wisent-ai/brama/releases/download/v${version}&quot;
+curl --fail --location --proto '=https' --tlsv1.2 --remote-name-all \
+  &quot;${base}/brama-v${version}-${platform}.tar.gz&quot; \
+  &quot;${base}/brama-v${version}-${platform}.tar.gz.sha256&quot;
+shasum -a 256 --check &quot;brama-v${version}-${platform}.tar.gz.sha256&quot;
+tar -xzf &quot;brama-v${version}-${platform}.tar.gz&quot;
+./bin/brama detect
+</code></pre>
+<p>Serving traffic takes more than the archive. Provision this installation's trust
+material once with <code>bin/provision-skarbiec-trust</code> — the archive ships no signing
+key and the launcher refuses to start until that material exists — then read
+<a href="/docs/onboarding"><code>ONBOARDING.md</code></a> before the first authenticated request.</p>
+<p>Maintainers working on unreleased source run the same command from a checkout,
+which needs Git and the Rust toolchain required by <code>Cargo.lock</code> (the production
+build uses the pinned builder in <code>Dockerfile</code>):</p>
+<pre><code class="language-bash">git clone https://github.com/wisent-ai/brama.git brama
+cd brama
+cargo run --locked -- detect
+</code></pre>
+<p>Expected output contains these fields with host-specific values:</p>
+<pre><code class="language-text">GPU Type: ...
+VRAM: ... GB
+RAM: ... GB
+CPU Cores: ...
+Recommended model: ...
+Recommended backend: ...
+</code></pre>
+<p>Neither command starts a service. The checkout path may leave build output under
+<code>target/</code>; it is a local build cache, not product state. Continue with
+<a href="/docs/onboarding"><code>ONBOARDING.md</code></a> for the authenticated loopback and production
+operator paths. Runnable, risk-labeled workflows are indexed in
+<a href="/docs/examples"><code>examples/</code></a>.</p>
+<h2 id="primary-interfaces">Primary interfaces<a class="headerlink" href="#primary-interfaces" title="Link to this section">&para;</a></h2>
+<ul>
+<li><strong>HTTP inference:</strong> <code>POST /v1/chat/completions</code>, <code>/v1/messages</code>,
+  <code>/v1/responses</code>, <code>/v1/embeddings</code>, and <code>/v1/moderations</code> are the canonical
+  model-execution interfaces. The three chat formats share one routing
+  decision, one identity contract, and one attempt budget; they differ only in
+  the shape of the request and the answer.</li>
+<li><strong>Streaming:</strong> any of the three chat formats streams when the request asks
+  for it -- <code>"stream": true</code> on chat completions and Anthropic Messages,
+  <code>"stream": true</code> on Responses. The response is <code>text/event-stream</code> in the
+  caller's own dialect: <code>chat.completion.chunk</code> frames closed by
+  <code>data: [DONE]</code>, Anthropic <code>message_start</code>/<code>content_block_*</code>/<code>message_stop</code>
+  events, or <code>response.*</code> events closed by <code>response.completed</code>. A stream that
+  ends without its terminal event is a generation that was cut after it
+  committed; the caller holds an incomplete answer and Brama has already
+  stopped. Rotation across models and credentials happens only before the
+  first byte, so a committed stream is never silently re-run.</li>
+<li><strong>Account API keys and subscriptions:</strong> authenticated Wisent users use
+  <code>GET|POST /v1/account/subscriptions</code> and
+  <code>DELETE /v1/account/subscriptions/:subscription_id</code>. Brama derives the owner
+  from the verified Wisent session; the caller never supplies an account or
+  agent identifier. <code>POST</code> accepts an API key for any supported remote provider,
+  stores it through Skarbiec without returning it, and makes that account's
+  canonical <code>provider/model</code> routes available for buffered and streamed calls.</li>
+<li><strong>HTTP discovery:</strong> <code>GET /v1/models</code>; account discovery combines public
+  catalog metadata with models executable by that account's stored keys, while
+  signed agent discovery includes agent-owned subscriptions.</li>
+<li><strong>Subscription lifecycle:</strong> <code>GET</code>, <code>POST</code>, and <code>DELETE</code>
+  <code>/v1/subscriptions/:agent_id</code>; always bearer- and HMAC-protected. A <code>GET</code>
+  returns, per subscription, the plan windows the provider itself reported
+  (<code>limits</code>: <code>used_fraction</code>, <code>window_label</code>, <code>resets_at_ms</code>, and the
+  <code>recorded_at_ms</code> the reading was taken at), what Brama measured (<code>measured</code>:
+  requests, failures, input and output tokens, first and last use), any
+  rate-limit <code>block</code> in force, when the record last changed
+  (<code>observed_at_ms</code>), where the newest window came from and whether it is still
+  current (<code>usage_source</code>: <code>provider</code>, <code>traffic</code> or <code>probe</code>, and <code>stale</code>), the
+  newest proactive check (<code>probe</code>: <code>attempted_at_ms</code>, <code>ok</code>, <code>detail</code> when there
+  is something to explain, and <code>source</code> -- <code>usage_report</code> or <code>completion</code>), and
+  where the credential itself stands (<code>credential</code>: <code>state</code> -- <code>active</code>,
+  <code>needs_reauthorization</code> or <code>disabled</code> -- with <code>cause</code>, <code>recorded_at_ms</code>,
+  <code>expires_at_ms</code> and <code>refreshed_at_ms</code>; <code>null</code> while nothing has been recorded
+  about the grant). <code>credential.state</code> is what separates a subscription that is
+  quiet from one whose sign-in is overdue, and <code>cause</code> is the provider's own
+  sentence for the refusal.</li>
+<li><strong>How fresh a plan window is:</strong> <code>usage_source</code> names which statement the
+  newest window is -- the provider's own usage report, the headers of real
+  traffic, or an operator's probe -- and is <code>null</code> when there is no window to
+  attribute. <code>stale</code> is true once the newest reading has aged past the freshness
+  window (<code>BRAMA_PLAN_USAGE_TTL_SECS</code>, default 300). A stale reading is still
+  served, because a number that says when it was taken is information and an
+  empty plan is not; a reading older than the retention window
+  (<code>BRAMA_PLAN_USAGE_RETENTION_SECS</code>, default 86400) stops being served, because
+  a fraction of a five-hour window that has since reset several times describes
+  nothing.</li>
+<li><strong>What an empty <code>limits</code> array means:</strong> one of four states, and the newest
+  check is what tells them apart. Windows present: render them, aged by the
+  newest <code>recorded_at_ms</code>, and say "as of" only when <code>stale</code> is false. Empty with
+  <code>probe.ok</code> false: the credential or the provider refused, and <code>probe.detail</code> is
+  its own sentence. Empty with no <code>probe</code> and nothing measured: nothing has ever
+  gone through this subscription. Empty with <code>probe.ok</code> true: the provider
+  genuinely publishes no plan state, and <code>probe.detail</code> says so when the provider
+  publishes no usage report at all. Only the last of those may be shown as "no
+  plan window", and none of them is a zero.</li>
+<li><strong>Operations:</strong> public <code>GET /health</code> and <code>GET /readyz</code>; protected <code>GET /stats</code>.
+  <code>/health</code> is liveness only and says so in its body (<code>dependencies:
+  not_probed</code>): it answers <code>ok</code> from a gateway whose every credential
+  redemption is being refused. <code>/readyz</code> is the one that answers whether the
+  product works: it redeems one capability per configured provider and returns
+  <code>503</code> naming the providers that failed, with no secret in the body. Deploy
+  checks and uptime monitors should read <code>/readyz</code>; <code>/health</code> only proves the
+  process is running.</li>
+<li><strong>Error contract:</strong> a refused redemption is <code>503 authorization_error</code> with
+  code <code>credential_unauthorized</code> and <code>retryable: false</code>, never a <code>429
+  capacity_error</code>. Waiting does not repair an authorization id that does not
+  match, and classifying it as capacity sends the caller into retries and the
+  operator into the subscription catalogue.</li>
+<li><strong>Desktop control plane:</strong> <code>brama-desktop</code> alone may call
+  <code>GET /v1/admin/snapshot</code>, <code>PUT /v1/admin/routes</code>, the <code>GET</code>, <code>POST</code>, and
+  <code>DELETE</code> <code>/v1/admin/subscriptions/:agent_id</code> family, and
+  <code>POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe</code>, which is the
+  only endpoint in the product that deliberately spends plan quota. These
+  endpoints return identifiers, usage and status only; subscription credentials
+  remain write-only.</li>
+<li><strong>CLI:</strong> <code>serve</code>, <code>version</code>, <code>detect</code>, <code>test</code>, <code>subscriptions list</code>,
+  <code>subscription refresh</code>, <code>collect-task-quality</code>, and <code>mcp</code>. Billable commands
+  require an explicit cost acknowledgement, and commands that mutate state
+  require an explicit <code>--reason</code>.</li>
+<li><strong>MCP:</strong> read-only stdio JSON-RPC exposing <code>brama_detect</code> only. Model execution,
+  credential discovery, collection, and mutation are deliberately excluded.</li>
+</ul>
+<p>The complete state, error, retry, authorization, and resource contract is in
+<a href="/docs/core"><code>CORE.md</code></a>. Provider capability and lifecycle contracts are in
+<a href="/docs/integrations"><code>INTEGRATIONS.md</code></a>.</p>
+<h2 id="reading-and-repairing-the-subscription-pool">Reading and repairing the subscription pool<a class="headerlink" href="#reading-and-repairing-the-subscription-pool" title="Link to this section">&para;</a></h2>
+<p>Every <code>best</code>-aliased call is paid for by a subscription credential, so an empty
+pool stops browser automation across the company. It did: both codex grants were
+burnt at the same time, every call answered <code>429 subscription_unavailable</code>, and
+the state that explained it -- <code>needs_reauthorization</code> with the provider's own
+sentence beside it -- was reachable only by grepping <code>brama-always-on.err</code> for
+the code and reading timestamps by hand. Two commands report that pool and repair
+it.</p>
+<h3 id="brama-subscriptions-list"><code>brama subscriptions list</code><a class="headerlink" href="#brama-subscriptions-list" title="Link to this section">&para;</a></h3>
+<p>Read-only. It contacts no provider, redeems no capability and writes nothing: it
+joins the deployment's subscription listing to the usage ledger and states what
+is already recorded, so it is safe to run against a gateway that is serving
+traffic.</p>
+<pre><code class="language-bash">brama subscriptions list --json
+</code></pre>
+<pre><code class="language-json">{
+  &quot;providers&quot;: [
+    {
+      &quot;provider&quot;: &quot;codex&quot;,
+      &quot;subscription_id&quot;: &quot;brama-sub-wisent-app-codex-primary&quot;,
+      &quot;state&quot;: &quot;burnt&quot;,
+      &quot;expires_at&quot;: null,
+      &quot;last_redeem_error&quot;: &quot;invalid_grant: refresh token is no longer accepted&quot;
+    }
+  ]
+}
+</code></pre>
+<p><code>state</code> is one of four words. <code>live</code>: nothing has refused this grant and its
+expiry, if it states one at all, is still ahead. <code>expired</code>: the recorded expiry
+has passed. <code>burnt</code>: the provider disowned the grant, or somebody retired the
+subscription, and only a sign-in returns it to the pool. <code>unknown</code>: nothing has
+ever been recorded about this grant, which is not the same statement as a working
+one. <code>expires_at</code> is the provider's own instant, and <code>null</code> for an API key that
+states none. <code>last_redeem_error</code> is the refusal standing in the way, in the words
+of whatever refused it: the credential's own cause first, then a rate-limit block
+still in force, then the newest failed check. A lapsed block is deliberately not
+reported, because a stale refusal printed beside a <code>live</code> grant is what sends an
+operator looking for a sign-in nothing needs.</p>
+<p>Without <code>--json</code> the same report is printed as lines, led by how many credentials
+are live -- which is the question that gets the command run.</p>
+<h3 id="brama-subscription-refresh-provider-reason-text"><code>brama subscription refresh &lt;provider&gt; --reason &lt;text&gt;</code><a class="headerlink" href="#brama-subscription-refresh-provider-reason-text" title="Link to this section">&para;</a></h3>
+<p>Runs the refresh the gateway's own timer runs, for one provider, now. A burnt or
+expired grant is never inside the timer's skew window, and a timer that will not
+try it is exactly why an empty pool stays empty. <code>--reason</code> is required because
+this rotates a grant -- the provider invalidates the previous refresh token the
+moment it issues a new one -- and the reason is appended to the journal beside
+the verdict.</p>
+<pre><code class="language-bash">brama subscription refresh codex --reason 'pool empty; every best call answered 429' --json
+</code></pre>
+<pre><code class="language-json">{
+  &quot;provider&quot;: &quot;codex&quot;,
+  &quot;attempted&quot;: 2,
+  &quot;result&quot;: &quot;failed&quot;,
+  &quot;detail&quot;: &quot;refreshed no `codex` grant out of 2 tried; brama-sub-wisent-app-codex-primary: invalid_grant: refresh token is no longer accepted&quot;
+}
+</code></pre>
+<p><code>attempted</code> counts the subscriptions a refresh was tried for, so <code>0</code> means the
+command found nothing to do and <code>detail</code> says which of three reasons it was: no
+usable subscription for that provider in the pool, a provider whose credentials
+are API keys and have no refresh path at all, or no usable credential source in
+this environment -- the last being what a shell without the launcher's capability
+environment gets, and not a broken account. A retired subscription is never
+refreshed, because rotating its grant would put back what somebody removed. The
+exit status is non-zero unless a credential was obtained.</p>
+<p>No credential material is printed by either command: the listing reads a ledger
+that has never held any, and the refresh drops the credential it obtains without
+looking at it.</p>
+<h2 id="operational-model">Operational model<a class="headerlink" href="#operational-model" title="Link to this section">&para;</a></h2>
+<ul>
+<li><strong>Configuration:</strong> production policy is generated by
+  <code>scripts/start-with-skarbiec.sh</code> from operator-owned configuration and scoped
+  secret consumers. Missing, malformed, duplicate, or contradictory security
+  configuration fails startup.</li>
+<li><strong>Dynamic inference routes:</strong> <code>BRAMA_INFERENCE_ROUTES_FILE</code> points at an
+  owner-only snapshot maintained by the deployment operator. Brama reloads it
+  per request, rejects symlinks and group/other-readable files, accepts only
+  loopback or Tailscale IPv4 deployment endpoints, fails closed on malformed
+  updates, and attempts centrally declared fallback routes in order.</li>
+<li><strong>Desktop credentials:</strong> standalone Brama Desktop launches its bundled Brama
+  binary on loopback, sends provider credentials once over the child process's
+  standard input, and keeps both its router bearer and provider credentials out
+  of process arguments, files, logs, and Brama state. A Stado-discovered Brama
+  installation may instead acquire its scoped bearer from Skarbiec.</li>
+<li><strong>State:</strong> <code>$BRAMA_STATE_DIR/journal.jsonl</code> contains retirement and quality
+  records. <code>$BRAMA_SUBSCRIPTION_USAGE_FILE</code>, by default
+  <code>~/.config/brama/subscription-usage.json</code> and owner-readable only, holds the
+  per-subscription usage ledger: measured counters, the newest plan reading per
+  window with the instant it was read and where it came from, when the provider's
+  usage report was last checked, any block, and the newest check verdict. It is
+  written atomically and is not a cache — the
+  question it answers spans months, not process lifetimes. A ledger written by
+  an older gateway still loads: readings that carry no instant of their own are
+  given the ledger file's modification time, and a ledger that will not parse
+  yields an empty one rather than stopping the gateway. <code>/tmp/brama-perf.json</code>
+  contains replaceable process telemetry. The entitlements router owns encrypted
+  subscription credential storage in managed deployments.</li>
+<li><strong>Subscription discovery:</strong> a provider subscription is a Skarbiec item tagged
+  <code>brama:subscription</code> and <code>brama:agent:&lt;agent&gt;</code>, carrying its provider and
+  subscription id in <code>brama:provider:&lt;provider&gt;</code> and <code>brama:id:&lt;id&gt;</code>. Both the
+  gateway and Brama Desktop filter on those tags, so vault item ids are opaque
+  and renaming one changes nothing. <code>scripts/provision-desktop-subscriptions.py</code>
+  writes the owner vault and <code>scripts/provision-host-subscriptions.sh</code> writes a
+  managed host's vault; both are idempotent and derive their tags from
+  <code>scripts/skarbiec-subscriptions.json</code>.</li>
+<li><strong>Plan usage from the provider's own report:</strong> every provider that rations a
+  subscription publishes a report of how much of the ration is gone, and reading
+  it spends no quota at all. <code>claude-code</code> publishes
+  <code>GET /api/oauth/usage</code> on <code>api.anthropic.com</code> (<code>five_hour</code>, <code>seven_day</code>,
+  <code>seven_day_opus</code> and <code>seven_day_sonnet</code>, each a utilization percentage with a
+  reset instant), <code>codex</code> publishes <code>GET /backend-api/wham/usage</code> on
+  <code>chatgpt.com</code> (<code>rate_limit.primary_window</code> and <code>.secondary_window</code>, each a
+  used percentage with its window length and reset), and <code>kimi</code> publishes
+  <code>GET /coding/v1/usages</code> on <code>api.kimi.com</code> (a <code>usage</code> object and a <code>limits</code>
+  array of limit/used/remaining counts with their windows). Every other provider
+  publishes nothing, and that absence is recorded as the provider's own answer
+  rather than left as an unexplained blank. Each subscription's report is read at
+  most once per <code>BRAMA_PLAN_USAGE_TTL_SECS</code> (default 300), spread by up to a
+  quarter either way from the subscription's own id so a fan-out of accounts on
+  one host never becomes one burst against a provider that rate-limits usage
+  reads per address, and single-flighted per subscription. The sweep that notices
+  aged-out rows runs every <code>BRAMA_PLAN_USAGE_SWEEP_SECS</code> (default 60, <code>0</code>
+  disables it) and is logged under <code>plan_usage_*</code>. A failed read never blanks a
+  row: the last good reading is kept, served with <code>stale</code> true, and dropped only
+  once it is older than <code>BRAMA_PLAN_USAGE_RETENTION_SECS</code> (default 86400).</li>
+<li><strong>Routing by what the plans have left:</strong> the readings above are not only for
+  reading. A selector orders its candidate routes by the freest usable
+  subscription behind each one, and an explicit route orders its bounded
+  credentials the same way, both from the ledger and neither costing a provider
+  call. Chance still breaks exact ties, so accounts at equal utilization stay
+  decorrelated, but an account the provider says is 90 percent spent is no
+  longer tried ahead of one at 10 percent. A window whose own reset instant has
+  passed counts as empty; a subscription with no reading counts as free,
+  because its first call writes the reading that corrects the placement.</li>
+<li><strong>One agent, one account, for the length of a window:</strong> the credential that
+  served an agent is remembered per provider and tried first on that agent's
+  next request, until the tightest window it reported resets (five hours when
+  the provider named no reset, capped at a day). Two things depend on it: a
+  provider's prompt cache lives behind one account, so scattering an agent's
+  turns across a pool throws the cache away, and one conversation's spend
+  belongs in one account's ledger rather than smeared across every account the
+  agent owns. It is a preference and never a grant -- it is consulted after
+  eligibility, skipped for a credential inside a block or reporting a full
+  window, and it cannot outlive the process, because a pin whose window has
+  passed is worth nothing anyway.</li>
+<li><strong>The one check that costs quota, and only on request:</strong> whether a provider
+  will actually serve a credential can only be answered by a real request, so
+  <code>POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe</code> spends one
+  minimal completion against one named subscription and records the verdict as
+  <code>probe</code> with <code>source</code> <code>completion</code>. Nothing triggers it on a timer: with default
+  configuration no timer performs a quota-consuming request. It is a route rather
+  than a subcommand because redeeming the credential needs the capabilities and
+  identities the launcher installed in the serving process, and a standalone
+  desktop install holds its provider credentials only in that process's memory. A
+  subscription inside a recorded block is refused with <code>409</code> rather than probed:
+  the block already says the account is out of quota, and re-reading that sentence
+  is what the block exists to prevent. The probe rotates to no other credential,
+  retires nothing, and is logged under its own <code>usage_probe_*</code> events so it is
+  never mistaken for a caller's request.</li>
+<li><strong>Refreshing ahead of expiry:</strong> an access token is replaced before it dies
+  rather than when a request trips over it. Every
+  <code>BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS</code> seconds (default 60, <code>0</code> disables it)
+  the gateway refreshes every active subscription credential that expires within
+  <code>BRAMA_CREDENTIAL_REFRESH_SKEW_SECS</code> (default 300), single-flighted per
+  subscription so a slow refresh is never started twice. Refreshing costs no plan
+  quota: a token endpoint is not a metered endpoint. A refusal is classified. A
+  definitive one -- <code>invalid_grant</code>, <code>invalid_token</code>, a revoked or unauthorized
+  refresh token, or a 401/403 that is not a transport failure -- is recorded as
+  <code>credential.state</code> <code>needs_reauthorization</code> with the provider's own sentence as
+  <code>credential.cause</code>, and that credential is left alone until a sign-in replaces
+  it. A transient one -- a timeout, a refused connection, any transport failure --
+  changes nothing and is retried by the next sweep. A refreshed grant that cannot
+  be written back to the vault is a failed refresh, not a success: the rotated
+  grant is dropped rather than spent from memory, because the provider has
+  already invalidated the one still in the vault. Events are <code>credential_refresh_*</code>
+  and <code>credential_refreshed_ahead</code>.</li>
+<li><strong>Credentials:</strong> callers use dedicated bearer items. Request-sign identities
+  and provider capabilities remain separate. Secrets are redeemed at final use
+  and are not written to JSON configuration, logs, or Brama state. Standalone
+  launchers pass a provider-to-credential JSON object to
+  <code>brama serve --local-credentials-stdin</code> over standard input.</li>
+<li><strong>Network:</strong> Brama binds to loopback. Standalone desktop clients use their
+  bundled process; managed clients may discover a local Brama service through
+  Stado. Provider endpoints require approved HTTPS hosts, disable redirects,
+  and bypass ambient proxies.</li>
+<li><strong>Failure:</strong> stable HTTP error codes distinguish invalid input, authentication,
+  authorization, quota, timeout, dependency unavailability, and provider
+  failure. Retryability is included in the error envelope.</li>
+<li><strong>Observability:</strong> health and <code>brama version</code> expose secret-free build identity;
+  structured logs record routing mode, selected route, attempts, outcome, and
+  remediation class. <code>/stats</code> remains bearer-protected.</li>
+<li><strong>Upgrade and rollback:</strong> follow <a href="/docs/release"><code>RELEASE.md</code></a>. Immutable product
+  version, source revision, platform, digest, and provenance are separate facts.</li>
+<li><strong>Qualification:</strong> evidence groups and consent boundaries are defined in
+  <a href="/docs/testing"><code>TESTING.md</code></a>.</li>
+</ul>
+<h2 id="project-status-and-support">Project status and support<a class="headerlink" href="#project-status-and-support" title="Link to this section">&para;</a></h2>
+<ul>
+<li><strong>Maturity:</strong> pre-1.0. Public contract changes follow the <code>0.x</code> policy in
+  <a href="/docs/release"><code>RELEASE.md</code></a>.</li>
+<li><strong>Current source version:</strong> the <code>version</code> field in <code>Cargo.toml</code>, which is the
+  single canonical source; this page does not duplicate the number.</li>
+<li><strong>Supported source:</strong> public <code>main</code> for development; immutable releases are
+  built, stored, and promoted through Stado.</li>
+<li><strong>Issues and operator support:</strong>
+  <a href="https://github.com/wisent-ai/brama/issues"><code>wisent-ai/brama</code> issues</a>;
+  see <a href="/docs/support"><code>SUPPORT.md</code></a>.</li>
+<li><strong>Security reports:</strong> use the private GitHub Security Advisory channel defined
+  in <a href="/docs/security"><code>SECURITY.md</code></a>; never put credentials in an issue.</li>
+<li><strong>License:</strong> Apache License 2.0; see <a href="https://github.com/wisent-ai/brama/blob/main/LICENSE"><code>LICENSE</code></a>.</li>
+</ul>
+<p>Rust code defines executable behavior. This README owns the product promise,
+boundaries, use cases, terminology, status, and operator entry points. Detailed
+documents must link here and must not claim a conflicting capability state.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stream one completion — Brama Docs</title>
+  <meta name="description" content="Stream one completion Goal: receive one generation as server-sent events, in whichever of the three chat formats the caller already speaks. Status: written against the streaming co">
+  <link rel="canonical" href="https://brama.wisent.com/docs/examples/inference/stream-a-completion">
+  <style>
+:root {
+  color-scheme: dark;
+  --bg: #080a0d;
+  --panel: #101319;
+  --panel-2: #151922;
+  --line: #282e3a;
+  --muted: #9ba5b5;
+  --text: #f2f5f9;
+  --accent: #b7ff52;
+  --accent-soft: rgba(183, 255, 82, .12);
+  --code: #111723;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 6rem; }
+body { margin: 0; background: radial-gradient(circle at 75% -10%, rgba(69, 108, 89, .24), transparent 32rem), var(--bg); color: var(--text); line-height: 1.65; }
+a { color: inherit; }
+.topbar { position: sticky; top: 0; z-index: 10; height: 4.25rem; display: flex; align-items: center; justify-content: space-between; padding: 0 2rem; border-bottom: 1px solid rgba(255,255,255,.09); background: rgba(8, 10, 13, .86); backdrop-filter: blur(18px); }
+.brand { display: inline-flex; align-items: center; gap: .65rem; font-size: 1.05rem; text-decoration: none; letter-spacing: -.01em; }
+.brand-mark { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .55rem; background: var(--accent); color: #10140b; font-weight: 900; }
+.brand strong { padding: .15rem .5rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+.topbar nav { display: flex; align-items: center; gap: 1.5rem; }
+.topbar nav a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.topbar nav a:hover { color: var(--text); }
+.layout { display: grid; grid-template-columns: 17.5rem minmax(0, 1fr); max-width: 94rem; min-height: calc(100vh - 4.25rem); margin: 0 auto; }
+aside { border-right: 1px solid var(--line); padding: 2rem 1.5rem 4rem; }
+aside > nav { position: sticky; top: 6.25rem; max-height: calc(100vh - 8rem); overflow: auto; scrollbar-width: thin; }
+.nav-group { margin-bottom: 1.75rem; }
+.nav-group h2 { margin: 0 0 .45rem; color: #737f90; font-size: .69rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.nav-group a { display: block; margin: .08rem 0; padding: .36rem .55rem; border-radius: .4rem; color: var(--muted); font-size: .82rem; line-height: 1.35; text-decoration: none; }
+.nav-group a:hover { color: var(--text); background: var(--panel); }
+.nav-group a.active { color: var(--accent); background: var(--accent-soft); }
+.mobile-nav { display: none; }
+main { width: 100%; min-width: 0; max-width: 65rem; padding: 3.5rem clamp(2rem, 6vw, 6rem) 2rem; }
+.source-note { margin: 0 0 1rem; color: #6f7a89; font: 600 .7rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
+.doc > h1:first-child { margin-top: 0; font-size: clamp(2.35rem, 5vw, 4rem); line-height: 1.04; letter-spacing: -.045em; }
+.doc h2 { margin: 3.25rem 0 1rem; padding-top: .5rem; font-size: 1.7rem; line-height: 1.2; letter-spacing: -.025em; }
+.doc h3 { margin: 2.25rem 0 .75rem; font-size: 1.22rem; line-height: 1.3; }
+.doc h4 { margin: 1.75rem 0 .5rem; font-size: 1rem; }
+.doc p, .doc li { color: #c7ced9; }
+.doc p { margin: 1rem 0; }
+.doc a { color: var(--accent); text-underline-offset: .2em; }
+.doc h1 .headerlink, .doc h2 .headerlink, .doc h3 .headerlink, .doc h4 .headerlink { margin-left: .5rem; color: #4d5765; font-size: .65em; text-decoration: none; opacity: 0; }
+.doc h1:hover .headerlink, .doc h2:hover .headerlink, .doc h3:hover .headerlink, .doc h4:hover .headerlink { opacity: 1; }
+.doc blockquote { margin: 1.5rem 0; padding: .85rem 1.1rem; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+.doc blockquote p { margin: .3rem 0; }
+.doc code { padding: .13rem .35rem; border: 1px solid #273143; border-radius: .35rem; background: var(--code); color: #dce7f7; font: .88em/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.doc pre { margin: 1.4rem 0; padding: 1.1rem 1.2rem; overflow: auto; border: 1px solid var(--line); border-radius: .7rem; background: var(--code); box-shadow: 0 18px 55px rgba(0,0,0,.2); }
+.doc pre code { padding: 0; border: 0; background: transparent; color: #dce7f7; overflow-wrap: normal; }
+.doc table { display: block; width: 100%; margin: 1.5rem 0; overflow-x: auto; border-collapse: collapse; font-size: .87rem; }
+.doc th, .doc td { min-width: 8rem; padding: .65rem .75rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.doc th { background: var(--panel-2); color: var(--text); }
+.doc td { color: #bcc5d2; }
+.doc img { max-width: 100%; height: auto; border-radius: .6rem; }
+.doc hr { margin: 3rem 0; border: 0; border-top: 1px solid var(--line); }
+.doc ul, .doc ol { padding-left: 1.4rem; }
+.doc li + li { margin-top: .35rem; }
+footer { display: flex; justify-content: space-between; margin-top: 5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: #6f7a89; font-size: .78rem; }
+footer a { color: var(--muted); text-decoration: none; }
+.hero { padding: clamp(1rem, 5vw, 4.5rem) 0 4rem; }
+.eyebrow { margin: 0 0 .85rem; color: var(--accent) !important; font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.hero h1 { max-width: 14ch; margin: 0; font-size: clamp(3rem, 7vw, 5.8rem); line-height: .96; letter-spacing: -.06em; }
+.hero > p:not(.eyebrow) { max-width: 48rem; margin: 1.5rem 0 0; color: var(--muted); font-size: 1.12rem; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+.button { display: inline-flex; align-items: center; min-height: 2.8rem; padding: .6rem 1rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--panel); text-decoration: none; }
+.button.primary { border-color: var(--accent); background: var(--accent); color: #11160c; font-weight: 750; }
+.featured, .directory { margin-top: 2.5rem; }
+.card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; }
+.card { min-height: 13rem; padding: 1.3rem; border: 1px solid var(--line); border-radius: .75rem; background: linear-gradient(145deg, rgba(21,25,34,.92), rgba(13,16,21,.92)); text-decoration: none; transition: border-color .16s, transform .16s; }
+.card:hover { transform: translateY(-2px); border-color: #526137; }
+.card span { color: var(--accent); font-size: .68rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.card h2 { margin: .9rem 0 .45rem; font-size: 1.3rem; line-height: 1.2; }
+.card p { margin: 0; color: var(--muted); font-size: .85rem; }
+.directory > h2 { margin: 0 0 1.2rem; font-size: 2.2rem; }
+.directory-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 2.5rem; }
+.directory-grid section { padding-top: 1rem; border-top: 1px solid var(--line); }
+.directory-grid h2 { margin: 0 0 .65rem; font-size: 1rem; }
+.directory-grid ul { margin: 0; padding: 0; list-style: none; }
+.directory-grid li { margin: .35rem 0; }
+.directory-grid a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.directory-grid a:hover { color: var(--accent); }
+@media (max-width: 860px) {
+  .topbar { padding: 0 1rem; }
+  .topbar nav a:not(:last-child) { display: none; }
+  .layout { display: block; }
+  aside { display: none; }
+  .mobile-nav { display: block; margin: 1rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--panel); }
+  .mobile-nav summary { padding: .75rem 1rem; cursor: pointer; color: var(--muted); font-size: .85rem; }
+  .mobile-nav nav { max-height: 70vh; overflow: auto; padding: .5rem 1rem 1rem; }
+  main { max-width: none; padding: 2.5rem 1.25rem 2rem; }
+  .doc > h1:first-child { font-size: clamp(2.1rem, 12vw, 3.3rem); }
+  .card-grid, .directory-grid { grid-template-columns: 1fr; }
+  .hero { padding-top: 1rem; }
+  .hero h1 { font-size: clamp(3rem, 15vw, 4.5rem); }
+}
+@media print {
+  .topbar, aside, .mobile-nav, footer { display: none; }
+  body { background: white; color: black; }
+  .layout { display: block; }
+  main { max-width: none; padding: 0; }
+  .doc p, .doc li { color: #222; }
+}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <details class="mobile-nav"><summary>Browse documentation</summary><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a class="active" aria-current="page" href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></details>
+  <div class="layout">
+    <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a class="active" aria-current="page" href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
+    <main>
+      <p class="source-note">Documentation topic: examples/inference/stream-a-completion.md</p>
+      <article class="doc"><h1 id="stream-one-completion">Stream one completion<a class="headerlink" href="#stream-one-completion" title="Link to this section">&para;</a></h1>
+<p><strong>Goal:</strong> receive one generation as server-sent events, in whichever of the three chat formats the caller already speaks.</p>
+<p><strong>Status:</strong> written against the streaming contract in <a href="/docs/core"><code>CORE.md</code></a>; not re-verified against the newest published release.</p>
+<p><strong>Risk:</strong> credentialed, provider-facing, and potentially billable. A stream that has committed cannot be cancelled without cost: quota already spent stays spent.</p>
+<p><strong>Environment:</strong> running Brama over approved HTTPS or authenticated loopback.</p>
+<p><strong>Preconditions:</strong> <code>BRAMA_URL</code>; dedicated bearer in <code>BRAMA_BEARER</code>; an allowed alias, canonical <code>provider/model</code> route, or selector. Subscription routes additionally need the three agent HMAC headers over the exact raw body, exactly as the buffered path does.</p>
+<p><strong>Inputs:</strong> synthetic non-sensitive text only.</p>
+<p><strong>Artifacts and side effects:</strong> one provider generation, ledger counters for the subscription that paid, and process telemetry. No file is written by the gateway.</p>
+<h2 id="openai-chat-completions">OpenAI chat completions<a class="headerlink" href="#openai-chat-completions" title="Link to this section">&para;</a></h2>
+<pre><code class="language-bash">umask 077
+cat &gt;stream.json &lt;&lt;'JSON'
+{&quot;model&quot;:&quot;wisent-backend/chat/primary&quot;,&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Count from one to five.&quot;}],&quot;max_tokens&quot;:64,&quot;temperature&quot;:0,&quot;stream&quot;:true}
+JSON
+</code></pre>
+<p>After explicit provider-cost approval:</p>
+<pre><code class="language-bash">curl --fail --silent --show-error --no-buffer \
+  -H &quot;Authorization: Bearer $BRAMA_BEARER&quot; \
+  -H 'Content-Type: application/json' \
+  --data-binary @stream.json \
+  &quot;$BRAMA_URL/v1/chat/completions&quot;
+</code></pre>
+<p>Expected: <code>Content-Type: text/event-stream</code>, then <code>data:</code> frames whose <code>object</code> is <code>chat.completion.chunk</code> — one carrying <code>delta.role</code>, then <code>delta.content</code> fragments, then a frame with <code>finish_reason</code>, then a frame carrying <code>usage</code> when the provider published a token meter, and finally <code>data: [DONE]</code>. Provider text is intentionally not predicted here.</p>
+<h2 id="anthropic-messages">Anthropic Messages<a class="headerlink" href="#anthropic-messages" title="Link to this section">&para;</a></h2>
+<pre><code class="language-bash">cat &gt;stream-anthropic.json &lt;&lt;'JSON'
+{&quot;model&quot;:&quot;claude-code/claude-sonnet-4-6&quot;,&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Count from one to five.&quot;}],&quot;max_tokens&quot;:64,&quot;stream&quot;:true}
+JSON
+</code></pre>
+<pre><code class="language-bash">curl --fail --silent --show-error --no-buffer \
+  -H &quot;Authorization: Bearer $BRAMA_BEARER&quot; \
+  -H &quot;x-agent-id: $BRAMA_AGENT_ID&quot; \
+  -H &quot;x-agent-timestamp: $BRAMA_AGENT_TIMESTAMP&quot; \
+  -H &quot;x-agent-signature: $BRAMA_AGENT_SIGNATURE&quot; \
+  -H 'Content-Type: application/json' \
+  --data-binary @stream-anthropic.json \
+  &quot;$BRAMA_URL/v1/messages&quot;
+</code></pre>
+<p>Expected event order: <code>message_start</code>, <code>content_block_start</code>, one or more <code>content_block_delta</code>, <code>content_block_stop</code>, <code>message_delta</code> carrying <code>stop_reason</code> and output tokens, <code>message_stop</code>. A tool call appears as its own <code>tool_use</code> content block whose arguments arrive as <code>input_json_delta</code> fragments.</p>
+<p>The signature covers the exact bytes of <code>stream-anthropic.json</code>; sign the file, do not re-serialize it.</p>
+<h2 id="openai-responses">OpenAI Responses<a class="headerlink" href="#openai-responses" title="Link to this section">&para;</a></h2>
+<pre><code class="language-bash">cat &gt;stream-responses.json &lt;&lt;'JSON'
+{&quot;model&quot;:&quot;codex/gpt-5.3-codex-spark&quot;,&quot;input&quot;:&quot;Count from one to five.&quot;,&quot;max_output_tokens&quot;:64,&quot;stream&quot;:true}
+JSON
+</code></pre>
+<pre><code class="language-bash">curl --fail --silent --show-error --no-buffer \
+  -H &quot;Authorization: Bearer $BRAMA_BEARER&quot; \
+  -H &quot;x-agent-id: $BRAMA_AGENT_ID&quot; \
+  -H &quot;x-agent-timestamp: $BRAMA_AGENT_TIMESTAMP&quot; \
+  -H &quot;x-agent-signature: $BRAMA_AGENT_SIGNATURE&quot; \
+  -H 'Content-Type: application/json' \
+  --data-binary @stream-responses.json \
+  &quot;$BRAMA_URL/v1/responses&quot;
+</code></pre>
+<p>Expected event order: <code>response.created</code>, <code>response.output_item.added</code>, <code>response.content_part.added</code>, <code>response.output_text.delta</code> fragments, <code>response.output_text.done</code>, <code>response.content_part.done</code>, <code>response.output_item.done</code>, <code>response.completed</code> carrying the whole output again with <code>usage</code>.</p>
+<h2 id="failure-path">Failure path<a class="headerlink" href="#failure-path" title="Link to this section">&para;</a></h2>
+<p>A refusal that happens <strong>before</strong> the first byte is an ordinary error document with Brama's own contract code and HTTP status: <code>403 forbidden</code> for an allowlist miss, <code>429 subscription_unavailable</code> when every bounded credential is spent, <code>503 credential_unauthorized</code> when the provider refused the grant. Every retry Brama is allowed to make has already happened by then.</p>
+<p>A failure <strong>after</strong> commit ends the stream without its terminal event: no <code>data: [DONE]</code>, no <code>message_stop</code>, and <code>response.failed</code> instead of <code>response.completed</code>. That is the signal that the generation is incomplete. Brama does not continue it on another credential, because a second attempt would duplicate both cost and emitted text; starting a new request is the caller's decision.</p>
+<p>Kimi streams carry no usage numbers. The provider's coding endpoint publishes no token meter on its event stream, so none is invented: the frames simply have no <code>usage</code>.</p>
+<h2 id="cleanup">Cleanup<a class="headerlink" href="#cleanup" title="Link to this section">&para;</a></h2>
+<pre><code class="language-bash">rm -f stream.json stream-anthropic.json stream-responses.json
+unset BRAMA_BEARER BRAMA_AGENT_ID BRAMA_AGENT_TIMESTAMP BRAMA_AGENT_SIGNATURE
+</code></pre>
+<p>Quota consumed by an approved stream cannot be undone, including for a stream the caller abandoned.</p>
+<h2 id="next">Next<a class="headerlink" href="#next" title="Link to this section">&para;</a></h2>
+<p>Buffered equivalents are in <a href="/docs/examples/core/call-http-api"><code>../core/call-http-api.md</code></a>; agent-owned selection is in <a href="/docs/examples/core/call-agent-selectors"><code>../core/call-agent-selectors.md</code></a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>
