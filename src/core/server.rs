@@ -2233,7 +2233,12 @@ async fn readyz() -> impl IntoResponse {
     // Every active subscription, once, whichever agents can see it: two agents
     // sharing one account must not cost two redemptions of the same credential.
     let mut active: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
-    for agent in crate::gateway::broker::configured_request_sign_agents() {
+    let standalone = crate::gateway::broker::local_provider_credentials_enabled();
+    for agent in if standalone {
+        Vec::new()
+    } else {
+        crate::gateway::broker::configured_request_sign_agents()
+    } {
         let mut subscribed: Vec<String> = Vec::new();
         for entry in crate::gateway::broker::list_subscriptions(&agent).await {
             if entry.status != "active" {
@@ -2306,26 +2311,31 @@ async fn readyz() -> impl IntoResponse {
     // loses its `brama:agent:` tag keeps a working credential and stops being
     // discoverable, so it is neither active nor refused nor retired -- it is
     // absent, and absence is what every screen in this fleet reported as health.
-    let untagged: Vec<Value> = crate::gateway::broker::list_unroutable_accounts()
-        .await
-        .into_iter()
-        .map(|account| {
-            let refusal = crate::subscription_dispatch::dispatch::no_active_credential_summary(
-                &account.provider,
-            );
-            json!({
-                "id": account.id,
-                "provider": account.provider,
-                "item": account.item,
-                "routable": false,
-                "reason": format!(
-                    "the vault holds this account and its item carries no 'brama:agent:' tag, \
-                     so subscription discovery cannot see it and no agent can route to it; \
-                     every request for this provider answers '{refusal}'"
-                ),
+    let untagged: Vec<Value> = if standalone {
+        Vec::new()
+    } else {
+        crate::gateway::broker::list_unroutable_accounts()
+            .await
+            .into_iter()
+            .map(|account| {
+                let refusal =
+                    crate::subscription_dispatch::dispatch::no_active_credential_summary(
+                        &account.provider,
+                    );
+                json!({
+                    "id": account.id,
+                    "provider": account.provider,
+                    "item": account.item,
+                    "routable": false,
+                    "reason": format!(
+                        "the vault holds this account and its item carries no 'brama:agent:' tag, \
+                         so subscription discovery cannot see it and no agent can route to it; \
+                         every request for this provider answers '{refusal}'"
+                    ),
+                })
             })
-        })
-        .collect();
+            .collect()
+    };
 
     // A credential nobody can route to is not readiness, and neither is a
     // catalogue entry behind a credential that will not redeem. Every half

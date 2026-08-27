@@ -356,7 +356,7 @@ fn configured_provider_grants() -> std::collections::HashSet<String> {
 /// Parsing the capability map and grant routes once avoids rebuilding the
 /// workload client for every model in a catalogue with thousands of entries.
 pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
-    let mut configured: std::collections::HashSet<String> = LOCAL_PROVIDER_CREDENTIALS
+    if let Some(configured) = LOCAL_PROVIDER_CREDENTIALS
         .read()
         .ok()
         .and_then(|credentials| {
@@ -364,8 +364,10 @@ pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
                 .as_ref()
                 .map(|values| values.keys().cloned().collect())
         })
-        .unwrap_or_default();
-    configured.extend(configured_provider_grants());
+    {
+        return configured;
+    }
+    let mut configured = configured_provider_grants();
     if client().is_none() {
         return configured;
     }
@@ -390,12 +392,10 @@ pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
 /// [`provider_credential`], which falls back to the exact field-scoped route
 /// when capability issuance or redemption is unavailable.
 pub fn provider_capability_configured(provider: &str) -> bool {
-    if LOCAL_PROVIDER_CREDENTIALS.read().is_ok_and(|credentials| {
-        credentials
-            .as_ref()
-            .is_some_and(|values| values.contains_key(provider))
-    }) {
-        return true;
+    if let Ok(credentials) = LOCAL_PROVIDER_CREDENTIALS.read() {
+        if let Some(credentials) = credentials.as_ref() {
+            return credentials.contains_key(provider);
+        }
     }
     let resource = provider_resource(provider);
     if capability_route(&resource).is_some() {

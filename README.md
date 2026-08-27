@@ -459,7 +459,10 @@ Skarbiec route without printing it. It then proves the full alias, standalone
 key, and managed-subscription lifecycles: add, read or provider probe, replace,
 another real completion, delete, and the final refusal. Its subscription uses
 a dedicated qualification agent and removes that credential before the test
-returns. `http_api_real` starts `brama serve` and requires a real authenticated
+returns. The same target sends real buffered and streamed requests through the
+OpenAI Chat, Anthropic Messages, and OpenAI Responses surfaces, then reads the
+resulting model catalogue, readiness, and statistics. `http_api_real` starts
+`brama serve` and requires a real authenticated
 completion plus Brama's persisted perf record. `capability_real` requires a
 real completion funded by each deployment capability. `subscription_real`
 requires a real completion, a provider-side OAuth rotation, and a Weles-driven
