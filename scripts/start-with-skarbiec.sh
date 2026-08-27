@@ -49,9 +49,13 @@ BRAMA_BIN=${BRAMA_BIN:-"$default_brama_bin"}
 ENTITLEMENTS_ROUTER_BIN=${ENTITLEMENTS_ROUTER_BIN:-"$default_router_bin"}
 config_dir=${BRAMA_SKARBIEC_CONFIG_DIR:-"$default_config_dir"}
 if [ "$bundled_installation" -eq 0 ] && [ ! -x "$ENTITLEMENTS_ROUTER_BIN" ]; then
-  discovered_router=$(command -v skarbiec || true)
-  if [ -n "$discovered_router" ] && [ -x "$discovered_router" ]; then
-    ENTITLEMENTS_ROUTER_BIN="$discovered_router"
+  if [ -x "${HOME:-/nonexistent}/.stado/bin/skarbiec" ]; then
+    ENTITLEMENTS_ROUTER_BIN="${HOME:-/nonexistent}/.stado/bin/skarbiec"
+  else
+    discovered_router=$(command -v skarbiec || true)
+    if [ -n "$discovered_router" ] && [ -x "$discovered_router" ]; then
+      ENTITLEMENTS_ROUTER_BIN="$discovered_router"
+    fi
   fi
 fi
 if [ -n "${BRAMA_BIN_OVERRIDE:-}" ]; then
