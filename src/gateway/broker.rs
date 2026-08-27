@@ -420,8 +420,12 @@ pub fn provider_capability_configured(provider: &str) -> bool {
 /// a fresh capability and redeem that. Both attempts go through the same
 /// broker, and neither ever holds plaintext beyond the returned [`Secret`].
 pub async fn provider_credential(provider: &str) -> Option<Secret> {
-    if let Some(secret) = local_provider_credential(provider) {
-        return Some(secret);
+    if local_provider_credentials_enabled() {
+        // Standalone mode is a separate credential authority. Falling through
+        // to a managed capability after a local key is removed makes the
+        // deletion appear successful while requests keep spending the fleet's
+        // account.
+        return local_provider_credential(provider);
     }
     let resource = provider_resource(provider);
     // Every step below can fail, and this used to return None for all of them,

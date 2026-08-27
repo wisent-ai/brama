@@ -432,33 +432,17 @@ The complete state, error, retry, authorization, and resource contract is in
 
 ### Functional test journeys
 
-The repository tests the public product binary and HTTP surfaces, not internal
-helpers. The administration targets cover the complete add/read/replace/delete
-stories and their refusals:
+The provider-facing tests run the public Brama binary against the real
+Skarbiec vault, real provider accounts, real quota, and Weles sign-ins. They
+contain no provider server, canned provider response, fake key, dry run, or
+smoke-test substitute. Run them inside the launcher environment, with the
+source-tree binary named explicitly so Skarbiec binds capabilities to the
+binary Cargo executes:
 
 ```console
-cargo test --test routing_alias_lifecycle
-cargo test --test credential_key_lifecycle
-cargo test --test subscription_lifecycle
-```
-
-`routing_alias_lifecycle` creates an alias, reads it from the admin snapshot,
-replaces its primary and fallback order, deletes it, and checks malformed,
-duplicate, unavailable, and required-alias refusals. `credential_key_lifecycle`
-adds and replaces a standalone provider key, proves that reads never expose its
-value, deletes it, and checks empty, unknown, local-only, absent, and
-non-desktop refusals. `subscription_lifecycle` adds and replaces one managed
-agent subscription, verifies its deterministic identity and write-only
-credential, retires it, and checks malformed, duplicate, unknown, and
-cross-agent refusals. The Brama Desktop controls named in the three sections
-above call those same endpoints.
-
-Provider-facing qualification is separate because it uses the real vault,
-provider accounts, quota, and Weles sign-ins. Run it inside the launcher
-environment, with the source-tree binary named explicitly so Skarbiec binds
-capabilities to the binary Cargo executes:
-
-```console
+BRAMA_BIN_OVERRIDE="$PWD/target/debug/brama" \
+  scripts/start-with-skarbiec.sh --exec "$HOME/.cargo/bin/cargo" \
+  test --test admin_real -- --test-threads=1
 BRAMA_BIN_OVERRIDE="$PWD/target/debug/brama" \
   scripts/start-with-skarbiec.sh --exec "$HOME/.cargo/bin/cargo" \
   test --test http_api_real -- --test-threads=1
@@ -470,16 +454,22 @@ BRAMA_BIN_OVERRIDE="$PWD/target/debug/brama" \
   test --test subscription_real -- --test-threads=1
 ```
 
-These journeys do not substitute a provider, skip the provider call, or accept
-a planned request as success. `http_api_real` starts `brama serve` and requires
-a real authenticated completion plus Brama's persisted perf record.
-`capability_real` requires a real completion funded by each deployment
-capability. `subscription_real` requires a real completion, a provider-side
-OAuth rotation, and a Weles-driven sign-in for each subscription provider,
-checking the usage ledger and journal after every operation. An expired grant,
-invalid key, exhausted provider balance, missing Weles token, or unavailable
-account fails the corresponding journey with the provider or product sentence;
-none is converted into a pass.
+`admin_real` reads the real OpenRouter credential through Brama's configured
+Skarbiec route without printing it. It then proves the full alias, standalone
+key, and managed-subscription lifecycles: add, read or provider probe, replace,
+another real completion, delete, and the final refusal. Its subscription uses
+a dedicated qualification agent and removes that credential before the test
+returns. `http_api_real` starts `brama serve` and requires a real authenticated
+completion plus Brama's persisted perf record. `capability_real` requires a
+real completion funded by each deployment capability. `subscription_real`
+requires a real completion, a provider-side OAuth rotation, and a Weles-driven
+sign-in for each subscription provider, checking the usage ledger and journal
+after every operation.
+
+An expired grant, invalid key, exhausted provider balance, missing Weles token,
+or unavailable account fails the corresponding journey with the provider or
+product sentence; none is converted into a pass. Lower-level parser and refusal
+contracts remain useful tests, but they are not reported as functional evidence.
 
 ## Reading and repairing the subscription pool
 

@@ -365,6 +365,7 @@ const PLAN_PROBE_MODELS: &[(&str, &str)] = &[
     ("codex", "gpt-5.3-codex-spark"),
     ("kimi", "kimi-for-coding"),
     ("deepseek", "deepseek-chat"),
+    ("openrouter", "openai/gpt-4o-mini"),
 ];
 
 /// The route to spend one request on to learn a provider's plan state, when

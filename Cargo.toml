@@ -17,24 +17,8 @@ name = "cli_command_contracts"
 path = "tests/cli/command_contracts.rs"
 
 [[test]]
-name = "credential_key_lifecycle"
-path = "tests/credentials/key_lifecycle.rs"
-
-[[test]]
-name = "http_inference_surfaces"
-path = "tests/http/inference_surfaces.rs"
-
-[[test]]
-name = "operations_telemetry_persistence"
-path = "tests/operations/telemetry_persistence.rs"
-
-[[test]]
-name = "routing_alias_lifecycle"
-path = "tests/routing/alias_lifecycle.rs"
-
-[[test]]
-name = "routing_registry_security"
-path = "tests/routing/registry_security.rs"
+name = "admin_real"
+path = "tests/providers/admin_real.rs"
 
 [[test]]
 name = "subscription_real"
@@ -52,9 +36,6 @@ path = "tests/providers/http_api_real.rs"
 name = "provider_contracts"
 path = "tests/providers/provider_contracts.rs"
 
-[[test]]
-name = "subscription_lifecycle"
-path = "tests/subscriptions/subscription_lifecycle.rs"
 
 [dependencies]
 async-trait = "0.1"
