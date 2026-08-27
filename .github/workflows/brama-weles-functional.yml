@@ -17,23 +17,22 @@ jobs:
     steps:
       - name: Check out Brama
         uses: actions/checkout@v4
+      - name: Check out pinned Probierz
+        uses: actions/checkout@v4
+        with:
+          repository: wisent-ai/probierz
+          ref: 521d02516a8f7ccc62179b4c6a0e76e56085d377
+          path: probierz-source
       - name: Install the Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: Install the pinned Probierz dependencies
+        working-directory: probierz-source
+        run: npm ci
       - name: Run all real Brama to Weles sign-ins through Probierz
         shell: bash
         run: |
           set -euo pipefail
-          if command -v probierz >/dev/null 2>&1; then
-            PROBIERZ="$(command -v probierz)"
-          elif [[ -x "$HOME/.cargo/bin/probierz" ]]; then
-            PROBIERZ="$HOME/.cargo/bin/probierz"
-          elif [[ -x "/opt/homebrew/bin/probierz" ]]; then
-            PROBIERZ="/opt/homebrew/bin/probierz"
-          else
-            echo "probierz is not installed on the dedicated test host" >&2
-            exit 1
-          fi
-          "$PROBIERZ" run tui \
+          node "$GITHUB_WORKSPACE/probierz-source/agent/cli.mjs" run tui \
             --app brama \
             --record \
             --spec "$GITHUB_WORKSPACE/tests/subscriptions/brama-weles-real.spec.mjs" \
