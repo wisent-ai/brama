@@ -30,9 +30,11 @@ const result = spawnSync(
   },
 );
 
-process.stdout.write(result.stdout || '');
-process.stderr.write(result.stderr || '');
 if (result.error) throw result.error;
 if (result.status !== 0) {
+  process.stderr.write(result.stderr || '');
+  process.stderr.write(result.stdout || '');
   throw new Error(`all three real Weles sign-ins must pass (exit ${result.status ?? 'unknown'})`);
 }
+process.stdout.write(result.stdout || '');
+process.stderr.write(result.stderr || '');

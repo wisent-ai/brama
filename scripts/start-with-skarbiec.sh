@@ -22,6 +22,7 @@ else
   bundled_installation=0
 fi
 
+requested_runtime_dir=${BRAMA_RUNTIME_DIR:-}
 service_env_file=${BRAMA_SERVICE_ENV_FILE:-${HOME:-/nonexistent}/.config/brama/service.env}
 if [ -f "$service_env_file" ]; then
   set -a
@@ -68,6 +69,9 @@ if [ -n "${BRAMA_BIN_OVERRIDE:-}" ]; then
   # trust beside the user's service state unless the caller named another
   # directory; /etc is both shared with production and unwritable in a normal
   # development or Probierz journey.
+  if [ -z "$requested_runtime_dir" ]; then
+    unset BRAMA_RUNTIME_DIR
+  fi
   if [ -z "$configured_config_dir" ]; then
     BRAMA_SKARBIEC_CONFIG_DIR="${HOME:-/nonexistent}/.config/brama/trust"
     config_dir="$BRAMA_SKARBIEC_CONFIG_DIR"
