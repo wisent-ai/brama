@@ -23,6 +23,7 @@ else
 fi
 
 requested_runtime_dir=${BRAMA_RUNTIME_DIR:-}
+requested_config_dir=${BRAMA_SKARBIEC_CONFIG_DIR:-}
 service_env_file=${BRAMA_SERVICE_ENV_FILE:-${HOME:-/nonexistent}/.config/brama/service.env}
 if [ -f "$service_env_file" ]; then
   set -a
@@ -32,7 +33,7 @@ elif [ -n "${BRAMA_SERVICE_ENV_FILE:-}" ]; then
   printf '%s\n' "BRAMA_SERVICE_ENV_FILE is not a regular file: $service_env_file" >/dev/stderr
   false
 fi
-configured_config_dir=${BRAMA_SKARBIEC_CONFIG_DIR:-}
+configured_config_dir=$requested_config_dir
 
 # A versioned bundle carries its own executables and trust material; these must
 # move together because registry.json binds capabilities to that exact binary.
