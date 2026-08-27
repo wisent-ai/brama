@@ -12,6 +12,7 @@ const result = spawnSync(
     '--exec',
     cargo,
     'test',
+    '--quiet',
     '--test',
     'subscription_real',
     'sign_in_reauthorizes_the_real_',
