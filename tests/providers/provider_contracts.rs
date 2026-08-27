@@ -252,8 +252,8 @@ fn sign_in_refuses_every_provider_weles_cannot_sign_in() {
 fn sign_in_refuses_oauth_providers_without_a_weles_worker() {
     let directory = TestDirectory::new("providers-sign-in-no-worker");
     for provider in OAUTH_PROVIDERS {
-        // A home with no Weles worker environment files holds no worker API
-        // token, and the refusal says where sign-ins run instead.
+        // An isolated command receives no Brama-Weles credential. The refusal
+        // names the exact Skarbiec item the service launcher must acquire.
         let output = command(&directory)
             .args([
                 "subscription",
@@ -267,18 +267,18 @@ fn sign_in_refuses_oauth_providers_without_a_weles_worker() {
         assert_eq!(output.status.code(), Some(1), "{provider} must exit 1");
         assert!(
             stderr_of(&output).contains(
-                "no Weles worker environment file exists on this host, so it has no worker API \
-                 token; sign-ins run on the host Weles runs on"
+                "BRAMA_WELES_REAUTH_TOKEN is unavailable; Brama must acquire \
+                 brama-weles-reauth/token from Skarbiec at startup"
             ),
             "{provider}: {}",
             stderr_of(&output)
         );
 
-        // With a token but no worker listening, the refusal names the exact
-        // health endpoint that did not answer, before any sign-in is attempted.
+        // With Brama's route credential but no worker listening, the refusal
+        // names the exact health endpoint before any sign-in is attempted.
         let output = command(&directory)
-            .env("WELES_API_TOKEN", "provider-contract-token")
-            .env("WELES_API_PORT", "1")
+            .env("BRAMA_WELES_REAUTH_TOKEN", "provider-contract-token")
+            .env("BRAMA_WELES_URL", "http://127.0.0.1:1")
             .args([
                 "subscription",
                 "sign-in",

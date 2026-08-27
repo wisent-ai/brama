@@ -421,10 +421,13 @@ or mutate another account's subscriptions.
 same secret-free pool states. Refresh one provider through
 `POST /v1/admin/subscription-pool/refresh` with
 `{"provider":"codex","reason":"<operator reason>"}`, or through
-`brama subscription refresh codex --reason '<operator reason>'`. Brama Desktop
-exposes both under **Subscription Pool**. A non-empty reason is required, the
-result is appended to the operational journal, and no credential value is
-returned.
+`brama subscription refresh codex --reason '<operator reason>'`. Repair a
+provider-disowned Claude Code, Codex, or Kimi grant with
+`brama subscription sign-in <provider> --reason '<operator reason>'`; Brama
+calls Weles's real `/reauth` trajectory, confirms the exact account row, then
+refreshes the grant. Brama Desktop exposes these operations under
+**Subscription Pool**. A non-empty reason is required, the result is appended
+to the operational journal, and no credential value is returned.
 
 The complete state, error, retry, authorization, and resource contract is in
 [`CORE.md`](https://brama.wisent.com/docs/core). Provider capability and lifecycle contracts are in
@@ -554,6 +557,35 @@ this environment -- the last being what a shell without the launcher's capabilit
 environment gets, and not a broken account. A retired subscription is never
 refreshed, because rotating its grant would put back what somebody removed. The
 exit status is non-zero unless a credential was obtained.
+
+### `brama subscription sign-in <provider> --reason <text>`
+
+Repairs a provider-disowned `claude-code`, `codex`, or `kimi` grant by running
+the provider's real login trajectory through Weles. Before any browser opens,
+Brama reads Weles's health contract, resolves exactly one `login_item`, and
+refuses an unknown or ambiguous account. Success requires Weles to echo that
+exact row and the refresh that follows to answer `refreshed`.
+
+```bash
+brama subscription sign-in codex \
+  --login-item codex-wisent-app-login \
+  --reason 'provider disowned the stored grant' \
+  --json
+```
+
+Brama and Weles each acquire `brama-weles-reauth/token` from Skarbiec under
+their own workload identities when their service starts. Brama receives
+`BRAMA_WELES_REAUTH_TOKEN` and presents it only to `POST /reauth`; Weles
+receives the same field and accepts it only on that route. `BRAMA_WELES_URL`
+names the Weles worker API and defaults to `http://127.0.0.1:8788`. Neither
+service reads the other's files, the token is never placed in argv or the
+journal, and no browser opens on the machine running the Brama command.
+
+The real functional journeys in `tests/providers/subscription_real.rs` run one
+Weles login and one provider refresh for each of Claude Code, Codex, and Kimi.
+They pass only when the exact login row is confirmed, the provider returns a
+usable grant, the pool leaves `needs_reauthorization`, and Brama records the
+`subscription_sign_in` journal entry.
 
 No credential material is printed by either command: the listing reads a ledger
 that has never held any, and the refresh drops the credential it obtains without

@@ -768,24 +768,29 @@ PY
 export BRAMA_REQUEST_SIGN_IDENTITIES
 
 
-# Weles reauth is not wired here any more, and this is the note that says why so
-# the next person does not restore it by reflex.
-#
-# This block redeemed `brama-weles-reauth` at every start and exported
-# WELES_URL and BRAMA_WELES_REAUTH_TOKEN. The gateway reads neither: the only
-# occurrences of "weles" in the crate are the `weles/agent/primary` model alias.
-# So every start spent a capability on a token nothing presented, and a refused
-# subscription credential had no path back -- the documented self-healing was an
-# export.
-#
-# The reauth surface that does exist is Weles's own worker API on the host that
-# runs it: `POST /reauth {"provider":"codex"|"claude"|"kimi"}` in
-# `weles/scripts/worker/weles-api-server.mjs`, guarded by WELES_API_TOKEN. That
-# token is not `brama-weles-reauth` -- presenting this one returns 401 -- and no
-# vault scope in `weles/scripts/worker/deploy/skarbiec-acquisition-scopes.conf`
-# provides it. Wiring a client here needs that scope to exist first; until then
-# a credential the provider refuses with a token it just issued is retired by
-# `subscription_dispatch`, which says re-authorization is what unblocks it.
+# Brama and Weles authenticate this one route with the same Skarbiec-owned
+# bearer. Brama acquires its copy through its own identity; Weles acquires its
+# copy through its own identity. Neither service reads the other's files.
+BRAMA_WELES_REAUTH_TOKEN="$(
+  "$ENTITLEMENTS_ROUTER_BIN" get brama-weles-reauth \
+    | "$PYTHON_BIN" -c '
+import json
+import sys
+payload = json.load(sys.stdin)
+if payload.get("schema") != "skarbiec.item.v2":
+    raise SystemExit("brama-weles-reauth did not return a Skarbiec v2 item")
+value = payload.get("fields", {}).get("token")
+if not isinstance(value, str) or not value:
+    raise SystemExit("brama-weles-reauth/token is empty")
+sys.stdout.write(value)
+'
+)"
+[ -n "$BRAMA_WELES_REAUTH_TOKEN" ] || {
+  printf '%s\n' "Brama-Weles reauthentication token is empty" >/dev/stderr
+  false
+}
+export BRAMA_WELES_REAUTH_TOKEN
+export BRAMA_WELES_URL="${BRAMA_WELES_URL:-http://127.0.0.1:8788}"
 
 subscriptions_file="$runtime_dir/subscriptions.json"
 capabilities_file="$runtime_dir/provider-capabilities.json"

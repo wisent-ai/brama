@@ -1,20 +1,14 @@
 //! One operator-driven sign-in of a provider subscription account.
 //!
-//! The gateway cannot repair a `needs_reauthorization` credential by itself: a
-//! grant the provider disowned is only replaced by a real sign-in, and for
-//! claude and kimi no local CLI can perform one. Weles owns that sign-in,
-//! drives it in its own browser on its own host, and exposes it as
-//! `POST /reauth` on its worker API. Until now the only callers of that
-//! surface were the renewal loop and a rendered host helper; an operator
-//! reading `brama subscriptions list` had no command that closes the loop the
-//! runbook describes -- "sign the subscription in again, then refresh".
-//! This module is that command.
+//! A grant the provider disowned is only replaced by a real sign-in. Weles owns
+//! that sign-in, drives it in its own browser on its own host, and exposes it
+//! as `POST /reauth` on its worker API. Brama and Weles receive the same
+//! `brama-weles-reauth` bearer independently from Skarbiec at service startup:
+//! Brama presents it and Weles accepts it only on the reauthentication route.
+//! No shared host, environment file, helper, or copied secret connects them.
 //!
 //! Nothing here opens a browser and nothing here reads or prints credential
-//! material. The one secret involved -- Weles's worker API token -- is read
-//! from the worker's own environment files exactly the way Weles's launcher
-//! reads them, is sent only as a request header, and reaches neither argv nor
-//! the journal. What the sign-in mints is written by Weles into the vault; the
+//! material. What the sign-in mints is written by Weles into the vault; the
 //! proof this command reports is the same proof the runbook names: the refresh
 //! that follows answers `refreshed`.
 
@@ -36,16 +30,6 @@ const FAILED: &str = "failed";
 /// the wrong account.
 const LOGIN_ITEM_SELECTOR: &str = "login_item";
 
-/// Where the worker's own API token lives, in the order Weles's launcher
-/// sources them: the later file wins. Naming a single file once made the host
-/// helper report "no worker API token" on a host that had one, so this reads
-/// the same set in the same order the helper settled on.
-const WORKER_ENV_FILES: &[&str] = &[
-    "weles/var/worker-content.env",
-    ".config/weles/worker.env",
-    ".weles/secrets.env",
-    ".stado/weles-model.env",
-];
 
 /// What one sign-in was asked to do.
 pub struct SignInOptions {
@@ -211,12 +195,10 @@ fn verdict(
     })
 }
 
-/// Where Weles's worker API answers. It binds loopback on its own host, so a
-/// deployment where Weles runs elsewhere names that host explicitly.
+/// The durable Brama-Weles endpoint. Both services may run on one host, where
+/// loopback is the default, or the launcher may set the full service URL.
 fn worker_api_base() -> String {
-    let host = env_or("WELES_API_HOST", "127.0.0.1");
-    let port = env_or("WELES_API_PORT", "8788");
-    format!("http://{host}:{port}")
+    env_or("BRAMA_WELES_URL", "http://127.0.0.1:8788").trim_end_matches('/').to_string()
 }
 
 fn env_or(key: &str, default: &str) -> String {
@@ -235,75 +217,25 @@ fn transport_timeout_seconds() -> u64 {
         .unwrap_or(1200)
 }
 
-/// The worker API token, read the way Weles's own launcher reads it and never
-/// echoed anywhere. `WELES_API_TOKEN` in the environment wins; otherwise the
-/// worker's environment files are read in launcher order and the later file
-/// wins, accepting `WELES_CONSOLE_API_TOKEN` as the console-minted alias.
+/// Brama's Weles admission credential. The launcher acquires this field from
+/// `brama-weles-reauth` through the entitlements router at every service start.
+/// It is deliberately distinct from Weles's general worker API token.
 fn worker_api_token() -> Result<String, String> {
-    if let Ok(token) = std::env::var("WELES_API_TOKEN") {
-        let token = token.trim().to_string();
-        if !token.is_empty() {
-            return Ok(token);
-        }
-    }
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    let files: Vec<std::path::PathBuf> = match std::env::var("WELES_WORKER_ENV_FILE") {
-        Ok(file) if !file.trim().is_empty() => vec![std::path::PathBuf::from(file.trim())],
-        _ => WORKER_ENV_FILES
-            .iter()
-            .map(|relative| std::path::PathBuf::from(&home).join(relative))
-            .collect(),
-    };
-    let mut token = None;
-    let mut present = false;
-    for file in &files {
-        let Ok(text) = std::fs::read_to_string(file) else {
-            continue;
-        };
-        present = true;
-        for key in ["WELES_API_TOKEN", "WELES_CONSOLE_API_TOKEN"] {
-            if let Some(found) = env_file_value(&text, key) {
-                token = Some(found);
-            }
-        }
-    }
-    if !present {
-        return Err(
-            "no Weles worker environment file exists on this host, so it has no worker API \
-             token; sign-ins run on the host Weles runs on"
+    let token = std::env::var("BRAMA_WELES_REAUTH_TOKEN")
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if token.is_empty() {
+        Err(
+            "BRAMA_WELES_REAUTH_TOKEN is unavailable; Brama must acquire \
+             brama-weles-reauth/token from Skarbiec at startup"
                 .into(),
-        );
-    }
-    token.ok_or_else(|| {
-        format!(
-            "no WELES_API_TOKEN or WELES_CONSOLE_API_TOKEN in any of: {}",
-            files
-                .iter()
-                .map(|file| file.display().to_string())
-                .collect::<Vec<_>>()
-                .join(" ")
         )
-    })
+    } else {
+        Ok(token)
+    }
 }
 
-/// The last assignment of `key` in one env file, `export` prefix and quotes
-/// tolerated, exactly as the shell that sources the file would read it.
-fn env_file_value(text: &str, key: &str) -> Option<String> {
-    let mut value = None;
-    for line in text.lines() {
-        let line = line.trim();
-        let line = line.strip_prefix("export ").unwrap_or(line).trim_start();
-        if let Some(rest) = line.strip_prefix(key) {
-            if let Some(assigned) = rest.strip_prefix('=') {
-                let assigned = assigned.trim().trim_matches('"').to_string();
-                if !assigned.is_empty() {
-                    value = Some(assigned);
-                }
-            }
-        }
-    }
-    value
-}
 
 /// Weles's own health answer, which advertises the selector contract and the
 /// sign-in rows it holds. `error_for_status` matters: a healthy exit from an
