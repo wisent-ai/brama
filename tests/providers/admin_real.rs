@@ -108,7 +108,12 @@ impl Gateway {
 
         let port = available_port();
         let mut child = Command::new(env!("CARGO_BIN_EXE_brama"))
-            .args(["serve", "--port", &port.to_string(), "--local-credentials-stdin"])
+            .args([
+                "serve",
+                "--port",
+                &port.to_string(),
+                "--local-credentials-stdin",
+            ])
             .env(
                 "BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES",
                 serde_json::to_string(&identities).expect("serialize identities"),
@@ -140,16 +145,32 @@ impl Gateway {
                 .send()
                 .is_ok_and(|response| response.status().is_success())
             {
-                return Self { child, origin, client, scratch };
+                return Self {
+                    child,
+                    origin,
+                    client,
+                    scratch,
+                };
             }
             std::thread::sleep(Duration::from_millis(50));
         }
         panic!("the real Brama binary did not bind");
     }
 
-    fn request(&self, method: reqwest::Method, path: &str, bearer: &str, body: Option<Value>) -> (u16, Value) {
-        let mut request = self.client.request(method, format!("{}{}", self.origin, path)).bearer_auth(bearer);
-        if let Some(body) = body { request = request.json(&body); }
+    fn request(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        bearer: &str,
+        body: Option<Value>,
+    ) -> (u16, Value) {
+        let mut request = self
+            .client
+            .request(method, format!("{}{}", self.origin, path))
+            .bearer_auth(bearer);
+        if let Some(body) = body {
+            request = request.json(&body);
+        }
         let response = request.send().expect("Brama response");
         let status = response.status().as_u16();
         let body = response.json().expect("Brama JSON response");
@@ -159,7 +180,6 @@ impl Gateway {
     fn admin(&self, method: reqwest::Method, path: &str, body: Option<Value>) -> (u16, Value) {
         self.request(method, path, DESKTOP_BEARER, body)
     }
-
 
     fn request_text(
         &self,
@@ -220,7 +240,10 @@ fn alias_add_edit_and_delete_changes_real_openrouter_dispatch() {
     assert_eq!(status, 200, "{created}");
     let (status, answer) = gateway.completion(ALIAS);
     assert_eq!(status, 200, "{answer}");
-    assert!(answer.pointer("/choices/0/message/content").and_then(Value::as_str).is_some_and(|text| !text.trim().is_empty()));
+    assert!(answer
+        .pointer("/choices/0/message/content")
+        .and_then(Value::as_str)
+        .is_some_and(|text| !text.trim().is_empty()));
 
     let (status, edited) = gateway.admin(
         reqwest::Method::PUT,
@@ -306,12 +329,8 @@ fn every_chat_surface_and_operational_read_uses_real_openrouter_state() {
             "/output/0/content/0/text",
         ),
     ] {
-        let (status, answer) = gateway.request(
-            reqwest::Method::POST,
-            path,
-            CLIENT_BEARER,
-            Some(body),
-        );
+        let (status, answer) =
+            gateway.request(reqwest::Method::POST, path, CLIENT_BEARER, Some(body));
         assert_eq!(status, 200, "{path}: {answer}");
         assert!(
             answer
@@ -345,12 +364,12 @@ fn every_chat_surface_and_operational_read_uses_real_openrouter_state() {
         assert!(stream.contains(terminal), "{path}: {stream}");
     }
 
-    let (status, models) =
-        gateway.request(reqwest::Method::GET, "/v1/models", CLIENT_BEARER, None);
+    let (status, models) = gateway.request(reqwest::Method::GET, "/v1/models", CLIENT_BEARER, None);
     assert_eq!(status, 200, "{models}");
-    assert!(models["data"].as_array().is_some_and(|rows| !rows.is_empty()));
-    let (status, readiness) =
-        gateway.request(reqwest::Method::GET, "/readyz", CLIENT_BEARER, None);
+    assert!(models["data"]
+        .as_array()
+        .is_some_and(|rows| !rows.is_empty()));
+    let (status, readiness) = gateway.request(reqwest::Method::GET, "/readyz", CLIENT_BEARER, None);
     assert_eq!(status, 200, "{readiness}");
     assert_eq!(readiness["ready"], true);
     let (status, stats) = gateway.admin(reqwest::Method::GET, "/stats", None);
@@ -374,7 +393,10 @@ fn subscription_add_replace_probe_and_delete_uses_real_openrouter_account() {
         Some(json!({"provider":"openrouter","label":"primary","api_key":credential})),
     );
     assert_eq!(status, 200, "{created}");
-    let id = created["subscription"]["id"].as_str().expect("subscription id").to_owned();
+    let id = created["subscription"]["id"]
+        .as_str()
+        .expect("subscription id")
+        .to_owned();
     let probe = format!("{collection}/{id}/probe");
     let (status, proved) = gateway.admin(reqwest::Method::POST, &probe, None);
     assert_eq!(status, 200, "{proved}");

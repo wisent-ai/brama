@@ -2318,10 +2318,9 @@ async fn readyz() -> impl IntoResponse {
             .await
             .into_iter()
             .map(|account| {
-                let refusal =
-                    crate::subscription_dispatch::dispatch::no_active_credential_summary(
-                        &account.provider,
-                    );
+                let refusal = crate::subscription_dispatch::dispatch::no_active_credential_summary(
+                    &account.provider,
+                );
                 json!({
                     "id": account.id,
                     "provider": account.provider,
