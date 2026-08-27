@@ -1,0 +1,41 @@
+name: brama-weles-functional
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: brama-weles-functional
+  cancel-in-progress: false
+
+jobs:
+  real-sign-in:
+    runs-on: [self-hosted, macOS, ARM64, stado-release]
+    timeout-minutes: 45
+    steps:
+      - name: Check out Brama
+        uses: actions/checkout@v4
+      - name: Install the Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Run all real Brama to Weles sign-ins through Probierz
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v probierz >/dev/null 2>&1; then
+            PROBIERZ="$(command -v probierz)"
+          elif [[ -x "$HOME/.cargo/bin/probierz" ]]; then
+            PROBIERZ="$HOME/.cargo/bin/probierz"
+          elif [[ -x "/opt/homebrew/bin/probierz" ]]; then
+            PROBIERZ="/opt/homebrew/bin/probierz"
+          else
+            echo "probierz is not installed on the dedicated test host" >&2
+            exit 1
+          fi
+          "$PROBIERZ" run tui \
+            --app brama \
+            --record \
+            --spec "$GITHUB_WORKSPACE/tests/subscriptions/brama-weles-real.spec.mjs" \
+            --timeout 2400000 \
+            --no-repair
