@@ -1,0 +1,18 @@
+schemaVersion: 1
+appId: brama
+productId: brama
+owner: Brama maintainers
+surfaces:
+  tui:
+    spec: brama-weles-real.spec.mjs
+    journeys: [real-weles-sign-in]
+journeys:
+  real-weles-sign-in:
+    owner: Brama maintainers
+    timeoutMs: 2400000
+    value: Claude Code, Codex, and Kimi each complete a real Brama sign-in through the persistent Weles connection.
+artifacts:
+  retain:
+    adhocDays: 30
+  redact: [TOKEN, SECRET, PASSWORD, KEY, COOKIE, AUTH, CREDENTIAL]
+  pii: possible

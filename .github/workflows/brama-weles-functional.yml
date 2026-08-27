@@ -30,6 +30,10 @@ jobs:
       - name: Install the pinned Probierz dependencies
         working-directory: probierz-source
         run: npm ci
+      - name: Register the Brama functional surface
+        run: |
+          mkdir -p probierz-source/apps/brama
+          cp tests/subscriptions/probierz.yaml probierz-source/apps/brama/probierz.yaml
       - name: Run all real Brama to Weles sign-ins through Probierz
         shell: bash
         run: |
