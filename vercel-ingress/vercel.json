@@ -50,6 +50,58 @@
       "destination": "/docs/cli.html"
     },
     {
+      "source": "/docs/cli/version",
+      "destination": "/docs/cli/version.html"
+    },
+    {
+      "source": "/docs/cli/serve",
+      "destination": "/docs/cli/serve.html"
+    },
+    {
+      "source": "/docs/cli/onboard",
+      "destination": "/docs/cli/onboard.html"
+    },
+    {
+      "source": "/docs/cli/test",
+      "destination": "/docs/cli/test.html"
+    },
+    {
+      "source": "/docs/cli/detect",
+      "destination": "/docs/cli/detect.html"
+    },
+    {
+      "source": "/docs/cli/mcp",
+      "destination": "/docs/cli/mcp.html"
+    },
+    {
+      "source": "/docs/cli/subscriptions",
+      "destination": "/docs/cli/subscriptions.html"
+    },
+    {
+      "source": "/docs/cli/subscriptions/list",
+      "destination": "/docs/cli/subscriptions/list.html"
+    },
+    {
+      "source": "/docs/cli/subscription",
+      "destination": "/docs/cli/subscription.html"
+    },
+    {
+      "source": "/docs/cli/subscription/refresh",
+      "destination": "/docs/cli/subscription/refresh.html"
+    },
+    {
+      "source": "/docs/cli/subscription/sign-in",
+      "destination": "/docs/cli/subscription/sign-in.html"
+    },
+    {
+      "source": "/docs/cli/collect-task-quality",
+      "destination": "/docs/cli/collect-task-quality.html"
+    },
+    {
+      "source": "/docs/cli/help",
+      "destination": "/docs/cli/help.html"
+    },
+    {
       "source": "/docs/providers",
       "destination": "/docs/providers.html"
     },

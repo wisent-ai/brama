@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CLI — Brama Docs</title>
-  <meta name="description" content="CLI The brama binary is the gateway, its diagnostics, and its operator repair commands in one. Billable commands require an explicit cost acknowledgement, and commands that mutate ">
-  <link rel="canonical" href="https://brama.wisent.com/docs/cli">
+  <title>brama subscriptions — Brama CLI Docs</title>
+  <meta name="description" content="Browse Brama subscription-pool reporting subcommands.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/cli/subscriptions">
   <style>
 :root {
   color-scheme: dark;
@@ -121,47 +121,16 @@ footer a { color: var(--muted); text-decoration: none; }
     <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a class="active" aria-current="page" href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
     <main>
       <p class="source-note">Brama CLI command reference</p>
-      <article class="doc"><h1 id="cli">CLI<a class="headerlink" href="#cli" title="Link to this section">&para;</a></h1>
-<p>The <code>brama</code> binary is the gateway, its local diagnostics, and its
-operator repair surface. Billable commands require explicit cost
-acknowledgement, credential mutations require an audit reason, and no command
-prints credential material. This tree follows the public dispatcher in Brama
-0.2.41.</p>
-<h2 id="invocation">Root invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama &lt;COMMAND&gt;</code></pre>
-<p>A top-level command is required. Use <code>brama --help</code> or
-<a href="/docs/cli/help"><code>brama help [COMMAND]...</code></a> to print the same tree
-from the installed build.</p>
-<h2 id="command-tree">Complete command tree<a class="headerlink" href="#command-tree" title="Link to this section">&para;</a></h2>
-<ul>
-<li><a href="/docs/cli/version"><code>brama version</code></a> — print secret-free product and build identity as JSON.</li>
-<li><a href="/docs/cli/serve"><code>brama serve</code></a> — start the OpenAI-compatible HTTP server.</li>
-<li><a href="/docs/cli/onboard"><code>brama onboard</code></a> — run the first-use journey and optionally receive one real model response.</li>
-<li><a href="/docs/cli/test"><code>brama test</code></a> — run one acknowledged test inference through the agent subscription path.</li>
-<li><a href="/docs/cli/detect"><code>brama detect</code></a> — detect local hardware and print a model recommendation.</li>
-<li><a href="/docs/cli/mcp"><code>brama mcp</code></a> — serve the read-only stdio MCP hardware-detection surface.</li>
-<li><a href="/docs/cli/subscriptions"><code>brama subscriptions &lt;COMMAND&gt;</code></a> — enter the read-only pool-reporting group.
-  <ul>
-  <li><a href="/docs/cli/subscriptions/list"><code>brama subscriptions list [--json]</code></a> — report every subscription and credential state.</li>
-  </ul>
-</li>
-<li><a href="/docs/cli/subscription"><code>brama subscription &lt;COMMAND&gt;</code></a> — enter the credential mutation group.
-  <ul>
-  <li><a href="/docs/cli/subscription/refresh"><code>brama subscription refresh &lt;PROVIDER&gt; --reason &lt;REASON&gt; [--json]</code></a> — refresh one provider's OAuth grants now.</li>
-  <li><a href="/docs/cli/subscription/sign-in"><code>brama subscription sign-in &lt;PROVIDER&gt; --reason &lt;REASON&gt; [--login-item &lt;LOGIN_ITEM&gt;] [--login-timeout-ms &lt;MILLISECONDS&gt;] [--json]</code></a> — drive one exact Weles row and prove it with a refresh.</li>
-  </ul>
-</li>
-<li><a href="/docs/cli/collect-task-quality"><code>brama collect-task-quality --agent-id &lt;ID&gt; --task &lt;KEY&gt; --prompt &lt;TEXT&gt; [--expected-exact &lt;TEXT&gt;] [--expected-contains &lt;TEXT&gt;] [--persist] [--max-models &lt;N&gt;] --allow-provider-cost</code></a> — collect deterministic task-quality evidence.</li>
-<li><a href="/docs/cli/help"><code>brama help [COMMAND]...</code></a> — print root or command-specific help.</li>
-</ul>
-<h2 id="safety-boundaries">Safety boundaries<a class="headerlink" href="#safety-boundaries" title="Link to this section">&para;</a></h2>
-<p><code>version</code>, <code>detect</code>, <code>subscriptions list</code>, and
-<code>help</code> are read-only. <code>mcp</code> exposes local detection only.
-<code>test</code>, the provider-requesting part of <code>onboard</code>, and
-<code>collect-task-quality</code> require <code>--allow-provider-cost</code>.
-<code>subscription refresh</code> and <code>subscription sign-in</code> require
-<code>--reason</code> and journal their verdicts. Each linked command page states its
-exact inputs, output and state effect, and relevant refusal text.</p></article>
+      <article class="doc"><h1 id="brama-subscriptions"><code>brama subscriptions</code><a class="headerlink" href="#brama-subscriptions" title="Link to this section">&para;</a></h1>
+<p>Enter the read-only subscription-pool reporting command group.</p>
+<h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">brama subscriptions &lt;COMMAND&gt;</code></pre>
+<p>A subcommand is required. This group has no options and performs no work by itself.</p>
+<h2 id="commands">Commands<a class="headerlink" href="#commands" title="Link to this section">&para;</a></h2>
+<ul><li><a href="/docs/cli/subscriptions/list"><code>brama subscriptions list [--json]</code></a> — report every subscription and credential state.</li></ul>
+<h2 id="output-state-and-refusals">Output, state, and refusals<a class="headerlink" href="#output-state-and-refusals" title="Link to this section">&para;</a></h2>
+<p>The group command itself produces only help or parser errors and changes no state. Omitting <code>&lt;COMMAND&gt;</code> or naming anything other than <code>list</code> is refused by Clap before a handler runs; use <code>brama subscriptions --help</code> to print the accepted tree.</p>
+<p><a href="/docs/cli">Back to the complete CLI command tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>
   </div>
