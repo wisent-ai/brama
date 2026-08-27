@@ -37,6 +37,8 @@ jobs:
           cp tests/subscriptions/brama-weles-real.spec.mjs probierz-source/packages/tui/specs/brama-weles-real.spec.mjs
       - name: Run all real Brama to Weles sign-ins through Probierz
         shell: bash
+        env:
+          BRAMA_REPO_ROOT: ${{ github.workspace }}
         run: |
           set -euo pipefail
           node "$GITHUB_WORKSPACE/probierz-source/agent/cli.mjs" run tui \
