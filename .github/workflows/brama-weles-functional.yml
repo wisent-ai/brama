@@ -38,5 +38,4 @@ jobs:
             --app brama \
             --record \
             --spec "$GITHUB_WORKSPACE/tests/subscriptions/brama-weles-real.spec.mjs" \
-            --timeout 2400000 \
-            --no-repair
+            --timeout 2400000
