@@ -23,6 +23,8 @@ jobs:
           repository: wisent-ai/probierz
           ref: 521d02516a8f7ccc62179b4c6a0e76e56085d377
           path: probierz-source
+      - name: Put Homebrew on PATH
+        run: echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
       - name: Install the Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Install the pinned Probierz dependencies
