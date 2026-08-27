@@ -30,7 +30,6 @@ const FAILED: &str = "failed";
 /// the wrong account.
 const LOGIN_ITEM_SELECTOR: &str = "login_item";
 
-
 /// What one sign-in was asked to do.
 pub struct SignInOptions {
     /// The provider whose account should be signed in (`codex`, `claude-code`,
@@ -198,7 +197,9 @@ fn verdict(
 /// The durable Brama-Weles endpoint. Both services may run on one host, where
 /// loopback is the default, or the launcher may set the full service URL.
 fn worker_api_base() -> String {
-    env_or("BRAMA_WELES_URL", "http://127.0.0.1:8788").trim_end_matches('/').to_string()
+    env_or("BRAMA_WELES_URL", "http://127.0.0.1:8788")
+        .trim_end_matches('/')
+        .to_string()
 }
 
 fn env_or(key: &str, default: &str) -> String {
@@ -235,7 +236,6 @@ fn worker_api_token() -> Result<String, String> {
         Ok(token)
     }
 }
-
 
 /// Weles's own health answer, which advertises the selector contract and the
 /// sign-in rows it holds. `error_for_status` matters: a healthy exit from an
