@@ -34,6 +34,7 @@ jobs:
         run: |
           mkdir -p probierz-source/apps/brama
           cp tests/subscriptions/probierz.yaml probierz-source/apps/brama/probierz.yaml
+          cp tests/subscriptions/brama-weles-real.spec.mjs probierz-source/packages/tui/specs/brama-weles-real.spec.mjs
       - name: Run all real Brama to Weles sign-ins through Probierz
         shell: bash
         run: |
