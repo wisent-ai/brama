@@ -576,10 +576,14 @@ brama subscription sign-in codex \
 Brama and Weles each acquire `brama-weles-reauth/token` from Skarbiec under
 their own workload identities when their service starts. Brama receives
 `BRAMA_WELES_REAUTH_TOKEN` and presents it only to `POST /reauth`; Weles
-receives the same field and accepts it only on that route. `BRAMA_WELES_URL`
-names the Weles worker API and defaults to `http://127.0.0.1:8788`. Neither
-service reads the other's files, the token is never placed in argv or the
-journal, and no browser opens on the machine running the Brama command.
+receives the same field and accepts it only on that route. At every start the
+Brama launcher reads `agent_skarbiec_url` from the host's fleet Stado config
+while retaining the dedicated `brama-service` identity; a stale endpoint in an
+older service-specific config therefore cannot disconnect Brama from the
+canonical vault. `BRAMA_WELES_URL` names the Weles worker API and defaults to
+`http://127.0.0.1:8788`. Neither service reads the other's files, the token is
+never placed in argv or the journal, and no browser opens on the machine running
+the Brama command.
 
 The real functional journeys in `tests/providers/subscription_real.rs` run one
 Weles login and one provider refresh for each of Claude Code, Codex, and Kimi.

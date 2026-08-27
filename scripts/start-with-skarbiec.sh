@@ -76,7 +76,7 @@ command -v "$PYTHON_BIN" >/dev/null 2>&1 || {
 # the broker then denied redeeming it, which is a hard failure to read because
 # both halves are working exactly as told.
 installation=$(basename "$(dirname -- "$bundle_root")")
-runtime_dir=${BRAMA_RUNTIME_DIR:-/tmp/brama-skarbiec-$installation}
+runtime_dir=${BRAMA_RUNTIME_DIR:-"${HOME:-/nonexistent}/.stado/run/brama-skarbiec-$installation"}
 socket_dir="$runtime_dir/socket"
 gnupg_dir="$runtime_dir/gnupg"
 worm_dir="$runtime_dir/worm"
@@ -106,10 +106,28 @@ fi
 # reported "No secret key" after the import was added. Importing a key that is
 # already present costs nothing.
 if [ -n "$stado_bin" ]; then
+  # The dedicated Brama config owns the service identity, but the fleet config
+  # owns service placement. Read the live Skarbiec endpoint from that one source
+  # instead of inheriting a stale port from an old service.env. On the always-on
+  # host that stale port addressed an empty broker at 8895 while the canonical
+  # broker was healthy at 19095, so Brama could never start to reach Weles.
+  fleet_stado_config=${BRAMA_FLEET_STADO_CONFIG:-"${HOME:-/nonexistent}/.config/stado/config.json"}
+  agent_skarbiec_url="$(
+    STADO_CONFIG="$fleet_stado_config" "$stado_bin" config show \
+      | "$PYTHON_BIN" -c '
+import json
+import sys
+value = json.load(sys.stdin).get("resolved", {}).get("agent_skarbiec_url")
+if not isinstance(value, str) or not value:
+    raise SystemExit("fleet Stado config has no agent_skarbiec_url")
+sys.stdout.write(value)
+'
+  )"
   service_key="$gnupg_dir/brama-service.key"
   rm -f "$service_key"
   ( umask 077
-    STADO_CONFIG=${BRAMA_SKARBIEC_STADO_CONFIG:-"${HOME:-/nonexistent}/.config/stado/brama-service.json"} \
+    WC_AGENT_SKARBIEC_URL="$agent_skarbiec_url" \
+      STADO_CONFIG=${BRAMA_SKARBIEC_STADO_CONFIG:-"${HOME:-/nonexistent}/.config/stado/brama-service.json"} \
       "$stado_bin" secrets get brama-service --field gpg_private_key > "$service_key" ) || {
     printf '%s\n' 'cannot read this service identity from Skarbiec (brama-service.gpg_private_key)' >/dev/stderr
     false
