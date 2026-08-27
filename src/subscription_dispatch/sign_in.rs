@@ -161,7 +161,9 @@ pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, String> {
     let refresh = pool::refresh_provider(&provider, &reason).await?;
     let refreshed = refresh.get("result").and_then(Value::as_str) == Some("refreshed");
     let detail = if refreshed {
-        format!("Weles signed `{login_item}` in and the refresh that followed obtained a credential")
+        format!(
+            "Weles signed `{login_item}` in and the refresh that followed obtained a credential"
+        )
     } else {
         format!(
             "Weles signed `{login_item}` in, but the refresh that followed obtained nothing: {}",

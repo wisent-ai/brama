@@ -190,7 +190,8 @@ fn api_serves_a_real_completion(story: &str, route: &str) {
         "the {route} answer carries no content: {body}"
     );
     assert_eq!(
-        body.pointer("/choices/0/message/role").and_then(Value::as_str),
+        body.pointer("/choices/0/message/role")
+            .and_then(Value::as_str),
         Some("assistant"),
         "{body}"
     );

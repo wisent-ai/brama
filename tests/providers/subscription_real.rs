@@ -190,8 +190,8 @@ fn refresh_rotates_the_real_grant(provider: &str) {
         "the rotated {provider} grant states no future expiry"
     );
 
-    let record = newest_journal_record("subscription_refresh")
-        .expect("a refresh must journal its verdict");
+    let record =
+        newest_journal_record("subscription_refresh").expect("a refresh must journal its verdict");
     assert_eq!(record["provider"], provider);
     assert_eq!(record["result"], "refreshed");
     assert_eq!(record["reason"], Value::String(reason));

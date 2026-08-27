@@ -221,10 +221,7 @@ fn refresh_attempts_oauth_providers_and_reports_the_redeem_refusal() {
 #[test]
 fn sign_in_refuses_every_provider_weles_cannot_sign_in() {
     let directory = TestDirectory::new("providers-sign-in-unknown");
-    for provider in ALL_PROVIDERS
-        .iter()
-        .filter(|provider| !is_oauth(provider))
-    {
+    for provider in ALL_PROVIDERS.iter().filter(|provider| !is_oauth(provider)) {
         let output = command(&directory)
             .args([
                 "subscription",
@@ -236,9 +233,8 @@ fn sign_in_refuses_every_provider_weles_cannot_sign_in() {
             .output()
             .expect("brama subscription sign-in");
         assert_eq!(output.status.code(), Some(1), "{provider} must exit 1");
-        let expected = format!(
-            "Weles signs in claude-code, codex and kimi; `{provider}` is not one of them"
-        );
+        let expected =
+            format!("Weles signs in claude-code, codex and kimi; `{provider}` is not one of them");
         assert!(
             stderr_of(&output).contains(&expected),
             "unknown-provider sentence missing for {provider}: {}",
