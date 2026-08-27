@@ -2,6 +2,14 @@ schemaVersion: 1
 appId: brama
 productId: brama
 owner: Brama maintainers
+repositories:
+  - root: .
+    mappings:
+      - paths:
+          - src/**
+          - scripts/start-with-skarbiec.sh
+          - tests/subscriptions/**
+        journeys: [real-weles-sign-in]
 surfaces:
   tui:
     spec: brama-weles-real.spec.mjs
