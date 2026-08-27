@@ -154,6 +154,8 @@ impl Gateway {
             }
             std::thread::sleep(Duration::from_millis(50));
         }
+        let _ = child.kill();
+        let _ = child.wait();
         panic!("the real Brama binary did not bind");
     }
 

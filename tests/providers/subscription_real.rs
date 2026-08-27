@@ -71,7 +71,7 @@ fn provider_rows(provider: &str) -> Vec<(String, Value)> {
     let Ok(text) = std::fs::read_to_string(ledger_path()) else {
         return Vec::new();
     };
-    let ledger: Value = serde_json::from_str(&text).unwrap_or_else(|_| Value::Null);
+    let ledger: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
     ledger["subscriptions"]
         .as_object()
         .map(|rows| {
@@ -87,8 +87,7 @@ fn newest_journal_record(kind: &str) -> Option<Value> {
     let text = std::fs::read_to_string(journal_path()).ok()?;
     text.lines()
         .filter_map(|line| serde_json::from_str::<Value>(line).ok())
-        .filter(|record| record["kind"] == kind)
-        .next_back()
+        .rfind(|record| record["kind"] == kind)
 }
 
 fn max_field(rows: &[(String, Value)], pointer: &str) -> i64 {

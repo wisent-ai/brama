@@ -39,11 +39,14 @@ const SUBSCRIPTION_CATALOG_ENV: &str = "BRAMA_SUBSCRIPTION_CATALOG";
 const DONATED_SUBSCRIPTIONS_FILE_ENV: &str = "BRAMA_DONATED_SUBSCRIPTIONS_FILE";
 const DEFAULT_DONATED_SUBSCRIPTIONS_FILE: &str = "/tmp/brama-skarbiec/donated-subscriptions.json";
 
+type LocalCredential = Zeroizing<Vec<u8>>;
+type LocalCredentialMap = HashMap<String, LocalCredential>;
+
 static OAUTH_REFRESH_LOCK: LazyLock<tokio::sync::Mutex<()>> =
     LazyLock::new(|| tokio::sync::Mutex::new(()));
-static LOCAL_PROVIDER_CREDENTIALS: LazyLock<RwLock<Option<HashMap<String, Zeroizing<Vec<u8>>>>>> =
+static LOCAL_PROVIDER_CREDENTIALS: LazyLock<RwLock<Option<LocalCredentialMap>>> =
     LazyLock::new(|| RwLock::new(None));
-static LOCAL_SUBSCRIPTION_CREDENTIALS: LazyLock<RwLock<HashMap<String, Zeroizing<Vec<u8>>>>> =
+static LOCAL_SUBSCRIPTION_CREDENTIALS: LazyLock<RwLock<LocalCredentialMap>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// Fold an identifier into the stable resource alphabet used by deployment
