@@ -27,6 +27,8 @@ jobs:
         run: echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
       - name: Install the Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: Build the exact Brama binary under test
+        run: cargo build --bin brama
       - name: Install the pinned Probierz dependencies
         working-directory: probierz-source
         run: npm ci
