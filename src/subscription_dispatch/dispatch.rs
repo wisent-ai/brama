@@ -1017,11 +1017,19 @@ pub async fn dispatch_best_subscription(
         Ok(agent_id) => agent_id,
         Err(e) => return ModelResponse::failure(&request.model, e),
     };
-    let models = match best_subscription_models(&agent_id, preferred).await {
+    dispatch_best_subscription_for_agent(&agent_id, request, preferred).await
+}
+
+pub async fn dispatch_best_subscription_for_agent(
+    agent_id: &str,
+    request: &ModelRequest,
+    preferred: Option<&str>,
+) -> ModelResponse {
+    let models = match best_subscription_models(agent_id, preferred).await {
         Ok(models) => models,
         Err(e) => return ModelResponse::failure(&request.model, e),
     };
-    dispatch_ranked_models(&agent_id, request, models, ANY_SUBSCRIPTION_CONTEXT).await
+    dispatch_ranked_models(agent_id, request, models, ANY_SUBSCRIPTION_CONTEXT).await
 }
 
 /// `model: "any-vision-capable"` selects an active stateless provider route
@@ -1956,11 +1964,19 @@ pub async fn dispatch_best_subscription_stream(
         Ok(agent_id) => agent_id,
         Err(e) => return Err(ModelResponse::failure(&request.model, e)),
     };
-    let models = match best_subscription_models(&agent_id, preferred).await {
+    dispatch_best_subscription_stream_for_agent(&agent_id, request, preferred).await
+}
+
+pub async fn dispatch_best_subscription_stream_for_agent(
+    agent_id: &str,
+    request: &ModelRequest,
+    preferred: Option<&str>,
+) -> Result<RoutedStream, ModelResponse> {
+    let models = match best_subscription_models(agent_id, preferred).await {
         Ok(models) => models,
         Err(e) => return Err(ModelResponse::failure(&request.model, e)),
     };
-    dispatch_ranked_models_stream(&agent_id, request, models, ANY_SUBSCRIPTION_CONTEXT).await
+    dispatch_ranked_models_stream(agent_id, request, models, ANY_SUBSCRIPTION_CONTEXT).await
 }
 
 pub async fn dispatch_any_vision_capable_subscription_stream(

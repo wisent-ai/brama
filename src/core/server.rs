@@ -22,12 +22,13 @@ use crate::providers::stream::{StreamDelta, StreamItem};
 use crate::subscription_dispatch::{
     authenticate_agent, dispatch_any_subscription, dispatch_any_subscription_stream,
     dispatch_any_vision_capable_subscription, dispatch_any_vision_capable_subscription_stream,
-    dispatch_best_subscription, dispatch_best_subscription_stream, dispatch_direct_openai_typed,
-    dispatch_direct_with_fallback, dispatch_direct_with_fallback_stream, dispatch_subscription,
-    dispatch_subscription_for_agent, dispatch_subscription_stream,
-    dispatch_subscription_stream_for_agent, dispatch_task_subscription,
-    dispatch_task_subscription_stream, is_subscription_model, provider_requires_caller_identity,
-    registry_models_for_agent, RoutedStream,
+    dispatch_best_subscription, dispatch_best_subscription_for_agent,
+    dispatch_best_subscription_stream, dispatch_best_subscription_stream_for_agent,
+    dispatch_direct_openai_typed, dispatch_direct_with_fallback,
+    dispatch_direct_with_fallback_stream, dispatch_subscription, dispatch_subscription_for_agent,
+    dispatch_subscription_stream, dispatch_subscription_stream_for_agent,
+    dispatch_task_subscription, dispatch_task_subscription_stream, is_subscription_model,
+    provider_requires_caller_identity, registry_models_for_agent, RoutedStream,
 };
 use crate::types::{BillingTarget, Message, ModelRequest, ModelResponse, Tool, ToolCall};
 
@@ -616,6 +617,11 @@ async fn ask_authority(bearer: &str) -> Option<ModelClientIdentity> {
         return None;
     }
     let client_id = answer.get("consumer").and_then(Value::as_str)?.to_string();
+    let agent_id = answer
+        .get("audience")
+        .and_then(Value::as_str)
+        .filter(|audience| valid_agent_id(audience))
+        .map(str::to_string);
     let routes: HashSet<String> = answer
         .get("capabilities")
         .and_then(Value::as_array)?
@@ -632,7 +638,7 @@ async fn ask_authority(bearer: &str) -> Option<ModelClientIdentity> {
     }
     Some(ModelClientIdentity {
         client_id,
-        agent_id: None,
+        agent_id,
         user_id: None,
         allowed_models: Some(routes),
     })
@@ -1659,15 +1665,26 @@ async fn route_model_call(
             } else if any_subscription {
                 dispatch_any_subscription_stream(headers, &request, raw_body).await
             } else if best_subscription {
-                dispatch_best_subscription_stream(
-                    headers,
-                    &request,
-                    raw_body,
-                    preferred_route.as_deref(),
-                )
-                .await
+                if let Some(agent_id) = client_identity.agent_id.as_deref() {
+                    dispatch_best_subscription_stream_for_agent(
+                        agent_id,
+                        &request,
+                        preferred_route.as_deref(),
+                    )
+                    .await
+                } else {
+                    dispatch_best_subscription_stream(
+                        headers,
+                        &request,
+                        raw_body,
+                        preferred_route.as_deref(),
+                    )
+                    .await
+                }
             } else if let Some(account_agent) = account_agent.as_deref() {
                 dispatch_subscription_stream_for_agent(account_agent, &request).await
+            } else if let Some(agent_id) = client_identity.agent_id.as_deref() {
+                dispatch_subscription_stream_for_agent(agent_id, &request).await
             } else if caller_scoped_request {
                 dispatch_subscription_stream(headers, &request, raw_body).await
             } else {
@@ -1689,11 +1706,27 @@ async fn route_model_call(
             DispatchedCall::Buffered(dispatch_any_subscription(headers, &request, raw_body).await)
         } else if best_subscription {
             DispatchedCall::Buffered(
-                dispatch_best_subscription(headers, &request, raw_body, preferred_route.as_deref())
-                    .await,
+                if let Some(agent_id) = client_identity.agent_id.as_deref() {
+                    dispatch_best_subscription_for_agent(
+                        agent_id,
+                        &request,
+                        preferred_route.as_deref(),
+                    )
+                    .await
+                } else {
+                    dispatch_best_subscription(
+                        headers,
+                        &request,
+                        raw_body,
+                        preferred_route.as_deref(),
+                    )
+                    .await
+                },
             )
         } else if let Some(account_agent) = account_agent.as_deref() {
             DispatchedCall::Buffered(dispatch_subscription_for_agent(account_agent, &request).await)
+        } else if let Some(agent_id) = client_identity.agent_id.as_deref() {
+            DispatchedCall::Buffered(dispatch_subscription_for_agent(agent_id, &request).await)
         } else if caller_scoped_request {
             DispatchedCall::Buffered(dispatch_subscription(headers, &request, raw_body).await)
         } else {
