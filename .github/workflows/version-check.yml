@@ -87,6 +87,8 @@ jobs:
     needs: [rust-gates, contract, baseline]
     permissions:
       contents: write
-    uses: wisent-ai/quality-control/.github/workflows/tag-on-manifest-bump.yml@897485548846d7dfe38832b6b9a38212cdd1685a
+      actions: write
+    uses: wisent-ai/quality-control/.github/workflows/tag-on-manifest-bump.yml@b3e0ed475860f77960f70c66527e4598dfa1c5b9
     with:
       manifest: Cargo.toml
+      release-workflow: release.yml
