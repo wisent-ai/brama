@@ -178,13 +178,17 @@ pub struct SubscriptionEntry {
 /// Deliberately not a [`SubscriptionEntry`]: these are precisely the accounts
 /// the per-agent listing cannot produce, and giving them the routable type
 /// would invite a caller to route to one.
+///
+/// When tags are present, provider and id are sourced from them. When tags are
+/// absent, both are None, indicating that the item's purpose cannot be determined
+/// without explicit metadata. The item id is always available for repair.
 #[derive(Debug, Clone)]
 pub struct UnroutableAccount {
-    /// The subscription id, as its coordinate or its `brama:id:` tag spells it.
-    pub id: String,
-    /// The provider whose account this is.
-    pub provider: String,
-    /// The vault item it lives in, so the repair has an address.
+    /// The subscription id from `brama:id:` tag, or None if tags are absent.
+    pub id: Option<String>,
+    /// The provider from `brama:provider:` tag, or None if tags are absent.
+    pub provider: Option<String>,
+    /// The vault item id it lives in, so the repair has an address.
     pub item: String,
 }
 
@@ -1425,51 +1429,31 @@ fn normalized_provider(value: &str) -> String {
     value.trim().to_lowercase().replace('_', "-")
 }
 
-/// The subscription id and provider a bare coordinate stands for.
-///
-/// [`subscription_resource`] writes `provider:<provider>:<subscription>`, and
-/// the authority's routes table reads it back, so the coordinate identifies an
-/// account even when nothing else about the item does. A two-part id is a
-/// direct provider credential rather than a subscription and is not one of
-/// these.
-fn subscription_coordinate(item_id: &str) -> Option<(String, String)> {
-    let mut parts = item_id.splitn(3, ':');
-    let ("provider", Some(provider), Some(subscription)) =
-        (parts.next()?, parts.next(), parts.next())
-    else {
-        return None;
-    };
-    let provider = normalized_provider(provider);
-    let subscription = subscription.trim();
-    (!provider.is_empty() && !subscription.is_empty()).then(|| (provider, subscription.to_owned()))
-}
-
 /// Map the router's full vault listing to the accounts no agent tag reaches.
 ///
-/// The tag loss comes in two depths and both hide an account the same way. An
-/// item that still carries `brama:subscription` and `brama:provider:` names
-/// itself and is missing only the agent it belongs to; an item stripped bare --
-/// `provider:kimi:brama-sub-wisent-app-kimi-primary` sat at revision 144 with
-/// no tags at all while its credential kept working -- is recognised by the
-/// coordinate it lives at. An item carrying any `brama:agent:` tag is routable
-/// and is not reported here, whichever agent that tag names.
+/// Reports every non-deleted item carrying no `brama:agent:` tag. Each of
+/// provider and id is populated from its corresponding tag (`brama:provider:`
+/// and `brama:id:`), or is None if the tag is absent. Item names are never
+/// parsed; all meaning is sourced from explicit tags. An item carrying any
+/// `brama:agent:` tag is routable and is not reported here, whichever agent
+/// that tag names.
 fn parse_unroutable_accounts(output: &[u8]) -> Result<Vec<UnroutableAccount>, ()> {
     let items: Vec<VaultListItem> = serde_json::from_slice(output).map_err(|_| ())?;
     let mut accounts: Vec<UnroutableAccount> = items
         .into_iter()
         .filter(|item| !item.deleted)
         .filter(|item| subscription_tag_value(&item.tags, "brama:agent:").is_none())
-        .filter_map(|item| {
-            let tagged = subscription_tag_value(&item.tags, "brama:id:").and_then(|id| {
-                subscription_tag_value(&item.tags, "brama:provider:")
-                    .map(|provider| (normalized_provider(provider), id.to_owned()))
-            });
-            let (provider, id) = tagged.or_else(|| subscription_coordinate(&item.id))?;
-            Some(UnroutableAccount {
+        .map(|item| {
+            // Populate fields from tags; neither causes the item to be skipped.
+            let id = subscription_tag_value(&item.tags, "brama:id:").map(|s| s.to_owned());
+            let provider = subscription_tag_value(&item.tags, "brama:provider:")
+                .map(|p| normalized_provider(p));
+            // Report any item with no agent tag, regardless of which provider/id tags it carries.
+            UnroutableAccount {
                 id,
                 provider,
                 item: item.id,
-            })
+            }
         })
         .collect();
     accounts.sort_by(|left, right| left.item.cmp(&right.item));

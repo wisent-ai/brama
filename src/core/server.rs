@@ -2349,19 +2349,46 @@ async fn readyz() -> impl IntoResponse {
             .await
             .into_iter()
             .map(|account| {
-                let refusal = crate::subscription_dispatch::dispatch::no_active_credential_summary(
-                    &account.provider,
-                );
+                let (provider_str, reason) = match (&account.provider, &account.id) {
+                    (Some(provider), Some(_id)) => {
+                        // Both tags present: provider-specific refusal message.
+                        let refusal = crate::subscription_dispatch::dispatch::no_active_credential_summary(provider);
+                        (provider.clone(), format!(
+                            "the vault holds this account and its item carries no 'brama:agent:' tag, \
+                             so subscription discovery cannot see it and no agent can route to it; \
+                             every request for this provider answers '{refusal}'"
+                        ))
+                    }
+                    (Some(provider), None) => {
+                        // Provider tag present but id missing: incomplete metadata.
+                        let refusal = crate::subscription_dispatch::dispatch::no_active_credential_summary(provider);
+                        (provider.clone(), format!(
+                            "the vault holds this account; its item carries 'brama:provider:' but no 'brama:id:' tag; \
+                             subscription discovery cannot route to it without both tags; \
+                             every request for this provider would answer '{refusal}'"
+                        ))
+                    }
+                    (None, Some(_id)) => {
+                        // Id tag present but provider missing: incomplete metadata.
+                        ("unknown".to_string(),
+                         "the vault holds this account; its item carries 'brama:id:' but no 'brama:provider:' tag; \
+                          subscription discovery cannot route to it without both tags; \
+                          operator: add the missing 'brama:provider:' tag or remove this item".to_string())
+                    }
+                    (None, None) => {
+                        // Both tags absent: item's purpose is completely unknown.
+                        ("unknown".to_string(),
+                         "the vault holds this account, but its item carries no 'brama:id:' or 'brama:provider:' tags; \
+                          this item has no declared purpose and subscription discovery cannot route to it; \
+                          operator: restore both tags or remove this item from the vault".to_string())
+                    }
+                };
                 json!({
                     "id": account.id,
-                    "provider": account.provider,
+                    "provider": &provider_str,
                     "item": account.item,
                     "routable": false,
-                    "reason": format!(
-                        "the vault holds this account and its item carries no 'brama:agent:' tag, \
-                         so subscription discovery cannot see it and no agent can route to it; \
-                         every request for this provider answers '{refusal}'"
-                    ),
+                    "reason": reason,
                 })
             })
             .collect()
