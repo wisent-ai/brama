@@ -1601,7 +1601,9 @@ async fn route_model_call(
     // own provider when it stayed anonymous and refused with "no active
     // credential for agent" the moment it proved who it was. The catalogue said
     // the opposite in the same breath, marking those models available to agent
-    // callers. Proving more identity cannot grant less access.
+    // callers. Proving more identity cannot grant less access. The dispatch
+    // branches below must therefore use this predicate too; a bearer-bound
+    // `agent_id` remains audit identity, not an entitlement by itself.
     let caller_scoped_request = account_agent.is_some()
         || any_subscription
         || any_vision_capable_subscription
@@ -1683,8 +1685,6 @@ async fn route_model_call(
                 }
             } else if let Some(account_agent) = account_agent.as_deref() {
                 dispatch_subscription_stream_for_agent(account_agent, &request).await
-            } else if let Some(agent_id) = client_identity.agent_id.as_deref() {
-                dispatch_subscription_stream_for_agent(agent_id, &request).await
             } else if caller_scoped_request {
                 dispatch_subscription_stream(headers, &request, raw_body).await
             } else {
@@ -1725,8 +1725,6 @@ async fn route_model_call(
             )
         } else if let Some(account_agent) = account_agent.as_deref() {
             DispatchedCall::Buffered(dispatch_subscription_for_agent(account_agent, &request).await)
-        } else if let Some(agent_id) = client_identity.agent_id.as_deref() {
-            DispatchedCall::Buffered(dispatch_subscription_for_agent(agent_id, &request).await)
         } else if caller_scoped_request {
             DispatchedCall::Buffered(dispatch_subscription(headers, &request, raw_body).await)
         } else {
