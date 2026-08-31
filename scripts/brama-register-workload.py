@@ -107,9 +107,11 @@ if routes_path is None:
     )
 routes = json.loads(routes_path.read_text())
 capabilities = sorted(
-    f"acquire:{entry['item']}#{entry['field']}"
-    for entry in routes.values()
-    if isinstance(entry, dict) and entry.get("item") and entry.get("field")
+    {
+        f"acquire:{entry['item']}#{entry['field']}"
+        for entry in routes.values()
+        if isinstance(entry, dict) and entry.get("item") and entry.get("field")
+    }
 )
 print(f"routes:   {routes_path}")
 if not capabilities:
