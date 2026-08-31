@@ -24,6 +24,7 @@ fi
 
 requested_runtime_dir=${BRAMA_RUNTIME_DIR:-}
 requested_config_dir=${BRAMA_SKARBIEC_CONFIG_DIR:-}
+requested_gnupg_home=${BRAMA_GNUPG_HOME:-}
 service_env_file=${BRAMA_SERVICE_ENV_FILE:-${HOME:-/nonexistent}/.config/brama/service.env}
 if [ -f "$service_env_file" ]; then
   set -a
@@ -32,6 +33,9 @@ if [ -f "$service_env_file" ]; then
 elif [ -n "${BRAMA_SERVICE_ENV_FILE:-}" ]; then
   printf '%s\n' "BRAMA_SERVICE_ENV_FILE is not a regular file: $service_env_file" >/dev/stderr
   false
+fi
+if [ -n "$requested_gnupg_home" ]; then
+  BRAMA_GNUPG_HOME="$requested_gnupg_home"
 fi
 configured_config_dir=$requested_config_dir
 
