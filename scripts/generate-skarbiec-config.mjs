@@ -74,9 +74,18 @@ const subscriptions = Object.values(vault?.items ?? {})
       .filter((tag) => tag.startsWith('brama:agent:'))
       .map((tag) => tag.slice('brama:agent:'.length)),
   }))
-  .filter(({ id, provider }) => typeof id === 'string' && typeof provider === 'string'
+  // The agent allowlist bounds which agents may hold a subscription at all, and
+  // the item states which agents hold it: one `brama:agent:<agent>` tag each.
+  // This used to ask instead whether the subscription id was spelled
+  // `brama-sub-<allowed-agent>-...`, which answered a different question with a
+  // name. It cut both ways: a correctly tagged subscription whose id did not
+  // follow the convention was dropped from the policy silently -- so the
+  // launcher then requested a capability for a resource nothing granted, and the
+  // account was never served -- while an item whose id merely spelled an allowed
+  // agent passed on evidence that was not about it.
+  .filter(({ id, provider, agents }) => typeof id === 'string' && typeof provider === 'string'
     && /^[a-z0-9-]+$/.test(provider)
-    && subscriptionAgentIds.some((agentId) => id.startsWith(`brama-sub-${agentId}-`)))
+    && agents.some((agentId) => subscriptionAgentIds.includes(agentId)))
   .sort((left, right) => left.id.localeCompare(right.id));
 
 // No subscription in the vault is a fact, not a failure: a host can be provisioned
@@ -84,7 +93,7 @@ const subscriptions = Object.values(vault?.items ?? {})
 // is why an empty list was never a state anyone saw -- it was a state that stopped
 // provisioning.
 if (subscriptions.length === 0) {
-  process.stderr.write(`no brama-sub-* subscription items in ${vaultPath}; the policy will grant none\n`);
+  process.stderr.write(`no item in ${vaultPath} carries ${MARK} with a brama:agent:<agent> tag naming an allowed agent; the policy will grant none\n`);
 }
 const controlConfigPath = controlConfigInput || process.env.BRAMA_CONTROL_CONFIG;
 let directProviderIds = ['local-openai'];

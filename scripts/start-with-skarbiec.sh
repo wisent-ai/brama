@@ -882,22 +882,23 @@ with open(policy_path, encoding="utf-8") as source:
 # question, and it disagreed -- the list on this host declared twenty-four
 # subscriptions over twenty providers while the vault held six, and a paid Claude
 # account was in the vault and missing from the list.
-with open(os.environ["SKARBIEC_VAULT_FILE"], encoding="utf-8") as source:
-    vault_items = (json.load(source).get("items") or {}).values()
-manifest_agents = {}
-for item in vault_items:
-    tags = item.get("tags") or []
-    if "brama:subscription" not in tags:
-        continue
-    subscription_id = next(
-        (tag[len("brama:id:"):] for tag in tags if tag.startswith("brama:id:")),
-        None,
-    )
-    if subscription_id is None:
-        continue
-    agents = [tag[len("brama:agent:"):] for tag in tags if tag.startswith("brama:agent:")]
-    if agents:
-        manifest_agents[subscription_id] = agents
+#
+# These four namespaces are the whole vocabulary, and the listing already read
+# above carries them, so this file opens the vault once through the router and
+# never reads the vault file beside it.
+SUBSCRIPTION_TAG = "brama:subscription"
+PROVIDER_TAG = "brama:provider:"
+SUBSCRIPTION_ID_TAG = "brama:id:"
+AGENT_TAG = "brama:agent:"
+
+
+def tag_values(tags, prefix):
+    return [tag[len(prefix):] for tag in tags if tag.startswith(prefix) and tag != prefix]
+
+
+def tag_value(tags, prefix):
+    declared = tag_values(tags, prefix)
+    return declared[0] if declared else None
 
 rules = policy.get("roles", {}).get("brama-runtime", [])
 allowed = {
@@ -912,15 +913,6 @@ request_sign_agents = sorted(
     and isinstance(resource, str)
     and resource.startswith("agent:")
 )
-subscription_agents = sorted({
-    *request_sign_agents,
-    "echo",
-    "content-platform",
-    "oko",
-    "weles",
-    "lem",
-    *(agent for agents in manifest_agents.values() for agent in agents),
-})
 normalize = lambda value: value.strip().lower().replace("_", "-")
 
 def issue(purpose, resource):
@@ -960,50 +952,78 @@ def issue(purpose, resource):
 
 capabilities = {}
 catalog = []
+# Everything that decides a capability is read off the item's declared tags,
+# never off its id.
+#
+# `brama:subscription` marks a subscription, `brama:provider:<provider>` names
+# its provider, `brama:id:<subscription-id>` names the subscription and each
+# `brama:agent:<agent>` names an agent allowed to spend it. All four are
+# registered tag namespaces in Skarbiec's schema, so the vault itself refuses a
+# write that misspells one, and they are exactly what the gateway's own
+# discovery reads (broker.rs::parse_live_subscriptions). That agreement is the
+# point: `redeem_subscription_credential` looks this map up by the subscription
+# id from `brama:id:` and builds its resource from the provider in
+# `brama:provider:`, so a capability filed under anything else is a capability
+# nobody asks for.
+#
+# This used to split the item id on colons to recover the provider and the
+# subscription id, and -- when the agent tags were missing -- infer the owning
+# agent from a `brama-sub-<agent>-` prefix on that id. An item id is a mutable,
+# human-chosen name. A rename filed the capability under a key the gateway never
+# asks for, or handed one agent's subscription to another, and nothing raised:
+# the credential stayed valid, the account simply stopped being served. An item
+# that has lost a declaration is now named and skipped, because a missing tag can
+# be put back and a guess cannot be taken back.
+#
+# The direct-provider branch is gone with it. It required the vault to hold an
+# item literally named `provider:<provider>`, which is a second name-shaped
+# precondition and a wrong one: the operator maps a resource to its vault
+# coordinate in capability-routes.json, and that coordinate need not share the
+# resource's spelling. Every `provider:<provider>` grant the operator declared is
+# issued by the loop over `allowed` below, which is the declaration that governs.
 for item in available_items:
     if not isinstance(item, dict) or item.get("deleted", False):
         continue
-    resource_id = item.get("id")
-    if not isinstance(resource_id, str):
+    item_name = item.get("id")
+    if not isinstance(item_name, str):
         continue
-    parts = resource_id.split(":")
-    if len(parts) == 2 and parts[0] == "provider":
-        provider = normalize(parts[1])
-        resource = f"provider:{provider}"
-        if ("brama.provider.authenticate", resource) not in allowed:
-            continue
-        granted = issue("brama.provider.authenticate", resource)
-        if granted is not None:
-            capabilities[provider] = granted
-    elif len(parts) == 3 and parts[0] == "provider":
-        provider, item_id = normalize(parts[1]), parts[2]
-        agent_ids = manifest_agents.get(item_id)
-        if agent_ids is None:
-            inferred = next(
-                (
-                    agent
-                    for agent in subscription_agents
-                    if item_id.startswith(f"brama-sub-{agent}-")
-                ),
-                None,
-            )
-            agent_ids = [] if inferred is None else [inferred]
-        if not agent_ids:
-            continue
-        resource = f"provider:{provider}:{item_id}"
-        if ("brama.provider.authenticate", resource) not in allowed:
-            continue
-        granted = issue("brama.provider.authenticate", resource)
-        if granted is None:
-            continue
-        capabilities[item_id] = granted
-        for agent_id in agent_ids:
-            catalog.append({
-                "id": item_id,
-                "provider": provider,
-                "agent_id": agent_id,
-                "status": "active",
-            })
+    tags = item.get("tags") or []
+    if SUBSCRIPTION_TAG not in tags:
+        continue
+    provider = tag_value(tags, PROVIDER_TAG)
+    subscription_id = tag_value(tags, SUBSCRIPTION_ID_TAG)
+    agent_ids = tag_values(tags, AGENT_TAG)
+    missing = [
+        f"{prefix}<value>"
+        for prefix, value in (
+            (PROVIDER_TAG, provider),
+            (SUBSCRIPTION_ID_TAG, subscription_id),
+            (AGENT_TAG, agent_ids),
+        )
+        if not value
+    ]
+    if missing:
+        sys.stderr.write(
+            f"skipping {item_name}: carries {SUBSCRIPTION_TAG} but no "
+            f"{' and no '.join(missing)} tag, so nothing declares what it serves; "
+            "tag it and it is served again\n"
+        )
+        continue
+    provider = normalize(provider)
+    resource = f"provider:{provider}:{subscription_id}"
+    if ("brama.provider.authenticate", resource) not in allowed:
+        continue
+    granted = issue("brama.provider.authenticate", resource)
+    if granted is None:
+        continue
+    capabilities[subscription_id] = granted
+    for agent_id in agent_ids:
+        catalog.append({
+            "id": subscription_id,
+            "provider": provider,
+            "agent_id": agent_id,
+            "status": "active",
+        })
 
 for purpose, resource in sorted(allowed):
     if purpose != "brama.provider.authenticate":

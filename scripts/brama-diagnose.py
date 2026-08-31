@@ -42,6 +42,7 @@ CAPABILITY_VERB = "capability-issue"
 REFUSAL = "unknown command"
 BOOT_MARKER = "Starting server"
 BEST_ALIAS = "best"
+PROVIDER_PURPOSE = "brama.provider.authenticate"
 REQUIRED_FILES = (
     "bin/brama",
     "bin/skarbiec-entitlements-router",
@@ -61,6 +62,15 @@ gid = os.getgid()
 
 def moment(epoch):
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch))
+
+
+def normalize(provider):
+    """The provider spelling the launcher files a capability under.
+
+    Mirrors `normalize` in start-with-skarbiec.sh, so the key this report looks
+    for is the key that file wrote.
+    """
+    return provider.strip().lower().replace("_", "-")
 
 
 def settings_of(path):
@@ -203,16 +213,47 @@ runtime_dir = pathlib.Path(
 print(f"runtime dir: {runtime_dir}")
 
 print("\n=== policy grants against capabilities issued")
-granted = set()
+# Both sides of this diff must be keyed the way the gateway redeems, or the
+# report lies about the thing it exists to diagnose.
+#
+# provider-capabilities.json is not keyed by provider. The launcher files a
+# direct provider grant under the provider slug and a subscription grant under
+# the subscription id (start-with-skarbiec.sh: capabilities[provider] and
+# capabilities[subscription_id]), because that is what the gateway asks for:
+# `provider_capability_configured` looks the map up by provider
+# (broker.rs::configured_capability(PROVIDER_CAPABILITIES_ENV, provider)) while
+# `redeem_subscription_credential` looks it up by subscription id. Two
+# keyspaces, chosen by grant type, not by preference.
+#
+# This used to collapse every grant to its provider slug, so a host whose grants
+# are all subscriptions compared provider slugs against subscription ids and
+# reported its own provider as granted-but-never-issued on a gateway that was
+# issuing perfectly. Each grant now carries the key its own type is filed under,
+# and the grant itself is printed verbatim rather than reduced to a fragment.
+#
+# The resource is safe to read this way: it is not a vault item id but a
+# capability coordinate the product generates and parses itself
+# (broker.rs::provider_resource / subscription_resource, capability.rs::
+# valid_resource), and the operator maps it to a vault coordinate in
+# capability-routes.json. Renaming an item does not change it.
+granted = {}
 policy_path = config_dir / "policy.json"
 if policy_path.is_file():
     policy = json.loads(policy_path.read_text())
     for rule in policy.get("roles", {}).get("brama-runtime", []):
+        if rule.get("purpose") != PROVIDER_PURPOSE:
+            continue
         resource = rule.get("resource", "")
-        if resource.startswith("provider:"):
-            granted.add(resource.partition("provider:")[-len(["tail"])].split(":")[len([])])
+        if not isinstance(resource, str):
+            continue
+        match resource.split(":"):
+            case ["provider", provider] if provider:
+                granted[normalize(provider)] = resource
+            case ["provider", provider, subscription] if provider and subscription:
+                granted[subscription] = resource
     print(f"  policy.json written {moment(policy_path.stat().st_mtime)}")
-    print(f"  granted providers ({len(granted)}): {', '.join(sorted(granted)) or 'none'}")
+    print(f"  granted provider resources ({len(granted)}): "
+          f"{', '.join(sorted(granted.values())) or 'none'}")
 else:
     print(f"  {policy_path}: absent")
 
@@ -225,9 +266,12 @@ if capabilities_path.is_file():
         print(f"  provider-capabilities.json unreadable: {failure}")
     print(f"  provider-capabilities.json written {moment(capabilities_path.stat().st_mtime)}")
     print(f"  issued ({len(issued)}): {', '.join(sorted(issued)) or 'none'}")
-    unissued = sorted(granted - set(issued))
+    unissued = sorted(resource for key, resource in granted.items() if key not in issued)
     if unissued:
         print(f"  granted but never issued: {', '.join(unissued)}")
+    unexpected = sorted(set(issued) - set(granted))
+    if unexpected:
+        print(f"  issued for a key no grant asks for: {', '.join(unexpected)}")
 else:
     print(f"  {capabilities_path}: absent")
 
