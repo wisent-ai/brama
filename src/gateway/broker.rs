@@ -1446,8 +1446,8 @@ fn parse_unroutable_accounts(output: &[u8]) -> Result<Vec<UnroutableAccount>, ()
         .map(|item| {
             // Populate fields from tags; neither causes the item to be skipped.
             let id = subscription_tag_value(&item.tags, "brama:id:").map(|s| s.to_owned());
-            let provider = subscription_tag_value(&item.tags, "brama:provider:")
-                .map(|p| normalized_provider(p));
+            let provider =
+                subscription_tag_value(&item.tags, "brama:provider:").map(normalized_provider);
             // Report any item with no agent tag, regardless of which provider/id tags it carries.
             UnroutableAccount {
                 id,
