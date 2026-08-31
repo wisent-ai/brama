@@ -24,7 +24,6 @@ fi
 
 requested_runtime_dir=${BRAMA_RUNTIME_DIR:-}
 requested_config_dir=${BRAMA_SKARBIEC_CONFIG_DIR:-}
-requested_gnupg_home=${BRAMA_GNUPG_HOME:-}
 service_env_file=${BRAMA_SERVICE_ENV_FILE:-${HOME:-/nonexistent}/.config/brama/service.env}
 if [ -f "$service_env_file" ]; then
   set -a
@@ -33,9 +32,6 @@ if [ -f "$service_env_file" ]; then
 elif [ -n "${BRAMA_SERVICE_ENV_FILE:-}" ]; then
   printf '%s\n' "BRAMA_SERVICE_ENV_FILE is not a regular file: $service_env_file" >/dev/stderr
   false
-fi
-if [ -n "$requested_gnupg_home" ]; then
-  BRAMA_GNUPG_HOME="$requested_gnupg_home"
 fi
 configured_config_dir=$requested_config_dir
 
@@ -120,13 +116,17 @@ if [ -x "$HOME/.stado/bin/stado" ]; then
 else
   stado_bin="$(command -v stado || true)"
 fi
-# Import only when Brama's dedicated GPG home has no private key. This home is
-# named by `BRAMA_GNUPG_HOME` and is not shared with an operator keyring, so a
-# private key already present there is the service identity imported during an
-# earlier successful start. Re-reading it from Skarbiec on every start made an
-# already-provisioned gateway depend on a fresh vault decryption and could stop
-# Brama during an unrelated GPG failure.
-if [ -n "$stado_bin" ] && ! gpg --batch --list-secret-keys >/dev/null 2>&1; then
+# The service key must match a recipient of the encrypted Brama items. An
+# unrelated private key is not enough: operator keyrings can contain other
+# identities while still being unable to decrypt the model-router records.
+service_identity_present=
+for recipient_key in 7E0441E08C5CEAAC 6C6746F4AB546CB4 C30E7BF28DDE114E; do
+  if gpg --batch --list-secret-keys "$recipient_key" >/dev/null 2>&1; then
+    service_identity_present=1
+    break
+  fi
+done
+if [ -n "$stado_bin" ] && [ -z "$service_identity_present" ]; then
   # The dedicated Brama config owns the service identity, but the fleet config
   # owns service placement. Read the live Skarbiec endpoint from that one source
   # instead of inheriting a stale port from an old service.env.

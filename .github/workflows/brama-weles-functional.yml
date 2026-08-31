@@ -41,11 +41,8 @@ jobs:
         shell: bash
         env:
           BRAMA_REPO_ROOT: ${{ github.workspace }}
-          BRAMA_GNUPG_HOME: /Users/charles/.config/brama/gnupg
         run: |
           set -euo pipefail
-          mkdir -p "$BRAMA_GNUPG_HOME"
-          chmod 700 "$BRAMA_GNUPG_HOME"
           node "$GITHUB_WORKSPACE/probierz-source/agent/cli.mjs" run tui \
             --app brama \
             --record \
