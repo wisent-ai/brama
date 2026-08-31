@@ -127,13 +127,18 @@ for recipient_key in 7E0441E08C5CEAAC 6C6746F4AB546CB4 C30E7BF28DDE114E; do
   fi
 done
 if [ -n "$stado_bin" ] && [ -z "$service_identity_present" ]; then
-  # The dedicated Brama config owns the service identity, but the fleet config
-  # owns service placement. Read the live Skarbiec endpoint from that one source
-  # instead of inheriting a stale port from an old service.env.
-  fleet_stado_config=${BRAMA_FLEET_STADO_CONFIG:-"${HOME:-/nonexistent}/.config/stado/config.json"}
-  agent_skarbiec_url="$(
-    STADO_CONFIG="$fleet_stado_config" "$stado_bin" config show \
-      | "$PYTHON_BIN" -c '
+  # An explicitly configured endpoint belongs to this Brama installation and
+  # wins over the fleet default. The fleet can run another Skarbiec instance
+  # for host management; using that endpoint here couples Brama startup to an
+  # unrelated keyring and can leave a healthy listener unable to decrypt the
+  # Brama service identity.
+  if [ -n "${WC_AGENT_SKARBIEC_URL:-}" ]; then
+    agent_skarbiec_url="$WC_AGENT_SKARBIEC_URL"
+  else
+    fleet_stado_config=${BRAMA_FLEET_STADO_CONFIG:-"${HOME:-/nonexistent}/.config/stado/config.json"}
+    agent_skarbiec_url="$(
+      STADO_CONFIG="$fleet_stado_config" "$stado_bin" config show \
+        | "$PYTHON_BIN" -c '
 import json
 import sys
 value = json.load(sys.stdin).get("resolved", {}).get("agent_skarbiec_url")
@@ -141,7 +146,8 @@ if not isinstance(value, str) or not value:
     raise SystemExit("fleet Stado config has no agent_skarbiec_url")
 sys.stdout.write(value)
 '
-  )"
+    )"
+  fi
   service_key="$gnupg_dir/brama-service.key"
   rm -f "$service_key"
   ( umask 077
