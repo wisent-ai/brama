@@ -116,12 +116,13 @@ if [ -x "$HOME/.stado/bin/stado" ]; then
 else
   stado_bin="$(command -v stado || true)"
 fi
-# Import only when this home does not already carry Brama's exact service key.
-# `gpg --list-secret-keys brama-service` matches the key's service UID rather
-# than accepting any unrelated secret key. Re-reading the same private key from
-# Skarbiec on every start made an already-provisioned gateway depend on a fresh
-# vault decryption and could stop Brama during an unrelated GPG failure.
-if [ -n "$stado_bin" ] && ! gpg --batch --list-secret-keys brama-service >/dev/null 2>&1; then
+# Import only when Brama's dedicated GPG home has no private key. This home is
+# named by `BRAMA_GNUPG_HOME` and is not shared with an operator keyring, so a
+# private key already present there is the service identity imported during an
+# earlier successful start. Re-reading it from Skarbiec on every start made an
+# already-provisioned gateway depend on a fresh vault decryption and could stop
+# Brama during an unrelated GPG failure.
+if [ -n "$stado_bin" ] && ! gpg --batch --list-secret-keys >/dev/null 2>&1; then
   # The dedicated Brama config owns the service identity, but the fleet config
   # owns service placement. Read the live Skarbiec endpoint from that one source
   # instead of inheriting a stale port from an old service.env.
