@@ -48,3 +48,11 @@ jobs:
             --record \
             --spec "$GITHUB_WORKSPACE/tests/subscriptions/brama-weles-real.spec.mjs" \
             --timeout 2400000
+      - name: Retain the complete Probierz evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: brama-weles-probierz-${{ github.run_id }}
+          path: probierz-source/test-results/brama/tui
+          if-no-files-found: error
+          retention-days: 30
