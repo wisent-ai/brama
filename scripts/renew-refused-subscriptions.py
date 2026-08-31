@@ -356,20 +356,23 @@ def host_vault_state(stado: str, host: str, run_id: str) -> tuple[dict, dict]:
     return items, trashed if isinstance(trashed, dict) else {}
 
 
-def bundle_for(items: dict, subscription_id: str, provider: str) -> tuple[str, dict] | None:
+def bundle_for(items: dict, subscription_id: str) -> tuple[str, dict] | None:
     """The vault bundle a subscription row was served from.
 
-    Matched on the `brama:id:` tag first, because that tag is the contract, and
-    on the naming convention second, so a bundle whose enumeration tags were lost
-    is still found rather than reported as absent.
+    Matched only on the `brama:id:` tag, because that tag is the contract and
+    the only thing that declares which subscription a bundle serves. An item id
+    is a mutable human-chosen name: the id-shaped fallback that used to stand
+    behind this tag meant a rename silently moved a renewal onto another
+    bundle, or a bundle that had quietly lost its enumeration tags kept being
+    renewed while the gateway could no longer see it. `brama:id:<id>` is a
+    registered tag namespace, so a bundle that ought to be found here can be
+    made to carry it; the caller reports a bundle without it as unserved rather
+    than guessing.
     """
     wanted = f"{SUBSCRIPTION_ID_TAG_PREFIX}{subscription_id}"
     for name, entry in items.items():
         if wanted in (entry.get("tags") or []):
             return name, entry
-    conventional = f"provider:{provider}:{subscription_id}"
-    if conventional in items:
-        return conventional, items[conventional]
     return None
 
 
@@ -885,15 +888,16 @@ def main() -> int:
         detail = probe_detail(subscription)
         repairable = state == STATE_REFUSED and is_auth_refusal(detail)
         print(f"=== {identifier} ({provider})")
-        found = bundle_for(vault_before, identifier, provider)
+        found = bundle_for(vault_before, identifier)
         if state == STATE_REFUSED and not repairable:
             print(f"    refused for a reason a sign-in does not repair: {detail[:DETAIL]}")
             continue
         if not found:
             if repairable:
                 print(
-                    "    refused, but no vault bundle on this host serves it, so there "
-                    "is nothing to renew and nothing to verify"
+                    "    refused, but no vault bundle on this host declares "
+                    f"{SUBSCRIPTION_ID_TAG_PREFIX}{identifier}, so there is nothing to "
+                    "renew and nothing to verify; if a bundle does serve it, tag it"
                 )
                 unclosed += FIRST
             else:
