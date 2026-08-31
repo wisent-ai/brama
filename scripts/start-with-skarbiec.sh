@@ -116,16 +116,15 @@ if [ -x "$HOME/.stado/bin/stado" ]; then
 else
   stado_bin="$(command -v stado || true)"
 fi
-# Imported unconditionally: a home that already holds some secret key is not a
-# home that holds this one, and skipping on that basis is why the router still
-# reported "No secret key" after the import was added. Importing a key that is
-# already present costs nothing.
-if [ -n "$stado_bin" ]; then
+# Import only when this home does not already carry Brama's exact service key.
+# `gpg --list-secret-keys brama-service` matches the key's service UID rather
+# than accepting any unrelated secret key. Re-reading the same private key from
+# Skarbiec on every start made an already-provisioned gateway depend on a fresh
+# vault decryption and could stop Brama during an unrelated GPG failure.
+if [ -n "$stado_bin" ] && ! gpg --batch --list-secret-keys brama-service >/dev/null 2>&1; then
   # The dedicated Brama config owns the service identity, but the fleet config
   # owns service placement. Read the live Skarbiec endpoint from that one source
-  # instead of inheriting a stale port from an old service.env. On the always-on
-  # host that stale port addressed an empty broker at 8895 while the canonical
-  # broker was healthy at 19095, so Brama could never start to reach Weles.
+  # instead of inheriting a stale port from an old service.env.
   fleet_stado_config=${BRAMA_FLEET_STADO_CONFIG:-"${HOME:-/nonexistent}/.config/stado/config.json"}
   agent_skarbiec_url="$(
     STADO_CONFIG="$fleet_stado_config" "$stado_bin" config show \

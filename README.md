@@ -581,7 +581,11 @@ Brama launcher reads `agent_skarbiec_url` from the host's fleet Stado config
 while retaining the dedicated `brama-service` identity; a stale endpoint in an
 older service-specific config therefore cannot disconnect Brama from the
 canonical vault. `BRAMA_WELES_URL` names the Weles worker API and defaults to
-`http://127.0.0.1:8788`. Neither service reads the other's files, the token is
+`http://127.0.0.1:8788`. Once the `brama-service` private key is present in
+Brama's dedicated GPG home, later starts reuse that exact key instead of asking
+Skarbiec to decrypt and import it again. A fresh installation still acquires
+the key from Skarbiec and fails closed if that first acquisition cannot
+complete. Neither service reads the other's files, the token is
 never placed in argv or the journal, and no browser opens on the machine running
 the Brama command.
 
