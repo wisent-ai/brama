@@ -20,7 +20,7 @@ on:
         required: true
         type: string
       rollback_compatible_with:
-        description: Previous SemVer accepted by this release
+        description: Additional rollback-compatible SemVer; active host versions are derived
         required: false
         type: string
 
@@ -92,6 +92,7 @@ jobs:
           STADO_CONFIG: /Users/charles/.config/stado/config.json
           STADO_BIN: /Users/charles/.stado/bin/stado
           RECEIPT_DIR: ${{ runner.temp }}/release-control
+          ADDITIONAL_ROLLBACK_COMPATIBILITY: ${{ inputs.rollback_compatible_with }}
         run: |
           source_revision="$(git rev-parse HEAD)"
           source_archive="$RUNNER_TEMP/release-control/brama-source.tar.gz"
@@ -101,9 +102,43 @@ jobs:
           pipeline_manifest_sha256="$(openssl dgst -sha256 .wisent-release.json)"
           pipeline_manifest_sha256="${pipeline_manifest_sha256##* }"
           builder="github-actions/${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}"
+          status_file="$RECEIPT_DIR/brama-rollout-status.json"
+          if ! "$STADO_BIN" release status brama --json > "$status_file"; then
+            printf '%s\n' "The rollout is not settled; using its observed active versions for compatibility."
+          fi
+          jq -e \
+            '(.targets | type) == "array" and (.targets | length) > 0' \
+            "$status_file" >/dev/null
+
           compatibility=()
-          if [ -n "${{ inputs.rollback_compatible_with }}" ]; then
-            compatibility=(--rollback-compatible-with "${{ inputs.rollback_compatible_with }}")
+          seen_versions=" "
+          while IFS= read -r active_version; do
+            [ -n "$active_version" ] || continue
+            case "$seen_versions" in
+              *" $active_version "*) ;;
+              *)
+                compatibility+=(--rollback-compatible-with "$active_version")
+                seen_versions="${seen_versions}${active_version} "
+                ;;
+            esac
+          done < <(
+            jq -r '.targets[].observed.active_version // empty' "$status_file" |
+              sort -u
+          )
+          if [ -n "$ADDITIONAL_ROLLBACK_COMPATIBILITY" ]; then
+            case "$seen_versions" in
+              *" $ADDITIONAL_ROLLBACK_COMPATIBILITY "*) ;;
+              *)
+                compatibility+=(
+                  --rollback-compatible-with "$ADDITIONAL_ROLLBACK_COMPATIBILITY"
+                )
+                ;;
+            esac
+          fi
+          if [ "${#compatibility[@]}" -eq 0 ]; then
+            printf '%s\n' \
+              "No active Brama version was observed; refusing an unsafe release manifest."
+            false
           fi
           for platform in linux-amd64 darwin-arm64; do
             archive="brama-v${{ inputs.version }}-$platform.tar.gz"
