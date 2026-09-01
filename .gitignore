@@ -15,3 +15,6 @@ build/
 # Worktrees are working copies, not repository content.
 .worktrees/
 .release-inputs/
+
+# Release build output: the worker and the local build both write here.
+.wisent-output/

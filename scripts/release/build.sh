@@ -5,7 +5,14 @@ source_dir=${WISENT_SOURCE_DIR:?WISENT_SOURCE_DIR is required}
 output_dir=${WISENT_OUTPUT_DIR:?WISENT_OUTPUT_DIR is required}
 platform=${WISENT_PLATFORM:?WISENT_PLATFORM is required}
 version=${WISENT_VERSION:?WISENT_VERSION is required}
-skarbiec_source=${WISENT_INPUT_SKARBIEC_DIR:?WISENT_INPUT_SKARBIEC_DIR is required}
+# The release worker materialises the manifest's `skarbiec` input and exports
+# WISENT_INPUT_SKARBIEC_DIR; when it is set this build is byte-identical to CI.
+# Off a worker nothing sets it, so `:?` made the release build unrunnable on a
+# developer machine — the same shape skarbiec-desktop hit with SKARBIEC_ROOT.
+# The fallback is the canonical Skarbiec checkout beside this one, and it is not
+# a weakening: the `$skarbiec_source/Cargo.toml` check below still refuses (66)
+# when neither the input nor the sibling checkout is there.
+skarbiec_source=${WISENT_INPUT_SKARBIEC_DIR:-"$source_dir/../skarbiec"}
 
 # Same reason as the quality gate: the worker's PATH is not a login shell's, and
 # the Linux builder keeps cargo under `$HOME/.cargo/bin`.
