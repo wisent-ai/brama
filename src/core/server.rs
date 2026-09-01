@@ -11,6 +11,7 @@ use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
+use futures_util::future::join_all;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
@@ -2211,28 +2212,65 @@ async fn health() -> impl IntoResponse {
     }))
 }
 
-/// Readiness: does the credential chain actually work right now?
+#[derive(Clone)]
+struct ReadinessReport {
+    status: StatusCode,
+    body: Value,
+}
+
+impl ReadinessReport {
+    fn pending() -> Self {
+        Self {
+            status: StatusCode::SERVICE_UNAVAILABLE,
+            body: json!({
+                "ready": false,
+                "reason": "readiness check has not completed",
+                "providers": [],
+                "denied": [],
+                "routing": [],
+                "unroutable": [],
+                "subscriptions": [],
+                "unredeemable": [],
+                "unroutable_accounts": [],
+                "operator_action_required": false,
+                "build": crate::build_info::current(),
+            }),
+        }
+    }
+}
+
+static READINESS_REPORT: LazyLock<tokio::sync::RwLock<ReadinessReport>> =
+    LazyLock::new(|| tokio::sync::RwLock::new(ReadinessReport::pending()));
+
+/// Return the last completed credential and routing check.
 ///
-/// `/health` answers whether the process is up, and all day on 2026-08-11 it
-/// answered `ok` while every redemption on the host was denied — a gateway that
-/// cannot obtain a single credential looked healthy to every deploy check, and
-/// the failure surfaced only when a person asked a model a question. This
-/// redeems one capability per configured provider and reports what the
-/// authority said. It returns no secret: only the provider name and whether its
-/// credential could be obtained.
-///
-/// Discovery is a declaration too. On 2026-08-18 this endpoint answered
-/// `ready: true` with "every configured provider credential was obtained and
-/// every active subscription contributes a model" while every live call was
-/// refused — codex `503 credential_unauthorized`, claude-code `429 all bounded
-/// credentials unavailable`, kimi `429 no active credential for agent` — because
-/// a catalogue entry proves that a model was once listed, not that anything can
-/// be presented to the provider now. So the last half performs the act: one
-/// redemption per active subscription, through the same broker call a request
-/// makes, reported in the request path's own words. It ends with the accounts
-/// discovery cannot see at all, because the listing that lost them is the one
-/// thing that can never report them missing.
+/// The check itself crosses the Skarbiec broker and provider discovery APIs.
+/// Doing that work inside this request made each three-second deployment probe
+/// cancel before a response, then start the same work again. A background loop
+/// owns the expensive check; this endpoint remains a bounded status read.
 async fn readyz() -> impl IntoResponse {
+    let report = READINESS_REPORT.read().await.clone();
+    (report.status, Json(report.body))
+}
+
+fn spawn_readiness_probe() {
+    tokio::spawn(async {
+        loop {
+            let report = calculate_readiness().await;
+            *READINESS_REPORT.write().await = report;
+            tokio::time::sleep(Duration::from_secs(30)).await;
+        }
+    });
+}
+
+/// Does the credential chain actually work right now?
+///
+/// `/health` answers whether the process is up. This check redeems one
+/// capability per configured provider, discovers every active subscription,
+/// and performs one subscription redemption through the request path. Provider,
+/// agent and subscription checks are independent, so each group runs
+/// concurrently; one slow provider no longer delays every check behind it.
+async fn calculate_readiness() -> ReadinessReport {
     let providers: Vec<String> = {
         let mut names: Vec<String> = crate::gateway::broker::configured_provider_capabilities()
             .into_iter()
@@ -2241,12 +2279,16 @@ async fn readyz() -> impl IntoResponse {
         names
     };
 
-    let mut checked = Vec::new();
-    let mut denied = Vec::new();
-    for provider in &providers {
+    let provider_results = join_all(providers.iter().map(|provider| async {
         let obtained = crate::gateway::broker::provider_credential(provider)
             .await
             .is_some();
+        (provider.clone(), obtained)
+    }))
+    .await;
+    let mut checked = Vec::with_capacity(provider_results.len());
+    let mut denied = Vec::new();
+    for (provider, obtained) in provider_results {
         if !obtained {
             denied.push(provider.clone());
         }
@@ -2255,23 +2297,28 @@ async fn readyz() -> impl IntoResponse {
 
     // Obtaining a credential is only the first half. A subscription whose model
     // discovery yields nothing is active, its credential redeems, and it still
-    // cannot be routed to -- and `registry_models_for_agent` only reports a
-    // discovery failure when *every* provider failed, so one working provider
-    // hides the rest. That is how a fleet ends up believing it has six
-    // subscriptions while every request goes to one.
-    let mut routable = Vec::new();
-    let mut unroutable = Vec::new();
-    // Every active subscription, once, whichever agents can see it: two agents
-    // sharing one account must not cost two redemptions of the same credential.
-    let mut active: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    // cannot be routed to. Every active subscription is collected once,
+    // whichever agents can see it.
     let standalone = crate::gateway::broker::local_provider_credentials_enabled();
-    for agent in if standalone {
+    let agents = if standalone {
         Vec::new()
     } else {
         crate::gateway::broker::configured_request_sign_agents()
-    } {
-        let mut subscribed: Vec<String> = Vec::new();
-        for entry in crate::gateway::broker::list_subscriptions(&agent).await {
+    };
+    let agent_results = join_all(agents.into_iter().map(|agent| async move {
+        let subscriptions = crate::gateway::broker::list_subscriptions(&agent).await;
+        let models =
+            crate::subscription_dispatch::dispatch::registry_models_for_agent(&agent).await;
+        (agent, subscriptions, models)
+    }))
+    .await;
+
+    let mut routable = Vec::new();
+    let mut unroutable = Vec::new();
+    let mut active = std::collections::BTreeMap::<String, String>::new();
+    for (agent, entries, models) in agent_results {
+        let mut subscribed = Vec::new();
+        for entry in entries {
             if entry.status != "active" {
                 continue;
             }
@@ -2279,10 +2326,9 @@ async fn readyz() -> impl IntoResponse {
             subscribed.push(provider.clone());
             active.entry(entry.id).or_insert(provider);
         }
-        match crate::subscription_dispatch::dispatch::registry_models_for_agent(&agent).await {
+        match models {
             Ok(models) => {
-                let mut per_provider: std::collections::BTreeMap<String, usize> =
-                    std::collections::BTreeMap::new();
+                let mut per_provider = std::collections::BTreeMap::<String, usize>::new();
                 for model in &models {
                     let provider =
                         crate::subscription_dispatch::dispatch::provider_for(&model.route_id)
@@ -2315,18 +2361,21 @@ async fn readyz() -> impl IntoResponse {
         }
     }
 
-    // The act itself. One redemption per active subscription, at the boundary a
-    // request redeems at, and the refusal is whatever refused it -- not a
-    // sentence this endpoint composed about a chain it did not walk.
-    let mut subscriptions = Vec::new();
-    let mut unredeemable = Vec::new();
-    for (subscription, provider) in &active {
+    // The act itself: one redemption per active subscription, at the boundary
+    // where a model request redeems it.
+    let subscription_results = join_all(active.iter().map(|(subscription, provider)| async {
         let refusal = crate::subscription_dispatch::dispatch::probe_subscription_redemption(
             subscription,
             provider,
         )
         .await
         .err();
+        (subscription.clone(), provider.clone(), refusal)
+    }))
+    .await;
+    let mut subscriptions = Vec::with_capacity(subscription_results.len());
+    let mut unredeemable = Vec::new();
+    for (subscription, provider, refusal) in subscription_results {
         if refusal.is_some() {
             unredeemable.push(subscription.clone());
         }
@@ -2338,10 +2387,9 @@ async fn readyz() -> impl IntoResponse {
         }));
     }
 
-    // And the accounts no listing above could have mentioned. A vault item that
-    // loses its `brama:agent:` tag keeps a working credential and stops being
-    // discoverable, so it is neither active nor refused nor retired -- it is
-    // absent, and absence is what every screen in this fleet reported as health.
+    // A subscription item that loses every `brama:agent:` tag disappears from
+    // normal discovery. The broker reports those explicitly without treating
+    // unrelated vault entries as subscription accounts.
     let untagged: Vec<Value> = if standalone {
         Vec::new()
     } else {
@@ -2351,7 +2399,6 @@ async fn readyz() -> impl IntoResponse {
             .map(|account| {
                 let (provider_str, reason) = match (&account.provider, &account.id) {
                     (Some(provider), Some(_id)) => {
-                        // Both tags present: provider-specific refusal message.
                         let refusal = crate::subscription_dispatch::dispatch::no_active_credential_summary(provider);
                         (provider.clone(), format!(
                             "the vault holds this account and its item carries no 'brama:agent:' tag, \
@@ -2360,7 +2407,6 @@ async fn readyz() -> impl IntoResponse {
                         ))
                     }
                     (Some(provider), None) => {
-                        // Provider tag present but id missing: incomplete metadata.
                         let refusal = crate::subscription_dispatch::dispatch::no_active_credential_summary(provider);
                         (provider.clone(), format!(
                             "the vault holds this account; its item carries 'brama:provider:' but no 'brama:id:' tag; \
@@ -2369,17 +2415,15 @@ async fn readyz() -> impl IntoResponse {
                         ))
                     }
                     (None, Some(_id)) => {
-                        // Id tag present but provider missing: incomplete metadata.
                         ("unknown".to_string(),
                          "the vault holds this account; its item carries 'brama:id:' but no 'brama:provider:' tag; \
                           subscription discovery cannot route to it without both tags; \
                           operator: add the missing 'brama:provider:' tag or remove this item".to_string())
                     }
                     (None, None) => {
-                        // Both tags absent: item's purpose is completely unknown.
                         ("unknown".to_string(),
-                         "the vault holds this account, but its item carries no 'brama:id:' or 'brama:provider:' tags; \
-                          this item has no declared purpose and subscription discovery cannot route to it; \
+                         "the vault holds this subscription account, but its item carries no 'brama:id:' or 'brama:provider:' tags; \
+                          subscription discovery cannot route to it; \
                           operator: restore both tags or remove this item from the vault".to_string())
                     }
                 };
@@ -2394,9 +2438,6 @@ async fn readyz() -> impl IntoResponse {
             .collect()
     };
 
-    // A credential nobody can route to is not readiness, and neither is a
-    // catalogue entry behind a credential that will not redeem. Every half
-    // counts, and the reason names the one that is blocking.
     let ready = !providers.is_empty()
         && denied.is_empty()
         && unredeemable.is_empty()
@@ -2418,11 +2459,11 @@ async fn readyz() -> impl IntoResponse {
     } else if !unroutable.is_empty() {
         "every credential was obtained, and at least one active subscription contributes no model: it cannot be routed to"
     } else {
-        "every configured provider credential was obtained, every active subscription redeemed, and every vault account carries the agent tag that makes it routable"
+        "every configured provider credential was obtained, every active subscription redeemed, and every active subscription account carries the agent tag that makes it routable"
     };
-    (
+    ReadinessReport {
         status,
-        Json(json!({
+        body: json!({
             "ready": ready,
             "reason": reason,
             "providers": checked,
@@ -2434,8 +2475,8 @@ async fn readyz() -> impl IntoResponse {
             "unroutable_accounts": untagged,
             "operator_action_required": !ready,
             "build": crate::build_info::current(),
-        })),
-    )
+        }),
+    }
 }
 
 /// Optional per-model telemetry block, present only when the route has stats.
@@ -3603,6 +3644,10 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
         models = crate::core::perf::tracked_count(),
         "perf registry loaded"
     );
+    // Readiness crosses the local capability broker and provider discovery. It
+    // runs out of band so a deploy probe always receives the latest completed
+    // answer instead of canceling an in-flight check at its HTTP deadline.
+    spawn_readiness_probe();
     // Plan usage is read from each provider's own usage report on a timer rather
     // than only from whatever traffic happens to arrive, so a subscription
     // nobody routed through today still reports what its plan says -- and no

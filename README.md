@@ -308,9 +308,10 @@ operator paths. Runnable, risk-labeled workflows are indexed in
 - **Operations:** public `GET /health` and `GET /readyz`; protected `GET /stats`.
   `/health` is liveness only and says so in its body (`dependencies:
   not_probed`): it answers `ok` from a gateway whose every credential
-  redemption is being refused. `/readyz` is the one that answers whether the
-  product works: it redeems one capability per configured provider and returns
-  `503` naming the providers that failed, with no secret in the body. Deploy
+  redemption is being refused. A background readiness loop redeems one
+  capability per configured provider, discovers active subscription models and
+  redeems each active subscription through the request path; `/readyz` returns
+  the latest completed result immediately, with no secret in the body. Deploy
   checks and uptime monitors should read `/readyz`; `/health` only proves the
   process is running.
 - **Error contract:** a refused redemption is `503 authorization_error` with
