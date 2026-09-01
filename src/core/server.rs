@@ -2462,6 +2462,7 @@ impl ReadinessReport {
             body: json!({
                 "ready": false,
                 "reason": "readiness check has not completed",
+                "degraded": true,
                 "providers": [],
                 "denied": [],
                 "routing": [],
@@ -2523,6 +2524,7 @@ async fn calculate_readiness() -> ReadinessReport {
         (provider.clone(), obtained)
     }))
     .await;
+    let provider_available = provider_results.iter().any(|(_, obtained)| *obtained);
     let mut checked = Vec::with_capacity(provider_results.len());
     let mut denied = Vec::new();
     for (provider, obtained) in provider_results {
@@ -2553,6 +2555,7 @@ async fn calculate_readiness() -> ReadinessReport {
     let mut routable = Vec::new();
     let mut unroutable = Vec::new();
     let mut active = std::collections::BTreeMap::<String, String>::new();
+    let mut model_providers = std::collections::BTreeSet::<String>::new();
     for (agent, entries, models) in agent_results {
         let mut subscribed = Vec::new();
         for entry in entries {
@@ -2571,6 +2574,7 @@ async fn calculate_readiness() -> ReadinessReport {
                         crate::subscription_dispatch::dispatch::provider_for(&model.route_id)
                             .unwrap_or("unattributed")
                             .to_string();
+                    model_providers.insert(provider.clone());
                     *per_provider.entry(provider).or_default() += usize::from(true);
                 }
                 for provider in &subscribed {
@@ -2612,9 +2616,12 @@ async fn calculate_readiness() -> ReadinessReport {
     .await;
     let mut subscriptions = Vec::with_capacity(subscription_results.len());
     let mut unredeemable = Vec::new();
+    let mut subscription_available = false;
     for (subscription, provider, refusal) in subscription_results {
         if refusal.is_some() {
             unredeemable.push(subscription.clone());
+        } else if model_providers.contains(&provider) {
+            subscription_available = true;
         }
         subscriptions.push(json!({
             "id": subscription,
@@ -2675,33 +2682,43 @@ async fn calculate_readiness() -> ReadinessReport {
             .collect()
     };
 
-    let ready = !providers.is_empty()
+    // Deployment readiness answers whether this process can carry traffic, not
+    // whether every account it can see is healthy. Requiring every subscription
+    // to redeem made a repaired release impossible to promote: only that release
+    // could run the renewal, while the rollout waited for renewal to finish.
+    // Keep the full account verdict in this same report as `degraded`; a single
+    // broken account remains visible without taking working routes offline.
+    let serving = provider_available || subscription_available;
+    let healthy = serving
         && denied.is_empty()
         && unredeemable.is_empty()
         && untagged.is_empty()
         && unroutable.is_empty();
-    let status = if ready {
+    let status = if serving {
         StatusCode::OK
     } else {
         StatusCode::SERVICE_UNAVAILABLE
     };
-    let reason = if providers.is_empty() {
-        "no provider capability is configured"
+    let reason = if providers.is_empty() && active.is_empty() && untagged.is_empty() {
+        "no provider capability or subscription is configured"
+    } else if !serving {
+        "no configured direct provider or subscription route can obtain a credential"
     } else if !denied.is_empty() {
-        "a configured provider credential could not be obtained; the authorization chain is broken, not busy"
+        "traffic can be served, but a configured direct-provider credential could not be obtained"
     } else if !unredeemable.is_empty() {
-        "an active subscription's credential did not redeem just now, so the next request that needs it will be refused whatever the catalogue lists"
+        "traffic can be served, but an active subscription credential could not be redeemed"
     } else if !untagged.is_empty() {
-        "the vault holds a subscription account whose item carries no agent tag: it is unroutable, and no subscription listing can report it"
+        "traffic can be served, but the vault holds a subscription account with no agent route"
     } else if !unroutable.is_empty() {
-        "every credential was obtained, and at least one active subscription contributes no model: it cannot be routed to"
+        "traffic can be served, but at least one active subscription contributes no model"
     } else {
-        "every configured provider credential was obtained, every active subscription redeemed, and every active subscription account carries the agent tag that makes it routable"
+        "every configured provider credential was obtained, every active subscription redeemed, and every active subscription account is routable"
     };
     ReadinessReport {
         status,
         body: json!({
-            "ready": ready,
+            "ready": serving,
+            "degraded": !healthy,
             "reason": reason,
             "providers": checked,
             "denied": denied,
@@ -2710,7 +2727,7 @@ async fn calculate_readiness() -> ReadinessReport {
             "subscriptions": subscriptions,
             "unredeemable": unredeemable,
             "unroutable_accounts": untagged,
-            "operator_action_required": !ready,
+            "operator_action_required": !healthy,
             "build": crate::build_info::current(),
         }),
     }

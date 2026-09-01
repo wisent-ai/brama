@@ -328,7 +328,11 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   redemption is being refused. A background readiness loop redeems one
   capability per configured provider, discovers active subscription models and
   redeems each active subscription through the request path; `/readyz` returns
-  the latest completed result immediately, with no secret in the body. Deploy
+  the latest completed result immediately, with no secret in the body. HTTP 200
+  and `ready: true` mean at least one configured direct-provider or subscription
+  route can carry traffic. `degraded: true` keeps every other denied,
+  unredeemable, or unroutable account visible without blocking a release that
+  contains its repair; HTTP 503 means no configured route can serve. Deploy
   checks and uptime monitors should read `/readyz`; `/health` only proves the
   process is running.
 - **Error contract:** a refused redemption is `503 authorization_error` with
