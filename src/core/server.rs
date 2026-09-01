@@ -704,9 +704,8 @@ fn exact_organization_header(
         .map_err(|_| IdentityResolutionError::InvalidOrganizationHeader)
 }
 
-type IdentityCache = std::sync::Mutex<
-    HashMap<IdentityCacheKey, (std::time::Instant, ModelClientIdentity)>,
->;
+type IdentityCache =
+    std::sync::Mutex<HashMap<IdentityCacheKey, (std::time::Instant, ModelClientIdentity)>>;
 static IDENTITY_CACHE: LazyLock<IdentityCache> = LazyLock::new(Default::default);
 
 fn identity_cache_ttl() -> std::time::Duration {
@@ -890,8 +889,8 @@ async fn authorize_organization(
     if bytes.len() > 64 * 1024 {
         return Err(IdentityResolutionError::UpstreamUnavailable);
     }
-    let authorization: OrganizationAuthorization = serde_json::from_slice(&bytes)
-        .map_err(|_| IdentityResolutionError::UpstreamUnavailable)?;
+    let authorization: OrganizationAuthorization =
+        serde_json::from_slice(&bytes).map_err(|_| IdentityResolutionError::UpstreamUnavailable)?;
     if authorization.user_id != expected_user_id
         || authorization.organization_id != expected_organization_id
     {
@@ -1955,24 +1954,13 @@ async fn route_model_call(
         } else if any_subscription {
             DispatchedCall::Buffered(dispatch_any_subscription(headers, &request, raw_body).await)
         } else if best_subscription {
-            DispatchedCall::Buffered(
-                if let Some(agent_id) = client_identity.agent_id() {
-                    dispatch_best_subscription_for_agent(
-                        agent_id,
-                        &request,
-                        preferred_route.as_deref(),
-                    )
+            DispatchedCall::Buffered(if let Some(agent_id) = client_identity.agent_id() {
+                dispatch_best_subscription_for_agent(agent_id, &request, preferred_route.as_deref())
                     .await
-                } else {
-                    dispatch_best_subscription(
-                        headers,
-                        &request,
-                        raw_body,
-                        preferred_route.as_deref(),
-                    )
+            } else {
+                dispatch_best_subscription(headers, &request, raw_body, preferred_route.as_deref())
                     .await
-                },
-            )
+            })
         } else if let Some(account_agent) = account_agent.as_deref() {
             DispatchedCall::Buffered(dispatch_subscription_for_agent(account_agent, &request).await)
         } else if caller_scoped_request {

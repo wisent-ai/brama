@@ -343,10 +343,10 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   only endpoint in the product that deliberately spends plan quota. These
   endpoints return identifiers, usage and status only; subscription credentials
   remain write-only.
-- **CLI:** `serve`, `version`, `detect`, `test`, `subscriptions list`,
-  `subscription refresh`, `collect-task-quality`, and `mcp`. Billable commands
-  require an explicit cost acknowledgement, and commands that mutate state
-  require an explicit `--reason`.
+- **CLI:** `serve`, `version`, `detect`, `onboard`, `onboard --reset`, `test`,
+  `subscriptions list`, `subscription refresh`, `collect-task-quality`, and
+  `mcp`. Billable commands require an explicit cost acknowledgement, and
+  commands that mutate state require an explicit `--reason`.
 - **MCP:** read-only stdio JSON-RPC exposing `brama_detect` only. Model execution,
   credential discovery, collection, and mutation are deliberately excluded.
 
@@ -629,6 +629,60 @@ usable grant, the pool leaves `needs_reauthorization`, and Brama records the
 No credential material is printed by either command: the listing reads a ledger
 that has never held any, and the refresh drops the credential it obtains without
 looking at it.
+
+## The first-use walkthrough, and asking for it again
+
+`brama onboard` walks the first-use journey: routing, the request and response
+contract, and the one real model response that completes it. Progress is
+recorded per workload under `$XDG_STATE_HOME/brama/onboarding.json`, defaulting
+to `~/.local/state/brama/onboarding.json`. Add `--allow-provider-cost` to send
+the single billable request that finishes the journey; without it the steps are
+printed and nothing is sent.
+
+```bash
+brama onboard
+brama onboard --allow-provider-cost
+```
+
+Once the journey is complete the command answers with one line and stops, which
+is right for a script and useless for the operator who wanted to read the steps
+again:
+
+```text
+Brama first-use journey is already complete: a real model response was received.
+```
+
+`--reset` is that operator's verb. It discards recorded progress through the
+onboarding client -- a new attempt, an `onboarding_reset` event, and the entry
+screen again -- and then prints the walkthrough in the same invocation, rather
+than arming something for the next one. It is not a billable command on its own;
+it sends a provider request only when `--allow-provider-cost` is also given.
+
+```bash
+brama onboard --reset
+```
+
+```text
+Brama first-use journey reset: recorded progress discarded, showing it again now.
+
+Route once, independent of provider
+Brama accepts one routing request and selects the configured provider/model route behind it. ...
+
+Use the OpenAI-compatible request and response contract
+Send model, messages, max_tokens, and temperature to POST /v1/chat/completions. ...
+request_example: {"model":"openai/default","messages":[...],"max_tokens":256,"temperature":0.7}
+response_example: {"id":"chatcmpl-...","model":"...","choices":[...],"usage":{...}}
+
+Receive one real model response
+Run the onboarding request through your configured route. ...
+
+Next: configure provider/auth separately if needed, then re-run this command with --allow-provider-cost.
+No provider request was sent and onboarding remains in progress.
+```
+
+Deleting `onboarding.json` is not the same operation. It drops the attempt the
+journey platform is holding open instead of closing it, so the reset is never
+recorded and the discarded attempt stays `in_progress` forever on the Echo side.
 
 ## Operational model
 
