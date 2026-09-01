@@ -1346,9 +1346,9 @@ pub enum DonationRefusal {
 impl DonationRefusal {
     pub fn detail(&self) -> &str {
         match self {
-            Self::Unusable(detail)
-            | Self::MappingConflict(detail)
-            | Self::Unwritable(detail) => detail,
+            Self::Unusable(detail) | Self::MappingConflict(detail) | Self::Unwritable(detail) => {
+                detail
+            }
         }
     }
 }
@@ -1454,7 +1454,9 @@ fn parse_subscriptions(output: &[u8], agent_id: &str) -> Result<Vec<Subscription
                 provider,
                 status,
                 label: entry.label.and_then(|value| complete_field(Some(value))),
-                login_item: entry.login_item.and_then(|value| complete_field(Some(value))),
+                login_item: entry
+                    .login_item
+                    .and_then(|value| complete_field(Some(value))),
             })
         })
         .collect())
@@ -1567,8 +1569,7 @@ fn parse_unroutable_accounts(output: &[u8]) -> Result<Vec<UnroutableAccount>, ()
             let id = subscription_tag_value(&item.tags, "brama:id:").map(str::to_owned);
             let provider =
                 subscription_tag_value(&item.tags, "brama:provider:").map(normalized_provider);
-            let login_item =
-                subscription_tag_value(&item.tags, "brama:login:").map(str::to_owned);
+            let login_item = subscription_tag_value(&item.tags, "brama:login:").map(str::to_owned);
             UnroutableAccount {
                 id,
                 provider,

@@ -108,10 +108,7 @@ pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, String> {
             .and_then(|row| row.get("subscription_id"))
             .and_then(Value::as_str)
             .filter(|id| !id.is_empty());
-        match (
-            options.subscription_id.as_deref(),
-            declared_subscription,
-        ) {
+        match (options.subscription_id.as_deref(), declared_subscription) {
             (Some(expected), Some(declared)) if expected == declared => {}
             (Some(expected), Some(declared)) => {
                 return Err(format!(

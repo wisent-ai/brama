@@ -140,12 +140,12 @@ pub fn subscription_sign_in_due(subscription_id: &str, cooldown: std::time::Dura
     let Some(latest) = latest_subscription_sign_in(subscription_id) else {
         return true;
     };
-    let at_ms = latest.get("at_ms").and_then(Value::as_i64).unwrap_or_default();
+    let at_ms = latest
+        .get("at_ms")
+        .and_then(Value::as_i64)
+        .unwrap_or_default();
     let cooldown_ms = i64::try_from(cooldown.as_millis()).unwrap_or(i64::MAX);
-    chrono::Utc::now()
-        .timestamp_millis()
-        .saturating_sub(at_ms)
-        >= cooldown_ms
+    chrono::Utc::now().timestamp_millis().saturating_sub(at_ms) >= cooldown_ms
 }
 
 /// Append one task-quality observation.

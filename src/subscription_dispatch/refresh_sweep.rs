@@ -247,11 +247,7 @@ async fn sweep(skew: Duration) {
 /// Start one account sign-in without making the refresh sweep wait for a
 /// browser. The claim is acquired before spawning, and the completed journal
 /// record supplies a restart-safe cooldown.
-fn schedule_sign_in(
-    subscription_id: String,
-    provider: String,
-    login_item: Option<String>,
-) -> bool {
+fn schedule_sign_in(subscription_id: String, provider: String, login_item: Option<String>) -> bool {
     let cooldown = sign_in_cooldown();
     if !crate::journal::subscription_sign_in_due(&subscription_id, cooldown) {
         return false;

@@ -3365,9 +3365,9 @@ fn donation_login_item(value: Option<&str>) -> Result<Option<String>, ApiError> 
     let value = value.trim();
     if value.is_empty()
         || value.len() > 160
-        || !value
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.'))
+        || !value.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
+        })
     {
         return Err(api_error(
             StatusCode::BAD_REQUEST,
