@@ -214,6 +214,24 @@ async fn sweep(skew: Duration) {
         if !visited.insert(entry.id.clone()) {
             continue;
         }
+        // A historical OAuth item without its exact Weles account is not fully
+        // owned, even while its current access token still works. Repair that
+        // identity now instead of waiting for an expiry or provider refusal:
+        // the requested subscription id lets Weles accept only its declared
+        // account, and a successful donation writes the durable login tag.
+        if entry
+            .login_item
+            .as_deref()
+            .map(str::trim)
+            .filter(|item| !item.is_empty())
+            .is_none()
+        {
+            awaiting_signin = awaiting_signin.saturating_add(1);
+            if schedule_sign_in(entry.id, entry.provider, entry.login_item) {
+                sign_ins_started = sign_ins_started.saturating_add(1);
+            }
+            continue;
+        }
         // What the ledger already knows decides whether the vault is read at
         // all. A grant the provider has disowned is not retried until a
         // sign-in replaces it, because the answer cannot change and asking
