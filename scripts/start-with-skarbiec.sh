@@ -294,14 +294,19 @@ fi
 # registration is idempotent and re-dates the grant, so doing it unconditionally
 # costs one vault write and removes a whole class of `capability redemption
 # denied` that no message anywhere explains.
+#
+# Registration is a startup requirement. Continuing used to publish `/health`
+# from a gateway that could not redeem any provider credential, so release
+# control committed it and every model request failed later.
 register="$bundle_root/libexec/brama-register-workload.py"
-if [ -f "$register" ]; then
-  BRAMA_SKARBIEC_CONFIG_DIR="$config_dir" \
-  ENTITLEMENTS_ROUTER_BIN="$ENTITLEMENTS_ROUTER_BIN" \
-  SKARBIEC_VAULT_FILE="$SKARBIEC_VAULT_FILE" \
-  "$PYTHON_BIN" "$register" >/dev/stderr || \
-    printf '%s\n' "workload registration failed; redemption will be denied" >/dev/stderr
-fi
+[ -f "$register" ] || {
+  printf '%s\n' "workload registrar is absent: $register" >/dev/stderr
+  false
+}
+BRAMA_SKARBIEC_CONFIG_DIR="$config_dir" \
+ENTITLEMENTS_ROUTER_BIN="$ENTITLEMENTS_ROUTER_BIN" \
+SKARBIEC_VAULT_FILE="$SKARBIEC_VAULT_FILE" \
+"$PYTHON_BIN" "$register" >/dev/stderr
 }
 
 : "${SKARBIEC_VAULT_FILE:?SKARBIEC_VAULT_FILE is required}"
