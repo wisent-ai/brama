@@ -53,10 +53,10 @@ pub struct SignInOptions {
 /// Sign one provider account in through Weles, then prove the repair the way
 /// the runbook does: by a refresh that answers `refreshed`.
 ///
-/// Hard refusals -- an unknown provider, a missing reason, no reachable Weles
-/// worker -- are `Err` and print as one sentence. A run that reached Weles
-/// reports a verdict whatever happened, so the journal records what the
-/// product answered even when the answer is a refusal.
+/// Transport and dependency refusals -- an unknown provider, a missing reason,
+/// no reachable Weles worker -- are `Err` so an automatic retry is not cooled
+/// down. An account-mapping refusal is a completed failed verdict: the same
+/// undeclared account cannot become correct on the next minute's sweep.
 pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, String> {
     let provider = options.provider.trim().to_string();
     let weles_provider = match provider.as_str() {
@@ -111,15 +111,37 @@ pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, String> {
         match (options.subscription_id.as_deref(), declared_subscription) {
             (Some(expected), Some(declared)) if expected == declared => {}
             (Some(expected), Some(declared)) => {
-                return Err(format!(
+                let detail = format!(
                     "Weles declares {login_item} for subscription {declared}, not {expected}; \
                      refusing to renew the wrong account"
+                );
+                return Ok(verdict(
+                    Some(expected),
+                    &provider,
+                    &login_item,
+                    &reason,
+                    FAILED,
+                    0,
+                    "",
+                    detail,
+                    Value::Null,
                 ));
             }
             (Some(expected), None) => {
-                return Err(format!(
+                let detail = format!(
                     "Weles does not declare which subscription {login_item} renews; refusing \
                      to infer the account for {expected}"
+                );
+                return Ok(verdict(
+                    Some(expected),
+                    &provider,
+                    &login_item,
+                    &reason,
+                    FAILED,
+                    0,
+                    "",
+                    detail,
+                    Value::Null,
                 ));
             }
             (None, _) => {}

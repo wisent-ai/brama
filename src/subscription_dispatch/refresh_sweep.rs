@@ -165,7 +165,6 @@ pub fn spawn() {
 
 /// What one subscription's turn came to, so the sweep can say what it did
 /// rather than only that it ran.
-#[derive(Clone, Copy)]
 enum Swept {
     /// This grant has more than the skew window left.
     NotDue,
@@ -173,8 +172,13 @@ enum Swept {
     Refreshed,
     /// The refresh was refused, or the refreshed grant could not be stored.
     Refused,
-    /// A refresh for this subscription was already running, or no credential
-    /// could be read to look at.
+    /// The vault row exists but yielded no credential. Its exact account must
+    /// go through Weles rather than being left unknown forever.
+    AwaitingSignIn {
+        subscription_id: String,
+        provider: String,
+    },
+    /// A refresh for this subscription was already running.
     Skipped,
 }
 
@@ -228,9 +232,19 @@ async fn sweep(skew: Duration) {
             RefreshHint::NotDue => continue,
             RefreshHint::Read => {}
         }
+        let login_item = entry.login_item;
         match refresh_one(entry.id, entry.provider, skew).await {
             Swept::Refreshed => refreshed = refreshed.saturating_add(1),
             Swept::Refused => refused = refused.saturating_add(1),
+            Swept::AwaitingSignIn {
+                subscription_id,
+                provider,
+            } => {
+                awaiting_signin = awaiting_signin.saturating_add(1);
+                if schedule_sign_in(subscription_id, provider, login_item) {
+                    sign_ins_started = sign_ins_started.saturating_add(1);
+                }
+            }
             Swept::NotDue | Swept::Skipped => {}
         }
     }
@@ -267,7 +281,7 @@ fn schedule_sign_in(subscription_id: String, provider: String, login_item: Optio
     tokio::spawn(async move {
         let _claim = claim;
         let _serial = SIGN_IN_SERIAL.lock().await;
-        let reason = "automatic renewal after definitive OAuth refresh refusal".to_owned();
+        let reason = "automatic OAuth credential renewal".to_owned();
         let options = super::sign_in::SignInOptions {
             provider: provider.clone(),
             login_item: login_item.clone(),
@@ -286,9 +300,9 @@ fn schedule_sign_in(subscription_id: String, provider: String, login_item: Optio
                     detail = verdict.get("detail").and_then(serde_json::Value::as_str).unwrap_or_default()
                 );
             }
-            // `Err` means preflight failed before Weles accepted a browser run:
-            // directory resolution, admission health or account attribution.
-            // Nothing account-sensitive happened, so do not write the
+            // `Err` means a transient preflight dependency failed before Weles
+            // accepted a browser run: directory resolution or admission
+            // health. Nothing account-sensitive happened, so do not write the
             // sign-in cooldown; the next sweep can use a repaired dependency.
             Ok(Err(detail)) => {
                 warn!(
@@ -382,10 +396,13 @@ async fn refresh_subscription(subscription_id: String, provider: String, skew: D
                 provider = %provider,
                 error = refused.detail.as_deref().unwrap_or_default(),
                 envelope = %refused.to_json(),
-                "no credential could be read for this subscription, so nothing about its \
-                 grant is known"
+                "no credential could be read for this subscription; its declared Weles account \
+                 will be asked to restore the grant"
             );
-            Swept::Skipped
+            Swept::AwaitingSignIn {
+                subscription_id,
+                provider,
+            }
         }
     }
 }
