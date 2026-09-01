@@ -100,13 +100,11 @@ pub fn record_subscription_refresh(
     }));
 }
 
-/// Record one operator-run subscription sign-in, with the reason they gave.
-///
-/// A sign-in replaces a grant somebody may still be counting on, so the record
-/// carries who asked (the reason), which account Weles drove, and what the
-/// product answered. No credential material is written here, exactly as
-/// everywhere else in this file.
+/// Record one subscription sign-in and the exact account Weles was asked to
+/// drive. `subscription_id` is present for automatic renewal; an older
+/// provider-wide CLI invocation may not have one.
 pub fn record_subscription_sign_in(
+    subscription_id: Option<&str>,
     provider: &str,
     login_item: &str,
     reason: &str,
@@ -115,13 +113,39 @@ pub fn record_subscription_sign_in(
 ) {
     append(json!({
         "kind": "subscription_sign_in",
+        "subscription_id": subscription_id,
         "provider": provider,
         "login_item": login_item,
         "reason": reason,
         "result": result,
         "detail": detail,
         "at": now(),
+        "at_ms": chrono::Utc::now().timestamp_millis(),
     }));
+}
+
+/// The newest completed automatic or operator sign-in for one subscription.
+pub fn latest_subscription_sign_in(subscription_id: &str) -> Option<Value> {
+    read_all().into_iter().rev().find(|record| {
+        field(record, "kind") == "subscription_sign_in"
+            && field(record, "subscription_id") == subscription_id
+    })
+}
+
+/// Whether another browser sign-in may start after the persisted cooldown.
+///
+/// The journal, not process memory, is authoritative so restarting Brama cannot
+/// turn one refusal into repeated Google sign-in and 2FA prompts.
+pub fn subscription_sign_in_due(subscription_id: &str, cooldown: std::time::Duration) -> bool {
+    let Some(latest) = latest_subscription_sign_in(subscription_id) else {
+        return true;
+    };
+    let at_ms = latest
+        .get("at_ms")
+        .and_then(Value::as_i64)
+        .unwrap_or_default();
+    let cooldown_ms = i64::try_from(cooldown.as_millis()).unwrap_or(i64::MAX);
+    chrono::Utc::now().timestamp_millis().saturating_sub(at_ms) >= cooldown_ms
 }
 
 /// Append one task-quality observation.

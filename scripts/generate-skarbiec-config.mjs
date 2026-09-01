@@ -54,46 +54,37 @@ const maxUses = 10_000_000;
 const subscriptionAgentIds = ['echo', 'content-platform', 'oko', 'wisent-app', 'lem', 'probierz'];
 const requestSignAgentIds = ['wisent-app'];
 
-// An agent allowlist stays: it bounds which agents may hold subscriptions at all,
-// which is a policy decision. What is gone is the list of the subscriptions
-// themselves, which was a copy of the vault kept by hand.
-// An image build has no vault, and that is a true statement about an image: it
-// cannot know which subscriptions a host holds. It bakes a policy with no
-// subscription rules, and the launcher provisions the real one at start from the
-// vault it is given -- which is better than baking a list that is stale the day
-// the image is pushed.
+// Vault ownership and agent routing are deliberately separate. Any item with
+// both `brama:id:` and `brama:provider:` is Brama credential material, so the
+// service policy may reacquire and repair it. Only items carrying the complete
+// subscription marker plus an allowed `brama:agent:` tag are routed to an
+// agent. This distinction lets a release repair tags stripped by an older
+// credential write without exposing that incomplete item to a caller.
 const vault = existsSync(vaultPath)
   ? JSON.parse(readFileSync(vaultPath, 'utf8'))
   : (process.stderr.write(`no vault at ${vaultPath}; the policy will grant no subscriptions\n`), {});
-const subscriptions = Object.values(vault?.items ?? {})
-  .filter((item) => Array.isArray(item?.tags) && item.tags.includes(MARK))
+const credentialSubscriptions = Object.values(vault?.items ?? {})
+  .filter((item) => Array.isArray(item?.tags))
   .map((item) => ({
     id: tagValue(item.tags, 'brama:id:'),
     provider: tagValue(item.tags, 'brama:provider:'),
     agents: item.tags
       .filter((tag) => tag.startsWith('brama:agent:'))
       .map((tag) => tag.slice('brama:agent:'.length)),
+    marked: item.tags.includes(MARK),
   }))
-  // The agent allowlist bounds which agents may hold a subscription at all, and
-  // the item states which agents hold it: one `brama:agent:<agent>` tag each.
-  // This used to ask instead whether the subscription id was spelled
-  // `brama-sub-<allowed-agent>-...`, which answered a different question with a
-  // name. It cut both ways: a correctly tagged subscription whose id did not
-  // follow the convention was dropped from the policy silently -- so the
-  // launcher then requested a capability for a resource nothing granted, and the
-  // account was never served -- while an item whose id merely spelled an allowed
-  // agent passed on evidence that was not about it.
-  .filter(({ id, provider, agents }) => typeof id === 'string' && typeof provider === 'string'
-    && /^[a-z0-9-]+$/.test(provider)
-    && agents.some((agentId) => subscriptionAgentIds.includes(agentId)))
+  .filter(({ id, provider }) => typeof id === 'string' && typeof provider === 'string'
+    && /^[a-z0-9-]+$/.test(provider))
   .sort((left, right) => left.id.localeCompare(right.id));
+const subscriptions = credentialSubscriptions
+  .filter(({ agents, marked }) => marked
+    && agents.some((agentId) => subscriptionAgentIds.includes(agentId)));
 
-// No subscription in the vault is a fact, not a failure: a host can be provisioned
-// before any credential is banked. The old code threw on an empty manifest, which
-// is why an empty list was never a state anyone saw -- it was a state that stopped
-// provisioning.
-if (subscriptions.length === 0) {
-  process.stderr.write(`no item in ${vaultPath} carries ${MARK} with a brama:agent:<agent> tag naming an allowed agent; the policy will grant none\n`);
+if (credentialSubscriptions.length === 0) {
+  process.stderr.write(`no item in ${vaultPath} carries valid brama:id: and brama:provider: tags; the policy will grant none\n`);
+}
+if (subscriptions.length === 0 && credentialSubscriptions.length !== 0) {
+  process.stderr.write(`no Brama credential in ${vaultPath} has ${MARK} with a brama:agent:<agent> tag; incomplete items can be repaired but are not routed\n`);
 }
 const controlConfigPath = controlConfigInput || process.env.BRAMA_CONTROL_CONFIG;
 let directProviderIds = ['local-openai'];
@@ -210,7 +201,7 @@ function macosCodeSigningRequirement(path) {
   return requirement;
 }
 
-const subscriptionRules = subscriptions.map(({ id, provider }) => ({
+const subscriptionRules = credentialSubscriptions.map(({ id, provider }) => ({
   purpose: 'brama.provider.authenticate',
   resource: `provider:${provider}:${id}`,
   target: 'brama',
@@ -218,7 +209,7 @@ const subscriptionRules = subscriptions.map(({ id, provider }) => ({
   max_uses: maxUses,
   delegation_depth: 0,
 }));
-const directProviderRules = [...new Set([...subscriptions.map(({ provider }) => provider), ...directProviderIds])].map((provider) => ({
+const directProviderRules = [...new Set([...credentialSubscriptions.map(({ provider }) => provider), ...directProviderIds])].map((provider) => ({
   purpose: 'brama.provider.authenticate',
   resource: `provider:${provider}`,
   target: 'brama',

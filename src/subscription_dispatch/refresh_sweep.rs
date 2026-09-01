@@ -40,6 +40,8 @@ use crate::subscription_dispatch::usage::{self, RefreshHint};
 
 const INTERVAL_ENV: &str = "BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS";
 const SKEW_ENV: &str = "BRAMA_CREDENTIAL_REFRESH_SKEW_SECS";
+const SIGN_IN_COOLDOWN_ENV: &str = "BRAMA_CREDENTIAL_SIGN_IN_COOLDOWN_SECS";
+const SIGN_IN_TIMEOUT_ENV: &str = "BRAMA_CREDENTIAL_SIGN_IN_TIMEOUT_MS";
 /// One minute: short enough that a token with a five-minute skew window is
 /// refreshed several sweeps before it expires even if some of those sweeps are
 /// slow, and cheap enough that the cost is a handful of vault reads a minute.
@@ -49,6 +51,8 @@ const DEFAULT_INTERVAL_SECS: u64 = 60;
 /// prevent: a token valid when the request was dispatched and expired when the
 /// provider read it.
 const DEFAULT_SKEW_SECS: u64 = 5 * 60;
+const DEFAULT_SIGN_IN_COOLDOWN_SECS: u64 = 30 * 60;
+const DEFAULT_SIGN_IN_TIMEOUT_MS: u64 = 15 * 60 * 1000;
 /// Long enough for the listener to be bound and the entitlements router to have
 /// answered its first read. Deliberately shorter than the usage probe's delay:
 /// a gateway that starts with a dead credential should say so in the first
@@ -57,6 +61,10 @@ const STARTUP_DELAY_SECS: u64 = 5;
 
 /// The subscriptions a refresh is running for right now.
 static IN_FLIGHT: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
+/// Only one remote browser sign-in may own Weles at a time. OAuth refreshes
+/// remain per-subscription and continue while this lock is held.
+static SIGN_IN_SERIAL: LazyLock<tokio::sync::Mutex<()>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(()));
 
 /// One subscription claimed for the duration of one refresh.
 ///
@@ -111,6 +119,22 @@ fn skew() -> Duration {
         .unwrap_or(DEFAULT_SKEW_SECS);
     Duration::from_secs(seconds)
 }
+fn sign_in_cooldown() -> Duration {
+    let seconds = std::env::var(SIGN_IN_COOLDOWN_ENV)
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .filter(|seconds| *seconds > 0)
+        .unwrap_or(DEFAULT_SIGN_IN_COOLDOWN_SECS);
+    Duration::from_secs(seconds)
+}
+
+fn sign_in_timeout_ms() -> u64 {
+    std::env::var(SIGN_IN_TIMEOUT_ENV)
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .filter(|timeout| *timeout > 0)
+        .unwrap_or(DEFAULT_SIGN_IN_TIMEOUT_MS)
+}
 
 /// Start refreshing credentials ahead of expiry, unless this host turned it off.
 pub fn spawn() {
@@ -160,44 +184,54 @@ async fn sweep(skew: Duration) {
     let mut refreshed = usize::default();
     let mut refused = usize::default();
     let mut awaiting_signin = usize::default();
+    let mut sign_ins_started = usize::default();
+    let mut entries = Vec::new();
     for agent in broker::configured_request_sign_agents() {
-        for entry in broker::list_subscriptions(&agent).await {
-            if entry.status != "active" || crate::journal::is_retired(&entry.id) {
-                continue;
-            }
-            // Only a provider whose credentials are OAuth grants has anything to
-            // do here. An API key has no access token that expires, so reading
-            // one to discover that would cost a vault read every minute and
-            // learn nothing.
-            if !broker::supports_oauth_refresh(&entry.provider) {
-                continue;
-            }
-            // A subscription two agents share is one account with one grant, and
-            // refreshing it twice would rotate a refresh token the first pass
-            // has already replaced.
-            if !visited.insert(entry.id.clone()) {
-                continue;
-            }
-            // What the ledger already knows decides whether the vault is read at
-            // all. A grant the provider has disowned is not retried until a
-            // sign-in replaces it, because the answer cannot change and asking
-            // every minute would cost one log line a minute per dead account. A
-            // grant whose recorded expiry is hours away is not read either: the
-            // read shells out to the entitlements router, and this file already
-            // holds the number that read would return.
-            match usage::credential_refresh_hint(&entry.id, skew) {
-                RefreshHint::AwaitingSignIn => {
-                    awaiting_signin = awaiting_signin.saturating_add(1);
-                    continue;
+        entries.extend(broker::list_subscriptions(&agent).await);
+    }
+    // Incomplete historical items are never handed to request dispatch. They
+    // enter only this repair loop; the Weles account declaration must map back
+    // to the exact subscription id before a browser opens.
+    entries.extend(broker::list_recoverable_subscriptions().await);
+    for entry in entries {
+        if entry.status != "active" || crate::journal::is_retired(&entry.id) {
+            continue;
+        }
+        // Only a provider whose credentials are OAuth grants has anything to
+        // do here. An API key has no access token that expires, so reading
+        // one to discover that would cost a vault read every minute and
+        // learn nothing.
+        if !broker::supports_oauth_refresh(&entry.provider) {
+            continue;
+        }
+        // A subscription two agents share is one account with one grant, and
+        // refreshing it twice would rotate a refresh token the first pass
+        // has already replaced.
+        if !visited.insert(entry.id.clone()) {
+            continue;
+        }
+        // What the ledger already knows decides whether the vault is read at
+        // all. A grant the provider has disowned is not retried until a
+        // sign-in replaces it, because the answer cannot change and asking
+        // every minute would cost one log line a minute per dead account. A
+        // grant whose recorded expiry is hours away is not read either: the
+        // read shells out to the entitlements router, and this file already
+        // holds the number that read would return.
+        match usage::credential_refresh_hint(&entry.id, skew) {
+            RefreshHint::AwaitingSignIn => {
+                awaiting_signin = awaiting_signin.saturating_add(1);
+                if schedule_sign_in(entry.id, entry.provider, entry.login_item) {
+                    sign_ins_started = sign_ins_started.saturating_add(1);
                 }
-                RefreshHint::NotDue => continue,
-                RefreshHint::Read => {}
+                continue;
             }
-            match refresh_one(entry.id, entry.provider, skew).await {
-                Swept::Refreshed => refreshed = refreshed.saturating_add(1),
-                Swept::Refused => refused = refused.saturating_add(1),
-                Swept::NotDue | Swept::Skipped => {}
-            }
+            RefreshHint::NotDue => continue,
+            RefreshHint::Read => {}
+        }
+        match refresh_one(entry.id, entry.provider, skew).await {
+            Swept::Refreshed => refreshed = refreshed.saturating_add(1),
+            Swept::Refused => refused = refused.saturating_add(1),
+            Swept::NotDue | Swept::Skipped => {}
         }
     }
     info!(
@@ -206,8 +240,90 @@ async fn sweep(skew: Duration) {
         refreshed,
         refused,
         awaiting_signin,
+        sign_ins_started,
         "finished one credential refresh sweep"
     );
+}
+/// Start one account sign-in without making the refresh sweep wait for a
+/// browser. The claim is acquired before spawning, and the completed journal
+/// record supplies a restart-safe cooldown.
+fn schedule_sign_in(subscription_id: String, provider: String, login_item: Option<String>) -> bool {
+    let cooldown = sign_in_cooldown();
+    if !crate::journal::subscription_sign_in_due(&subscription_id, cooldown) {
+        return false;
+    }
+    let Some(claim) = InFlight::claim(&subscription_id) else {
+        return false;
+    };
+    // Old primary subscriptions may predate the login tag. Weles declares one
+    // primary account per provider; the first successful donation writes that
+    // exact account back as `brama:login:`, completing the migration without a
+    // one-off vault helper.
+    let login_item = login_item.filter(|item| !item.trim().is_empty());
+    let login_label = login_item
+        .as_deref()
+        .unwrap_or("Weles-declared primary")
+        .to_owned();
+    tokio::spawn(async move {
+        let _claim = claim;
+        let _serial = SIGN_IN_SERIAL.lock().await;
+        let reason = "automatic renewal after definitive OAuth refresh refusal".to_owned();
+        let options = super::sign_in::SignInOptions {
+            provider: provider.clone(),
+            login_item: login_item.clone(),
+            subscription_id: Some(subscription_id.clone()),
+            reason: reason.clone(),
+            login_timeout_ms: sign_in_timeout_ms(),
+        };
+        match tokio::spawn(super::sign_in::sign_in_provider(options)).await {
+            Ok(Ok(verdict)) => {
+                info!(
+                    event = "credential_sign_in_finished",
+                    subscription = %subscription_id,
+                    provider = %provider,
+                    login_item = %login_label,
+                    result = verdict.get("result").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
+                    detail = verdict.get("detail").and_then(serde_json::Value::as_str).unwrap_or_default()
+                );
+            }
+            Ok(Err(detail)) => {
+                warn!(
+                    event = "credential_sign_in_failed",
+                    subscription = %subscription_id,
+                    provider = %provider,
+                    login_item = %login_label,
+                    %detail
+                );
+                crate::journal::record_subscription_sign_in(
+                    Some(&subscription_id),
+                    &provider,
+                    login_item.as_deref().unwrap_or(""),
+                    &reason,
+                    "failed",
+                    &detail,
+                );
+            }
+            Err(error) => {
+                let detail = format!("automatic sign-in task failed: {error}");
+                warn!(
+                    event = "credential_sign_in_panicked",
+                    subscription = %subscription_id,
+                    provider = %provider,
+                    login_item = %login_label,
+                    %detail
+                );
+                crate::journal::record_subscription_sign_in(
+                    Some(&subscription_id),
+                    &provider,
+                    login_item.as_deref().unwrap_or(""),
+                    &reason,
+                    "failed",
+                    &detail,
+                );
+            }
+        }
+    });
+    true
 }
 
 /// Refresh one subscription, surviving anything it does.

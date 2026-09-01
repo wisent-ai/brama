@@ -35,10 +35,12 @@ pub struct SignInOptions {
     /// The provider whose account should be signed in (`codex`, `claude-code`,
     /// `kimi`).
     pub provider: String,
-    /// The exact Weles sign-in row to drive, or `None` to use the single row
-    /// Weles holds for the provider. Two or more rows are never guessed
-    /// between.
+    /// The exact Weles sign-in row to drive, or `None` to use the account Weles
+    /// explicitly declares primary for the provider.
     pub login_item: Option<String>,
+    /// Exact subscription whose stored grant this sign-in replaces. Automatic
+    /// renewal always supplies it; older provider-wide CLI calls may not.
+    pub subscription_id: Option<String>,
     /// Why this sign-in is being run; recorded in the journal beside the
     /// verdict.
     pub reason: String,
@@ -73,7 +75,7 @@ pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, String> {
         return Err("--reason must say why this sign-in is being run".into());
     }
 
-    let base = worker_api_base();
+    let base = worker_api_base().await?;
     let token = worker_api_token()?;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(transport_timeout_seconds()))
@@ -84,15 +86,50 @@ pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, String> {
     // because the cost of finding out afterwards is one real sign-in into the
     // wrong account.
     let health = read_health(&client, &base).await?;
+    let selecting_declared_primary = options
+        .login_item
+        .as_deref()
+        .is_none_or(|item| item.trim().is_empty());
     let login_item = resolve_login_item(
         &health,
         weles_provider,
         options.login_item.as_deref().map(str::trim),
     )?;
+    if selecting_declared_primary {
+        let declared_subscription = health
+            .get("login_items")
+            .and_then(Value::as_array)
+            .and_then(|rows| {
+                rows.iter().find(|row| {
+                    row.get(LOGIN_ITEM_SELECTOR).and_then(Value::as_str)
+                        == Some(login_item.as_str())
+                })
+            })
+            .and_then(|row| row.get("subscription_id"))
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty());
+        match (options.subscription_id.as_deref(), declared_subscription) {
+            (Some(expected), Some(declared)) if expected == declared => {}
+            (Some(expected), Some(declared)) => {
+                return Err(format!(
+                    "Weles declares {login_item} for subscription {declared}, not {expected}; \
+                     refusing to renew the wrong account"
+                ));
+            }
+            (Some(expected), None) => {
+                return Err(format!(
+                    "Weles does not declare which subscription {login_item} renews; refusing \
+                     to infer the account for {expected}"
+                ));
+            }
+            (None, _) => {}
+        }
+    }
 
     let body = json!({
         "provider": weles_provider,
         "login_item": login_item,
+        "subscription_id": options.subscription_id.as_deref(),
         "timeout_ms": options.login_timeout_ms,
     });
     let response = client
@@ -105,28 +142,52 @@ pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, String> {
     let status = response.status().as_u16();
     let answer: Value = response.json().await.unwrap_or_else(|_| json!({}));
 
-    // A login that reports success proves nothing on its own. Confirmation is
-    // Weles echoing back the exact row it was asked for; a release that
-    // predates the selector answers no `login_item` at all, and that run is
-    // reported unconfirmed rather than attributed to an account nobody proved
-    // it came from.
+    // Echoing the row proves attribution; `ok` proves the browser trajectory
+    // finished. A failed trajectory used to return its exact stderr in this
+    // body, and Brama replaced it with an attribution sentence that hid the
+    // cause.
     let echoed = answer.get(LOGIN_ITEM_SELECTOR).and_then(Value::as_str);
-    let confirmed = status == 200 && echoed == Some(login_item.as_str());
+    let attributed = echoed == Some(login_item.as_str());
+    let succeeded = status == 200 && answer.get("ok").and_then(Value::as_bool) == Some(true);
     let account = answer
         .get("display_name")
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string();
 
-    if !confirmed {
+    if !attributed || !succeeded {
+        let run_id = answer
+            .get("run_id")
+            .and_then(Value::as_str)
+            .unwrap_or("unreported");
+        let exit_code = answer
+            .get("exitCode")
+            .and_then(Value::as_i64)
+            .map(|code| code.to_string())
+            .unwrap_or_else(|| "unreported".to_string());
+        let timed_out = answer
+            .get("timed_out")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let said = ["error", "message", "stderr_tail", "stdout_tail"]
+            .iter()
+            .filter_map(|field| answer.get(field).and_then(Value::as_str))
+            .filter(|value| !value.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join(" | ");
+        let said: String = said.chars().take(1800).collect();
         let detail = format!(
-            "Weles answered HTTP {status} and named `{}` where `{login_item}` was asked for, so \
-             this run is not attributed to the account it was meant for; the credential it may \
-             have minted stands in the vault, and `brama subscriptions list` says whether the \
-             pool recovered",
-            echoed.unwrap_or("no login_item")
+            "Weles sign-in run {run_id} answered HTTP {status}, exit {exit_code}, timed_out={timed_out}, \
+             login_item={}; {}",
+            echoed.unwrap_or("unreported"),
+            if said.is_empty() {
+                "the trajectory reported no stderr or message"
+            } else {
+                said.as_str()
+            }
         );
         return Ok(verdict(
+            options.subscription_id.as_deref(),
             &provider,
             &login_item,
             &reason,
@@ -141,11 +202,16 @@ pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, String> {
     // The runbook's own proof: a sign-in replaced the grant, and the refresh
     // that follows answers `refreshed`. The refresh writes its own journal
     // record beside this one, exactly as if the operator had run it.
-    let refresh = pool::refresh_provider(&provider, &reason).await?;
+    let refresh = match options.subscription_id.as_deref() {
+        Some(subscription_id) => {
+            pool::refresh_subscription(&provider, subscription_id, &reason).await?
+        }
+        None => pool::refresh_provider(&provider, &reason).await?,
+    };
     let refreshed = refresh.get("result").and_then(Value::as_str) == Some("refreshed");
     let detail = if refreshed {
         format!(
-            "Weles signed `{login_item}` in and the refresh that followed obtained a credential"
+            "Weles signed `{login_item}` in and the exact subscription refresh obtained a credential"
         )
     } else {
         format!(
@@ -157,6 +223,7 @@ pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, String> {
         )
     };
     Ok(verdict(
+        options.subscription_id.as_deref(),
         &provider,
         &login_item,
         &reason,
@@ -173,6 +240,7 @@ pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, String> {
 /// never told.
 #[allow(clippy::too_many_arguments)]
 fn verdict(
+    subscription_id: Option<&str>,
     provider: &str,
     login_item: &str,
     reason: &str,
@@ -182,8 +250,16 @@ fn verdict(
     detail: String,
     refresh: Value,
 ) -> Value {
-    crate::journal::record_subscription_sign_in(provider, login_item, reason, result, &detail);
+    crate::journal::record_subscription_sign_in(
+        subscription_id,
+        provider,
+        login_item,
+        reason,
+        result,
+        &detail,
+    );
     json!({
+        "subscription_id": subscription_id,
         "provider": provider,
         "login_item": login_item,
         "account": account,
@@ -194,12 +270,71 @@ fn verdict(
     })
 }
 
-/// The durable Brama-Weles endpoint. Both services may run on one host, where
-/// loopback is the default, or the launcher may set the full service URL.
-fn worker_api_base() -> String {
-    env_or("BRAMA_WELES_URL", "http://127.0.0.1:8788")
-        .trim_end_matches('/')
-        .to_string()
+/// Resolve Weles from Stado at the moment a sign-in needs it. Placement can
+/// change while Brama keeps serving model traffic; baking loopback into the
+/// launcher made the renewal path silently keep the old host forever.
+async fn worker_api_base() -> Result<String, String> {
+    if let Ok(configured) = std::env::var("BRAMA_WELES_URL") {
+        let configured = configured.trim();
+        if !configured.is_empty() {
+            reqwest::Url::parse(configured)
+                .map_err(|error| format!("BRAMA_WELES_URL is invalid: {error}"))?;
+            return Ok(configured.trim_end_matches('/').to_string());
+        }
+    }
+    let stado = std::env::var("BRAMA_STADO_BIN")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+            std::path::PathBuf::from(home)
+                .join(".stado")
+                .join("bin")
+                .join("stado")
+        });
+    let output = tokio::process::Command::new(&stado)
+        .args([
+            "service",
+            "directory",
+            "connect",
+            "weles-admission",
+            "--no-verify",
+            "--json",
+        ])
+        .output()
+        .await
+        .map_err(|error| {
+            format!(
+                "cannot resolve weles-admission through {}: {error}",
+                stado.display()
+            )
+        })?;
+    if !output.status.success() {
+        let detail: String = String::from_utf8_lossy(&output.stderr)
+            .trim()
+            .chars()
+            .take(500)
+            .collect();
+        return Err(format!(
+            "Stado could not resolve weles-admission: {}",
+            if detail.is_empty() {
+                output.status.to_string()
+            } else {
+                detail
+            }
+        ));
+    }
+    let document: Value = serde_json::from_slice(&output.stdout)
+        .map_err(|error| format!("Stado weles-admission answer is not JSON: {error}"))?;
+    let url = document
+        .get("url")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| "Stado weles-admission answer carries no URL".to_string())?;
+    reqwest::Url::parse(url)
+        .map_err(|error| format!("Stado returned an invalid weles-admission URL: {error}"))?;
+    Ok(url.trim_end_matches('/').to_string())
 }
 
 fn env_or(key: &str, default: &str) -> String {
@@ -262,9 +397,9 @@ async fn read_health(client: &reqwest::Client, base: &str) -> Result<Value, Stri
 /// The exact sign-in row this run will drive.
 ///
 /// A named row must exist and belong to the provider. An unnamed run uses the
-/// single row Weles holds for the provider; zero rows cannot be signed in and
-/// two or more are never guessed between, because a sign-in there would not
-/// say which account it was for.
+/// provider's sole row or the one Weles explicitly marks primary. That primary
+/// declaration bootstraps old subscription items which predate `brama:login:`;
+/// the successful donation writes the tag, so later renewals no longer need it.
 fn resolve_login_item(
     health: &Value,
     weles_provider: &str,
@@ -322,23 +457,36 @@ fn resolve_login_item(
         }
         return Ok(asked.to_string());
     }
-    let held: Vec<String> = rows
+    let matching = rows
         .iter()
         .filter(|row| row.get("provider").and_then(Value::as_str) == Some(weles_provider))
-        .map(row_item)
+        .collect::<Vec<_>>();
+    if matching.len() == 1 {
+        return Ok(row_item(matching[0]));
+    }
+    let primary = matching
+        .iter()
+        .filter(|row| row.get("primary").and_then(Value::as_bool) == Some(true))
+        .collect::<Vec<_>>();
+    if primary.len() == 1 {
+        return Ok(row_item(primary[0]));
+    }
+    let held = matching
+        .iter()
+        .map(|row| row_item(row))
         .filter(|item| !item.is_empty())
-        .collect();
-    match held.as_slice() {
-        [only] => Ok(only.clone()),
-        [] => Err(format!(
+        .collect::<Vec<_>>();
+    if held.is_empty() {
+        return Err(format!(
             "Weles holds no sign-in row for provider {weles_provider}; that account has to \
              exist in Weles before it can be signed in"
-        )),
-        several => Err(format!(
-            "Weles holds {} sign-in rows for provider {weles_provider} ({}); name the one to \
-             drive with --login-item",
-            several.len(),
-            several.join(", ")
-        )),
+        ));
     }
+    Err(format!(
+        "Weles holds {} sign-in rows for provider {weles_provider} ({}) and marks {} primary; \
+         it must declare exactly one primary account before an unmapped subscription can renew",
+        held.len(),
+        held.join(", "),
+        primary.len()
+    ))
 }
