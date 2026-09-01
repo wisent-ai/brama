@@ -37,7 +37,6 @@ const CENTRAL_REQUEST_SIGN_AGENTS: &[&str] = &[
 const PROVIDER_CAPABILITIES_ENV: &str = "BRAMA_PROVIDER_CAPABILITY_IDS";
 const SUBSCRIPTION_CATALOG_ENV: &str = "BRAMA_SUBSCRIPTION_CATALOG";
 const DONATED_SUBSCRIPTIONS_FILE_ENV: &str = "BRAMA_DONATED_SUBSCRIPTIONS_FILE";
-const DEFAULT_DONATED_SUBSCRIPTIONS_FILE: &str = "/tmp/brama-skarbiec/donated-subscriptions.json";
 
 type LocalCredential = Zeroizing<Vec<u8>>;
 type LocalCredentialMap = HashMap<String, LocalCredential>;
@@ -171,24 +170,25 @@ pub struct SubscriptionEntry {
     pub status: String,
     #[serde(default)]
     pub label: Option<String>,
+    #[serde(default)]
+    pub login_item: Option<String>,
 }
 
-/// One subscription account the vault holds that no agent tag points at.
+/// One Brama credential whose metadata is not complete enough to route.
 ///
 /// Deliberately not a [`SubscriptionEntry`]: these are precisely the accounts
 /// the per-agent listing cannot produce, and giving them the routable type
-/// would invite a caller to route to one.
-///
-/// When tags are present, provider and id are sourced from them. When tags are
-/// absent, both are None, indicating that the item's purpose cannot be determined
-/// without explicit metadata. The item id is always available for repair.
+/// would invite a caller to route to one. Provider and id come only from tags;
+/// item names stay opaque.
 #[derive(Debug, Clone)]
 pub struct UnroutableAccount {
-    /// The subscription id from `brama:id:` tag, or None if tags are absent.
+    /// The subscription id from `brama:id:` tag, or None when that tag is absent.
     pub id: Option<String>,
-    /// The provider from `brama:provider:` tag, or None if tags are absent.
+    /// The provider from `brama:provider:` tag, or None when that tag is absent.
     pub provider: Option<String>,
-    /// The vault item id it lives in, so the repair has an address.
+    /// The Weles vault row from `brama:login:`, when an earlier write kept it.
+    pub login_item: Option<String>,
+    /// The vault item id it lives in, so diagnostics have an address.
     pub item: String,
 }
 
@@ -206,6 +206,8 @@ struct BrokerSubscriptionEntry {
     status: Option<String>,
     #[serde(default)]
     label: Option<String>,
+    #[serde(default)]
+    login_item: Option<String>,
 }
 
 fn configured_subscription_ids() -> std::collections::HashSet<String> {
@@ -873,13 +875,41 @@ pub async fn list_unroutable_accounts() -> Vec<UnroutableAccount> {
     parse_unroutable_accounts(&output.stdout).unwrap_or_default()
 }
 
+/// Incomplete Brama credential metadata that still identifies an exact
+/// subscription. These entries are renewal candidates, not routable entries:
+/// Weles must prove the declared primary maps to the same subscription id, and
+/// the resulting donation adds the missing routing tags before any agent sees
+/// it.
+pub async fn list_recoverable_subscriptions() -> Vec<SubscriptionEntry> {
+    list_unroutable_accounts()
+        .await
+        .into_iter()
+        .filter_map(|account| {
+            Some(SubscriptionEntry {
+                id: account.id?,
+                provider: account.provider?,
+                status: "active".to_owned(),
+                label: None,
+                login_item: account.login_item,
+            })
+        })
+        .collect()
+}
+
 /// Path of the donated-subscriptions overlay file.
 pub fn donated_subscriptions_path() -> PathBuf {
     std::env::var(DONATED_SUBSCRIPTIONS_FILE_ENV)
         .ok()
         .filter(|value| !value.trim().is_empty())
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_DONATED_SUBSCRIPTIONS_FILE))
+        .unwrap_or_else(|| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+            PathBuf::from(home)
+                .join(".stado")
+                .join("var")
+                .join("brama")
+                .join("donated-subscriptions.json")
+        })
 }
 
 /// Overlay entries for one agent. A missing or corrupt file yields nothing.
@@ -934,6 +964,7 @@ pub fn donated_add(
     id: &str,
     provider: &str,
     label: Option<&str>,
+    login_item: Option<&str>,
 ) -> Result<(), String> {
     update_donated_items(|items| {
         items.retain(|item| item.get("id").and_then(Value::as_str) != Some(id));
@@ -943,6 +974,7 @@ pub fn donated_add(
             "agent_id": agent_id,
             "status": "active",
             "label": label,
+            "login_item": login_item,
         }));
     })
 }
@@ -1160,15 +1192,14 @@ fn issue_capability_blocking(purpose: &str, resource: &str) -> Option<String> {
     )
 }
 
-async fn put_credential(item_id: &str, secret: &[u8]) -> Result<(), String> {
+async fn put_credential(
+    item_id: &str,
+    secret: &[u8],
+    tags: Option<&[String]>,
+) -> Result<(), String> {
     use std::process::Stdio;
     use tokio::io::AsyncWriteExt;
 
-    // `credential-put --recipient` was the vault's interface before the
-    // credential lifecycle was rebuilt; the CLI answers `unknown command` to it
-    // now, so every donation failed at the last step and no refreshed
-    // subscription could ever land. `set-json` is the current write, and it
-    // takes the document on stdin -- plaintext still crosses only the pipe.
     let document = serde_json::json!({
         "kind": "bundle",
         "schema": "skarbiec.item.v2",
@@ -1176,11 +1207,16 @@ async fn put_credential(item_id: &str, secret: &[u8]) -> Result<(), String> {
         "fields": {"value": String::from_utf8_lossy(secret)},
     })
     .to_string();
-    let mut child = tokio::process::Command::new(entitlements_router_bin())
+    let mut command = tokio::process::Command::new(entitlements_router_bin());
+    command
         .arg("set-json")
         .arg(item_id)
         .arg("--type")
-        .arg("bundle")
+        .arg("bundle");
+    if let Some(tags) = tags {
+        command.arg("--tags").arg(tags.join(","));
+    }
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -1200,8 +1236,7 @@ async fn put_credential(item_id: &str, secret: &[u8]) -> Result<(), String> {
         .map_err(|error| format!("wait entitlements router: {error}"))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        let detail_limit: usize = "200".parse().expect("valid credential error detail limit");
-        let detail: String = stderr.trim().chars().take(detail_limit).collect();
+        let detail: String = stderr.trim().chars().take(200).collect();
         return Err(format!("credential write failed: {detail}"));
     }
     Ok(())
@@ -1214,6 +1249,85 @@ fn put_local_subscription_credential(item_id: &str, secret: &[u8]) -> Result<(),
         .insert(item_id.to_owned(), Zeroizing::new(secret.to_vec()));
     Ok(())
 }
+async fn donated_credential_tags(
+    item_id: &str,
+    agent_id: &str,
+    provider: &str,
+    subscription_id: &str,
+    login_item: Option<&str>,
+) -> Result<Vec<String>, DonationRefusal> {
+    let output = tokio::process::Command::new(entitlements_router_bin())
+        .arg("list")
+        .output()
+        .await
+        .map_err(|error| DonationRefusal::Unwritable(format!("list vault tags: {error}")))?;
+    if !output.status.success() {
+        let detail: String = String::from_utf8_lossy(&output.stderr)
+            .trim()
+            .chars()
+            .take(200)
+            .collect();
+        return Err(DonationRefusal::Unwritable(format!(
+            "list vault tags failed: {detail}"
+        )));
+    }
+    let items: Vec<VaultListItem> = serde_json::from_slice(&output.stdout)
+        .map_err(|error| DonationRefusal::Unwritable(format!("decode vault tags: {error}")))?;
+    let mut tags = items
+        .into_iter()
+        .find(|item| item.id == item_id)
+        .map(|item| item.tags)
+        .unwrap_or_default();
+
+    let required = [
+        ("brama:agent:", agent_id.to_owned()),
+        ("brama:provider:", normalized_provider(provider)),
+        ("brama:id:", subscription_id.to_owned()),
+    ];
+    if !tags.iter().any(|tag| tag == "brama:subscription") {
+        tags.push("brama:subscription".to_owned());
+    }
+    for (prefix, wanted) in required {
+        let declared = tags
+            .iter()
+            .filter_map(|tag| tag.strip_prefix(prefix))
+            .filter(|value| !value.is_empty())
+            .collect::<Vec<_>>();
+        let disagrees = declared.iter().any(|value| {
+            if prefix == "brama:provider:" {
+                normalized_provider(value) != wanted
+            } else {
+                *value != wanted.as_str()
+            }
+        });
+        if disagrees {
+            return Err(DonationRefusal::MappingConflict(format!(
+                "{item_id} already carries {prefix}{}; refusing {prefix}{wanted}",
+                declared.join(",")
+            )));
+        }
+        if declared.is_empty() {
+            tags.push(format!("{prefix}{wanted}"));
+        }
+    }
+    if let Some(login_item) = login_item {
+        let declared = tags
+            .iter()
+            .filter_map(|tag| tag.strip_prefix("brama:login:"))
+            .filter(|value| !value.is_empty())
+            .collect::<Vec<_>>();
+        if declared.iter().any(|value| *value != login_item) {
+            return Err(DonationRefusal::MappingConflict(format!(
+                "{item_id} is mapped to login {}; refusing credential minted by {login_item}",
+                declared.join(",")
+            )));
+        }
+        if declared.is_empty() {
+            tags.push(format!("brama:login:{login_item}"));
+        }
+    }
+    Ok(tags)
+}
 
 /// Why a donated credential was not banked.
 ///
@@ -1223,6 +1337,8 @@ fn put_local_subscription_credential(item_id: &str, secret: &[u8]) -> Result<(),
 pub enum DonationRefusal {
     /// The document carries no credential the request path could present.
     Unusable(String),
+    /// Existing subscription metadata names another account.
+    MappingConflict(String),
     /// The vault write itself failed.
     Unwritable(String),
 }
@@ -1230,7 +1346,9 @@ pub enum DonationRefusal {
 impl DonationRefusal {
     pub fn detail(&self) -> &str {
         match self {
-            Self::Unusable(detail) | Self::Unwritable(detail) => detail,
+            Self::Unusable(detail)
+            | Self::MappingConflict(detail)
+            | Self::Unwritable(detail) => detail,
         }
     }
 }
@@ -1256,9 +1374,11 @@ impl DonationRefusal {
 /// object satisfies. The predicate is the request path's own reduction, so
 /// nothing a request could have presented is refused here.
 pub async fn put_donated_credential(
+    agent_id: &str,
     provider: &str,
     subscription_id: &str,
     api_key: &str,
+    login_item: Option<&str>,
 ) -> Result<(), DonationRefusal> {
     let item_id = format!("provider:{provider}:{subscription_id}");
     // The bearer is derived only to prove one can be, and dropped unread.
@@ -1276,15 +1396,13 @@ pub async fn put_donated_credential(
         put_local_subscription_credential(&item_id, api_key.as_bytes())
             .map_err(DonationRefusal::Unwritable)?;
     } else {
-        put_credential(&item_id, api_key.as_bytes())
+        let tags =
+            donated_credential_tags(&item_id, agent_id, provider, subscription_id, login_item)
+                .await?;
+        put_credential(&item_id, api_key.as_bytes(), Some(&tags))
             .await
             .map_err(DonationRefusal::Unwritable)?;
     }
-    // A stored credential is the sign-in that a `needs_reauthorization` waits
-    // for, and nothing else clears that state. Without this the console would
-    // keep demanding a re-authorization that an operator has already done, and
-    // the recorded cause would go on describing a grant that is no longer in
-    // the vault.
     crate::subscription_dispatch::usage::record_credential_signed_in(subscription_id, provider);
     Ok(())
 }
@@ -1309,7 +1427,7 @@ async fn put_subscription_credential(
     if local_provider_credentials_enabled() {
         put_local_subscription_credential(&item_id, credential)
     } else {
-        put_credential(&item_id, credential).await
+        put_credential(&item_id, credential, None).await
     }
 }
 
@@ -1336,6 +1454,7 @@ fn parse_subscriptions(output: &[u8], agent_id: &str) -> Result<Vec<Subscription
                 provider,
                 status,
                 label: entry.label.and_then(|value| complete_field(Some(value))),
+                login_item: entry.login_item.and_then(|value| complete_field(Some(value))),
             })
         })
         .collect())
@@ -1391,6 +1510,7 @@ fn parse_live_subscriptions(output: &[u8], agent_id: &str) -> Result<Vec<Subscri
                 )?),
                 status: "active".to_owned(),
                 label: None,
+                login_item: subscription_tag_value(&item.tags, "brama:login:").map(str::to_owned),
             })
         })
         .collect())
@@ -1414,6 +1534,7 @@ fn parse_live_subscriptions_any_agent(output: &[u8]) -> Result<Vec<SubscriptionE
                 )?),
                 status: "active".to_owned(),
                 label: None,
+                login_item: subscription_tag_value(&item.tags, "brama:login:").map(str::to_owned),
             })
         })
         .collect())
@@ -1425,28 +1546,33 @@ fn normalized_provider(value: &str) -> String {
     value.trim().to_lowercase().replace('_', "-")
 }
 
-/// Map the router's subscription listing to accounts no agent tag reaches.
+/// Map the router's listing to Brama credentials that cannot be routed.
 ///
-/// Only an item carrying `brama:subscription` is an account in this catalogue.
-/// Direct provider keys, client identities and login records legitimately carry
-/// no `brama:agent:` tag and must not make readiness fail. Provider and id are
-/// populated from their explicit tags; item names are never parsed.
+/// A complete subscription needs the marker and at least one agent tag. An
+/// older credential write could preserve `brama:id:` and `brama:provider:` but
+/// drop either routing tag; those items are included so automatic renewal can
+/// restore their metadata. Items with no Brama id remain unrelated vault data.
 fn parse_unroutable_accounts(output: &[u8]) -> Result<Vec<UnroutableAccount>, ()> {
     let items: Vec<VaultListItem> = serde_json::from_slice(output).map_err(|_| ())?;
     let mut accounts: Vec<UnroutableAccount> = items
         .into_iter()
         .filter(|item| !item.deleted)
-        .filter(|item| item.tags.iter().any(|tag| tag == "brama:subscription"))
-        .filter(|item| subscription_tag_value(&item.tags, "brama:agent:").is_none())
+        .filter(|item| subscription_tag_value(&item.tags, "brama:id:").is_some())
+        .filter(|item| subscription_tag_value(&item.tags, "brama:provider:").is_some())
+        .filter(|item| {
+            !item.tags.iter().any(|tag| tag == "brama:subscription")
+                || subscription_tag_value(&item.tags, "brama:agent:").is_none()
+        })
         .map(|item| {
-            // Populate fields from tags; neither causes the item to be skipped.
-            let id = subscription_tag_value(&item.tags, "brama:id:").map(|s| s.to_owned());
+            let id = subscription_tag_value(&item.tags, "brama:id:").map(str::to_owned);
             let provider =
                 subscription_tag_value(&item.tags, "brama:provider:").map(normalized_provider);
-            // The subscription marker above establishes that this is an account.
+            let login_item =
+                subscription_tag_value(&item.tags, "brama:login:").map(str::to_owned);
             UnroutableAccount {
                 id,
                 provider,
+                login_item,
                 item: item.id,
             }
         })

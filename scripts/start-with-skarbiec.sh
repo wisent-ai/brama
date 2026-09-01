@@ -809,7 +809,6 @@ printf '%s\n' "read Brama-Weles reauthentication identity" >/dev/stderr
   false
 }
 export BRAMA_WELES_REAUTH_TOKEN
-export BRAMA_WELES_URL="${BRAMA_WELES_URL:-http://127.0.0.1:8788}"
 
 subscriptions_file="$runtime_dir/subscriptions.json"
 catalog_file="$runtime_dir/subscription-catalog.json"
@@ -852,6 +851,7 @@ SUBSCRIPTION_TAG = "brama:subscription"
 PROVIDER_TAG = "brama:provider:"
 SUBSCRIPTION_ID_TAG = "brama:id:"
 AGENT_TAG = "brama:agent:"
+LOGIN_TAG = "brama:login:"
 
 
 def tag_values(tags, prefix):
@@ -880,11 +880,11 @@ catalog = []
 # model discovery spent before the first request.
 #
 # `brama:subscription` marks a subscription, `brama:provider:<provider>` names
-# its provider, `brama:id:<subscription-id>` names the subscription and each
-# `brama:agent:<agent>` names an agent allowed to spend it. All four are
-# registered tag namespaces in Skarbiec's schema. The policy still has to allow
-# the exact provider resource; the catalog only exposes metadata and every use
-# still requires a fresh capability from the authority.
+# its provider, `brama:id:<subscription-id>` names the subscription,
+# `brama:login:<vault-item>` names the Weles account that can renew it, and each
+# `brama:agent:<agent>` names an agent allowed to spend it. The policy still has
+# to allow the exact provider resource; the catalog only exposes metadata and
+# every use still requires a fresh capability from the authority.
 for item in available_items:
     if not isinstance(item, dict) or item.get("deleted", False):
         continue
@@ -897,6 +897,7 @@ for item in available_items:
     provider = tag_value(tags, PROVIDER_TAG)
     subscription_id = tag_value(tags, SUBSCRIPTION_ID_TAG)
     agent_ids = tag_values(tags, AGENT_TAG)
+    login_item = tag_value(tags, LOGIN_TAG)
     missing = [
         f"{prefix}<value>"
         for prefix, value in (
@@ -923,6 +924,7 @@ for item in available_items:
             "provider": provider,
             "agent_id": agent_id,
             "status": "active",
+            "login_item": login_item,
         })
 
 with open(catalog_path, "w", encoding="utf-8") as target:
@@ -970,29 +972,6 @@ fi
 if [ "$#" -gt 0 ]; then
   "$BRAMA_BIN" "$@"
   exit $?
-fi
-
-
-# Renewal runs here because nothing else runs it. A subscription credential that
-# the provider rejects is repaired by a real sign-in through Weles, and until now
-# that repair waited for a person: the fleet carried five days of refused
-# subscriptions that only surfaced when an operator looked at a screen. A
-# separate launchd unit would be the tidier home, but a new unit cannot be
-# bootstrapped through the fleet channel on this host, so the loop lives beside
-# the capability broker and shares the gateway's lifecycle. It sweeps, sleeps and
-# spends nothing when there is nothing refused; its own cooldown, not the sweep
-# interval, decides how often one account is signed in again.
-RENEWAL_LOOP=${BRAMA_RENEWAL_LOOP_BIN:-"$bundle_root/bin/renewal-loop-service"}
-if [ "${BRAMA_RENEWAL_ENABLED:-1}" != 0 ] && [ -x "$RENEWAL_LOOP" ]; then
-  BRAMA_RENEWAL_SWEEP_COMMAND=${BRAMA_RENEWAL_SWEEP_COMMAND:-"$bundle_root/bin/renew-refused-subscriptions"}
-  BRAMA_RENEWAL_ROUTER_BIN=${BRAMA_RENEWAL_ROUTER_BIN:-"$ENTITLEMENTS_ROUTER_BIN"}
-  export BRAMA_RENEWAL_SWEEP_COMMAND BRAMA_RENEWAL_ROUTER_BIN
-  "$RENEWAL_LOOP" &
-  renewal_pid=$!
-  trap 'kill "$broker_pid" "$renewal_pid" 2>/dev/null || true' EXIT INT TERM
-  printf '%s\n' "renewal loop started as pid $renewal_pid"
-else
-  printf '%s\n' "renewal loop not started (enabled=${BRAMA_RENEWAL_ENABLED:-1}, path $RENEWAL_LOOP)"
 fi
 
 

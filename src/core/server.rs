@@ -3285,6 +3285,8 @@ fn subscription_view(entry: &crate::gateway::broker::SubscriptionEntry) -> Value
         "provider": entry.provider,
         "status": entry.status,
         "label": entry.label,
+        "login_item": entry.login_item,
+        "sign_in": crate::journal::latest_subscription_sign_in(&entry.id),
         "limits": windows.limits,
         "measured": recorded.as_ref().map(|usage| &usage.measured),
         "block": recorded.as_ref().and_then(|usage| usage.block.clone()),
@@ -3368,6 +3370,25 @@ async fn account_credential_provider(value: Option<&str>) -> Option<String> {
         .map(|provider| provider.id.clone())
 }
 
+fn donation_login_item(value: Option<&str>) -> Result<Option<String>, ApiError> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let value = value.trim();
+    if value.is_empty()
+        || value.len() > 160
+        || !value
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.'))
+    {
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            "login_item must contain 1..160 ASCII letters, digits, hyphens, underscores or dots",
+        ));
+    }
+    Ok(Some(value.to_owned()))
+}
+
 async fn create_subscription(
     agent_id: String,
     request: DonateSubscriptionRequest,
@@ -3383,6 +3404,7 @@ async fn create_subscription(
                 "provider must name a supported remote API or subscription provider",
             )
         })?;
+    let login_item = donation_login_item(request.login_item.as_deref())?;
     let api_key = request.api_key.as_deref().unwrap_or("");
     if api_key.is_empty() || api_key.chars().count() > 8000 {
         return Err(api_error(
@@ -3390,41 +3412,70 @@ async fn create_subscription(
             "api_key must contain 1..8000 characters",
         ));
     }
-    // One row per agent and provider, refreshed in place. A per-donation id
-    // needed a new entry in the operator's routes table before anything could
-    // read it, so donations accumulated rows that no request could use.
+    // `claude-code` is the routing provider id, while the stable subscription
+    // ids shipped before that normalization use `claude`. Keep the persisted
+    // identity stable so renewal replaces the existing account instead of
+    // creating an unreachable second primary.
+    let subscription_provider = if provider == "claude-code" {
+        "claude"
+    } else {
+        provider.as_str()
+    };
     let subscription_id = format!(
         "brama-sub-{}-{}-primary",
         crate::gateway::broker::slug(&agent_id),
-        crate::gateway::broker::slug(&provider)
+        crate::gateway::broker::slug(subscription_provider)
     );
-    // A document that carries no credential is the donor's mistake and the vault
-    // was not touched, so it is a 400 naming the shape rather than a conflict:
-    // this coordinate is the only copy of that subscription's credential, and the
-    // previous answer here made destroying it and failing to write it read alike.
-    crate::gateway::broker::put_donated_credential(&provider, &subscription_id, api_key)
-        .await
-        .map_err(|refusal| match refusal {
-            crate::gateway::broker::DonationRefusal::Unusable(detail) => {
-                api_error(StatusCode::BAD_REQUEST, &detail)
-            }
-            crate::gateway::broker::DonationRefusal::Unwritable(_) => {
-                api_error(StatusCode::CONFLICT, "subscription credential was rejected")
-            }
-        })?;
+    if let Some(requested_id) = request
+        .subscription_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+    {
+        if requested_id != subscription_id {
+            return Err(api_error(
+                StatusCode::CONFLICT,
+                &format!(
+                    "this donation resolves to subscription {subscription_id}, not {requested_id}"
+                ),
+            ));
+        }
+    }
+    crate::gateway::broker::put_donated_credential(
+        &agent_id,
+        &provider,
+        &subscription_id,
+        api_key,
+        login_item.as_deref(),
+    )
+    .await
+    .map_err(|refusal| match refusal {
+        crate::gateway::broker::DonationRefusal::Unusable(detail) => {
+            api_error(StatusCode::BAD_REQUEST, &detail)
+        }
+        crate::gateway::broker::DonationRefusal::MappingConflict(detail) => {
+            api_error(StatusCode::CONFLICT, &detail)
+        }
+        crate::gateway::broker::DonationRefusal::Unwritable(detail) => {
+            api_error(StatusCode::INTERNAL_SERVER_ERROR, &detail)
+        }
+    })?;
     crate::gateway::broker::donated_add(
         &agent_id,
         &subscription_id,
         &provider,
         request.label.as_deref(),
+        login_item.as_deref(),
     )
-    .map_err(|_| api_error(StatusCode::CONFLICT, "subscription registration failed"))?;
+    .map_err(|message| api_error(StatusCode::INTERNAL_SERVER_ERROR, &message))?;
     Ok(Json(json!({
         "subscription": {
             "id": subscription_id,
             "provider": provider,
+            "agent_id": agent_id,
             "status": "active",
             "label": request.label,
+            "login_item": login_item,
         }
     })))
 }
@@ -3638,6 +3689,8 @@ struct DonateSubscriptionRequest {
     provider: Option<String>,
     label: Option<String>,
     api_key: Option<String>,
+    login_item: Option<String>,
+    subscription_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -3743,79 +3796,15 @@ async fn donate_subscription(
     headers: axum::http::HeaderMap,
     Path(agent_id): Path<String>,
     body: axum::body::Bytes,
-) -> ApiError {
-    if let Err(error) = authorize_caller(&client_identity, &headers, &body, Some(&agent_id)).await {
-        return error;
-    }
-    let req: DonateSubscriptionRequest = match serde_json::from_slice(&body) {
-        Ok(req) => req,
-        Err(error) => {
-            return api_error(
-                StatusCode::BAD_REQUEST,
-                &format!("invalid subscription request: {error}"),
-            )
-        }
-    };
-    // Account and agent credentials share one provider contract. A provider
-    // accepted here is executable by the same static or catalogue adapter the
-    // request path will later use.
-    let provider = match account_credential_provider(req.provider.as_deref()).await {
-        Some(provider) => provider,
-        None => {
-            return api_error(
-                StatusCode::BAD_REQUEST,
-                "provider must name a supported remote API or subscription provider",
-            )
-        }
-    };
-    let api_key = req.api_key.as_deref().unwrap_or("");
-    if api_key.is_empty() || api_key.chars().count() > 8000 {
-        return api_error(
+) -> Result<Json<Value>, ApiError> {
+    authorize_caller(&client_identity, &headers, &body, Some(&agent_id)).await?;
+    let request: DonateSubscriptionRequest = serde_json::from_slice(&body).map_err(|error| {
+        api_error(
             StatusCode::BAD_REQUEST,
-            "api_key must contain 1..8000 characters",
-        );
-    }
-    // One row per agent and provider, refreshed in place: reads resolve through
-    // the operator's routes table, and a per-donation id has no entry there.
-    let subscription_id = format!(
-        "brama-sub-{}-{}-primary",
-        crate::gateway::broker::slug(&agent_id),
-        crate::gateway::broker::slug(&provider)
-    );
-    // The donor learns which of the two happened: a document carrying no
-    // credential leaves the stored one untouched and is the caller's to fix,
-    // while a failed write is this installation's.
-    if let Err(refusal) =
-        crate::gateway::broker::put_donated_credential(&provider, &subscription_id, api_key).await
-    {
-        let status = match refusal {
-            crate::gateway::broker::DonationRefusal::Unusable(_) => StatusCode::BAD_REQUEST,
-            crate::gateway::broker::DonationRefusal::Unwritable(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
-        };
-        return api_error(status, refusal.detail());
-    }
-    if let Err(message) = crate::gateway::broker::donated_add(
-        &agent_id,
-        &subscription_id,
-        &provider,
-        req.label.as_deref(),
-    ) {
-        return api_error(StatusCode::INTERNAL_SERVER_ERROR, &message);
-    }
-    (
-        StatusCode::OK,
-        Json(json!({
-            "subscription": {
-                "id": subscription_id,
-                "provider": provider,
-                "agent_id": agent_id,
-                "status": "active",
-                "label": req.label,
-            }
-        })),
-    )
+            &format!("invalid subscription request: {error}"),
+        )
+    })?;
+    create_subscription(agent_id, request).await
 }
 
 async fn retire_subscription(

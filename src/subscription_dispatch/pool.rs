@@ -144,6 +144,75 @@ pub async fn refresh_provider(provider: &str, reason: &str) -> Result<Value, Str
         detail(provider, attempted, refreshed, unreadable, &refusals),
     ))
 }
+/// Refresh exactly the subscription a sign-in replaced.
+///
+/// Provider-wide refresh is useful to an operator, but it is not proof for an
+/// automatic repair: another healthy account on the same provider could make
+/// that aggregate answer `refreshed` while the requested account stayed dead.
+pub async fn refresh_subscription(
+    provider: &str,
+    subscription_id: &str,
+    reason: &str,
+) -> Result<Value, String> {
+    let provider = provider.trim();
+    let subscription_id = subscription_id.trim();
+    let reason = reason.trim();
+    if provider.is_empty() || subscription_id.is_empty() {
+        return Err("a provider and subscription id are required".into());
+    }
+    if reason.is_empty() {
+        return Err("--reason must say why this refresh is being run".into());
+    }
+    if !candidates(provider)
+        .await
+        .iter()
+        .any(|candidate| candidate == subscription_id)
+    {
+        return Ok(verdict(
+            provider,
+            reason,
+            usize::default(),
+            FAILED,
+            format!(
+                "`{subscription_id}` is not an active `{provider}` subscription in this deployment"
+            ),
+        ));
+    }
+    if !broker::supports_oauth_refresh(provider) {
+        return Ok(verdict(
+            provider,
+            reason,
+            usize::default(),
+            FAILED,
+            format!("`{provider}` credentials have no OAuth refresh path"),
+        ));
+    }
+    match broker::refresh_subscription_credential(subscription_id, provider).await {
+        Ok(credential) => {
+            drop(credential);
+            Ok(verdict(
+                provider,
+                reason,
+                1,
+                REFRESHED,
+                format!("refreshed `{subscription_id}`"),
+            ))
+        }
+        Err(refused) => {
+            let detail = refused
+                .detail
+                .as_deref()
+                .unwrap_or("refused without a stated reason");
+            Ok(verdict(
+                provider,
+                reason,
+                1,
+                FAILED,
+                format!("`{subscription_id}`: {detail}"),
+            ))
+        }
+    }
+}
 
 /// One verdict, in the shape the caller prints and the audit record keeps.
 ///

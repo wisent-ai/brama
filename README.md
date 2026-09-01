@@ -582,13 +582,14 @@ exit status is non-zero unless a credential was obtained.
 
 Repairs a provider-disowned `claude-code`, `codex`, or `kimi` grant by running
 the provider's real login trajectory through Weles. Before any browser opens,
-Brama reads Weles's health contract, resolves exactly one `login_item`, and
-refuses an unknown or ambiguous account. Success requires Weles to echo that
-exact row and the refresh that follows to answer `refreshed`.
+Brama reads Weles's health contract, resolves the named `login_item` or the one
+Weles explicitly declares primary, and verifies an automatically selected row
+belongs to the exact subscription being repaired. Success requires Weles to
+echo that row and the exact subscription refresh to answer `refreshed`.
 
 ```bash
 brama subscription sign-in codex \
-  --login-item codex-wisent-app-login \
+  --login-item codex-wisent-google-sso \
   --reason 'provider disowned the stored grant' \
   --json
 ```
@@ -600,14 +601,24 @@ receives the same field and accepts it only on that route. At every start the
 Brama launcher reads `agent_skarbiec_url` from the host's fleet Stado config
 while retaining the dedicated `brama-service` identity; a stale endpoint in an
 older service-specific config therefore cannot disconnect Brama from the
-canonical vault. `BRAMA_WELES_URL` names the Weles worker API and defaults to
-`http://127.0.0.1:8788`. Once the `brama-service` private key is present in
-Brama's dedicated GPG home, later starts reuse that exact key instead of asking
-Skarbiec to decrypt and import it again. A fresh installation still acquires
-the key from Skarbiec and fails closed if that first acquisition cannot
-complete. Neither service reads the other's files, the token is
-never placed in argv or the journal, and no browser opens on the machine running
-the Brama command.
+canonical vault. `BRAMA_WELES_URL` is an explicit override; otherwise Brama
+resolves `weles-admission` from Stado's service directory at the moment a
+sign-in starts, using the declared `brama` consumer and
+`credential-lifecycle` capability. Once the `brama-service` private key is
+present in Brama's dedicated GPG home, later starts reuse that exact key instead
+of asking Skarbiec to decrypt and import it again. A fresh installation still
+acquires the key from Skarbiec and fails closed if that first acquisition cannot
+complete. Neither service reads the other's files, the token is never placed in
+argv or the journal, and no browser opens on the machine running the Brama
+command.
+
+The in-process refresh sweep renews OAuth grants before expiry. A definitive
+provider refusal schedules one Weles sign-in at a time and keeps its cooldown in
+the journal, so a Brama restart does not repeat a failed browser run. Historical
+vault items that still carry `brama:id:` and `brama:provider:` but lost routing
+tags remain unavailable to callers; the policy grants only Brama enough access
+to repair them, Weles proves their primary account mapping, and a successful
+donation restores `brama:subscription`, `brama:agent:`, and `brama:login:`.
 
 The real functional journeys in `tests/providers/subscription_real.rs` run one
 Weles login and one provider refresh for each of Claude Code, Codex, and Kimi.

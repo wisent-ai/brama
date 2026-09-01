@@ -297,6 +297,7 @@ async fn main() {
                 brama::subscription_dispatch::sign_in::SignInOptions {
                     provider,
                     login_item,
+                    subscription_id: None,
                     reason,
                     login_timeout_ms,
                 },
