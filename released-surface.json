@@ -1,6 +1,6 @@
 {
-  "version": "0.2.48",
-  "source": "github-release:v0.2.48 -- immutable archives and checksums published by the repository release workflow",
+  "version": "0.2.49",
+  "source": "github-release:v0.2.49 -- immutable archives and checksums published by the repository release workflow",
   "surface": [
     "collect-task-quality",
     "detect",
