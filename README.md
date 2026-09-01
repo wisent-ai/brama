@@ -617,12 +617,14 @@ argv or the journal, and no browser opens on the machine running the Brama
 command.
 
 The in-process refresh sweep renews OAuth grants before expiry. A definitive
-provider refusal or a declared OAuth subscription whose vault row yields no
-credential schedules one Weles sign-in at a time. Completed browser runs and
-permanent account-mapping refusals keep their cooldown in the journal, so a
-Brama restart does not repeat them; a transient Weles preflight failure does not
-consume that cooldown. Historical vault items that still carry `brama:id:` and
-`brama:provider:` but lost routing tags remain unavailable to callers; the
+provider refusal, a declared OAuth subscription whose vault row yields no
+credential, or a historical OAuth item missing its exact Weles account schedules
+one Weles sign-in at a time.
+Completed browser runs and permanent account-mapping refusals keep their
+cooldown in the journal, so a Brama restart does not repeat them; a transient
+Weles preflight failure does not consume that cooldown. Historical vault items
+that still carry `brama:id:` and `brama:provider:` but lost routing tags remain
+unavailable to callers; the
 policy grants only Brama enough access to repair them, Weles proves their primary
 account mapping, and a successful donation restores `brama:subscription`,
 `brama:agent:`, and `brama:login:`.
