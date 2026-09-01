@@ -684,7 +684,7 @@ sources = [
     ("openenv", "openenv-model-router", None, None),
     ("trading-autonomy", "trading-autonomy-model-router", None, None),
     ("wisent-trade-agent", "wisent-trade-agent-model-router", None, None),
-    ("wisent-backend", "wisent-backend-model-router", None, backend_models),
+    ("wisent-backend", "wisent-backend-model-router", "wisent-app", backend_models),
     ("tama-objective-authority", "tama-objective-authority-model-router", "wisent-app", tama_models),
     ("brama-operations", "brama-operations-model-router", "wisent-app", None),
     ("brama-desktop", "brama-desktop-model-router", None, None),
@@ -1076,17 +1076,6 @@ export BRAMA_PROVIDER_CAPABILITY_IDS="$(cat "$capabilities_file")"
 export BRAMA_REQUEST_SIGN_CAPABILITY_IDS="$(cat "$request_capabilities_file")"
 export BRAMA_SUBSCRIPTION_CATALOG="$(cat "$catalog_file")"
 
-# Keep the Darwin runtime aligned with the canonical control-plane aliases.
-# `MODEL_ALIASES` in src/core/server.rs requires the exact seven-alias set, so
-# omitting one fails startup with "must contain the exact named alias set".
-#
-# `weles/agent/primary` is no longer routed to a client: `weles` holds `best`
-# only. The alias name stays because the validated set is exactly these seven,
-# and its route points at the deployment the backend chat aliases use rather
-# than at the roleplay model it named before.
-if [ "$(uname -s)" = Darwin ]; then
-  export BRAMA_MODEL_ALIASES='{"best":"codex/gpt-5.3-codex-spark","weles/agent/primary":"local-openai/chat-primary","wisent-backend/chat/fallback":"local-openai/chat-primary","wisent-backend/chat/primary":"local-openai/chat-primary","wisent-backend/embeddings":"openai/embeddings","wisent-backend/evaluation":"local-openai/chat-primary","wisent-backend/moderation":"openai/moderation"}'
-fi
 
 
 $ENTITLEMENTS_ROUTER_BIN capability-serve &
