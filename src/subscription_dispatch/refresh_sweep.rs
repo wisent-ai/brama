@@ -286,23 +286,22 @@ fn schedule_sign_in(subscription_id: String, provider: String, login_item: Optio
                     detail = verdict.get("detail").and_then(serde_json::Value::as_str).unwrap_or_default()
                 );
             }
+            // `Err` means preflight failed before Weles accepted a browser run:
+            // directory resolution, admission health or account attribution.
+            // Nothing account-sensitive happened, so do not write the
+            // sign-in cooldown; the next sweep can use a repaired dependency.
             Ok(Err(detail)) => {
                 warn!(
-                    event = "credential_sign_in_failed",
+                    event = "credential_sign_in_preflight_failed",
                     subscription = %subscription_id,
                     provider = %provider,
                     login_item = %login_label,
                     %detail
                 );
-                crate::journal::record_subscription_sign_in(
-                    Some(&subscription_id),
-                    &provider,
-                    login_item.as_deref().unwrap_or(""),
-                    &reason,
-                    "failed",
-                    &detail,
-                );
             }
+            // A failed join likewise proves no completed Weles verdict. Keeping
+            // it out of the journal prevents a transient process fault from
+            // suppressing renewal for the full account cooldown.
             Err(error) => {
                 let detail = format!("automatic sign-in task failed: {error}");
                 warn!(
@@ -311,14 +310,6 @@ fn schedule_sign_in(subscription_id: String, provider: String, login_item: Optio
                     provider = %provider,
                     login_item = %login_label,
                     %detail
-                );
-                crate::journal::record_subscription_sign_in(
-                    Some(&subscription_id),
-                    &provider,
-                    login_item.as_deref().unwrap_or(""),
-                    &reason,
-                    "failed",
-                    &detail,
                 );
             }
         }
