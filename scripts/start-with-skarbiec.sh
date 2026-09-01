@@ -634,8 +634,10 @@ fi
 export BRAMA_INFERENCE_ROUTES_FILE
 unset routes_dir
 
-# Read every accepted bearer from its dedicated Skarbiec item through the local
-# entitlement router and its exact recipient grant.
+# Preload only the two bearers whose exact alias sets Brama validates at
+# startup. Every other bearer is resolved through Skarbiec introspection on its
+# first request. Opening the large vault once for every optional client kept
+# the gateway process from starting before Stado's candidate deadline.
 : "${BRAMA_ALLOWED_MODELS:?set exact closed Brama model allowlist}"
 identities_file="$runtime_dir/model-router-client-identities.json"
 "$PYTHON_BIN" - "$ENTITLEMENTS_ROUTER_BIN" >"$identities_file" <<'PY'
@@ -656,42 +658,12 @@ backend_models = [model for model in all_models if model.startswith("wisent-back
 # deployment happens to answer. Granting `weles/agent/primary` here refuses
 # startup with "must give `weles` its exact required alias set".
 weles_models = ["best"]
-tama_models = ["best"]
-# Lem's figure pipeline asks for a capability, not a vendor: `any-vision-capable`
-# for judging a rendered figure and `any` for drafting one. Pinning the client to
-# a model name dated the allowlist to whatever was current the day it was written
-# and made every model change a Brama edit. Literature reads remain capped to the
-# two chat aliases.
-lem_models = [
-    "wisent-backend/chat/primary",
-    "wisent-backend/chat/fallback",
-    "any",
-    "any-vision-capable",
-]
 sources = [
-    ("content-platform-production", "content-platform-production-model-router", "content-platform", None),
-    ("echo", "echo-model-router", "echo", None),
-    ("oko", "oko-model-router", "oko", None),
     ("weles", "weles-model-router", "weles", weles_models),
-    ("weles-keyword-planner", "weles-keyword-planner-model-router", "wisent-app", None),
-    ("jeden", "jeden-model-router", None, None),
-    ("probierz", "probierz-model-router", "probierz", None),
-    ("wisent-backend-api", "wisent-backend-api-model-router", None, None),
-    ("wisent-app", "wisent-app-model-router", "wisent-app", None),
-    ("growth-tactics", "growth-tactics-model-router", None, None),
-    ("singularity", "singularity-model-router", None, None),
-    ("trading-tools", "trading-tools-model-router", None, None),
-    ("openenv", "openenv-model-router", None, None),
-    ("trading-autonomy", "trading-autonomy-model-router", None, None),
-    ("wisent-trade-agent", "wisent-trade-agent-model-router", None, None),
     ("wisent-backend", "wisent-backend-model-router", "wisent-app", backend_models),
-    ("tama-objective-authority", "tama-objective-authority-model-router", "wisent-app", tama_models),
-    ("brama-operations", "brama-operations-model-router", "wisent-app", None),
-    ("brama-desktop", "brama-desktop-model-router", None, None),
-    ("lem", "lem-model-router", None, lem_models),
 ]
 
-def field(item, name, required=True):
+def field(item, name):
     # check=True hides the reason: the traceback names the command and drops
     # everything the router said about why it refused, which turns a one-line
     # cause into an afternoon of guessing from the outside.
@@ -704,18 +676,7 @@ def field(item, name, required=True):
     )
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip()
-        message = f"reading {item} through the entitlements router failed: {detail}"
-        if required:
-            raise SystemExit(message)
-        # A host holds the credentials for the products it serves, not for
-        # every product in the fleet. Refusing to boot because the item for
-        # one unrelated client is encrypted to a key this machine was never
-        # given takes down every client whose item is readable, which is the
-        # whole gateway. That client is left out instead; nothing it could
-        # have done becomes possible, because Brama only accepts the bearers
-        # it was handed here.
-        sys.stderr.write(f"{message}\nskipping client identity {item}\n")
-        return None
+        raise SystemExit(f"reading {item} through the entitlements router failed: {detail}")
     payload = json.loads(result.stdout)
     if payload.get("schema") != "skarbiec.item.v2":
         raise RuntimeError(f"{item} did not return a Skarbiec v2 item")
@@ -727,19 +688,10 @@ def field(item, name, required=True):
         raise RuntimeError(f"{item}/{name} is not a single non-empty value")
     return value
 
-# The two clients the server itself verifies at startup — it exits unless
-# `wisent-backend` and `weles` carry their exact alias sets — must be present
-# or the failure belongs at the top, not in a warning nobody reads.
-REQUIRED_CLIENTS = {"wisent-backend", "weles"}
-
 identities = []
 for client_id, item, agent_id, allowed_models in sources:
-    token = field(item, "token", required=client_id in REQUIRED_CLIENTS)
-    if token is None:
-        continue
-    identity = {"client_id": client_id, "token": token}
-    if agent_id is not None:
-        identity["agent_id"] = agent_id
+    token = field(item, "token")
+    identity = {"client_id": client_id, "token": token, "agent_id": agent_id}
     if allowed_models is not None:
         identity["allowed_models"] = allowed_models
     identities.append(identity)
@@ -747,14 +699,8 @@ sys.stdout.write(json.dumps(identities, separators=(",", ":")))
 PY
 BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES=$(cat "$identities_file")
 rm -f "$identities_file"
-# Empty is allowed now. The gateway resolves a bearer it does not recognise
-# against Skarbiec, so this list is a warm start rather than a precondition --
-# and building it requires reading every client's secret here, which is what
-# stopped this launcher on a host that was not provisioned to decrypt them.
-[ -n "$BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES" ] || {
-  printf '%s\n' "no client identities read at start; bearers will be resolved through Skarbiec" >/dev/stderr
-  BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES=""
-}
+# Unknown bearers are intentionally absent here and resolved by the
+# introspection grant configured above.
 export BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES
 unset BRAMA_ALLOWED_MODELS
 
@@ -781,7 +727,7 @@ sources = {
     "wisent-app": "agent:wisent-app",
 }
 
-def field(item, name):
+def item_fields(item):
     # check=True hides the reason: the traceback names the command and drops
     # everything the router said about why it refused, which turns a one-line
     # cause into an afternoon of guessing from the outside.
@@ -801,6 +747,9 @@ def field(item, name):
     fields = payload.get("fields")
     if not isinstance(fields, dict):
         raise RuntimeError(f"{item} did not return a fields object")
+    return fields
+
+def field(fields, item, name):
     value = fields.get(name)
     if not isinstance(value, str) or not value:
         raise RuntimeError(f"{item}/{name} is empty")
@@ -808,13 +757,14 @@ def field(item, name):
 
 identities = {}
 for expected_id, item in sources.items():
+    fields = item_fields(item)
     if expected_id == "wisent-app":
-        identities[expected_id] = field(item, "value")
+        identities[expected_id] = field(fields, item, "value")
         continue
-    actual_id = field(item, "id")
+    actual_id = field(fields, item, "id")
     if actual_id != expected_id:
         raise RuntimeError(f"{item}/id does not match its product identity")
-    identities[actual_id] = field(item, "agent_auth_secret")
+    identities[actual_id] = field(fields, item, "agent_auth_secret")
 print(json.dumps(identities, separators=(",", ":")))
 PY
 )"
