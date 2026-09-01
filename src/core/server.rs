@@ -81,6 +81,7 @@ const BRAMA_DESKTOP_CLIENT_ID: &str = "brama-desktop";
 const BRAMA_USER_CLIENT_ID: &str = "brama-user";
 const WISENT_ORGANIZATION_HEADER: &str = "x-wisent-organization-id";
 const WISENT_SUPABASE_URL: &str = "https://alvaewvbyxpgwdpugnxy.supabase.co";
+const WISENT_SUPABASE_ANON_KEY: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFsdmFld3ZieXhwZ3dkcHVnbnh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzOTc5NDcsImV4cCI6MjA5Njk3Mzk0N30.xkkJ36ZTwtqyVZLFju0vc9S25grTuKbj9ILKlsXdUPA";
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -803,9 +804,8 @@ async fn ask_authority(bearer: &str) -> WorkloadAuthorityAnswer {
 }
 
 async fn ask_wisent_identity(bearer: &str) -> WisentIdentityAnswer {
-    let Ok(anon_key) = std::env::var("BRAMA_WISENT_AUTH_ANON_KEY") else {
-        return WisentIdentityAnswer::Unavailable;
-    };
+    let anon_key = std::env::var("BRAMA_WISENT_AUTH_ANON_KEY")
+        .unwrap_or_else(|_| WISENT_SUPABASE_ANON_KEY.to_string());
     if anon_key.trim().is_empty() {
         return WisentIdentityAnswer::Unavailable;
     }
@@ -852,7 +852,7 @@ async fn authorize_organization(
     expected_organization_id: uuid::Uuid,
 ) -> Result<HumanOrganizationContext, IdentityResolutionError> {
     let anon_key = std::env::var("BRAMA_WISENT_AUTH_ANON_KEY")
-        .map_err(|_| IdentityResolutionError::UpstreamUnavailable)?;
+        .unwrap_or_else(|_| WISENT_SUPABASE_ANON_KEY.to_string());
     if anon_key.trim().is_empty() {
         return Err(IdentityResolutionError::UpstreamUnavailable);
     }

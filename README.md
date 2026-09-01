@@ -274,6 +274,9 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   Wisent Supabase at `https://alvaewvbyxpgwdpugnxy.supabase.co`, calls
   `authorize_organization` with the same bearer, and accepts only the returned
   user, organization, and typed `owner`, `admin`, or `member` role. The
+  `BRAMA_WISENT_AUTH_ANON_KEY` may override the built-in public anon key for a
+  different identity deployment; an explicitly empty override makes the
+  identity authority unavailable instead of weakening authentication. The
   organization is verified request context, not subscription ownership: Brama
   continues to derive the subscription owner from the verified user, and the
   caller never supplies an account or agent identifier. `POST` accepts an API
