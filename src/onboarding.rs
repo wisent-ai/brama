@@ -174,10 +174,15 @@ impl Transport for BramaTransport {
     }
 }
 
+/// Run Brama's first-use journey. `reset` discards recorded progress through the
+/// journey client -- emitting `onboarding_reset` rather than deleting the state
+/// file behind the client's back -- and shows the walkthrough again from its
+/// first step in this same invocation.
 pub async fn run_first_use(
     model: String,
     agent_id: String,
     allow_provider_cost: bool,
+    reset: bool,
 ) -> Result<bool, JourneyError> {
     let fallback = bundle_from_canonical(
         FALLBACK_DEFINITION,
@@ -198,6 +203,13 @@ pub async fn run_first_use(
     )?;
 
     journey.start(STATE_REVISION).await?;
+    if reset {
+        journey.reset(STATE_REVISION).await?;
+        println!(
+            "Brama first-use journey reset: recorded progress discarded, showing it again now."
+        );
+        println!();
+    }
     if let Some(progress) = journey.progress() {
         let _ = transport
             .read_state(PRODUCT_ID, progress.attempt_id, &subject_hash)

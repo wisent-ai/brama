@@ -40,6 +40,9 @@ enum Commands {
         /// Acknowledge that onboarding should perform one billable provider request
         #[arg(long, default_value_t = false)]
         allow_provider_cost: bool,
+        /// Discard recorded progress and show the walkthrough again from its first step
+        #[arg(long, default_value_t = false)]
+        reset: bool,
     },
     /// Run a test inference through the router
     Test {
@@ -181,7 +184,10 @@ async fn main() {
             model,
             agent_id,
             allow_provider_cost,
-        } => match brama::onboarding::run_first_use(model, agent_id, allow_provider_cost).await {
+            reset,
+        } => match brama::onboarding::run_first_use(model, agent_id, allow_provider_cost, reset)
+            .await
+        {
             Ok(false) if allow_provider_cost => {
                 std::process::exit(1);
             }
