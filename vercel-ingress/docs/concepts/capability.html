@@ -150,9 +150,10 @@ single-use capability has nothing worth keeping, and an id the launcher put
 in the environment of a running process cannot be refreshed at all.</p>
 <h2 id="lifecycle">Lifecycle<a class="headerlink" href="#lifecycle" title="Link to this section">&para;</a></h2>
 <ol>
-<li>The launcher seeds one capability id per provider in
-   <code>BRAMA_PROVIDER_CAPABILITY_IDS</code> at boot. Those expire within the hour, so
-   their refusal later is the expected steady state, not a fault.</li>
+<li>The launcher builds trusted subscription metadata and starts the owner-bound
+   broker without pre-issuing capabilities. A boot-time id is single-use,
+   cannot be refreshed through a process environment, and model discovery may
+   spend it before the first request.</li>
 <li>On the request path, immediately before the provider HTTP call, the
    gateway obtains a fresh capability for the purpose and resource and
    redeems it through the owner-bound broker socket.</li>

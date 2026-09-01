@@ -812,31 +812,24 @@ export BRAMA_WELES_REAUTH_TOKEN
 export BRAMA_WELES_URL="${BRAMA_WELES_URL:-http://127.0.0.1:8788}"
 
 subscriptions_file="$runtime_dir/subscriptions.json"
-capabilities_file="$runtime_dir/provider-capabilities.json"
-request_capabilities_file="$runtime_dir/request-sign-capabilities.json"
 catalog_file="$runtime_dir/subscription-catalog.json"
+# Releases before 0.2.52 persisted boot-time capability ids here. They are
+# single-use authority records, not durable service state.
+rm -f "$runtime_dir/provider-capabilities.json" "$runtime_dir/request-sign-capabilities.json"
 printf '%s\n' "reading subscription catalog" >/dev/stderr
 "$ENTITLEMENTS_ROUTER_BIN" list >"$subscriptions_file"
-printf '%s\n' "read subscription catalog; issuing runtime capabilities" >/dev/stderr
+printf '%s\n' "read subscription catalog; building runtime catalog" >/dev/stderr
 "$PYTHON_BIN" - \
-  "$ENTITLEMENTS_ROUTER_BIN" \
   "$subscriptions_file" \
   "$config_dir/policy.json" \
-  "$capabilities_file" \
-  "$request_capabilities_file" \
   "$catalog_file" <<'PY'
 import json
-import os
-import subprocess
 import sys
 
 (
     _program,
-    router,
     available_path,
     policy_path,
-    capabilities_path,
-    request_capabilities_path,
     catalog_path,
 ) = sys.argv
 with open(available_path, encoding="utf-8") as source:
@@ -875,81 +868,23 @@ allowed = {
     for rule in rules
     if isinstance(rule, dict)
 }
-request_sign_agents = sorted(
-    resource.removeprefix("agent:")
-    for purpose, resource in allowed
-    if purpose == "brama.request.sign"
-    and isinstance(resource, str)
-    and resource.startswith("agent:")
-)
 normalize = lambda value: value.strip().lower().replace("_", "-")
 
-def issue(purpose, resource):
-    # Lifetime and use count are the authority's to set, not this launcher's.
-    # It used to name a thirty-day, million-use capability, which the authority
-    # now refuses outright: capabilities there are short and countable by
-    # design, and their nonce retention is derived from that ceiling. Asking for
-    # the defaults keeps the two in step, and moving the ceiling to fit an old
-    # ask would have widened a security bound to spare this line a change.
-    issued = subprocess.run(
-        [
-            router,
-            "capability-issue",
-            # The authority verifies a redemption against the key registered
-            # for this agent, and allows a workload key only on a consumer that
-            # carries `acquire`. `brama-service` carries one `read` for this
-            # gateway's GPG key and so can never be that consumer, whatever
-            # else is fixed; the runtime needs its own acquisition consumer.
-            "--agent", "brama-runtime",
-            "--purpose", purpose,
-            "--resource", resource,
-            "--target", "brama",
-        ],
-        capture_output=True,
-        text=True,
-    )
-    if issued.returncode:
-        detail = issued.stderr.strip() or issued.stdout.strip() or "no detail"
-        # One subscription that cannot be issued is not a reason to serve
-        # nobody. The same judgement is already made when an item cannot be
-        # read: the client that depends on it is left out, and every other
-        # client keeps its gateway. A raise here takes the whole thing down.
-        sys.stderr.write(f"capability issue failed for {resource}: {detail}\n")
-        sys.stderr.write(f"skipping subscription {resource}\n")
-        return None
-    return json.loads(issued.stdout)["capability_id"]
 
-capabilities = {}
 catalog = []
-# Everything that decides a capability is read off the item's declared tags,
-# never off its id.
+# Subscription metadata comes from the item's declared tags, never from its id.
+# A capability is intentionally not issued here. Skarbiec capabilities are
+# short-lived and single-use, while the gateway already obtains one immediately
+# before each credential redemption. Seeding every allowed resource delayed
+# startup, rewrote the capability state once per resource, and produced ids that
+# model discovery spent before the first request.
 #
 # `brama:subscription` marks a subscription, `brama:provider:<provider>` names
 # its provider, `brama:id:<subscription-id>` names the subscription and each
 # `brama:agent:<agent>` names an agent allowed to spend it. All four are
-# registered tag namespaces in Skarbiec's schema, so the vault itself refuses a
-# write that misspells one, and they are exactly what the gateway's own
-# discovery reads (broker.rs::parse_live_subscriptions). That agreement is the
-# point: `redeem_subscription_credential` looks this map up by the subscription
-# id from `brama:id:` and builds its resource from the provider in
-# `brama:provider:`, so a capability filed under anything else is a capability
-# nobody asks for.
-#
-# This used to split the item id on colons to recover the provider and the
-# subscription id, and -- when the agent tags were missing -- infer the owning
-# agent from a `brama-sub-<agent>-` prefix on that id. An item id is a mutable,
-# human-chosen name. A rename filed the capability under a key the gateway never
-# asks for, or handed one agent's subscription to another, and nothing raised:
-# the credential stayed valid, the account simply stopped being served. An item
-# that has lost a declaration is now named and skipped, because a missing tag can
-# be put back and a guess cannot be taken back.
-#
-# The direct-provider branch is gone with it. It required the vault to hold an
-# item literally named `provider:<provider>`, which is a second name-shaped
-# precondition and a wrong one: the operator maps a resource to its vault
-# coordinate in capability-routes.json, and that coordinate need not share the
-# resource's spelling. Every `provider:<provider>` grant the operator declared is
-# issued by the loop over `allowed` below, which is the declaration that governs.
+# registered tag namespaces in Skarbiec's schema. The policy still has to allow
+# the exact provider resource; the catalog only exposes metadata and every use
+# still requires a fresh capability from the authority.
 for item in available_items:
     if not isinstance(item, dict) or item.get("deleted", False):
         continue
@@ -982,10 +917,6 @@ for item in available_items:
     resource = f"provider:{provider}:{subscription_id}"
     if ("brama.provider.authenticate", resource) not in allowed:
         continue
-    granted = issue("brama.provider.authenticate", resource)
-    if granted is None:
-        continue
-    capabilities[subscription_id] = granted
     for agent_id in agent_ids:
         catalog.append({
             "id": subscription_id,
@@ -994,52 +925,15 @@ for item in available_items:
             "status": "active",
         })
 
-for purpose, resource in sorted(allowed):
-    if purpose != "brama.provider.authenticate":
-        continue
-    parts = resource.split(":")
-    if len(parts) == 2 and parts[0] == "provider":
-        provider = normalize(parts[1])
-        if provider not in capabilities:
-            granted = issue(purpose, resource)
-            if granted is not None:
-                capabilities[provider] = granted
-
-request_capabilities = {}
-for agent_id in request_sign_agents:
-    granted = issue("brama.request.sign", f"agent:{agent_id}")
-    if granted is not None:
-        request_capabilities[agent_id] = granted
-
-# Every capability refused, and none issued, has one overwhelmingly likely
-# cause worth stating once instead of leaving it to be inferred from a column
-# of identical refusals followed by an alias error that mentions none of this.
-# A resource names a purpose; only the issuing operator says which vault entry
-# it stands for, and that mapping lives in one file beside the vault. Without
-# it nothing resolves, the gateway starts with no provider it may authenticate
-# to, and the first alias that needs one ends the process.
-if not capabilities and not request_capabilities:
-    routes_file = os.environ.get("SKARBIEC_CAPABILITY_ROUTES_FILE", "")
-    where = routes_file or "capability-routes.json beside the Skarbiec vault"
-    sys.stderr.write(
-        "no capability was issued for any provider on this host: the routes "
-        f"table is missing or maps nothing.\nExpected at: {where}\n"
-        'Each entry maps one resource to one vault coordinate, for example '
-        '{"provider:openai": {"item": "provider-openai", "field": "api_key"}}.\n'
-        "The issuing operator writes it -- a workload that chose its own "
-        "mapping would be choosing which credential its purpose stands for.\n"
-    )
-with open(capabilities_path, "w", encoding="utf-8") as target:
-    json.dump(capabilities, target, separators=(",", ":"))
-with open(request_capabilities_path, "w", encoding="utf-8") as target:
-    json.dump(request_capabilities, target, separators=(",", ":"))
 with open(catalog_path, "w", encoding="utf-8") as target:
     json.dump({"items": catalog}, target, separators=(",", ":"))
 PY
-printf '%s\n' "issued runtime capabilities" >/dev/stderr
-export BRAMA_PROVIDER_CAPABILITY_IDS="$(cat "$capabilities_file")"
-export BRAMA_REQUEST_SIGN_CAPABILITY_IDS="$(cat "$request_capabilities_file")"
+printf '%s\n' "built runtime catalog; capabilities issue on demand" >/dev/stderr
 export BRAMA_SUBSCRIPTION_CATALOG="$(cat "$catalog_file")"
+# Boot-time ids are single-use and cannot be refreshed inside a running process.
+# Clear inherited values so every credential use asks the authority at its final
+# use boundary instead of trying a stale seed first.
+unset BRAMA_PROVIDER_CAPABILITY_IDS BRAMA_REQUEST_SIGN_CAPABILITY_IDS
 
 
 

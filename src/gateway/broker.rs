@@ -275,9 +275,9 @@ pub async fn get_agent_auth_secret(agent_id: &str) -> Option<Secret> {
             }
         }
     }
-    // Same reasoning as a provider credential: the id the launcher seeded is
-    // short-lived by contract, so its refusal is the steady state and a fresh
-    // capability is the answer, not an error.
+    // Same reasoning as a provider credential: an optional seed is short-lived
+    // by contract, so its refusal is steady state and a fresh capability is the
+    // answer, not an error. Managed launches do not pre-issue one.
     // The provider path already says when the authority refuses; this one
     // returned None in silence, and the caller sees only "no auth secret for
     // agent" -- a sentence that fits a missing item, a refused issue and a
@@ -422,10 +422,11 @@ pub fn provider_capability_configured(provider: &str) -> bool {
 
 /// Redeem a direct provider API credential immediately before the HTTP call.
 ///
-/// The launcher seeds one id per provider at boot and those expire within the
-/// hour, so a refusal is the expected steady state rather than a fault: obtain
-/// a fresh capability and redeem that. Both attempts go through the same
-/// broker, and neither ever holds plaintext beyond the returned [`Secret`].
+/// Managed launches issue at final use because a short-lived, single-use id
+/// cannot be refreshed through a process environment. An optional seed is
+/// accepted for standalone callers, but its refusal is steady state: obtain a
+/// fresh capability and redeem that. Neither path holds plaintext beyond the
+/// returned [`Secret`].
 pub async fn provider_credential(provider: &str) -> Option<Secret> {
     if local_provider_credentials_enabled() {
         // Standalone mode is a separate credential authority. Falling through
@@ -459,7 +460,7 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
                     provider,
                     %resource,
                     %error,
-                    "the capability issued at boot did not redeem; asking for a fresh one"
+                    "the optional capability seed did not redeem; asking for a fresh one"
                 ),
             },
             Err(error) => warn!(
@@ -467,11 +468,6 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
                 provider, %resource, %error, "the configured capability id is not usable"
             ),
         }
-    } else {
-        warn!(
-            event = "provider_credential_not_configured",
-            provider, "no capability was issued for this provider at boot; asking for one now"
-        );
     }
     let Some(fresh) = issue_capability(PROVIDER_PURPOSE, &resource).await else {
         warn!(
@@ -553,10 +549,10 @@ async fn redeem_subscription_credential(subscription_id: &str, provider: &str) -
     {
         return Some(Secret::from_bytes(credential));
     }
-    // A capability is single-use and short-lived by contract, and model
-    // discovery redeems one at boot, so the id the launcher seeded is spent
-    // before the first request arrives. Ask for a fresh capability and fall
-    // back to the authority's own grant when the seeded one is gone.
+    // A capability is single-use and short-lived by contract. An optional
+    // standalone seed may already be spent; managed launches omit it and issue
+    // immediately before use. Fall back to the authority's own grant if fresh
+    // issuance or redemption is refused.
     let seeded = configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id);
     match seeded
         .as_deref()

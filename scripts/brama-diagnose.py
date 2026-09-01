@@ -5,7 +5,7 @@ Every failure this host has had reads the same from outside - `/health` answers
 and no route works, or nothing listens at all - while the cause was a different
 file each time: a workload registry describing another installation, a router
 without the verb the launcher calls, an operator route naming a deployment
-instead of a provider, a policy granting a provider the broker never issued for,
+instead of a provider, a policy granting a provider the authority did not route,
 a listener bound where no caller looks. Each was found by opening one more file
 than the message named.
 
@@ -16,8 +16,8 @@ says beside what it has to agree with:
   2. every installed generation: completeness, router verbs, and whether its
      workload registry describes it on this host;
   3. the service env values that decide which of those is used;
-  4. the policy's provider grants against the capabilities actually issued;
-  5. every alias route against the providers a capability exists for;
+  4. the policy's provider grants against the authority-owned routes table;
+  5. every alias route against the providers that policy and routes agree on;
   6. where the gateway is reachable, and by which scheme;
   7. the current boot attempt from the error log, and nothing older.
 
@@ -65,11 +65,7 @@ def moment(epoch):
 
 
 def normalize(provider):
-    """The provider spelling the launcher files a capability under.
-
-    Mirrors `normalize` in start-with-skarbiec.sh, so the key this report looks
-    for is the key that file wrote.
-    """
+    """The provider spelling used in an authority route."""
     return provider.strip().lower().replace("_", "-")
 
 
@@ -212,70 +208,67 @@ runtime_dir = pathlib.Path(
 )
 print(f"runtime dir: {runtime_dir}")
 
-print("\n=== policy grants against capabilities issued")
-# Both sides of this diff must be keyed the way the gateway redeems, or the
-# report lies about the thing it exists to diagnose.
-#
-# provider-capabilities.json is not keyed by provider. The launcher files a
-# direct provider grant under the provider slug and a subscription grant under
-# the subscription id (start-with-skarbiec.sh: capabilities[provider] and
-# capabilities[subscription_id]), because that is what the gateway asks for:
-# `provider_capability_configured` looks the map up by provider
-# (broker.rs::configured_capability(PROVIDER_CAPABILITIES_ENV, provider)) while
-# `redeem_subscription_credential` looks it up by subscription id. Two
-# keyspaces, chosen by grant type, not by preference.
-#
-# This used to collapse every grant to its provider slug, so a host whose grants
-# are all subscriptions compared provider slugs against subscription ids and
-# reported its own provider as granted-but-never-issued on a gateway that was
-# issuing perfectly. Each grant now carries the key its own type is filed under,
-# and the grant itself is printed verbatim rather than reduced to a fragment.
-#
-# The resource is safe to read this way: it is not a vault item id but a
-# capability coordinate the product generates and parses itself
-# (broker.rs::provider_resource / subscription_resource, capability.rs::
-# valid_resource), and the operator maps it to a vault coordinate in
-# capability-routes.json. Renaming an item does not change it.
-granted = {}
+print("\n=== policy grants against authority routes")
+# A capability is issued at final use. The durable agreement to diagnose is
+# therefore the exact resource shared by policy.json and capability-routes.json,
+# not a single-use id an older launcher happened to leave on disk.
+granted = set()
 policy_path = config_dir / "policy.json"
 if policy_path.is_file():
     policy = json.loads(policy_path.read_text())
     for rule in policy.get("roles", {}).get("brama-runtime", []):
         if rule.get("purpose") != PROVIDER_PURPOSE:
             continue
-        resource = rule.get("resource", "")
-        if not isinstance(resource, str):
-            continue
-        match resource.split(":"):
-            case ["provider", provider] if provider:
-                granted[normalize(provider)] = resource
-            case ["provider", provider, subscription] if provider and subscription:
-                granted[subscription] = resource
+        resource = rule.get("resource")
+        if isinstance(resource, str):
+            granted.add(resource)
     print(f"  policy.json written {moment(policy_path.stat().st_mtime)}")
     print(f"  granted provider resources ({len(granted)}): "
-          f"{', '.join(sorted(granted.values())) or 'none'}")
+          f"{', '.join(sorted(granted)) or 'none'}")
 else:
     print(f"  {policy_path}: absent")
 
-issued = {}
-capabilities_path = runtime_dir / "provider-capabilities.json"
-if capabilities_path.is_file():
-    try:
-        issued = json.loads(capabilities_path.read_text())
-    except ValueError as failure:
-        print(f"  provider-capabilities.json unreadable: {failure}")
-    print(f"  provider-capabilities.json written {moment(capabilities_path.stat().st_mtime)}")
-    print(f"  issued ({len(issued)}): {', '.join(sorted(issued)) or 'none'}")
-    unissued = sorted(resource for key, resource in granted.items() if key not in issued)
-    if unissued:
-        print(f"  granted but never issued: {', '.join(unissued)}")
-    unexpected = sorted(set(issued) - set(granted))
-    if unexpected:
-        print(f"  issued for a key no grant asks for: {', '.join(unexpected)}")
+configured_routes = settings.get("SKARBIEC_CAPABILITY_ROUTES_FILE")
+configured_vault = settings.get("SKARBIEC_VAULT_FILE")
+if configured_routes:
+    capability_routes_path = pathlib.Path(configured_routes)
+elif configured_vault:
+    capability_routes_path = pathlib.Path(configured_vault).parent / "capability-routes.json"
 else:
-    print(f"  {capabilities_path}: absent")
+    capability_routes_path = home / ".config" / "skarbiec" / "capability-routes.json"
 
-print("\n=== alias routes against issued capabilities")
+routed = set()
+if capability_routes_path.is_file():
+    document = json.loads(capability_routes_path.read_text())
+    table = document.get("routes", document)
+    if isinstance(table, dict):
+        routed = {
+            resource
+            for resource, coordinate in table.items()
+            if isinstance(resource, str)
+            and isinstance(coordinate, dict)
+            and isinstance(coordinate.get("item"), str)
+            and isinstance(coordinate.get("field"), str)
+        }
+    print(f"  {capability_routes_path}")
+    missing_routes = sorted(granted - routed)
+    if missing_routes:
+        print(f"  granted but unrouted: {', '.join(missing_routes)}")
+    unexpected_routes = sorted(
+        resource for resource in routed - granted if resource.startswith("provider:")
+    )
+    if unexpected_routes:
+        print(f"  routed without a provider grant: {', '.join(unexpected_routes)}")
+else:
+    print(f"  {capability_routes_path}: absent")
+
+routed_direct_providers = {
+    normalize(parts[1])
+    for resource in granted & routed
+    if len(parts := resource.split(":")) == 2 and parts[0] == "provider"
+}
+
+print("\n=== alias routes against routed provider grants")
 routes_path = pathlib.Path(
     settings.get("BRAMA_INFERENCE_ROUTES_FILE")
     or (home / ".config" / "brama" / "inference-routes.json")
@@ -288,15 +281,15 @@ if routes_path.is_file():
         for route in fallbacks:
             entries[f"{alias} (fallback)"] = route
     for alias, route in sorted(entries.items()):
-        provider = route.split("/")[len([])]
-        if alias.startswith(BEST_ALIAS):
+        provider = route.split("/")[0]
+        if route == BEST_ALIAS:
             verdict = "exempt: a subscription pays for best"
         elif "/" not in route:
             verdict = "REFUSED: names no provider"
-        elif provider in issued:
+        elif provider in routed_direct_providers:
             verdict = "ok"
         else:
-            verdict = "REFUSED: no capability issued"
+            verdict = "REFUSED: no routed provider grant"
         print(f"    {alias} -> {route} [{verdict}]")
     deployments = [entry.get("name") for entry in document.get("deployments", [])]
     print(f"  deployments: {', '.join(name for name in deployments if name) or 'none'}")
