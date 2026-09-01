@@ -205,7 +205,7 @@ beside the client body as a fleet envelope
 </tr>
 <tr>
 <td>Caller</td>
-<td>bearer table (constant-time) → Skarbiec introspection → Wisent Identity; verdicts cached 5 s; fail closed (<a href="/docs/concepts/client-identity">concepts/client-identity</a>)</td>
+<td>bearer table and Skarbiec introspection classify workload/model clients; canonical Wisent Supabase plus <code>authorize_organization</code> classifies humans and verifies <code>X-Wisent-Organization-ID</code>; human cache keys include bearer digest + organization ID; fail closed (<a href="/docs/concepts/client-identity">concepts/client-identity</a>)</td>
 </tr>
 <tr>
 <td>Agent</td>
@@ -213,7 +213,7 @@ beside the client body as a fleet envelope
 </tr>
 <tr>
 <td>Admin</td>
-<td><code>/v1/admin/*</code> answers only <code>brama-desktop</code>; <code>/v1/account/*</code> only a verified Wisent user session (<code>brama-user</code>)</td>
+<td><code>/v1/admin/*</code> answers only <code>brama-desktop</code>; <code>/v1/account/*</code> only a verified Wisent human (<code>brama-user</code>) with organization context, while subscription ownership remains user-scoped</td>
 </tr>
 <tr>
 <td>Secrets</td>

@@ -8,7 +8,6 @@ import shutil
 from pathlib import Path
 
 AUTH_VALUES = {
-    "BRAMA_WISENT_AUTH_URL": "https://alvaewvbyxpgwdpugnxy.supabase.co",
     # Supabase anon keys are public client configuration, not service-role secrets.
     "BRAMA_WISENT_AUTH_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFsdmFld3ZieXhwZ3dkcHVnbnh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzOTc5NDcsImV4cCI6MjA5Njk3Mzk0N30.xkkJ36ZTwtqyVZLFju0vc9S25grTuKbj9ILKlsXdUPA",
 }

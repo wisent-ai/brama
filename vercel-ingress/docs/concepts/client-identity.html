@@ -167,30 +167,36 @@ bearer that carries <code>allowed_models</code> may reach only the six inference
 discovery paths (<code>/v1/chat/completions</code>, <code>/v1/messages</code>, <code>/v1/responses</code>,
 <code>/v1/embeddings</code>, <code>/v1/moderations</code>, <code>/v1/models</code>) plus the account routes;
 anything else answers <code>403</code>.</p>
-<h2 id="resolution-order">Resolution order<a class="headerlink" href="#resolution-order" title="Link to this section">&para;</a></h2>
+<h2 id="resolution-order">Identity classification<a class="headerlink" href="#resolution-order" title="Link to this section">&para;</a></h2>
 <p>The boot table is a warm start, not a precondition — it is a copy taken at
 boot, so it cannot expire, cannot be revoked, and cannot contain a client
-registered since the process started. A presented bearer resolves in order:</p>
+registered since the process started. Brama classifies a presented bearer into
+one of two disjoint identity kinds:</p>
 <ol>
-<li>Constant-time lookup against the boot table (SHA-256 digests).</li>
-<li>Skarbiec token introspection through the <code>BRAMA_SKARBIEC_CONSUMER</code> grant
-   (<code>WC_SKARBIEC_URL</code>) — the authority that issued the token.</li>
-<li>Wisent Identity (<code>BRAMA_WISENT_AUTH_URL</code> + <code>BRAMA_WISENT_AUTH_ANON_KEY</code>)
-   for desktop user sessions, resolved into the <code>brama-user</code> identity.</li>
+<li>Static boot-table and Skarbiec-introspected tokens are workload/model-client
+    identities. They do not require or acquire organization context.</li>
+<li>A JWT validated by canonical Wisent Supabase
+    (<code>https://alvaewvbyxpgwdpugnxy.supabase.co</code>, configured only with
+    <code>BRAMA_WISENT_AUTH_ANON_KEY</code>) is a human identity. The request must
+    also carry <code>X-Wisent-Organization-ID: &lt;uuid&gt;</code>; Brama calls
+    <code>authorize_organization(target_org_id)</code> with the same bearer and
+    accepts only its matching user, organization, and typed
+    <code>owner</code>/<code>admin</code>/<code>member</code> role.</li>
 </ol>
-<p>Both authorities fail closed, and every verdict is cached for five seconds
-keyed by the bearer's SHA-256 hex — long enough to keep authorities off the
-hot path, short enough that revocation stays effective without a restart
-(<code>src/core/server.rs</code>).</p>
+<p>Successful workload identities are cached for five seconds by bearer SHA-256
+digest. Successful human identities are cached by bearer digest plus verified
+organization ID, so switching organizations cannot reuse a prior request's
+context. The raw bearer is never logged (<code>src/core/server.rs</code>).</p>
 <h2 id="special-identities">Special identities<a class="headerlink" href="#special-identities" title="Link to this section">&para;</a></h2>
 <p>Two <code>client_id</code> values are special in code:</p>
 <ul>
 <li><code>brama-desktop</code> — the only identity the <code>/v1/admin/*</code> family answers, and
   it must carry no model allowlist. Every other caller gets <code>403</code>.</li>
-<li><code>brama-user</code> — the identity Wisent Identity sessions resolve into; the
-  only identity the <code>/v1/account/*</code> family serves, and the owner of an
-  account operation is derived from the verified session, never from a
-  caller-supplied identifier.</li>
+<li><code>brama-user</code> — a human identity verified by Wisent Supabase and
+  <code>authorize_organization</code>; the only identity the
+  <code>/v1/account/*</code> family serves. Account ownership remains derived
+  from the verified user, never from the organization or a caller-supplied
+  identifier.</li>
 </ul>
 <p>In managed deployments, startup additionally requires two exact allowlists as
 internal consistency checks when the table is present: <code>wisent-backend</code> must
@@ -203,18 +209,28 @@ exactly <code>best</code>.</p>
  &quot;retryable&quot;:false,&quot;type&quot;:&quot;authentication_error&quot;}}       # HTTP 401
 </code></pre>
 <ul>
-<li>Missing or unknown bearer → <code>401</code> <code>unauthorized</code>. The body is deliberately
-  blank about why: an unauthenticated caller learns nothing.</li>
+<li>Human bearer with missing, duplicate, or malformed
+  <code>X-Wisent-Organization-ID</code> → <code>400</code>.</li>
+<li>Missing, malformed, or invalid bearer → <code>401</code>
+  <code>unauthorized</code>. The body is deliberately blank about why: an
+  unauthenticated caller learns nothing.</li>
+<li>Valid human bearer without membership in the requested organization →
+  <code>403</code> <code>forbidden</code>.</li>
+<li>Unavailable Skarbiec/Supabase identity authority →
+  <code>503</code> <code>identity upstream unavailable</code>.</li>
 <li>Valid bearer outside its path scope, or a signed agent that contradicts
-  the bearer's <code>agent_id</code> binding or the path agent → <code>403</code> <code>forbidden</code>.</li>
-<li>Non-<code>brama-desktop</code> identity on <code>/v1/admin/*</code> → <code>403</code> <code>forbidden</code>.</li>
+  the workload bearer's <code>agent_id</code> binding or the path agent →
+  <code>403</code> <code>forbidden</code>.</li>
+<li>Non-<code>brama-desktop</code> identity on <code>/v1/admin/*</code> →
+  <code>403</code> <code>forbidden</code>.</li>
 </ul>
 <h2 id="lifecycle">Lifecycle<a class="headerlink" href="#lifecycle" title="Link to this section">&para;</a></h2>
 <p>Identities are read once at startup; the gateway does not reload the client
 table in place — restart after any identity change
 (<a href="/docs/configuration">configuration</a>). Bearers not in the table live and
-die with their authority: Skarbiec revocation takes effect within the
-five-second cache.</p>
+die with their authority: Skarbiec token revocation and Supabase human
+membership changes take effect within the five-second, identity-kind-specific
+cache.</p>
 <h2 id="not-to-be-confused-with">Not to be confused with<a class="headerlink" href="#not-to-be-confused-with" title="Link to this section">&para;</a></h2>
 <ul>
 <li><strong>An agent identity.</strong> The bearer authenticates transport; the HMAC trio

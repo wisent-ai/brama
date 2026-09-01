@@ -259,13 +259,27 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   committed; the caller holds an incomplete answer and Brama has already
   stopped. Rotation across models and credentials happens only before the
   first byte, so a committed stream is never silently re-run.
+- **Authentication:** static and Skarbiec-issued workload/model-client bearers
+  remain workload identities and do not send an organization header. A bearer
+  validated by Wisent Supabase is a human identity on account, discovery, and
+  model routes, and always requires the server-verified organization context
+  described below. A missing or malformed organization header returns `400`,
+  an invalid bearer `401`, no membership `403`, and an unavailable identity
+  authority `503`.
 - **Account API keys and subscriptions:** authenticated Wisent users use
   `GET|POST /v1/account/subscriptions` and
-  `DELETE /v1/account/subscriptions/:subscription_id`. Brama derives the owner
-  from the verified Wisent session; the caller never supplies an account or
-  agent identifier. `POST` accepts an API key for any supported remote provider,
-  stores it through Skarbiec without returning it, and makes that account's
-  canonical `provider/model` routes available for buffered and streamed calls.
+  `DELETE /v1/account/subscriptions/:subscription_id`. Every human request sends
+  `Authorization: Bearer <Supabase JWT>` and
+  `X-Wisent-Organization-ID: <uuid>`. Brama validates the JWT with the canonical
+  Wisent Supabase at `https://alvaewvbyxpgwdpugnxy.supabase.co`, calls
+  `authorize_organization` with the same bearer, and accepts only the returned
+  user, organization, and typed `owner`, `admin`, or `member` role. The
+  organization is verified request context, not subscription ownership: Brama
+  continues to derive the subscription owner from the verified user, and the
+  caller never supplies an account or agent identifier. `POST` accepts an API
+  key for any supported remote provider, stores it through Skarbiec without
+  returning it, and makes that user's canonical `provider/model` routes
+  available for buffered and streamed calls.
 - **HTTP discovery:** `GET /v1/models`; account discovery combines public
   catalog metadata with models executable by that account's stored keys, while
   signed agent discovery includes agent-owned subscriptions.
@@ -411,10 +425,12 @@ agent**: **Connect a subscription** adds an agent/provider subscription,
 **Replace this subscription credential…** replaces the credential and optional
 label, **Verify with provider…** runs the deliberate one-request probe, and
 **Retire this subscription…** removes it. Under **My account**, the same
-add-or-replace and retire semantics are scoped by the signed-in Wisent identity
+add-or-replace and retire semantics remain scoped by the signed-in Wisent user
 through `GET`/`POST /v1/account/subscriptions` and
 `DELETE /v1/account/subscriptions/:subscription_id`; an account can never read
-or mutate another account's subscriptions.
+or mutate another user's subscriptions. These calls require both the Supabase
+bearer and a server-verified `X-Wisent-Organization-ID`, but switching
+organizations does not move, duplicate, or relabel user-owned subscriptions.
 
 ### Subscription pool
 
