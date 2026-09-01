@@ -1429,26 +1429,25 @@ fn normalized_provider(value: &str) -> String {
     value.trim().to_lowercase().replace('_', "-")
 }
 
-/// Map the router's full vault listing to the accounts no agent tag reaches.
+/// Map the router's subscription listing to accounts no agent tag reaches.
 ///
-/// Reports every non-deleted item carrying no `brama:agent:` tag. Each of
-/// provider and id is populated from its corresponding tag (`brama:provider:`
-/// and `brama:id:`), or is None if the tag is absent. Item names are never
-/// parsed; all meaning is sourced from explicit tags. An item carrying any
-/// `brama:agent:` tag is routable and is not reported here, whichever agent
-/// that tag names.
+/// Only an item carrying `brama:subscription` is an account in this catalogue.
+/// Direct provider keys, client identities and login records legitimately carry
+/// no `brama:agent:` tag and must not make readiness fail. Provider and id are
+/// populated from their explicit tags; item names are never parsed.
 fn parse_unroutable_accounts(output: &[u8]) -> Result<Vec<UnroutableAccount>, ()> {
     let items: Vec<VaultListItem> = serde_json::from_slice(output).map_err(|_| ())?;
     let mut accounts: Vec<UnroutableAccount> = items
         .into_iter()
         .filter(|item| !item.deleted)
+        .filter(|item| item.tags.iter().any(|tag| tag == "brama:subscription"))
         .filter(|item| subscription_tag_value(&item.tags, "brama:agent:").is_none())
         .map(|item| {
             // Populate fields from tags; neither causes the item to be skipped.
             let id = subscription_tag_value(&item.tags, "brama:id:").map(|s| s.to_owned());
             let provider =
                 subscription_tag_value(&item.tags, "brama:provider:").map(normalized_provider);
-            // Report any item with no agent tag, regardless of which provider/id tags it carries.
+            // The subscription marker above establishes that this is an account.
             UnroutableAccount {
                 id,
                 provider,
