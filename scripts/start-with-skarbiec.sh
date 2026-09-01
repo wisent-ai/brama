@@ -997,7 +997,7 @@ fi
 
 
 # Releases before this launcher handed the gateway to a child shell. Stopping
-# the launchd job therefore left that child alive on port 8080, and every newer
+# the launchd job therefore left that child alive on its port, and every newer
 # release was quarantined even though its own process model was correct. Retire
 # only an exact stale managed executable: never kill an arbitrary listener.
 brama_port=${BRAMA_PORT_OVERRIDE:-${PORT:-8080}}
@@ -1005,7 +1005,9 @@ if [ -x /usr/sbin/lsof ]; then
   for stale_pid in $(/usr/sbin/lsof -nP -tiTCP:"$brama_port" -sTCP:LISTEN 2>/dev/null || true); do
     stale_bin=$(ps -p "$stale_pid" -o comm= 2>/dev/null || true)
     case "$stale_bin" in
-      "${HOME:-/nonexistent}/.stado/services/brama/sha256-"*/darwin-arm/bin/brama)
+      "${HOME:-/nonexistent}/.stado/services/brama/sha256-"*/darwin-arm/bin/brama|\
+      "${HOME:-/nonexistent}/.stado/services/brama/sha256-"*/darwin-arm64/bin/brama|\
+      "${HOME:-/nonexistent}/.stado/services/brama/releases/"*/darwin-arm64/bin/brama)
         if [ "$(realpath "$stale_bin")" != "$(realpath "$BRAMA_BIN")" ]; then
           printf '%s\n' "retiring stale managed Brama process $stale_pid from $stale_bin" >/dev/stderr
           kill "$stale_pid"
@@ -1029,10 +1031,10 @@ fi
 # between the supervisor and the process that matters. The supervisor stops the
 # job by signalling what it launched, that signal is not one a shell trap gets
 # to answer, and the gateway it had started outlived the stop as a disowned
-# process still holding port 8080. Every later start then failed on an address
+# process still holding its port. Every later start then failed on an address
 # already in use, and the service showed inactive while a gateway it no longer
 # controlled kept serving.
 #
 # The broker no longer needs the trap: a leftover one is ended at startup by
 # the socket guard above, which is the same repair without the shell.
-exec "$BRAMA_BIN" serve --port "${BRAMA_PORT_OVERRIDE:-${PORT:-8080}}"
+exec "$BRAMA_BIN" serve --port "$brama_port"
