@@ -60,6 +60,24 @@ jobs:
         with:
           repository: wisent-ai/weles
           path: weles-source
+      - name: Put Homebrew on PATH
+        if: env.skipped != '1'
+        run: echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
+      # `dist/` is a build output: weles gitignores it and tracks no file under
+      # it, so a fresh checkout carries none and every launcher dies on
+      # ERR_MODULE_NOT_FOUND for dist/utils/login-accounts.js before it can
+      # probe its pool -- the pools then stay burnt behind a green-looking
+      # schedule. The host's old ~/weles copy was deployed already built, which
+      # is why pointing WELES_DIR at a source checkout lost the artefact without
+      # anything saying so. node_modules is needed at run time too, not only to
+      # compile, and `npm ci` installs exactly the lockfile, so what runs is
+      # reproducible against whatever revision the checkout resolved.
+      - name: Build the weles runners this job executes
+        if: env.skipped != '1'
+        working-directory: weles-source
+        run: |
+          npm ci
+          npm run build
       - name: Run the ${{ matrix.provider }} reauth launcher
         if: env.skipped != '1'
         env:
