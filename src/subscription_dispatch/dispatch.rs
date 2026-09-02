@@ -86,14 +86,68 @@ fn refuse_as(
 /// A provider that refused every credential and a vault that produced none are
 /// both authorization failures no wait repairs; only a genuinely exhausted pool
 /// is capacity.
-fn rotation_failure_kind(
-    saw_auth_rejection: bool,
-    saw_unredeemable_credential: bool,
-) -> &'static str {
-    if saw_auth_rejection || saw_unredeemable_credential {
+///
+/// A credential inside an authorization block counts with the first group. The
+/// router skips a blocked credential without calling the provider, so a
+/// credential the provider had already refused looked, for the half hour its
+/// block lasted, exactly like one that was merely out of quota - and the caller
+/// was told to retry. That is the same defect as reporting a refused redemption
+/// as capacity, arriving one layer further in.
+fn rotation_failure_kind(cause: PoolEmptyCause) -> &'static str {
+    if cause.needs_authorization() {
         "credential_unauthorized"
     } else {
         "subscription_unavailable"
+    }
+}
+
+/// Why an emptied credential pool emptied, as one value.
+///
+/// The buffered and streaming paths reach this decision independently and used
+/// to spell it twice. They now share it, because the two spellings drifting is
+/// how the same broken credential comes to answer `503` to one caller and `429`
+/// to another.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PoolEmptyCause {
+    /// A provider refused a credential outright during this request.
+    pub auth_rejection: bool,
+    /// A credential was skipped because its recorded block is an authorization
+    /// block: the same refusal, still being served from the ledger.
+    pub reauthorization_block: bool,
+    /// The vault produced no credential at all -- no capability, no grant.
+    pub unredeemable_credential: bool,
+}
+
+impl PoolEmptyCause {
+    /// Whether repairing this needs an authorization, not a wait.
+    pub fn needs_authorization(self) -> bool {
+        self.auth_rejection || self.reauthorization_block || self.unredeemable_credential
+    }
+}
+
+/// The sentence one emptied pool is reported with.
+///
+/// Four causes, and the caller acts on each differently: a provider that
+/// refused needs a sign-in, a credential inside an authorization block is that
+/// same refusal still recorded, a vault that produced nothing needs a
+/// capability or grant repaired, and everything else is quota worth waiting
+/// out. Only the last is retryable.
+///
+/// The block case is why this is a named function with a test beside it.
+/// `codex` answered `401 Your session has ended. Please log in again`, which
+/// recorded `needs_reauthorization` and a half-hour block; every request inside
+/// that window skipped the credential without asking anyone, emptied the pool
+/// with nothing observed, and fell through to the capacity sentence. The ledger
+/// had recorded the authorization failure the whole time, and the caller was
+/// told to retry -- which is the defect ARCHITECTURE.md records as fixed,
+/// reappearing one layer further in.
+pub fn pool_empty_summary(provider: &str, cause: PoolEmptyCause) -> String {
+    if cause.auth_rejection || cause.reauthorization_block {
+        auth_rejected_summary(provider)
+    } else if cause.unredeemable_credential {
+        unredeemable_credential_summary(provider)
+    } else {
+        bounded_unavailable_summary(provider)
     }
 }
 
@@ -154,9 +208,15 @@ pub async fn probe_subscription_redemption(
     // Checked before redeeming, in the request path's own order: a blocked
     // credential is skipped there without a provider call, so a readiness probe
     // that redeemed it anyway would report a working credential the router
-    // refuses to use.
+    // refuses to use. An authorization block is named as one, for the same
+    // reason the request path names it: `/readyz` is the deploy check, and
+    // "wait" and "sign in again" are different instructions to whoever reads it.
     if usage::is_blocked(subscription_id) {
-        return Err(bounded_unavailable_summary(provider));
+        return Err(if usage::needs_reauthorization(subscription_id) {
+            auth_rejected_summary(provider)
+        } else {
+            bounded_unavailable_summary(provider)
+        });
     }
     match broker::subscription_credential(subscription_id, provider).await {
         Some(credential) => {
@@ -1365,6 +1425,12 @@ async fn attempt_subscription(
     // capacity nor a provider refusal, and the caller must not be told to wait
     // for it.
     let mut saw_unredeemable_credential = false;
+    // Set when a credential was skipped because its recorded block is an
+    // authorization block rather than a rate limit. The ledger knows the
+    // difference -- `record_reauthorization_needed` writes the state beside the
+    // block precisely so it is not lost -- and without reading it here the
+    // whole half hour reports as capacity.
+    let mut saw_reauthorization_block = false;
     for (index, entry) in rows.iter().take(max_credential_attempts()).enumerate() {
         let credential_id = &entry.id;
         // A credential inside a recorded block is skipped without a provider
@@ -1372,11 +1438,14 @@ async fn attempt_subscription(
         // string on every request, which meant paying for the 429 to learn what
         // the last 429 already said.
         if usage::is_blocked(credential_id) {
+            let reauthorization = usage::needs_reauthorization(credential_id);
+            saw_reauthorization_block = saw_reauthorization_block || reauthorization;
             warn!(
                 event = "credential_blocked",
                 provider,
                 credential_index = index,
-                "bounded credential is inside a recorded rate-limit block"
+                reauthorization,
+                "bounded credential is inside a recorded block"
             );
             continue;
         }
@@ -1525,24 +1594,30 @@ async fn attempt_subscription(
     // rejected the credential is an authorization failure that waiting cannot
     // reach, and callers used to retry it as `429 capacity_error` while the
     // subscription sat burnt waiting for someone to log in.
-    // Three different reasons empty one pool, and the caller acts on each
-    // differently: a provider that refused needs a sign-in, a vault that
-    // produced nothing needs a capability or grant repaired, and everything
-    // else is quota worth waiting out. Only the last one is retryable, and
-    // reporting the first two as capacity is what sends an agent into hours of
-    // retries against a chain no waiting can mend.
-    let summary = if saw_auth_rejection {
-        auth_rejected_summary(provider)
-    } else if saw_unredeemable_credential {
-        unredeemable_credential_summary(provider)
-    } else {
-        bounded_unavailable_summary(provider)
+    // Four different reasons empty one pool, and the caller acts on each
+    // differently: a provider that refused needs a sign-in, a credential inside
+    // an authorization block is that same refusal still being served from the
+    // ledger, a vault that produced nothing needs a capability or grant
+    // repaired, and everything else is quota worth waiting out. Only the last
+    // one is retryable, and reporting the others as capacity is what sends an
+    // agent into hours of retries against a chain no waiting can mend.
+    //
+    // The block case is the one that reopened this. `codex` answered
+    // `401 Your session has ended. Please log in again`, which recorded
+    // `needs_reauthorization` and a half-hour block; every request inside that
+    // window then skipped the credential without asking anyone, emptied the
+    // pool with nothing observed, and was answered `429 retryable: true`. The
+    // ledger had said `needs_reauthorization` the whole time.
+    let cause = PoolEmptyCause {
+        auth_rejection: saw_auth_rejection,
+        reauthorization_block: saw_reauthorization_block,
+        unredeemable_credential: saw_unredeemable_credential,
     };
     let mut failure = refuse_as(
         request,
         POINT_BOUNDED_ROTATION,
-        rotation_failure_kind(saw_auth_rejection, saw_unredeemable_credential),
-        summary,
+        rotation_failure_kind(cause),
+        pool_empty_summary(provider, cause),
         refresh_refusal,
     );
     failure.attempts = provider_attempts;
@@ -1720,14 +1795,22 @@ async fn attempt_subscription_stream(
     let mut refresh_refusal: Option<Failure> = None;
     let mut saw_auth_rejection = false;
     let mut saw_unredeemable_credential = false;
+    // The streaming path empties its pool the same way the buffered one does,
+    // so it reads the ledger's authorization state the same way. Fixing one and
+    // not the other would make the same broken credential answer `503` to a
+    // buffered caller and `429` to a streaming one.
+    let mut saw_reauthorization_block = false;
     for (index, entry) in rows.iter().take(max_credential_attempts()).enumerate() {
         let credential_id = &entry.id;
         if usage::is_blocked(credential_id) {
+            let reauthorization = usage::needs_reauthorization(credential_id);
+            saw_reauthorization_block = saw_reauthorization_block || reauthorization;
             warn!(
                 event = "credential_blocked",
                 provider,
                 credential_index = index,
-                "bounded credential is inside a recorded rate-limit block"
+                reauthorization,
+                "bounded credential is inside a recorded block"
             );
             continue;
         }
@@ -1874,24 +1957,18 @@ async fn attempt_subscription_stream(
             "provider rejected bounded credential with a rotatable failure"
         );
     }
-    // Three different reasons empty one pool, and the caller acts on each
-    // differently: a provider that refused needs a sign-in, a vault that
-    // produced nothing needs a capability or grant repaired, and everything
-    // else is quota worth waiting out. Only the last one is retryable, and
-    // reporting the first two as capacity is what sends an agent into hours of
-    // retries against a chain no waiting can mend.
-    let summary = if saw_auth_rejection {
-        auth_rejected_summary(provider)
-    } else if saw_unredeemable_credential {
-        unredeemable_credential_summary(provider)
-    } else {
-        bounded_unavailable_summary(provider)
+    // Both refusal paths read the same cause through the same function; see
+    // [`pool_empty_summary`] for why the block case is the one that matters.
+    let cause = PoolEmptyCause {
+        auth_rejection: saw_auth_rejection,
+        reauthorization_block: saw_reauthorization_block,
+        unredeemable_credential: saw_unredeemable_credential,
     };
     let mut failure = refuse_as(
         request,
         POINT_BOUNDED_ROTATION,
-        rotation_failure_kind(saw_auth_rejection, saw_unredeemable_credential),
-        summary,
+        rotation_failure_kind(cause),
+        pool_empty_summary(provider, cause),
         refresh_refusal,
     );
     failure.attempts = provider_attempts;

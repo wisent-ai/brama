@@ -1175,15 +1175,23 @@ struct Usage {
     total_tokens: u32,
 }
 
-#[derive(Clone, Copy)]
-struct ModelErrorContract {
-    status: StatusCode,
-    error_type: &'static str,
-    code: &'static str,
-    retryable: bool,
+/// What Brama answers a client with for one refusal sentence.
+///
+/// Public because it is a contract, not an implementation detail: the status,
+/// the type, the code and `retryable` are what every caller in the fleet acts
+/// on, ARCHITECTURE.md records the rule they must obey - an authorization
+/// failure is never dressed as capacity - and it has now regressed twice while
+/// being unreachable from any test.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ModelErrorContract {
+    pub status: StatusCode,
+    pub error_type: &'static str,
+    pub code: &'static str,
+    pub retryable: bool,
 }
 
-fn model_error_contract(message: &str) -> ModelErrorContract {
+/// Classify one refusal sentence into the contract a client is answered with.
+pub fn model_error_contract(message: &str) -> ModelErrorContract {
     let normalized = message.to_ascii_lowercase();
     if normalized.contains("no credits remaining")
         || normalized.contains("insufficient_quota")
@@ -1295,6 +1303,25 @@ fn model_error_contract(message: &str) -> ModelErrorContract {
             status: StatusCode::SERVICE_UNAVAILABLE,
             error_type: "authorization_error",
             code: "subscription_reauthorization_required",
+            retryable: false,
+        };
+    }
+    // A pool with no eligible row at all is discovery, not capacity: the agent
+    // has no active credential of this provider, which is what a subscription
+    // whose vault item lost its `brama:agent:` tag produces, and what a retired
+    // subscription produces. Waiting restores neither a tag nor a retirement.
+    // Each sentence is matched whole rather than by a bare "no active", so that
+    // "no active stateless provider models for signed agent" -- a catalogue
+    // answer, not a credential one -- keeps its own classification. The pinned
+    // variant reads "... for provider 'x' and agent", so it needs its own arm
+    // rather than the credential-sentence one.
+    if (normalized.contains("no active") && normalized.contains("credential for agent"))
+        || normalized.contains("is not active for provider")
+    {
+        return ModelErrorContract {
+            status: StatusCode::SERVICE_UNAVAILABLE,
+            error_type: "authorization_error",
+            code: "credential_unauthorized",
             retryable: false,
         };
     }

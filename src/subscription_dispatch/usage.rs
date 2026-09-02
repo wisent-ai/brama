@@ -1021,6 +1021,25 @@ pub fn is_blocked(subscription_id: &str) -> bool {
     })
 }
 
+/// Whether this subscription's recorded block is an authorization block.
+///
+/// [`record_reauthorization_needed`] writes two things: the state that says a
+/// sign-in is the repair, and a half-hour block that stops the credential being
+/// spent meanwhile. The router skips a blocked credential without asking the
+/// provider, so for that half hour the only record of *why* the pool is empty
+/// is this state - and a caller told the pool was merely bounded is told to
+/// wait for something no wait reaches. This is how the request path reads the
+/// difference.
+pub fn needs_reauthorization(subscription_id: &str) -> bool {
+    with_ledger(|ledger| {
+        ledger
+            .subscriptions
+            .get(subscription_id)
+            .and_then(|entry| entry.credential.as_ref())
+            .is_some_and(|credential| credential.state == CredentialState::NeedsReauthorization)
+    })
+}
+
 /// The earliest future reset instant across this subscription's served windows.
 ///
 /// A pin on this credential should die with its tightest window, and this is

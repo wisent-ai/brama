@@ -36,6 +36,10 @@ path = "tests/providers/http_api_real.rs"
 name = "provider_contracts"
 path = "tests/providers/provider_contracts.rs"
 
+[[test]]
+name = "refusal_contract"
+path = "tests/routing/refusal_contract.rs"
+
 
 [dependencies]
 async-trait = "0.1"
