@@ -660,9 +660,26 @@ backend_models = [model for model in all_models if model.startswith("wisent-back
 # deployment happens to answer. Granting `weles/agent/primary` here refuses
 # startup with "must give `weles` its exact required alias set".
 weles_models = ["best"]
+# The credential-renewal caller. Weles's reauth trajectories present the bearer
+# from `wisent-app-model-router` and sign as agent `wisent-app`; that bearer was
+# in no boot table and behind no grant, so every renewal read answered
+# `model_bearer_unrecognized` and the pool those trajectories exist to refill
+# stayed empty while three providers waited to be signed in. The routes are
+# derived from the same closed allowlist the backend's are, never a second copy
+# of the model names: each provider's own route is what a trajectory probes, and
+# `best` is the subscription alias those grants serve.
+renewal_providers = ("claude-code", "codex", "kimi")
+renewal_models = sorted(
+    {model for model in all_models if model.split("/", 1)[0] in renewal_providers}
+    | {"best"}
+)
+# The last field says whether the gateway refuses to start without this client.
+# Renewal is not: it repairs the pool, it does not serve traffic, and a
+# gateway that will not start serves none of it.
 sources = [
-    ("weles", "weles-model-router", "weles", weles_models),
-    ("wisent-backend", "wisent-backend-model-router", "wisent-app", backend_models),
+    ("weles", "weles-model-router", "weles", weles_models, True),
+    ("wisent-backend", "wisent-backend-model-router", "wisent-app", backend_models, True),
+    ("wisent-app", "wisent-app-model-router", "wisent-app", renewal_models, False),
 ]
 
 def field(item, name):
@@ -691,14 +708,23 @@ def field(item, name):
     return value
 
 def identity(source):
-    client_id, item, agent_id, allowed_models = source
-    result = {"client_id": client_id, "token": field(item, "token"), "agent_id": agent_id}
+    client_id, item, agent_id, allowed_models, required = source
+    try:
+        token = field(item, "token")
+    except SystemExit as refusal:
+        if required:
+            raise
+        # Named rather than swallowed: the silent version of this state is what
+        # let a client be missing from the table for as long as it was.
+        print(f"optional client {client_id} skipped: {refusal}", file=sys.stderr)
+        return None
+    result = {"client_id": client_id, "token": token, "agent_id": agent_id}
     if allowed_models is not None:
         result["allowed_models"] = allowed_models
     return result
 
 with ThreadPoolExecutor(max_workers=len(sources)) as executor:
-    identities = list(executor.map(identity, sources))
+    identities = [entry for entry in executor.map(identity, sources) if entry]
 sys.stdout.write(json.dumps(identities, separators=(",", ":")))
 PY
 printf '%s\n' "read required model-router identities" >/dev/stderr
