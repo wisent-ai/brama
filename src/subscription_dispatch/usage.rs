@@ -885,6 +885,25 @@ pub fn credential_refresh_hint(subscription_id: &str, within: Duration) -> Refre
     })
 }
 
+/// When the ledger's verdict about one subscription's grant was recorded, or
+/// `None` when nothing has ever been recorded about it.
+///
+/// This is the instant a repair loop compares itself against. A browser
+/// sign-in can only change the answer if the stored credential changed, and the
+/// ledger writes a new instant every time it does -- a refusal, a rotation, a
+/// sign-in that stored something. A verdict no newer than the last sign-in
+/// therefore proves that sign-in has already been tried against exactly this
+/// state and produced this.
+pub fn credential_recorded_at_ms(subscription_id: &str) -> Option<i64> {
+    with_ledger(|ledger| {
+        ledger
+            .subscriptions
+            .get(subscription_id)
+            .and_then(|entry| entry.credential.as_ref())
+            .map(|credential| credential.recorded_at_ms)
+    })
+}
+
 /// Record what an operator's on-demand completion probe learned about one
 /// subscription.
 ///

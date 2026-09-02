@@ -132,18 +132,30 @@ pub fn latest_subscription_sign_in(subscription_id: &str) -> Option<Value> {
     })
 }
 
+/// When the newest completed sign-in for one subscription happened, or `None`
+/// when none ever has.
+///
+/// Distinct from "some time ago": a caller deciding whether another browser
+/// sign-in could produce a different answer needs the instant, not an elapsed
+/// window, because what it compares against is when the stored credential's
+/// verdict was recorded.
+pub fn latest_subscription_sign_in_at_ms(subscription_id: &str) -> Option<i64> {
+    latest_subscription_sign_in(subscription_id).map(|latest| {
+        latest
+            .get("at_ms")
+            .and_then(Value::as_i64)
+            .unwrap_or_default()
+    })
+}
+
 /// Whether another browser sign-in may start after the persisted cooldown.
 ///
 /// The journal, not process memory, is authoritative so restarting Brama cannot
 /// turn one refusal into repeated Google sign-in and 2FA prompts.
 pub fn subscription_sign_in_due(subscription_id: &str, cooldown: std::time::Duration) -> bool {
-    let Some(latest) = latest_subscription_sign_in(subscription_id) else {
+    let Some(at_ms) = latest_subscription_sign_in_at_ms(subscription_id) else {
         return true;
     };
-    let at_ms = latest
-        .get("at_ms")
-        .and_then(Value::as_i64)
-        .unwrap_or_default();
     let cooldown_ms = i64::try_from(cooldown.as_millis()).unwrap_or(i64::MAX);
     chrono::Utc::now().timestamp_millis().saturating_sub(at_ms) >= cooldown_ms
 }
