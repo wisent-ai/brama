@@ -1221,6 +1221,9 @@ mod tests {
     /// The first refusal ever recorded establishes the verdict.
     #[test]
     fn a_first_refusal_establishes_the_verdict() {
-        assert_eq!(refusal_recorded_at_ms(None, SENTENCE, ESTABLISHED_MS), ESTABLISHED_MS);
+        assert_eq!(
+            refusal_recorded_at_ms(None, SENTENCE, ESTABLISHED_MS),
+            ESTABLISHED_MS
+        );
     }
 }
