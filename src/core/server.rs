@@ -907,6 +907,23 @@ fn is_account_path(path: &str) -> bool {
     path == "/v1/account/subscriptions" || path.starts_with("/v1/account/subscriptions/")
 }
 
+/// The agent-scoped subscription routes: read one agent's pool, donate a fresh
+/// grant, retire a spent row.
+///
+/// Their handlers authorize with `authorize_caller`, which verifies an HMAC
+/// signature over the exact body and binds it to the agent named in the path --
+/// strictly more than a bearer proves. The allowlist below excluded them
+/// anyway, and every workload identity is model-scoped, because the workload
+/// authority always resolves one with `allowed_models: Some(routes)`. So these
+/// routes were unreachable by construction for the only caller they exist for:
+/// on charless-mac-mini the Weles renewal trajectory read
+/// `list subscriptions -> 401` on every tick while the pool it was there to
+/// refill stayed empty, and the refusal named neither the path nor the reason.
+fn is_agent_subscription_path(path: &str) -> bool {
+    path.strip_prefix("/v1/subscriptions/")
+        .is_some_and(|agent| !agent.is_empty() && !agent.contains('/'))
+}
+
 async fn require_model_bearer(
     State(auth): State<ModelIngressAuth>,
     mut request: axum::extract::Request,
@@ -931,7 +948,12 @@ async fn require_model_bearer(
                 return api_error(StatusCode::FORBIDDEN, "forbidden").into_response()
             }
             Err(IdentityResolutionError::Unauthorized) => {
-                return api_error(StatusCode::UNAUTHORIZED, "unauthorized").into_response()
+                warn!(
+                    path = %request.uri().path(),
+                    event = "model_bearer_unrecognized",
+                    "no boot-table client and no authority answer matched the presented bearer"
+                );
+                return api_error(StatusCode::UNAUTHORIZED, "unauthorized").into_response();
             }
             Err(IdentityResolutionError::UpstreamUnavailable) => {
                 return api_error(
@@ -944,6 +966,7 @@ async fn require_model_bearer(
     };
     if identity.allowed_models.is_some()
         && !is_account_path(request.uri().path())
+        && !is_agent_subscription_path(request.uri().path())
         && !matches!(
             request.uri().path(),
             // Every inference and discovery path a model-scoped bearer may
@@ -959,6 +982,12 @@ async fn require_model_bearer(
                 | "/v1/models"
         )
     {
+        warn!(
+            client_id = %identity.client_id,
+            path = %request.uri().path(),
+            event = "model_scoped_bearer_path_refused",
+            "a model-scoped credential may not reach this path"
+        );
         return api_error(StatusCode::FORBIDDEN, "forbidden").into_response();
     }
     if let Some(agent_id) = identity.agent_id() {
