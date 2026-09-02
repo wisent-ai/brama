@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "product_id": "brama",
+  "journey_id": "first-use",
+  "journey_version": "2026-08-04.1",
+  "entry_screen_id": "provider-neutral-routing",
+  "first_success_fact": "model_response_received",
+  "published_at": "2026-08-04T00:00:00Z",
+  "source_revision": "brama-first-use-2026-08-04.1",
+  "screens": [
+    {
+      "screen_id": "provider-neutral-routing",
+      "screen_kind": "explanation",
+      "title_key": "onboarding.routing.title",
+      "body_key": "onboarding.routing.body",
+      "required": true,
+      "actions": [
+        "next"
+      ],
+      "transitions": [
+        {
+          "next_screen_id": "request-response-contract",
+          "reason_code": "routing_understood",
+          "priority": 0
+        }
+      ],
+      "presentation": {
+        "title": "Route once, independent of provider",
+        "body": "Brama accepts one routing request and selects the configured provider/model route behind it. Your application keeps the same message contract while routes, aliases, and subscription-backed selection can change independently. Provider credentials and caller authentication are provisioned separately; onboarding never creates or changes them."
+      }
+    },
+    {
+      "screen_id": "request-response-contract",
+      "screen_kind": "explanation",
+      "title_key": "onboarding.contract.title",
+      "body_key": "onboarding.contract.body",
+      "required": true,
+      "actions": [
+        "next"
+      ],
+      "transitions": [
+        {
+          "next_screen_id": "real-model-response",
+          "reason_code": "contract_understood",
+          "priority": 0
+        }
+      ],
+      "presentation": {
+        "title": "Use the OpenAI-compatible request and response contract",
+        "body": "Send model, messages, max_tokens, and temperature to POST /v1/chat/completions. A successful response returns id, model, choices[0].message, finish_reason, and token usage; routing details stay Brama-owned.",
+        "request_example": "{\"model\":\"openai/default\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello in one sentence.\"}],\"max_tokens\":256,\"temperature\":0.7}",
+        "response_example": "{\"id\":\"chatcmpl-...\",\"model\":\"...\",\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"...\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":0,\"completion_tokens\":0,\"total_tokens\":0}}"
+      }
+    },
+    {
+      "screen_id": "real-model-response",
+      "screen_kind": "first_success",
+      "title_key": "onboarding.response.title",
+      "body_key": "onboarding.response.body",
+      "required": true,
+      "completion_evidence": {
+        "kind": "fact",
+        "fact": "model_response_received",
+        "operator": "eq",
+        "value": true
+      },
+      "actions": [
+        "send_real_model_request"
+      ],
+      "transitions": [],
+      "presentation": {
+        "title": "Receive one real model response",
+        "body": "Run the onboarding request through your configured route. Completion is recorded only after Brama receives a successful response from a real model; viewing this step or allowing provider cost is not sufficient. Auth and provider setup remain separate."
+      }
+    }
+  ],
+  "analytics_contract": {
+    "contract_version": "1",
+    "surface": "cli",
+    "exposure_event": "onboarding_step_viewed",
+    "primary_action_event": "onboarding_step_completed",
+    "completion_event": "onboarding_completed",
+    "first_success_event": "onboarding_first_success_observed"
+  }
+}
