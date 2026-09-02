@@ -2557,6 +2557,33 @@ fn spawn_readiness_probe() {
     });
 }
 
+/// What `/readyz` says about a provider whose active subscription contributed
+/// no model, given the refusals the discovery sweep recorded for it.
+///
+/// "No model discovered" on its own cannot distinguish a provider that
+/// answered with nothing from a credential this gateway could not derive a key
+/// from and therefore never asked with — and those two have different owners.
+/// The sweep already knew which and kept it to itself: `discover_models`
+/// records every per-subscription refusal and then drops the list unless the
+/// pool ended with no models at all, so one working subscription silenced the
+/// reason every other one failed.
+///
+/// Measured on charless-mac-mini on 2026-09-02: claude-code and kimi both
+/// redeemed and both discovered nothing while codex, in the same sweep on the
+/// same host, discovered five. Separating "the provider answered with nothing"
+/// from "we never asked" took reading this crate's branches and counting
+/// `static_models` entries, because no surface would say it. Every
+/// subscription provider in the registry carries a static model list, so an
+/// empty result cannot come from the provider's own answer at all — only from
+/// a refusal reached before that fallback.
+pub fn unroutable_reason(refusals: &[String]) -> String {
+    const HEADLINE: &str = "active subscription, no model discovered";
+    if refusals.is_empty() {
+        return HEADLINE.to_string();
+    }
+    format!("{HEADLINE} — {}", refusals.join("; "))
+}
+
 /// Does the credential chain actually work right now?
 ///
 /// `/health` answers whether the process is up. This check redeems one
@@ -2635,10 +2662,27 @@ async fn calculate_readiness() -> ReadinessReport {
                 }
                 for provider in &subscribed {
                     if !per_provider.contains_key(provider) {
+                        // Why, when the sweep recorded one. "No model
+                        // discovered" alone cannot distinguish a provider that
+                        // answered with nothing from a credential this gateway
+                        // could not derive a key from and so never asked with,
+                        // and those have different owners.
+                        let refusals: Vec<String> = active
+                            .iter()
+                            .filter(|(_, subscribed_provider)| *subscribed_provider == provider)
+                            .filter_map(|(subscription, subscribed_provider)| {
+                                crate::subscription_dispatch::dispatch::discovery_failure(
+                                    subscribed_provider,
+                                    subscription,
+                                )
+                                .map(|why| format!("{subscription}: {why}"))
+                            })
+                            .collect();
+                        let reason = unroutable_reason(&refusals);
                         unroutable.push(json!({
                             "agent": agent,
                             "provider": provider,
-                            "reason": "active subscription, no model discovered",
+                            "reason": reason,
                         }));
                     }
                 }

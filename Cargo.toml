@@ -44,6 +44,10 @@ path = "tests/routing/refusal_contract.rs"
 name = "subscription_tag_contract"
 path = "tests/routing/subscription_tag_contract.rs"
 
+[[test]]
+name = "discovery_reason_contract"
+path = "tests/routing/discovery_reason_contract.rs"
+
 
 [dependencies]
 async-trait = "0.1"
