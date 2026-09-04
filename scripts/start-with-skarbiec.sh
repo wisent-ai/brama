@@ -10,10 +10,11 @@ umask 077
 # "unavailable" long after start, with /health and /v1/models still answering.
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 bundle_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
+installation=$(basename "$(dirname -- "$bundle_root")")
 if [ -x "$bundle_root/bin/brama" ] && [ -x "$bundle_root/bin/skarbiec-entitlements-router" ]; then
   default_brama_bin="$bundle_root/bin/brama"
   default_router_bin="$bundle_root/bin/skarbiec-entitlements-router"
-  default_config_dir="${HOME:-/nonexistent}/.config/brama/trust"
+  default_config_dir="${HOME:-/nonexistent}/.config/brama/trust-$installation"
   bundled_installation=1
 else
   default_brama_bin=/usr/local/bin/brama
@@ -24,6 +25,7 @@ fi
 
 requested_runtime_dir=${BRAMA_RUNTIME_DIR:-}
 requested_config_dir=${BRAMA_SKARBIEC_CONFIG_DIR:-}
+requested_port_override=${BRAMA_PORT_OVERRIDE:-}
 service_env_file=${BRAMA_SERVICE_ENV_FILE:-${HOME:-/nonexistent}/.config/brama/service.env}
 if [ -f "$service_env_file" ]; then
   set -a
@@ -32,6 +34,17 @@ if [ -f "$service_env_file" ]; then
 elif [ -n "${BRAMA_SERVICE_ENV_FILE:-}" ]; then
   printf '%s\n' "BRAMA_SERVICE_ENV_FILE is not a regular file: $service_env_file" >/dev/stderr
   false
+fi
+# The supervisor owns process-local coordinates. A service.env written for an
+# older installation may still name its runtime directory or candidate port;
+# sourcing it must not collapse a blue-green pair back onto one process state.
+if [ -n "$requested_runtime_dir" ]; then
+  BRAMA_RUNTIME_DIR=$requested_runtime_dir
+  export BRAMA_RUNTIME_DIR
+fi
+if [ -n "$requested_port_override" ]; then
+  BRAMA_PORT_OVERRIDE=$requested_port_override
+  export BRAMA_PORT_OVERRIDE
 fi
 configured_config_dir=$requested_config_dir
 
@@ -90,7 +103,6 @@ command -v "$PYTHON_BIN" >/dev/null 2>&1 || {
 # describes a different workload -- so the authority issued the capability and
 # the broker then denied redeeming it, which is a hard failure to read because
 # both halves are working exactly as told.
-installation=$(basename "$(dirname -- "$bundle_root")")
 runtime_dir=${BRAMA_RUNTIME_DIR:-"${HOME:-/nonexistent}/.stado/run/brama-skarbiec-$installation"}
 socket_dir="$runtime_dir/socket"
 gnupg_dir="$runtime_dir/gnupg"
@@ -378,12 +390,11 @@ export SKARBIEC_CAP_POLICY_SIG="$config_dir/policy.sig"
 export SKARBIEC_WORKLOAD_REGISTRY="$config_dir/registry.json"
 export SKARBIEC_WORKLOAD_REGISTRY_SIG="$config_dir/registry.sig"
 export SKARBIEC_CAP_STATE="$runtime_dir/capability.sqlite"
-# One socket for this host, not one per installed release. The path used to
-# carry the installation's own hash, so every upgrade introduced a broker that
-# no previously issued capability could be redeemed against, and the old ones
-# stayed behind holding their sockets. The guard below ends a leftover broker of
-# this kind before binding, which is what makes a single stable path safe.
-SKARBIEC_CAP_SOCKET=${BRAMA_CAP_SOCKET:-$HOME/.stado/run/brama-capability.sock}
+# A blue-green generation owns its broker socket with its capability state and
+# workload registry. Capabilities are issued immediately before redemption, so
+# no durable id needs a machine-wide socket; sharing one instead lets a candidate
+# replace the active release's broker before traffic has cut over.
+SKARBIEC_CAP_SOCKET=${BRAMA_CAP_SOCKET:-"$socket_dir/capability.sock"}
 export SKARBIEC_CAP_SOCKET
 mkdir -p "$(dirname -- "$SKARBIEC_CAP_SOCKET")"
 chmod u=rwx,g=rx,o= "$(dirname -- "$SKARBIEC_CAP_SOCKET")"
@@ -965,9 +976,17 @@ unset BRAMA_PROVIDER_CAPABILITY_IDS BRAMA_REQUEST_SIGN_CAPABILITY_IDS
 
 
 
-$ENTITLEMENTS_ROUTER_BIN capability-serve &
+"$ENTITLEMENTS_ROUTER_BIN" capability-serve &
 broker_pid=$!
-trap 'kill "$broker_pid" 2>/dev/null || true' EXIT INT TERM
+owner_pid=$$
+(
+  while kill -0 "$owner_pid" 2>/dev/null; do
+    sleep 1
+  done
+  kill "$broker_pid" 2>/dev/null || true
+) &
+broker_reaper_pid=$!
+trap 'kill "$broker_pid" "$broker_reaper_pid" 2>/dev/null || true' EXIT INT TERM
 attempt=0
 while [ ! -S "$SKARBIEC_CAP_SOCKET" ]; do
   attempt=$((attempt + 1))
@@ -1031,15 +1050,7 @@ if [ -x /usr/sbin/lsof ]; then
   done
 fi
 
-# `exec` on purpose. Supervising the gateway from this shell instead looked
-# tidier -- a trap could then stop the capability broker -- but it put a shell
-# between the supervisor and the process that matters. The supervisor stops the
-# job by signalling what it launched, that signal is not one a shell trap gets
-# to answer, and the gateway it had started outlived the stop as a disowned
-# process still holding its port. Every later start then failed on an address
-# already in use, and the service showed inactive while a gateway it no longer
-# controlled kept serving.
-#
-# The broker no longer needs the trap: a leftover one is ended at startup by
-# the socket guard above, which is the same repair without the shell.
+# `exec` keeps the gateway at the PID the supervisor owns. The broker reaper
+# above watches that same PID across exec and ends the generation's broker when
+# the gateway exits, so rollback cannot leave a candidate authority behind.
 exec "$BRAMA_BIN" serve --port "$brama_port"

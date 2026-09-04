@@ -1030,6 +1030,24 @@ fn issue_arguments(purpose: &str, resource: &str) -> Vec<String> {
         CAPABILITY_TARGET.to_owned(),
     ]
 }
+fn capability_refusal_detail(stdout: &[u8], stderr: &[u8]) -> String {
+    let stderr = String::from_utf8_lossy(stderr);
+    let stderr = stderr.trim();
+    if !stderr.is_empty() {
+        return stderr.to_owned();
+    }
+    let Ok(document) = serde_json::from_slice::<Value>(stdout) else {
+        return "authority refused the capability without a reason".to_owned();
+    };
+    let reason = document
+        .get("reason")
+        .and_then(Value::as_str)
+        .unwrap_or("authority refused the capability");
+    match document.get("remedy").and_then(Value::as_str) {
+        Some(remedy) if !remedy.is_empty() => format!("{reason}; {remedy}"),
+        _ => reason.to_owned(),
+    }
+}
 
 fn issued_capability_id(
     stdout: &[u8],
@@ -1041,7 +1059,7 @@ fn issued_capability_id(
         warn!(
             event = "capability_issue_refused",
             resource = resource,
-            detail = String::from_utf8_lossy(stderr).trim()
+            detail = capability_refusal_detail(stdout, stderr)
         );
         return None;
     }

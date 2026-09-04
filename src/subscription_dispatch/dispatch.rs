@@ -259,7 +259,7 @@ pub async fn probe_subscription_redemption(
 /// it returns names the item and the field names it looked for and never any
 /// credential material.
 pub(crate) fn redeemed_credential_verdict(item: &str, secret: &str) -> Result<(), String> {
-    provider_registry::credential_key(item, secret).map(|key| drop(key))
+    provider_registry::credential_key(item, secret).map(drop)
 }
 
 fn max_selector_models() -> usize {
