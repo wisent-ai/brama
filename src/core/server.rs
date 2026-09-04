@@ -3965,18 +3965,13 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
     let ingress_auth = ModelIngressAuth::from_env()?;
     if !standalone {
         ingress_auth.requires_exact_aliases("wisent-backend", WISENT_MODEL_ALIASES)?;
-        // Weles drafts browser trajectories, which needs a frontier
-        // instruction-following model rather than whatever local deployment
-        // happens to be up. `best` is the subscription route: the caller's
-        // HMAC identity selects the subscription that pays, and it is the only
-        // alias exempt from `alias_requires_direct_capability`, so it is also
-        // the only way this client can reach a subscription-funded model.
-        //
-        // It is the ONLY alias this client gets. A second route was tried and
-        // withdrawn: it can only point at a direct-credential deployment, and
-        // sending browser work to whatever model happens to be up is worse than
-        // not running it. When this pool is empty the answer is to refill it.
-        ingress_auth.requires_exact_aliases("weles", &[BEST_ALIAS])?;
+        // Weles keeps `best` for subscription-funded inference and receives one
+        // explicit workload route for the model the operator selected for browser
+        // tasks. The second alias is not a wildcard or a provider credential: it
+        // still resolves through Brama's validated route table, so an unavailable
+        // subscription can fall back to declared local inference without changing
+        // the caller or bypassing Brama.
+        ingress_auth.requires_exact_aliases("weles", &[BEST_ALIAS, WELES_AGENT_PRIMARY_ALIAS])?;
     }
     let aliases = ModelAliases::from_env(!standalone)?;
     // Touch the perf registry so persisted stats load at startup, not on first use.

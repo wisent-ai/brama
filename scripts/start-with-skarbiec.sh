@@ -664,13 +664,11 @@ next(arguments)
 router = next(arguments)
 all_models = os.environ["BRAMA_ALLOWED_MODELS"].split(",")
 backend_models = [model for model in all_models if model.startswith("wisent-backend/")]
-# `requires_exact_aliases("weles", &[BEST_ALIAS])` in src/core/server.rs: the
-# worker drafts browser trajectories, so its identity is granted the
-# subscription alias and nothing else. A second alias was tried and withdrawn:
-# browser work belongs on the subscription model, not on whichever local
-# deployment happens to answer. Granting `weles/agent/primary` here refuses
-# startup with "must give `weles` its exact required alias set".
-weles_models = ["best"]
+# Keep both Brama-owned paths the worker may request. `best` preserves
+# subscription-funded inference; `weles/agent/primary` is the operator-selected
+# workload route and can target declared local inference when that pool is empty.
+# The server validates this exact pair for the `weles` client at startup.
+weles_models = ["best", "weles/agent/primary"]
 # The credential-renewal caller. Weles's reauth trajectories present the bearer
 # from `wisent-app-model-router` and sign as agent `wisent-app`; that bearer was
 # in no boot table and behind no grant, so every renewal read answered
