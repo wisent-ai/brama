@@ -12,6 +12,16 @@
       "uri": "stado://sources/skarbiec/18f10209ff860566fa47b5830ec5952a337a3f6d347843fe7691747637e350f9/source.tar.gz",
       "sha256": "18f10209ff860566fa47b5830ec5952a337a3f6d347843fe7691747637e350f9",
       "mount": "skarbiec"
+    },
+    "echo_web": {
+      "uri": "stado://sources/brama/24cbce71163fa7b5fba185183c49caf099d6fc59781b062e4c005f05621c231d/source.tar.gz",
+      "sha256": "24cbce71163fa7b5fba185183c49caf099d6fc59781b062e4c005f05621c231d",
+      "mount": "echo-web"
+    },
+    "wisent_errors": {
+      "uri": "stado://sources/brama/ec954af07e12b1a6efc8bcced98881f520cb582df378e1300fa50133c5a96aca/source.tar.gz",
+      "sha256": "ec954af07e12b1a6efc8bcced98881f520cb582df378e1300fa50133c5a96aca",
+      "mount": "wisent-errors"
     }
   },
   "platforms": {
@@ -85,6 +95,7 @@
     "state_schema": 1,
     "minimum_stado_version": "0.6.1",
     "rollback_compatible_with": [
+      "0.2.66",
       "0.2.65",
       "0.2.64",
       "0.2.63",

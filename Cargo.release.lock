@@ -2593,12 +2593,10 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 [[package]]
 name = "wisent-errors"
 version = "1.0.0"
-source = "git+https://github.com/wisent-ai/wisent-errors?rev=e3014d2c900e499e171aeed8804da10bc7d93bf8#e3014d2c900e499e171aeed8804da10bc7d93bf8"
 
 [[package]]
 name = "wisent-onboarding-client"
 version = "0.1.0"
-source = "git+https://github.com/wisent-ai/echo-web?rev=aa423766991c3c958145bc7e5f2a62748bb3951c#aa423766991c3c958145bc7e5f2a62748bb3951c"
 dependencies = [
  "async-trait",
  "reqwest",
