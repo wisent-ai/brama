@@ -35,6 +35,7 @@ pub enum WireProtocol {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AuthKind {
+    None,
     Bearer,
     XApiKey,
     AnthropicBearer,
@@ -302,7 +303,7 @@ const PROVIDERS: &[ProviderDescriptor] = &[
         models_path: "/v1/models",
         chat_path: "/v1/chat/completions",
         wire: WireProtocol::OpenAiChat,
-        auth: AuthKind::Bearer,
+        auth: AuthKind::None,
         static_models: &[],
     },
 ];
@@ -313,6 +314,10 @@ pub fn providers() -> &'static [ProviderDescriptor] {
 
 pub fn provider(id: &str) -> Option<&'static ProviderDescriptor> {
     PROVIDERS.iter().find(|provider| provider.id == id)
+}
+
+pub(crate) fn provider_requires_credential(provider_id: &str) -> bool {
+    provider(provider_id).is_none_or(|descriptor| descriptor.auth != AuthKind::None)
 }
 pub fn provider_id_from_route(value: &str) -> Option<&str> {
     let (provider_id, model_id) = value.split_once('/')?;
@@ -990,6 +995,17 @@ pub(crate) fn credential_key(item: &str, secret: &str) -> Result<String, String>
     })
 }
 
+fn provider_credential_key(
+    descriptor: &ProviderDescriptor,
+    item: &str,
+    secret: &str,
+) -> Result<String, String> {
+    if descriptor.auth == AuthKind::None {
+        return Ok(String::new());
+    }
+    credential_key(item, secret)
+}
+
 fn credential_account_id(secret: &str) -> Option<String> {
     credential_document(secret)?
         .pointer("/tokens/account_id")
@@ -1144,6 +1160,7 @@ fn authorize(
     key: &str,
 ) -> RequestBuilder {
     match descriptor.auth {
+        AuthKind::None => builder,
         AuthKind::Bearer => builder.bearer_auth(key),
         AuthKind::XApiKey => builder
             .header("x-api-key", key)
@@ -1440,7 +1457,7 @@ pub async fn discover_models(
 
     let descriptor = provider(provider_id)
         .ok_or_else(|| format!("provider `{provider_id}` is not in the Wisent registry"))?;
-    let key = credential_key(item, secret)?;
+    let key = provider_credential_key(descriptor, item, secret)?;
     let base_url = provider_base_url(descriptor)?;
     let client = control_client()?;
     let request = authorize_provider(
@@ -2678,7 +2695,7 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
     let Some((descriptor, model_id)) = route(&request.model) else {
         return dispatch_catalog(request, item, secret).await;
     };
-    let key = match credential_key(item, secret) {
+    let key = match provider_credential_key(descriptor, item, secret) {
         Ok(key) => key,
         Err(error) => return ModelResponse::failure(&request.model, error),
     };
@@ -2763,7 +2780,7 @@ pub async fn dispatch_stream(
             "streaming is supported for provider routes only".to_string(),
         ));
     };
-    let key = match credential_key(item, secret) {
+    let key = match provider_credential_key(descriptor, item, secret) {
         Ok(key) => key,
         Err(error) => return Err(ModelResponse::failure(&request.model, error)),
     };
@@ -2824,7 +2841,7 @@ pub async fn dispatch_openai_typed(
     }
     let (descriptor, model_id) =
         route(route_id).ok_or_else(|| "invalid provider/model route".to_string())?;
-    let key = credential_key(item, secret)?;
+    let key = provider_credential_key(descriptor, item, secret)?;
     let base_url = provider_base_url(descriptor)?;
     let client = dispatch_client()
         .map_err(|_| "dependency_unavailable: provider client could not be built".to_string())?;

@@ -401,6 +401,9 @@ pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
 /// [`provider_credential`], which falls back to the exact field-scoped route
 /// when capability issuance or redemption is unavailable.
 pub fn provider_capability_configured(provider: &str) -> bool {
+    if !crate::providers::adapter::provider_requires_credential(provider) {
+        return true;
+    }
     if let Ok(credentials) = LOCAL_PROVIDER_CREDENTIALS.read() {
         if let Some(credentials) = credentials.as_ref() {
             return credentials.contains_key(provider);
@@ -430,6 +433,9 @@ pub fn provider_capability_configured(provider: &str) -> bool {
 /// fresh capability and redeem that. Neither path holds plaintext beyond the
 /// returned [`Secret`].
 pub async fn provider_credential(provider: &str) -> Option<Secret> {
+    if !crate::providers::adapter::provider_requires_credential(provider) {
+        return Some(Secret::from_bytes(Vec::new()));
+    }
     if local_provider_credentials_enabled() {
         // Standalone mode is a separate credential authority. Falling through
         // to a managed capability after a local key is removed makes the
