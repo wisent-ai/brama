@@ -1,6 +1,6 @@
 {
-  "version": "0.2.66",
-  "source": "stado://releases/brama/0.2.66/darwin-arm64/release.json source_revision=2da4734f2fdabeaa2f638f0608e680673c721708 artifact_sha256=6d53a98ad2716ded5d95d1e7548c826aad0768fc411f9cc9a8ec42543f604c1d",
+  "version": "0.2.67",
+  "source": "stado://releases/brama/0.2.67/darwin-arm64/release.json source_revision=c9614420b45225044c33201a5bb2c9a8076d249b artifact_sha256=feb1f1b954c4782b0aa48177a6ca9b4e25f5f99520e02ad9662b097bacda3f9b",
   "surface": [
     "collect-task-quality",
     "detect",
