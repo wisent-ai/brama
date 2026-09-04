@@ -76,6 +76,36 @@
         "stage/LICENSE": "LICENSE"
       },
       "runner_platform": "linux-amd64"
+    },
+    "web": {
+      "runner_platform": "darwin-arm64",
+      "quality": [
+        {
+          "name": "web-quality",
+          "argv": [
+            "stado",
+            "web",
+            "quality",
+            "--root",
+            "vercel-ingress/docs"
+          ]
+        }
+      ],
+      "build": {
+        "argv": [
+          "stado",
+          "web",
+          "build",
+          "--root",
+          "vercel-ingress/docs"
+        ]
+      },
+      "stage": {
+        "dist/brama-web.tar.gz": "brama-web.tar.gz",
+        "dist/brama-web.tar.gz.sha256": "brama-web.tar.gz.sha256",
+        "dist/SOURCE_REVISION": "SOURCE_REVISION"
+      },
+      "secret_env": {}
     }
   },
   "runtime": {
