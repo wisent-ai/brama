@@ -1,6 +1,6 @@
 {
-  "version": "0.2.52",
-  "source": "github-release:v0.2.52 -- immutable archives and checksums published by the repository release workflow",
+  "version": "0.2.65",
+  "source": "stado://releases/brama/0.2.65/darwin-arm64/release.json source_revision=4a397b8feecede450e4acfbe3ad8adac78f3c52d artifact_sha256=dd0f94fefa89fc71fedfbecab05c24823e2f83e423178850935f23879f440fc3",
   "surface": [
     "collect-task-quality",
     "detect",

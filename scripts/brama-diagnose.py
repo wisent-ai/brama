@@ -12,10 +12,10 @@ than the message named.
 So this opens all of them, in the order the launcher does, and prints what each
 says beside what it has to agree with:
 
-  1. the units that start Brama, and which generation they lead to;
-  2. every installed generation: completeness, router verbs, and whether its
-     workload registry describes it on this host;
-  3. the service env values that decide which of those is used;
+  1. the units that start Brama, and the release state that actually serves;
+  2. every installed generation: completeness, router verbs, and whether the
+     host trust registry describes that exact installation;
+  3. the service env values beside the supervisor-owned runtime coordinates;
   4. the policy's provider grants against the authority-owned routes table;
   5. every alias route against the providers that policy and routes agree on;
   6. where the gateway is reachable, and by which scheme;
@@ -49,7 +49,6 @@ REQUIRED_FILES = (
     "bin/start-with-skarbiec",
     "bin/provision-skarbiec-trust",
     "libexec/generate-skarbiec-config.mjs",
-    "etc/brama-skarbiec/subscriptions.json",
 )
 
 home = pathlib.Path.home()
@@ -81,11 +80,62 @@ def settings_of(path):
 
 
 settings = settings_of(env_file)
+release_state_path = home / ".stado" / "release-state" / "brama.json"
+try:
+    release_state = json.loads(release_state_path.read_text())
+except (OSError, ValueError):
+    release_state = {}
+
+
+def release_record(name):
+    record = release_state.get(name)
+    if not isinstance(record, dict):
+        return None
+    release_dir = record.get("release_dir")
+    return record if isinstance(release_dir, str) and release_dir else None
+
+
+def record_root(name):
+    record = release_record(name)
+    return pathlib.Path(record["release_dir"]).resolve() if record else None
+
+
+active_record = release_record("active")
+release_roots = {
+    name: root
+    for name in ("active", "candidate", "previous")
+    if (root := record_root(name)) is not None
+}
+
+
+def installed_generations():
+    if not services.is_dir():
+        return []
+    direct = [
+        path
+        for path in services.iterdir()
+        if path.name != "releases" and not path.is_symlink() and path.is_dir()
+    ]
+    releases = services / "releases"
+    nested = (
+        [path for path in releases.iterdir() if not path.is_symlink() and path.is_dir()]
+        if releases.is_dir()
+        else []
+    )
+    return sorted(direct + nested, key=lambda path: (path.stat().st_mtime, str(path)))
+
+
+def config_dir_for(generation):
+    return home / ".config" / "brama" / f"trust-{generation.name}"
+
 
 
 def architecture_root(generation):
-    nested = generation / "darwin-arm"
-    return nested if nested.is_dir() else generation
+    for platform in ("darwin-arm64", "darwin-arm"):
+        nested = generation / platform
+        if nested.is_dir():
+            return nested
+    return generation
 
 
 def router_answers(root):
@@ -108,14 +158,14 @@ def digest_of(path):
     return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else "missing"
 
 
-def registry_verdict(root):
-    registry = root / "etc" / "brama-skarbiec" / "registry.json"
+def registry_verdict(root, config_dir):
+    registry = config_dir / "registry.json"
     if not registry.is_file():
-        return ["no workload registry"]
+        return [f"{registry}: absent"]
     try:
         document = json.loads(registry.read_text())
     except ValueError as failure:
-        return [f"registry unreadable: {failure}"]
+        return [f"{registry}: unreadable: {failure}"]
     workload = next(iter(document.get("workloads", {}).values()), {})
     binary = root / "bin" / "brama"
     expected = {
@@ -129,7 +179,7 @@ def registry_verdict(root):
         for name, value in expected.items()
         if str(workload.get(name)) != str(value)
     ]
-    return wrong or ["describes this installation"]
+    return wrong or [f"{registry}: describes this installation"]
 
 
 print("=== units that start Brama")
@@ -161,21 +211,22 @@ for location in unit_locations:
                 break
 
 print("\n=== installed generations")
-for generation in sorted(services.iterdir(), key=lambda path: path.name):
-    if generation.is_symlink() or not generation.is_dir():
-        continue
+for generation in installed_generations():
     root = architecture_root(generation)
     if not (root / "bin").is_dir():
         continue
-    marker = " <- current" if generation == resolved else ""
+    roles = [
+        name
+        for name, release_root in release_roots.items()
+        if root.resolve() == release_root
+    ]
+    if generation.resolve() == resolved:
+        roles.append("legacy current")
+    marker = f" <- {', '.join(roles)}" if roles else ""
     missing = [name for name in REQUIRED_FILES if not (root / name).exists()]
-    print(f"  {generation.name}{marker}  installed {moment(generation.stat().st_mtime)}")
+    print(f"  {generation}{marker}  installed {moment(generation.stat().st_mtime)}")
     print(f"    files:    {'complete' if not missing else 'missing ' + ', '.join(missing)}")
     print(f"    router {CAPABILITY_VERB}: {router_answers(root)}")
-    # A launcher without its executable bit is a unit that never starts and
-    # never explains: launchd reports the failure to the system log, not to the
-    # service's own, so the error stream stays exactly as it was on the last
-    # successful boot and everything here reads as healthy.
     unrunnable = [
         name
         for name in ("bin/brama", "bin/skarbiec-entitlements-router", "bin/start-with-skarbiec")
@@ -183,7 +234,7 @@ for generation in sorted(services.iterdir(), key=lambda path: path.name):
     ]
     if unrunnable:
         print(f"    NOT EXECUTABLE: {', '.join(unrunnable)}")
-    for line in registry_verdict(root):
+    for line in registry_verdict(root, config_dir_for(generation)):
         print(f"    registry: {line}")
 
 print("\n=== service env")
@@ -193,19 +244,31 @@ for name in sorted(settings):
     else:
         print(f"  {name}={settings[name]}")
 
-config_dir = pathlib.Path(
-    settings.get("BRAMA_SKARBIEC_CONFIG_DIR")
-    or (architecture_root(resolved) / "etc" / "brama-skarbiec" if resolved else "")
-)
-# The launcher names its runtime directory after the installation it is running,
-# so a report that reads the unsuffixed path shows whatever an older generation
-# left behind — capabilities "issued" hours ago by a bundle no longer on disk.
-# That reads as a working broker on a host where nothing was issued at all.
-installation = resolved.name if resolved else ""
-runtime_dir = pathlib.Path(
-    settings.get("BRAMA_RUNTIME_DIR")
-    or (f"/tmp/brama-skarbiec-{installation}" if installation else "/tmp/brama-skarbiec")
-)
+if active_record:
+    active_root = pathlib.Path(active_record["release_dir"]).resolve()
+    active_generation = active_root.parent
+    config_dir = config_dir_for(active_generation)
+    runtime_dir = (
+        home
+        / ".stado"
+        / "run"
+        / "brama"
+        / f"{active_record.get('version')}-{active_record.get('port')}"
+    )
+    print(
+        f"active release: {active_record.get('version')} pid={active_record.get('pid')} "
+        f"port={active_record.get('port')} root={active_root}"
+    )
+else:
+    generation = resolved.parent if resolved and resolved.name.startswith("darwin-") else resolved
+    config_dir = config_dir_for(generation) if generation else home / ".config" / "brama" / "trust"
+    runtime_dir = (
+        home / ".stado" / "run" / f"brama-skarbiec-{generation.name}"
+        if generation
+        else home / ".stado" / "run" / "brama-skarbiec"
+    )
+    print("active release: absent; inspecting legacy current")
+print(f"config dir:  {config_dir}")
 print(f"runtime dir: {runtime_dir}")
 
 print("\n=== policy grants against authority routes")

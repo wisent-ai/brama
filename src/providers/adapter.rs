@@ -1130,6 +1130,9 @@ fn provider_base_url_for(
     if descriptor.id != "local-openai" {
         return provider_base_url(descriptor);
     }
+    if let Some(configured) = provider_base_url_override(descriptor.id) {
+        return validated_provider_base_url(descriptor.id, &configured, true);
+    }
     let path = crate::core::inference_routes::configured_path()
         .ok_or_else(|| "BRAMA_INFERENCE_ROUTES_FILE is required for local inference".to_string())?;
     crate::core::inference_routes::base_url(&path, model_id)
