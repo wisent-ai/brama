@@ -3965,11 +3965,11 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
     let ingress_auth = ModelIngressAuth::from_env()?;
     if !standalone {
         ingress_auth.requires_exact_aliases("wisent-backend", WISENT_MODEL_ALIASES)?;
-        // Weles keeps `best` for subscription-funded inference and receives one
+        // Weles keeps `best` for subscription-funded fallback and receives one
         // explicit workload route for the model the operator selected for browser
         // tasks. The second alias is not a wildcard or a provider credential: it
-        // still resolves through Brama's validated route table, so an unavailable
-        // subscription can fall back to declared local inference without changing
+        // still resolves through Brama's validated route table, so the declared
+        // primary can use local inference and fall back to `best` without changing
         // the caller or bypassing Brama.
         ingress_auth.requires_exact_aliases("weles", &[BEST_ALIAS, WELES_AGENT_PRIMARY_ALIAS])?;
     }

@@ -664,10 +664,9 @@ next(arguments)
 router = next(arguments)
 all_models = os.environ["BRAMA_ALLOWED_MODELS"].split(",")
 backend_models = [model for model in all_models if model.startswith("wisent-backend/")]
-# Keep both Brama-owned paths the worker may request. `best` preserves
-# subscription-funded inference; `weles/agent/primary` is the operator-selected
-# workload route and can target declared local inference when that pool is empty.
-# The server validates this exact pair for the `weles` client at startup.
+# Keep both Brama-owned paths the worker may request. `weles/agent/primary`
+# selects the declared workload route and `best` remains its subscription-funded
+# fallback. The server validates this exact pair for the `weles` client at startup.
 weles_models = ["best", "weles/agent/primary"]
 # The credential-renewal caller. Weles's reauth trajectories present the bearer
 # from `wisent-app-model-router` and sign as agent `wisent-app`; that bearer was
