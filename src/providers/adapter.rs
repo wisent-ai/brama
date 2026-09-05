@@ -2542,11 +2542,36 @@ fn with_limits(mut response: ModelResponse, limits: Vec<LimitReading>) -> ModelR
     response
 }
 
+/// Characters of transport cause a failure sentence may carry. Long enough for
+/// a chain like "error sending request: connection refused", short enough that
+/// a log line survives whole.
+const MAX_TRANSPORT_CAUSE: usize = 300;
+
+/// The reason a send failed, in the caller's vocabulary and with the cause.
+///
+/// The bare sentences this used to return said a request failed and nothing
+/// else. On 2026-09-05 every product chat failed with `dependency_unavailable:
+/// provider request failed` while the model host answered other callers in
+/// 0.3 s, and the gateway's own log could not distinguish a refused
+/// connection, an unroutable address and a TLS refusal — so an outage that was
+/// entirely inside one hop took hours to name. The transport error carries that
+/// answer already; withholding it was the defect.
+///
+/// The cause is bounded and carries no request body, only the client's own
+/// description of why the socket did not carry the call.
 fn transport_error_message(error: &reqwest::Error) -> String {
+    let mut cause = error.to_string();
+    let mut source = std::error::Error::source(error);
+    while let Some(inner) = source {
+        cause.push_str(": ");
+        cause.push_str(&inner.to_string());
+        source = std::error::Error::source(inner);
+    }
+    let cause: String = cause.chars().take(MAX_TRANSPORT_CAUSE).collect();
     if error.is_timeout() {
-        "dependency_timeout: provider request timed out".to_string()
+        format!("dependency_timeout: provider request timed out: {cause}")
     } else {
-        "dependency_unavailable: provider request failed".to_string()
+        format!("dependency_unavailable: provider request failed: {cause}")
     }
 }
 
