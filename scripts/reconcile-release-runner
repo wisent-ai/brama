@@ -1,0 +1,80 @@
+#!/bin/bash
+# Reconcile Brama's self-hosted GitHub Actions runner on the release host.
+#
+# Four workflows in this repository run only on that runner: release-control,
+# funnel-keepalive, provider-reauth and brama-weles-functional. When the runner
+# is offline, every one of them is cancelled unseen, the Funnel root handler
+# drifts from Brama's declared origin, and provider credentials stop being
+# refreshed. On 2026-09-05 the runner GitHub's own `svc.sh` had installed as a
+# system LaunchDaemon self-updated to v2.336.0 and died on every start with
+# "Failed to create CoreCLR" (actions/runner#4570); 39 consecutive scheduled
+# runs were cancelled before anyone noticed, through a 502 on brama.wisent.com.
+#
+# This command installs the runner the way `wisent-backend` already installs
+# its own on the same host: a checked-in launcher (`.github/runner/
+# reconcile-release-runner.sh`) that pins the runner version, strips the
+# quarantine-prone signatures, disables self-update and runs as a Stado-managed
+# unit, so `stado service` owns its lifecycle and logs. Everything reaches the
+# host through Stado; nothing here opens a shell on it.
+set -euo pipefail
+umask 077
+
+stado_bin="${STADO_BIN:-$HOME/.stado/bin/stado}"
+gh_bin="${GH_BIN:-$(command -v gh)}"
+host="${BRAMA_RUNNER_HOST:-charless-mac-mini}"
+owner_service="${BRAMA_RUNNER_OWNER_SERVICE:-com.wisent.always-on.brama}"
+runner_service="${BRAMA_RUNNER_SERVICE:-brama-release-runner}"
+runner_name="${BRAMA_RUNNER_NAME:-charless-mac-mini-stado-release}"
+remote_root="/Users/charles/.stado/actions-runner-brama-release"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+launcher="$repo_root/.github/runner/reconcile-release-runner.sh"
+work="$HOME/.stado/work/brama-release-runner"
+token_file="$work/registration-token"
+
+[[ -x "$stado_bin" ]] || { printf 'managed Stado executable is missing: %s\n' "$stado_bin" >&2; exit 1; }
+[[ -x "$gh_bin" ]] || { printf 'GitHub CLI is missing: %s\n' "$gh_bin" >&2; exit 1; }
+[[ -x "$launcher" ]] || { printf 'release runner launcher is missing: %s\n' "$launcher" >&2; exit 1; }
+[[ "$runner_name" =~ ^[A-Za-z0-9._-]+$ ]] || { printf 'invalid runner name: %s\n' "$runner_name" >&2; exit 1; }
+/bin/mkdir -p "$work"
+trap '/bin/rm -f "$token_file"' EXIT
+
+"$gh_bin" api --method POST \
+  repos/wisent-ai/brama/actions/runners/registration-token \
+  --jq .token > "$token_file"
+[[ -s "$token_file" ]] || { printf 'GitHub returned no runner registration token\n' >&2; exit 1; }
+
+"$stado_bin" service file-sync "$owner_service" \
+  --host "$host" \
+  --source-file "$launcher" \
+  --target-file "$remote_root/reconcile-release-runner.sh" \
+  --executable \
+  --json
+"$stado_bin" service file-sync "$owner_service" \
+  --host "$host" \
+  --source-file "$token_file" \
+  --target-file "$remote_root/.registration-token" \
+  --json
+
+if "$stado_bin" service show "$runner_service" --json >/dev/null 2>&1; then
+  "$stado_bin" service restart "$runner_service" --host "$host" --json
+else
+  "$stado_bin" service deploy "$runner_service" \
+    --host "$host" \
+    --as-launch-agent \
+    --from "$remote_root/reconcile-release-runner.sh" \
+    --json
+fi
+
+for _ in {1..12}; do
+  online="$(
+    "$gh_bin" api repos/wisent-ai/brama/actions/runners \
+      --jq "[.runners[] | select(.name == \"$runner_name\" and .status == \"online\")] | length"
+  )"
+  if [[ "$online" -gt 0 ]]; then
+    printf '%s\n' "$runner_name is online on $host"
+    exit 0
+  fi
+  /bin/sleep 5
+done
+printf '%s\n' "$runner_name did not come online on $host within 60 seconds; read: stado service logs $runner_service --host $host" >&2
+exit 1
