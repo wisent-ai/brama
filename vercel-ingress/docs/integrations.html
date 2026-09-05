@@ -125,6 +125,10 @@ footer a { color: var(--muted); text-decoration: none; }
 <p>Integrations extend the stable core in <a href="/docs/core"><code>CORE.md</code></a>. They do not redefine
 client identity, subscription ownership, routing limits, state authority, or
 public error semantics.</p>
+<h2 id="register-existing-model-bearer">Register an existing model bearer</h2>
+<p>Reading a bearer from Skarbiec does not register it as a Brama caller. On the Skarbiec owner host, <code>python3 scripts/provision-model-consumer.py probierz --model codex/gpt-5.6-sol</code> registers the existing <code>probierz-model-router#token</code> value with the authority for that exact route and audience <code>probierz</code>. It does not rotate the stored bearer or restart Brama. Repeat <code>--model</code> for additional exact routes; existing model grants are retained.</p>
+<p>The command prints the grant expiry. Running it again renews the same bearer registration. A grant with another audience, a workload key, or non-model capabilities is refused without replacing that grant. Supplying the optional workload public-key path also provisions the caller's separate one-use acquisition grant, as before.</p>
+<p>Brama reads this registration through token introspection, so the registered bearer must still meet the request-signing and subscription-ownership requirements. An HTTP 401 means authentication did not succeed; it is not proof that the selected model ran.</p>
 <h2 id="adapter-boundary">Adapter boundary<a class="headerlink" href="#adapter-boundary" title="Link to this section">&para;</a></h2>
 <p><code>subscription_dispatch</code> owns provider-neutral eligibility and bounded selection.
 <code>providers</code> owns external protocol adapters. An adapter owns:</p>
