@@ -296,6 +296,16 @@ const PROVIDERS: &[ProviderDescriptor] = &[
         auth: AuthKind::Bearer,
         static_models: &[],
     },
+    // The local model server is authenticated. `AuthKind::None` was true when
+    // this meant an unguarded loopback process; Stado now deploys vLLM with
+    // `--api-key` and publishes the endpoint on the tailnet, and it mints the
+    // bearer for exactly this caller (`provider:local-openai#token`, the item
+    // the operator's capability route already names). With `None` the broker
+    // returned an empty secret without reading anything and no Authorization
+    // header was sent, so on 2026-09-05 every product chat took HTTP 401 from
+    // the model host while the same request carrying that token answered in
+    // 0.3 s — and nothing in the gateway logged a credential step at all,
+    // because none happened.
     ProviderDescriptor {
         id: "local-openai",
         display_name: "Local OpenAI",
@@ -303,7 +313,7 @@ const PROVIDERS: &[ProviderDescriptor] = &[
         models_path: "/v1/models",
         chat_path: "/v1/chat/completions",
         wire: WireProtocol::OpenAiChat,
-        auth: AuthKind::None,
+        auth: AuthKind::Bearer,
         static_models: &[],
     },
 ];
