@@ -62,6 +62,33 @@ if [[ "$declared" != "$version" ]]; then
   exit 65
 fi
 
+# Both locks record brama's own version, and the release build passes --locked
+# so cargo may not rewrite them. When a version bump touches Cargo.toml alone
+# the build dies on "cannot update the lock file ... because --locked was
+# passed", which names neither the file that is behind nor the version it holds
+# — and by then the release coordinate has already attested this source
+# revision, so the whole version has to be abandoned. Refuse here instead,
+# before anything is published, and say which lock to bump.
+for lock in Cargo.lock Cargo.release.lock; do
+  lock_path="$source_dir/$lock"
+  [[ -f "$lock_path" ]] || continue
+  locked=$(
+    awk '
+      /^name = "brama"$/ { found = 1; next }
+      found && /^version = "/ {
+        gsub(/^version = "|"$/, "")
+        print
+        exit
+      }
+    ' "$lock_path"
+  )
+  if [[ -n "$locked" && "$locked" != "$version" ]]; then
+    printf '%s pins brama %s but this release is %s; run scripts/release/bump-version.sh %s\n' \
+      "$lock" "$locked" "$version" "$version" >&2
+    exit 65
+  fi
+done
+
 build_root="$output_dir/.build"
 stage="$output_dir/stage"
 rm -rf "$build_root" "$stage"
