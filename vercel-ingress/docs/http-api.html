@@ -420,14 +420,20 @@ the bearer-bound agent, signed agent, and path agent must agree
   (<code>state</code>: <code>active</code> | <code>needs_reauthorization</code> | <code>disabled</code>, with <code>cause</code>
   and instants), <code>usage_source</code> (<code>provider</code> | <code>traffic</code> | <code>probe</code>), <code>stale</code>
   (<code>src/core/server.rs:2800</code>).</li>
-<li><strong>POST</strong> — body <code>{"provider", "label"?, "api_key"}</code> (unknown fields
-  refused). Refusals: <code>provider must name a supported remote API or
+<li><strong>POST</strong> — body <code>{"provider", "label"?, "api_key",
+  "subscription_id"?, "login_item"?}</code> (unknown fields refused). Without
+  <code>subscription_id</code>, the deterministic primary slot is used. An explicit
+  id may select another existing subscription owned by this agent; it never
+  silently overwrites the primary. An unknown or unowned selection returns
+  <code>404 subscription not found</code>; a provider mismatch returns
+  <code>409 selected subscription belongs to a different provider</code>.
+  Other refusals: <code>provider must name a supported remote API or
   subscription provider</code> (400), <code>api_key must contain 1..8000 characters</code>
-  (400), a document that does not reduce to a bearer (400, donor's to fix),
-  a failed vault write (500, this installation's). Success:
-  <code>{"subscription": {"id": "brama-sub-&lt;agent&gt;-&lt;provider&gt;-primary",
-  "provider", "agent_id", "status": "active", "label"}}</code>. The credential
-  value is never returned.</li>
+  (400), a document that does not reduce to a bearer (400), an existing
+  subscription or login mapping conflict (409), and a failed vault write (500).
+  Success returns <code>{"subscription": {"id": "&lt;selected-subscription&gt;",
+  "provider", "agent_id", "status": "active", "label", "login_item"}}</code>.
+  The credential value is never returned.</li>
 <li><strong>DELETE</strong> — body <code>{"subscription_id"}</code>; <code>subscription_id is required</code>
   (400), <code>subscription not found</code> (404) for a target the signed agent does
   not own. Success <code>{"ok": true}</code>. Retirement is a journal record that

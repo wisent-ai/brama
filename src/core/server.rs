@@ -3526,7 +3526,7 @@ async fn create_subscription(
     } else {
         provider.as_str()
     };
-    let subscription_id = format!(
+    let mut subscription_id = format!(
         "brama-sub-{}-{}-primary",
         crate::gateway::broker::slug(&agent_id),
         crate::gateway::broker::slug(subscription_provider)
@@ -3538,12 +3538,18 @@ async fn create_subscription(
         .filter(|id| !id.is_empty())
     {
         if requested_id != subscription_id {
-            return Err(api_error(
-                StatusCode::CONFLICT,
-                &format!(
-                    "this donation resolves to subscription {subscription_id}, not {requested_id}"
-                ),
-            ));
+            let owned = crate::gateway::broker::list_subscriptions(&agent_id)
+                .await
+                .into_iter()
+                .find(|entry| entry.id == requested_id)
+                .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "subscription not found"))?;
+            if owned.provider != provider {
+                return Err(api_error(
+                    StatusCode::CONFLICT,
+                    "selected subscription belongs to a different provider",
+                ));
+            }
+            subscription_id = requested_id.to_owned();
         }
     }
     crate::gateway::broker::put_donated_credential(
