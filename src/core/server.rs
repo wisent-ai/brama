@@ -3092,7 +3092,7 @@ fn require_brama_desktop(identity: &ModelClientIdentity) -> Result<(), ApiError>
 ///
 /// A route naming `best` is delegation rather than a provider: the alias hands
 /// the choice to subscription dispatch, which resolves it per caller identity.
-fn alias_route_shape_supported(alias: &str, route: &str) -> bool {
+pub(crate) fn alias_route_shape_supported(alias: &str, route: &str) -> bool {
     if route == BEST_ALIAS {
         return alias != WISENT_EMBEDDING_ALIAS && alias != WISENT_MODERATION_ALIAS;
     }
@@ -3116,7 +3116,7 @@ fn alias_route_shape_supported(alias: &str, route: &str) -> bool {
 /// pointing at the subscription route owns no direct credential either, and
 /// keying the exemption on the alias name alone made `best` the only alias that
 /// could ever reach a subscription-funded model.
-fn alias_requires_direct_capability(alias: &str, route: &str) -> bool {
+pub(crate) fn alias_requires_direct_capability(alias: &str, route: &str) -> bool {
     alias != BEST_ALIAS && route != BEST_ALIAS
 }
 
@@ -3149,6 +3149,32 @@ struct AdminRouteDelete {
     alias: String,
 }
 
+fn default_adoption_agent_id() -> String {
+    "wisent-app".to_string()
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AdminAdoptionPreview {
+    document: String,
+    source_name: String,
+    #[serde(default = "default_adoption_agent_id")]
+    agent_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AdminAdoptionApply {
+    document: String,
+    source_name: String,
+    #[serde(default = "default_adoption_agent_id")]
+    agent_id: String,
+    #[serde(default)]
+    selected_aliases: Vec<String>,
+    #[serde(default)]
+    replace_alias_conflicts: bool,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct AdminCredentialMutation {
@@ -3157,7 +3183,7 @@ struct AdminCredentialMutation {
     credential: Option<String>,
 }
 
-fn valid_alias(alias: &str) -> bool {
+pub(crate) fn valid_alias(alias: &str) -> bool {
     !alias.is_empty()
         && alias.len() <= 128
         && alias.trim() == alias
@@ -3209,6 +3235,54 @@ async fn admin_snapshot(
             "credentials": "skarbiec",
         },
     })))
+}
+
+async fn preview_admin_adoption(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Extension(aliases): Extension<ModelAliases>,
+    Json(request): Json<AdminAdoptionPreview>,
+) -> Result<Json<crate::config_adoption::AdoptionPreview>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    let path = aliases.routes_file.as_deref().ok_or_else(|| {
+        api_error(
+            StatusCode::CONFLICT,
+            "runtime route registry is not configured",
+        )
+    })?;
+    crate::config_adoption::preview_document(
+        &request.document,
+        &request.source_name,
+        path,
+        &request.agent_id,
+    )
+    .await
+    .map(Json)
+    .map_err(|error| api_error(StatusCode::BAD_REQUEST, &error))
+}
+
+async fn apply_admin_adoption(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Extension(aliases): Extension<ModelAliases>,
+    Json(request): Json<AdminAdoptionApply>,
+) -> Result<Json<crate::config_adoption::AdoptionResult>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    let path = aliases.routes_file.as_deref().ok_or_else(|| {
+        api_error(
+            StatusCode::CONFLICT,
+            "runtime route registry is not configured",
+        )
+    })?;
+    crate::config_adoption::apply_document(
+        &request.document,
+        &request.source_name,
+        path,
+        &request.agent_id,
+        &request.selected_aliases,
+        request.replace_alias_conflicts,
+    )
+    .await
+    .map(Json)
+    .map_err(|error| api_error(StatusCode::BAD_REQUEST, &error))
 }
 
 async fn update_admin_route(
@@ -4021,6 +4095,14 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
         .route(
             "/v1/admin/routes",
             put(update_admin_route).delete(delete_admin_route),
+        )
+        .route(
+            "/v1/admin/configuration-adoption/preview",
+            post(preview_admin_adoption),
+        )
+        .route(
+            "/v1/admin/configuration-adoption/apply",
+            post(apply_admin_adoption),
         )
         .route(
             "/v1/admin/credentials",

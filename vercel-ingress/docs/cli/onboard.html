@@ -122,21 +122,30 @@ footer a { color: var(--muted); text-decoration: none; }
     <main>
       <p class="source-note">Brama CLI command reference</p>
       <article class="doc"><h1 id="brama-onboard"><code>brama onboard</code><a class="headerlink" href="#brama-onboard" title="Link to this section">&para;</a></h1>
-<p>Run Brama’s first-use journey and, only with explicit cost acknowledgement, request one real model response.</p>
+<p>Run Brama’s first-use journey, optionally adopt reviewed routes the user already has, and, only with explicit cost acknowledgement, request one real model response.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama onboard [-m &lt;ROUTE&gt;|--model &lt;ROUTE&gt;] [--agent-id &lt;ID&gt;] [--allow-provider-cost]</code></pre>
+<pre><code class="language-console">brama onboard [-m &lt;ROUTE&gt;|--model &lt;ROUTE&gt;] [--agent-id &lt;ID&gt;] [--allow-provider-cost] [--reset]
+  [--adopt-from &lt;FILE&gt; [--adopt-into &lt;FILE&gt;]
+   [--adopt-apply (--adopt-select &lt;ALIAS&gt;... | --adopt-all-importable)
+    [--adopt-replace-conflicts]]]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>-m, --model &lt;ROUTE&gt;</code></td><td>optional; <code>openai/default</code></td><td>Canonical provider/model route for the first real response.</td></tr>
-<tr><td><code>--agent-id &lt;ID&gt;</code></td><td>optional; <code>wisent-app</code></td><td>Workload whose separately provisioned provider credential is used.</td></tr>
-<tr><td><code>--allow-provider-cost</code></td><td>optional; off</td><td>Acknowledge one billable provider request.</td></tr>
+<tr><td><code>--agent-id &lt;ID&gt;</code></td><td>optional; <code>wisent-app</code></td><td>Workload whose separately provisioned provider credentials and tagged Skarbiec subscriptions are reviewed or used.</td></tr>
+<tr><td><code>--allow-provider-cost</code></td><td>optional; off</td><td>Acknowledge one billable provider request. Adoption never uses this acknowledgement and never makes an inference.</td></tr>
+<tr><td><code>--reset</code></td><td>optional; off</td><td>Discard recorded walkthrough progress and replay first use.</td></tr>
+<tr><td><code>--adopt-from &lt;FILE&gt;</code></td><td>optional</td><td>Review a regular, non-symlink, at-most-1-MiB schema-1 Brama inference-routes JSON file before continuing the journey. Without <code>--adopt-apply</code>, the command prints the review and stops.</td></tr>
+<tr><td><code>--adopt-into &lt;FILE&gt;</code></td><td>optional</td><td>Owner-only destination; defaults to <code>BRAMA_INFERENCE_ROUTES_FILE</code>, then <code>~/.config/brama/inference-routes.json</code>.</td></tr>
+<tr><td><code>--adopt-select &lt;ALIAS&gt;</code></td><td>repeatable</td><td>Select exact aliases from the reviewed source.</td></tr>
+<tr><td><code>--adopt-all-importable</code></td><td>optional; off</td><td>Select aliases classified as importable or already unchanged. Conflicts and rejected aliases are excluded.</td></tr>
+<tr><td><code>--adopt-apply</code></td><td>optional; off</td><td>Atomically persist the selected aliases through the same operation as <a href="/docs/cli/adopt"><code>brama adopt</code></a> and Brama Desktop.</td></tr>
+<tr><td><code>--adopt-replace-conflicts</code></td><td>optional; off</td><td>Replace a reviewed alias conflict. Deployment-name conflicts remain non-replaceable.</td></tr>
 </tbody></table>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
-<p>The command prints the journey steps. Without cost acknowledgement it sends no provider request, exits 0, and persists in-progress state at <code>~/.local/state/brama/onboarding.json</code>. With acknowledgement it prints the selected model, response, and token counts; only a successful real response records completion.</p>
+<p>An adoption review reports configured acquisition identities, discoverable subscription identities, every candidate chain, and importable, unchanged, conflicting, or rejected disposition. Applying reports exact imported, unchanged, conflicting, and rejected counts, preserves unselected state, and writes once only after whole-document validation. It never copies credential material; Skarbiec and the existing standalone provider store retain ownership.</p>
+<p>The walkthrough then prints its remaining journey steps. Without cost acknowledgement it sends no provider request, exits 0, and persists in-progress state at <code>~/.local/state/brama/onboarding.json</code>. With acknowledgement it prints the selected model, response, and token counts; neither a review nor a persisted route marks onboarding complete. Only a successful real response records completion.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
-<p>Without acknowledgement the exact terminal guidance is:</p>
-<pre><code class="language-text">Next: configure provider/auth separately if needed, then re-run this command with --allow-provider-cost.
-No provider request was sent and onboarding remains in progress.</code></pre>
-<p>A failed model call prints <code>Model request failed: &lt;reason&gt;</code> and <code>Onboarding remains in progress because no model response was received.</code>; with cost acknowledged the command exits 1. Journey failures print <code>Onboarding error: &lt;error&gt;</code> and exit 1.</p>
+<p>Adoption options without <code>--adopt-from</code>, a write option without <code>--adopt-apply</code>, an apply without a selection mode, invalid source data, unknown or duplicate selections, and invalid destination state print <code>Configuration adoption error: &lt;reason&gt;</code> and exit 1 before the onboarding journey advances.</p>
+<p>Without cost acknowledgement the terminal guidance explains that no provider request was sent and onboarding remains in progress. A failed model call prints <code>Model request failed: &lt;reason&gt;</code> and <code>Onboarding remains in progress because no model response was received.</code>; with cost acknowledged the command exits 1. Journey failures print <code>Onboarding error: &lt;error&gt;</code> and exit 1.</p>
 <p><a href="/docs/cli">Back to the complete CLI command tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>

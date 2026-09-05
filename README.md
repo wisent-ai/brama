@@ -341,16 +341,21 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   match, and classifying it as capacity sends the caller into retries and the
   operator into the subscription catalogue.
 - **Desktop control plane:** `brama-desktop` alone may call
-  `GET /v1/admin/snapshot`, `PUT /v1/admin/routes`, the `GET`, `POST`, and
+  `GET /v1/admin/snapshot`, `PUT /v1/admin/routes`,
+  `POST /v1/admin/configuration-adoption/preview`,
+  `POST /v1/admin/configuration-adoption/apply`, the `GET`, `POST`, and
   `DELETE` `/v1/admin/subscriptions/:agent_id` family, and
   `POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe`, which is the
-  only endpoint in the product that deliberately spends plan quota. These
-  endpoints return identifiers, usage and status only; subscription credentials
-  remain write-only.
-- **CLI:** `serve`, `version`, `detect`, `onboard`, `onboard --reset`, `test`,
-  `subscriptions list`, `subscription refresh`, `collect-task-quality`, and
-  `mcp`. Billable commands require an explicit cost acknowledgement, and
-  commands that mutate state require an explicit `--reason`.
+  only endpoint in the product that deliberately spends plan quota. The
+  adoption endpoints review and atomically persist selected route aliases but
+  never receive or return credential material. The other endpoints return
+  identifiers, usage and status only; subscription credentials remain
+  write-only.
+- **CLI:** `serve`, `version`, `detect`, `adopt`, `onboard`, `onboard --reset`,
+  `test`, `subscriptions list`, `subscription refresh`,
+  `collect-task-quality`, and `mcp`. Billable commands require an explicit cost
+  acknowledgement; adoption is review-only until `--apply` names an exact
+  selection.
 - **MCP:** read-only stdio JSON-RPC exposing `brama_detect` only. Model execution,
   credential discovery, collection, and mutation are deliberately excluded.
 
@@ -679,17 +684,61 @@ No credential material is printed by either command: the listing reads a ledger
 that has never held any, and the refresh drops the credential it obtains without
 looking at it.
 
+## Adopt routes you already use
+
+`brama adopt --from <file>` reads an existing Brama
+`inference-routes` schema-1 JSON document and reports every alias and ordered
+fallback, required local deployment, configured direct-provider acquisition,
+and Skarbiec subscription identity for the selected agent. It is a review:
+there is no write, credential redemption, subscription activation, or model
+call.
+
+```bash
+brama adopt --from ~/.config/brama/inference-routes.json
+brama adopt --from old-routes.json --apply --select '<alias>'
+brama adopt --from old-routes.json --apply --all-importable
+```
+
+The source must be a regular non-symlink UTF-8 file of at most 1 MiB. A
+whitespace-only file is a valid empty registry. The complete source and current
+destination are validated before mutation; unknown fields, duplicate keys or
+deployment names, repeated destinations, unsafe local endpoints, and
+unsupported route shapes reject without a partial write. Unreferenced
+deployments are reported rather than silently copied.
+
+Nothing is imported until `--apply` is paired with repeated `--select <alias>`
+or `--all-importable`. Identical aliases are unchanged, so repeat imports are
+idempotent. Existing aliases win by default; `--replace-conflicts` replaces
+only reviewed alias conflicts, never a conflicting deployment name. Every
+unselected alias, fallback, and deployment remains intact. The destination is
+`BRAMA_INFERENCE_ROUTES_FILE`, or
+`~/.config/brama/inference-routes.json` when that variable is unset, and an
+accepted selection is committed with the same atomic route-registry operation
+used by the service and Brama Desktop.
+
+Brama Desktop exposes the same review during first use and under
+**Settings → Existing configuration**. Managed credentials and subscription
+identities stay in Skarbiec; standalone provider keys stay in the local
+runtime’s existing Keychain owner. Adoption creates no second credential
+store.
+
 ## The first-use walkthrough, and asking for it again
 
-`brama onboard` walks the first-use journey: routing, the request and response
-contract, and the one real model response that completes it. Progress is
-recorded per workload under `$XDG_STATE_HOME/brama/onboarding.json`, defaulting
-to `~/.local/state/brama/onboarding.json`. Add `--allow-provider-cost` to send
-the single billable request that finishes the journey; without it the steps are
-printed and nothing is sent.
+`brama onboard` walks the first-use journey: optional adoption of routes the
+user already has, routing, the request and response contract, and the one real
+model response that completes it. Progress is recorded per workload under
+`$XDG_STATE_HOME/brama/onboarding.json`, defaulting to
+`~/.local/state/brama/onboarding.json`. `--adopt-from <file>` first prints the
+same review as `brama adopt` and stops; pair it with `--adopt-apply` plus an
+exact `--adopt-select <alias>` or `--adopt-all-importable` to persist and
+continue the walkthrough. Adoption never marks the journey complete. Add
+`--allow-provider-cost` to send the single billable request that finishes the
+journey; without it the steps are printed and nothing is sent.
 
 ```bash
 brama onboard
+brama onboard --adopt-from old-routes.json
+brama onboard --adopt-from old-routes.json --adopt-apply --adopt-all-importable
 brama onboard --allow-provider-cost
 ```
 

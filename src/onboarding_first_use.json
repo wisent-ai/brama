@@ -2,12 +2,34 @@
   "schema_version": 1,
   "product_id": "brama",
   "journey_id": "first-use",
-  "journey_version": "2026-08-04.1",
-  "entry_screen_id": "provider-neutral-routing",
+  "journey_version": "2026-09-05.1",
+  "entry_screen_id": "adopt-existing-configuration",
   "first_success_fact": "model_response_received",
-  "published_at": "2026-08-04T00:00:00Z",
-  "source_revision": "brama-first-use-2026-08-04.1",
+  "published_at": "2026-09-05T00:00:00Z",
+  "source_revision": "brama-first-use-2026-09-05.1",
   "screens": [
+    {
+      "screen_id": "adopt-existing-configuration",
+      "screen_kind": "action",
+      "title_key": "onboarding.adoption.title",
+      "body_key": "onboarding.adoption.body",
+      "required": true,
+      "actions": [
+        "review_existing_configuration",
+        "skip"
+      ],
+      "transitions": [
+        {
+          "next_screen_id": "provider-neutral-routing",
+          "reason_code": "configuration_reviewed_or_skipped",
+          "priority": 0
+        }
+      ],
+      "presentation": {
+        "title": "Start with routes you already use",
+        "body": "Run brama onboard --adopt-from <FILE> to review an existing Brama inference-routes registry together with the provider acquisitions and Skarbiec subscription identities this installation can already use. Nothing is copied or changed until you rerun with --adopt-apply and select exact aliases; skip leaves an empty usable setup."
+      }
+    },
     {
       "screen_id": "provider-neutral-routing",
       "screen_kind": "explanation",
@@ -26,7 +48,7 @@
       ],
       "presentation": {
         "title": "Route once, independent of provider",
-        "body": "Brama accepts one routing request and selects the configured provider/model route behind it. Your application keeps the same message contract while routes, aliases, and subscription-backed selection can change independently. Provider credentials and caller authentication are provisioned separately; onboarding never creates or changes them."
+        "body": "Brama accepts one routing request and selects the configured provider/model route behind it. Your application keeps the same message contract while routes, aliases, and subscription-backed selection can change independently. Adopted aliases are persisted through the same owner-only route registry the service reloads for later requests; provider credentials remain at their existing authority."
       }
     },
     {
@@ -70,7 +92,7 @@
       "transitions": [],
       "presentation": {
         "title": "Receive one real model response",
-        "body": "Run the onboarding request through your configured route. Completion is recorded only after Brama receives a successful response from a real model; viewing this step or allowing provider cost is not sufficient. Auth and provider setup remain separate."
+        "body": "Run the onboarding request through your configured or adopted route. Completion is recorded only after Brama receives a successful response from a real model; importing configuration, viewing this step, or allowing provider cost is not sufficient."
       }
     }
   ],

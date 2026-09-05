@@ -818,20 +818,30 @@ pub async fn refresh_subscription_credential_ahead(
     }
 }
 
-/// Enumerate one agent's subscription metadata through the local entitlements
-/// broker or its trusted deployment-time catalog. The donated-subscriptions
-/// overlay is metadata only; every credential use still requires a capability.
-pub async fn list_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
+/// Enumerate one agent's subscription metadata through the configured
+/// acquisition boundary and preserve whether that boundary answered.
+///
+/// Onboarding needs to distinguish an empty account from an unavailable
+/// Skarbiec/entitlements route; flattening both to an empty vector would present
+/// a dependency failure as a valid zero-state import.
+pub async fn discover_subscriptions(agent_id: &str) -> Result<Vec<SubscriptionEntry>, String> {
     let mut entries = list_subscriptions_result(agent_id)
         .await
-        .unwrap_or_default();
+        .map_err(|_| "subscription discovery is unavailable".to_string())?;
     for donated in donated_subscriptions(agent_id) {
         match entries.iter_mut().find(|entry| entry.id == donated.id) {
             Some(existing) => *existing = donated,
             None => entries.push(donated),
         }
     }
-    entries
+    Ok(entries)
+}
+
+/// Enumerate one agent's subscription metadata through the local entitlements
+/// broker or its trusted deployment-time catalog. The donated-subscriptions
+/// overlay is metadata only; every credential use still requires a capability.
+pub async fn list_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
+    discover_subscriptions(agent_id).await.unwrap_or_default()
 }
 
 /// Every active subscription this deployment holds, whichever agent owns it.

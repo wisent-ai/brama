@@ -137,6 +137,7 @@ from the installed build.</p>
 <li><a href="/docs/cli/version"><code>brama version</code></a> — print secret-free product and build identity as JSON.</li>
 <li><a href="/docs/cli/serve"><code>brama serve</code></a> — start the OpenAI-compatible HTTP server.</li>
 <li><a href="/docs/cli/onboard"><code>brama onboard</code></a> — run the first-use journey and optionally receive one real model response.</li>
+<li><a href="/docs/cli/adopt"><code>brama adopt --from &lt;FILE&gt; …</code></a> — review and atomically adopt selected aliases from an existing Brama route registry.</li>
 <li><a href="/docs/cli/test"><code>brama test</code></a> — run one acknowledged test inference through the agent subscription path.</li>
 <li><a href="/docs/cli/detect"><code>brama detect</code></a> — detect local hardware and print a model recommendation.</li>
 <li><a href="/docs/cli/mcp"><code>brama mcp</code></a> — serve the read-only stdio MCP hardware-detection surface.</li>
@@ -157,6 +158,8 @@ from the installed build.</p>
 <h2 id="safety-boundaries">Safety boundaries<a class="headerlink" href="#safety-boundaries" title="Link to this section">&para;</a></h2>
 <p><code>version</code>, <code>detect</code>, <code>subscriptions list</code>, and
 <code>help</code> are read-only. <code>mcp</code> exposes local detection only.
+<code>adopt</code> is review-only unless <code>--apply</code> is combined with an exact
+selection; it never reads credential material or calls a provider.
 <code>test</code>, the provider-requesting part of <code>onboard</code>, and
 <code>collect-task-quality</code> require <code>--allow-provider-cost</code>.
 <code>subscription refresh</code> and <code>subscription sign-in</code> require

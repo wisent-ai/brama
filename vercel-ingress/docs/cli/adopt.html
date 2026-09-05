@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>brama adopt — Brama CLI Docs</title>
+  <meta name="description" content="Review and adopt selected aliases from an existing Brama inference-route registry without copying credentials.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/cli/adopt">
+  <style>
+:root{color-scheme:dark;--bg:#080a0d;--panel:#101319;--line:#282e3a;--muted:#9ba5b5;--text:#f2f5f9;--accent:#b7ff52;--code:#111723;font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 75% -10%,rgba(69,108,89,.24),transparent 32rem),var(--bg);color:var(--text);line-height:1.65}a{color:var(--accent)}.topbar{position:sticky;top:0;z-index:10;height:4.25rem;display:flex;align-items:center;justify-content:space-between;padding:0 2rem;border-bottom:1px solid rgba(255,255,255,.09);background:rgba(8,10,13,.86);backdrop-filter:blur(18px)}.brand{display:inline-flex;align-items:center;gap:.65rem;color:var(--text);text-decoration:none}.brand-mark{display:grid;place-items:center;width:2rem;height:2rem;border-radius:.55rem;background:var(--accent);color:#10140b;font-weight:900}.brand strong{padding:.15rem .5rem;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase}.topbar nav{display:flex;gap:1.5rem}.topbar nav a{color:var(--muted);font-size:.88rem;text-decoration:none}.layout{display:grid;grid-template-columns:17.5rem minmax(0,1fr);max-width:94rem;min-height:calc(100vh - 4.25rem);margin:0 auto}aside{border-right:1px solid var(--line);padding:2rem 1.5rem 4rem}aside nav{position:sticky;top:6.25rem}.nav-group{margin-bottom:1.75rem}.nav-group h2{margin:0 0 .45rem;color:#737f90;font-size:.69rem;letter-spacing:.12em;text-transform:uppercase}.nav-group a{display:block;margin:.08rem 0;padding:.36rem .55rem;border-radius:.4rem;color:var(--muted);font-size:.82rem;text-decoration:none}.nav-group a.active{color:var(--accent);background:rgba(183,255,82,.12)}main{width:100%;min-width:0;max-width:65rem;padding:3.5rem clamp(2rem,6vw,6rem) 2rem}.source-note{color:#6f7a89;font:600 .7rem/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}.doc h1{font-size:clamp(2.35rem,5vw,4rem);line-height:1.04;letter-spacing:-.045em}.doc h2{margin:3rem 0 1rem;font-size:1.7rem}.doc p,.doc li{color:#c7ced9}.doc code{padding:.13rem .35rem;border:1px solid #273143;border-radius:.35rem;background:var(--code);color:#dce7f7;font:.88em/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}.doc pre{padding:1.1rem 1.2rem;overflow:auto;border:1px solid var(--line);border-radius:.7rem;background:var(--code)}.doc pre code{padding:0;border:0}.doc table{display:block;width:100%;overflow-x:auto;border-collapse:collapse;font-size:.87rem}.doc th,.doc td{min-width:8rem;padding:.65rem .75rem;border:1px solid var(--line);text-align:left;vertical-align:top}.doc th{background:#151922}.doc ul,.doc ol{padding-left:1.4rem}.doc li+li{margin-top:.35rem}footer{display:flex;justify-content:space-between;margin-top:5rem;padding-top:1.25rem;border-top:1px solid var(--line);color:#6f7a89;font-size:.78rem}@media(max-width:860px){.layout{display:block}aside{display:none}main{padding:2.5rem 1.25rem}.topbar nav a:not(:last-child){display:none}}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Documentation navigation"><nav>
+      <section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/configuration">Configuration</a><a href="/docs/onboarding">Onboarding</a></section>
+      <section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a class="active" aria-current="page" href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a></section>
+      <section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a></section>
+    </nav></aside>
+    <main>
+      <p class="source-note">Brama CLI command reference</p>
+      <article class="doc">
+        <h1 id="brama-adopt"><code>brama adopt</code></h1>
+        <p>Review and adopt selected routing aliases from an existing Brama route registry. The command uses the same Brama-owned operation and owner-only route-registry write as Brama Desktop. It reads provider identities only from the acquisition routes already configured for this Brama process and subscription identities only through Brama’s existing Skarbiec/entitlements discovery path. It never reads, prints, copies, or creates a provider credential, and it never enables a paid subscription or calls a model.</p>
+        <h2 id="invocation">Invocation</h2>
+        <pre><code class="language-console">brama adopt --from &lt;FILE&gt; [--into &lt;FILE&gt;] [--agent-id &lt;ID&gt;] [--json]
+brama adopt --from &lt;FILE&gt; --apply (--select &lt;ALIAS&gt;... | --all-importable) [--replace-conflicts] [--into &lt;FILE&gt;] [--agent-id &lt;ID&gt;] [--json]</code></pre>
+        <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
+          <tr><td><code>--from &lt;FILE&gt;</code></td><td>required</td><td>A regular, non-symlink UTF-8 Brama <code>inference-routes</code> JSON document. Schema version 1, including its optional <code>deployments</code>, <code>routes</code>, and <code>fallbacks</code>, is accepted. A zero-byte or whitespace-only file means an empty registry.</td></tr>
+          <tr><td><code>--into &lt;FILE&gt;</code></td><td>optional</td><td>The owner-only destination. The default is <code>BRAMA_INFERENCE_ROUTES_FILE</code>, then <code>~/.config/brama/inference-routes.json</code>.</td></tr>
+          <tr><td><code>--agent-id &lt;ID&gt;</code></td><td><code>wisent-app</code></td><td>The exact agent whose already-tagged Skarbiec subscriptions are included in the review.</td></tr>
+          <tr><td><code>--apply</code></td><td>off</td><td>Permit an atomic destination write. Without it the command is review-only.</td></tr>
+          <tr><td><code>--select &lt;ALIAS&gt;</code></td><td>repeatable</td><td>Select one exact source alias. Unknown or duplicate selections reject the request before mutation.</td></tr>
+          <tr><td><code>--all-importable</code></td><td>off</td><td>Select aliases whose preview disposition is <code>importable</code> or <code>unchanged</code>, so repeat imports report existing accepted state. Conflicts and rejected routes are never added implicitly.</td></tr>
+          <tr><td><code>--replace-conflicts</code></td><td>off</td><td>Allow a selected alias to replace a different destination chain. A deployment-name conflict is never replaced because an unselected existing alias may depend on it.</td></tr>
+          <tr><td><code>--json</code></td><td>off</td><td>Return the same secret-free preview or result as structured JSON.</td></tr>
+        </tbody></table>
+        <h2 id="review">Review and selection</h2>
+        <p>The first invocation reports every configured direct-provider acquisition, every discoverable subscription identity for the selected agent, every source alias and ordered fallback, the current destination chain when that alias already exists, and every deployment the source alias needs. Alias dispositions are <code>importable</code>, <code>unchanged</code>, <code>conflicting</code>, or <code>rejected</code>. An unreferenced deployment is reported and not silently imported.</p>
+        <p>A direct <code>provider/model</code> route is rejected unless Brama already has a configured acquisition route for that provider. A <code>best</code> route is rejected when subscription discovery failed or found no subscription for the selected agent. This is a configuration check only: it does not redeem the credential or spend provider quota.</p>
+        <h2 id="duplicates-and-conflicts">Duplicates, conflicts, and repeat imports</h2>
+        <p>An identical alias is <code>unchanged</code>. A different chain under an existing alias is <code>conflicting</code> and the current chain wins unless that exact alias was selected with <code>--replace-conflicts</code>. Repeating an import is therefore idempotent. Existing aliases, fallbacks, and deployments not selected by the user are preserved. Duplicate JSON keys, duplicate destinations in a chain, duplicate deployment names, unknown fields, unsupported model shapes, and unsafe deployment endpoints reject the complete input before a destination write.</p>
+        <h2 id="state-and-results">State and results</h2>
+        <p>All accepted selections are merged and validated in memory, then committed with one owner-only atomic replacement. The result reports exact counts and per-alias dispositions: <code>imported</code>, <code>unchanged</code>, <code>conflicting</code>, and <code>rejected</code>. Subsequent requests use the persisted registry because Brama reloads <code>BRAMA_INFERENCE_ROUTES_FILE</code> on route resolution. The source file is retained unchanged; Skarbiec remains the authority for provider and subscription identities.</p>
+        <h2 id="failures">Failures</h2>
+        <ul>
+          <li>An unreadable, non-UTF-8, symlinked, non-regular, or larger-than-1-MiB source prints <code>Configuration adoption error: &lt;reason&gt;</code> and exits 1.</li>
+          <li>Malformed or unsupported JSON, an invalid agent id, an invalid destination registry, or a selection absent from the source rejects before mutation.</li>
+          <li><code>--select</code>, <code>--all-importable</code>, and <code>--replace-conflicts</code> require <code>--apply</code>. <code>--apply</code> requires a selection mode.</li>
+          <li>A Skarbiec discovery failure is visible in the preview and rejects <code>best</code>; it does not erase direct routes or manufacture an empty subscription result.</li>
+        </ul>
+        <p><a href="/docs/cli">Back to the complete CLI command tree</a>.</p>
+      </article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

@@ -19,11 +19,11 @@ use crate::{Message, ModelRequest};
 
 const PRODUCT_ID: &str = "brama";
 const JOURNEY_ID: &str = "first-use";
-const JOURNEY_VERSION: &str = "2026-08-04.1";
+const JOURNEY_VERSION: &str = "2026-09-05.1";
 const FIRST_SUCCESS_FACT: &str = "model_response_received";
-const JOURNEY_VERSION_ID: &str = "5a4a397b-4839-4d1e-b90f-31c543a6ebc9";
+const JOURNEY_VERSION_ID: &str = "6d0e4e20-e8cc-4cec-87b8-1556a6167855";
 const STADO_CLIENT: &str = "brama";
-const STATE_REVISION: &str = "cli:first-use:2026-08-04.1";
+const STATE_REVISION: &str = "cli:first-use:2026-09-05.1";
 
 const FALLBACK_DEFINITION: &str = include_str!("onboarding_first_use.json");
 
@@ -256,7 +256,7 @@ pub async fn run_first_use(
 
     if !allow_provider_cost {
         println!();
-        println!("Next: configure provider/auth separately if needed, then re-run this command with --allow-provider-cost.");
+        println!("Next: adopt an existing route registry with --adopt-from, configure provider/auth separately if needed, then re-run this command with --allow-provider-cost.");
         println!("No provider request was sent and onboarding remains in progress.");
         journey.flush().await?;
         return Ok(false);

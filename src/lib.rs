@@ -5,6 +5,7 @@
 
 pub mod build_info;
 pub mod capability;
+pub mod config_adoption;
 pub mod core;
 pub mod crypto;
 pub mod detection;

@@ -125,7 +125,15 @@ footer a { color: var(--muted); text-decoration: none; }
 <p>All notable Brama changes are documented here. Brama follows Semantic
 Versioning and the pre-one compatibility policy in <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
 <h2 id="unreleased">Unreleased<a class="headerlink" href="#unreleased" title="Link to this section">&para;</a></h2>
-<p>Nothing yet.</p>
+<h3 id="existing-route-configuration-can-be-reviewed-and-adopted">Existing route configuration can be reviewed and adopted<a class="headerlink" href="#existing-route-configuration-can-be-reviewed-and-adopted" title="Link to this section">&para;</a></h3>
+<p><code>brama adopt</code>, first-use <code>--adopt-*</code> options, and Brama
+Desktop now share one Brama-owned preview/apply operation for schema-1
+inference-route registries. It discovers only configured provider acquisitions
+and secret-free Skarbiec subscription identities, requires exact route
+selection, validates the complete import before one atomic route-file write,
+preserves existing aliases by default, and reports imported, unchanged,
+conflicting, and rejected aliases. It never copies credentials, activates a
+subscription, or performs inference.</p>
 <h2 id="0242-2026-08-27">0.2.42 - 2026-08-27<a class="headerlink" href="#0242-2026-08-27" title="Link to this section">&para;</a></h2>
 <p>Re-cut of 0.2.41, whose immutable release coordinate was half-published
 while the fleet object store was recovering from an outage; the changes below

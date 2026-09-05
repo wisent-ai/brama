@@ -176,6 +176,30 @@ not restate a version it cannot keep current.</p>
 <p>from the GitHub Release described in <a href="/docs/release"><code>RELEASE.md</code></a>, verify the
 digest, and install the packaged binary and launcher. A source checkout is never
 the normal production installation model.</p>
+<h2 id="bring-existing-configuration">Bring existing configuration first<a class="headerlink" href="#bring-existing-configuration" title="Link to this section">&para;</a></h2>
+<p>An existing Brama installation can seed the new one before a provider request.
+Use <a href="/docs/cli/adopt"><code>brama adopt --from &lt;FILE&gt;</code></a>, or
+<code>brama onboard --adopt-from &lt;FILE&gt;</code>, to review a schema-1
+<code>inference-routes</code> JSON file. Brama Desktop offers the same
+<strong>Review existing setup…</strong> action during first use and under
+<strong>Settings → Existing configuration</strong>. Both surfaces call the Brama
+service’s configuration-adoption operation and its owner-only route registry;
+the desktop does not parse or write routes independently.</p>
+<p>The review lists each alias and ordered fallback chain, the local deployments it
+references, the direct-provider acquisitions already configured for this Brama
+runtime, and subscription identities discovered through the existing Skarbiec
+boundary for the selected agent. It never requests or copies credential
+contents, never enables a subscription, and never calls a model.</p>
+<p>Nothing is selected automatically. A missing or empty source is represented
+honestly, skip leaves an empty usable setup, and an apply validates the complete
+source and destination before one atomic write. Identical aliases are unchanged;
+existing aliases win by default; a reviewed alias conflict requires explicit
+replacement; a deployment-name conflict is never replaced. Unselected aliases,
+fallbacks, deployments, credentials, and the source file remain intact.</p>
+<p>Successful persistence reports imported, unchanged, conflicting, and rejected
+aliases. It advances the configuration step but is not Brama’s first-success
+fact: the journey remains in progress until the gateway produces a real routed
+model response.</p>
 <h2 id="safe-local-first-success">Safe local first success<a class="headerlink" href="#safe-local-first-success" title="Link to this section">&para;</a></h2>
 <h3 id="starting-state">Starting state<a class="headerlink" href="#starting-state" title="Link to this section">&para;</a></h3>
 <p>Use a clean shell. No Brama, Skarbiec, provider, or agent environment variables

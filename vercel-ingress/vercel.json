@@ -62,6 +62,10 @@
       "destination": "/docs/cli/onboard.html"
     },
     {
+      "source": "/docs/cli/adopt",
+      "destination": "/docs/cli/adopt.html"
+    },
+    {
       "source": "/docs/cli/test",
       "destination": "/docs/cli/test.html"
     },

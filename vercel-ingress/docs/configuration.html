@@ -223,6 +223,41 @@ reads, then the launcher's own inputs.</p>
 </tr>
 </tbody>
 </table>
+<h2 id="adopting-an-existing-route-registry">Adopting an existing route registry<a class="headerlink" href="#adopting-an-existing-route-registry" title="Link to this section">&para;</a></h2>
+<p><a href="/docs/cli/adopt"><code>brama adopt</code></a>, the first-use
+<code>--adopt-*</code> options, and Brama Desktop’s
+<strong>Review existing setup…</strong> sheet use one Brama-owned preview/apply
+operation. The accepted source is the exact schema-1 route-registry document,
+not a guessed provider export:</p>
+<pre><code class="language-json">{
+  "schema_version": 1,
+  "deployments": [],
+  "routes": {},
+  "fallbacks": {}
+}</code></pre>
+<p><code>schema_version</code> may be omitted by a legacy schema-1 registry; the
+other three fields are optional. A zero-byte or
+whitespace-only source means an empty registry. A source must be regular,
+non-symlink, UTF-8, and no larger than 1 MiB. Every field, alias, destination,
+deployment name, adapter, fallback, and endpoint is validated before mutation.
+Unknown fields, duplicate object keys, duplicate deployment names, repeated
+destinations, a fallback without a primary, unsupported provider/model shapes,
+or endpoints outside loopback and Tailscale IPv4 reject the complete source.</p>
+<p>The review resolves bare deployment names through the source deployment table,
+lists unreferenced deployments instead of dropping them silently, and classifies
+each alias. Direct provider routes are importable only when this process already
+has the corresponding acquisition route. <code>best</code> is importable only
+when the selected agent has a subscription identity discoverable through
+Brama’s existing Skarbiec boundary. Discovery does not redeem the credential,
+activate a subscription, or perform inference.</p>
+<p>Selection is explicit. Identical aliases are unchanged and make repeat imports
+idempotent. Existing aliases win by default; a user may explicitly replace a
+reviewed alias conflict, but never a deployment-name conflict. Unselected and
+unreferenced state is preserved. Apply merges in memory, revalidates the whole
+destination, then replaces the owner-only file atomically. The source file and
+credential stores are retained unchanged. Results report exact imported,
+unchanged, conflicting, and rejected aliases through CLI, HTTP, and desktop
+surfaces.</p>
 <h2 id="state-and-ledgers">State and ledgers<a class="headerlink" href="#state-and-ledgers" title="Link to this section">&para;</a></h2>
 <table>
 <thead>

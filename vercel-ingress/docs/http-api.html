@@ -469,6 +469,28 @@ credentials remain write-only.</p>
   alias</code>, <code>400 route chain is unsupported, duplicated, or unavailable</code>,
   <code>409 route update was rejected</code>. Success <code>{"ok": true, "routes": ...}</code>;
   the write is atomic and validated before rename.</li>
+<li><strong>POST <code>/v1/admin/configuration-adoption/preview</code></strong> —
+  body exactly <code>{"document":"&lt;schema-1 JSON&gt;","source_name":"&lt;display name&gt;","agent_id":"wisent-app"}</code>;
+  <code>agent_id</code> defaults to <code>wisent-app</code>. It validates the
+  complete source and current destination, reads secret-free configured
+  acquisition and subscription identities, and returns
+  <code>providers</code>, <code>subscriptions</code>,
+  <code>subscription_discovery</code>, <code>candidates</code>, and
+  <code>unreferenced_deployments</code>. It performs no write, credential
+  redemption, subscription activation, or inference.</li>
+<li><strong>POST <code>/v1/admin/configuration-adoption/apply</code></strong> —
+  body exactly <code>{"document":"&lt;schema-1 JSON&gt;","source_name":"&lt;display name&gt;","agent_id":"wisent-app","selected_aliases":["&lt;alias&gt;"],"replace_alias_conflicts":false}</code>.
+  It repeats preview validation, rejects duplicate or unknown selections, and
+  atomically merges only accepted selections into the configured route file.
+  The response contains the resulting secret-free <code>routes</code>, per-alias
+  <code>items</code>, and exact <code>imported</code>, <code>unchanged</code>,
+  <code>conflicting</code>, and <code>rejected</code> counts. Existing aliases win
+  unless explicitly replaced; deployment conflicts are never replaced.</li>
+<li>Both adoption endpoints answer <code>409 runtime route registry is not
+  configured</code> when no live route file exists, <code>400 &lt;reason&gt;</code> for
+  invalid files, identities, routes, selections, or destination state, and
+  <code>403 forbidden</code> for callers other than Brama Desktop. Error paths
+  leave the route file unchanged and never return credential contents.</li>
 <li><strong>GET <code>/v1/admin/subscriptions/:agent_id</code></strong> — captured:
   <code>{"agentId":"&lt;agent&gt;","subscriptions":[]}</code>; rows are the same
   subscription view as the signed listing.</li>
