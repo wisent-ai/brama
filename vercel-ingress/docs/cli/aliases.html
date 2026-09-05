@@ -140,7 +140,7 @@ ox-alpha                         capability_absent    openrouter/stealth/ox-alph
                                  alias `ox-alpha` routes to openrouter/stealth/ox-alpha but this gateway holds no provider credential for openrouter; issue the provider capability on this host or point the alias at a route it can reach, such as `best`
 weles                            no_route             -
                                  alias `weles` is required by this gateway but no route is declared for it; declare one with `PUT /v1/admin/routes` or in the launcher's model_aliases policy
-wisent-backend/chat/primary      serving              local-openai/chat-primary
+wisent-backend/chat      serving              local-openai/chat-primary
 9 alias(es), 4 cannot be served</code></pre>
 <p>States are <code>serving</code>, <code>no_route</code>, <code>capability_absent</code> and <code>routes_file_invalid</code>; their meaning and repair are in <a href="/docs/concepts/alias#an-alias-that-cannot-serve-says-so">the alias concept</a>. <code>best</code> is a subscription selector, not a route, so it is reported <code>serving</code> with no route table entry. JSON output carries <code>source</code>, <code>aliases</code> and <code>unserviceable</code>; the same table for a running gateway is <a href="/docs/http-api#get-v1aliases"><code>GET /v1/aliases</code></a>.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
