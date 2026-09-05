@@ -531,8 +531,7 @@ except (KeyError, TypeError) as error:
 
 required_aliases = {
     "best",
-    "wisent-backend/chat/primary",
-    "wisent-backend/chat/fallback",
+    "wisent-backend/chat",
     "wisent-backend/evaluation",
     "wisent-backend/embeddings",
     "wisent-backend/moderation",

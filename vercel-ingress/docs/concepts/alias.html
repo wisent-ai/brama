@@ -130,7 +130,7 @@ credential its caller does not own.</p>
 <h2 id="the-model-name-vocabulary">The model-name vocabulary<a class="headerlink" href="#the-model-name-vocabulary" title="Link to this section">&para;</a></h2>
 <p>A request's <code>model</code> field must be one of exactly four things:</p>
 <ol>
-<li>an alias the deployment declares (<code>wisent-backend/chat/primary</code>, <code>smol</code>, …);</li>
+<li>an alias the deployment declares (<code>wisent-backend/chat</code>, <code>smol</code>, …);</li>
 <li>the delegation alias <code>best</code>;</li>
 <li>a canonical <code>provider/model</code> route (<code>openai/gpt-4o-mini</code>);</li>
 <li>a selector (<code>any</code>, <code>any-vision-capable</code>, <code>task:&lt;task-name&gt;</code>) — signed
@@ -156,12 +156,8 @@ callers ship against them:</p>
 </thead>
 <tbody>
 <tr>
-<td><code>wisent-backend/chat/primary</code></td>
-<td>chat</td>
-</tr>
-<tr>
-<td><code>wisent-backend/chat/fallback</code></td>
-<td>chat</td>
+<td><code>wisent-backend/chat</code></td>
+<td>chat — the Wisent App's chat alias; its primary route and its ordered fallbacks are the route table's <code>fallbacks</code> column, not a rank spelled into the name</td>
 </tr>
 <tr>
 <td><code>wisent-backend/evaluation</code></td>
@@ -246,8 +242,8 @@ a JSON registry:</p>
     {&quot;name&quot;: &quot;qwen3-8b&quot;, &quot;adapters&quot;: [{&quot;name&quot;: &quot;chat&quot;}],
      &quot;endpoint&quot;: {&quot;host&quot;: &quot;127.0.0.1&quot;, &quot;port&quot;: 8000}}
   ],
-  &quot;routes&quot;:    {&quot;wisent-backend/chat/primary&quot;: &quot;openai/gpt-4o-mini&quot;},
-  &quot;fallbacks&quot;: {&quot;wisent-backend/chat/primary&quot;: [&quot;anthropic/claude-3-5-haiku-latest&quot;]}
+  &quot;routes&quot;:    {&quot;wisent-backend/chat&quot;: &quot;openai/gpt-4o-mini&quot;},
+  &quot;fallbacks&quot;: {&quot;wisent-backend/chat&quot;: [&quot;anthropic/claude-3-5-haiku-latest&quot;]}
 }
 </code></pre>
 <p>Guards, each failing closed with its own sentence

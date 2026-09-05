@@ -54,8 +54,11 @@ fn request_deadline() -> Duration {
 
 const MODEL_ROUTER_CLIENT_IDENTITIES_ENV: &str = "BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES";
 const MODEL_ALIASES_ENV: &str = "BRAMA_MODEL_ALIASES";
-const WISENT_CHAT_PRIMARY_ALIAS: &str = "wisent-backend/chat/primary";
-const WISENT_CHAT_FALLBACK_ALIAS: &str = "wisent-backend/chat/fallback";
+/// The Wisent App's chat alias. It carries the consumer and the capability and
+/// nothing else: `wisent-backend/chat/primary` and `wisent-backend/chat/fallback`
+/// encoded a rank in the name, and a rank is what the route table's `fallbacks`
+/// column is for. One alias, one primary route, an ordered fallback chain.
+const WISENT_CHAT_ALIAS: &str = "wisent-backend/chat";
 const WISENT_EVALUATION_ALIAS: &str = "wisent-backend/evaluation";
 const WISENT_EMBEDDING_ALIAS: &str = "wisent-backend/embeddings";
 const WISENT_MODERATION_ALIAS: &str = "wisent-backend/moderation";
@@ -67,15 +70,13 @@ const WISENT_MODERATION_ALIAS: &str = "wisent-backend/moderation";
 const WELES_ALIAS: &str = "weles";
 pub const BEST_ALIAS: &str = "best";
 const WISENT_MODEL_ALIASES: &[&str] = &[
-    WISENT_CHAT_PRIMARY_ALIAS,
-    WISENT_CHAT_FALLBACK_ALIAS,
+    WISENT_CHAT_ALIAS,
     WISENT_EVALUATION_ALIAS,
     WISENT_EMBEDDING_ALIAS,
     WISENT_MODERATION_ALIAS,
 ];
 const MODEL_ALIASES: &[&str] = &[
-    WISENT_CHAT_PRIMARY_ALIAS,
-    WISENT_CHAT_FALLBACK_ALIAS,
+    WISENT_CHAT_ALIAS,
     WISENT_EVALUATION_ALIAS,
     WISENT_EMBEDDING_ALIAS,
     WISENT_MODERATION_ALIAS,

@@ -81,7 +81,7 @@ if not base:
     raise SystemExit("no candidate address served /health")
 
 BEST = "best"
-ALIASES = (BEST, "local-openai/chat-primary", "wisent-backend/chat/primary")
+ALIASES = (BEST, "local-openai/chat-primary", "wisent-backend/chat")
 
 # A direct or alias route needs the bearer only. `best` is the subscription
 # route: the agent identity selects the subscription that pays, so the gateway
