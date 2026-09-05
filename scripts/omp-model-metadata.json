@@ -1,0 +1,505 @@
+{
+ "claude-code": [
+  {
+   "contextWindow": 200000,
+   "id": "claude-3-5-sonnet-20240620",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 8192,
+   "reasoning": false
+  },
+  {
+   "contextWindow": 200000,
+   "id": "claude-3-5-sonnet-20241022",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 8192,
+   "reasoning": false
+  },
+  {
+   "contextWindow": 200000,
+   "id": "claude-3-7-sonnet-20250219",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 64000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 200000,
+   "id": "claude-3-haiku-20240307",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 4096,
+   "reasoning": false
+  },
+  {
+   "contextWindow": 200000,
+   "id": "claude-3-opus-20240229",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 4096,
+   "reasoning": false
+  },
+  {
+   "contextWindow": 200000,
+   "id": "claude-3-sonnet-20240229",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 4096,
+   "reasoning": false
+  },
+  {
+   "contextWindow": 1000000,
+   "id": "claude-fable-5",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 200000,
+   "id": "claude-haiku-4-5",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 64000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 200000,
+   "id": "claude-haiku-4-5-20251001",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 64000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 1000000,
+   "id": "claude-mythos-5",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 200000,
+   "id": "claude-opus-4-0",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 32000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 200000,
+   "id": "claude-opus-4-1",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 32000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 200000,
+   "id": "claude-opus-4-1-20250805",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 32000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 200000,
+   "id": "claude-opus-4-20250514",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 32000,
+   "reasoning": false
+  },
+  {
+   "contextWindow": 200000,
+   "id": "claude-opus-4-5",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 64000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 200000,
+   "id": "claude-opus-4-5-20251101",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 64000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 1000000,
+   "id": "claude-opus-4-6",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 1000000,
+   "id": "claude-opus-4-7",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 1000000,
+   "id": "claude-opus-4-8",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 200000,
+   "id": "claude-sonnet-4-0",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 64000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 200000,
+   "id": "claude-sonnet-4-20250514",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 64000,
+   "reasoning": false
+  },
+  {
+   "contextWindow": 1000000,
+   "id": "claude-sonnet-4-5",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 64000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 1000000,
+   "id": "claude-sonnet-4-5-20250929",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 64000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 1000000,
+   "id": "claude-sonnet-4-6",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 1000000,
+   "id": "claude-sonnet-5",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  }
+ ],
+ "codex": [
+  {
+   "contextWindow": 272000,
+   "id": "codex-auto-review",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 400000,
+   "id": "gpt-5",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 272000,
+   "id": "gpt-5-codex",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 272000,
+   "id": "gpt-5-codex-mini",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 400000,
+   "id": "gpt-5.1",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 272000,
+   "id": "gpt-5.1-codex",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 272000,
+   "id": "gpt-5.1-codex-max",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 272000,
+   "id": "gpt-5.1-codex-mini",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 272000,
+   "id": "gpt-5.2",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 272000,
+   "id": "gpt-5.2-codex",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 272000,
+   "id": "gpt-5.3-codex",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 128000,
+   "id": "gpt-5.3-codex-spark",
+   "input": [
+    "text"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 272000,
+   "id": "gpt-5.4",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 272000,
+   "id": "gpt-5.4-mini",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 272000,
+   "id": "gpt-5.4-nano",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 272000,
+   "id": "gpt-5.5",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 272000,
+   "id": "gpt-5.6-luna",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 272000,
+   "id": "gpt-5.6-sol",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 272000,
+   "id": "gpt-5.6-terra",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 128000,
+   "reasoning": true
+  }
+ ],
+ "kimi": [
+  {
+   "contextWindow": 262144,
+   "id": "kimi-for-coding",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 32000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 262144,
+   "id": "kimi-k2",
+   "input": [
+    "text"
+   ],
+   "maxTokens": 262144,
+   "reasoning": false
+  },
+  {
+   "contextWindow": 262144,
+   "id": "kimi-k2-turbo-preview",
+   "input": [
+    "text"
+   ],
+   "maxTokens": 32000,
+   "reasoning": false
+  },
+  {
+   "contextWindow": 262144,
+   "id": "kimi-k2.5",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 65536,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 1048576,
+   "id": "k3",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 32000,
+   "reasoning": true
+  },
+  {
+   "contextWindow": 262144,
+   "id": "kimi-for-coding-highspeed",
+   "input": [
+    "text",
+    "image"
+   ],
+   "maxTokens": 32000,
+   "reasoning": true
+  }
+ ]
+}
