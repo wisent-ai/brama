@@ -590,6 +590,14 @@ browser, starts Weles, copies a refresh token, or starts a new login. OMP remain
 the only owner of refresh-token rotation; the expected email and ChatGPT account
 UUID prevent a changed account index from silently selecting another identity.
 
+List account identities with `omp token openai-codex --list` and read their
+provider-reported quota and ChatGPT UUIDs with
+`omp usage --provider openai-codex --json`. Select an account with remaining
+quota and its already assigned Brama subscription; do not overwrite another
+account's slot. The synchronizer accepts any existing Codex subscription owned
+by the signed agent, not only the primary slot. Omit `--login-item` when neither
+the subscription nor its vault tags declares a login mapping.
+
 ```bash
 python3 scripts/operations/sync-omp-codex-session.py \
   --brama-url https://brama.wisent.com \

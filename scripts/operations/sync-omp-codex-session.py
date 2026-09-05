@@ -165,7 +165,7 @@ def synchronize(options: argparse.Namespace) -> dict:
     if f"brama:agent:{options.agent_id}" not in tags or "brama:subscription" not in tags:
         raise Refusal(f"{item_id} is not assigned to the signed Brama agent")
     login_tags = [tag for tag in tags if tag.startswith("brama:login:")]
-    expected_login = f"brama:login:{options.login_item}"
+    expected_login = f"brama:login:{options.login_item}" if options.login_item else None
     if login_tags and login_tags != [expected_login]:
         raise Refusal(f"{item_id} belongs to login mapping {login_tags!r}")
     if before.get("state") != "active" or before.get("kind") != "bundle":
@@ -174,13 +174,14 @@ def synchronize(options: argparse.Namespace) -> dict:
         raise Refusal(f"{item_id} contains fields this session synchronization must not replace")
 
     changed = before["fields"][0]["sha256"] != expected_digest
-    if not login_tags:
+    add_login_mapping = expected_login is not None and not login_tags
+    if add_login_mapping:
         tags.append(expected_login)
     # Writing the vault alone does not acknowledge a replaced grant to Brama:
     # its request path still skips a recorded reauthorization block. Use the
     # signed donation operation so the credential and that record agree.
     needs_acknowledgment = (
-        changed or not login_tags
+        changed or add_login_mapping
         or (existing.get("credential") or {}).get("state") != "active"
     )
     if needs_acknowledgment:
@@ -209,7 +210,7 @@ def main() -> int:
     parser.add_argument("--stado", default=str(Path.home() / ".local/bin/stado"))
     parser.add_argument("--agent-id", required=True)
     parser.add_argument("--subscription-id", required=True)
-    parser.add_argument("--login-item", required=True)
+    parser.add_argument("--login-item", help="Exact existing login mapping, if this subscription has one")
     parser.add_argument("--account", required=True, type=int, help="OMP's 1-based stored account index")
     parser.add_argument("--email", required=True)
     parser.add_argument("--account-id", required=True, help="Expected ChatGPT account UUID")
@@ -228,8 +229,6 @@ def main() -> int:
         parser.error("Brama must be an HTTPS origin or authenticated loopback origin")
     if not options.agent_id or any(character not in "abcdefghijklmnopqrstuvwxyz0123456789-" for character in options.agent_id):
         parser.error("agent-id must contain lowercase ASCII letters, digits or hyphens")
-    if options.subscription_id != f"brama-sub-{options.agent_id}-codex-primary":
-        parser.error("subscription-id must be the named agent's existing Codex primary")
     if options.account < 1 or not options.reason.strip():
         parser.error("account must be positive and reason must be nonempty")
     stopped = threading.Event()
