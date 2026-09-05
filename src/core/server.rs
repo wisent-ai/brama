@@ -590,9 +590,8 @@ impl ModelAliases {
     /// The route chain as declared, before serviceability is applied.
     fn declared_chain(&self, alias: &str) -> Result<Option<Vec<String>>, String> {
         if let Some(path) = self.routes_file.as_deref() {
-            match crate::core::inference_routes::route_chain(path, alias)? {
-                Some(chain) => return Ok(Some(chain)),
-                None => {}
+            if let Some(chain) = crate::core::inference_routes::route_chain(path, alias)? {
+                return Ok(Some(chain));
             }
         }
         Ok(self.routes.get(alias).cloned().map(|route| vec![route]))
