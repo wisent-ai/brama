@@ -752,10 +752,7 @@ pub fn alias_report() -> Result<AliasReport, std::io::Error> {
             let default_path = PathBuf::from(home).join(".config/brama/inference-routes.json");
             if default_path.is_file() {
                 // Set only for this process: the CLI is reading, not serving.
-                std::env::set_var(
-                    crate::core::inference_routes::ROUTES_FILE_ENV,
-                    default_path,
-                );
+                std::env::set_var(crate::core::inference_routes::ROUTES_FILE_ENV, default_path);
             }
         }
     }
@@ -2089,7 +2086,10 @@ async fn route_model_call(
     // requested name is not a provider/model route, so the caller was told its
     // model name was wrong, and the catalogue had already dropped the alias
     // rather than list it as unavailable. Both answers hid the same fact.
-    if alias_source.is_none() && requested_model != BEST_ALIAS && aliases.is_declared(requested_model) {
+    if alias_source.is_none()
+        && requested_model != BEST_ALIAS
+        && aliases.is_declared(requested_model)
+    {
         let diagnosis = aliases.diagnose(requested_model);
         if !diagnosis.serving() {
             warn!(
@@ -2102,10 +2102,9 @@ async fn route_model_call(
             return Err(api_error_with_details(
                 StatusCode::SERVICE_UNAVAILABLE,
                 "alias_unserviceable",
-                &diagnosis
-                    .reason
-                    .clone()
-                    .unwrap_or_else(|| format!("alias `{requested_model}` has no serviceable route")),
+                &diagnosis.reason.clone().unwrap_or_else(|| {
+                    format!("alias `{requested_model}` has no serviceable route")
+                }),
                 json!({
                     "alias": diagnosis.alias,
                     "state": diagnosis.state,
