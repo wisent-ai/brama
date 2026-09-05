@@ -618,10 +618,7 @@ instead of opening a login, and the existing account must remain usable by OMP.<
   <code>brama:subscription</code> and <code>brama:agent:&lt;agent&gt;</code>, carrying its provider and
   subscription id in <code>brama:provider:&lt;provider&gt;</code> and <code>brama:id:&lt;id&gt;</code>. Both the
   gateway and Brama Desktop filter on those tags, so vault item ids are opaque
-  and renaming one changes nothing. <code>scripts/provision-desktop-subscriptions.py</code>
-  writes the owner vault and <code>scripts/provision-host-subscriptions.sh</code> writes a
-  managed host's vault; both are idempotent and derive their tags from
-  <code>scripts/skarbiec-subscriptions.json</code>.</li>
+  and renaming one changes nothing.</li>
 <li><strong>Plan usage from the provider's own report:</strong> every provider that rations a
   subscription publishes a report of how much of the ration is gone, and reading
   it spends no quota at all. <code>claude-code</code> publishes
