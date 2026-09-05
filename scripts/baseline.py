@@ -1,10 +1,19 @@
-"""Regenerate released-surface.json from Brama's independent release channel.
+"""Regenerate released-surface.json from Brama's release channel.
 
 Preference order, best first:
 
+  stado://releases/...  a release the Stado release plane has published and a
+                        host is running; this is the channel `stado release
+                        submit` writes and the one production installs from
   github-release:<tag>  a GitHub Release with every supported archive and checksum
   git-archive:<tag>     a SemVer tag whose tree declares the tagged version
   head:<sha>            no usable release or tag exists
+
+The Stado channel comes first because it is the one that ships. GitHub Releases
+stopped at v0.2.53 when the tag job stalled, while the release plane went on
+publishing every version production runs — so measuring the surface against the
+GitHub channel compared today's tree with a release from twenty-two versions
+ago, and the contract gate demanded a version that had already been published.
 
 Usage:
     python3 scripts/baseline.py
@@ -31,6 +40,8 @@ PRODUCT = "brama"
 GITHUB_RELEASE_MARKER = "github-release:"
 GIT_ARCHIVE_MARKER = "git-archive:"
 HEAD_MARKER = "head:"
+STADO_RELEASE_MARKER = "stado://releases/"
+STADO_BIN = os.environ.get("STADO_BIN", "stado")
 SUPPORTED_PLATFORMS = ("linux-amd64", "darwin-arm64")
 
 REPOSITORY = pathlib.Path(__file__).resolve().parent.parent
@@ -192,7 +203,85 @@ def published_release() -> str:
     return ""
 
 
+def stado_release() -> tuple[str, str, str]:
+    """The newest published Stado release: version, source revision, artifact.
+
+    `stado release status brama` answers with what the release plane published
+    and what each host actually runs. A version is only usable as a baseline
+    when its source revision is in this checkout, because the surface has to be
+    recomputed from that exact tree rather than trusted from a file.
+
+    `stado release status brama` exits non-zero whenever a rollout target
+    cannot be shown to be running the declared version, which is a statement
+    about the fleet and not about the answer: the report is on stdout either
+    way. Treating that exit code as "no channel" is what made this reader fall
+    through to a GitHub release twenty-two versions old.
+    """
+    executable = shutil.which(STADO_BIN)
+    if executable is None:
+        return ("", "", "")
+    try:
+        answer = subprocess.run(
+            [executable, "release", "status", PRODUCT, "--json"],
+            check=False,
+            capture_output=True,
+            text=True,
+        ).stdout
+        report = json.loads(answer)
+    except (json.JSONDecodeError, OSError):
+        return ("", "", "")
+    published = []
+    for target in report.get("targets") or []:
+        desired = target.get("desired") or {}
+        version = desired.get("version")
+        if not version or not SEMVER_TAG.match(f"v{version}"):
+            continue
+        for platform, artifact in (desired.get("artifacts") or {}).items():
+            revision_id = (artifact or {}).get("source_revision")
+            manifest = (artifact or {}).get("manifest_uri") or ""
+            if not revision_id or not manifest.startswith(STADO_RELEASE_MARKER):
+                continue
+            published.append(
+                (
+                    tuple(int(part) for part in version.split(".")),
+                    version,
+                    revision_id,
+                    f"{STADO_RELEASE_MARKER}{PRODUCT}/{version}/{platform}",
+                )
+            )
+    for _, version, revision_id, artifact in sorted(published, reverse=True):
+        try:
+            git("cat-file", "-e", f"{revision_id}^{{commit}}")
+        except subprocess.CalledProcessError:
+            print(
+                f"baseline.py: published {version} names source revision {revision_id},"
+                " which this checkout does not hold; looking further back.",
+                file=sys.stderr,
+            )
+            continue
+        return (version, revision_id, artifact)
+    return ("", "", "")
+
+
 def baseline() -> dict:
+    version, revision_id, artifact = stado_release()
+    if version:
+        surface, declared = revision(revision_id)
+        if declared != version:
+            print(
+                f"baseline.py: published {version} was built from {revision_id}, whose tree"
+                f" declares {declared}; recording the tree's own version.",
+                file=sys.stderr,
+            )
+        return {
+            "version": declared,
+            "source": (
+                f"{artifact} source_revision={revision_id} -- signed release object the "
+                "Stado release plane published and hosts install from"
+            ),
+            "surface": surface,
+        }
+
     release = published_release()
     if release:
         surface, declared = revision(release)
