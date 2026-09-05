@@ -840,11 +840,21 @@ fn build_shared_client(seconds: &str) -> Result<Client, String> {
         .timeout(std::time::Duration::from_secs(
             seconds.parse().expect("static number"),
         ))
+        .pool_idle_timeout(std::time::Duration::from_secs(POOL_IDLE_SECONDS))
         .redirect(reqwest::redirect::Policy::none())
         .no_proxy()
         .build()
         .map_err(|error| error.to_string())
 }
+
+/// How long a pooled connection may sit unused before it is discarded.
+///
+/// The local model endpoint is reached across a tailnet hop whose relay drops
+/// an idle flow well before an HTTP client would: the next request then picks a
+/// pooled socket the far side has already forgotten and fails on the first
+/// write, with nothing logged upstream because the bytes never arrived. A pool
+/// that forgets first cannot hand out such a socket.
+const POOL_IDLE_SECONDS: u64 = 15;
 
 /// Catalogue and provider control calls, which are expected to answer quickly.
 pub fn control_client() -> Result<Client, String> {
@@ -870,6 +880,7 @@ fn dispatch_client() -> Result<Client, String> {
 static STREAM_CLIENT: std::sync::LazyLock<Result<Client, String>> =
     std::sync::LazyLock::new(|| {
         Client::builder()
+            .pool_idle_timeout(std::time::Duration::from_secs(POOL_IDLE_SECONDS))
             .redirect(reqwest::redirect::Policy::none())
             .no_proxy()
             .build()
@@ -2339,10 +2350,10 @@ async fn dispatch_catalog(request: &ModelRequest, item: &str, secret: &str) -> M
         CatalogProtocol::Unsupported => unreachable!(),
     };
     let started = Instant::now();
-    let response = match authorize_catalog(client.post(url), descriptor, &key)
-        .json(&payload)
-        .send()
-        .await
+    let response = match send_once_more_if_unsent(
+        authorize_catalog(client.post(url), descriptor, &key).json(&payload),
+    )
+    .await
     {
         Ok(response) => response,
         Err(error) => return transport_failure(&request.model, &error),
@@ -2549,6 +2560,33 @@ fn attempted_failure(route_id: &str, message: String) -> ModelResponse {
     failure
 }
 
+/// Send once more when the first attempt never reached the provider.
+///
+/// A `reqwest` error that is a connect failure, or a request-phase failure that
+/// produced no response, means the provider never saw the request: nothing was
+/// generated, nothing was billed, and sending it again is the same request
+/// rather than a second one. On 2026-09-05 that class of failure reached a
+/// person as "Assistant response failed. Please try again." while the gateway's
+/// own record said `attempts=1` and `retryable=true` — the retry the envelope
+/// promised had no implementation behind it.
+///
+/// A timeout is deliberately NOT retried. The provider may have accepted that
+/// request and be generating against it, and a duplicate would bill twice and
+/// could answer twice.
+async fn send_once_more_if_unsent(
+    builder: reqwest::RequestBuilder,
+) -> Result<reqwest::Response, reqwest::Error> {
+    let Some(retry) = builder.try_clone() else {
+        return builder.send().await;
+    };
+    match builder.send().await {
+        Err(error) if !error.is_timeout() && (error.is_connect() || error.is_request()) => {
+            retry.send().await
+        }
+        result => result,
+    }
+}
+
 /// Classify one refused provider answer: the contract kind clients read, and the
 /// provider's own sentence, bounded like every other stored reason.
 ///
@@ -2709,14 +2747,15 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
     };
     let payload = chat_payload(descriptor, model_id.as_ref(), request);
     let started = Instant::now();
-    let response = match authorize_provider(
-        client.post(endpoint(&base_url, descriptor.chat_path)),
-        descriptor,
-        &key,
-        secret,
+    let response = match send_once_more_if_unsent(
+        authorize_provider(
+            client.post(endpoint(&base_url, descriptor.chat_path)),
+            descriptor,
+            &key,
+            secret,
+        )
+        .json(&payload),
     )
-    .json(&payload)
-    .send()
     .await
     {
         Ok(response) => response,
@@ -2793,14 +2832,15 @@ pub async fn dispatch_stream(
         Err(error) => return Err(ModelResponse::failure(&request.model, error)),
     };
     let payload = streaming_chat_payload(descriptor, model_id.as_ref(), request);
-    let response = match authorize_provider(
-        client.post(endpoint(&base_url, descriptor.chat_path)),
-        descriptor,
-        &key,
-        secret,
+    let response = match send_once_more_if_unsent(
+        authorize_provider(
+            client.post(endpoint(&base_url, descriptor.chat_path)),
+            descriptor,
+            &key,
+            secret,
+        )
+        .json(&payload),
     )
-    .json(&payload)
-    .send()
     .await
     {
         Ok(response) => response,
