@@ -198,8 +198,8 @@ diagnostic, not the machine contract.</p>
 <tr>
 <td style="text-align: right;">429</td>
 <td><code>subscription_unavailable</code></td>
-<td>no usable agent credential in bound attempts, and at least one was actually tried</td>
-<td>Repair intended subscription or wait</td>
+<td>no usable agent credential in bound attempts; at least one is inside a recorded quota block</td>
+<td>Wait for the provider's quota reset or choose an explicit authorized target</td>
 </tr>
 <tr>
 <td style="text-align: right;">502</td>
@@ -239,11 +239,14 @@ diagnostic, not the machine contract.</p>
 </tr>
 </tbody>
 </table>
-<p>One boundary is worth naming twice: a refused redemption is
-<code>503 credential_unauthorized</code> with <code>retryable: false</code>, never a
-<code>429 capacity_error</code>. Waiting does not repair an authorization that does not
-match, and classifying it as capacity sends the caller into retries and the
-operator into the wrong catalogue.</p>
+<p>A pool can contain both a refused credential and an account that is only out of
+quota. When no account serves the request, an observed quota refusal takes
+precedence: Brama returns that provider's original <code>429</code> message rather
+than claiming every account needs a new sign-in. A recorded quota block returns
+<code>429 subscription_unavailable</code> without contacting that provider again.
+When no account can recover by waiting, the authorization refusal remains
+<code>503</code> with <code>retryable: false</code>. Buffered and streaming requests
+use the same precedence.</p>
 <h2 id="the-operator-envelope">The operator envelope<a class="headerlink" href="#the-operator-envelope" title="Link to this section">&para;</a></h2>
 <p><code>src/core/failure.rs</code> is the one place Brama's own vocabulary becomes the
 fleet's, using the <code>wisent-errors</code> crate for everything derivable and

@@ -423,9 +423,13 @@ Content-Type: application/json
 {"provider":"openai","label":"primary","api_key":"<credential>"}
 ```
 
-Brama maintains one deterministic subscription per agent and provider. Repeating
-the `POST` for that provider replaces the credential and label in place instead
-of creating an unroutable duplicate. A deliberate provider check is
+Without `subscription_id`, Brama uses the deterministic primary subscription for
+that agent and provider. Repeating the `POST` replaces that credential in place.
+To renew a secondary or other existing subscription, include its exact
+`subscription_id` from the listing. An unknown or unowned selection returns
+`404 subscription not found`; a provider mismatch returns
+`409 selected subscription belongs to a different provider`.
+A deliberate provider check is
 `POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe`; it performs one
 minimal real completion and therefore spends provider quota. Retire the
 subscription and its credential with
@@ -594,6 +598,14 @@ OMP account's access token to the signed Brama donation API. It never opens a
 browser, starts Weles, copies a refresh token, or starts a new login. OMP remains
 the only owner of refresh-token rotation; the expected email and ChatGPT account
 UUID prevent a changed account index from silently selecting another identity.
+
+List account identities with `omp token openai-codex --list` and read their
+provider-reported quota and ChatGPT UUIDs with
+`omp usage --provider openai-codex --json`. Select an account with remaining
+quota and its already assigned Brama subscription; do not overwrite another
+account's slot. The synchronizer accepts any existing Codex subscription owned
+by the signed agent, not only the primary slot. Omit `--login-item` when neither
+the subscription nor its vault tags declares a login mapping.
 
 ```bash
 python3 scripts/operations/sync-omp-codex-session.py \

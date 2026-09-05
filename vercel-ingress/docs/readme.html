@@ -550,6 +550,13 @@ OMP account's access token to the signed Brama donation API. It never opens a
 browser, starts Weles, copies a refresh token, or starts a new login. OMP remains
 the only owner of refresh-token rotation; the expected email and ChatGPT account
 UUID prevent a changed account index from silently selecting another identity.</p>
+<p>List account identities with <code>omp token openai-codex --list</code> and read
+their provider-reported quota and ChatGPT UUIDs with
+<code>omp usage --provider openai-codex --json</code>. Select an account with remaining
+quota and its already assigned Brama subscription; do not overwrite another
+account's slot. The synchronizer accepts any existing Codex subscription owned
+by the signed agent, not only the primary slot. Omit <code>--login-item</code> when neither
+the subscription nor its vault tags declares a login mapping.</p>
 <pre><code class="language-bash">python3 scripts/operations/sync-omp-codex-session.py \
   --brama-url https://brama.wisent.com \
   --host &lt;Stado-host-owning-Brama-vault&gt; \
