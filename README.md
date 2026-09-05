@@ -827,10 +827,7 @@ recorded and the discarded attempt stays `in_progress` forever on the Echo side.
   `brama:subscription` and `brama:agent:<agent>`, carrying its provider and
   subscription id in `brama:provider:<provider>` and `brama:id:<id>`. Both the
   gateway and Brama Desktop filter on those tags, so vault item ids are opaque
-  and renaming one changes nothing. `scripts/provision-desktop-subscriptions.py`
-  writes the owner vault and `scripts/provision-host-subscriptions.sh` writes a
-  managed host's vault; both are idempotent and derive their tags from
-  `scripts/skarbiec-subscriptions.json`.
+  and renaming one changes nothing.
 - **Plan usage from the provider's own report:** every provider that rations a
   subscription publishes a report of how much of the ration is gone, and reading
   it spends no quota at all. `claude-code` publishes
