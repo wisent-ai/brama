@@ -11,6 +11,7 @@ for line in path.read_text(errors="replace").splitlines():
     clean = ansi.sub("", line)
     if (
         "weles/agent/primary" not in clean
+        and '"weles"' not in clean
         and "local-openai" not in clean
         and 'event="provider_credential_' not in clean
         and 'event="credential_read_' not in clean

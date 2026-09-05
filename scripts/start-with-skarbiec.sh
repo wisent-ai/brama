@@ -536,7 +536,7 @@ required_aliases = {
     "wisent-backend/evaluation",
     "wisent-backend/embeddings",
     "wisent-backend/moderation",
-    "weles/agent/primary",
+    "weles",
 }
 if not isinstance(allowed_models, list):
     raise SystemExit(
@@ -579,7 +579,7 @@ malformed_routes = {
     if not isinstance(route, str)
     or not route
     or route.strip() != route
-    or "/" not in route
+    or ("/" not in route and route != "best")
 }
 if malformed_routes:
     raise SystemExit(
@@ -664,10 +664,11 @@ next(arguments)
 router = next(arguments)
 all_models = os.environ["BRAMA_ALLOWED_MODELS"].split(",")
 backend_models = [model for model in all_models if model.startswith("wisent-backend/")]
-# Keep both Brama-owned paths the worker may request. `weles/agent/primary`
-# selects the declared workload route and `best` remains its subscription-funded
-# fallback. The server validates this exact pair for the `weles` client at startup.
-weles_models = ["best", "weles/agent/primary"]
+# Keep both Brama-owned paths the worker may request. `weles` is the worker's
+# own alias and selects whatever the route table declares for it; `best` remains
+# its subscription-funded fallback. The server validates this exact pair for the
+# `weles` client at startup (`requires_exact_aliases("weles", …)`).
+weles_models = ["best", "weles"]
 # The credential-renewal caller. Weles's reauth trajectories present the bearer
 # from `wisent-app-model-router` and sign as agent `wisent-app`; that bearer was
 # in no boot table and behind no grant, so every renewal read answered
