@@ -1245,7 +1245,7 @@ fn model_from_value(descriptor: &ProviderDescriptor, row: &Value) -> Option<Regi
 
 /// oh-my-pi model metadata extracted from the local models.db, embedded at
 /// compile time so subscription providers get authoritative limits.
-static OMP_MODEL_METADATA: &str = include_str!("../../scripts/omp-model-metadata.json");
+static OMP_MODEL_METADATA: &str = include_str!("omp-model-metadata.json");
 
 #[derive(Clone, Debug)]
 struct OmpModelMetadata {

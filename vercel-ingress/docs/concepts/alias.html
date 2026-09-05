@@ -176,8 +176,8 @@ callers ship against them:</p>
 <td>moderation only</td>
 </tr>
 <tr>
-<td><code>weles/agent/primary</code></td>
-<td>chat</td>
+<td><code>weles</code></td>
+<td>chat — the Weles workload's own alias, spelled as the client's name; which model answers it is the route table's decision</td>
 </tr>
 <tr>
 <td><code>best</code></td>
@@ -191,8 +191,42 @@ or stray whitespace fails startup. A route naming a provider whose capability
 was never issued on this host does not fail startup: the gateway starts,
 serves the aliases that are serviceable, and logs
 <code>alias_provider_capability_absent</code> — "no provider capability was issued for
-this route; the alias will not serve" (<code>src/core/server.rs</code>). At request time
-such an alias resolves to nothing, exactly as an undeclared alias does.</p>
+this route; the alias will not serve" (<code>src/core/server.rs</code>).</p>
+<h2 id="an-alias-that-cannot-serve-says-so"><a class="headerlink" href="#an-alias-that-cannot-serve-says-so" title="Link to this section">An alias that cannot serve says so&para;</a></h2>
+<p>A declared alias is never silently dropped. The gateway judges every alias it
+knows into one of four states, and every surface reports the same word:</p>
+<table>
+<thead><tr><th>state</th><th>meaning</th><th>repair</th></tr></thead>
+<tbody>
+<tr><td><code>serving</code></td><td>at least one declared route names a provider this gateway holds a credential for, or delegates to <code>best</code></td><td>none</td></tr>
+<tr><td><code>no_route</code></td><td>the alias is known — required by the contract or named by a caller's allowlist — but no route is declared for it</td><td>declare a route with <code>PUT /v1/admin/routes</code> or in the launcher's <code>model_aliases</code> policy</td></tr>
+<tr><td><code>capability_absent</code></td><td>every declared route names a provider whose capability was never issued on this host</td><td>issue the provider capability, or point the alias at a route the host can reach, such as <code>best</code></td></tr>
+<tr><td><code>routes_file_invalid</code></td><td>the route registry file exists and cannot be read, so nothing in it serves</td><td>repair the file named by <code>BRAMA_INFERENCE_ROUTES_FILE</code></td></tr>
+</tbody>
+</table>
+<p>Where the verdict is read:</p>
+<ul>
+<li><code>GET /v1/models</code> lists a declared alias the caller may use even when it
+cannot serve, as <code>available: false</code> with <code>unavailable_reason</code> carrying the
+sentence above. A caller that checks the catalog before calling — Jeden does —
+therefore reports <code>model `weles` is unavailable: alias `weles` routes to … but
+this gateway holds no provider credential for …</code> instead of
+<code>not in the Brama catalog</code>.</li>
+<li>A completion request naming a declared alias that cannot serve is refused
+with <code>503</code>, code <code>alias_unserviceable</code>, the same sentence as
+<code>message</code>, and <code>details.state</code>, <code>details.route</code>,
+<code>details.fallbacks</code>. It is not refused as a malformed model name.</li>
+<li><a href="/docs/http-api#get-v1aliases"><code>GET /v1/aliases</code></a> is the operator's
+view: every alias with state, route, fallbacks, reason, whether the contract
+requires it, and whether the presenting bearer may use it.</li>
+<li><a href="/docs/cli/aliases"><code>brama aliases</code></a> prints the same table from an
+operator shell and names the route registry file it read; <code>--strict</code> exits
+non-zero when any alias cannot serve.</li>
+<li>Brama Desktop's Routing screen carries a <strong>Gateway</strong> column and a
+<strong>Not serving</strong> facet, and its inspector shows the reason verbatim; an alias
+the gateway requires but has no route for appears there with an
+<em>Add route</em> action even though the registry has no row for it.</li>
+</ul>
 <p>In standalone desktop mode an absent <code>BRAMA_MODEL_ALIASES</code> means <code>{}</code>; in
 managed mode a bare <code>brama serve</code> fails closed with the exact sentence in the
 <a href="/docs/runbook#brama-serve-refuses-to-start">runbook</a>.</p>

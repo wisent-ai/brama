@@ -59,7 +59,12 @@ const WISENT_CHAT_FALLBACK_ALIAS: &str = "wisent-backend/chat/fallback";
 const WISENT_EVALUATION_ALIAS: &str = "wisent-backend/evaluation";
 const WISENT_EMBEDDING_ALIAS: &str = "wisent-backend/embeddings";
 const WISENT_MODERATION_ALIAS: &str = "wisent-backend/moderation";
-const WELES_AGENT_PRIMARY_ALIAS: &str = "weles/agent/primary";
+/// The Weles workload's own alias. It is spelled as the client's name and
+/// nothing more: `weles/agent/primary` carried a purpose and a rank in the
+/// name, both of which changed under it twice while the name stayed, so the
+/// name stopped describing anything. Which model serves it is the route table's
+/// business, and `GET /v1/aliases` is where that is read.
+const WELES_ALIAS: &str = "weles";
 pub const BEST_ALIAS: &str = "best";
 const WISENT_MODEL_ALIASES: &[&str] = &[
     WISENT_CHAT_PRIMARY_ALIAS,
@@ -74,7 +79,7 @@ const MODEL_ALIASES: &[&str] = &[
     WISENT_EVALUATION_ALIAS,
     WISENT_EMBEDDING_ALIAS,
     WISENT_MODERATION_ALIAS,
-    WELES_AGENT_PRIMARY_ALIAS,
+    WELES_ALIAS,
     BEST_ALIAS,
 ];
 const BRAMA_DESKTOP_CLIENT_ID: &str = "brama-desktop";
@@ -552,6 +557,222 @@ impl ModelAliases {
             Vec::new(),
         )
     }
+
+    /// Every alias this gateway knows by name: the named contract plus every
+    /// alias an operator declared in the launcher table or the route registry.
+    fn declared(&self) -> Vec<String> {
+        let mut names = MODEL_ALIASES
+            .iter()
+            .map(|alias| (*alias).to_string())
+            .collect::<Vec<_>>();
+        names.extend(self.routes.keys().cloned());
+        if let Some(path) = self.routes_file.as_deref() {
+            if let Ok(dynamic) = crate::core::inference_routes::resolved(path) {
+                names.extend(dynamic.into_keys());
+            }
+        }
+        names.sort();
+        names.dedup();
+        names
+    }
+
+    fn is_declared(&self, alias: &str) -> bool {
+        MODEL_ALIASES.contains(&alias)
+            || self.routes.contains_key(alias)
+            || self.routes_file.as_deref().is_some_and(|path| {
+                crate::core::inference_routes::resolve(path, alias)
+                    .ok()
+                    .flatten()
+                    .is_some()
+            })
+    }
+
+    /// The route chain as declared, before serviceability is applied.
+    fn declared_chain(&self, alias: &str) -> Result<Option<Vec<String>>, String> {
+        if let Some(path) = self.routes_file.as_deref() {
+            match crate::core::inference_routes::route_chain(path, alias)? {
+                Some(chain) => return Ok(Some(chain)),
+                None => {}
+            }
+        }
+        Ok(self.routes.get(alias).cloned().map(|route| vec![route]))
+    }
+
+    /// Why one declared alias is in the state it is in.
+    ///
+    /// `source` and `chat_route` answer "give me a route or nothing", which is
+    /// right for dispatch and useless for an operator: nothing looks the same
+    /// whether the alias was never declared, points at a provider this host
+    /// holds no credential for, or sits in a route file that stopped parsing.
+    /// Those are three different repairs, so they are three different states.
+    fn diagnose(&self, alias: &str) -> AliasDiagnosis {
+        // `best` is a selector, not a route: subscription dispatch resolves it
+        // per caller identity, so no route table entry is expected and its
+        // absence is not a fault. A `best` with an explicit route is an
+        // operator override and is judged like any other chain below.
+        if alias == BEST_ALIAS && !matches!(self.declared_chain(alias), Ok(Some(_))) {
+            return AliasDiagnosis {
+                alias: alias.to_string(),
+                state: ALIAS_SERVING,
+                route: Some(BEST_ALIAS.to_string()),
+                fallbacks: Vec::new(),
+                reason: None,
+            };
+        }
+        let chain = match self.declared_chain(alias) {
+            Ok(chain) => chain,
+            Err(error) => {
+                return AliasDiagnosis {
+                    alias: alias.to_string(),
+                    state: ALIAS_ROUTES_FILE_INVALID,
+                    route: None,
+                    fallbacks: Vec::new(),
+                    reason: Some(format!(
+                        "the inference route registry could not be read: {error}"
+                    )),
+                };
+            }
+        };
+        let Some(chain) = chain else {
+            return AliasDiagnosis {
+                alias: alias.to_string(),
+                state: ALIAS_NO_ROUTE,
+                route: None,
+                fallbacks: Vec::new(),
+                reason: Some(if MODEL_ALIASES.contains(&alias) {
+                    format!(
+                        "alias `{alias}` is required by this gateway but no route is declared for it; declare one with `PUT /v1/admin/routes` or in the launcher's model_aliases policy"
+                    )
+                } else {
+                    format!("alias `{alias}` is not declared on this gateway")
+                }),
+            };
+        };
+        let mut serviceable = Vec::new();
+        let mut refused = Vec::new();
+        for route in &chain {
+            if !alias_requires_direct_capability(alias, route)
+                || crate::providers::adapter::provider_id_from_route(route)
+                    .is_some_and(crate::gateway::broker::provider_capability_configured)
+            {
+                serviceable.push(route.clone());
+            } else {
+                refused.push(route.clone());
+            }
+        }
+        if let Some(first) = serviceable.first().cloned() {
+            return AliasDiagnosis {
+                alias: alias.to_string(),
+                state: ALIAS_SERVING,
+                route: Some(first),
+                fallbacks: serviceable.into_iter().skip(1).collect(),
+                reason: None,
+            };
+        }
+        AliasDiagnosis {
+            alias: alias.to_string(),
+            state: ALIAS_CAPABILITY_ABSENT,
+            route: chain.first().cloned(),
+            fallbacks: chain.into_iter().skip(1).collect(),
+            reason: Some(format!(
+                "alias `{alias}` routes to {} but this gateway holds no provider credential for {}; issue the provider capability on this host or point the alias at a route it can reach, such as `best`",
+                refused.join(", "),
+                refused
+                    .iter()
+                    .filter_map(|route| crate::providers::adapter::provider_id_from_route(route))
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .into_iter()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )),
+        }
+    }
+}
+
+/// The alias resolves to at least one route this gateway can authenticate to.
+pub const ALIAS_SERVING: &str = "serving";
+/// The alias is known but no route is declared for it.
+pub const ALIAS_NO_ROUTE: &str = "no_route";
+/// Every declared route names a provider this host holds no credential for.
+pub const ALIAS_CAPABILITY_ABSENT: &str = "capability_absent";
+/// The route registry file exists and cannot be read, so nothing in it serves.
+pub const ALIAS_ROUTES_FILE_INVALID: &str = "routes_file_invalid";
+
+/// One alias, what it points at, and whether that can be served right now.
+#[derive(Clone, Debug, Serialize)]
+pub struct AliasDiagnosis {
+    pub alias: String,
+    pub state: &'static str,
+    pub route: Option<String>,
+    pub fallbacks: Vec<String>,
+    pub reason: Option<String>,
+}
+
+impl AliasDiagnosis {
+    pub fn serving(&self) -> bool {
+        self.state == ALIAS_SERVING
+    }
+}
+
+/// Where an alias report was read from, so the reader can tell a gateway's
+/// answer from an operator shell's answer.
+#[derive(Clone, Debug, Serialize)]
+pub struct AliasReportSource {
+    /// The launcher's alias table, when this process was started with it.
+    pub launcher_table_present: bool,
+    /// The route registry file that was read, if any.
+    pub routes_file: Option<PathBuf>,
+}
+
+/// Every declared alias with its state, plus the sources the answer came from.
+#[derive(Clone, Debug, Serialize)]
+pub struct AliasReport {
+    pub source: AliasReportSource,
+    pub aliases: Vec<AliasDiagnosis>,
+}
+
+impl AliasReport {
+    pub fn unserviceable(&self) -> usize {
+        self.aliases.iter().filter(|alias| !alias.serving()).count()
+    }
+}
+
+/// Every declared alias with its state, for the CLI and any console that has
+/// no bearer for the running gateway.
+///
+/// Read from the same sources the server reads at startup, so the answer is
+/// the gateway's own: the launcher's alias table when this process was started
+/// with it, and the route registry file, which defaults to the launcher's path
+/// when the variable is not set so an operator shell sees the same file the
+/// gateway does. The report names both, because a shell that has neither is
+/// looking at the compiled-in contract alone and must say so.
+pub fn alias_report() -> Result<AliasReport, std::io::Error> {
+    if std::env::var_os(crate::core::inference_routes::ROUTES_FILE_ENV).is_none() {
+        if let Some(home) = std::env::var_os("HOME") {
+            let default_path = PathBuf::from(home).join(".config/brama/inference-routes.json");
+            if default_path.is_file() {
+                // Set only for this process: the CLI is reading, not serving.
+                std::env::set_var(
+                    crate::core::inference_routes::ROUTES_FILE_ENV,
+                    default_path,
+                );
+            }
+        }
+    }
+    let aliases = ModelAliases::from_env(false)?;
+    let source = AliasReportSource {
+        launcher_table_present: std::env::var_os(MODEL_ALIASES_ENV).is_some(),
+        routes_file: aliases.routes_file.clone(),
+    };
+    let diagnoses = aliases
+        .declared()
+        .iter()
+        .map(|alias| aliases.diagnose(alias))
+        .collect();
+    Ok(AliasReport {
+        source,
+        aliases: diagnoses,
+    })
 }
 
 fn exact_agent_header(headers: &HeaderMap, expected: &str) -> bool {
@@ -1863,6 +2084,38 @@ async fn route_model_call(
     }
     let task_subscription = task_subscription_selector(requested_model);
     let (alias_source, alias_fallbacks) = aliases.chat_route(requested_model);
+    // An alias the gateway knows but cannot serve is a configuration fault on
+    // this host, not a malformed request. Falling through made it one: the
+    // requested name is not a provider/model route, so the caller was told its
+    // model name was wrong, and the catalogue had already dropped the alias
+    // rather than list it as unavailable. Both answers hid the same fact.
+    if alias_source.is_none() && requested_model != BEST_ALIAS && aliases.is_declared(requested_model) {
+        let diagnosis = aliases.diagnose(requested_model);
+        if !diagnosis.serving() {
+            warn!(
+                event = "alias_unserviceable_request",
+                client_id = %client_identity.client_id,
+                alias = requested_model,
+                state = diagnosis.state,
+                "refusing a declared alias that has no serviceable route"
+            );
+            return Err(api_error_with_details(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "alias_unserviceable",
+                &diagnosis
+                    .reason
+                    .clone()
+                    .unwrap_or_else(|| format!("alias `{requested_model}` has no serviceable route")),
+                json!({
+                    "alias": diagnosis.alias,
+                    "state": diagnosis.state,
+                    "route": diagnosis.route,
+                    "fallbacks": diagnosis.fallbacks,
+                }),
+            )
+            .into_response());
+        }
+    }
     // `best` is a selector, not a route. The alias resolves to one configured
     // provider route and that route is the caller's first choice, but the name
     // means "the best subscription model this caller can be served from", so
@@ -2846,6 +3099,45 @@ fn perf_json(model: &str) -> Option<serde_json::Value> {
     })
 }
 
+/// Every alias this gateway declares, with whether it serves and why not.
+///
+/// `GET /v1/models` is the caller's view — what it may ask for. This is the
+/// operator's view of the same table: every alias, its route and fallbacks as
+/// declared, the state the gateway would put it in right now, and whether the
+/// presenting bearer is allowed to use it. It exists because the only place an
+/// unroutable alias used to show up was a warning in the server log and a
+/// `not in the catalog` sentence in some other product.
+async fn list_aliases(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Extension(aliases): Extension<ModelAliases>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let report = aliases
+        .declared()
+        .iter()
+        .map(|alias| {
+            let diagnosis = aliases.diagnose(alias);
+            json!({
+                "alias": diagnosis.alias,
+                "state": diagnosis.state,
+                "route": diagnosis.route,
+                "fallbacks": diagnosis.fallbacks,
+                "reason": diagnosis.reason,
+                "required": MODEL_ALIASES.contains(&alias.as_str()),
+                "authorized": client_identity.authorizes_model(alias),
+            })
+        })
+        .collect::<Vec<_>>();
+    let unserviceable = report
+        .iter()
+        .filter(|entry| entry["state"] != ALIAS_SERVING)
+        .count();
+    Ok(Json(json!({
+        "object": "list",
+        "aliases": report,
+        "unserviceable": unserviceable,
+    })))
+}
+
 async fn list_models(
     Extension(client_identity): Extension<ModelClientIdentity>,
     Extension(aliases): Extension<ModelAliases>,
@@ -2943,10 +3235,21 @@ async fn list_models(
         }
     }
 
-    for alias in MODEL_ALIASES {
-        if client_identity.authorizes_model(alias) && aliases.source(alias).is_some() {
-            model_ids.push((*alias).to_string());
-            available.insert((*alias).to_string());
+    // Every alias the caller may name is listed. One that serves is available;
+    // one that is declared and cannot serve is listed as unavailable with the
+    // reason, because a name that silently vanishes from the catalogue reads
+    // to the caller as "no such model" and sends it to fix the wrong thing.
+    let mut unavailable_reasons: HashMap<String, String> = HashMap::new();
+    for alias in aliases.declared() {
+        if !client_identity.authorizes_model(&alias) {
+            continue;
+        }
+        let diagnosis = aliases.diagnose(&alias);
+        model_ids.push(alias.clone());
+        if diagnosis.serving() {
+            available.insert(alias);
+        } else if let Some(reason) = diagnosis.reason {
+            unavailable_reasons.insert(alias, reason);
         }
     }
     model_ids.sort();
@@ -3016,6 +3319,9 @@ async fn list_models(
                         entry["perf"] = perf;
                     }
                 }
+                if let Some(reason) = unavailable_reasons.get(&id) {
+                    entry["unavailable_reason"] = json!(reason);
+                }
                 entry
             })
             .collect::<Vec<_>>();
@@ -3052,6 +3358,13 @@ async fn list_models(
                 if let Some(perf) = perf_json(&id) {
                     entry["perf"] = perf;
                 }
+            }
+            // A declared alias that cannot serve says why, to every caller: the
+            // reason is this gateway's configuration, not anything about who is
+            // asking, and hiding it is what produced "not in the catalog".
+            if let Some(reason) = unavailable_reasons.get(&id) {
+                entry["available"] = json!(false);
+                entry["unavailable_reason"] = json!(reason);
             }
             entry
         })
@@ -3857,6 +4170,36 @@ fn api_error(status: StatusCode, message: &str) -> ApiError {
     error_response(status, error_type, code, message, retryable, u32::default())
 }
 
+/// An error whose code is the fault itself, with the facts a caller needs to
+/// act on it beside the sentence. `api_error` picks the code from the status,
+/// which is right when the status is the whole story and wrong when the same
+/// 503 can mean "provider down" or "this alias was never wired up".
+fn api_error_with_details(
+    status: StatusCode,
+    code: &str,
+    message: &str,
+    details: serde_json::Value,
+) -> ApiError {
+    let error_type = match status {
+        StatusCode::SERVICE_UNAVAILABLE | StatusCode::GATEWAY_TIMEOUT => "dependency_error",
+        StatusCode::BAD_REQUEST => "request_error",
+        _ => "state_error",
+    };
+    (
+        status,
+        Json(json!({
+            "error": {
+                "message": message,
+                "type": error_type,
+                "code": code,
+                "retryable": false,
+                "attempts": u32::default(),
+                "details": details,
+            }
+        })),
+    )
+}
+
 /// Authenticate the signed caller and, for agent-scoped resources, bind the
 /// caller identity to the exact path identity. Request bodies are verified as
 /// received so subscription mutations cannot substitute an unsigned donor.
@@ -3971,13 +4314,13 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
     let ingress_auth = ModelIngressAuth::from_env()?;
     if !standalone {
         ingress_auth.requires_exact_aliases("wisent-backend", WISENT_MODEL_ALIASES)?;
-        // Weles keeps `best` for subscription-funded fallback and receives one
-        // explicit workload route for the model the operator selected for browser
-        // tasks. The second alias is not a wildcard or a provider credential: it
-        // still resolves through Brama's validated route table, so the declared
-        // primary can use local inference and fall back to `best` without changing
-        // the caller or bypassing Brama.
-        ingress_auth.requires_exact_aliases("weles", &[BEST_ALIAS, WELES_AGENT_PRIMARY_ALIAS])?;
+        // Weles keeps `best` for subscription-funded fallback and its own alias,
+        // `weles`, for the model the operator selected for browser tasks. The
+        // alias is not a wildcard or a provider credential: it still resolves
+        // through Brama's validated route table, so the declared primary can use
+        // local inference and fall back to `best` without changing the caller or
+        // bypassing Brama.
+        ingress_auth.requires_exact_aliases("weles", &[BEST_ALIAS, WELES_ALIAS])?;
     }
     let aliases = ModelAliases::from_env(!standalone)?;
     // Touch the perf registry so persisted stats load at startup, not on first use.
@@ -4008,6 +4351,7 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
         .route("/v1/embeddings", post(embeddings))
         .route("/v1/moderations", post(moderations))
         .route("/v1/models", get(list_models))
+        .route("/v1/aliases", get(list_aliases))
         .route(
             "/v1/subscriptions/:agent_id",
             get(list_agent_subscriptions)
