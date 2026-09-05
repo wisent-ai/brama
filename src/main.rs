@@ -53,6 +53,7 @@ enum Commands {
         adopt_into: Option<PathBuf>,
         /// Exact source alias to adopt; repeat for more than one
         #[arg(long = "adopt-select", value_name = "ALIAS")]
+        adopt_selected_aliases: Vec<String>,
         /// Adopt every importable or already unchanged alias from --adopt-from
         #[arg(long, default_value_t = false)]
         adopt_all_importable: bool,
@@ -79,6 +80,7 @@ enum Commands {
         apply: bool,
         /// Exact source alias to persist; repeat for more than one
         #[arg(long = "select", value_name = "ALIAS")]
+        selected_aliases: Vec<String>,
         /// Select every importable or already unchanged alias
         #[arg(long, default_value_t = false)]
         all_importable: bool,
