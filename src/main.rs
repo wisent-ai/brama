@@ -112,6 +112,15 @@ enum Commands {
         #[command(subcommand)]
         command: SubscriptionsCommand,
     },
+    /// Report every model alias this gateway declares and whether it can serve
+    Aliases {
+        /// Print the report as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
+        /// Exit non-zero when any declared alias cannot be served
+        #[arg(long, default_value_t = false)]
+        strict: bool,
+    },
     /// Act on one provider's subscription credentials
     Subscription {
         #[command(subcommand)]
@@ -387,6 +396,55 @@ async fn main() {
                 }
             }
         },
+        Commands::Aliases { json, strict } => {
+            let report = match brama::core::server::alias_report() {
+                Ok(report) => report,
+                Err(error) => {
+                    eprintln!("aliases could not be read: {error}");
+                    std::process::exit(1);
+                }
+            };
+            let unserviceable = report.unserviceable();
+            if json {
+                print_json(&serde_json::json!({
+                    "source": report.source,
+                    "aliases": report.aliases,
+                    "unserviceable": unserviceable,
+                }));
+            } else {
+                match &report.source.routes_file {
+                    Some(path) => println!("route registry: {}", path.display()),
+                    None => println!("route registry: none configured"),
+                }
+                println!(
+                    "launcher alias table: {}",
+                    if report.source.launcher_table_present {
+                        "present in this process"
+                    } else {
+                        "absent; only the compiled-in contract and the route registry are visible here"
+                    }
+                );
+                for alias in &report.aliases {
+                    let chain = match &alias.route {
+                        Some(route) if alias.fallbacks.is_empty() => route.clone(),
+                        Some(route) => format!("{route} -> {}", alias.fallbacks.join(" -> ")),
+                        None => "-".to_string(),
+                    };
+                    println!("{:<32} {:<20} {}", alias.alias, alias.state, chain);
+                    if let Some(reason) = &alias.reason {
+                        println!("{:<32} {}", "", reason);
+                    }
+                }
+                println!(
+                    "{} alias(es), {} cannot be served",
+                    report.aliases.len(),
+                    unserviceable
+                );
+            }
+            if strict && unserviceable > 0 {
+                std::process::exit(1);
+            }
+        }
         Commands::Subscription { command } => match command {
             SubscriptionCommand::Refresh {
                 provider,

@@ -14,6 +14,13 @@ name: version-check
 # the candidate is recomputed. A check that rebuilt both sides would always agree with
 # itself and would gate nothing.
 #
+# `scripts/check-baseline.py` checks that file against the channel that published it.
+# Brama's releases are published by the Stado release plane, which is what every host
+# installs; GitHub Releases are a second, secondary channel and stalled at v0.2.53 when
+# the tag job below stopped running. Asserting the baseline had to be the newest GitHub
+# release therefore refused every commit for twenty-two versions, and this job's failure
+# is what kept the tag job from running at all.
+#
 # A successful push to main tags the version already declared in Cargo.toml.
 # The existing v* release workflow remains the sole artifact publisher.
 
@@ -49,38 +56,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Assert the baseline agrees with GitHub Releases
+      - name: Assert the baseline agrees with the channel that published it
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
-        run: |
-          set -euo pipefail
-          marker="$(jq -er '.source | split(" ") | first | select(length > 0)' released-surface.json)"
-          case "$marker" in
-            github-release:*|git-archive:*|head:*) ;;
-            *)
-              echo "::error::unknown baseline marker: $marker"
-              false
-              ;;
-          esac
-
-          : "${RUNNER_TEMP:=$(mktemp -d)}"
-          python3 scripts/baseline.py > "$RUNNER_TEMP/best.json"
-          best="$(jq -er '.source | split(" ") | first | select(length > 0)' "$RUNNER_TEMP/best.json")"
-
-          if [ "${marker%%:*}" = head ]; then
-            have="${marker%%:*}"
-            want="${best%%:*}"
-          else
-            have="$marker"
-            want="$best"
-          fi
-          if [ "$have" != "$want" ]; then
-            echo "::error::The baseline is $have, but $want is the best complete release."
-            echo "::error::Regenerate it with: python3 scripts/baseline.py --write"
-            false
-          fi
-          echo "Baseline $have matches the independent GitHub release channel."
+        run: python3 scripts/check-baseline.py
 
   tag:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

@@ -228,7 +228,7 @@ material — the five <code>reason</code> sentences are decoded in the
 <p>Then one completion — this spends real provider quota:</p>
 <pre><code class="language-bash">curl -s -H &quot;Authorization: Bearer $BRAMA_CLIENT_TOKEN&quot; \
   -H 'Content-Type: application/json' \
-  -d '{&quot;model&quot;: &quot;wisent-backend/chat/primary&quot;,
+  -d '{&quot;model&quot;: &quot;wisent-backend/chat&quot;,
        &quot;messages&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;Say hello in one sentence.&quot;}]}' \
   http://127.0.0.1:8080/v1/chat/completions
 </code></pre>

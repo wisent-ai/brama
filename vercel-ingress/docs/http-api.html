@@ -189,6 +189,12 @@ from a running 0.2.38 gateway.</p>
 </tr>
 <tr>
 <td>GET</td>
+<td><code>/v1/aliases</code></td>
+<td>bearer</td>
+<td>every declared alias with the gateway's verdict on whether it can serve, and why not</td>
+</tr>
+<tr>
+<td>GET</td>
 <td><code>/v1/subscriptions/:agent_id</code></td>
 <td>bearer + agent HMAC</td>
 <td>list one agent's subscriptions</td>
@@ -407,6 +413,26 @@ discovery marks models executable by that account's stored keys, and signed
 agent discovery includes agent-owned subscriptions. Captured shape:</p>
 <pre><code class="language-json">{&quot;data&quot;:[{&quot;id&quot;:&quot;&lt;provider&gt;/&lt;model&gt;&quot;,&quot;object&quot;:&quot;model&quot;,&quot;owned_by&quot;:&quot;&lt;provider&gt;&quot;}, ...]}
 </code></pre>
+<p>A declared alias the caller may use but that cannot serve is listed with
+<code>available: false</code> and <code>unavailable_reason</code>; it is not omitted. The
+reason is the gateway's configuration, so it is shown to every caller. See
+<a href="/docs/concepts/alias#an-alias-that-cannot-serve-says-so">an alias that cannot serve says so</a>.</p>
+<h2 id="get-v1aliases"><code>GET /v1/aliases</code><a class="headerlink" href="#get-v1aliases" title="Link to this section">&para;</a></h2>
+<p>Every alias this gateway declares — the named contract plus every operator
+route — with the state the gateway would put it in right now. Captured shape:</p>
+<pre><code class="language-json">{&quot;object&quot;:&quot;list&quot;,
+ &quot;unserviceable&quot;:1,
+ &quot;aliases&quot;:[
+  {&quot;alias&quot;:&quot;weles&quot;,&quot;state&quot;:&quot;serving&quot;,&quot;route&quot;:&quot;best&quot;,&quot;fallbacks&quot;:[],&quot;reason&quot;:null,&quot;required&quot;:true,&quot;authorized&quot;:true},
+  {&quot;alias&quot;:&quot;ox-alpha&quot;,&quot;state&quot;:&quot;capability_absent&quot;,&quot;route&quot;:&quot;openrouter/stealth/ox-alpha&quot;,&quot;fallbacks&quot;:[],
+   &quot;reason&quot;:&quot;alias `ox-alpha` routes to openrouter/stealth/ox-alpha but this gateway holds no provider credential for openrouter; issue the provider capability on this host or point the alias at a route it can reach, such as `best`&quot;,
+   &quot;required&quot;:false,&quot;authorized&quot;:true}]}
+</code></pre>
+<p><code>state</code> is one of <code>serving</code>, <code>no_route</code>, <code>capability_absent</code>,
+<code>routes_file_invalid</code>; <code>required</code> says the alias is part of the compiled-in
+contract; <code>authorized</code> says the presenting bearer may name it. A completion
+naming a declared alias whose state is not <code>serving</code> is refused with <code>503</code>
+and code <code>alias_unserviceable</code> carrying the same <code>reason</code> as <code>message</code>.</p>
 <h2 id="subscription-lifecycle-agent-signed">Subscription lifecycle (agent-signed)<a class="headerlink" href="#subscription-lifecycle-agent-signed" title="Link to this section">&para;</a></h2>
 <p>All three verbs on <code>/v1/subscriptions/:agent_id</code> require bearer + HMAC, and
 the bearer-bound agent, signed agent, and path agent must agree
