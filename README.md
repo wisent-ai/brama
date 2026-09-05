@@ -582,6 +582,46 @@ environment gets, and not a broken account. A retired subscription is never
 refreshed, because rotating its grant would put back what somebody removed. The
 exit status is non-zero unless a credential was obtained.
 
+### Reusing an existing OMP Codex session without signing in
+
+`scripts/operations/sync-omp-codex-session.py` sends the selected existing
+OMP account's access token to the signed Brama donation API. It never opens a
+browser, starts Weles, copies a refresh token, or starts a new login. OMP remains
+the only owner of refresh-token rotation; the expected email and ChatGPT account
+UUID prevent a changed account index from silently selecting another identity.
+
+```bash
+python3 scripts/operations/sync-omp-codex-session.py \
+  --brama-url https://brama.wisent.com \
+  --host <Stado-host-owning-Brama-vault> \
+  --agent-id wisent-app \
+  --subscription-id brama-sub-wisent-app-codex-primary \
+  --login-item <existing-login-item> \
+  --account <OMP-account-number> \
+  --email <expected-email> \
+  --account-id <expected-ChatGPT-account-UUID> \
+  --bearer-item jeden-model-router \
+  --signing-item agent:wisent-app \
+  --reason 'synchronize an already signed-in OMP account'
+```
+
+The command reads credentials from the local owner vault and uses Stado to
+inspect the target item's digest and tags. Only Brama writes the donated token
+and acknowledges the replaced credential in its subscription ledger. A direct
+vault write alone cannot clear Brama's recorded `needs_reauthorization` state.
+Shared subscriptions keep every existing `brama:agent:` tag; another authorized
+consumer is not an account-mapping conflict. A caller not assigned to the item,
+a different provider, subscription or login mapping, or an inactive or
+unexpectedly shaped bundle is refused without replacing it.
+
+`stored` or `current` reports the target vault revision, access-token expiry
+and verified preservation of its consumers, not successful model inference.
+The next actual model task supplies that evidence. A failed synchronization
+exits non-zero and includes the failed operation; no token is printed.
+`--watch` repeats every five minutes when run as a Stado-managed user service on
+the host that owns the OMP session. An unavailable or invalid OMP session exits
+instead of opening a login, and the existing account must remain usable by OMP.
+
 ### `brama subscription sign-in <provider> --reason <text>`
 
 Repairs a provider-disowned `claude-code`, `codex`, or `kimi` grant by running

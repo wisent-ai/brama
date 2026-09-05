@@ -1386,37 +1386,23 @@ async fn donated_credential_tags(
         .map(|item| item.tags)
         .unwrap_or_default();
 
-    let required = [
-        ("brama:agent:", agent_id.to_owned()),
-        ("brama:provider:", normalized_provider(provider)),
-        ("brama:id:", subscription_id.to_owned()),
-    ];
-    if !tags.iter().any(|tag| tag == "brama:subscription") {
-        tags.push("brama:subscription".to_owned());
-    }
-    for (prefix, wanted) in required {
-        let declared = tags
-            .iter()
-            .filter_map(|tag| tag.strip_prefix(prefix))
-            .filter(|value| !value.is_empty())
-            .collect::<Vec<_>>();
-        let disagrees = declared.iter().any(|value| {
-            if prefix == "brama:provider:" {
-                normalized_provider(value) != wanted
-            } else {
-                *value != wanted.as_str()
-            }
-        });
-        if disagrees {
+    let agent_tag = format!("brama:agent:{agent_id}");
+    if !tags.contains(&agent_tag) {
+        if tags.iter().any(|tag| {
+            tag.strip_prefix("brama:agent:")
+                .is_some_and(|agent| !agent.is_empty())
+        }) {
             return Err(DonationRefusal::MappingConflict(format!(
-                "{item_id} already carries {prefix}{}; refusing {prefix}{wanted}",
-                declared.join(",")
+                "{item_id} is not assigned to agent {agent_id}; refusing to replace its credential"
             )));
         }
-        if declared.is_empty() {
-            tags.push(format!("{prefix}{wanted}"));
-        }
+        tags.push(agent_tag);
     }
+    // Agent tags are additive entitlements, unlike the provider, subscription
+    // and login identity. Renewing a shared credential must preserve every
+    // existing consumer rather than reject the other authorized agents.
+    let mut tags = subscription_tags_for_write(&tags, provider, subscription_id)
+        .map_err(DonationRefusal::MappingConflict)?;
     if let Some(login_item) = login_item {
         let declared = tags
             .iter()

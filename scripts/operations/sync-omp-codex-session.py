@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Keep one existing OMP Codex account donated to its exact Brama subscription.
+"""Keep an existing OMP Codex session in its exact Brama-owned Skarbiec item.
 
-OMP remains the only owner of the refresh token. Only the current access token
-crosses the authenticated Brama donation endpoint; no browser or sign-in is
-started. Run with --watch under Stado to publish subsequent OMP refreshes.
-Credentials are acquired through the owner Skarbiec CLI, never command arguments.
+OMP remains the only refresh-token owner. Brama receives only the access token
+through its signed donation API; Stado confirms the vault item and consumers.
+No browser or sign-in is started. --watch repeats this synchronization.
 """
 
 from __future__ import annotations
@@ -83,40 +82,52 @@ def current_access(options: argparse.Namespace, environment: dict[str, str]) -> 
     return token, int(claims["exp"])
 
 
-def gateway_request(options: argparse.Namespace, bearer: str, signing_secret: str, body: dict | None) -> dict:
-    encoded = b"" if body is None else json.dumps(body, separators=(",", ":")).encode()
+def subscription_request(
+    options: argparse.Namespace, bearer: str, signing_secret: str,
+    document: dict | None = None,
+) -> dict:
+    body = None if document is None else json.dumps(document, separators=(",", ":")).encode()
+    body_hash = "" if body is None else hashlib.sha256(body).hexdigest()
     stamp = str(int(time.time()))
-    digest = hashlib.sha256(encoded).hexdigest() if encoded else ""
     signature = hmac.new(
-        signing_secret.encode(), f"{options.agent_id}:{stamp}:{digest}".encode(), hashlib.sha256,
+        signing_secret.encode(),
+        f"{options.agent_id}:{stamp}:{body_hash}".encode(),
+        hashlib.sha256,
     ).hexdigest()
     request = urllib.request.Request(
         f"{options.brama_url.rstrip('/')}/v1/subscriptions/{options.agent_id}",
-        data=encoded if body is not None else None,
+        data=body,
         headers={
             "Authorization": f"Bearer {bearer}",
+            "Content-Type": "application/json",
+            "x-agent-body-sha256": body_hash,
             "x-agent-id": options.agent_id,
             "x-agent-timestamp": stamp,
             "x-agent-signature": signature,
-            "Content-Type": "application/json",
         },
     )
     try:
         with urllib.request.build_opener(NoRedirect()).open(request, timeout=60) as response:
             payload = response.read(1024 * 1024 + 1)
     except urllib.error.HTTPError as error:
-        raise Refusal(f"Brama subscription {'donation' if body is not None else 'listing'} refused with HTTP {error.code}") from None
-    except urllib.error.URLError:
-        raise Refusal("Brama subscription endpoint is unreachable") from None
+        detail = error.read(4096).decode("utf-8", errors="replace")
+        raise Refusal(f"Brama subscription request refused with HTTP {error.code}: {detail}") from None
     if len(payload) > 1024 * 1024:
         raise Refusal("Brama subscription response exceeds its metadata size limit")
-    try:
-        value = json.loads(payload)
-    except ValueError:
-        raise Refusal("Brama subscription response is not JSON") from None
-    if not isinstance(value, dict):
-        raise Refusal("Brama subscription response is not an object")
-    return value
+    return json.loads(payload)
+
+
+def stado_command(options: argparse.Namespace, arguments: list[str]) -> dict:
+    result = subprocess.run(
+        [options.stado, "host", *arguments, "--json"],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=180,
+    )
+    if result.returncode:
+        raise Refusal(
+            f"stado host {arguments[0]} exited {result.returncode}: {result.stderr.strip()}"
+        )
+    return json.loads(result.stdout)
 
 
 def synchronize(options: argparse.Namespace) -> dict:
@@ -124,39 +135,69 @@ def synchronize(options: argparse.Namespace) -> dict:
     environment["SKARBIEC_VAULT_FILE"] = str(options.vault)
     bearer = command_value([options.skarbiec, "get", options.bearer_item, "--field", "token"], environment)
     signing_secret = command_value([options.skarbiec, "get", options.signing_item, "--field", "value"], environment)
-    listing = gateway_request(options, bearer, signing_secret, None)
-    subscriptions = listing.get("subscriptions")
-    if not isinstance(subscriptions, list):
-        raise Refusal("Brama did not return its subscription list")
-    existing = next((item for item in subscriptions if item.get("id") == options.subscription_id), None)
-    if existing is None:
-        raise Refusal("The exact subscription is not owned by this signed agent")
-    if existing.get("provider") != "codex":
-        raise Refusal("The exact subscription does not use Codex")
-    if existing.get("login_item") != options.login_item:
-        raise Refusal("The subscription's login item differs from the named account mapping")
+    listing = subscription_request(options, bearer, signing_secret)
+    existing = next(
+        (item for item in listing["subscriptions"] if item["id"] == options.subscription_id), None,
+    )
+    if existing is None or existing["provider"] != "codex":
+        raise Refusal("The signed Brama agent does not own the exact Codex subscription")
+    if existing.get("login_item") not in {None, options.login_item}:
+        raise Refusal(
+            f"The subscription maps to {existing.get('login_item')!r}, not {options.login_item!r}"
+        )
 
     token, expires = current_access(options, environment)
-    label = f"omp:{options.email}:{hashlib.sha256(token.encode()).hexdigest()}"
-    changed = existing.get("label") != label
-    if changed:
-        credential = json.dumps({"tokens": {
-            "access_token": token,
-            "account_id": options.account_id,
-        }, "expires_at": expires}, separators=(",", ":"))
-        result = gateway_request(options, bearer, signing_secret, {
-            "provider": "codex", "label": label, "api_key": credential,
-            "login_item": options.login_item, "subscription_id": options.subscription_id,
+    credential = json.dumps({"tokens": {
+        "access_token": token,
+        "account_id": options.account_id,
+    }, "expires_at": expires}, separators=(",", ":"))
+    expected_digest = hashlib.sha256(credential.encode()).hexdigest()
+    item_id = f"provider:codex:{options.subscription_id}"
+    show = ["vault-item-show", options.host, item_id]
+    before = stado_command(options, show)
+    tags = before["tags"].split(",")
+    for prefix, expected in (
+        ("brama:provider:", "codex"),
+        ("brama:id:", options.subscription_id),
+    ):
+        if [tag.removeprefix(prefix) for tag in tags if tag.startswith(prefix)] != [expected]:
+            raise Refusal(f"{item_id} does not carry its exact {prefix}{expected} mapping")
+    if f"brama:agent:{options.agent_id}" not in tags or "brama:subscription" not in tags:
+        raise Refusal(f"{item_id} is not assigned to the signed Brama agent")
+    login_tags = [tag for tag in tags if tag.startswith("brama:login:")]
+    expected_login = f"brama:login:{options.login_item}"
+    if login_tags and login_tags != [expected_login]:
+        raise Refusal(f"{item_id} belongs to login mapping {login_tags!r}")
+    if before.get("state") != "active" or before.get("kind") != "bundle":
+        raise Refusal(f"{item_id} is not an active credential bundle")
+    if [field["name"] for field in before["fields"]] != ["value"]:
+        raise Refusal(f"{item_id} contains fields this session synchronization must not replace")
+
+    changed = before["fields"][0]["sha256"] != expected_digest
+    if not login_tags:
+        tags.append(expected_login)
+    # Writing the vault alone does not acknowledge a replaced grant to Brama:
+    # its request path still skips a recorded reauthorization block. Use the
+    # signed donation operation so the credential and that record agree.
+    needs_acknowledgment = (
+        changed or not login_tags
+        or (existing.get("credential") or {}).get("state") != "active"
+    )
+    if needs_acknowledgment:
+        subscription_request(options, bearer, signing_secret, {
+            "provider": "codex",
+            "subscription_id": options.subscription_id,
+            "login_item": options.login_item,
+            "label": f"omp:{options.email}",
+            "api_key": credential,
         })
-        if result.get("subscription", {}).get("id") != options.subscription_id:
-            raise Refusal("Brama did not acknowledge the exact donated subscription")
-        observed = gateway_request(options, bearer, signing_secret, None)
-        if not any(item.get("id") == options.subscription_id and item.get("label") == label
-                   for item in observed.get("subscriptions", [])):
-            raise Refusal("Brama did not retain the donated subscription metadata")
+    after = stado_command(options, show) if needs_acknowledgment else before
+    if after["fields"][0]["sha256"] != expected_digest or set(after["tags"].split(",")) != set(tags):
+        raise Refusal(f"{item_id} did not retain the access token and all existing consumer tags")
     return {
         "subscription": options.subscription_id, "account": options.email,
-        "access_expires_at": expires, "result": "donated" if changed else "current",
+        "access_expires_at": expires, "result": "stored" if changed else "current",
+        "revision": after["revision"], "host": options.host,
         "refresh_owner": "omp", "reason": options.reason,
     }
 
@@ -164,6 +205,8 @@ def synchronize(options: argparse.Namespace) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--brama-url", required=True)
+    parser.add_argument("--host", required=True, help="Stado-selected host owning Brama's vault")
+    parser.add_argument("--stado", default=str(Path.home() / ".local/bin/stado"))
     parser.add_argument("--agent-id", required=True)
     parser.add_argument("--subscription-id", required=True)
     parser.add_argument("--login-item", required=True)
@@ -195,8 +238,8 @@ def main() -> int:
     while not stopped.is_set():
         try:
             print(json.dumps(synchronize(options)), flush=True)
-        except (Refusal, subprocess.TimeoutExpired, OSError) as error:
-            detail = str(error) if isinstance(error, Refusal) else "credential synchronization command or transport failed"
+        except (Refusal, subprocess.TimeoutExpired, OSError, ValueError, KeyError, TypeError) as error:
+            detail = f"{type(error).__name__}: {error}"
             print(json.dumps({"result": "refused", "detail": detail, "reason": options.reason}), file=sys.stderr, flush=True)
             return 1
         if not options.watch or stopped.wait(300):
