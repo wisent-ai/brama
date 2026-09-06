@@ -613,8 +613,8 @@ write_policy(
 PY
 BRAMA_ALLOWED_MODELS=$(cat "$policy_dir/allowed-models")
 BRAMA_MODEL_ALIASES=$(cat "$policy_dir/model-aliases")
-BRAMA_BACKEND_ALLOWED_MODELS=$(cat "$policy_dir/backend-models")
-export BRAMA_ALLOWED_MODELS BRAMA_MODEL_ALIASES BRAMA_BACKEND_ALLOWED_MODELS
+backend_models=$(cat "$policy_dir/backend-models")
+export BRAMA_ALLOWED_MODELS BRAMA_MODEL_ALIASES
 rm -rf "$policy_dir"
 trap - EXIT HUP INT TERM
 unset policy_dir control_config BRAMA_CONTROL_CONFIG
@@ -656,7 +656,7 @@ unset routes_dir
 : "${BRAMA_ALLOWED_MODELS:?set exact closed Brama model allowlist}"
 identities_file="$runtime_dir/model-router-client-identities.json"
 printf '%s\n' "reading required model-router identities" >/dev/stderr
-"$PYTHON_BIN" - "$ENTITLEMENTS_ROUTER_BIN" >"$identities_file" <<'PY'
+"$PYTHON_BIN" - "$ENTITLEMENTS_ROUTER_BIN" "$backend_models" >"$identities_file" <<'PY'
 from concurrent.futures import ThreadPoolExecutor
 import json
 import os
@@ -667,9 +667,9 @@ arguments = iter(sys.argv)
 next(arguments)
 router = next(arguments)
 all_models = os.environ["BRAMA_ALLOWED_MODELS"].split(",")
-# The backend's identity uses the required contract, not every optional alias
-# whose name happens to share its prefix in the deployment's route table.
-backend_models = json.loads(os.environ["BRAMA_BACKEND_ALLOWED_MODELS"])
+# Extra operator aliases remain routable; they are not automatically added to
+# the backend client's exact startup grant.
+backend_models = json.loads(next(arguments))
 # Keep both Brama-owned paths the worker may request. `weles` is the worker's
 # own alias and selects whatever the route table declares for it; `best` remains
 # its subscription-funded fallback. The server validates this exact pair for the
@@ -748,7 +748,7 @@ rm -f "$identities_file"
 # Unknown bearers are intentionally absent here and resolved by the
 # introspection grant configured above.
 export BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES
-unset BRAMA_ALLOWED_MODELS BRAMA_BACKEND_ALLOWED_MODELS
+unset BRAMA_ALLOWED_MODELS backend_models
 
 # Product request-sign identities are projected from their exact Skarbiec items.
 # `wisent-app` is Jeden's public runtime identity and uses the dedicated
