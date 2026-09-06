@@ -283,13 +283,8 @@ async fn main() {
                 std::process::exit(1);
             }
 
-            match brama::onboarding::run_first_use(
-                model,
-                agent_id,
-                allow_provider_cost,
-                reset,
-            )
-            .await
+            match brama::onboarding::run_first_use(model, agent_id, allow_provider_cost, reset)
+                .await
             {
                 Ok(false) if allow_provider_cost => {
                     std::process::exit(1);
@@ -576,13 +571,9 @@ async fn run_adoption(
         None => brama::config_adoption::default_destination()?,
     };
     let source_name = from.display().to_string();
-    let preview = brama::config_adoption::preview_document(
-        &document,
-        &source_name,
-        &destination,
-        agent_id,
-    )
-    .await?;
+    let preview =
+        brama::config_adoption::preview_document(&document, &source_name, &destination, agent_id)
+            .await?;
     if !apply {
         if json {
             println!(
@@ -701,9 +692,7 @@ fn print_adoption_preview(preview: &brama::config_adoption::AdoptionPreview) {
         }
     }
     for deployment in &preview.unreferenced_deployments {
-        println!(
-            "  rejected    deployment {deployment}: no source alias references it"
-        );
+        println!("  rejected    deployment {deployment}: no source alias references it");
     }
 }
 
@@ -723,9 +712,7 @@ fn print_adoption_result(result: &brama::config_adoption::AdoptionResult) {
     }
 }
 
-fn adoption_disposition(
-    disposition: brama::config_adoption::AdoptionDisposition,
-) -> &'static str {
+fn adoption_disposition(disposition: brama::config_adoption::AdoptionDisposition) -> &'static str {
     use brama::config_adoption::AdoptionDisposition;
     match disposition {
         AdoptionDisposition::Importable => "importable",
