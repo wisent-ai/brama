@@ -63,7 +63,12 @@ const MODEL_ALIASES_ENV: &str = "BRAMA_MODEL_ALIASES";
 /// already says. `POST /v1/chat/completions` is the chat shape, so the name
 /// carries only who is asking.
 const WISENT_BACKEND_ALIAS: &str = "wisent-backend";
-const WISENT_EVALUATION_ALIAS: &str = "wisent-backend/evaluation";
+/// The model-review probe's alias. It was `wisent-backend/evaluation`, which
+/// named a consumer that never called it: the caller is Stado's precheck
+/// runner, which mints its own per-repository bearer and reviews a pull
+/// request through this gateway. The backend's grant carried it for no reason
+/// other than the prefix in its name.
+const MODEL_REVIEW_ALIAS: &str = "model-review";
 /// The two aliases whose name still carries a purpose, and the only reason it
 /// does: `POST /v1/embeddings` and `POST /v1/moderations` accept exactly this
 /// one model name each, so the endpoint already names the shape — but the route
@@ -79,15 +84,17 @@ const WISENT_MODERATION_ALIAS: &str = "wisent-backend/moderation";
 /// business, and `GET /v1/aliases` is where that is read.
 const WELES_ALIAS: &str = "weles";
 pub const BEST_ALIAS: &str = "best";
+/// The Wisent App backend's own grant: its alias and the two capability
+/// endpoints that accept exactly one model name each. Model review is not the
+/// backend's and is not here.
 const WISENT_MODEL_ALIASES: &[&str] = &[
     WISENT_BACKEND_ALIAS,
-    WISENT_EVALUATION_ALIAS,
     WISENT_EMBEDDING_ALIAS,
     WISENT_MODERATION_ALIAS,
 ];
 const MODEL_ALIASES: &[&str] = &[
     WISENT_BACKEND_ALIAS,
-    WISENT_EVALUATION_ALIAS,
+    MODEL_REVIEW_ALIAS,
     WISENT_EMBEDDING_ALIAS,
     WISENT_MODERATION_ALIAS,
     WELES_ALIAS,

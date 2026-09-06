@@ -532,7 +532,7 @@ except (KeyError, TypeError) as error:
 required_aliases = {
     "best",
     "wisent-backend",
-    "wisent-backend/evaluation",
+    "model-review",
     "wisent-backend/embeddings",
     "wisent-backend/moderation",
     "weles",

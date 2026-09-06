@@ -200,8 +200,8 @@ context. The raw bearer is never logged (<code>src/core/server.rs</code>).</p>
 </ul>
 <p>In managed deployments, startup additionally checks two allowlists for
 internal consistency when the table is present: <code>wisent-backend</code> must
-hold <code>wisent-backend</code>, <code>wisent-backend/evaluation</code>,
-<code>wisent-backend/embeddings</code>, and <code>wisent-backend/moderation</code>;
+hold <code>wisent-backend</code>, <code>wisent-backend/embeddings</code> and
+<code>wisent-backend/moderation</code>;
 the <code>weles</code> identity must hold <code>best</code> and <code>weles</code>.
 Either grant may hold more: an alias this build does not compile in is the
 operator's to add, and a release that refused it could not be restarted under

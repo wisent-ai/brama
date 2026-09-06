@@ -124,6 +124,12 @@ footer a { color: var(--muted); text-decoration: none; }
       <article class="doc"><h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Link to this section">&para;</a></h1>
 <p>All notable Brama changes are documented here. Brama follows Semantic
 Versioning and the pre-one compatibility policy in <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-model-review-alias">Unreleased: model review has its own alias</h2>
+<p>The model-review probe's alias is <code>model-review</code>. It was
+<code>wisent-backend/evaluation</code>, which named a consumer that never called
+it: the caller is Stado's precheck runner with its own per-repository bearer.
+The Wisent App backend's startup grant carried that alias for no reason other
+than the prefix in its name, and no longer does.</p>
 <h2 id="unreleased-consumer-name-alias">Unreleased: the backend alias is the client's name</h2>
 <p>The Wisent App backend's chat alias is <code>wisent-backend</code>. It was
 <code>wisent-backend/chat/primary</code> with a <code>/fallback</code> twin, which spelled a
