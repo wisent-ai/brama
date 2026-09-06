@@ -11,20 +11,18 @@
 //! which this credential must not be tried again, so the dispatcher stops
 //! guessing from error strings on every call.
 //!
-//! A fourth fact was added once it became clear that the first three cannot be
-//! told apart when they are all absent: the verdict of the last proactive probe.
-//! An empty set of windows means one of three unrelated things -- the provider
-//! publishes none, nothing ever reached this account, or the credential is
-//! refused -- and the probe verdict is what names which.
+//! A fourth fact is the verdict of the newest provider-only usage check. An
+//! empty set of windows can mean that the provider explicitly published none,
+//! nothing ever reached this account, or the credential was refused; the usage
+//! check names which without being overwritten by a completion probe.
 //!
-//! A fifth was added for the same reason the fourth was: a credential the
-//! provider has disowned is not a plan window, not a block, and not a probe
-//! verdict, and while it had nowhere to be recorded it rendered as an account
-//! that simply had a quiet week. Four credentials sat refused for five days
-//! looking exactly like that. The credential state says whether the grant
-//! itself is still something the provider accepts, in the provider's own
-//! words, so a reader can tell "nothing happened here" from "a sign-in is
-//! overdue".
+//! The completion probe remains a separate fifth fact because it answers
+//! whether inference itself worked and may run later than a failed free usage
+//! read. A sixth records whether the provider still accepts the credential at
+//! all. A disowned credential is not a plan window, block, or probe verdict,
+//! and while it had nowhere to be recorded it rendered as an account that
+//! simply had a quiet week. The credential state says whether a sign-in is
+//! overdue.
 //!
 //! The file is written atomically and is not a cache. It survives restarts
 //! because the question it answers -- "how much of this month is gone" -- is not
@@ -38,6 +36,7 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
+use wisent_errors::{Code, Failure};
 
 use crate::core::failure::{self, IMPACT_CREDENTIAL_BLOCK, POINT_CREDENTIAL_BLOCK};
 use crate::types::{LimitReading, ModelResponse};
@@ -55,7 +54,7 @@ const REASON_LIMIT: usize = 200;
 /// Five minutes is short enough that a five-hour window never ages past its own
 /// reset unnoticed, and long enough that seven accounts polling their providers
 /// cost seven requests per five minutes rather than one per console refresh.
-/// Both providers that publish a usage report rate-limit it per source address.
+/// Provider usage endpoints may rate-limit per source address.
 const PLAN_USAGE_TTL_ENV: &str = "BRAMA_PLAN_USAGE_TTL_SECS";
 const DEFAULT_PLAN_USAGE_TTL_SECS: i64 = 5 * 60;
 /// How long a last good reading is still worth serving after it went stale.
@@ -121,7 +120,7 @@ pub fn jittered_plan_usage_ttl_ms(subscription_id: &str) -> i64 {
     plan_usage_ttl_ms().saturating_mul(factor) / PERCENT
 }
 
-static LEDGER: Mutex<Option<Ledger>> = Mutex::new(None);
+static LEDGER: Mutex<Option<LedgerState>> = Mutex::new(None);
 
 /// Everything recorded about one subscription.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -143,14 +142,25 @@ pub struct SubscriptionUsage {
     /// existed; every mutation below sets it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updated_at_ms: Option<i64>,
-    /// The newest proactive usage probe, when one has run.
+    /// The newest explicitly requested completion probe, when one has run.
     ///
-    /// This is what separates the three reasons a subscription reports no plan
-    /// window. Without it, a provider that publishes nothing, an account no
-    /// traffic ever reached, and a credential the provider rejects are one
-    /// indistinguishable blank.
+    /// This answers whether inference worked. It is not evidence that the free
+    /// usage endpoint was readable; that verdict lives in `usage_check`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub probe: Option<Probe>,
+    /// The newest free provider usage-report attempt.
+    ///
+    /// Kept apart from `probe`, which records a completion check: ordinary
+    /// traffic or a later completion must never erase the reason the usage
+    /// report itself could not be read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage_check: Option<Probe>,
+    /// Full failure from the newest refused free usage attempt.
+    ///
+    /// This is ledger-internal evidence for read-only reports, not a duplicate
+    /// wire field. `Probe` intentionally remains the small public check shape.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage_failure: Option<serde_json::Value>,
     /// Where the newest plan window came from.
     ///
     /// Three sources state the same kind of fact with different standing: the
@@ -245,22 +255,19 @@ pub enum CheckSource {
     Completion,
 }
 
-/// The outcome of the newest proactive check of one subscription.
+/// The outcome of one proactive check.
 ///
-/// `ok` is about the provider call, not about the plan: a provider that answered
-/// and publishes no window at all is a successful check with no readings, and
-/// that is precisely the state no reader could name before. Both kinds of check
-/// write here, because what a reader needs is the newest verdict about the
-/// account rather than the newest verdict of one particular mechanism; `source`
-/// says which one it was.
+/// The same shape is stored independently for completion probes and provider
+/// usage reports. `source` identifies the mechanism; the enclosing
+/// `SubscriptionUsage` field decides which mechanism's newest verdict it is.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Probe {
     pub attempted_at_ms: i64,
     pub ok: bool,
     /// The provider's own sentence when it refused, trimmed like every other
     /// stored reason here. On success it is set only when the success itself
-    /// needs explaining -- a provider that publishes no usage report at all --
-    /// and absent otherwise.
+    /// needs explaining -- Brama has no supported free usage-report endpoint
+    /// for this credential -- and absent otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
     /// Which check this verdict came from. Absent in ledgers written before the
@@ -333,12 +340,34 @@ struct Ledger {
     #[serde(default)]
     subscriptions: BTreeMap<String, SubscriptionUsage>,
 }
+#[derive(Debug)]
+struct LedgerState {
+    ledger: Ledger,
+    storage_error: Option<String>,
+    /// A ledger that existed but could not be read or decoded is never replaced
+    /// by the empty in-memory fallback. New observations remain visible in this
+    /// process, but only repairing the persisted history can make writes safe.
+    persist_blocked: bool,
+}
 
 fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|elapsed| i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX))
         .unwrap_or_default()
+}
+const POINT_USAGE_LEDGER_PERSIST: &str = "brama.subscription-usage.ledger-persist";
+const IMPACT_PLAN_USAGE: &str = "this subscription's current usage report";
+
+fn plan_usage_storage_failure(subscription_id: &str, provider: &str, detail: String) -> Failure {
+    failure::envelope(
+        POINT_USAGE_LEDGER_PERSIST,
+        Code::Config,
+        IMPACT_PLAN_USAGE,
+        detail,
+    )
+    .with_context("subscription", subscription_id)
+    .with_context("provider", provider)
 }
 
 fn usage_path() -> Option<PathBuf> {
@@ -357,21 +386,74 @@ fn usage_path() -> Option<PathBuf> {
     )
 }
 
-/// Read the ledger, tolerating anything the file might be.
+/// Read the ledger once, retaining any failure beside the in-memory state.
 ///
-/// A ledger that will not parse yields an empty one rather than an error: this
-/// file is a record, not a configuration, and a gateway that refuses to start
-/// because a usage number is malformed trades every request for one statistic.
-fn load() -> Ledger {
+/// A missing file is a new ledger. An existing file that cannot be read or
+/// decoded is different: serving can continue from memory, but writing an empty
+/// replacement would destroy the only copy of its history.
+fn load() -> LedgerState {
     let Some(path) = usage_path() else {
-        return Ledger::default();
+        return LedgerState {
+            ledger: Ledger::default(),
+            storage_error: Some(
+                "cannot resolve the subscription usage ledger path because HOME is unavailable"
+                    .to_string(),
+            ),
+            persist_blocked: true,
+        };
     };
-    let Ok(text) = fs::read_to_string(&path) else {
-        return Ledger::default();
+    let text = match fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return LedgerState {
+                ledger: Ledger::default(),
+                storage_error: None,
+                persist_blocked: false,
+            };
+        }
+        Err(error) => {
+            return LedgerState {
+                ledger: Ledger::default(),
+                storage_error: Some(format!(
+                    "cannot read subscription usage ledger `{}`: {error}",
+                    path.display()
+                )),
+                persist_blocked: true,
+            };
+        }
     };
-    let mut ledger: Ledger = serde_json::from_str(&text).unwrap_or_default();
+    let mut ledger: Ledger = match serde_json::from_str(&text) {
+        Ok(ledger) => ledger,
+        Err(error) => {
+            return LedgerState {
+                ledger: Ledger::default(),
+                storage_error: Some(format!(
+                    "cannot decode subscription usage ledger `{}`: {error}",
+                    path.display()
+                )),
+                persist_blocked: true,
+            };
+        }
+    };
     backfill_reading_times(&mut ledger, &path);
-    ledger
+    // Before `usage_check` existed the usage-report verdict occupied `probe`.
+    // Copy it into the dedicated field in memory so a later completion probe
+    // cannot erase it. Pure reads do not rewrite the legacy file.
+    for usage in ledger.subscriptions.values_mut() {
+        if usage.usage_check.is_none()
+            && usage
+                .probe
+                .as_ref()
+                .is_some_and(|probe| probe.source == Some(CheckSource::UsageReport))
+        {
+            usage.usage_check = usage.probe.clone();
+        }
+    }
+    LedgerState {
+        ledger,
+        storage_error: None,
+        persist_blocked: false,
+    }
 }
 
 /// Give readings written before `recorded_at_ms` existed the ledger file's own
@@ -403,23 +485,32 @@ fn backfill_reading_times(ledger: &mut Ledger, path: &std::path::Path) {
 
 /// Write through a private temporary file in the same directory and rename, so
 /// a reader never sees a half-written ledger and a crash never truncates one.
-fn persist(ledger: &Ledger) {
-    let Some(path) = usage_path() else {
-        return;
-    };
-    let Some(parent) = path.parent() else {
-        return;
-    };
-    if fs::create_dir_all(parent).is_err() {
-        return;
-    }
-    let Ok(bytes) = serde_json::to_vec_pretty(ledger) else {
-        return;
-    };
-    let staging = parent.join(format!(".subscription-usage.{}.tmp", std::process::id()));
+fn persist(ledger: &Ledger) -> Result<(), String> {
+    let path = usage_path().ok_or_else(|| {
+        "cannot resolve the subscription usage ledger path because HOME is unavailable".to_string()
+    })?;
+    let parent = path.parent().ok_or_else(|| {
+        format!(
+            "subscription usage ledger `{}` has no parent directory",
+            path.display()
+        )
+    })?;
+    fs::create_dir_all(parent).map_err(|error| {
+        format!(
+            "cannot create subscription usage ledger directory `{}`: {error}",
+            parent.display()
+        )
+    })?;
+    let bytes = serde_json::to_vec_pretty(ledger)
+        .map_err(|error| format!("cannot encode subscription usage ledger: {error}"))?;
+    let staging = parent.join(format!(
+        ".subscription-usage.{}.{}.tmp",
+        std::process::id(),
+        now_ms()
+    ));
     let written = (|| -> std::io::Result<()> {
         let mut options = OpenOptions::new();
-        options.write(true).create(true).truncate(true);
+        options.write(true).create_new(true);
         #[cfg(unix)]
         {
             use std::os::unix::fs::OpenOptionsExt;
@@ -430,23 +521,86 @@ fn persist(ledger: &Ledger) {
         file.write_all(b"\n")?;
         file.sync_all()
     })();
-    if written.is_err() || fs::rename(&staging, &path).is_err() {
+    if let Err(error) = written {
         let _ = fs::remove_file(&staging);
+        return Err(format!(
+            "cannot write subscription usage ledger staging file `{}`: {error}",
+            staging.display()
+        ));
     }
+    if let Err(error) = fs::rename(&staging, &path) {
+        let _ = fs::remove_file(&staging);
+        return Err(format!(
+            "cannot replace subscription usage ledger `{}` from `{}`: {error}",
+            path.display(),
+            staging.display()
+        ));
+    }
+    Ok(())
 }
 
-fn with_ledger<T>(apply: impl FnOnce(&mut Ledger) -> T) -> T {
+fn ledger_state(guard: &mut Option<LedgerState>) -> &mut LedgerState {
+    if guard.is_none() {
+        *guard = Some(load());
+    }
+    guard.as_mut().unwrap_or_else(|| unreachable!())
+}
+
+/// Mutate the process ledger and attempt to commit the resulting whole state.
+///
+/// The mutation is retained even when the write fails, so a report in this
+/// process still shows the newest observation alongside [`storage_error`].
+fn write_ledger<T>(apply: impl FnOnce(&mut Ledger) -> T) -> (T, Result<(), String>) {
     let mut guard = match LEDGER.lock() {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
     };
-    if guard.is_none() {
-        *guard = Some(load());
+    let state = ledger_state(&mut guard);
+    let outcome = apply(&mut state.ledger);
+    let stored = if state.persist_blocked {
+        Err(state.storage_error.clone().unwrap_or_else(|| {
+            "subscription usage ledger persistence is blocked by an earlier load failure"
+                .to_string()
+        }))
+    } else {
+        persist(&state.ledger)
+    };
+    match &stored {
+        Ok(()) => state.storage_error = None,
+        Err(error) => state.storage_error = Some(error.clone()),
     }
-    let ledger = guard.as_mut().unwrap_or_else(|| unreachable!());
-    let outcome = apply(ledger);
-    persist(ledger);
-    outcome
+    (outcome, stored)
+}
+
+fn with_ledger<T>(apply: impl FnOnce(&mut Ledger) -> T) -> T {
+    write_ledger(apply).0
+}
+
+/// Read the current process ledger without rewriting it.
+fn read_ledger<T>(apply: impl FnOnce(&Ledger) -> T) -> T {
+    let mut guard = match LEDGER.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    apply(&ledger_state(&mut guard).ledger)
+}
+
+/// Mutate only the current process view after a failed commit.
+fn with_ledger_memory<T>(apply: impl FnOnce(&mut Ledger) -> T) -> T {
+    let mut guard = match LEDGER.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    apply(&mut ledger_state(&mut guard).ledger)
+}
+
+/// The actual ledger load or persistence failure still affecting this process.
+pub fn storage_error() -> Option<String> {
+    let mut guard = match LEDGER.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    ledger_state(&mut guard).storage_error.clone()
 }
 
 /// Record one provider call against the subscription that paid for it.
@@ -521,6 +675,36 @@ pub fn record_call_from(
     });
 }
 
+fn failure_value(failure: &Failure) -> serde_json::Value {
+    serde_json::from_str(&failure.to_json()).expect("Wisent failure serialization is JSON")
+}
+
+fn remember_plan_usage_failure(
+    subscription_id: &str,
+    provider: &str,
+    attempted_at_ms: i64,
+    refused: &Failure,
+) {
+    let detail = bounded_usage_detail(refused.detail.as_deref());
+    let envelope = failure_value(refused);
+    with_ledger_memory(|ledger| {
+        let entry = ledger
+            .subscriptions
+            .entry(subscription_id.to_string())
+            .or_default();
+        entry.provider = provider.to_string();
+        entry.updated_at_ms = Some(attempted_at_ms);
+        entry.plan_usage_checked_at_ms = Some(attempted_at_ms);
+        entry.usage_check = Some(Probe {
+            attempted_at_ms,
+            ok: false,
+            detail,
+            source: Some(CheckSource::UsageReport),
+        });
+        entry.usage_failure = Some(envelope);
+    });
+}
+
 /// Record what the provider's own usage report said about one subscription.
 ///
 /// This is the ordinary path now: it costs no quota, so it runs on a timer, and
@@ -528,9 +712,13 @@ pub fn record_call_from(
 /// limit ids. A report that carried no window is still a successful check --
 /// which is what tells a reader that the blank row is the provider's answer and
 /// not a broken credential.
-pub fn record_plan_usage(subscription_id: &str, provider: &str, readings: &[LimitReading]) {
+pub fn record_plan_usage(
+    subscription_id: &str,
+    provider: &str,
+    readings: &[LimitReading],
+) -> Result<(), Failure> {
     let now = now_ms();
-    with_ledger(|ledger| {
+    let (_, stored) = write_ledger(|ledger| {
         let entry = ledger
             .subscriptions
             .entry(subscription_id.to_string())
@@ -546,24 +734,37 @@ pub fn record_plan_usage(subscription_id: &str, provider: &str, readings: &[Limi
         if !readings.is_empty() {
             entry.usage_source = Some(UsageSource::Provider);
         }
-        entry.probe = Some(Probe {
+        entry.usage_check = Some(Probe {
             attempted_at_ms: now,
             ok: true,
             detail: None,
             source: Some(CheckSource::UsageReport),
         });
+        entry.usage_failure = None;
     });
+    match stored {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            let refused = plan_usage_storage_failure(subscription_id, provider, error);
+            remember_plan_usage_failure(subscription_id, provider, now, &refused);
+            Err(refused)
+        }
+    }
 }
 
-/// Record that this provider publishes no usage report at all.
+/// Record that Brama supports no free usage-report endpoint for this provider
+/// credential.
 ///
-/// A fact about the provider, not a failure of the reader, and one worth storing:
-/// without it an operator looking at a blank plan cannot tell a vendor that
-/// states nothing from a gateway that never asked.
-pub fn record_plan_usage_unpublished(subscription_id: &str, provider: &str, detail: &str) {
+/// This is a fact about Brama's credential-scoped integration, not a claim that
+/// the vendor has no separately privileged billing API.
+pub fn record_plan_usage_unpublished(
+    subscription_id: &str,
+    provider: &str,
+    detail: &str,
+) -> Result<(), Failure> {
     let now = now_ms();
-    let detail = bounded_reason(Some(detail));
-    with_ledger(|ledger| {
+    let detail = bounded_usage_detail(Some(detail));
+    let (_, stored) = write_ledger(|ledger| {
         let entry = ledger
             .subscriptions
             .entry(subscription_id.to_string())
@@ -571,25 +772,39 @@ pub fn record_plan_usage_unpublished(subscription_id: &str, provider: &str, deta
         entry.provider = provider.to_string();
         entry.updated_at_ms = Some(now);
         entry.plan_usage_checked_at_ms = Some(now);
-        entry.probe = Some(Probe {
+        entry.usage_check = Some(Probe {
             attempted_at_ms: now,
             ok: true,
             detail,
             source: Some(CheckSource::UsageReport),
         });
+        entry.usage_failure = None;
     });
+    match stored {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            let refused = plan_usage_storage_failure(subscription_id, provider, error);
+            remember_plan_usage_failure(subscription_id, provider, now, &refused);
+            Err(refused)
+        }
+    }
 }
 
-/// Record that the provider refused to state this subscription's usage.
+/// Record one failed free usage attempt with its complete Wisent envelope.
 ///
-/// The readings already stored are left exactly where they are. A refusal is a
+/// The readings already stored are left exactly where they are. A failure is a
 /// reason the row is not current, not evidence that the last good reading was
 /// wrong, and replacing it with nothing would blank a screen over one bad
-/// minute upstream.
-pub fn record_plan_usage_refused(subscription_id: &str, provider: &str, detail: &str) {
+/// attempt.
+pub fn record_plan_usage_failure(
+    subscription_id: &str,
+    provider: &str,
+    refused: &Failure,
+) -> Result<(), Failure> {
     let now = now_ms();
-    let detail = bounded_reason(Some(detail));
-    with_ledger(|ledger| {
+    let detail = bounded_usage_detail(refused.detail.as_deref());
+    let envelope = failure_value(refused);
+    let (_, stored) = write_ledger(|ledger| {
         let entry = ledger
             .subscriptions
             .entry(subscription_id.to_string())
@@ -597,13 +812,23 @@ pub fn record_plan_usage_refused(subscription_id: &str, provider: &str, detail: 
         entry.provider = provider.to_string();
         entry.updated_at_ms = Some(now);
         entry.plan_usage_checked_at_ms = Some(now);
-        entry.probe = Some(Probe {
+        entry.usage_check = Some(Probe {
             attempted_at_ms: now,
             ok: false,
             detail,
             source: Some(CheckSource::UsageReport),
         });
+        entry.usage_failure = Some(envelope);
     });
+    match stored {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            let storage = plan_usage_storage_failure(subscription_id, provider, error)
+                .caused_by(refused.clone());
+            remember_plan_usage_failure(subscription_id, provider, now, &storage);
+            Err(storage)
+        }
+    }
 }
 
 /// Trim one stored sentence to the bound every reason in this file shares.
@@ -612,6 +837,19 @@ fn bounded_reason(detail: Option<&str>) -> Option<String> {
         .map(str::trim)
         .filter(|detail| !detail.is_empty())
         .map(|detail| detail.chars().take(REASON_LIMIT).collect::<String>())
+}
+/// Usage failures use the fleet envelope's detail bound so endpoint, status,
+/// and provider reason survive together.
+fn bounded_usage_detail(detail: Option<&str>) -> Option<String> {
+    detail
+        .map(str::trim)
+        .filter(|detail| !detail.is_empty())
+        .map(|detail| {
+            detail
+                .chars()
+                .take(wisent_errors::DETAIL_LIMIT)
+                .collect::<String>()
+        })
 }
 
 /// Mark a subscription unusable until an instant.
@@ -891,7 +1129,7 @@ pub enum RefreshHint {
 /// refreshes normally instead of skipping every account on it.
 pub fn credential_refresh_hint(subscription_id: &str, within: Duration) -> RefreshHint {
     let horizon = now_ms().saturating_add(i64::try_from(within.as_millis()).unwrap_or(i64::MAX));
-    with_ledger(|ledger| {
+    read_ledger(|ledger| {
         let Some(credential) = ledger
             .subscriptions
             .get(subscription_id)
@@ -923,7 +1161,7 @@ pub fn credential_refresh_hint(subscription_id: &str, within: Duration) -> Refre
 /// therefore proves that sign-in has already been tried against exactly this
 /// state and produced this.
 pub fn credential_recorded_at_ms(subscription_id: &str) -> Option<i64> {
-    with_ledger(|ledger| {
+    read_ledger(|ledger| {
         ledger
             .subscriptions
             .get(subscription_id)
@@ -969,39 +1207,34 @@ pub fn record_probe(
 
 /// Whether this subscription's usage report is due to be read again.
 ///
-/// Two windows have to have passed, and they answer different questions. The
-/// report was checked longer ago than this subscription's own spread cache
-/// window -- that is the cache -- and no reading of any kind is younger than it,
-/// so a row that traffic just refreshed does not spend a request on a provider
-/// that rate-limits usage reads per address to learn what it already knows.
+/// A recent report attempt owns the cache window, whether it succeeded or
+/// failed. Otherwise every retained window must still be current; one new
+/// traffic header cannot make an older or already-reset window fresh.
 pub fn plan_usage_due(subscription_id: &str) -> bool {
     let now = now_ms();
     let window = jittered_plan_usage_ttl_ms(subscription_id);
-    with_ledger(|ledger| {
+    read_ledger(|ledger| {
         let Some(entry) = ledger.subscriptions.get(subscription_id) else {
             return true;
         };
         let checked_recently = entry
             .plan_usage_checked_at_ms
             .is_some_and(|checked| now.saturating_sub(checked) < window);
-        let read_recently =
-            newest_reading_ms(entry).is_some_and(|recorded| now.saturating_sub(recorded) < window);
-        !checked_recently && !read_recently
+        let readings_current = !entry.limits.is_empty()
+            && entry.limits.values().all(|reading| {
+                let recorded_is_current = reading.recorded_at_ms > 0
+                    && now.saturating_sub(reading.recorded_at_ms) < window;
+                let reset_is_current = reading
+                    .resets_at_ms
+                    .is_none_or(|resets_at_ms| resets_at_ms > now);
+                recorded_is_current && reset_is_current
+            });
+        !checked_recently && !readings_current
     })
 }
 
-/// The instant of the newest plan reading this subscription holds.
-fn newest_reading_ms(entry: &SubscriptionUsage) -> Option<i64> {
-    entry
-        .limits
-        .values()
-        .map(|reading| reading.recorded_at_ms)
-        .filter(|recorded| *recorded > 0)
-        .max()
-}
-
 /// The plan windows a reader should be shown, where they came from, and whether
-/// the newest of them has aged past the freshness window.
+/// any retained window or the newest usage-report attempt is stale.
 pub struct PlanWindows {
     pub limits: Vec<LimitReading>,
     pub source: Option<UsageSource>,
@@ -1030,9 +1263,9 @@ pub fn plan_windows(usage: Option<&SubscriptionUsage>) -> PlanWindows {
         .limits
         .values()
         .filter(|reading| {
-            // A reading with no instant of its own cannot be aged, and the load
-            // path has already given every one of those the tightest upper bound
-            // available, so anything still at zero is served rather than judged.
+            // A reading with no instant is still useful legacy evidence, but
+            // cannot truthfully be called current; the freshness projection
+            // below marks it stale.
             reading.recorded_at_ms == 0 || now.saturating_sub(reading.recorded_at_ms) <= retention
         })
         .cloned()
@@ -1044,22 +1277,38 @@ pub fn plan_windows(usage: Option<&SubscriptionUsage>) -> PlanWindows {
             stale: false,
         };
     }
-    let newest = limits
-        .iter()
-        .map(|reading| reading.recorded_at_ms)
-        .max()
-        .unwrap_or_default();
+    let stale = usage.usage_check.as_ref().is_some_and(|check| !check.ok)
+        || limits.iter().any(|reading| {
+            (reading.recorded_at_ms == 0
+                || now.saturating_sub(reading.recorded_at_ms) > plan_usage_ttl_ms())
+                || reading
+                    .resets_at_ms
+                    .is_some_and(|resets_at_ms| resets_at_ms <= now)
+        });
     PlanWindows {
-        stale: newest > 0 && now.saturating_sub(newest) > plan_usage_ttl_ms(),
+        stale,
         limits,
         source: usage.usage_source,
     }
+}
+/// The newest provider-only usage attempt, separate from completion probes.
+///
+/// The fallback keeps ledgers written before the dedicated field readable
+/// until their next in-process load migrates the verdict.
+pub fn plan_usage_check(recorded: Option<&SubscriptionUsage>) -> Option<&Probe> {
+    let recorded = recorded?;
+    recorded.usage_check.as_ref().or_else(|| {
+        recorded
+            .probe
+            .as_ref()
+            .filter(|probe| probe.source == Some(CheckSource::UsageReport))
+    })
 }
 
 /// Whether this subscription is inside a recorded block right now.
 pub fn is_blocked(subscription_id: &str) -> bool {
     let now = now_ms();
-    with_ledger(|ledger| {
+    read_ledger(|ledger| {
         ledger
             .subscriptions
             .get(subscription_id)
@@ -1078,7 +1327,7 @@ pub fn is_blocked(subscription_id: &str) -> bool {
 /// wait for something no wait reaches. This is how the request path reads the
 /// difference.
 pub fn needs_reauthorization(subscription_id: &str) -> bool {
-    with_ledger(|ledger| {
+    read_ledger(|ledger| {
         ledger
             .subscriptions
             .get(subscription_id)
@@ -1141,22 +1390,16 @@ pub fn used_fraction(subscription_id: &str) -> Option<f64> {
 
 /// The recorded state of one subscription, if anything was ever recorded.
 pub fn usage_for(subscription_id: &str) -> Option<SubscriptionUsage> {
-    with_ledger(|ledger| ledger.subscriptions.get(subscription_id).cloned())
+    read_ledger(|ledger| ledger.subscriptions.get(subscription_id).cloned())
 }
 
-/// Every subscription this ledger file describes, read without writing it back.
+/// Every subscription in the current process ledger, without writing it back.
 ///
-/// Deliberately not routed through [`with_ledger`], which persists after every
-/// call including a read. An operator listing the pool while the gateway is
-/// serving would otherwise rewrite the file from a snapshot taken before the
-/// gateway's own next write, so looking at the ledger could lose a record --
-/// and looking is the whole purpose of the command that calls this.
-///
-/// The ledger is asked to enumerate rather than to answer about one id because
-/// an operator diagnosing an empty pool does not know which subscriptions
-/// exist; that is part of what they are asking.
+/// This uses the same in-memory state as [`usage_for`], including observations
+/// whose atomic write failed. [`storage_error`] tells the reporter that the
+/// persisted copy is behind.
 pub fn recorded_subscriptions() -> BTreeMap<String, SubscriptionUsage> {
-    load().subscriptions
+    read_ledger(|ledger| ledger.subscriptions.clone())
 }
 
 #[cfg(test)]

@@ -142,23 +142,23 @@ from the installed build.</p>
 <li><a href="/docs/cli/detect"><code>brama detect</code></a> — detect local hardware and print a model recommendation.</li>
 <li><a href="/docs/cli/mcp"><code>brama mcp</code></a> — serve the read-only stdio MCP hardware-detection surface.</li>
 <li><a href="/docs/cli/aliases"><code>brama aliases [--json] [--strict]</code></a> — report every declared model alias, the route behind it, and whether this gateway can serve it; <code>--strict</code> exits non-zero when any cannot.</li>
-<li><a href="/docs/cli/subscriptions"><code>brama subscriptions &lt;COMMAND&gt;</code></a> — enter the read-only pool-reporting group.
+<li><a href="/docs/cli/subscriptions"><code>brama subscriptions &lt;COMMAND&gt;</code></a> — enter the subscription-pool reporting group.
   <ul>
-  <li><a href="/docs/cli/subscriptions/list"><code>brama subscriptions list [--json]</code></a> — report every subscription and credential state.</li>
+  <li><a href="/docs/cli/subscriptions/list"><code>brama subscriptions list [--json] [--refresh-usage]</code></a> — report every subscription, usage window and failure, optionally reading current free provider reports.</li>
   </ul>
 </li>
 <li><a href="/docs/cli/subscription"><code>brama subscription &lt;COMMAND&gt;</code></a> — enter the credential mutation group.
   <ul>
   <li><a href="/docs/cli/subscription/refresh"><code>brama subscription refresh &lt;PROVIDER&gt; --reason &lt;REASON&gt; [--json]</code></a> — refresh one provider's OAuth grants now.</li>
-  <li><a href="/docs/cli/subscription/sign-in"><code>brama subscription sign-in &lt;PROVIDER&gt; --reason &lt;REASON&gt; [--login-item &lt;LOGIN_ITEM&gt;] [--login-timeout-ms &lt;MILLISECONDS&gt;] [--json]</code></a> — drive one exact Weles row and prove it with a refresh.</li>
+  <li><a href="/docs/cli/subscription/sign-in"><code>brama subscription sign-in &lt;PROVIDER&gt; --reason &lt;REASON&gt; [--subscription-id &lt;ID&gt;] [--login-item &lt;LOGIN_ITEM&gt;] [--login-timeout-ms &lt;MILLISECONDS&gt;] [--json]</code></a> — drive one exact Weles row and prove it with a refresh.</li>
   </ul>
 </li>
 <li><a href="/docs/cli/collect-task-quality"><code>brama collect-task-quality --agent-id &lt;ID&gt; --task &lt;KEY&gt; --prompt &lt;TEXT&gt; [--expected-exact &lt;TEXT&gt;] [--expected-contains &lt;TEXT&gt;] [--persist] [--max-models &lt;N&gt;] --allow-provider-cost</code></a> — collect deterministic task-quality evidence.</li>
 <li><a href="/docs/cli/help"><code>brama help [COMMAND]...</code></a> — print root or command-specific help.</li>
 </ul>
 <h2 id="safety-boundaries">Safety boundaries<a class="headerlink" href="#safety-boundaries" title="Link to this section">&para;</a></h2>
-<p><code>version</code>, <code>detect</code>, <code>subscriptions list</code>, and
-<code>help</code> are read-only. <code>mcp</code> exposes local detection only.
+<p><code>version</code>, <code>detect</code>, <code>subscriptions list</code> without <code>--refresh-usage</code>, and
+<code>help</code> are read-only. <code>--refresh-usage</code> reads provider reports and persists their outcome through Brama's normal credential handling; it starts neither a sign-in nor model inference. <code>mcp</code> exposes local detection only.
 <code>adopt</code> is review-only unless <code>--apply</code> is combined with an exact
 selection; it never reads credential material or calls a provider.
 <code>test</code>, the provider-requesting part of <code>onboard</code>, and

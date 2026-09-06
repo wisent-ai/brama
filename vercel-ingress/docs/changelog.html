@@ -124,6 +124,20 @@ footer a { color: var(--muted); text-decoration: none; }
       <article class="doc"><h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Link to this section">&para;</a></h1>
 <p>All notable Brama changes are documented here. Brama follows Semantic
 Versioning and the pre-one compatibility policy in <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-subscription-usage">Unreleased: subscription usage and failure reporting</h2>
+<p><code>brama subscriptions list --refresh-usage</code> and Brama Desktop's
+<strong>Refresh usage</strong> share native free provider reports, bounded
+credential access and OAuth renewal. Account rows retain their last readings,
+reset and observation times, independent <code>usage_check</code> results and
+complete stored failure causes. Discovery, storage, malformed replies and
+partial refresh failures are visible rather than represented as a healthy
+empty pool. Unsupported free-report integrations remain unmeasured, not zero.</p>
+<p>Desktop exposes the same account-specific errors, retained stale windows and
+explicit Weles/Stado <strong>Sign in</strong> action. Missing measurement times
+stay unknown. Refresh operations can wait longer than ordinary reads so a
+provider or credential timeout can be reported by Brama itself. OAuth renewal
+does not open a browser by default; automatic Weles sign-in requires
+<code>BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN=1</code>. No OMP integration is used.</p>
 <h2 id="0277">0.2.77<a class="headerlink" href="#0277" title="Link to this section">&para;</a></h2>
 <p>The managed backend identity is derived from the
 four required backend aliases, so optional route names cannot make its

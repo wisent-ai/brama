@@ -121,119 +121,42 @@ footer a { color: var(--muted); text-decoration: none; }
     <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a class="active" aria-current="page" href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
     <main>
       <p class="source-note">Documentation topic: docs/walkthrough-subscriptions.md</p>
-      <article class="doc"><h1 id="walkthrough-reading-and-repairing-the-subscription-pool">Walkthrough: reading and repairing the subscription pool<a class="headerlink" href="#walkthrough-reading-and-repairing-the-subscription-pool" title="Link to this section">&para;</a></h1>
-<p>What the subscription surfaces answer on a deployment whose pool is empty —
-which is exactly the state every deployment starts in, and the state an
-operator is diagnosing when these commands matter. Executed against a
-development build of 0.2.38 with isolated state
-(<code>BRAMA_STATE_DIR</code>, <code>BRAMA_SUBSCRIPTION_USAGE_FILE</code>, and
-<code>ENTITLEMENTS_ROUTER_BIN</code> pointed at temp paths); output pasted as captured.
-No provider was contacted and no quota spent — listing, refreshing an empty
-pool, and signed discovery are all free by construction.</p>
-<h2 id="1-the-pool-report">1. The pool report<a class="headerlink" href="#1-the-pool-report" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">$ brama subscriptions list
-0 of 0 subscription credentials are live
-
-$ brama subscriptions list --json
-{
-  &quot;providers&quot;: []
-}
-</code></pre>
-<p>The count leads because it is the question that gets this command run: how
-many credentials can still serve a <code>best</code> call. The command joins the
-deployment's subscription listing to the usage ledger — it contacts no
-provider, redeems no capability, and writes nothing, so it is safe against a
-serving gateway. Row states are <code>live</code>, <code>expired</code>, <code>burnt</code>, <code>unknown</code>
-(<a href="/docs/concepts/subscription#states">concepts/subscription</a>).</p>
-<h2 id="2-refreshing-an-empty-pool-tells-you-it-is-empty">2. Refreshing an empty pool tells you it is empty<a class="headerlink" href="#2-refreshing-an-empty-pool-tells-you-it-is-empty" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">$ brama subscription refresh codex --reason &quot;docs walkthrough: exercise the empty-pool refresh path&quot;
-provider: codex
-attempted: 0
-result: failed
-detail: no usable `codex` subscription is in this deployment's pool, so no
-credential source is configured to refresh: one has to be signed in and
-stored in the vault before this command has anything to act on
-$ echo $?
-1
-</code></pre>
-<p>Exit status is non-zero unless a credential was obtained — the caller
-running this is trying to repair an empty pool and needs to know from the
-status whether it is still empty. The same verdict for a provider with no
-OAuth refresh path (<code>openai</code>) reads identically: nothing is configured to
-refresh.</p>
-<p>Every refresh attempt is journaled with its reason, verbatim
-(<code>$BRAMA_STATE_DIR/journal.jsonl</code>):</p>
-<pre><code class="language-json">{&quot;at&quot;:&quot;2026-08-24T22:04:06.461181+00:00&quot;,&quot;attempted&quot;:0,
- &quot;detail&quot;:&quot;no usable `codex` subscription is in this deployment's pool, so no credential source is configured to refresh: one has to be signed in and stored in the vault before this command has anything to act on&quot;,
- &quot;kind&quot;:&quot;subscription_refresh&quot;,&quot;provider&quot;:&quot;codex&quot;,
- &quot;reason&quot;:&quot;docs walkthrough: exercise the empty-pool refresh path&quot;,&quot;result&quot;:&quot;failed&quot;}
-</code></pre>
-<h2 id="3-signed-agent-discovery">3. Signed agent discovery<a class="headerlink" href="#3-signed-agent-discovery" title="Link to this section">&para;</a></h2>
-<p><code>GET /v1/subscriptions/:agent_id</code> requires the bearer <strong>and</strong> the agent's
-HMAC trio, and the signed agent must equal the path agent
-(<a href="/docs/concepts/entitlement">concepts/entitlement</a>). With a request-sign
-identity configured for <code>wisent-app</code> and a correctly signed GET:</p>
-<pre><code class="language-console">$ curl -s -H &quot;Authorization: Bearer docs-test-token&quot; \
-    -H &quot;x-agent-id: wisent-app&quot; -H &quot;x-agent-timestamp: $ts&quot; -H &quot;x-agent-signature: $sig&quot; \
-    http://127.0.0.1:18321/v1/subscriptions/wisent-app
-{&quot;subscriptions&quot;:[]}
-
-$ # same signature, different path agent
-$ curl -s ... http://127.0.0.1:18321/v1/subscriptions/oko
-{&quot;error&quot;:{&quot;attempts&quot;:0,&quot;code&quot;:&quot;forbidden&quot;,&quot;message&quot;:&quot;forbidden&quot;,...}}   # 403
-</code></pre>
-<p>The signature is HMAC-SHA256 over <code>{agent_id}:{timestamp}:{body_sha256_hex}</code>
-with an empty hash string for a bodyless GET;
-<a href="https://github.com/wisent-ai/brama/blob/main/docs/examples/signed-agent-listing.sh">examples/signed-agent-listing.sh</a> computes
-it with <code>openssl</code>.</p>
-<h2 id="4-what-an-empty-pool-refuses-at-request-time">4. What an empty pool refuses at request time<a class="headerlink" href="#4-what-an-empty-pool-refuses-at-request-time" title="Link to this section">&para;</a></h2>
-<p>A selector from a correctly signed agent that owns nothing:</p>
-<pre><code class="language-console">$ # model=&quot;any&quot;, signed as wisent-app
-{&quot;error&quot;:{&quot;attempts&quot;:0,&quot;code&quot;:&quot;subscription_unavailable&quot;,
- &quot;message&quot;:&quot;no active stateless provider models for signed agent&quot;,
- &quot;retryable&quot;:true,&quot;type&quot;:&quot;capacity_error&quot;}}            # HTTP 429
-</code></pre>
-<p>And <code>brama test</code> (which routes through the same subscription dispatch)
-against a provider the agent holds no credential for:</p>
-<pre><code class="language-console">$ brama test --model openai/stub-ok --allow-provider-cost
-Error: no active 'openai' credential for agent
-$ echo $?
-1
-</code></pre>
-<p>The stderr log beside it carries the operator envelope with
-<code>failure_point: brama.dispatch.credential-selection</code>
-(<a href="/docs/concepts/failure-point">concepts/failure-point</a>).</p>
-<h2 id="5-the-admin-view-of-the-same-pool">5. The admin view of the same pool<a class="headerlink" href="#5-the-admin-view-of-the-same-pool" title="Link to this section">&para;</a></h2>
-<p>The <code>/v1/admin/*</code> family answers only the <code>brama-desktop</code> identity
-(<a href="/docs/concepts/client-identity">concepts/client-identity</a>):</p>
-<pre><code class="language-console">$ curl -s -H &quot;Authorization: Bearer $DESKTOP_TOKEN&quot; http://127.0.0.1:18321/v1/admin/subscription-pool
-{&quot;providers&quot;:[]}
-
-$ curl -s -X POST -H &quot;Authorization: Bearer $DESKTOP_TOKEN&quot; \
-    -H 'Content-Type: application/json' \
-    -d '{&quot;provider&quot;:&quot;codex&quot;,&quot;reason&quot;:&quot;docs: exercise refresh with empty pool&quot;}' \
-    http://127.0.0.1:18321/v1/admin/subscription-pool/refresh
-{&quot;attempted&quot;:0,&quot;detail&quot;:&quot;no usable `codex` subscription is in this deployment's pool, ...&quot;,
- &quot;provider&quot;:&quot;codex&quot;,&quot;result&quot;:&quot;failed&quot;}                 # HTTP 200
-
-$ curl -s -H &quot;Authorization: Bearer $DESKTOP_TOKEN&quot; http://127.0.0.1:18321/v1/admin/subscriptions/wisent-app
-{&quot;agentId&quot;:&quot;wisent-app&quot;,&quot;subscriptions&quot;:[]}
-
-$ curl -s -X POST -H &quot;Authorization: Bearer $DESKTOP_TOKEN&quot; -H 'Content-Type: application/json' \
-    -d '{}' http://127.0.0.1:18321/v1/admin/subscriptions/wisent-app/sub-missing/probe
-{&quot;error&quot;:{&quot;attempts&quot;:0,&quot;code&quot;:&quot;subscription_not_found&quot;,&quot;message&quot;:&quot;subscription not found&quot;,...}}  # 404
-</code></pre>
-<p>The HTTP refresh reports the verdict in the body with status 200 — the
-verdict is the answer; only the CLI maps <code>failed</code> to a non-zero exit. The
-probe is the one endpoint in the product that would deliberately spend plan
-quota, which is why a missing target is a clean <code>404</code> and a blocked one is
-refused with <code>409</code> before any provider call (<a href="/docs/http-api">http-api</a>).</p>
-<h2 id="6-where-a-real-repair-goes-from-here">6. Where a real repair goes from here<a class="headerlink" href="#6-where-a-real-repair-goes-from-here" title="Link to this section">&para;</a></h2>
-<p>On a managed deployment the repair for <code>burnt</code>/<code>needs_reauthorization</code> rows
-is a sign-in that replaces the grant (Brama Desktop, or a donation through
-<code>POST /v1/subscriptions/:agent_id</code>), then <code>brama subscription refresh
-&lt;provider&gt; --reason "&lt;why&gt;"</code> to verify the pool answers <code>refreshed</code>. The
-<a href="/docs/runbook">runbook</a> maps each <code>last_redeem_error</code> sentence to its repair.</p></article>
+      <article class="doc"><h1 id="walkthrough-reading-and-repairing-the-subscription-pool">Reading and repairing subscription usage<a class="headerlink" href="#walkthrough-reading-and-repairing-the-subscription-pool" title="Link to this section">&para;</a></h1>
+<p>Use Brama's native commands or Brama Desktop. The commands below describe
+the product workflow; they are not captured execution results.</p>
+<h2 id="read">Read the recorded state</h2>
+<pre><code class="language-console">brama subscriptions list --json</code></pre>
+<p>The response includes <code>ok</code>, <code>observed_at_ms</code>,
+<code>errors</code>, and <code>providers</code>. Each account carries its identity,
+credential state, actual plan windows, observation/reset times, and latest
+<code>usage_check</code>. A live credential alone is not proof of current usage.</p>
+<h2 id="refresh">Refresh free usage reports</h2>
+<pre><code class="language-console">brama subscriptions list --refresh-usage --json</code></pre>
+<p>In Desktop choose <strong>Refresh usage</strong> on Subscriptions or
+Subscription Pool. Both use the same Brama function, which obtains credentials
+from Skarbiec and reads the provider's own report without sending a model
+request. Expired OAuth grants are renewed when possible; sign-in is never
+opened as a side effect.</p>
+<h2 id="failure">Read failures without losing successful accounts</h2>
+<p>An incomplete report has <code>ok: false</code> and the CLI exits 1.
+<code>errors</code> preserves the failed operation, actual cause, account and
+attempt time. HTTP 200 alone does not mean success. A failing account does not
+hide successful accounts, and retained old measurements are visibly stale.
+Skarbiec failure is not an empty inventory; absent or malformed metrics are
+not zero usage. If Brama cannot answer, Desktop reports that connection failure
+itself instead of displaying a healthy empty screen.</p>
+<h2 id="sign-in">Sign in only the account that requires it</h2>
+<pre><code class="language-console">brama subscription sign-in codex --subscription-id &lt;subscription-id&gt; --login-item &lt;login-item&gt; --reason 'replace the provider-refused grant' --json</code></pre>
+<p>The equivalent Desktop action is <strong>Sign in</strong> on the selected
+account. Weles performs the login on the Stado-selected host. Brama checks the
+account mapping and requires a successful refresh of that exact subscription;
+a different working account cannot make the operation succeed.</p>
+<p>After a successful sign-in, refresh usage again. A provider rejection,
+unavailable Weles worker or failed Skarbiec write remains an explicit error,
+not an instruction to infer success from stored metadata.</p>
+<p>See <a href="/docs/cli/subscriptions/list">the CLI report contract</a>,
+<a href="/docs/cli/subscription/sign-in">sign-in refusals</a>, and
+<a href="/docs/http-api#subscription-usage-results">HTTP result semantics</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>
   </div>

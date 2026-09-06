@@ -143,6 +143,7 @@ are on the line; neither stands in for the other.</p>
 <p><code>retryable</code> is stated explicitly, and <code>attempts</code> bounds any replay the caller
 considers: selector and credential replay never exceeds it. Message text is
 diagnostic, not the machine contract.</p>
+<p>Subscription reports also carry <code>ok</code> and <code>errors</code>. These are completed reports, so HTTP 200 can contain <code>ok: false</code> and partial rows. The <code>errors</code> array contains standard Wisent envelopes with <code>failure_point</code>, <code>error_code</code>, <code>detail</code>, and context identifying the account and attempt time. Discovery failures are not empty inventories; expired measurements are not current; missing metrics are not zero. CLI reports exit non-zero and desktop clients show the same errors beside retained stale readings.</p>
 <table>
 <thead>
 <tr>
@@ -343,10 +344,10 @@ otherwise Brama's own kind is translated exactly once:</p>
 </tbody>
 </table>
 <p>Every arm preserves what the client contract already said about retrying:
-retryable kinds map to retryable codes and permanent ones do not. The
-envelope stays in the log — a new key in the HTTP error body would be a wire
-change — and rendering stays local: the HTTP body, the log fields, and the
-usage ledger keep the exact shapes their readers already parse.</p>
+retryable kinds map to retryable codes and permanent ones do not. Ordinary HTTP
+admission errors retain their existing body. Subscription reports expose their
+Wisent envelopes in <code>errors</code> so partial failures are visible without
+reading server logs; the same reasons remain in the usage ledger.</p>
 <h2 id="where-errors-are-not-allowed">Where errors are not allowed<a class="headerlink" href="#where-errors-are-not-allowed" title="Link to this section">&para;</a></h2>
 <p>Logs and error bodies never include bearer values, HMAC signatures,
 capability IDs, raw credentials, request bodies, prompt text, raw provider

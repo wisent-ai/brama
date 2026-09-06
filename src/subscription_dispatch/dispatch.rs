@@ -80,6 +80,18 @@ fn refuse_as(
     ModelResponse::failure(&request.model, message)
 }
 
+fn failure_detail(failure: &Failure) -> String {
+    failure.detail.clone().unwrap_or_else(|| failure.render())
+}
+
+fn remember_failure(slot: &mut Option<Failure>, failure: Failure) {
+    let prior = slot.take();
+    *slot = Some(match prior {
+        Some(prior) => failure.caused_by(prior),
+        None => failure,
+    });
+}
+
 /// Which kind an emptied credential pool is, so the log envelope and the HTTP
 /// answer say the same thing.
 ///
@@ -222,19 +234,28 @@ pub async fn probe_subscription_redemption(
         });
     }
     match broker::subscription_credential(subscription_id, provider).await {
-        Some(credential) => {
+        Ok(credential) => {
             let item = broker::subscription_resource(provider, subscription_id);
             let verdict = match credential.expose_utf8() {
                 Ok(secret) => redeemed_credential_verdict(&item, secret),
-                Err(_) => Err(format!(
-                    "Skarbiec item `{item}` holds bytes that are not valid UTF-8, so no \
-                     credential can be read from them"
+                Err(error) => Err(format!(
+                    "Skarbiec item `{item}` holds bytes that are not valid UTF-8: {error}"
                 )),
             };
             drop(credential);
             verdict
         }
-        None => Err(unredeemable_credential_summary(provider)),
+        Err(refused) => {
+            warn!(
+                event = "subscription_redemption_probe_failed",
+                subscription = subscription_id,
+                provider,
+                envelope = %refused.to_json(),
+                "{}",
+                refused.render()
+            );
+            Err(failure_detail(&refused))
+        }
     }
 }
 
@@ -407,11 +428,20 @@ fn spawn_console_discovery() {
         return;
     }
     tokio::spawn(async move {
-        let entries = broker::list_all_subscriptions()
-            .await
-            .into_iter()
-            .filter(|entry| entry.status == "active" && !crate::journal::is_retired(&entry.id))
-            .collect::<Vec<_>>();
+        let entries = match broker::list_all_subscriptions().await {
+            Ok(entries) => entries
+                .into_iter()
+                .filter(|entry| entry.status == "active" && !crate::journal::is_retired(&entry.id))
+                .collect::<Vec<_>>(),
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    event = "console_subscription_listing_failed",
+                    "subscription models could not be refreshed for the console catalogue"
+                );
+                Vec::new()
+            }
+        };
         if let Err(error) = discover_subscription_models(entries).await {
             tracing::warn!(
                 %error,
@@ -527,16 +557,25 @@ async fn discover_subscription_models(
                 continue;
             }
             let secret = match broker::subscription_credential(&entry.id, provider).await {
-                Some(secret) => secret,
-                None => {
-                    failures.push(format!("{}: credential unavailable", entry.id));
+                Ok(secret) => secret,
+                Err(refused) => {
+                    let detail = failure_detail(&refused);
+                    warn!(
+                        event = "subscription_model_credential_failed",
+                        subscription = %entry.id,
+                        provider,
+                        envelope = %refused.to_json(),
+                        "{}",
+                        refused.render()
+                    );
+                    failures.push(format!("{}: {detail}", entry.id));
                     continue;
                 }
             };
             let secret = match secret.expose_utf8() {
                 Ok(secret) => secret,
-                Err(_) => {
-                    failures.push(format!("{}: credential is not UTF-8", entry.id));
+                Err(error) => {
+                    failures.push(format!("{}: credential is not UTF-8: {error}", entry.id));
                     continue;
                 }
             };
@@ -1252,13 +1291,25 @@ pub async fn probe_subscription_usage(
     request: &ModelRequest,
 ) -> ModelResponse {
     let token = match broker::subscription_credential(subscription_id, provider).await {
-        Some(token) => token,
-        None => return ModelResponse::failure(&request.model, "credential unavailable".into()),
+        Ok(token) => token,
+        Err(refused) => {
+            return refuse(
+                request,
+                POINT_CREDENTIAL_SELECTION,
+                failure_detail(&refused),
+                Some(refused),
+            );
+        }
     };
     let token = match token.expose_utf8() {
         Ok(token) => token,
-        Err(_) => {
-            return ModelResponse::failure(&request.model, "credential is not valid UTF-8".into())
+        Err(error) => {
+            return refuse(
+                request,
+                POINT_CREDENTIAL_SELECTION,
+                format!("credential is not valid UTF-8: {error}"),
+                None,
+            );
         }
     };
     let item = broker::subscription_resource(provider, subscription_id);
@@ -1473,9 +1524,9 @@ async fn attempt_subscription(
     apply_pin(&mut rows, agent_id, provider);
 
     let mut provider_attempts = u32::default();
-    // Why this request was refused usually happened here, one layer down: a
-    // refresh the provider rejected. Keeping it means the refusal can say so.
-    let mut refresh_refusal: Option<Failure> = None;
+    // The newest credential-boundary refusal is the operation that finally
+    // stopped this request, whether redemption, refresh, or credential decode.
+    let mut credential_refusal: Option<Failure> = None;
     // Set when a provider refused a credential outright, as opposed to being out
     // of quota: the two empty the pool for different reasons and the caller has
     // to be told which.
@@ -1513,28 +1564,42 @@ async fn attempt_subscription(
             continue;
         }
         let token = match broker::subscription_credential(credential_id, provider).await {
-            Some(token) => token,
-            None => {
+            Ok(token) => token,
+            Err(refused) => {
                 saw_unredeemable_credential = true;
                 warn!(
                     event = "credential_unavailable",
                     provider,
                     credential_index = index,
-                    "bounded credential is unavailable"
+                    envelope = %refused.to_json(),
+                    "{}",
+                    refused.render()
                 );
+                remember_failure(&mut credential_refusal, refused);
                 continue;
             }
         };
         let token = match token.expose_utf8() {
             Ok(token) => token,
-            Err(_) => {
+            Err(error) => {
                 saw_unredeemable_credential = true;
+                let refused = failure::envelope(
+                    POINT_CREDENTIAL_SELECTION,
+                    failure::code_for("credential_unauthorized"),
+                    IMPACT_MODEL_REQUEST,
+                    format!("subscription credential is not valid UTF-8: {error}"),
+                )
+                .with_context("subscription", credential_id)
+                .with_context("provider", provider);
                 warn!(
                     event = "credential_invalid_encoding",
                     provider,
                     credential_index = index,
-                    "bounded credential has invalid encoding"
+                    envelope = %refused.to_json(),
+                    "{}",
+                    refused.render()
                 );
+                remember_failure(&mut credential_refusal, refused);
                 continue;
             }
         };
@@ -1551,8 +1616,8 @@ async fn attempt_subscription(
         let mut rejected_with_fresh_token = false;
         if !result.success && result.error.as_deref().is_some_and(is_auth_failure) {
             match broker::refresh_subscription_credential(credential_id, provider).await {
-                Ok(fresh) => {
-                    if let Ok(fresh_token) = fresh.expose_utf8() {
+                Ok(fresh) => match fresh.expose_utf8() {
+                    Ok(fresh_token) => {
                         provider_attempts = provider_attempts.saturating_add(u32::from(true));
                         result = provider_registry::dispatch(request, &item, fresh_token).await;
                         result.attempts = provider_attempts;
@@ -1570,11 +1635,19 @@ async fn attempt_subscription(
                         rejected_with_fresh_token =
                             result.error.as_deref().is_some_and(is_auth_failure);
                     }
-                }
-                // The newest refusal is kept rather than the first: it is the
-                // one that stopped this request, and the earlier credentials
-                // logged theirs on the way past.
-                Err(refused) => refresh_refusal = Some(refused),
+                    Err(error) => {
+                        let refused = failure::envelope(
+                            POINT_CREDENTIAL_SELECTION,
+                            failure::code_for("credential_unauthorized"),
+                            IMPACT_MODEL_REQUEST,
+                            format!("refreshed credential is not valid UTF-8: {error}"),
+                        )
+                        .with_context("subscription", credential_id)
+                        .with_context("provider", provider);
+                        remember_failure(&mut credential_refusal, refused);
+                    }
+                },
+                Err(refused) => remember_failure(&mut credential_refusal, refused),
             }
         }
         if result.success {
@@ -1674,12 +1747,21 @@ async fn attempt_subscription(
         reauthorization_block: saw_reauthorization_block,
         unredeemable_credential: saw_unredeemable_credential,
     };
+    let message = credential_refusal
+        .as_ref()
+        .map(|refused| {
+            format!(
+                "'{provider}' subscription credential failed: {}",
+                failure_detail(refused)
+            )
+        })
+        .unwrap_or_else(|| pool_empty_summary(provider, cause));
     let mut failure = refuse_as(
         request,
         POINT_BOUNDED_ROTATION,
         rotation_failure_kind(cause),
-        pool_empty_summary(provider, cause),
-        refresh_refusal,
+        message,
+        credential_refusal,
     );
     failure.attempts = provider_attempts;
     RouteAttempt::pool_empty(failure)
@@ -1853,7 +1935,7 @@ async fn attempt_subscription_stream(
     apply_pin(&mut rows, agent_id, provider);
 
     let mut provider_attempts = u32::default();
-    let mut refresh_refusal: Option<Failure> = None;
+    let mut credential_refusal: Option<Failure> = None;
     let mut saw_auth_rejection = false;
     let mut saw_unredeemable_credential = false;
     // The streaming path empties its pool the same way the buffered one does,
@@ -1879,28 +1961,42 @@ async fn attempt_subscription_stream(
             continue;
         }
         let token = match broker::subscription_credential(credential_id, provider).await {
-            Some(token) => token,
-            None => {
+            Ok(token) => token,
+            Err(refused) => {
                 saw_unredeemable_credential = true;
                 warn!(
                     event = "credential_unavailable",
                     provider,
                     credential_index = index,
-                    "bounded credential is unavailable"
+                    envelope = %refused.to_json(),
+                    "{}",
+                    refused.render()
                 );
+                remember_failure(&mut credential_refusal, refused);
                 continue;
             }
         };
         let token = match token.expose_utf8() {
             Ok(token) => token,
-            Err(_) => {
+            Err(error) => {
                 saw_unredeemable_credential = true;
+                let refused = failure::envelope(
+                    POINT_CREDENTIAL_SELECTION,
+                    failure::code_for("credential_unauthorized"),
+                    IMPACT_MODEL_REQUEST,
+                    format!("subscription credential is not valid UTF-8: {error}"),
+                )
+                .with_context("subscription", credential_id)
+                .with_context("provider", provider);
                 warn!(
                     event = "credential_invalid_encoding",
                     provider,
                     credential_index = index,
-                    "bounded credential has invalid encoding"
+                    envelope = %refused.to_json(),
+                    "{}",
+                    refused.render()
                 );
+                remember_failure(&mut credential_refusal, refused);
                 continue;
             }
         };
@@ -1919,8 +2015,8 @@ async fn attempt_subscription_stream(
             .is_some_and(is_auth_failure)
         {
             match broker::refresh_subscription_credential(credential_id, provider).await {
-                Ok(fresh) => {
-                    if let Ok(fresh_token) = fresh.expose_utf8() {
+                Ok(fresh) => match fresh.expose_utf8() {
+                    Ok(fresh_token) => {
                         provider_attempts = provider_attempts.saturating_add(u32::from(true));
                         result =
                             provider_registry::dispatch_stream(request, &item, fresh_token).await;
@@ -1930,8 +2026,19 @@ async fn attempt_subscription_stream(
                             .and_then(|failure| failure.error.as_deref())
                             .is_some_and(is_auth_failure);
                     }
-                }
-                Err(refused) => refresh_refusal = Some(refused),
+                    Err(error) => {
+                        let refused = failure::envelope(
+                            POINT_CREDENTIAL_SELECTION,
+                            failure::code_for("credential_unauthorized"),
+                            IMPACT_MODEL_REQUEST,
+                            format!("refreshed credential is not valid UTF-8: {error}"),
+                        )
+                        .with_context("subscription", credential_id)
+                        .with_context("provider", provider);
+                        remember_failure(&mut credential_refusal, refused);
+                    }
+                },
+                Err(refused) => remember_failure(&mut credential_refusal, refused),
             }
         }
         let failure = match result {
@@ -2043,12 +2150,21 @@ async fn attempt_subscription_stream(
         reauthorization_block: saw_reauthorization_block,
         unredeemable_credential: saw_unredeemable_credential,
     };
+    let message = credential_refusal
+        .as_ref()
+        .map(|refused| {
+            format!(
+                "'{provider}' subscription credential failed: {}",
+                failure_detail(refused)
+            )
+        })
+        .unwrap_or_else(|| pool_empty_summary(provider, cause));
     let mut failure = refuse_as(
         request,
         POINT_BOUNDED_ROTATION,
         rotation_failure_kind(cause),
-        pool_empty_summary(provider, cause),
-        refresh_refusal,
+        message,
+        credential_refusal,
     );
     failure.attempts = provider_attempts;
     RouteAttempt::pool_empty(failure)
