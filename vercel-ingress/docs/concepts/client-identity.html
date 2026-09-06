@@ -198,16 +198,19 @@ context. The raw bearer is never logged (<code>src/core/server.rs</code>).</p>
   from the verified user, never from the organization or a caller-supplied
   identifier.</li>
 </ul>
-<p>In managed deployments, startup additionally requires two exact allowlists as
-internal consistency checks when the table is present: <code>wisent-backend</code> must
-hold exactly <code>wisent-backend/chat</code>, <code>wisent-backend/evaluation</code>,
-<code>wisent-backend/embeddings</code>, and <code>wisent-backend/moderation</code>.
-The <code>weles</code> identity holds exactly <code>best</code> and <code>weles</code>.
+<p>In managed deployments, startup additionally checks two allowlists for
+internal consistency when the table is present: <code>wisent-backend</code> must
+hold <code>wisent-backend/chat</code>, <code>wisent-backend/evaluation</code>,
+<code>wisent-backend/embeddings</code>, and <code>wisent-backend/moderation</code>;
+the <code>weles</code> identity must hold <code>best</code> and <code>weles</code>.
+Either grant may hold more: an alias this build does not compile in is the
+operator's to add, and a release that refused it could not be restarted under
+the policy written for its successor.
 The launcher derives the backend identity from these required aliases, not
 from optional deployment aliases that share the <code>wisent-backend/</code> prefix.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
-<p>A startup refusal reports the expected and observed alias lists after
-<code>must give CLIENT its exact required alias set</code>. <code>observed=None</code>
+<p>A startup refusal reports the required and observed alias lists after
+<code>must give CLIENT every required alias</code>. <code>observed=None</code>
 means that the client or its allowlist is absent; no bearer value is printed.</p>
 <p>Observed against a running gateway (0.2.38):</p>
 <pre><code class="language-text">$ curl -s http://127.0.0.1:8080/v1/models        # no bearer

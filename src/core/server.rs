@@ -307,11 +307,15 @@ impl ModelIngressAuth {
         Ok(Self { credentials })
     }
 
-    fn requires_exact_aliases(
-        &self,
-        client_id: &str,
-        aliases: &[&str],
-    ) -> Result<(), std::io::Error> {
+    /// Every alias this build compiles in for `client_id` must be in the
+    /// client's allowed set. The set may hold more: the launcher's policy is
+    /// where an operator adds an alias, and a client that is allowed one name
+    /// this build does not know is not misconfigured, it is ahead. Requiring
+    /// equality here made every alias rename a flag day: the policy that let
+    /// the new release start refused the release still running, and on
+    /// 2026-09-05 0.2.75 died on this line while 0.2.72 could no longer be
+    /// restarted under the same file, leaving nothing on port 18080.
+    fn requires_aliases(&self, client_id: &str, aliases: &[&str]) -> Result<(), std::io::Error> {
         // This checks a table for internal consistency. With no table there is
         // nothing inconsistent: those clients are resolved against Skarbiec,
         // where their alias set is a capability rather than a line in an
@@ -319,14 +323,13 @@ impl ModelIngressAuth {
         if self.credentials.is_empty() {
             return Ok(());
         }
-        let expected = aliases
-            .iter()
-            .copied()
-            .map(str::to_string)
-            .collect::<HashSet<_>>();
         let valid = self.credentials.iter().any(|credential| {
             credential.identity.client_id == client_id
-                && credential.identity.allowed_models.as_ref() == Some(&expected)
+                && credential
+                    .identity
+                    .allowed_models
+                    .as_ref()
+                    .is_some_and(|models| aliases.iter().all(|alias| models.contains(*alias)))
         });
         if valid {
             Ok(())
@@ -345,7 +348,7 @@ impl ModelIngressAuth {
             Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 format!(
-                    "{MODEL_ROUTER_CLIENT_IDENTITIES_ENV} must give `{client_id}` its exact required alias set; expected={required:?}; observed={observed:?}"
+                    "{MODEL_ROUTER_CLIENT_IDENTITIES_ENV} must give `{client_id}` every required alias; required={required:?}; observed={observed:?}"
                 ),
             ))
         }
@@ -4451,14 +4454,14 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
     let _ = STARTED_AT.elapsed();
     let ingress_auth = ModelIngressAuth::from_env()?;
     if !standalone {
-        ingress_auth.requires_exact_aliases("wisent-backend", WISENT_MODEL_ALIASES)?;
+        ingress_auth.requires_aliases("wisent-backend", WISENT_MODEL_ALIASES)?;
         // Weles keeps `best` for subscription-funded fallback and its own alias,
         // `weles`, for the model the operator selected for browser tasks. The
         // alias is not a wildcard or a provider credential: it still resolves
         // through Brama's validated route table, so the declared primary can use
         // local inference and fall back to `best` without changing the caller or
         // bypassing Brama.
-        ingress_auth.requires_exact_aliases("weles", &[BEST_ALIAS, WELES_ALIAS])?;
+        ingress_auth.requires_aliases("weles", &[BEST_ALIAS, WELES_ALIAS])?;
     }
     let aliases = ModelAliases::from_env(!standalone)?;
     // Touch the perf registry so persisted stats load at startup, not on first use.
