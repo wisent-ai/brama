@@ -236,9 +236,7 @@ pub fn import_routes(
                 .map(Value::String)
                 .collect(),
         );
-        if current_primary != expected_primary.as_ref()
-            || current_fallbacks != expected_fallbacks
-        {
+        if current_primary != expected_primary.as_ref() || current_fallbacks != expected_fallbacks {
             results.push(RouteImportResult {
                 alias: route.alias.clone(),
                 disposition: RouteImportDisposition::Conflicting,
@@ -307,14 +305,7 @@ pub fn import_routes(
             } else {
                 fallback_map.insert(
                     route.alias.clone(),
-                    Value::Array(
-                        route
-                            .fallbacks
-                            .iter()
-                            .cloned()
-                            .map(Value::String)
-                            .collect(),
-                    ),
+                    Value::Array(route.fallbacks.iter().cloned().map(Value::String).collect()),
                 );
             }
             results.push(RouteImportResult {

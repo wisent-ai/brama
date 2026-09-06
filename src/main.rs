@@ -253,10 +253,12 @@ async fn main() {
                     from,
                     adopt_into.as_deref(),
                     &agent_id,
-                    adopt_apply,
-                    &adopt_selected_aliases,
-                    adopt_all_importable,
-                    adopt_replace_conflicts,
+                    AdoptionSelection {
+                        apply: adopt_apply,
+                        selected_aliases: &adopt_selected_aliases,
+                        all_importable: adopt_all_importable,
+                        replace_conflicts: adopt_replace_conflicts,
+                    },
                     false,
                 )
                 .await
@@ -283,13 +285,8 @@ async fn main() {
                 std::process::exit(1);
             }
 
-            match brama::onboarding::run_first_use(
-                model,
-                agent_id,
-                allow_provider_cost,
-                reset,
-            )
-            .await
+            match brama::onboarding::run_first_use(model, agent_id, allow_provider_cost, reset)
+                .await
             {
                 Ok(false) if allow_provider_cost => {
                     std::process::exit(1);
@@ -315,10 +312,12 @@ async fn main() {
                 &from,
                 into.as_deref(),
                 &agent_id,
-                apply,
-                &selected_aliases,
-                all_importable,
-                replace_conflicts,
+                AdoptionSelection {
+                    apply,
+                    selected_aliases: &selected_aliases,
+                    all_importable,
+                    replace_conflicts,
+                },
                 json,
             )
             .await
@@ -546,16 +545,28 @@ async fn main() {
     }
 }
 
+/// What the operator selected for adoption: the switch that persists anything,
+/// and the three ways of naming which aliases.
+struct AdoptionSelection<'a> {
+    apply: bool,
+    selected_aliases: &'a [String],
+    all_importable: bool,
+    replace_conflicts: bool,
+}
+
 async fn run_adoption(
     from: &Path,
     into: Option<&Path>,
     agent_id: &str,
-    apply: bool,
-    selected_aliases: &[String],
-    all_importable: bool,
-    replace_conflicts: bool,
+    selection: AdoptionSelection<'_>,
     json: bool,
 ) -> Result<bool, String> {
+    let AdoptionSelection {
+        apply,
+        selected_aliases,
+        all_importable,
+        replace_conflicts,
+    } = selection;
     if !apply && (all_importable || replace_conflicts || !selected_aliases.is_empty()) {
         return Err(
             "--apply is required with --select, --all-importable, or --replace-conflicts"
@@ -576,13 +587,9 @@ async fn run_adoption(
         None => brama::config_adoption::default_destination()?,
     };
     let source_name = from.display().to_string();
-    let preview = brama::config_adoption::preview_document(
-        &document,
-        &source_name,
-        &destination,
-        agent_id,
-    )
-    .await?;
+    let preview =
+        brama::config_adoption::preview_document(&document, &source_name, &destination, agent_id)
+            .await?;
     if !apply {
         if json {
             println!(
@@ -701,9 +708,7 @@ fn print_adoption_preview(preview: &brama::config_adoption::AdoptionPreview) {
         }
     }
     for deployment in &preview.unreferenced_deployments {
-        println!(
-            "  rejected    deployment {deployment}: no source alias references it"
-        );
+        println!("  rejected    deployment {deployment}: no source alias references it");
     }
 }
 
@@ -723,9 +728,7 @@ fn print_adoption_result(result: &brama::config_adoption::AdoptionResult) {
     }
 }
 
-fn adoption_disposition(
-    disposition: brama::config_adoption::AdoptionDisposition,
-) -> &'static str {
+fn adoption_disposition(disposition: brama::config_adoption::AdoptionDisposition) -> &'static str {
     use brama::config_adoption::AdoptionDisposition;
     match disposition {
         AdoptionDisposition::Importable => "importable",
