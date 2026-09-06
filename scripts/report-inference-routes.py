@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Report where the gateway's own model routes point.
 
-`wisent-backend/chat` is not a provider model: it is a route in this
+`wisent-backend` is not a provider model: it is a route in this
 host's inference routes file, and when the endpoint behind it stops answering
 the caller sees only "provider request failed". That message is the same one a
 missing credential produces, so this report shows both the ordered route table

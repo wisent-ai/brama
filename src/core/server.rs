@@ -55,12 +55,21 @@ fn request_deadline() -> Duration {
 
 const MODEL_ROUTER_CLIENT_IDENTITIES_ENV: &str = "BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES";
 const MODEL_ALIASES_ENV: &str = "BRAMA_MODEL_ALIASES";
-/// The Wisent App's chat alias. It carries the consumer and the capability and
-/// nothing else: `wisent-backend/chat/primary` and `wisent-backend/chat/fallback`
-/// encoded a rank in the name, and a rank is what the route table's `fallbacks`
-/// column is for. One alias, one primary route, an ordered fallback chain.
-const WISENT_CHAT_ALIAS: &str = "wisent-backend/chat";
+/// The Wisent App backend's alias. It is the client's name and nothing else.
+///
+/// `wisent-backend/chat/primary` and `/fallback` spelled a rank into the name,
+/// which is what the route table's `fallbacks` column is for; `wisent-backend/chat`
+/// then still spelled the shape, which is what the endpoint the caller posts to
+/// already says. `POST /v1/chat/completions` is the chat shape, so the name
+/// carries only who is asking.
+const WISENT_BACKEND_ALIAS: &str = "wisent-backend";
 const WISENT_EVALUATION_ALIAS: &str = "wisent-backend/evaluation";
+/// The two aliases whose name still carries a purpose, and the only reason it
+/// does: `POST /v1/embeddings` and `POST /v1/moderations` accept exactly this
+/// one model name each, so the endpoint already names the shape — but the route
+/// table is keyed by alias name alone and these two need a destination of their
+/// own, different from chat's. Until a route can be declared per shape, the
+/// suffix is where that destination hangs.
 const WISENT_EMBEDDING_ALIAS: &str = "wisent-backend/embeddings";
 const WISENT_MODERATION_ALIAS: &str = "wisent-backend/moderation";
 /// The Weles workload's own alias. It is spelled as the client's name and
@@ -71,13 +80,13 @@ const WISENT_MODERATION_ALIAS: &str = "wisent-backend/moderation";
 const WELES_ALIAS: &str = "weles";
 pub const BEST_ALIAS: &str = "best";
 const WISENT_MODEL_ALIASES: &[&str] = &[
-    WISENT_CHAT_ALIAS,
+    WISENT_BACKEND_ALIAS,
     WISENT_EVALUATION_ALIAS,
     WISENT_EMBEDDING_ALIAS,
     WISENT_MODERATION_ALIAS,
 ];
 const MODEL_ALIASES: &[&str] = &[
-    WISENT_CHAT_ALIAS,
+    WISENT_BACKEND_ALIAS,
     WISENT_EVALUATION_ALIAS,
     WISENT_EMBEDDING_ALIAS,
     WISENT_MODERATION_ALIAS,
