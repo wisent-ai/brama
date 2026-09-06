@@ -130,15 +130,16 @@ discovery, states, the ledger, and the credential lifecycle.</p>
 <h2 id="shape-and-discovery">Shape and discovery<a class="headerlink" href="#shape-and-discovery" title="Link to this section">&para;</a></h2>
 <p>A subscription is a vault item tagged <code>brama:subscription</code> and
 <code>brama:agent:&lt;agent&gt;</code>, carrying its provider in <code>brama:provider:&lt;provider&gt;</code>
-and its subscription id in <code>brama:id:&lt;id&gt;</code>. Both the gateway and Brama
-Desktop filter on those tags, so vault item ids stay opaque and renaming one
-changes nothing. Its credential lives at the coordinate
+and its subscription id in <code>brama:id:&lt;id&gt;</code>. Brama discovers those
+tags and Desktop consumes the returned accounts and errors; it does not keep a
+second list. Vault item ids stay opaque. The credential coordinate is
 <code>provider:&lt;provider&gt;:&lt;subscription&gt;</code> (<code>src/gateway/broker.rs</code>).</p>
 <p>Discovery shells the local entitlements router's <code>list</code> (binary from
 <code>ENTITLEMENTS_ROUTER_BIN</code>, default <code>entitlements-router</code>); successful
-listings are cached per agent for 60 seconds, a failed shell never poisons
-the cache, and a failed live lookup may fall back only to the trusted
-startup catalog (<code>BRAMA_SUBSCRIPTION_CATALOG</code>).</p>
+listings are cached per agent for 60 seconds. User-facing discovery preserves
+process errors, exit status and stderr, malformed output and timeouts.
+A trusted startup catalog may support routing, but never hides a failed live
+lookup in the operator's report.</p>
 <p>An item that loses its <code>brama:agent:</code> tag keeps a working credential and
 stops existing for every listing — the one failure the deployment had no way
 to see, which is why <code>/readyz</code> reports such accounts explicitly as
@@ -183,27 +184,41 @@ deliberately not reported.</p>
 <code>~/.config/brama/subscription-usage.json</code>, owner-readable, written
 atomically) holds per-subscription state: measured counters, the newest plan
 reading per window with its instant and source, any rate-limit block, the
-credential state, and the newest probe verdict. It is not a cache — the
-question it answers spans months. A ledger from an older gateway still
-loads, and one that will not parse yields an empty ledger rather than
-stopping the gateway.</p>
+credential state, completion checks and the independent newest free-usage
+attempt. It is not a cache. Older ledgers remain readable; malformed or
+unreadable history is reported with its path and actual reason rather than
+silently replaced with an empty file. Failed writes remain visible together
+with last-good in-memory readings.</p>
 <p>Plan windows come from each provider's own free usage report
-(<a href="/docs/concepts/provider">provider</a> lists the three endpoints); every other provider
-publishes nothing, and that absence is recorded as the provider's own
-answer. Each subscription's report is read at most once per
+(<a href="/docs/concepts/provider">provider</a> lists the three supported endpoints).
+Other providers are reported as unsupported by this free-report path with the
+current credential, not as successfully queried billing APIs. Observed traffic
+counters remain available. Background reads obey
 <code>BRAMA_PLAN_USAGE_TTL_SECS</code> (default 300), jittered ±25% derived from the
 subscription id so accounts stay decorrelated across restarts, and
 single-flighted per subscription; the sweep runs every
 <code>BRAMA_PLAN_USAGE_SWEEP_SECS</code> (default 60, <code>0</code> disables). A failed read
 never blanks a row: the last good reading is served with <code>stale: true</code> and
 dropped only past <code>BRAMA_PLAN_USAGE_RETENTION_SECS</code> (default 86400).</p>
+<p><code>brama subscriptions list --refresh-usage</code> and Brama Desktop's
+<strong>Refresh usage</strong> explicitly request new reports through that same
+bounded operation. Neither starts a sign-in nor sends a model request.
+Concurrent attempts for one subscription cannot silently skip their result.
+A failed attempt, an elapsed reset or an aged retained window marks the
+reading stale immediately; one fresh window does not make older windows current.</p>
 <p>In listings, <code>usage_source</code> names which statement the newest window is —
 <code>provider</code> (the provider's report, no quota), <code>traffic</code> (response headers),
-or <code>probe</code> (the operator's on-demand check) — and an empty <code>limits</code> array is
-one of four states told apart by the newest check: a refused credential, a
-subscription nothing has used, a provider that genuinely publishes no plan
-state, or windows that aged out. Only the third may be rendered as "no plan
-window"; none of them is a zero.</p>
+or <code>probe</code> (the operator's on-demand check). <code>usage_check</code>
+holds the latest free-report attempt's time, success and detail independently
+of completion checks. An empty <code>limits</code> array can mean an unread
+account, a failed read, expired history or an unsupported report; none means
+zero usage. Missing or malformed metrics from a publishing provider are
+errors, not unsupported reports.</p>
+<p>Every list and refresh includes <code>ok</code>, <code>observed_at_ms</code>
+and <code>errors</code>. A partial report retains successful accounts and
+returns <code>ok: false</code>, including on HTTP 200. CLI exits non-zero;
+Desktop shows each failed operation beside retained stale data. If Brama
+itself cannot answer, the client reports the connection or decoding failure.</p>
 <h2 id="blocks">Blocks<a class="headerlink" href="#blocks" title="Link to this section">&para;</a></h2>
 <p>A rate-limited provider answer records a block: 15 minutes by default,
 capped at 7 days when the provider states a longer reset, and 30 minutes for
@@ -225,15 +240,21 @@ produced — a body containing <code>invalid_grant</code>, <code>invalid_token</
 else is <strong>transient</strong>, left for the next sweep. A definitive refusal is
 recorded as <code>credential.state: needs_reauthorization</code> with the provider's
 own sentence as <code>cause</code>, and the credential is left alone until a sign-in
-replaces it — on the host Weles runs on, <code>brama subscription sign-in
-&lt;provider&gt; --reason &quot;&lt;why&gt;&quot;</code> performs that sign-in and proves it by the
-refresh that follows
-(<a href="/docs/cli#brama-subscription-sign-in-provider-reason-text-json">cli</a>).
+replaces it. <code>brama subscription sign-in &lt;provider&gt;
+--subscription-id &lt;id&gt; --login-item &lt;login-item&gt; --reason "&lt;why&gt;"</code>
+selects the exact account. Brama Desktop exposes the same explicit
+<strong>Sign in</strong> action. Weles performs the login on its Stado-selected
+host, and Brama requires a successful refresh of that subscription afterwards
+(<a href="/docs/cli/subscription/sign-in">CLI contract</a>).
 A refreshed grant that cannot be written back to the vault is a
 failed refresh — the rotated grant is dropped, because the provider already
 invalidated the one still stored. A provider rejecting a grant whose local
 expiry still claims validity triggers one forced refresh on the request
 path.</p>
+<p>OAuth token renewal does not open a browser. Browser sign-in is an explicit
+CLI or Desktop action by default. The existing automatic Weles renewal runs
+only when the deployment sets <code>BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN=1</code>;
+usage reporting itself never schedules a sign-in.</p>
 <h2 id="donation-and-retirement">Donation and retirement<a class="headerlink" href="#donation-and-retirement" title="Link to this section">&para;</a></h2>
 <p><code>POST /v1/subscriptions/:agent_id</code> (and the account/admin variants) banks a
 credential onto the coordinate the operator's routes table already names for

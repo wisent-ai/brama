@@ -16,8 +16,7 @@ use zeroize::{Zeroize, Zeroizing};
 
 use crate::capability::{CapabilityClient, CapabilityRef, Secret};
 use crate::core::failure::{
-    self, IMPACT_CREDENTIAL_PERSIST, IMPACT_CREDENTIAL_REFRESH, POINT_CREDENTIAL_PERSIST,
-    POINT_CREDENTIAL_REDEEM,
+    self, IMPACT_CREDENTIAL_PERSIST, POINT_CREDENTIAL_PERSIST, POINT_CREDENTIAL_REDEEM,
 };
 use wisent_errors::{Code, Failure};
 
@@ -37,6 +36,7 @@ const CENTRAL_REQUEST_SIGN_AGENTS: &[&str] = &[
 const PROVIDER_CAPABILITIES_ENV: &str = "BRAMA_PROVIDER_CAPABILITY_IDS";
 const SUBSCRIPTION_CATALOG_ENV: &str = "BRAMA_SUBSCRIPTION_CATALOG";
 const DONATED_SUBSCRIPTIONS_FILE_ENV: &str = "BRAMA_DONATED_SUBSCRIPTIONS_FILE";
+const ENTITLEMENTS_ROUTER_TIMEOUT: Duration = Duration::from_secs(15);
 
 type LocalCredential = Zeroizing<Vec<u8>>;
 type LocalCredentialMap = HashMap<String, LocalCredential>;
@@ -284,20 +284,42 @@ pub async fn get_agent_auth_secret(agent_id: &str) -> Option<Secret> {
     // returned None in silence, and the caller sees only "no auth secret for
     // agent" -- a sentence that fits a missing item, a refused issue and a
     // denied redemption equally well.
-    let Some(fresh) = issue_capability(REQUEST_SIGN_PURPOSE, &resource).await else {
-        warn!(
-            event = "request_sign_issue_failed",
-            agent_id, %resource,
-            "the authority would not issue a request-sign capability; trying the read grant"
-        );
-        return credential_by_grant(&resource).await;
+    let fresh = match issue_capability(REQUEST_SIGN_PURPOSE, &resource).await {
+        Ok(fresh) => fresh,
+        Err(refused) => {
+            warn!(
+                event = "request_sign_issue_failed",
+                agent_id,
+                %resource,
+                envelope = %refused.to_json(),
+                "the authority would not issue a request-sign capability; trying the read grant"
+            );
+            return match credential_by_grant(&resource).await {
+                Ok(secret) => Some(secret),
+                Err(grant_refusal) => {
+                    let refusal = grant_refusal.caused_by(refused);
+                    warn!(
+                        event = "request_sign_credential_unavailable",
+                        agent_id,
+                        envelope = %refusal.to_json(),
+                        "{}",
+                        refusal.render()
+                    );
+                    None
+                }
+            };
+        }
     };
-    let Ok(binding) = CapabilityRef::request_sign(&fresh, &resource) else {
-        warn!(
-            event = "request_sign_binding_invalid",
-            agent_id, %resource, "the issued capability does not bind to this resource"
-        );
-        return None;
+    let binding = match CapabilityRef::request_sign(&fresh, &resource) {
+        Ok(binding) => binding,
+        Err(error) => {
+            warn!(
+                event = "request_sign_binding_invalid",
+                agent_id, %resource, %error,
+                "the issued capability does not bind to this resource"
+            );
+            return None;
+        }
     };
     match client()?.redeem(&binding) {
         Ok(secret) => Some(secret),
@@ -308,13 +330,19 @@ pub async fn get_agent_auth_secret(agent_id: &str) -> Option<Secret> {
                 "the authority issued a request-sign capability and refused to redeem it; \
                  trying the read grant"
             );
-            // The provider path already falls back this way when a capability
-            // cannot be redeemed -- a workload proof that no longer matches the
-            // key the vault registered takes down every redemption, and there
-            // is no reason the signing secret should be the one credential with
-            // no way through. The grant is the authority's own, narrower than a
-            // capability, and the route is the same coordinate either way.
-            credential_by_grant(&resource).await
+            match credential_by_grant(&resource).await {
+                Ok(secret) => Some(secret),
+                Err(refusal) => {
+                    warn!(
+                        event = "request_sign_credential_unavailable",
+                        agent_id,
+                        envelope = %refusal.to_json(),
+                        "{}",
+                        refusal.render()
+                    );
+                    None
+                }
+            }
         }
     }
 }
@@ -410,19 +438,30 @@ pub fn provider_capability_configured(provider: &str) -> bool {
         }
     }
     let resource = provider_resource(provider);
-    if capability_route(&resource).is_some() {
+    if capability_route(&resource).is_ok() {
         return true;
+    }
+    if let Some(capability_id) = configured_capability(PROVIDER_CAPABILITIES_ENV, provider) {
+        if client().is_some() && CapabilityRef::provider(&capability_id, &resource).is_ok() {
+            return true;
+        }
     }
     if client().is_none() {
         return false;
     }
-    if let Some(capability_id) = configured_capability(PROVIDER_CAPABILITIES_ENV, provider) {
-        if CapabilityRef::provider(&capability_id, &resource).is_ok() {
-            return true;
+    match issue_capability_blocking(PROVIDER_PURPOSE, &resource) {
+        Ok(capability_id) => CapabilityRef::provider(&capability_id, &resource).is_ok(),
+        Err(refused) => {
+            warn!(
+                event = "provider_capability_check_failed",
+                provider,
+                envelope = %refused.to_json(),
+                "{}",
+                refused.render()
+            );
+            false
         }
     }
-    issue_capability_blocking(PROVIDER_PURPOSE, &resource)
-        .is_some_and(|capability_id| CapabilityRef::provider(&capability_id, &resource).is_ok())
 }
 
 /// Redeem a direct provider API credential immediately before the HTTP call.
@@ -437,181 +476,132 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
         return Some(Secret::from_bytes(Vec::new()));
     }
     if local_provider_credentials_enabled() {
-        // Standalone mode is a separate credential authority. Falling through
-        // to a managed capability after a local key is removed makes the
-        // deletion appear successful while requests keep spending the fleet's
-        // account.
         return local_provider_credential(provider);
     }
     let resource = provider_resource(provider);
-    // Every step below can fail, and this used to return None for all of them,
-    // so a caller saw one sentence -- "credential is unavailable" -- covering a
-    // broker that was never configured, a capability that had expired, a route
-    // the authority does not have, and a workload the broker will not accept.
-    // Telling them apart from the outside was not possible, and guessing wrong
-    // cost a day.
-    let Some(broker) = client() else {
-        warn!(
-            event = "provider_credential_no_broker",
-            provider,
-            "no capability broker client: SKARBIEC_CAP_SOCKET, SKARBIEC_WORKLOAD_ID or the \
-             workload signing key is missing or unreadable; trying the read grant"
-        );
-        return credential_by_grant(&resource).await;
-    };
+    let mut prior = None;
     if let Some(capability_id) = configured_capability(PROVIDER_CAPABILITIES_ENV, provider) {
-        match CapabilityRef::provider(&capability_id, &resource) {
-            Ok(binding) => match broker.redeem(&binding) {
-                Ok(secret) => return Some(secret),
-                Err(error) => warn!(
-                    event = "provider_credential_redeem_failed",
-                    provider,
-                    %resource,
-                    %error,
-                    "the optional capability seed did not redeem; asking for a fresh one"
-                ),
-            },
-            Err(error) => warn!(
-                event = "provider_credential_binding_invalid",
-                provider, %resource, %error, "the configured capability id is not usable"
-            ),
+        match redeem_provider_resource(&capability_id, &resource) {
+            Ok(secret) => return Some(secret),
+            Err(refused) => prior = Some(refused),
         }
     }
-    let Some(fresh) = issue_capability(PROVIDER_PURPOSE, &resource).await else {
-        warn!(
-            event = "provider_credential_issue_failed",
-            provider, %resource,
-            "the authority would not issue a capability for this resource; trying the read grant"
-        );
-        return credential_by_grant(&resource).await;
-    };
-    let binding = CapabilityRef::provider(&fresh, &resource).ok()?;
-    match broker.redeem(&binding) {
-        Ok(secret) => Some(secret),
-        Err(error) => {
-            warn!(
-                event = "provider_credential_fresh_redeem_failed",
-                provider, %resource, %error,
-                "a freshly issued capability did not redeem either; trying the read grant"
-            );
-            credential_by_grant(&resource).await
-        }
+    match issue_capability(PROVIDER_PURPOSE, &resource).await {
+        Ok(fresh) => match redeem_provider_resource(&fresh, &resource) {
+            Ok(secret) => return Some(secret),
+            Err(refused) => prior = Some(append_failure_cause(refused, prior)),
+        },
+        Err(refused) => prior = Some(append_failure_cause(refused, prior)),
     }
-}
-
-/// Redeem one provider-purpose capability for a resource.
-///
-/// Kept as a function rather than a chain so the capability id outlives the
-/// binding that borrows it; inlining it is what the borrow checker refuses.
-///
-/// The refusal is logged rather than swallowed. The direct-provider path above
-/// already says why a redemption failed, and the subscription path returning a
-/// bare `None` is what made "credential unavailable" cover a missing route, an
-/// expired capability and a workload the vault will not accept -- three repairs
-/// behind one sentence.
-fn redeem_provider_resource(capability_id: &str, resource: &str) -> Option<Secret> {
-    let binding = match CapabilityRef::provider(capability_id, resource) {
-        Ok(binding) => binding,
-        Err(error) => {
-            warn!(
-                event = "subscription_capability_binding_invalid",
-                %resource, %error, "the capability id does not bind to this resource"
-            );
-            return None;
-        }
-    };
-    let broker = match client() {
-        Some(broker) => broker,
-        None => {
-            warn!(
-                event = "subscription_capability_no_broker",
-                %resource,
-                "no capability broker client: SKARBIEC_CAP_SOCKET, SKARBIEC_WORKLOAD_ID or the \
-                 workload signing key is missing or unreadable"
-            );
-            return None;
-        }
-    };
-    match broker.redeem(&binding) {
+    match credential_by_grant(&resource).await {
         Ok(secret) => Some(secret),
-        Err(error) => {
+        Err(refused) => {
+            let refused = append_failure_cause(refused, prior).with_context("provider", provider);
             warn!(
-                event = "subscription_capability_redeem_refused",
-                %resource, %error, "the authority refused to redeem this capability"
+                event = "provider_credential_unavailable",
+                provider,
+                envelope = %refused.to_json(),
+                "{}",
+                refused.render()
             );
             None
         }
     }
 }
 
-async fn redeem_subscription_credential(subscription_id: &str, provider: &str) -> Option<Secret> {
+fn credential_failure(detail: impl Into<String>, resource: &str, code: Code) -> Failure {
+    failure::envelope(
+        POINT_CREDENTIAL_REDEEM,
+        code,
+        "one credential lookup",
+        detail,
+    )
+    .with_context("resource", resource)
+}
+
+fn append_failure_cause(failure: Failure, cause: Option<Failure>) -> Failure {
+    match cause {
+        Some(cause) => failure.caused_by(cause),
+        None => failure,
+    }
+}
+
+fn redeem_provider_resource(capability_id: &str, resource: &str) -> Result<Secret, Failure> {
+    let binding = CapabilityRef::provider(capability_id, resource).map_err(|error| {
+        credential_failure(
+            format!("capability does not bind to `{resource}`: {error}"),
+            resource,
+            Code::Config,
+        )
+    })?;
+    let broker = client().ok_or_else(|| {
+        credential_failure(
+            "no capability broker client: SKARBIEC_CAP_SOCKET, SKARBIEC_WORKLOAD_ID, or the workload signing key is missing or unreadable",
+            resource,
+            Code::Config,
+        )
+    })?;
+    broker.redeem(&binding).map_err(|error| {
+        credential_failure(
+            format!("authority refused capability redemption: {error}"),
+            resource,
+            failure::code_for("credential_unauthorized"),
+        )
+    })
+}
+
+async fn redeem_subscription_credential(
+    subscription_id: &str,
+    provider: &str,
+) -> Result<Secret, Failure> {
     let resource = subscription_resource(provider, subscription_id);
-    if let Some(credential) = LOCAL_SUBSCRIPTION_CREDENTIALS
-        .read()
-        .ok()
-        .and_then(|credentials| {
-            credentials
-                .get(&resource)
-                .map(|value| value.as_slice().to_vec())
-        })
-    {
-        return Some(Secret::from_bytes(credential));
-    }
-    // A capability is single-use and short-lived by contract. An optional
-    // standalone seed may already be spent; managed launches omit it and issue
-    // immediately before use. Fall back to the authority's own grant if fresh
-    // issuance or redemption is refused.
-    let seeded = configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id);
-    match seeded
-        .as_deref()
-        .and_then(|capability_id| redeem_provider_resource(capability_id, &resource))
-    {
-        Some(credential) => Some(credential),
-        None => match issue_capability(PROVIDER_PURPOSE, &resource).await {
-            Some(fresh) => match redeem_provider_resource(&fresh, &resource) {
-                Some(credential) => Some(credential),
-                None => {
-                    warn!(
-                        event = "subscription_credential_redeem_failed",
-                        provider, %resource,
-                        "a freshly issued capability did not redeem; trying the read grant"
-                    );
-                    credential_by_grant(&resource).await
-                }
-            },
-            None => {
-                warn!(
-                    event = "subscription_credential_issue_failed",
-                    provider, %resource,
-                    "the authority would not issue a capability; trying the read grant"
-                );
-                credential_by_grant(&resource).await
+    match LOCAL_SUBSCRIPTION_CREDENTIALS.read() {
+        Ok(credentials) => {
+            if let Some(credential) = credentials.get(&resource) {
+                return Ok(Secret::from_bytes(credential.as_slice().to_vec()));
             }
-        },
+        }
+        Err(_) => {
+            return Err(credential_failure(
+                "local subscription credential lock is poisoned",
+                &resource,
+                Code::Config,
+            )
+            .with_context("subscription", subscription_id)
+            .with_context("provider", provider));
+        }
     }
+
+    let mut prior = None;
+    if let Some(capability_id) = configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id) {
+        match redeem_provider_resource(&capability_id, &resource) {
+            Ok(secret) => return Ok(secret),
+            Err(refused) => prior = Some(refused),
+        }
+    }
+    match issue_capability(PROVIDER_PURPOSE, &resource).await {
+        Ok(fresh) => match redeem_provider_resource(&fresh, &resource) {
+            Ok(secret) => return Ok(secret),
+            Err(refused) => prior = Some(append_failure_cause(refused, prior)),
+        },
+        Err(refused) => prior = Some(append_failure_cause(refused, prior)),
+    }
+    credential_by_grant(&resource).await.map_err(|refused| {
+        append_failure_cause(refused, prior)
+            .with_context("subscription", subscription_id)
+            .with_context("provider", provider)
+    })
 }
 
 async fn refresh_subscription_credential_inner(
     subscription_id: &str,
     provider: &str,
     force: bool,
-    preserve_on_failure: bool,
 ) -> Result<Secret, Failure> {
     // Refresh-token rotation is single-flight. Re-reading after the lock lets a
     // concurrent caller observe the value already written to the vault.
     let _guard = OAUTH_REFRESH_LOCK.lock().await;
-    let credential = redeem_subscription_credential(subscription_id, provider)
-        .await
-        .ok_or_else(|| {
-            failure::envelope(
-                POINT_CREDENTIAL_REDEEM,
-                failure::code_for("credential_unauthorized"),
-                IMPACT_CREDENTIAL_REFRESH,
-                "no capability or read grant produced this subscription's credential",
-            )
-            .with_context("subscription", subscription_id)
-            .with_context("provider", provider)
-        })?;
+    let credential = redeem_subscription_credential(subscription_id, provider).await?;
     if !force && !super::oauth_refresh::needs_refresh(&credential, provider) {
         return Ok(credential);
     }
@@ -629,10 +619,7 @@ async fn refresh_subscription_credential_inner(
                 "OAuth refresh failed"
             );
             record_refusal(subscription_id, provider, &refused);
-            // The refusal is returned rather than discarded: the dispatcher
-            // hangs it under the request it is about to refuse, which is the
-            // only way the provider's own sentence reaches the caller.
-            return preserve_on_failure.then_some(credential).ok_or(refused);
+            return Err(refused);
         }
     };
     // The reason matters more than the fact. A refreshed grant that cannot be
@@ -641,6 +628,7 @@ async fn refresh_subscription_credential_inner(
     // that something went wrong. The default recipient being a key no keyring
     // holds looked identical to a broken vault for a full day.
     if let Err(error) = put_subscription_credential(subscription_id, provider, &fresh).await {
+        let persist_detail = error.clone();
         let unpersisted = failure::envelope(
             POINT_CREDENTIAL_PERSIST,
             Code::Config,
@@ -667,7 +655,7 @@ async fn refresh_subscription_credential_inner(
         crate::subscription_dispatch::usage::record_reauthorization_needed(
             subscription_id,
             provider,
-            "the refreshed grant could not be persisted; the stored refresh token is stale",
+            &persist_detail,
         );
         return Err(unpersisted);
     }
@@ -728,18 +716,19 @@ fn record_refusal(subscription_id: &str, provider: &str, refused: &Failure) {
 }
 
 /// Redeem one subscription credential at the final-use boundary. Expired
-/// provider OAuth grants are refreshed only inside this scoped Brama runtime,
-/// used immediately, and persisted through the local entitlements router when
-/// possible.
-pub async fn subscription_credential(subscription_id: &str, provider: &str) -> Option<Secret> {
+/// provider OAuth grants are refreshed only inside this scoped Brama runtime
+/// and persisted before use. A rejected refresh or rejected vault write returns
+/// its [`Failure`]; neither an expired grant nor an unpersisted rotation escapes.
+pub async fn subscription_credential(
+    subscription_id: &str,
+    provider: &str,
+) -> Result<Secret, Failure> {
     let credential = redeem_subscription_credential(subscription_id, provider).await?;
     if !super::oauth_refresh::needs_refresh(&credential, provider) {
-        return Some(credential);
+        return Ok(credential);
     }
     drop(credential);
-    refresh_subscription_credential_inner(subscription_id, provider, false, true)
-        .await
-        .ok()
+    refresh_subscription_credential_inner(subscription_id, provider, false).await
 }
 
 /// Force one OAuth refresh after the provider rejects a grant whose local
@@ -751,7 +740,7 @@ pub async fn refresh_subscription_credential(
     subscription_id: &str,
     provider: &str,
 ) -> Result<Secret, Failure> {
-    refresh_subscription_credential_inner(subscription_id, provider, true, false).await
+    refresh_subscription_credential_inner(subscription_id, provider, true).await
 }
 
 /// Whether this provider's subscription credentials are OAuth grants that can be
@@ -791,17 +780,9 @@ pub async fn refresh_subscription_credential_ahead(
     provider: &str,
     skew: Duration,
 ) -> RefreshAhead {
-    let Some(credential) = redeem_subscription_credential(subscription_id, provider).await else {
-        return RefreshAhead::Unavailable(
-            failure::envelope(
-                POINT_CREDENTIAL_REDEEM,
-                failure::code_for("credential_unauthorized"),
-                IMPACT_CREDENTIAL_REFRESH,
-                "no capability or read grant produced this subscription's credential",
-            )
-            .with_context("subscription", subscription_id)
-            .with_context("provider", provider),
-        );
+    let credential = match redeem_subscription_credential(subscription_id, provider).await {
+        Ok(credential) => credential,
+        Err(refused) => return RefreshAhead::Unavailable(refused),
     };
     let expires_at_ms = super::oauth_refresh::access_token_expiry_ms(&credential, provider);
     if !super::oauth_refresh::expires_within(&credential, provider, skew) {
@@ -810,7 +791,7 @@ pub async fn refresh_subscription_credential_ahead(
     // Dropped before the refresh so this token is not held in memory across the
     // wait for the rotation lock and the provider's answer.
     drop(credential);
-    match refresh_subscription_credential_inner(subscription_id, provider, true, false).await {
+    match refresh_subscription_credential_inner(subscription_id, provider, true).await {
         Ok(refreshed) => RefreshAhead::Refreshed {
             expires_at_ms: super::oauth_refresh::access_token_expiry_ms(&refreshed, provider),
         },
@@ -824,11 +805,13 @@ pub async fn refresh_subscription_credential_ahead(
 /// Onboarding needs to distinguish an empty account from an unavailable
 /// Skarbiec/entitlements route; flattening both to an empty vector would present
 /// a dependency failure as a valid zero-state import.
+///
+/// This always performs live discovery. The trusted startup catalog belongs to
+/// internal routing only and cannot turn a failed user-facing read into success.
 pub async fn discover_subscriptions(agent_id: &str) -> Result<Vec<SubscriptionEntry>, String> {
-    let mut entries = list_subscriptions_result(agent_id)
-        .await
-        .map_err(|_| "subscription discovery is unavailable".to_string())?;
-    for donated in donated_subscriptions(agent_id) {
+    let broker = entitlements_router_bin();
+    let mut entries = live_subscriptions(&broker, agent_id, true).await?;
+    for donated in donated_subscriptions(agent_id)? {
         match entries.iter_mut().find(|entry| entry.id == donated.id) {
             Some(existing) => *existing = donated,
             None => entries.push(donated),
@@ -837,31 +820,53 @@ pub async fn discover_subscriptions(agent_id: &str) -> Result<Vec<SubscriptionEn
     Ok(entries)
 }
 
-/// Enumerate one agent's subscription metadata through the local entitlements
-/// broker or its trusted deployment-time catalog. The donated-subscriptions
-/// overlay is metadata only; every credential use still requires a capability.
+/// Enumerate one agent's subscription metadata for internal routing.
+///
+/// A trusted deployment catalog may keep routing available when live discovery
+/// fails, but the live failure is always logged and is never used by
+/// [`discover_subscriptions`].
 pub async fn list_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
-    discover_subscriptions(agent_id).await.unwrap_or_default()
+    let mut entries = match list_subscriptions_result(agent_id).await {
+        Ok(entries) => entries,
+        Err(error) => {
+            warn!(
+                event = "subscription_routing_discovery_failed",
+                agent_id,
+                %error,
+                "live subscription discovery failed and no trusted catalog was usable"
+            );
+            Vec::new()
+        }
+    };
+    match donated_subscriptions(agent_id) {
+        Ok(donated) => {
+            for entry in donated {
+                match entries.iter_mut().find(|existing| existing.id == entry.id) {
+                    Some(existing) => *existing = entry,
+                    None => entries.push(entry),
+                }
+            }
+        }
+        Err(error) => warn!(
+            event = "donated_subscription_overlay_failed",
+            agent_id,
+            %error,
+            "routing continues without the donated-subscriptions overlay"
+        ),
+    }
+    entries
 }
 
 /// Every active subscription this deployment holds, whichever agent owns it.
-///
-/// Metadata only, exactly as the per-agent listing: an id, a provider and a
-/// status. Using any credential behind these still requires redeeming its own
-/// capability, so widening the listing widens no access.
-pub async fn list_all_subscriptions() -> Vec<SubscriptionEntry> {
-    let broker = entitlements_router_bin();
-    let Ok(output) = tokio::process::Command::new(&broker)
-        .arg("list")
-        .output()
-        .await
-    else {
-        return Vec::new();
-    };
+pub async fn list_all_subscriptions() -> Result<Vec<SubscriptionEntry>, String> {
+    let output = router_output("list all subscriptions", |command| {
+        command.arg("list");
+    })
+    .await?;
     if !output.status.success() {
-        return Vec::new();
+        return Err(router_refusal("list all subscriptions", &output));
     }
-    parse_live_subscriptions_any_agent(&output.stdout).unwrap_or_default()
+    parse_live_subscriptions_any_agent(&output.stdout)
 }
 
 /// Every subscription account in the vault that carries no `brama:agent:` tag.
@@ -877,18 +882,31 @@ pub async fn list_all_subscriptions() -> Vec<SubscriptionEntry> {
 /// nothing here becomes a second reader of the vault, and metadata only: an
 /// item id, a provider and a subscription id, never a value.
 pub async fn list_unroutable_accounts() -> Vec<UnroutableAccount> {
-    let broker = entitlements_router_bin();
-    let Ok(output) = tokio::process::Command::new(&broker)
-        .arg("list")
-        .output()
-        .await
-    else {
-        return Vec::new();
+    let output = match router_output("list unroutable subscription accounts", |command| {
+        command.arg("list");
+    })
+    .await
+    {
+        Ok(output) => output,
+        Err(error) => {
+            warn!(event = "unroutable_account_listing_failed", %error);
+            return Vec::new();
+        }
     };
     if !output.status.success() {
+        warn!(
+            event = "unroutable_account_listing_failed",
+            error = %router_refusal("list unroutable subscription accounts", &output)
+        );
         return Vec::new();
     }
-    parse_unroutable_accounts(&output.stdout).unwrap_or_default()
+    match parse_unroutable_accounts(&output.stdout) {
+        Ok(accounts) => accounts,
+        Err(error) => {
+            warn!(event = "unroutable_account_listing_failed", %error);
+            Vec::new()
+        }
+    }
 }
 
 /// Incomplete Brama credential metadata that still identifies an exact
@@ -928,12 +946,26 @@ pub fn donated_subscriptions_path() -> PathBuf {
         })
 }
 
-/// Overlay entries for one agent. A missing or corrupt file yields nothing.
-fn donated_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
-    let Ok(text) = std::fs::read_to_string(donated_subscriptions_path()) else {
-        return Vec::new();
+/// Overlay entries for one agent. A missing file is an empty overlay; every
+/// other read or decode failure remains visible to the caller.
+fn donated_subscriptions(agent_id: &str) -> Result<Vec<SubscriptionEntry>, String> {
+    let path = donated_subscriptions_path();
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(format!(
+                "read donated subscriptions file `{}`: {error}",
+                path.to_string_lossy()
+            ));
+        }
     };
-    parse_subscriptions(text.as_bytes(), agent_id).unwrap_or_default()
+    parse_subscriptions(text.as_bytes(), agent_id).map_err(|error| {
+        format!(
+            "decode donated subscriptions file `{}`: {error}",
+            path.to_string_lossy()
+        )
+    })
 }
 
 /// Read-modify-write the overlay file atomically (temp + rename, mode 0600).
@@ -1009,6 +1041,44 @@ fn entitlements_router_bin() -> String {
         .unwrap_or_else(|| DEFAULT_ENTITLEMENTS_ROUTER_BIN.to_owned())
 }
 
+async fn bounded_output(
+    binary: &str,
+    operation: &str,
+    configure: impl FnOnce(&mut tokio::process::Command),
+) -> Result<std::process::Output, String> {
+    let mut command = tokio::process::Command::new(binary);
+    command.kill_on_drop(true);
+    configure(&mut command);
+    match tokio::time::timeout(ENTITLEMENTS_ROUTER_TIMEOUT, command.output()).await {
+        Ok(Ok(output)) => Ok(output),
+        Ok(Err(error)) => Err(format!("{operation}: {error}")),
+        Err(_) => Err(format!(
+            "{operation} timed out after {} seconds; the child was killed",
+            ENTITLEMENTS_ROUTER_TIMEOUT.as_secs()
+        )),
+    }
+}
+
+async fn router_output(
+    operation: &str,
+    configure: impl FnOnce(&mut tokio::process::Command),
+) -> Result<std::process::Output, String> {
+    bounded_output(&entitlements_router_bin(), operation, configure).await
+}
+
+fn router_refusal(operation: &str, output: &std::process::Output) -> String {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let detail = stderr.trim();
+    if detail.is_empty() {
+        format!(
+            "{operation} failed with status {}; stderr was empty",
+            output.status
+        )
+    } else {
+        format!("{operation} failed with status {}: {detail}", output.status)
+    }
+}
+
 const PROVIDER_PURPOSE: &str = "brama.provider.authenticate";
 const REQUEST_SIGN_PURPOSE: &str = "brama.request.sign";
 /// The agent a capability is issued to, and the identity whose registered key
@@ -1065,165 +1135,274 @@ fn capability_refusal_detail(stdout: &[u8], stderr: &[u8]) -> String {
     }
 }
 
-fn issued_capability_id(
-    stdout: &[u8],
-    stderr: &[u8],
-    succeeded: bool,
-    resource: &str,
-) -> Option<String> {
-    if !succeeded {
-        warn!(
-            event = "capability_issue_refused",
-            resource = resource,
-            detail = capability_refusal_detail(stdout, stderr)
-        );
-        return None;
+fn issued_capability_id(output: &std::process::Output, resource: &str) -> Result<String, Failure> {
+    if !output.status.success() {
+        let detail = capability_refusal_detail(&output.stdout, &output.stderr);
+        return Err(credential_failure(
+            format!(
+                "capability issuance for `{resource}` failed with status {}: {detail}",
+                output.status
+            ),
+            resource,
+            failure::code_for("credential_unauthorized"),
+        ));
     }
-    serde_json::from_slice::<Value>(stdout)
-        .ok()?
+    let document: Value = serde_json::from_slice(&output.stdout).map_err(|error| {
+        credential_failure(
+            format!("capability issuance returned malformed JSON: {error}"),
+            resource,
+            Code::Unknown,
+        )
+    })?;
+    document
         .get("capability_id")
         .and_then(Value::as_str)
+        .filter(|id| !id.trim().is_empty())
         .map(str::to_owned)
+        .ok_or_else(|| {
+            credential_failure(
+                "capability issuance response is missing non-empty field `capability_id`",
+                resource,
+                Code::Unknown,
+            )
+        })
 }
 
 /// Obtain one capability on the request path.
-async fn issue_capability(purpose: &str, resource: &str) -> Option<String> {
-    let output = tokio::process::Command::new(entitlements_router_bin())
+async fn issue_capability(purpose: &str, resource: &str) -> Result<String, Failure> {
+    let arguments = issue_arguments(purpose, resource);
+    let output = router_output("issue capability", |command| {
+        command.args(arguments);
+    })
+    .await
+    .map_err(|error| credential_failure(error, resource, Code::Unknown))?;
+    issued_capability_id(&output, resource)
+}
+
+fn issue_capability_blocking(purpose: &str, resource: &str) -> Result<String, Failure> {
+    use std::process::Stdio;
+
+    let mut child = std::process::Command::new(entitlements_router_bin())
         .args(issue_arguments(purpose, resource))
-        .output()
-        .await
-        .ok()?;
-    issued_capability_id(
-        &output.stdout,
-        &output.stderr,
-        output.status.success(),
-        resource,
-    )
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| {
+            credential_failure(
+                format!("issue capability: {error}"),
+                resource,
+                Code::Unknown,
+            )
+        })?;
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                let output = child.wait_with_output().map_err(|error| {
+                    credential_failure(
+                        format!("collect capability issuance output: {error}"),
+                        resource,
+                        Code::Unknown,
+                    )
+                })?;
+                return issued_capability_id(&output, resource);
+            }
+            Ok(None) if started.elapsed() < ENTITLEMENTS_ROUTER_TIMEOUT => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Ok(None) => {
+                let kill_error = child.kill().err();
+                let output = child.wait_with_output().map_err(|error| {
+                    credential_failure(
+                        format!(
+                            "capability issuance timed out after {} seconds; kill result: {}; collect output: {error}",
+                            ENTITLEMENTS_ROUTER_TIMEOUT.as_secs(),
+                            kill_error
+                                .as_ref()
+                                .map(ToString::to_string)
+                                .unwrap_or_else(|| "child killed".to_owned())
+                        ),
+                        resource,
+                        Code::Unknown,
+                    )
+                })?;
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(credential_failure(
+                    format!(
+                        "capability issuance timed out after {} seconds; {}; stderr: {}",
+                        ENTITLEMENTS_ROUTER_TIMEOUT.as_secs(),
+                        kill_error
+                            .map(|error| format!("kill failed: {error}"))
+                            .unwrap_or_else(|| "the child was killed".to_owned()),
+                        if stderr.trim().is_empty() {
+                            "<empty>"
+                        } else {
+                            stderr.trim()
+                        }
+                    ),
+                    resource,
+                    Code::Unknown,
+                ));
+            }
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(credential_failure(
+                    format!("poll capability issuance child: {error}"),
+                    resource,
+                    Code::Unknown,
+                ));
+            }
+        }
+    }
 }
 
 /// The vault coordinate a resource stands for, as the operator wrote it.
 ///
 /// The same table the authority consults, read here so nothing in this process
 /// ever decides for itself which credential a purpose means.
-fn capability_route(resource: &str) -> Option<(String, String)> {
-    let path = std::env::var_os("SKARBIEC_CAPABILITY_ROUTES_FILE")?;
-    let raw = std::fs::read_to_string(path).ok()?;
-    let document: serde_json::Value = serde_json::from_str(&raw).ok()?;
+fn capability_route(resource: &str) -> Result<(String, String), Failure> {
+    let path = std::env::var_os("SKARBIEC_CAPABILITY_ROUTES_FILE").ok_or_else(|| {
+        credential_failure(
+            "SKARBIEC_CAPABILITY_ROUTES_FILE is not configured",
+            resource,
+            Code::Config,
+        )
+    })?;
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        credential_failure(
+            format!(
+                "read capability routes file `{}`: {error}",
+                path.to_string_lossy()
+            ),
+            resource,
+            Code::Config,
+        )
+    })?;
+    let document: Value = serde_json::from_str(&raw).map_err(|error| {
+        credential_failure(
+            format!(
+                "capability routes file `{}` contains malformed JSON: {error}",
+                path.to_string_lossy()
+            ),
+            resource,
+            Code::Config,
+        )
+    })?;
     let table = document.get("routes").unwrap_or(&document);
-    let entry = table.get(resource)?;
-    let item = entry.get("item")?.as_str()?.to_owned();
-    let field = entry.get("field")?.as_str()?.to_owned();
-    Some((item, field))
+    let entry = table.get(resource).ok_or_else(|| {
+        credential_failure(
+            format!("no capability route maps resource `{resource}`"),
+            resource,
+            Code::Config,
+        )
+    })?;
+    let item = entry
+        .get("item")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            credential_failure(
+                format!("capability route for `{resource}` is missing non-empty field `item`"),
+                resource,
+                Code::Config,
+            )
+        })?
+        .to_owned();
+    let field = entry
+        .get("field")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            credential_failure(
+                format!("capability route for `{resource}` is missing non-empty field `field`"),
+                resource,
+                Code::Config,
+            )
+        })?
+        .to_owned();
+    Ok((item, field))
 }
 
 /// Read one provider credential through the grant the vault already carries.
 ///
 /// Redeeming a capability is the stronger path and stays first. It is not the
 /// only one the fleet provisions: some providers are granted as a plain
-/// per-field read to a named consumer -- `read:provider:local-openai#token` is
-/// exactly that -- and where the grant that exists is a read, refusing to use
-/// it means refusing to serve a provider the operator deliberately allowed.
-///
-/// Nothing is widened here. The router presents this host's consumer identity
-/// and the authority still decides: without the grant the read is refused, and
-/// the coordinate comes from the operator's routes table rather than a guess.
-async fn credential_by_grant(resource: &str) -> Option<Secret> {
-    let Some((item, field)) = capability_route(resource) else {
-        warn!(
-            event = "credential_read_unrouted",
-            %resource,
-            "no capability route maps this resource to a vault item and field"
-        );
-        return None;
-    };
-    let output = match tokio::process::Command::new(entitlements_router_bin())
-        .arg("get")
-        .arg(&item)
-        .output()
-        .await
-    {
-        Ok(output) => output,
-        Err(error) => {
-            warn!(
-                event = "credential_read_unspawnable",
-                %resource, %item, %error,
-                "the entitlements router could not be started"
-            );
-            return None;
-        }
-    };
+/// per-field read to a named consumer.
+async fn credential_by_grant(resource: &str) -> Result<Secret, Failure> {
+    let (item, field) = capability_route(resource)?;
+    let output = router_output("read credential through grant", |command| {
+        command.arg("get").arg(&item);
+    })
+    .await
+    .map_err(|error| {
+        credential_failure(error, resource, Code::Unknown)
+            .with_context("item", item.as_str())
+            .with_context("field", field.as_str())
+    })?;
     if !output.status.success() {
-        // The authority's own sentence, not a summary of it. "credential
-        // unavailable" fits a missing item, a key this host lacks and an item
-        // still in the legacy envelope equally well, and only the last of those
-        // is fixed by a migration the message would otherwise never name.
-        let detail = String::from_utf8_lossy(&output.stderr);
-        warn!(
-            event = "credential_read_refused",
-            %resource,
-            %item,
-            detail = %detail.trim(),
-            "the authority refused a direct read of this credential"
-        );
-        return None;
+        return Err(credential_failure(
+            router_refusal("read credential through grant", &output),
+            resource,
+            failure::code_for("credential_unauthorized"),
+        )
+        .with_context("item", item.as_str())
+        .with_context("field", field.as_str()));
     }
-    let payload: serde_json::Value = match serde_json::from_slice(&output.stdout) {
-        Ok(payload) => payload,
-        Err(error) => {
-            warn!(
-                event = "credential_read_unparseable",
-                %resource, %item, %error,
-                "the authority returned a credential document that is not JSON"
-            );
-            return None;
-        }
-    };
-    let Some(value) = payload.get("fields").and_then(|fields| fields.get(&field)) else {
-        warn!(
-            event = "credential_read_field_absent",
-            %resource, %item, %field,
-            "the credential document carries no such field"
-        );
-        return None;
-    };
+    let payload: Value = serde_json::from_slice(&output.stdout).map_err(|error| {
+        credential_failure(
+            format!("credential read for item `{item}` returned malformed JSON: {error}"),
+            resource,
+            Code::Unknown,
+        )
+        .with_context("item", item.as_str())
+        .with_context("field", field.as_str())
+    })?;
+    let fields = payload
+        .get("fields")
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            credential_failure(
+                format!("credential document for item `{item}` is missing object field `fields`"),
+                resource,
+                Code::Unknown,
+            )
+            .with_context("item", item.as_str())
+            .with_context("field", field.as_str())
+        })?;
+    let value = fields.get(&field).ok_or_else(|| {
+        credential_failure(
+            format!("credential document for item `{item}` is missing field `{field}`"),
+            resource,
+            Code::Unknown,
+        )
+        .with_context("item", item.as_str())
+        .with_context("field", field.as_str())
+    })?;
     let bytes = match value {
-        serde_json::Value::String(value) => value.as_bytes().to_vec(),
-        serde_json::Value::Null => {
-            warn!(
-                event = "credential_read_field_absent",
-                %resource, %item, %field,
-                "the credential document carries a null field"
-            );
-            return None;
+        Value::String(value) => value.as_bytes().to_vec(),
+        Value::Null => {
+            return Err(credential_failure(
+                format!("credential document for item `{item}` has null field `{field}`"),
+                resource,
+                Code::Unknown,
+            )
+            .with_context("item", item.as_str())
+            .with_context("field", field.as_str()));
         }
-        value => match serde_json::to_vec(value) {
-            Ok(bytes) => bytes,
-            Err(error) => {
-                warn!(
-                    event = "credential_read_field_unserializable",
-                    %resource, %item, %field, %error,
-                    "the credential field could not be preserved as JSON"
-                );
-                return None;
-            }
-        },
+        value => serde_json::to_vec(value).map_err(|error| {
+            credential_failure(
+                format!(
+                    "credential field `{field}` for item `{item}` could not be preserved as JSON: {error}"
+                ),
+                resource,
+                Code::Unknown,
+            )
+            .with_context("item", item.as_str())
+            .with_context("field", field.as_str())
+        })?,
     };
-    Some(Secret::from_bytes(bytes))
-}
-
-/// The same request during startup validation, where there is no runtime to
-/// await on and blocking for one child process costs nothing.
-fn issue_capability_blocking(purpose: &str, resource: &str) -> Option<String> {
-    let output = std::process::Command::new(entitlements_router_bin())
-        .args(issue_arguments(purpose, resource))
-        .output()
-        .ok()?;
-    issued_capability_id(
-        &output.stdout,
-        &output.stderr,
-        output.status.success(),
-        resource,
-    )
+    Ok(Secret::from_bytes(bytes))
 }
 
 async fn put_credential(
@@ -1243,6 +1422,7 @@ async fn put_credential(
     .to_string();
     let mut command = tokio::process::Command::new(entitlements_router_bin());
     command
+        .kill_on_drop(true)
         .arg("set-json")
         .arg(item_id)
         .arg("--type")
@@ -1255,23 +1435,44 @@ async fn put_credential(
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|error| format!("spawn entitlements router: {error}"))?;
-    let write_result = match child.stdin.take() {
-        Some(mut stdin) => stdin.write_all(document.as_bytes()).await,
-        None => return Err("entitlements router stdin is unavailable".to_owned()),
-    };
-    if write_result.is_err() {
-        let _ = child.kill().await;
-        return Err("write entitlements router credential failed".to_owned());
+        .map_err(|error| format!("spawn credential write: {error}"))?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| "credential write child stdin is unavailable".to_owned())?;
+    match tokio::time::timeout(
+        ENTITLEMENTS_ROUTER_TIMEOUT,
+        stdin.write_all(document.as_bytes()),
+    )
+    .await
+    {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
+            let _ = child.kill().await;
+            return Err(format!("write credential document to child stdin: {error}"));
+        }
+        Err(_) => {
+            let _ = child.kill().await;
+            return Err(format!(
+                "write credential document timed out after {} seconds; the child was killed",
+                ENTITLEMENTS_ROUTER_TIMEOUT.as_secs()
+            ));
+        }
     }
-    let output = child
-        .wait_with_output()
-        .await
-        .map_err(|error| format!("wait entitlements router: {error}"))?;
+    drop(stdin);
+    let output =
+        match tokio::time::timeout(ENTITLEMENTS_ROUTER_TIMEOUT, child.wait_with_output()).await {
+            Ok(Ok(output)) => output,
+            Ok(Err(error)) => return Err(format!("wait for credential write child: {error}")),
+            Err(_) => {
+                return Err(format!(
+                    "credential write timed out after {} seconds; the child was killed",
+                    ENTITLEMENTS_ROUTER_TIMEOUT.as_secs()
+                ));
+            }
+        };
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let detail: String = stderr.trim().chars().take(200).collect();
-        return Err(format!("credential write failed: {detail}"));
+        return Err(router_refusal("credential write", &output));
     }
     Ok(())
 }
@@ -1373,23 +1574,20 @@ async fn donated_credential_tags(
     subscription_id: &str,
     login_item: Option<&str>,
 ) -> Result<Vec<String>, DonationRefusal> {
-    let output = tokio::process::Command::new(entitlements_router_bin())
-        .arg("list")
-        .output()
-        .await
-        .map_err(|error| DonationRefusal::Unwritable(format!("list vault tags: {error}")))?;
+    let output = router_output("list vault tags for donated credential", |command| {
+        command.arg("list");
+    })
+    .await
+    .map_err(DonationRefusal::Unwritable)?;
     if !output.status.success() {
-        let detail: String = String::from_utf8_lossy(&output.stderr)
-            .trim()
-            .chars()
-            .take(200)
-            .collect();
-        return Err(DonationRefusal::Unwritable(format!(
-            "list vault tags failed: {detail}"
+        return Err(DonationRefusal::Unwritable(router_refusal(
+            "list vault tags for donated credential",
+            &output,
         )));
     }
-    let items: Vec<VaultListItem> = serde_json::from_slice(&output.stdout)
-        .map_err(|error| DonationRefusal::Unwritable(format!("decode vault tags: {error}")))?;
+    let items: Vec<VaultListItem> = serde_json::from_slice(&output.stdout).map_err(|error| {
+        DonationRefusal::Unwritable(format!("decode vault tags for donated credential: {error}"))
+    })?;
     let mut tags = items
         .into_iter()
         .find(|item| item.id == item_id)
@@ -1542,21 +1740,18 @@ async fn put_subscription_credential(
 
 /// The tags one vault item carries right now, empty when it does not exist.
 async fn existing_item_tags(item_id: &str) -> Result<Vec<String>, String> {
-    let output = tokio::process::Command::new(entitlements_router_bin())
-        .arg("list")
-        .output()
-        .await
-        .map_err(|error| format!("list vault tags: {error}"))?;
+    let output = router_output("list vault tags for credential write", |command| {
+        command.arg("list");
+    })
+    .await?;
     if !output.status.success() {
-        let detail: String = String::from_utf8_lossy(&output.stderr)
-            .trim()
-            .chars()
-            .take(200)
-            .collect();
-        return Err(format!("list vault tags failed: {detail}"));
+        return Err(router_refusal(
+            "list vault tags for credential write",
+            &output,
+        ));
     }
     let items: Vec<VaultListItem> = serde_json::from_slice(&output.stdout)
-        .map_err(|error| format!("decode vault tags: {error}"))?;
+        .map_err(|error| format!("decode vault tags for credential write: {error}"))?;
     Ok(items
         .into_iter()
         .find(|item| item.id == item_id)
@@ -1568,34 +1763,36 @@ fn complete_field(value: Option<String>) -> Option<String> {
     value.filter(|field| !field.is_empty() && field.trim() == field)
 }
 
-fn parse_subscriptions(output: &[u8], agent_id: &str) -> Result<Vec<SubscriptionEntry>, ()> {
-    let response: BrokerItems = serde_json::from_slice(output).map_err(|_| ())?;
-
-    Ok(response
-        .items
-        .into_iter()
-        .filter_map(|entry| {
-            let id = complete_field(entry.id)?;
-            let provider = complete_field(entry.provider)?;
-            let entry_agent_id = complete_field(entry.agent_id)?;
-            let status = complete_field(entry.status)?;
-            if entry_agent_id != agent_id {
-                return None;
-            }
-            Some(SubscriptionEntry {
-                id,
-                provider,
-                status,
-                label: entry.label.and_then(|value| complete_field(Some(value))),
-                login_item: entry
-                    .login_item
-                    .and_then(|value| complete_field(Some(value))),
-            })
-        })
-        .collect())
+fn required_broker_field(
+    value: Option<String>,
+    field: &str,
+    index: usize,
+) -> Result<String, String> {
+    complete_field(value)
+        .ok_or_else(|| format!("subscription catalog row {index} is missing valid field `{field}`"))
 }
 
-fn configured_subscriptions(agent_id: &str) -> Option<Result<Vec<SubscriptionEntry>, ()>> {
+fn parse_subscriptions(output: &[u8], agent_id: &str) -> Result<Vec<SubscriptionEntry>, String> {
+    let response: BrokerItems = serde_json::from_slice(output)
+        .map_err(|error| format!("subscription catalog contains malformed JSON: {error}"))?;
+    let mut entries = Vec::new();
+    for (index, entry) in response.items.into_iter().enumerate() {
+        let entry_agent_id = required_broker_field(entry.agent_id, "agent_id", index)?;
+        if entry_agent_id != agent_id {
+            continue;
+        }
+        entries.push(SubscriptionEntry {
+            id: required_broker_field(entry.id, "id", index)?,
+            provider: required_broker_field(entry.provider, "provider", index)?,
+            status: required_broker_field(entry.status, "status", index)?,
+            label: complete_field(entry.label),
+            login_item: complete_field(entry.login_item),
+        });
+    }
+    Ok(entries)
+}
+
+fn configured_subscriptions(agent_id: &str) -> Option<Result<Vec<SubscriptionEntry>, String>> {
     let encoded = std::env::var(SUBSCRIPTION_CATALOG_ENV).ok()?;
     Some(parse_subscriptions(encoded.as_bytes(), agent_id))
 }
@@ -1626,53 +1823,57 @@ fn subscription_tag_value<'a>(tags: &'a [String], prefix: &str) -> Option<&'a st
 /// `brama:agent:<agent>`; `brama:provider:` and `brama:id:` tags carry the
 /// provider and subscription id, so item ids stay opaque and renames are safe.
 /// Non-deleted resources become active entries.
-fn parse_live_subscriptions(output: &[u8], agent_id: &str) -> Result<Vec<SubscriptionEntry>, ()> {
+fn live_subscription_entry(item: &VaultListItem) -> Result<SubscriptionEntry, String> {
+    let coordinate = if item.id.trim().is_empty() {
+        "<unnamed vault item>"
+    } else {
+        item.id.as_str()
+    };
+    let id = subscription_tag_value(&item.tags, "brama:id:").ok_or_else(|| {
+        format!("subscription vault item `{coordinate}` is missing tag `brama:id:<id>`")
+    })?;
+    let provider = subscription_tag_value(&item.tags, "brama:provider:").ok_or_else(|| {
+        format!("subscription vault item `{coordinate}` is missing tag `brama:provider:<provider>`")
+    })?;
+    Ok(SubscriptionEntry {
+        id: id.to_owned(),
+        provider: normalized_provider(provider),
+        status: "active".to_owned(),
+        label: None,
+        login_item: subscription_tag_value(&item.tags, "brama:login:").map(str::to_owned),
+    })
+}
+
+fn parse_live_subscriptions(
+    output: &[u8],
+    agent_id: &str,
+) -> Result<Vec<SubscriptionEntry>, String> {
     let agent_tag = format!("brama:agent:{agent_id}");
-    let items: Vec<VaultListItem> = serde_json::from_slice(output).map_err(|_| ())?;
-    Ok(items
-        .into_iter()
-        .filter(|item| !item.deleted)
-        .filter(|item| {
-            item.tags.iter().any(|tag| tag == "brama:subscription")
-                && item.tags.iter().any(|tag| tag == &agent_tag)
-        })
-        .filter_map(|item| {
-            Some(SubscriptionEntry {
-                id: subscription_tag_value(&item.tags, "brama:id:")?.to_owned(),
-                provider: normalized_provider(subscription_tag_value(
-                    &item.tags,
-                    "brama:provider:",
-                )?),
-                status: "active".to_owned(),
-                label: None,
-                login_item: subscription_tag_value(&item.tags, "brama:login:").map(str::to_owned),
-            })
-        })
-        .collect())
+    let items: Vec<VaultListItem> = serde_json::from_slice(output)
+        .map_err(|error| format!("subscription listing returned malformed JSON: {error}"))?;
+    let mut entries = Vec::new();
+    for item in items.into_iter().filter(|item| {
+        !item.deleted
+            && item.tags.iter().any(|tag| tag == "brama:subscription")
+            && item.tags.iter().any(|tag| tag == &agent_tag)
+    }) {
+        entries.push(live_subscription_entry(&item)?);
+    }
+    Ok(entries)
 }
 
 /// The same mapping without the owning-agent filter, for the console listing.
-/// One subscription tag is the whole test: an item that carries it is a
-/// subscription no matter which agent's tag sits beside it.
-fn parse_live_subscriptions_any_agent(output: &[u8]) -> Result<Vec<SubscriptionEntry>, ()> {
-    let items: Vec<VaultListItem> = serde_json::from_slice(output).map_err(|_| ())?;
-    Ok(items
+fn parse_live_subscriptions_any_agent(output: &[u8]) -> Result<Vec<SubscriptionEntry>, String> {
+    let items: Vec<VaultListItem> = serde_json::from_slice(output)
+        .map_err(|error| format!("subscription listing returned malformed JSON: {error}"))?;
+    let mut entries = Vec::new();
+    for item in items
         .into_iter()
-        .filter(|item| !item.deleted)
-        .filter(|item| item.tags.iter().any(|tag| tag == "brama:subscription"))
-        .filter_map(|item| {
-            Some(SubscriptionEntry {
-                id: subscription_tag_value(&item.tags, "brama:id:")?.to_owned(),
-                provider: normalized_provider(subscription_tag_value(
-                    &item.tags,
-                    "brama:provider:",
-                )?),
-                status: "active".to_owned(),
-                label: None,
-                login_item: subscription_tag_value(&item.tags, "brama:login:").map(str::to_owned),
-            })
-        })
-        .collect())
+        .filter(|item| !item.deleted && item.tags.iter().any(|tag| tag == "brama:subscription"))
+    {
+        entries.push(live_subscription_entry(&item)?);
+    }
+    Ok(entries)
 }
 
 /// Normalize a provider name the way both live parsers above do, so one
@@ -1687,8 +1888,9 @@ fn normalized_provider(value: &str) -> String {
 /// older credential write could preserve `brama:id:` and `brama:provider:` but
 /// drop either routing tag; those items are included so automatic renewal can
 /// restore their metadata. Items with no Brama id remain unrelated vault data.
-fn parse_unroutable_accounts(output: &[u8]) -> Result<Vec<UnroutableAccount>, ()> {
-    let items: Vec<VaultListItem> = serde_json::from_slice(output).map_err(|_| ())?;
+fn parse_unroutable_accounts(output: &[u8]) -> Result<Vec<UnroutableAccount>, String> {
+    let items: Vec<VaultListItem> = serde_json::from_slice(output)
+        .map_err(|error| format!("vault account listing returned malformed JSON: {error}"))?;
     let mut accounts: Vec<UnroutableAccount> = items
         .into_iter()
         .filter(|item| !item.deleted)
@@ -1731,7 +1933,7 @@ async fn live_subscriptions(
     broker: &str,
     agent_id: &str,
     bypass_cache: bool,
-) -> Result<Vec<SubscriptionEntry>, ()> {
+) -> Result<Vec<SubscriptionEntry>, String> {
     if !bypass_cache {
         if let Ok(cache) = LIVE_SUBSCRIPTIONS_CACHE.lock() {
             if let Some((fetched_at, entries)) = cache.get(agent_id) {
@@ -1753,34 +1955,53 @@ async fn live_subscriptions(
 async fn list_subscriptions_live(
     broker: &str,
     agent_id: &str,
-) -> Result<Vec<SubscriptionEntry>, ()> {
-    let output = tokio::process::Command::new(broker)
-        .arg("list")
-        .output()
-        .await
-        .map_err(|_| ())?;
+) -> Result<Vec<SubscriptionEntry>, String> {
+    let output = bounded_output(broker, "list subscriptions", |command| {
+        command.arg("list");
+    })
+    .await?;
     if !output.status.success() {
-        return Err(());
+        return Err(router_refusal("list subscriptions", &output));
     }
     parse_live_subscriptions(&output.stdout, agent_id)
 }
 
-async fn list_subscriptions_result(agent_id: &str) -> Result<Vec<SubscriptionEntry>, ()> {
+async fn list_subscriptions_result(agent_id: &str) -> Result<Vec<SubscriptionEntry>, String> {
     let broker = entitlements_router_bin();
-    // Live vault discovery supplies conventional per-agent entries. The
-    // deployment catalog additionally carries explicit sharing decisions for
-    // items whose owner-prefixed id belongs to a different agent. It was built
-    // from the same live listing at startup, so merging it cannot invent a
-    // credential; final use still requires capability redemption.
-    if let Ok(mut live) = live_subscriptions(&broker, agent_id, false).await {
-        if let Some(Ok(configured)) = configured_subscriptions(agent_id) {
-            for entry in configured {
-                if !live.iter().any(|existing| existing.id == entry.id) {
-                    live.push(entry);
+    match live_subscriptions(&broker, agent_id, false).await {
+        Ok(mut live) => {
+            match configured_subscriptions(agent_id) {
+                Some(Ok(configured)) => {
+                    for entry in configured {
+                        if !live.iter().any(|existing| existing.id == entry.id) {
+                            live.push(entry);
+                        }
+                    }
                 }
+                Some(Err(error)) => warn!(
+                    event = "subscription_catalog_invalid",
+                    agent_id,
+                    %error,
+                    "live subscriptions remain usable without the invalid trusted catalog"
+                ),
+                None => {}
+            }
+            Ok(live)
+        }
+        Err(live_error) => {
+            warn!(
+                event = "subscription_live_discovery_failed",
+                agent_id,
+                error = %live_error,
+                "internal routing will use the trusted catalog if one is available"
+            );
+            match configured_subscriptions(agent_id) {
+                Some(Ok(configured)) => Ok(configured),
+                Some(Err(catalog_error)) => Err(format!(
+                    "{live_error}; trusted subscription catalog is invalid: {catalog_error}"
+                )),
+                None => Err(live_error),
             }
         }
-        return Ok(live);
     }
-    configured_subscriptions(agent_id).unwrap_or(Err(()))
 }

@@ -124,22 +124,24 @@ footer a { color: var(--muted); text-decoration: none; }
       <article class="doc"><h1 id="brama-subscription-sign-in"><code>brama subscription sign-in</code><a class="headerlink" href="#brama-subscription-sign-in" title="Link to this section">&para;</a></h1>
 <p>Ask Weles to sign one provider account in, then prove the repair by running Brama’s refresh path.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama subscription sign-in &lt;PROVIDER&gt; --reason &lt;REASON&gt; [--login-item &lt;LOGIN_ITEM&gt;] [--login-timeout-ms &lt;MILLISECONDS&gt;] [--json]</code></pre>
+<pre><code class="language-console">brama subscription sign-in &lt;PROVIDER&gt; --reason &lt;REASON&gt; [--subscription-id &lt;ID&gt;] [--login-item &lt;LOGIN_ITEM&gt;] [--login-timeout-ms &lt;MILLISECONDS&gt;] [--json]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>&lt;PROVIDER&gt;</code></td><td>required</td><td>One of <code>codex</code>, <code>claude-code</code>, or <code>kimi</code>.</td></tr>
 <tr><td><code>--reason &lt;REASON&gt;</code></td><td>required</td><td>Nonempty audit reason recorded with sign-in and refresh verdicts.</td></tr>
+<tr><td><code>--subscription-id &lt;ID&gt;</code></td><td>optional</td><td>Exact subscription whose stored grant must be replaced and refreshed. Brama refuses a mismatched declared Weles account rather than selecting another subscription.</td></tr>
 <tr><td><code>--login-item &lt;LOGIN_ITEM&gt;</code></td><td>optional</td><td>Exact Weles sign-in row. If omitted, exactly one row must exist for the provider.</td></tr>
 <tr><td><code>--login-timeout-ms &lt;MILLISECONDS&gt;</code></td><td>optional; <code>900000</code></td><td>Maximum time Weles may spend driving the browser.</td></tr>
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print JSON instead of labeled lines.</td></tr>
 </tbody></table>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
 <p>Brama checks Weles health and row selection before opening a browser, posts the exact row to Weles, requires Weles to echo that row, then refreshes the provider credential. The verdict reports <code>provider</code>, <code>login_item</code>, optional account name, <code>result</code>, <code>detail</code>, and nested refresh data in JSON. It may replace a vault credential and appends sign-in and refresh journal records. It exits 0 only for a confirmed sign-in followed by a refreshed credential.</p>
+<p>Brama Desktop's explicit <strong>Sign in</strong> action targets the selected account through <code>POST /v1/admin/subscription-pool/sign-in</code>, <code>POST /v1/admin/subscription-sign-in/:agent_id/:subscription_id</code>, or <code>POST /v1/account/subscription-sign-in/:subscription_id</code>. The body names a nonempty <code>reason</code>, optional <code>login_item</code> and optional <code>login_timeout_ms</code>; the pool route additionally requires <code>subscription_id</code>. Brama verifies ownership and derives the provider from that subscription. The app does not launch a local browser, and neither listing nor refreshing usage invokes this action.</p>
 <h2 id="refusals">Exact refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <ul>
 <li>Unsupported provider: <code>Weles signs in claude-code, codex and kimi; `&lt;provider&gt;` is not one of them</code>.</li>
 <li>Empty reason: <code>--reason must say why this sign-in is being run</code>.</li>
 <li>Missing admission credential: <code>BRAMA_WELES_REAUTH_TOKEN is unavailable; Brama must acquire brama-weles-reauth/token from Skarbiec at startup</code>.</li>
-<li>Unreachable worker: <code>Weles worker API does not answer its own health check at &lt;base&gt;/healthz (&lt;error&gt;); start it before signing an account in</code>.</li>
+<li>Unreachable worker: <code>Weles health request at &lt;base&gt;/healthz failed: &lt;error&gt;</code>.</li>
 <li>Old worker: <code>this Weles release does not advertise the login_item selector, so it would choose a sign-in row itself; deploy the release that carries it before signing a named account in</code>.</li>
 <li>No named row: <code>Weles holds no sign-in row for &lt;login-item&gt;; it holds &lt;rows&gt;. That account has to exist in Weles before it can be signed in</code>.</li>
 <li>Wrong provider: <code>&lt;login-item&gt; is a &lt;held-provider&gt; account, not a &lt;provider&gt; one; refusing to sign it in for the wrong provider</code>.</li>

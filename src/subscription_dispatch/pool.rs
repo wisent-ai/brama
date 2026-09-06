@@ -23,33 +23,250 @@
 
 use std::collections::BTreeMap;
 
+use futures_util::{stream, StreamExt};
 use serde_json::{json, Value};
+use wisent_errors::{Code, Failure};
 
-use crate::core::failure::POINT_CREDENTIAL_REDEEM;
-use crate::gateway::broker;
-use crate::subscription_dispatch::usage::{self, CredentialState, SubscriptionUsage};
+use crate::core::failure::{self, POINT_CREDENTIAL_REDEEM};
+use crate::gateway::broker::{self, SubscriptionEntry};
+use crate::subscription_dispatch::usage::{CredentialState, SubscriptionUsage};
+use crate::subscription_dispatch::{plan_usage, usage};
 
 /// The provider named for a subscription whose record carries none, so a row is
 /// never keyed on an empty string.
 const UNATTRIBUTED: &str = "unattributed";
 
-/// A run that obtained at least one credential, and one that obtained none. The
-/// caller's exit status is read off this, so the two words are fixed here rather
+/// A run that obtained every attempted credential, or an incomplete run.
+/// The caller's exit status is read off this, so the two words are fixed here rather
 /// than spelled at each return.
 const REFRESHED: &str = "refreshed";
 const FAILED: &str = "failed";
 
 /// The whole pool as the gateway sees it, read-only.
 pub async fn report() -> Value {
-    let now_ms = now_ms();
-    let providers = pool()
-        .await
+    report_scope(None, false).await
+}
+
+/// Read free provider reports through the serving process's credential path.
+/// This never starts a sign-in or sends a model request.
+pub async fn refresh_usage() -> Value {
+    report_scope(None, true).await
+}
+
+/// The same report, restricted to the caller's authorized agent.
+pub async fn report_agent(agent_id: &str, refresh: bool) -> Value {
+    report_scope(Some(agent_id), refresh).await
+}
+
+async fn report_scope(agent_id: Option<&str>, refresh: bool) -> Value {
+    let (entries, mut errors) = inventory(agent_id).await;
+    if refresh && errors.is_empty() {
+        let attempts: Vec<_> = entries
+            .iter()
+            .filter(|entry| entry.status == "active" && !crate::journal::is_retired(&entry.id))
+            .map(|entry| plan_usage::refresh(&entry.id, &entry.provider))
+            .collect();
+        if attempts.is_empty() {
+            errors.push(
+                failure::envelope(
+                    "brama.subscriptions.usage",
+                    Code::Config,
+                    "subscription usage refresh",
+                    "no active subscription is available to refresh",
+                )
+                .with_context("attempted_at_ms", now_ms().to_string()),
+            );
+        }
+        let results = stream::iter(attempts)
+            .buffer_unordered(4)
+            .collect::<Vec<_>>()
+            .await;
+        errors.extend(results.into_iter().filter_map(Result::err));
+    }
+    let mut errors: Vec<Value> = errors
         .into_iter()
-        .map(|(provider, subscription_id, recorded)| {
-            row(&provider, &subscription_id, recorded.as_ref(), now_ms)
+        .map(|error| failure_json(&error))
+        .collect();
+    let observed_at_ms = now_ms();
+    let rows = entries
+        .iter()
+        .map(|entry| {
+            let recorded = usage::usage_for(&entry.id);
+            let windows = usage::plan_windows(recorded.as_ref());
+            if !errors.iter().any(|error| {
+                error
+                    .pointer("/context/subscription")
+                    .and_then(Value::as_str)
+                    == Some(entry.id.as_str())
+            }) {
+                if let Some(error) =
+                    reading_error(entry, recorded.as_ref(), &windows, observed_at_ms)
+                {
+                    errors.push(error);
+                }
+            }
+            if agent_id.is_some() {
+                subscription_row(entry, recorded.as_ref(), windows)
+            } else {
+                let mut row = subscription_row(entry, recorded.as_ref(), windows);
+                row["subscription_id"] = json!(entry.id);
+                row["state"] = json!(if entry.status == "undiscovered" {
+                    "unknown"
+                } else if retired(&entry.id, recorded.as_ref()) {
+                    "burnt"
+                } else {
+                    state(recorded.as_ref(), observed_at_ms)
+                });
+                row["expires_at"] = expires_at(recorded.as_ref());
+                row["last_redeem_error"] = last_redeem_error(recorded.as_ref(), observed_at_ms);
+                row
+            }
         })
         .collect::<Vec<_>>();
-    json!({"providers": providers})
+    if let Some(detail) = usage::storage_error() {
+        errors.push(failure_json(
+            &failure::envelope(
+                "brama.subscriptions.ledger",
+                Code::Config,
+                "subscription usage history",
+                detail,
+            )
+            .with_context("attempted_at_ms", observed_at_ms.to_string()),
+        ));
+    }
+    let mut report = json!({
+        "ok": errors.is_empty(),
+        "observed_at_ms": observed_at_ms,
+        "errors": errors,
+    });
+    if let Some(agent_id) = agent_id {
+        report["agentId"] = json!(agent_id);
+        report["subscriptions"] = json!(rows);
+    } else {
+        report["providers"] = json!(rows);
+    }
+    report
+}
+
+fn failure_json(failure: &Failure) -> Value {
+    serde_json::from_str(&failure.to_json()).expect("Wisent failure serialization is JSON")
+}
+
+async fn inventory(agent_id: Option<&str>) -> (Vec<SubscriptionEntry>, Vec<Failure>) {
+    let discovered = match agent_id {
+        Some(agent_id) => broker::discover_subscriptions(agent_id).await,
+        None => broker::list_all_subscriptions().await,
+    };
+    let (entries, errors) = match discovered {
+        Ok(entries) => (entries, Vec::new()),
+        Err(detail) => {
+            let mut error = failure::envelope(
+                "brama.subscriptions.discovery",
+                Code::Config,
+                "subscription inventory",
+                detail,
+            )
+            .with_context("attempted_at_ms", now_ms().to_string());
+            if let Some(agent_id) = agent_id {
+                error = error.with_context("agent", agent_id);
+            }
+            (Vec::new(), vec![error])
+        }
+    };
+    let mut entries: BTreeMap<_, _> = entries
+        .into_iter()
+        .map(|entry| (entry.id.clone(), entry))
+        .collect();
+    // Only the administrator's pool can include historical accounts. A scoped
+    // read must never widen an agent's ownership from a shared usage ledger.
+    if agent_id.is_none() {
+        for (id, recorded) in usage::recorded_subscriptions() {
+            entries
+                .entry(id.clone())
+                .or_insert_with(|| SubscriptionEntry {
+                    status: if retired(&id, Some(&recorded)) {
+                        "retired"
+                    } else {
+                        "undiscovered"
+                    }
+                    .into(),
+                    id,
+                    provider: named(&recorded.provider),
+                    label: None,
+                    login_item: None,
+                });
+        }
+    }
+    (entries.into_values().collect(), errors)
+}
+
+fn reading_error(
+    entry: &SubscriptionEntry,
+    recorded: Option<&SubscriptionUsage>,
+    windows: &usage::PlanWindows,
+    now: i64,
+) -> Option<Value> {
+    if entry.status == "undiscovered" {
+        return Some(failure_json(&failure::envelope(
+            "brama.subscriptions.discovery",
+            Code::Config,
+            "one subscription usage report",
+            "subscription exists in usage history but was not returned by Skarbiec; its current credential cannot be confirmed",
+        )
+        .with_context("subscription", &entry.id)
+        .with_context("provider", &entry.provider)
+        .with_context("attempted_at_ms", now.to_string())));
+    }
+    if entry.status != "active" || retired(&entry.id, recorded) {
+        return None;
+    }
+    let check = usage::plan_usage_check(recorded);
+    if check.is_some_and(|check| !check.ok) {
+        if let Some(failure) = recorded.and_then(|recorded| recorded.usage_failure.as_ref()) {
+            return Some(failure.clone());
+        }
+    }
+    let credential = recorded.and_then(|recorded| recorded.credential.as_ref());
+    let detail = if let Some(cause) = credential
+        .filter(|credential| credential.state == CredentialState::NeedsReauthorization)
+        .and_then(|credential| credential.cause.as_deref())
+    {
+        cause
+    } else if let Some(check) = check.filter(|check| !check.ok) {
+        check
+            .detail
+            .as_deref()
+            .unwrap_or("usage refresh failed without a stated reason")
+    } else if windows.stale {
+        "the last usage reading is no longer current; refresh usage to obtain a new report"
+    } else if windows.limits.is_empty() {
+        if check.is_some_and(|check| check.ok)
+            && !crate::providers::adapter::publishes_plan_usage(&entry.provider)
+        {
+            return None;
+        }
+        if check.is_some() {
+            "no current plan windows are available from the last usage reading"
+        } else {
+            "usage has not been read for this subscription"
+        }
+    } else {
+        return None;
+    };
+    Some(failure_json(
+        &failure::envelope(
+            "brama.subscriptions.usage",
+            failure::code_for_message(detail, "provider_failure"),
+            "one subscription usage report",
+            detail,
+        )
+        .with_context("subscription", &entry.id)
+        .with_context("provider", &entry.provider)
+        .with_context(
+            "attempted_at_ms",
+            check.map_or(now, |check| check.attempted_at_ms).to_string(),
+        ),
+    ))
 }
 
 /// Refresh every grant this deployment holds for one provider, because an
@@ -74,7 +291,7 @@ pub async fn refresh_provider(provider: &str, reason: &str) -> Result<Value, Str
     // name this deployment holds no subscription for -- a typo included -- is
     // told that rather than being described as an API-key provider it may not be
     // at all.
-    let candidates = candidates(provider).await;
+    let candidates = candidates(provider).await?;
     if candidates.is_empty() {
         return Ok(verdict(
             provider,
@@ -136,7 +353,7 @@ pub async fn refresh_provider(provider: &str, reason: &str) -> Result<Value, Str
         provider,
         reason,
         attempted,
-        if refreshed > usize::default() {
+        if refreshed == attempted {
             REFRESHED
         } else {
             FAILED
@@ -164,7 +381,7 @@ pub async fn refresh_subscription(
         return Err("--reason must say why this refresh is being run".into());
     }
     if !candidates(provider)
-        .await
+        .await?
         .iter()
         .any(|candidate| candidate == subscription_id)
     {
@@ -269,43 +486,14 @@ fn detail(
 ///
 /// A retired subscription is left out. Somebody took it out of the pool
 /// deliberately, and rotating its grant would put back what they removed.
-async fn candidates(provider: &str) -> Vec<String> {
-    pool()
-        .await
+async fn candidates(provider: &str) -> Result<Vec<String>, String> {
+    Ok(broker::list_all_subscriptions()
+        .await?
         .into_iter()
-        .filter(|(row_provider, _, _)| row_provider == provider)
-        .filter(|(_, subscription_id, recorded)| !retired(subscription_id, recorded.as_ref()))
-        .map(|(_, subscription_id, _)| subscription_id)
-        .collect()
-}
-
-/// Every subscription this deployment has: the broker's listing, widened by
-/// every subscription the ledger holds a record for.
-///
-/// The union is the point. The listing alone misses a subscription whose vault
-/// item was removed while the gateway still holds a burnt grant for it, and it
-/// needs the entitlements router on `PATH` -- which is exactly what a shell
-/// diagnosing an empty pool may not have, and an empty answer there would read
-/// as an empty pool. The ledger alone misses a subscription nothing has used
-/// yet. Together they are what the gateway routes over.
-async fn pool() -> Vec<(String, String, Option<SubscriptionUsage>)> {
-    let mut recorded = usage::recorded_subscriptions();
-    let mut rows: BTreeMap<(String, String), Option<SubscriptionUsage>> = BTreeMap::new();
-    for entry in broker::list_all_subscriptions().await {
-        let ledger_record = recorded.remove(&entry.id);
-        rows.insert((named(&entry.provider), entry.id), ledger_record);
-    }
-    for (subscription_id, ledger_record) in recorded {
-        rows.insert(
-            (named(&ledger_record.provider), subscription_id),
-            Some(ledger_record),
-        );
-    }
-    rows.into_iter()
-        .map(|((provider, subscription_id), ledger_record)| {
-            (provider, subscription_id, ledger_record)
-        })
-        .collect()
+        .filter(|entry| entry.provider == provider && entry.status == "active")
+        .filter(|entry| !retired(&entry.id, usage::usage_for(&entry.id).as_ref()))
+        .map(|entry| entry.id)
+        .collect())
 }
 
 fn named(provider: &str) -> String {
@@ -316,20 +504,52 @@ fn named(provider: &str) -> String {
     trimmed.to_string()
 }
 
-/// One pool row: which account it is, whether its credential works, until when,
-/// and the last thing that refused it.
-fn row(
-    provider: &str,
-    subscription_id: &str,
+/// One account projection shared by the HTTP list, pool, CLI and refresh.
+pub fn subscription_view(entry: &SubscriptionEntry) -> Value {
+    let recorded = usage::usage_for(&entry.id);
+    let windows = usage::plan_windows(recorded.as_ref());
+    subscription_row(entry, recorded.as_ref(), windows)
+}
+
+fn subscription_row(
+    entry: &SubscriptionEntry,
     recorded: Option<&SubscriptionUsage>,
-    now_ms: i64,
+    windows: usage::PlanWindows,
 ) -> Value {
     json!({
-        "provider": provider,
-        "subscription_id": subscription_id,
-        "state": state(recorded, now_ms),
-        "expires_at": expires_at(recorded),
-        "last_redeem_error": last_redeem_error(recorded, now_ms),
+        "id": entry.id,
+        "provider": entry.provider,
+        "status": entry.status,
+        "label": entry.label,
+        "login_item": entry.login_item,
+        "sign_in": crate::journal::latest_subscription_sign_in(&entry.id),
+        "limits": windows.limits,
+        "measured": recorded.map(|usage| &usage.measured),
+        "block": recorded.and_then(|usage| usage.block.as_ref()),
+        "observed_at_ms": recorded.and_then(|usage| usage.updated_at_ms),
+        "probe": recorded.and_then(|usage| usage.probe.as_ref()),
+        "usage_check": usage::plan_usage_check(recorded),
+        "credential": credential_view(entry, recorded),
+        "usage_source": windows.source.map(|source| source.as_str()),
+        "stale": windows.stale,
+    })
+}
+
+fn credential_view(entry: &SubscriptionEntry, recorded: Option<&SubscriptionUsage>) -> Value {
+    let Some(credential) = recorded.and_then(|usage| usage.credential.as_ref()) else {
+        return Value::Null;
+    };
+    let state = if entry.status != "active" || crate::journal::is_retired(&entry.id) {
+        CredentialState::Disabled
+    } else {
+        credential.state
+    };
+    json!({
+        "state": state.as_str(),
+        "cause": credential.cause,
+        "recorded_at_ms": credential.recorded_at_ms,
+        "expires_at_ms": credential.expires_at_ms,
+        "refreshed_at_ms": credential.refreshed_at_ms,
     })
 }
 
@@ -397,6 +617,12 @@ fn last_redeem_error(recorded: Option<&SubscriptionUsage>, now_ms: i64) -> Value
         .filter(|block| block.blocked_until_ms > now_ms)
     {
         return json!(block.reason);
+    }
+    if let Some(detail) = usage::plan_usage_check(Some(usage))
+        .filter(|check| !check.ok)
+        .and_then(|check| check.detail.as_deref())
+    {
+        return json!(detail);
     }
     usage
         .probe

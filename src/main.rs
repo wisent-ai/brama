@@ -162,6 +162,9 @@ enum SubscriptionsCommand {
         /// Print the report as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,
+        /// Read current free provider usage reports; never starts a sign-in or model request
+        #[arg(long, default_value_t = false)]
+        refresh_usage: bool,
     },
 }
 
@@ -186,6 +189,9 @@ enum SubscriptionCommand {
         /// The exact Weles sign-in row to drive; without it the single row Weles holds for the provider is used, and two or more are never guessed between
         #[arg(long)]
         login_item: Option<String>,
+        /// Exact Brama subscription whose grant must be replaced and refreshed
+        #[arg(long)]
+        subscription_id: Option<String>,
         /// Why this sign-in is being run; recorded in the journal beside the verdict
         #[arg(long)]
         reason: String,
@@ -283,13 +289,8 @@ async fn main() {
                 std::process::exit(1);
             }
 
-            match brama::onboarding::run_first_use(
-                model,
-                agent_id,
-                allow_provider_cost,
-                reset,
-            )
-            .await
+            match brama::onboarding::run_first_use(model, agent_id, allow_provider_cost, reset)
+                .await
             {
                 Ok(false) if allow_provider_cost => {
                     std::process::exit(1);
@@ -387,12 +388,22 @@ async fn main() {
             brama::mcp::serve();
         }
         Commands::Subscriptions { command } => match command {
-            SubscriptionsCommand::List { json } => {
-                let report = brama::subscription_dispatch::pool::report().await;
+            SubscriptionsCommand::List {
+                json,
+                refresh_usage,
+            } => {
+                let report = if refresh_usage {
+                    brama::subscription_dispatch::pool::refresh_usage().await
+                } else {
+                    brama::subscription_dispatch::pool::report().await
+                };
                 if json {
                     print_json(&report);
                 } else {
                     print_pool(&report);
+                }
+                if report.get("ok").and_then(Value::as_bool) != Some(true) {
+                    std::process::exit(1);
                 }
             }
         },
@@ -459,10 +470,7 @@ async fn main() {
                     } else {
                         print_refresh(&verdict);
                     }
-                    // A refresh that obtained nothing exits non-zero after
-                    // reporting, because the caller that runs this is trying to
-                    // repair an empty pool and needs to know from the status
-                    // whether it is still empty.
+                    // Partial renewal is a failure, even if some grants now work.
                     if text(&verdict, "result") != Some("refreshed") {
                         std::process::exit(1);
                     }
@@ -475,6 +483,7 @@ async fn main() {
             SubscriptionCommand::SignIn {
                 provider,
                 login_item,
+                subscription_id,
                 reason,
                 login_timeout_ms,
                 json,
@@ -482,7 +491,7 @@ async fn main() {
                 brama::subscription_dispatch::sign_in::SignInOptions {
                     provider,
                     login_item,
-                    subscription_id: None,
+                    subscription_id,
                     reason,
                     login_timeout_ms,
                 },
@@ -576,13 +585,9 @@ async fn run_adoption(
         None => brama::config_adoption::default_destination()?,
     };
     let source_name = from.display().to_string();
-    let preview = brama::config_adoption::preview_document(
-        &document,
-        &source_name,
-        &destination,
-        agent_id,
-    )
-    .await?;
+    let preview =
+        brama::config_adoption::preview_document(&document, &source_name, &destination, agent_id)
+            .await?;
     if !apply {
         if json {
             println!(
@@ -701,9 +706,7 @@ fn print_adoption_preview(preview: &brama::config_adoption::AdoptionPreview) {
         }
     }
     for deployment in &preview.unreferenced_deployments {
-        println!(
-            "  rejected    deployment {deployment}: no source alias references it"
-        );
+        println!("  rejected    deployment {deployment}: no source alias references it");
     }
 }
 
@@ -723,9 +726,7 @@ fn print_adoption_result(result: &brama::config_adoption::AdoptionResult) {
     }
 }
 
-fn adoption_disposition(
-    disposition: brama::config_adoption::AdoptionDisposition,
-) -> &'static str {
+fn adoption_disposition(disposition: brama::config_adoption::AdoptionDisposition) -> &'static str {
     use brama::config_adoption::AdoptionDisposition;
     match disposition {
         AdoptionDisposition::Importable => "importable",
@@ -744,12 +745,7 @@ fn print_json(report: &Value) {
     );
 }
 
-/// The subscription pool as lines a person reads.
-///
-/// The count leads because it is the question that gets this command run: how
-/// many credentials can still serve a `best` call. Nothing but a state, a
-/// provider and an id is printed per row unless there is something more to say,
-/// so a healthy pool is short and a broken one is where the sentences are.
+/// The same subscription report as the desktop, including partial failures.
 fn print_pool(report: &Value) {
     let rows: &[Value] = report
         .get("providers")
@@ -761,12 +757,23 @@ fn print_pool(report: &Value) {
         .filter(|row| text(row, "state") == Some("live"))
         .count();
     println!("{live} of {} subscription credentials are live", rows.len());
+    println!(
+        "usage report: {}",
+        if report.get("ok").and_then(Value::as_bool) == Some(true) {
+            "complete"
+        } else {
+            "incomplete"
+        }
+    );
     for row in rows {
         println!(
-            "{:<8} {:<14} {}",
-            text(row, "state").unwrap_or_default(),
-            text(row, "provider").unwrap_or_default(),
-            text(row, "subscription_id").unwrap_or_default()
+            "{:<8} {:<14} {}{}",
+            text(row, "state").unwrap_or("unknown"),
+            text(row, "provider").unwrap_or("unknown"),
+            text(row, "subscription_id").unwrap_or("unknown"),
+            text(row, "label")
+                .map(|label| format!(" ({label})"))
+                .unwrap_or_default()
         );
         if let Some(expires_at) = text(row, "expires_at") {
             println!("    expires_at: {expires_at}");
@@ -774,7 +781,78 @@ fn print_pool(report: &Value) {
         if let Some(error) = text(row, "last_redeem_error") {
             println!("    last_redeem_error: {error}");
         }
+        if let Some(check) = row.get("usage_check").filter(|check| !check.is_null()) {
+            println!(
+                "    usage checked: {} ({})",
+                instant(check.get("attempted_at_ms")),
+                if check.get("ok").and_then(Value::as_bool) == Some(true) {
+                    "succeeded"
+                } else {
+                    "failed"
+                }
+            );
+            if let Some(detail) = text(check, "detail") {
+                println!("    usage detail: {detail}");
+            }
+        }
+        let limits = row
+            .get("limits")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        if limits.is_empty() {
+            println!("    no usage measurement available");
+        }
+        for limit in limits {
+            let amount = limit
+                .get("used_fraction")
+                .and_then(Value::as_f64)
+                .map(|fraction| format!("{:.1}%", fraction * 100.0))
+                .unwrap_or_else(|| "unknown".to_string());
+            println!(
+                "    {}: {amount} used; reset {}; observed {}{}",
+                text(limit, "window_label")
+                    .or_else(|| text(limit, "label"))
+                    .unwrap_or("unnamed window"),
+                instant(limit.get("resets_at_ms")),
+                instant(limit.get("recorded_at_ms")),
+                if row.get("stale").and_then(Value::as_bool) == Some(true) {
+                    " (stale)"
+                } else {
+                    ""
+                }
+            );
+        }
     }
+    if let Some(errors) = report.get("errors").and_then(Value::as_array) {
+        for error in errors {
+            let account = error
+                .pointer("/context/subscription")
+                .and_then(Value::as_str)
+                .or_else(|| error.pointer("/context/agent").and_then(Value::as_str))
+                .unwrap_or("subscription report");
+            let mut current = Some(error);
+            let mut prefix = "";
+            while let Some(failure) = current {
+                eprintln!(
+                    "{account}: {prefix}{}: {}",
+                    text(failure, "failure_point").unwrap_or("unknown operation"),
+                    text(failure, "detail").unwrap_or("failed without a stated reason")
+                );
+                current = failure.get("cause").filter(|cause| cause.is_object());
+                prefix = "caused by ";
+            }
+        }
+    }
+}
+
+fn instant(value: Option<&Value>) -> String {
+    value
+        .and_then(Value::as_i64)
+        .filter(|value| *value > 0)
+        .and_then(chrono::DateTime::from_timestamp_millis)
+        .map(|at| at.to_rfc3339())
+        .unwrap_or_else(|| "unknown".to_string())
 }
 
 /// What one refresh came to, as lines.

@@ -42,6 +42,8 @@ const INTERVAL_ENV: &str = "BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS";
 const SKEW_ENV: &str = "BRAMA_CREDENTIAL_REFRESH_SKEW_SECS";
 const SIGN_IN_COOLDOWN_ENV: &str = "BRAMA_CREDENTIAL_SIGN_IN_COOLDOWN_SECS";
 const SIGN_IN_TIMEOUT_ENV: &str = "BRAMA_CREDENTIAL_SIGN_IN_TIMEOUT_MS";
+/// Browser sign-in is separate from silent OAuth token renewal.
+const AUTOMATIC_SIGN_IN_ENV: &str = "BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN";
 /// One minute: short enough that a token with a five-minute skew window is
 /// refreshed several sweeps before it expires even if some of those sweeps are
 /// slow, and cheap enough that the cost is a handful of vault reads a minute.
@@ -184,6 +186,7 @@ enum Swept {
 
 /// Walk every active subscription once, refreshing what is due.
 async fn sweep(skew: Duration) {
+    let automatic_sign_in = std::env::var(AUTOMATIC_SIGN_IN_ENV).is_ok_and(|value| value == "1");
     let mut visited = BTreeSet::new();
     let mut refreshed = usize::default();
     let mut refused = usize::default();
@@ -196,7 +199,9 @@ async fn sweep(skew: Duration) {
     // Incomplete historical items are never handed to request dispatch. They
     // enter only this repair loop; the Weles account declaration must map back
     // to the exact subscription id before a browser opens.
-    entries.extend(broker::list_recoverable_subscriptions().await);
+    if automatic_sign_in {
+        entries.extend(broker::list_recoverable_subscriptions().await);
+    }
     for entry in entries {
         if entry.status != "active" || crate::journal::is_retired(&entry.id) {
             continue;
@@ -219,12 +224,13 @@ async fn sweep(skew: Duration) {
         // identity now instead of waiting for an expiry or provider refusal:
         // the requested subscription id lets Weles accept only its declared
         // account, and a successful donation writes the durable login tag.
-        if entry
-            .login_item
-            .as_deref()
-            .map(str::trim)
-            .filter(|item| !item.is_empty())
-            .is_none()
+        if automatic_sign_in
+            && entry
+                .login_item
+                .as_deref()
+                .map(str::trim)
+                .filter(|item| !item.is_empty())
+                .is_none()
         {
             awaiting_signin = awaiting_signin.saturating_add(1);
             if schedule_sign_in(entry.id, entry.provider, entry.login_item) {
@@ -242,7 +248,8 @@ async fn sweep(skew: Duration) {
         match usage::credential_refresh_hint(&entry.id, skew) {
             RefreshHint::AwaitingSignIn => {
                 awaiting_signin = awaiting_signin.saturating_add(1);
-                if schedule_sign_in(entry.id, entry.provider, entry.login_item) {
+                if automatic_sign_in && schedule_sign_in(entry.id, entry.provider, entry.login_item)
+                {
                     sign_ins_started = sign_ins_started.saturating_add(1);
                 }
                 continue;
@@ -259,7 +266,7 @@ async fn sweep(skew: Duration) {
                 provider,
             } => {
                 awaiting_signin = awaiting_signin.saturating_add(1);
-                if schedule_sign_in(subscription_id, provider, login_item) {
+                if automatic_sign_in && schedule_sign_in(subscription_id, provider, login_item) {
                     sign_ins_started = sign_ins_started.saturating_add(1);
                 }
             }
@@ -273,6 +280,7 @@ async fn sweep(skew: Duration) {
         refused,
         awaiting_signin,
         sign_ins_started,
+        automatic_sign_in,
         "finished one credential refresh sweep"
     );
 }
