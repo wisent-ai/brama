@@ -539,7 +539,7 @@ fn credential_view(entry: &SubscriptionEntry, recorded: Option<&SubscriptionUsag
     let Some(credential) = recorded.and_then(|usage| usage.credential.as_ref()) else {
         return Value::Null;
     };
-    let state = if entry.status != "active" || crate::journal::is_retired(&entry.id) {
+    let state = if entry.status == "retired" || crate::journal::is_retired(&entry.id) {
         CredentialState::Disabled
     } else {
         credential.state
