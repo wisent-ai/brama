@@ -138,12 +138,14 @@ stay unknown. Refresh operations can wait longer than ordinary reads so a
 provider or credential timeout can be reported by Brama itself. OAuth renewal
 does not open a browser by default; automatic Weles sign-in requires
 <code>BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN=1</code>. No OMP integration is used.</p>
-<h2 id="0276">0.2.76<a class="headerlink" href="#0276" title="Link to this section">&para;</a></h2>
-<p>The managed launcher and server use the single <code>wisent-backend/chat</code>
-alias and the <code>weles</code> alias. The backend identity is derived from the
+<h2 id="0277">0.2.77<a class="headerlink" href="#0277" title="Link to this section">&para;</a></h2>
+<p>The managed backend identity is derived from the
 four required backend aliases, so optional route names cannot make its
 startup allowlist contradict the server contract. A mismatch reports the
 expected and observed names without printing credentials.</p>
+<h2 id="0276">0.2.76<a class="headerlink" href="#0276" title="Link to this section">&para;</a></h2>
+<p>The managed launcher and server use the single <code>wisent-backend/chat</code>
+alias and the <code>weles</code> alias.</p>
 <h3 id="existing-route-configuration-can-be-reviewed-and-adopted">Existing route configuration can be reviewed and adopted<a class="headerlink" href="#existing-route-configuration-can-be-reviewed-and-adopted" title="Link to this section">&para;</a></h3>
 <p><code>brama adopt</code>, first-use <code>--adopt-*</code> options, and Brama
 Desktop now share one Brama-owned preview/apply operation for schema-1
