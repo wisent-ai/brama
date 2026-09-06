@@ -124,6 +124,16 @@ footer a { color: var(--muted); text-decoration: none; }
       <article class="doc"><h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Link to this section">&para;</a></h1>
 <p>All notable Brama changes are documented here. Brama follows Semantic
 Versioning and the pre-one compatibility policy in <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-consumer-name-alias">Unreleased: the backend alias is the client's name</h2>
+<p>The Wisent App backend's chat alias is <code>wisent-backend</code>. It was
+<code>wisent-backend/chat/primary</code> with a <code>/fallback</code> twin, which spelled a
+rank the route table's <code>fallbacks</code> column already carries, and then
+<code>wisent-backend/chat</code>, which spelled a shape
+<code>POST /v1/chat/completions</code> already names. The alias now carries only who is
+asking. <code>wisent-backend/embeddings</code> and <code>wisent-backend/moderation</code> keep
+their purpose segment for one stated reason: each needs a route of its own and the
+route table is keyed by alias name alone.</p>
+
 <h2 id="unreleased-subscription-usage">Unreleased: subscription usage and failure reporting</h2>
 <p><code>brama subscriptions list --refresh-usage</code> and Brama Desktop's
 <strong>Refresh usage</strong> share native free provider reports, bounded

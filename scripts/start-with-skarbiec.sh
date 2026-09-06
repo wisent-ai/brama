@@ -531,7 +531,7 @@ except (KeyError, TypeError) as error:
 
 required_aliases = {
     "best",
-    "wisent-backend/chat",
+    "wisent-backend",
     "wisent-backend/evaluation",
     "wisent-backend/embeddings",
     "wisent-backend/moderation",
@@ -608,7 +608,7 @@ write_policy(allowed_path, ",".join(allowed_models))
 write_policy(aliases_path, json.dumps(aliases, separators=(",", ":"), sort_keys=True))
 write_policy(
     backend_path,
-    json.dumps(sorted(alias for alias in required_aliases if alias.startswith("wisent-backend/"))),
+    json.dumps(sorted(alias for alias in required_aliases if alias == "wisent-backend" or alias.startswith("wisent-backend/"))),
 )
 PY
 BRAMA_ALLOWED_MODELS=$(cat "$policy_dir/allowed-models")

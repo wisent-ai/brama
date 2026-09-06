@@ -130,7 +130,7 @@ configuration fails startup, and no credential, provider, identity, or
 storage fallback is silent. This page lists every knob the gateway itself
 reads, then the launcher's own inputs.</p>
 <p>The managed launcher derives the <code>wisent-backend</code> client's exact
-four-alias grant from the required policy: <code>wisent-backend/chat</code>,
+four-alias grant from the required policy: <code>wisent-backend</code>,
 <code>wisent-backend/evaluation</code>, <code>wisent-backend/embeddings</code>,
 and <code>wisent-backend/moderation</code>. Extra operator aliases remain in the
 route table but are not automatically granted to this client. Startup checks
@@ -188,7 +188,7 @@ followed by <code>required=</code> and <code>observed=</code> lists.</p>
 <tr>
 <td><code>BRAMA_MODEL_ALIASES</code></td>
 <td>required in managed mode</td>
-<td>JSON object of alias → canonical route. Must contain <code>wisent-backend/chat</code>, <code>wisent-backend/evaluation</code>, <code>wisent-backend/embeddings</code>, <code>wisent-backend/moderation</code>, <code>weles</code>, and <code>best</code>; extra names are permitted without widening the required clients' allowlists. In standalone mode absent means <code>{}</code></td>
+<td>JSON object of alias → canonical route. Must contain <code>wisent-backend</code>, <code>wisent-backend/evaluation</code>, <code>wisent-backend/embeddings</code>, <code>wisent-backend/moderation</code>, <code>weles</code>, and <code>best</code>; extra names are permitted without widening the required clients' allowlists. In standalone mode absent means <code>{}</code></td>
 </tr>
 <tr>
 <td><code>BRAMA_INFERENCE_ROUTES_FILE</code></td>

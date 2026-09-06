@@ -127,6 +127,30 @@ what does its answer mean? Each entry starts from the symptom, quotes the
 exact sentence the product uses (every string below exists in source or was
 captured from a running 0.2.38 gateway), and names the repair. The error
 vocabulary itself is in <a href="/docs/errors">errors</a>.</p>
+<h2 id="public-endpoint-and-ci-checkout">The public endpoint fails while CI waits for a key<a class="headerlink" href="#public-endpoint-and-ci-checkout" title="Link to this section">&para;</a></h2>
+<p>The <code>funnel-keepalive</code> workflow publishes Brama's origin from Stado's
+service directory every five minutes. Its checked-in
+<code>scripts/brama-funnel-publisher.sh</code> changes only the root path on HTTPS
+port 443; it preserves the Stado object and integration paths on the same port.
+A queued workflow has not published anything, even when the runner is online.</p>
+<p>For an empty HTTP 502 from the public endpoint, compare the declared origin
+with the current forwarding rule and inspect the publisher's job:</p>
+<pre><code class="language-shell">stado service directory bind brama --target charless-mac-mini --json
+stado host exec charless-mac-mini -- tailscale serve status --json
+gh run list --repo wisent-ai/brama --workflow funnel-keepalive.yml
+</code></pre>
+<p>If a checkout waits in <code>git-credential-osxkeychain</code>, do not approve a
+system dialog or restart the runner. Brama's jobs on the release runner create
+an empty, job-local Git configuration before checkout, ignore system Git
+configuration, and disable terminal and askpass prompts. Checkout uses its
+GitHub token; private dependency authorization writes only to that job's Git
+configuration, not the host's shared configuration. A missing credential makes
+the job fail instead of opening a consent window. Jobs started from an older
+revision retain their old settings; cancel a stuck old run before scheduling
+the corrected publisher, rather than rerunning the old revision.</p>
+<p>A completed publication proves the forwarding rule, not model inference.
+Confirm the original authenticated request against Brama before treating the
+caller as repaired.</p>
 <h2 id="brama-serve-refuses-to-start"><code>brama serve</code> refuses to start<a class="headerlink" href="#brama-serve-refuses-to-start" title="Link to this section">&para;</a></h2>
 <p>The sentence, verbatim (exit 1):</p>
 <pre><code class="language-text">Server error: BRAMA_MODEL_ALIASES is required and is assembled by

@@ -23,7 +23,15 @@ jobs:
             platform: darwin-arm64
             architecture: arm64
     runs-on: ${{ matrix.os }}
+    env:
+      GIT_CONFIG_NOSYSTEM: "1"
+      GIT_TERMINAL_PROMPT: "0"
+      GIT_ASKPASS: /usr/bin/false
     steps:
+      - name: Use job-local Git configuration
+        run: |
+          git_config=$(mktemp "$RUNNER_TEMP/brama-gitconfig.XXXXXX")
+          printf 'GIT_CONFIG_GLOBAL=%s\n' "$git_config" >> "$GITHUB_ENV"
       # A self-hosted runner inherits the launch daemon's PATH, not a login
       # shell's, so Homebrew binaries the release steps rely on — `gh` above
       # all — are absent until they are added explicitly.
