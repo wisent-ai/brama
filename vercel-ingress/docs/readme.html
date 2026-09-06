@@ -552,10 +552,10 @@ Weles account, validates its declared subscription mapping, and requires an
 actual successful credential refresh afterwards. Brama Desktop exposes the
 same operation as <strong>Sign in</strong>. Weles runs the browser on the
 Stado-selected host, never on the machine showing Brama Desktop.</p>
-<p>OAuth tokens renew without opening a login. Browser sign-in is explicit by
-default; a deployment must set <code>BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN=1</code>
-to enable the existing automatic Weles renewal. A failed usage read therefore
-remains a visible error instead of an unexpected login. See the
+<p>OAuth tokens renew without opening a login. Browser sign-in requires an
+explicit CLI or Desktop action selecting one subscription and Weles account.
+A failed usage read remains a visible error instead of an unexpected login.
+The credential timer never starts a browser sign-in. See the
 <a href="/docs/cli/subscription/sign-in">sign-in contract and refusals</a>.</p>
 <h2 id="operational-model">Operational model<a class="headerlink" href="#operational-model" title="Link to this section">&para;</a></h2>
 <ul>

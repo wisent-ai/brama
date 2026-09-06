@@ -128,8 +128,9 @@ pub struct SubscriptionUsage {
     pub provider: String,
     #[serde(default)]
     pub measured: Measured,
-    /// Latest reading per limit id, newest wins. A window the provider stopped
-    /// reporting keeps its last reading rather than vanishing from the view.
+    /// Latest reading per limit id from the newest successful source. A
+    /// provider report replaces this set because an omitted optional window is
+    /// the provider's current statement that the account has no such window.
     #[serde(default)]
     pub limits: BTreeMap<String, LimitReading>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -359,7 +360,12 @@ fn now_ms() -> i64 {
 const POINT_USAGE_LEDGER_PERSIST: &str = "brama.subscription-usage.ledger-persist";
 const IMPACT_PLAN_USAGE: &str = "this subscription's current usage report";
 
-fn plan_usage_storage_failure(subscription_id: &str, provider: &str, detail: String) -> Failure {
+fn plan_usage_storage_failure(
+    subscription_id: &str,
+    provider: &str,
+    attempted_at_ms: i64,
+    detail: String,
+) -> Failure {
     failure::envelope(
         POINT_USAGE_LEDGER_PERSIST,
         Code::Config,
@@ -368,6 +374,7 @@ fn plan_usage_storage_failure(subscription_id: &str, provider: &str, detail: Str
     )
     .with_context("subscription", subscription_id)
     .with_context("provider", provider)
+    .with_context("attempted_at_ms", attempted_at_ms.to_string())
 }
 
 fn usage_path() -> Option<PathBuf> {
@@ -707,11 +714,10 @@ fn remember_plan_usage_failure(
 
 /// Record what the provider's own usage report said about one subscription.
 ///
-/// This is the ordinary path now: it costs no quota, so it runs on a timer, and
-/// the readings land in exactly the map real traffic writes to, keyed by the same
-/// limit ids. A report that carried no window is still a successful check --
-/// which is what tells a reader that the blank row is the provider's answer and
-/// not a broken credential.
+/// This is the ordinary path now: it costs no quota, so it runs on a timer.
+/// The provider's complete report replaces the prior window set. In particular,
+/// a schema-valid empty report is a known empty plan, not permission to retain
+/// windows the provider has explicitly stopped publishing.
 pub fn record_plan_usage(
     subscription_id: &str,
     provider: &str,
@@ -726,14 +732,13 @@ pub fn record_plan_usage(
         entry.provider = provider.to_string();
         entry.updated_at_ms = Some(now);
         entry.plan_usage_checked_at_ms = Some(now);
+        entry.limits.clear();
         for reading in readings {
             entry
                 .limits
                 .insert(reading.limit_id.clone(), reading.clone());
         }
-        if !readings.is_empty() {
-            entry.usage_source = Some(UsageSource::Provider);
-        }
+        entry.usage_source = (!readings.is_empty()).then_some(UsageSource::Provider);
         entry.usage_check = Some(Probe {
             attempted_at_ms: now,
             ok: true,
@@ -745,7 +750,7 @@ pub fn record_plan_usage(
     match stored {
         Ok(()) => Ok(()),
         Err(error) => {
-            let refused = plan_usage_storage_failure(subscription_id, provider, error);
+            let refused = plan_usage_storage_failure(subscription_id, provider, now, error);
             remember_plan_usage_failure(subscription_id, provider, now, &refused);
             Err(refused)
         }
@@ -783,7 +788,7 @@ pub fn record_plan_usage_unpublished(
     match stored {
         Ok(()) => Ok(()),
         Err(error) => {
-            let refused = plan_usage_storage_failure(subscription_id, provider, error);
+            let refused = plan_usage_storage_failure(subscription_id, provider, now, error);
             remember_plan_usage_failure(subscription_id, provider, now, &refused);
             Err(refused)
         }
@@ -823,7 +828,7 @@ pub fn record_plan_usage_failure(
     match stored {
         Ok(()) => Ok(()),
         Err(error) => {
-            let storage = plan_usage_storage_failure(subscription_id, provider, error)
+            let storage = plan_usage_storage_failure(subscription_id, provider, now, error)
                 .caused_by(refused.clone());
             remember_plan_usage_failure(subscription_id, provider, now, &storage);
             Err(storage)

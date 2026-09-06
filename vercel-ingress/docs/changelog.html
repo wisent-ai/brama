@@ -136,8 +136,13 @@ empty pool. Unsupported free-report integrations remain unmeasured, not zero.</p
 explicit Weles/Stado <strong>Sign in</strong> action. Missing measurement times
 stay unknown. Refresh operations can wait longer than ordinary reads so a
 provider or credential timeout can be reported by Brama itself. OAuth renewal
-does not open a browser by default; automatic Weles sign-in requires
-<code>BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN=1</code>. No OMP integration is used.</p>
+never opens a browser; Weles sign-in requires the explicit selected-account
+action. No OMP integration is used.</p>
+<p>A successful provider report replaces the complete prior set of limit
+windows, including a provider's explicit empty report. An omitted window can
+no longer appear current only because it existed in an older reading.
+Failed reads retain the last good windows as stale, and provider, credential
+and ledger-write failures include the recorded attempt time.</p>
 <h2 id="0277">0.2.77<a class="headerlink" href="#0277" title="Link to this section">&para;</a></h2>
 <p>The managed backend identity is derived from the
 four required backend aliases, so optional route names cannot make its

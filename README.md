@@ -308,12 +308,13 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   traffic, or an operator's probe -- and is `null` when there is no window to
   attribute. `stale` is true after a failed usage attempt, a window reset, or
   any retained reading aging past `BRAMA_PLAN_USAGE_TTL_SECS` (default 300).
-  A stale reading is still
-  served, because a number that says when it was taken is information and an
-  empty plan is not; a reading older than the retention window
-  (`BRAMA_PLAN_USAGE_RETENTION_SECS`, default 86400) stops being served, because
-  a fraction of a five-hour window that has since reset several times describes
-  nothing.
+  A failed read keeps the last good reading and marks it stale, because a number
+  that says when it was taken is information and an empty plan is not. A later
+  schema-valid provider report replaces the complete window set, so windows the
+  provider explicitly omits disappear and an explicit empty report remains
+  distinguishable from missing data through `usage_check.ok: true`. A reading
+  older than the retention window (`BRAMA_PLAN_USAGE_RETENTION_SECS`, default
+  86400) stops being served.
 - **What an empty `limits` array means:** `usage_check` distinguishes an
   unread subscription, a failed read, expired history, and a provider that
   does not publish a report. `usage_check.ok: false` carries the actual
@@ -636,19 +637,14 @@ complete. Neither service reads the other's files, the token is never placed in
 argv or the journal, and no browser opens on the machine running the Brama
 command.
 
-The in-process refresh sweep renews OAuth tokens before expiry, without opening
-a login. Browser sign-in requires the explicit CLI or Desktop action by
-default. Deployments that deliberately want the existing automatic Weles
-renewal may set `BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN=1`; only then can a
-provider refusal or incomplete account mapping schedule a browser sign-in.
-Completed browser runs and permanent account-mapping refusals keep their
-cooldown in the journal, so a Brama restart does not repeat them; a transient
-Weles preflight failure does not consume that cooldown. Historical vault items
-that still carry `brama:id:` and `brama:provider:` but lost routing tags remain
-unavailable to callers; the
-policy grants only Brama enough access to repair them, Weles proves their primary
-account mapping, and a successful donation restores `brama:subscription`,
-`brama:agent:`, and `brama:login:`.
+The in-process refresh sweep silently renews OAuth tokens before expiry. It
+never opens a login or chooses an account: a refused or absent grant remains
+marked for reauthorization until an operator explicitly selects its exact
+subscription and Weles login item through the CLI or Desktop sign-in action.
+Historical vault items that still carry `brama:id:` and `brama:provider:` but
+lost routing tags remain unavailable to callers until that explicit repair;
+Weles proves the selected account mapping, and a successful donation restores
+`brama:subscription`, `brama:agent:`, and `brama:login:`.
 
 The real functional journeys in `tests/providers/subscription_real.rs` run one
 Weles login and one provider refresh for each of Claude Code, Codex, and Kimi.

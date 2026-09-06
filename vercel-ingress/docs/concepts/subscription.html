@@ -251,10 +251,9 @@ failed refresh — the rotated grant is dropped, because the provider already
 invalidated the one still stored. A provider rejecting a grant whose local
 expiry still claims validity triggers one forced refresh on the request
 path.</p>
-<p>OAuth token renewal does not open a browser. Browser sign-in is an explicit
-CLI or Desktop action by default. The existing automatic Weles renewal runs
-only when the deployment sets <code>BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN=1</code>;
-usage reporting itself never schedules a sign-in.</p>
+<p>OAuth token renewal does not open a browser. Browser sign-in requires an
+explicit CLI or Desktop action selecting one subscription and its Weles
+account. Neither usage reporting nor the credential timer schedules a sign-in.</p>
 <h2 id="donation-and-retirement">Donation and retirement<a class="headerlink" href="#donation-and-retirement" title="Link to this section">&para;</a></h2>
 <p><code>POST /v1/subscriptions/:agent_id</code> (and the account/admin variants) banks a
 credential onto the coordinate the operator's routes table already names for

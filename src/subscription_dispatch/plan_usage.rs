@@ -164,6 +164,10 @@ fn scoped_failure(
     failure::envelope(point, code, IMPACT_PLAN_USAGE, detail)
         .with_context("subscription", subscription_id)
         .with_context("provider", provider)
+        .with_context(
+            "attempted_at_ms",
+            chrono::Utc::now().timestamp_millis().to_string(),
+        )
 }
 
 fn provider_status(detail: &str) -> Option<u16> {

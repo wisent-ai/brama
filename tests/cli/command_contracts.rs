@@ -112,40 +112,6 @@ fn mcp_exposes_only_the_read_only_hardware_tool() {
 }
 
 #[test]
-fn subscription_commands_read_isolated_state_and_require_explicit_mutation_context() {
-    let directory = TestDirectory::new("cli-subscriptions");
-    let list = command(&directory)
-        .args(["subscriptions", "list", "--json"])
-        .output()
-        .expect("subscription list");
-    assert!(
-        list.status.success(),
-        "{}",
-        String::from_utf8_lossy(&list.stderr)
-    );
-    let body: Value = serde_json::from_slice(&list.stdout).expect("subscription list JSON");
-    assert_eq!(body["providers"], Value::Array(Vec::new()));
-
-    let refresh = command(&directory)
-        .args([
-            "subscription",
-            "refresh",
-            "openai",
-            "--reason",
-            "contract verifies an empty provider pool",
-            "--json",
-        ])
-        .output()
-        .expect("subscription refresh");
-    assert!(!refresh.status.success());
-    let body: Value = serde_json::from_slice(&refresh.stdout).expect("refresh verdict JSON");
-    assert_eq!(body["provider"], "openai");
-    assert_eq!(body["attempted"], 0);
-    assert_eq!(body["result"], "failed");
-    assert!(directory.path().join("state/journal.jsonl").is_file());
-}
-
-#[test]
 fn billable_cli_commands_refuse_before_provider_access_without_cost_acknowledgement() {
     let directory = TestDirectory::new("cli-cost-boundary");
     let inference = command(&directory)

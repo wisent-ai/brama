@@ -38,8 +38,8 @@ pub struct SignInOptions {
     /// The exact Weles sign-in row to drive, or `None` to use the account Weles
     /// explicitly declares primary for the provider.
     pub login_item: Option<String>,
-    /// Exact subscription whose stored grant this sign-in replaces. Automatic
-    /// renewal always supplies it; older provider-wide CLI calls may not.
+    /// Exact subscription whose stored grant this operator-selected sign-in
+    /// replaces.
     pub subscription_id: Option<String>,
     /// Why this sign-in is being run; recorded in the journal beside the
     /// verdict.
@@ -54,9 +54,9 @@ pub struct SignInOptions {
 /// the runbook does: by a refresh that answers `refreshed`.
 ///
 /// Transport and dependency refusals -- an unknown provider, a missing reason,
-/// no reachable Weles worker -- are `Err` so an automatic retry is not cooled
-/// down. An account-mapping refusal is a completed failed verdict: the same
-/// undeclared account cannot become correct on the next minute's sweep.
+/// no reachable Weles worker -- are `Err`. An account-mapping refusal is a
+/// completed failed verdict: the selected Weles row cannot safely renew a
+/// different subscription.
 pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, String> {
     let provider = options.provider.trim().to_string();
     let weles_provider = match provider.as_str() {
