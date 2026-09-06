@@ -283,8 +283,20 @@ from a running 0.2.38 gateway.</p>
 <td><code>brama-desktop</code> only</td>
 <td>refresh one provider's pooled grants now</td>
 </tr>
+<tr><td>POST</td><td><code>/v1/admin/subscription-pool/usage</code></td><td><code>brama-desktop</code> only</td><td>refresh free usage reports for the whole pool</td></tr>
+<tr><td>POST</td><td><code>/v1/admin/subscription-usage/:agent_id</code></td><td><code>brama-desktop</code> only</td><td>refresh one administered agent's usage</td></tr>
+<tr><td>POST</td><td><code>/v1/account/subscription-usage</code></td><td>Wisent user session</td><td>refresh the authenticated account's usage</td></tr>
+<tr><td>POST</td><td><code>/v1/subscription-usage/:agent_id</code></td><td>bearer + agent HMAC</td><td>refresh the signed agent's usage</td></tr>
+<tr><td>POST</td><td><code>/v1/admin/subscription-pool/sign-in</code></td><td><code>brama-desktop</code> only</td><td>explicitly sign in the selected pooled account through Weles</td></tr>
+<tr><td>POST</td><td><code>/v1/admin/subscription-sign-in/:agent_id/:subscription_id</code></td><td><code>brama-desktop</code> only</td><td>explicitly sign in one subscription owned by the administered agent</td></tr>
+<tr><td>POST</td><td><code>/v1/account/subscription-sign-in/:subscription_id</code></td><td>Wisent user session</td><td>explicitly sign in one subscription owned by the authenticated account</td></tr>
 </tbody>
 </table>
+<h2 id="subscription-usage-results">Subscription usage results<a class="headerlink" href="#subscription-usage-results" title="Link to this section">&para;</a></h2>
+<p>Subscription list and usage-refresh responses contain <code>ok</code>, <code>observed_at_ms</code>, <code>errors</code>, and <code>subscriptions</code> (or <code>providers</code> for the administrator's pool). A completed report can return HTTP 200 with <code>ok: false</code>: the body retains successful rows and standard Wisent failure envelopes for the failures. Clients must inspect <code>ok</code>, not infer success from HTTP status. Admission failures still use the ordinary HTTP error body.</p>
+<p>Each row carries <code>usage_check</code> with the latest free report attempt's <code>attempted_at_ms</code>, <code>ok</code>, <code>detail</code> and <code>source</code>, separately from a completion <code>probe</code>. Window percentages come only from valid provider metrics; their reset and observation instants are preserved. An unsuccessful refresh immediately marks retained measurements stale. Missing measurements, unsupported reports and failed reads are distinct; none implies zero usage.</p>
+<p>The usage POSTs accept no credential and require the same identity as the corresponding list. They use Brama's existing provider and Skarbiec handling, do not spend model quota, and never launch Weles or open a sign-in. A dependency timeout, invalid response or storage failure appears in the result with the failed operation and actual reason.</p>
+<p>Sign-in is separate and explicitly requested. The sign-in routes require a nonempty <code>reason</code>, accept <code>login_item</code> and <code>login_timeout_ms</code>, and the pool route additionally requires <code>subscription_id</code>. Brama verifies current ownership, refuses retired or mismapped accounts, derives the provider from the selected subscription, and invokes the existing Weles flow on the Stado-selected host. It returns the native <code>signed_in</code>/<code>failed</code> verdict and actual detail. Ordinary list and usage routes never invoke this flow.</p>
 <h2 id="transport">Transport<a class="headerlink" href="#transport" title="Link to this section">&para;</a></h2>
 <p>A request is accepted only when its peer is loopback, the address the gateway
 itself bound, a peer named in <code>BRAMA_ENCRYPTED_PEER_IPS</code> (a mesh hop that is

@@ -295,8 +295,8 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   rate-limit `block` in force, when the record last changed
   (`observed_at_ms`), where the newest window came from and whether it is still
   current (`usage_source`: `provider`, `traffic` or `probe`, and `stale`), the
-  newest proactive check (`probe`: `attempted_at_ms`, `ok`, `detail` when there
-  is something to explain, and `source` -- `usage_report` or `completion`), and
+  newest completion check (`probe`) and the independent latest free usage
+  attempt (`usage_check`: `attempted_at_ms`, `ok`, `detail`, `source`), and
   where the credential itself stands (`credential`: `state` -- `active`,
   `needs_reauthorization` or `disabled` -- with `cause`, `recorded_at_ms`,
   `expires_at_ms` and `refreshed_at_ms`; `null` while nothing has been recorded
@@ -306,22 +306,22 @@ operator paths. Runnable, risk-labeled workflows are indexed in
 - **How fresh a plan window is:** `usage_source` names which statement the
   newest window is -- the provider's own usage report, the headers of real
   traffic, or an operator's probe -- and is `null` when there is no window to
-  attribute. `stale` is true once the newest reading has aged past the freshness
-  window (`BRAMA_PLAN_USAGE_TTL_SECS`, default 300). A stale reading is still
+  attribute. `stale` is true after a failed usage attempt, a window reset, or
+  any retained reading aging past `BRAMA_PLAN_USAGE_TTL_SECS` (default 300).
+  A stale reading is still
   served, because a number that says when it was taken is information and an
   empty plan is not; a reading older than the retention window
   (`BRAMA_PLAN_USAGE_RETENTION_SECS`, default 86400) stops being served, because
   a fraction of a five-hour window that has since reset several times describes
   nothing.
-- **What an empty `limits` array means:** one of four states, and the newest
-  check is what tells them apart. Windows present: render them, aged by the
-  newest `recorded_at_ms`, and say "as of" only when `stale` is false. Empty with
-  `probe.ok` false: the credential or the provider refused, and `probe.detail` is
-  its own sentence. Empty with no `probe` and nothing measured: nothing has ever
-  gone through this subscription. Empty with `probe.ok` true: the provider
-  genuinely publishes no plan state, and `probe.detail` says so when the provider
-  publishes no usage report at all. Only the last of those may be shown as "no
-  plan window", and none of them is a zero.
+- **What an empty `limits` array means:** `usage_check` distinguishes an
+  unread subscription, a failed read, expired history, and a provider that
+  does not publish a report. `usage_check.ok: false` carries the actual
+  operation and reason; a missing check is not a successful measurement.
+  Providers that publish reports must return valid usage windows. Missing or
+  malformed metrics are errors, never zero usage or an unsupported plan.
+  Listings include `ok`, `observed_at_ms` and `errors`; failures use the
+  Wisent envelope and preserve account, operation, reason and attempt time.
 - **Operations:** public `GET /health` and `GET /readyz`; protected `GET /stats`.
   `/health` is liveness only and says so in its body (`dependencies:
   not_probed`): it answers `ok` from a gateway whose every credential
@@ -522,28 +522,23 @@ it.
 
 ### `brama subscriptions list`
 
-Read-only. It contacts no provider, redeems no capability and writes nothing: it
-joins the deployment's subscription listing to the usage ledger and states what
-is already recorded, so it is safe to run against a gateway that is serving
-traffic.
+Without options this reads recorded state, contacts no provider and changes no
+credential. It joins live Skarbiec discovery with the usage ledger and reports
+discovery failures rather than treating them as an empty pool. Add
+`--refresh-usage` to read the providers' free usage reports through Brama's
+normal credential handling, including renewal of an expired OAuth grant.
+Neither form starts a sign-in or calls a model.
 
 ```bash
 brama subscriptions list --json
+brama subscriptions list --refresh-usage --json
 ```
 
-```json
-{
-  "providers": [
-    {
-      "provider": "codex",
-      "subscription_id": "brama-sub-wisent-app-codex-primary",
-      "state": "burnt",
-      "expires_at": null,
-      "last_redeem_error": "invalid_grant: refresh token is no longer accepted"
-    }
-  ]
-}
-```
+The JSON report includes `ok`, `observed_at_ms`, `errors`, and `providers`.
+Each provider row contains the subscription identity, label, credential
+state, `limits` with usage/reset/observation instants, `usage_check`, and
+`stale`. `errors` contains the standard Wisent failure envelopes; their
+context identifies the subscription or agent and the attempt time.
 
 `state` is one of four words. `live`: nothing has refused this grant and its
 expiry, if it states one at all, is still ahead. `expired`: the recorded expiry
@@ -557,8 +552,22 @@ still in force, then the newest failed check. A lapsed block is deliberately not
 reported, because a stale refusal printed beside a `live` grant is what sends an
 operator looking for a sign-in nothing needs.
 
-Without `--json` the same report is printed as lines, led by how many credentials
-are live -- which is the question that gets the command run.
+Without `--json`, each plan window and its observation/reset time is printed
+beside the account. An incomplete report is labelled explicitly and its errors
+are printed to stderr. Both output modes exit non-zero when discovery,
+history access, or any active account's usage is unavailable or stale.
+A confirmed empty inventory succeeds on a plain read; asking to refresh it
+fails with `no active subscription is available to refresh`.
+
+Brama Desktop's **Refresh usage** action calls the same native implementation:
+`POST /v1/admin/subscription-pool/usage` for the whole pool,
+`POST /v1/admin/subscription-usage/:agent_id` for an administered agent,
+`POST /v1/account/subscription-usage` for the signed-in account, or
+`POST /v1/subscription-usage/:agent_id` for a bearer-and-HMAC signed agent.
+The responses preserve successful rows and report failures with `ok: false`;
+an HTTP 200 alone is not a successful refresh. The desktop retains last-good
+rows after a connection or discovery failure, marks them stale, and shows the
+failed operation instead of an empty or healthy screen.
 
 ### `brama subscription refresh <provider> --reason <text>`
 
@@ -589,68 +598,22 @@ are API keys and have no refresh path at all, or no usable credential source in
 this environment -- the last being what a shell without the launcher's capability
 environment gets, and not a broken account. A retired subscription is never
 refreshed, because rotating its grant would put back what somebody removed. The
-exit status is non-zero unless a credential was obtained.
+exit status is non-zero unless every attempted credential was obtained.
 
-### Reusing an existing OMP Codex session without signing in
-
-`scripts/operations/sync-omp-codex-session.py` sends the selected existing
-OMP account's access token to the signed Brama donation API. It never opens a
-browser, starts Weles, copies a refresh token, or starts a new login. OMP remains
-the only owner of refresh-token rotation; the expected email and ChatGPT account
-UUID prevent a changed account index from silently selecting another identity.
-
-List account identities with `omp token openai-codex --list` and read their
-provider-reported quota and ChatGPT UUIDs with
-`omp usage --provider openai-codex --json`. Select an account with remaining
-quota and its already assigned Brama subscription; do not overwrite another
-account's slot. The synchronizer accepts any existing Codex subscription owned
-by the signed agent, not only the primary slot. Omit `--login-item` when neither
-the subscription nor its vault tags declares a login mapping.
-
-```bash
-python3 scripts/operations/sync-omp-codex-session.py \
-  --brama-url https://brama.wisent.com \
-  --host <Stado-host-owning-Brama-vault> \
-  --agent-id wisent-app \
-  --subscription-id brama-sub-wisent-app-codex-primary \
-  --login-item <existing-login-item> \
-  --account <OMP-account-number> \
-  --email <expected-email> \
-  --account-id <expected-ChatGPT-account-UUID> \
-  --bearer-item jeden-model-router \
-  --signing-item agent:wisent-app \
-  --reason 'synchronize an already signed-in OMP account'
-```
-
-The command reads credentials from the local owner vault and uses Stado to
-inspect the target item's digest and tags. Only Brama writes the donated token
-and acknowledges the replaced credential in its subscription ledger. A direct
-vault write alone cannot clear Brama's recorded `needs_reauthorization` state.
-Shared subscriptions keep every existing `brama:agent:` tag; another authorized
-consumer is not an account-mapping conflict. A caller not assigned to the item,
-a different provider, subscription or login mapping, or an inactive or
-unexpectedly shaped bundle is refused without replacing it.
-
-`stored` or `current` reports the target vault revision, access-token expiry
-and verified preservation of its consumers, not successful model inference.
-The next actual model task supplies that evidence. A failed synchronization
-exits non-zero and includes the failed operation; no token is printed.
-`--watch` repeats every five minutes when run as a Stado-managed user service on
-the host that owns the OMP session. An unavailable or invalid OMP session exits
-instead of opening a login, and the existing account must remain usable by OMP.
 
 ### `brama subscription sign-in <provider> --reason <text>`
 
 Repairs a provider-disowned `claude-code`, `codex`, or `kimi` grant by running
 the provider's real login trajectory through Weles. Before any browser opens,
 Brama reads Weles's health contract, resolves the named `login_item` or the one
-Weles explicitly declares primary, and verifies an automatically selected row
+Weles explicitly declares primary, and verifies any declared row mapping
 belongs to the exact subscription being repaired. Success requires Weles to
 echo that row and the exact subscription refresh to answer `refreshed`.
 
 ```bash
 brama subscription sign-in codex \
   --login-item codex-wisent-google-sso \
+  --subscription-id brama-sub-wisent-app-codex-primary \
   --reason 'provider disowned the stored grant' \
   --json
 ```
@@ -673,10 +636,11 @@ complete. Neither service reads the other's files, the token is never placed in
 argv or the journal, and no browser opens on the machine running the Brama
 command.
 
-The in-process refresh sweep renews OAuth grants before expiry. A definitive
-provider refusal, a declared OAuth subscription whose vault row yields no
-credential, or a historical OAuth item missing its exact Weles account schedules
-one Weles sign-in at a time.
+The in-process refresh sweep renews OAuth tokens before expiry, without opening
+a login. Browser sign-in requires the explicit CLI or Desktop action by
+default. Deployments that deliberately want the existing automatic Weles
+renewal may set `BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN=1`; only then can a
+provider refusal or incomplete account mapping schedule a browser sign-in.
 Completed browser runs and permanent account-mapping refusals keep their
 cooldown in the journal, so a Brama restart does not repeat them; a transient
 Weles preflight failure does not consume that cooldown. Historical vault items
@@ -822,16 +786,17 @@ recorded and the discarded attempt stays `in_progress` forever on the Echo side.
   usage report was last checked, any block, and the newest check verdict. It is
   written atomically and is not a cache — the
   question it answers spans months, not process lifetimes. A ledger written by
-  an older gateway still loads: readings that carry no instant of their own are
-  given the ledger file's modification time, and a ledger that will not parse
-  yields an empty one rather than stopping the gateway. `/tmp/brama-perf.json`
+  an older gateway still loads. An unreadable or malformed ledger is reported
+  with its path and actual error, not overwritten with an empty history.
+  Failed writes remain visible, alongside the last in-memory readings.
+  `/tmp/brama-perf.json`
   contains replaceable process telemetry. The entitlements router owns encrypted
   subscription credential storage in managed deployments.
 - **Subscription discovery:** a provider subscription is a Skarbiec item tagged
   `brama:subscription` and `brama:agent:<agent>`, carrying its provider and
-  subscription id in `brama:provider:<provider>` and `brama:id:<id>`. Both the
-  gateway and Brama Desktop filter on those tags, so vault item ids are opaque
-  and renaming one changes nothing.
+  subscription id in `brama:provider:<provider>` and `brama:id:<id>`. Brama
+  performs this discovery; Desktop consumes Brama's result and errors rather
+  than maintaining a second subscription list.
 - **Plan usage from the provider's own report:** every provider that rations a
   subscription publishes a report of how much of the ration is gone, and reading
   it spends no quota at all. `claude-code` publishes
@@ -841,17 +806,20 @@ recorded and the discarded attempt stays `in_progress` forever on the Echo side.
   `chatgpt.com` (`rate_limit.primary_window` and `.secondary_window`, each a
   used percentage with its window length and reset), and `kimi` publishes
   `GET /coding/v1/usages` on `api.kimi.com` (a `usage` object and a `limits`
-  array of limit/used/remaining counts with their windows). Every other provider
-  publishes nothing, and that absence is recorded as the provider's own answer
-  rather than left as an unexplained blank. Each subscription's report is read at
-  most once per `BRAMA_PLAN_USAGE_TTL_SECS` (default 300), spread by up to a
+  array of limit/used/remaining counts with their windows). For other providers,
+  Brama explicitly records that no free usage-report endpoint is supported
+  with the current credential; it does not claim to have read their billing API.
+  Their observed traffic counters remain available. Background reads obey
+  `BRAMA_PLAN_USAGE_TTL_SECS` (default 300), spread by up to a
   quarter either way from the subscription's own id so a fan-out of accounts on
   one host never becomes one burst against a provider that rate-limits usage
   reads per address, and single-flighted per subscription. The sweep that notices
   aged-out rows runs every `BRAMA_PLAN_USAGE_SWEEP_SECS` (default 60, `0`
-  disables it) and is logged under `plan_usage_*`. A failed read never blanks a
-  row: the last good reading is kept, served with `stale` true, and dropped only
-  once it is older than `BRAMA_PLAN_USAGE_RETENTION_SECS` (default 86400).
+  disables it) and is logged under `plan_usage_*`. An explicit usage refresh
+  reads now and shares the same bounded per-subscription operation. A failed
+  read immediately marks retained readings stale; their original observation
+  times remain unchanged. History older than `BRAMA_PLAN_USAGE_RETENTION_SECS`
+  (default 86400) is no longer presented as a usable plan window.
 - **Routing by what the plans have left:** the readings above are not only for
   reading. A selector orders its candidate routes by the freest usable
   subscription behind each one, and an explicit route orders its bounded

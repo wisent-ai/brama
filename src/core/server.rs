@@ -20,6 +20,7 @@ use tracing::{info, warn};
 
 use crate::core::failure::{self, IMPACT_MODEL_REQUEST, POINT_MODEL_REQUEST};
 use crate::providers::stream::{StreamDelta, StreamItem};
+use crate::subscription_dispatch::pool;
 use crate::subscription_dispatch::{
     authenticate_agent, dispatch_any_subscription, dispatch_any_subscription_stream,
     dispatch_any_vision_capable_subscription, dispatch_any_vision_capable_subscription_stream,
@@ -3758,97 +3759,11 @@ async fn account_agent_for_route(identity: &ModelClientIdentity, route: &str) ->
         .then_some(agent_id)
 }
 
-/// One subscription as every reader sees it: identity, plan windows the
-/// provider reported, where those windows came from and whether they are still
-/// current, what Brama measured, any block in force, when this record last
-/// changed, what the newest proactive check learned, and where its credential
-/// stands with the provider.
-///
-/// `limits` being empty is not one state but four, and the newest check and the
-/// record instant are what separate them. Windows present: render them, aged by
-/// the newest `recorded_at_ms`, and say "as of" only when `stale` is false.
-/// Empty with a failed check: the credential or the provider said no, and
-/// `probe.detail` is its sentence. Empty with no check and nothing measured:
-/// nothing has ever gone through this subscription. Empty with a successful
-/// check: the provider genuinely publishes no plan window, and only this state
-/// may be rendered as such. A zero is never one of the four.
-///
-/// `usage_source` says which of the three statements the newest window is -- the
-/// provider's own usage report, the headers of real traffic, or an operator's
-/// probe -- and is null when there is no window to attribute. `stale` says the
-/// newest window has aged past the freshness window; a stale reading is still
-/// served, because a number with its own instant beside it is information and an
-/// empty plan is not.
-fn subscription_view(entry: &crate::gateway::broker::SubscriptionEntry) -> Value {
-    let recorded = crate::subscription_dispatch::usage::usage_for(&entry.id);
-    let windows = crate::subscription_dispatch::usage::plan_windows(recorded.as_ref());
-    json!({
-        "id": entry.id,
-        "provider": entry.provider,
-        "status": entry.status,
-        "label": entry.label,
-        "login_item": entry.login_item,
-        "sign_in": crate::journal::latest_subscription_sign_in(&entry.id),
-        "limits": windows.limits,
-        "measured": recorded.as_ref().map(|usage| &usage.measured),
-        "block": recorded.as_ref().and_then(|usage| usage.block.clone()),
-        "observed_at_ms": recorded.as_ref().and_then(|usage| usage.updated_at_ms),
-        "probe": recorded.as_ref().and_then(|usage| usage.probe.clone()),
-        "credential": credential_view(entry, recorded.as_ref()),
-        "usage_source": windows.source.map(|source| source.as_str()),
-        "stale": windows.stale,
-    })
-}
-
-/// Where one subscription's credential stands, or `null` when nothing has ever
-/// been recorded about its grant.
-///
-/// A retirement outranks whatever the last refresh concluded. An operator who
-/// retired a subscription said it must not be used, and reporting it as
-/// `needs_reauthorization` would invite a sign-in that changes nothing; a
-/// retirement recorded by an older build left no credential record at all, which
-/// is the case this override exists for.
-///
-/// Every field is present whenever the object is, and `state` is the only one
-/// that is never null: a reader that has to guess which of the three states an
-/// absent field meant is exactly the reading that let four refused credentials
-/// pass for quiet ones.
-fn credential_view(
-    entry: &crate::gateway::broker::SubscriptionEntry,
-    recorded: Option<&crate::subscription_dispatch::usage::SubscriptionUsage>,
-) -> Value {
-    use crate::subscription_dispatch::usage::CredentialState;
-
-    let Some(credential) = recorded.and_then(|usage| usage.credential.as_ref()) else {
-        return Value::Null;
-    };
-    let retired = entry.status != "active" || crate::journal::is_retired(&entry.id);
-    let state = if retired {
-        CredentialState::Disabled
-    } else {
-        credential.state
-    };
-    json!({
-        "state": state.as_str(),
-        "cause": credential.cause,
-        "recorded_at_ms": credential.recorded_at_ms,
-        "expires_at_ms": credential.expires_at_ms,
-        "refreshed_at_ms": credential.refreshed_at_ms,
-    })
-}
-
 async fn list_subscriptions(agent_id: String) -> Result<Json<Value>, ApiError> {
     if !valid_agent_id(&agent_id) {
         return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
     }
-    let subscriptions = crate::gateway::broker::list_subscriptions(&agent_id)
-        .await
-        .into_iter()
-        .map(|entry| subscription_view(&entry))
-        .collect::<Vec<_>>();
-    Ok(Json(
-        json!({"agentId": agent_id, "subscriptions": subscriptions}),
-    ))
+    Ok(Json(pool::report_agent(&agent_id, false).await))
 }
 
 async fn account_credential_provider(value: Option<&str>) -> Option<String> {
@@ -3935,8 +3850,9 @@ async fn create_subscription(
         .filter(|id| !id.is_empty())
     {
         if requested_id != subscription_id {
-            let owned = crate::gateway::broker::list_subscriptions(&agent_id)
+            let owned = crate::gateway::broker::discover_subscriptions(&agent_id)
                 .await
+                .map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?
                 .into_iter()
                 .find(|entry| entry.id == requested_id)
                 .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "subscription not found"))?;
@@ -3992,8 +3908,9 @@ async fn retire_managed_subscription(
     agent_id: String,
     subscription_id: String,
 ) -> Result<Json<Value>, ApiError> {
-    let owned = crate::gateway::broker::list_subscriptions(&agent_id)
+    let owned = crate::gateway::broker::discover_subscriptions(&agent_id)
         .await
+        .map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?
         .into_iter()
         .find(|entry| entry.id == subscription_id);
     let Some(owned) = owned else {
@@ -4009,15 +3926,9 @@ async fn retire_managed_subscription(
         "retired by its owning agent",
     );
     crate::gateway::broker::donated_remove(&subscription_id)
-        .map_err(|_| api_error(StatusCode::CONFLICT, "subscription retirement failed"))?;
-    crate::gateway::broker::remove_donated_credential(&owned.provider, &subscription_id).map_err(
-        |_| {
-            api_error(
-                StatusCode::CONFLICT,
-                "subscription credential retirement failed",
-            )
-        },
-    )?;
+        .map_err(|detail| api_error(StatusCode::CONFLICT, &detail))?;
+    crate::gateway::broker::remove_donated_credential(&owned.provider, &subscription_id)
+        .map_err(|detail| api_error(StatusCode::CONFLICT, &detail))?;
     Ok(Json(json!({"ok": true})))
 }
 
@@ -4025,6 +3936,22 @@ async fn list_account_subscriptions(
     Extension(client_identity): Extension<ModelClientIdentity>,
 ) -> Result<Json<Value>, ApiError> {
     list_subscriptions(account_agent_id(&client_identity)?).await
+}
+
+async fn refresh_account_subscription_usage(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+) -> Result<Json<Value>, ApiError> {
+    let agent_id = account_agent_id(&client_identity)?;
+    Ok(Json(pool::report_agent(&agent_id, true).await))
+}
+
+async fn sign_in_account_subscription(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Path(subscription_id): Path<String>,
+    Json(request): Json<SignInSubscriptionRequest>,
+) -> Result<Json<Value>, ApiError> {
+    let agent_id = account_agent_id(&client_identity)?;
+    sign_in_selected_subscription(Some(&agent_id), &subscription_id, request).await
 }
 
 async fn create_account_subscription(
@@ -4047,6 +3974,29 @@ async fn list_admin_subscriptions(
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
     list_subscriptions(agent_id).await
+}
+
+async fn refresh_admin_subscription_usage(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Path(agent_id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    if !valid_agent_id(&agent_id) {
+        return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
+    }
+    Ok(Json(pool::report_agent(&agent_id, true).await))
+}
+
+async fn sign_in_admin_subscription(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Path((agent_id, subscription_id)): Path<(String, String)>,
+    Json(request): Json<SignInSubscriptionRequest>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    if !valid_agent_id(&agent_id) {
+        return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
+    }
+    sign_in_selected_subscription(Some(&agent_id), &subscription_id, request).await
 }
 
 async fn create_admin_subscription(
@@ -4088,8 +4038,9 @@ async fn probe_admin_subscription(
     if !valid_agent_id(&agent_id) {
         return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
     }
-    let entry = crate::gateway::broker::list_subscriptions(&agent_id)
+    let entry = crate::gateway::broker::discover_subscriptions(&agent_id)
         .await
+        .map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?
         .into_iter()
         .find(|entry| entry.id == subscription_id)
         .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "subscription not found"))?;
@@ -4099,7 +4050,7 @@ async fn probe_admin_subscription(
     Ok(Json(json!({
         "ok": true,
         "probe": probe,
-        "subscription": subscription_view(&entry),
+        "subscription": pool::subscription_view(&entry),
     })))
 }
 /// The dispatch pool exactly as the process that dispatches requests believes
@@ -4115,6 +4066,90 @@ async fn admin_subscription_pool(
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
     Ok(Json(crate::subscription_dispatch::pool::report().await))
+}
+
+async fn refresh_admin_pool_usage(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    Ok(Json(pool::refresh_usage().await))
+}
+
+async fn sign_in_admin_pool_subscription(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Json(mut request): Json<SignInSubscriptionRequest>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    let subscription_id = request
+        .subscription_id
+        .take()
+        .filter(|id| !id.trim().is_empty())
+        .ok_or_else(|| api_error(StatusCode::BAD_REQUEST, "a subscription id is required"))?;
+    sign_in_selected_subscription(None, &subscription_id, request).await
+}
+
+async fn sign_in_selected_subscription(
+    agent_id: Option<&str>,
+    subscription_id: &str,
+    request: SignInSubscriptionRequest,
+) -> Result<Json<Value>, ApiError> {
+    let reason = request
+        .reason
+        .as_deref()
+        .map(str::trim)
+        .filter(|reason| !reason.is_empty())
+        .ok_or_else(|| {
+            api_error(
+                StatusCode::BAD_REQUEST,
+                "--reason must say why this sign-in is being run",
+            )
+        })?;
+    if request
+        .subscription_id
+        .as_deref()
+        .is_some_and(|id| id != subscription_id)
+    {
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            "subscription id does not match the requested account",
+        ));
+    }
+    let entries = match agent_id {
+        Some(agent_id) => crate::gateway::broker::discover_subscriptions(agent_id).await,
+        None => crate::gateway::broker::list_all_subscriptions().await,
+    }
+    .map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?;
+    let entry = entries
+        .into_iter()
+        .find(|entry| entry.id == subscription_id)
+        .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "subscription not found"))?;
+    if entry.status != "active" || crate::journal::is_retired(&entry.id) {
+        return Err(api_error(
+            StatusCode::CONFLICT,
+            "retired subscriptions cannot be signed in",
+        ));
+    }
+    if let (Some(held), Some(asked)) = (entry.login_item.as_deref(), request.login_item.as_deref())
+    {
+        if held != asked.trim() {
+            return Err(api_error(
+                StatusCode::CONFLICT,
+                &format!("subscription `{subscription_id}` uses Weles login item `{held}`, not `{asked}`"),
+            ));
+        }
+    }
+    crate::subscription_dispatch::sign_in::sign_in_provider(
+        crate::subscription_dispatch::sign_in::SignInOptions {
+            provider: entry.provider,
+            subscription_id: Some(entry.id),
+            login_item: request.login_item.or(entry.login_item),
+            reason: reason.to_string(),
+            login_timeout_ms: request.login_timeout_ms.unwrap_or(900_000),
+        },
+    )
+    .await
+    .map(Json)
+    .map_err(|detail| api_error(StatusCode::BAD_GATEWAY, &detail))
 }
 
 /// One operator-driven refresh of a provider's pooled grants, run by the
@@ -4211,6 +4246,15 @@ struct RetireSubscriptionRequest {
 struct RefreshSubscriptionPoolRequest {
     provider: Option<String>,
     reason: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SignInSubscriptionRequest {
+    subscription_id: Option<String>,
+    reason: Option<String>,
+    login_item: Option<String>,
+    login_timeout_ms: Option<u64>,
 }
 
 type ApiError = (StatusCode, Json<serde_json::Value>);
@@ -4321,12 +4365,19 @@ async fn list_agent_subscriptions(
     Path(agent_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     authorize_caller(&client_identity, &headers, &[], Some(&agent_id)).await?;
-    let subscriptions = crate::gateway::broker::list_subscriptions(&agent_id)
-        .await
-        .into_iter()
-        .map(|entry| subscription_view(&entry))
-        .collect::<Vec<_>>();
-    Ok(Json(json!({"subscriptions": subscriptions})))
+    list_subscriptions(agent_id).await
+}
+
+async fn refresh_agent_subscription_usage(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    headers: axum::http::HeaderMap,
+    Path(agent_id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    authorize_caller(&client_identity, &headers, &[], Some(&agent_id)).await?;
+    if !valid_agent_id(&agent_id) {
+        return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
+    }
+    Ok(Json(pool::report_agent(&agent_id, true).await))
 }
 
 async fn donate_subscription(
@@ -4367,8 +4418,11 @@ async fn retire_subscription(
     if subscription_id.is_empty() {
         return api_error(StatusCode::BAD_REQUEST, "subscription_id is required");
     }
-    let owned = crate::gateway::broker::list_subscriptions(&agent_id)
-        .await
+    let entries = match crate::gateway::broker::discover_subscriptions(&agent_id).await {
+        Ok(entries) => entries,
+        Err(detail) => return api_error(StatusCode::SERVICE_UNAVAILABLE, &detail),
+    };
+    let owned = entries
         .into_iter()
         .find(|entry| entry.id == subscription_id);
     let Some(owned) = owned else {
@@ -4443,8 +4497,20 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
                 .delete(retire_subscription),
         )
         .route(
+            "/v1/subscription-usage/:agent_id",
+            post(refresh_agent_subscription_usage),
+        )
+        .route(
             "/v1/account/subscriptions",
             get(list_account_subscriptions).post(create_account_subscription),
+        )
+        .route(
+            "/v1/account/subscription-usage",
+            post(refresh_account_subscription_usage),
+        )
+        .route(
+            "/v1/account/subscription-sign-in/:subscription_id",
+            post(sign_in_account_subscription),
         )
         .route(
             "/v1/account/subscriptions/:subscription_id",
@@ -4475,6 +4541,14 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
             get(list_admin_subscriptions).post(create_admin_subscription),
         )
         .route(
+            "/v1/admin/subscription-usage/:agent_id",
+            post(refresh_admin_subscription_usage),
+        )
+        .route(
+            "/v1/admin/subscription-sign-in/:agent_id/:subscription_id",
+            post(sign_in_admin_subscription),
+        )
+        .route(
             "/v1/admin/subscriptions/:agent_id/:subscription_id",
             delete(retire_admin_subscription),
         )
@@ -4483,6 +4557,14 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
             post(probe_admin_subscription),
         )
         .route("/v1/admin/subscription-pool", get(admin_subscription_pool))
+        .route(
+            "/v1/admin/subscription-pool/usage",
+            post(refresh_admin_pool_usage),
+        )
+        .route(
+            "/v1/admin/subscription-pool/sign-in",
+            post(sign_in_admin_pool_subscription),
+        )
         .route(
             "/v1/admin/subscription-pool/refresh",
             post(refresh_admin_subscription_pool),

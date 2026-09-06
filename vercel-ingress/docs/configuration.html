@@ -332,11 +332,17 @@ surfaces.</p>
 <td><code>300</code></td>
 <td>refresh credentials expiring within this window</td>
 </tr>
+<tr>
+<td><code>BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN</code></td>
+<td>unset (off)</td>
+<td>only <code>1</code> enables automatic Weles browser sign-in after credential refusal or missing account mapping; OAuth token renewal remains enabled independently</td>
+</tr>
 </tbody>
 </table>
 <p>With defaults, no timer performs a quota-consuming request: usage reports and
 token refreshes are free, and the only quota-spending check is the explicit
-admin probe route.</p>
+admin probe route. No default timer opens a browser; signing in requires the
+separate CLI or Desktop action unless automatic Weles renewal was explicitly enabled.</p>
 <h2 id="catalog-and-providers">Catalog and providers<a class="headerlink" href="#catalog-and-providers" title="Link to this section">&para;</a></h2>
 <table>
 <thead>

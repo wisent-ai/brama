@@ -431,14 +431,12 @@ struct PlanUsageEndpoint {
     shape: PlanUsageShape,
 }
 
-/// The usage reports the providers on this fleet actually publish.
+/// The usage reports Brama can read freely with provider credentials.
 ///
-/// Each is issued to exactly the OAuth credential the chat route already
-/// presents, so nothing new is provisioned to learn a plan window. Every other
-/// provider in [`PROVIDERS`] publishes no usage report at all -- including the
-/// API-key `anthropic` route, whose report is issued to OAuth credentials only
-/// -- and for those the absence is a recorded fact about the provider rather
-/// than a failed read.
+/// Each is issued to exactly the credential the chat route already presents, so
+/// nothing new is provisioned to learn a plan window. Other provider credentials
+/// have no supported free report here. That says nothing about separately
+/// privileged organization billing APIs a vendor may expose.
 const PLAN_USAGE_ENDPOINTS: &[PlanUsageEndpoint] = &[
     PlanUsageEndpoint {
         provider_id: "claude-code",
@@ -460,19 +458,20 @@ const PLAN_USAGE_ENDPOINTS: &[PlanUsageEndpoint] = &[
 /// What one provider's own usage report said.
 #[derive(Debug)]
 pub enum PlanUsage {
-    /// The provider answered. No readings means it published no window this
-    /// time, which is an answer and not a failure.
+    /// The provider answered with a schema-valid report. No readings is valid
+    /// only when the provider explicitly reported all of its optional windows
+    /// as absent.
     Report(Vec<LimitReading>),
-    /// This provider publishes no usage report, so there is nothing to read and
-    /// nothing is wrong.
+    /// Brama supports no free usage-report endpoint for this provider
+    /// credential. Separately privileged billing APIs are outside this flow.
     Unpublished,
-    /// The provider was asked and refused, in its own words, classified exactly
-    /// as a refused model request is: a reader that acts on
-    /// `provider_authentication` keeps acting on the same sentence.
+    /// The provider call or its response was refused. The string retains the
+    /// contract kind prefix and the exact endpoint, operation, status (when an
+    /// HTTP response existed), vault item, and underlying cause.
     Refused(String),
 }
 
-/// Whether this provider publishes a usage report at all.
+/// Whether Brama supports a free usage report for this provider credential.
 pub fn publishes_plan_usage(provider_id: &str) -> bool {
     plan_usage_endpoint(provider_id).is_some()
 }
@@ -517,37 +516,94 @@ fn plan_usage_url(
             )
         })
 }
+fn plan_usage_refusal(
+    kind: &str,
+    provider_id: &str,
+    item: &str,
+    url: &str,
+    status: Option<reqwest::StatusCode>,
+    cause: &str,
+) -> PlanUsage {
+    let status = status
+        .map(|status| format!(" returned HTTP {}", status.as_u16()))
+        .unwrap_or_else(|| " failed before an HTTP response".to_string());
+    PlanUsage::Refused(format!(
+        "{kind}: provider `{provider_id}` usage GET `{url}` for credential `{item}`{status}: \
+         {cause}"
+    ))
+}
+
+fn classified_plan_usage_refusal(
+    provider_id: &str,
+    item: &str,
+    url: &str,
+    status: Option<reqwest::StatusCode>,
+    message: &str,
+) -> PlanUsage {
+    let (kind, cause) = message
+        .split_once(':')
+        .map(|(kind, cause)| (kind.trim(), cause.trim()))
+        .unwrap_or(("provider_failure", message));
+    plan_usage_refusal(kind, provider_id, item, url, status, cause)
+}
 
 /// Read one subscription's plan windows from the provider's own usage report.
 ///
-/// `item` is the vault coordinate the credential was redeemed from and is named
-/// in a refusal for the reason the request path names it: the repair to an
-/// unusable credential is always at the coordinate it came from. The
-/// authorization is the chat route's, header for header, because these reports
-/// are issued to exactly the credential the chat route presents.
+/// This performs one bounded, provider-only GET. It never invokes inference or
+/// sign-in, and every refusal retains the operation coordinates needed to
+/// diagnose the exact account and endpoint.
 pub async fn read_plan_usage(provider_id: &str, item: &str, secret: &str) -> PlanUsage {
     let Some(endpoint) = plan_usage_endpoint(provider_id) else {
         return PlanUsage::Unpublished;
     };
     let Some(descriptor) = provider(provider_id) else {
-        // Both tables are static, so this is a typo in one of them rather than
-        // anything a provider did.
-        return PlanUsage::Refused(format!(
-            "provider_failure: provider `{provider_id}` publishes a usage report but is not \
-             registered"
-        ));
+        return plan_usage_refusal(
+            "provider_failure",
+            provider_id,
+            item,
+            endpoint.url,
+            None,
+            "the provider publishes a usage report but is not registered",
+        );
     };
     let url = match plan_usage_url(descriptor, endpoint) {
         Ok(url) => url,
-        Err(message) => return PlanUsage::Refused(format!("provider_failure: {message}")),
+        Err(message) => {
+            return plan_usage_refusal(
+                "provider_failure",
+                provider_id,
+                item,
+                endpoint.url,
+                None,
+                &message,
+            );
+        }
     };
     let key = match credential_key(item, secret) {
         Ok(key) => key,
-        Err(message) => return PlanUsage::Refused(format!("provider_authentication: {message}")),
+        Err(message) => {
+            return plan_usage_refusal(
+                "provider_authentication",
+                provider_id,
+                item,
+                &url,
+                None,
+                &message,
+            );
+        }
     };
     let client = match control_client() {
         Ok(client) => client,
-        Err(message) => return PlanUsage::Refused(format!("provider_failure: {message}")),
+        Err(message) => {
+            return plan_usage_refusal(
+                "provider_failure",
+                provider_id,
+                item,
+                &url,
+                None,
+                &format!("provider client configuration failed: {message}"),
+            );
+        }
     };
     let builder = client.get(&url).header("accept", "application/json");
     let response = match authorize_provider(builder, descriptor, &key, secret)
@@ -555,11 +611,28 @@ pub async fn read_plan_usage(provider_id: &str, item: &str, secret: &str) -> Pla
         .await
     {
         Ok(response) => response,
-        Err(error) => return PlanUsage::Refused(transport_error_message(&error)),
+        Err(error) => {
+            return classified_plan_usage_refusal(
+                provider_id,
+                item,
+                &url,
+                None,
+                &transport_error_message(&error),
+            );
+        }
     };
+    let response_status = response.status();
     let (status, _plan, text) = match bounded_response_text(response).await {
         Ok(parts) => parts,
-        Err(message) => return PlanUsage::Refused(message),
+        Err(message) => {
+            return classified_plan_usage_refusal(
+                provider_id,
+                item,
+                &url,
+                Some(response_status),
+                &message,
+            );
+        }
     };
     if !status.is_success() {
         let (kind, detail) = provider_refusal(status, &text);
@@ -570,39 +643,65 @@ pub async fn read_plan_usage(provider_id: &str, item: &str, secret: &str) -> Pla
             contract_kind = kind,
             "the provider refused its own usage report: {detail}"
         );
-        return PlanUsage::Refused(format!("{kind}: {detail}"));
+        return plan_usage_refusal(kind, provider_id, item, &url, Some(status), &detail);
     }
-    let Ok(body) = serde_json::from_str::<Value>(&text) else {
-        return PlanUsage::Refused(
-            "provider_failure: the provider's usage report is not JSON".to_string(),
-        );
+    let body = match serde_json::from_str::<Value>(&text) {
+        Ok(body) => body,
+        Err(error) => {
+            return plan_usage_refusal(
+                "provider_failure",
+                provider_id,
+                item,
+                &url,
+                Some(status),
+                &format!("usage response is not valid JSON: {error}"),
+            );
+        }
     };
-    PlanUsage::Report(plan_usage_readings(endpoint.shape, &body, observed_at_ms()))
+    match plan_usage_readings(endpoint.shape, &body, observed_at_ms()) {
+        Ok(readings) => PlanUsage::Report(readings),
+        Err(error) => plan_usage_refusal(
+            "provider_failure",
+            provider_id,
+            item,
+            &url,
+            Some(status),
+            &format!("usage response schema is invalid: {error}"),
+        ),
+    }
 }
 
 /// The windows Anthropic's usage report names, mapped onto the very limit ids
 /// its response headers produce, so one account's five-hour window stays one row
-/// however it was read.
-const ANTHROPIC_USAGE_WINDOWS: &[(&str, &str, &str, &str)] = &[
-    ("five_hour", "anthropic:5h", "Claude 5 hour", "5 hours"),
-    ("seven_day", "anthropic:7d", "Claude 7 day", "7 days"),
+/// however it was read. The final flag is true only for plan-specific windows
+/// Anthropic is documented to omit for accounts that do not have them.
+const ANTHROPIC_USAGE_WINDOWS: &[(&str, &str, &str, &str, bool)] = &[
+    (
+        "five_hour",
+        "anthropic:5h",
+        "Claude 5 hour",
+        "5 hours",
+        false,
+    ),
+    ("seven_day", "anthropic:7d", "Claude 7 day", "7 days", false),
     (
         "seven_day_opus",
         "anthropic:7d-opus",
         "Claude 7 day (Opus)",
         "7 days",
+        true,
     ),
     (
         "seven_day_sonnet",
         "anthropic:7d-sonnet",
         "Claude 7 day (Sonnet)",
         "7 days",
+        true,
     ),
 ];
 
-/// The usage reports state utilization as a percentage, while the response
-/// headers state the same quantity as a fraction; a reading is stored as a
-/// fraction, so one of the two has to be divided.
+/// The usage reports state utilization as a percentage, while the ledger stores
+/// it as a fraction.
 const PERCENT_SCALE: f64 = 100.0;
 const MS_PER_SECOND: f64 = 1_000.0;
 const SECONDS_PER_MINUTE: f64 = 60.0;
@@ -613,193 +712,412 @@ const DAYS_PER_WEEK: f64 = 7.0;
 /// reach it for another thirty thousand years.
 const EPOCH_MILLISECONDS_FLOOR: f64 = 1e12;
 
-/// A number a provider may have written as a number or as a decimal string.
-fn json_number(value: Option<&Value>) -> Option<f64> {
-    match value? {
-        Value::Number(number) => number.as_f64(),
-        Value::String(text) => text.trim().parse::<f64>().ok(),
-        _ => None,
+fn required_object<'a>(
+    value: Option<&'a Value>,
+    path: &str,
+) -> Result<&'a Map<String, Value>, String> {
+    value
+        .ok_or_else(|| format!("missing `{path}`"))?
+        .as_object()
+        .ok_or_else(|| format!("`{path}` must be an object"))
+}
+
+/// A claimed number may be JSON numeric or a decimal string, but it must be
+/// finite. Accepting `NaN` from a string would poison every later comparison.
+fn claimed_number(value: Option<&Value>, path: &str) -> Result<f64, String> {
+    let value = value.ok_or_else(|| format!("missing `{path}`"))?;
+    let number = match value {
+        Value::Number(number) => number
+            .as_f64()
+            .ok_or_else(|| format!("`{path}` is outside the supported numeric range"))?,
+        Value::String(text) => text
+            .trim()
+            .parse::<f64>()
+            .map_err(|error| format!("`{path}` is not a number: {error}"))?,
+        _ => return Err(format!("`{path}` must be a number")),
+    };
+    if !number.is_finite() {
+        return Err(format!("`{path}` must be finite"));
+    }
+    Ok(number)
+}
+
+fn optional_number(value: Option<&Value>, path: &str) -> Result<Option<f64>, String> {
+    match value {
+        None | Some(Value::Null) => Ok(None),
+        value => claimed_number(value, path).map(Some),
     }
 }
 
-/// An instant a provider may state as an RFC 3339 string, as epoch seconds, or
-/// as epoch milliseconds. All three appear across these three reports.
-fn instant_ms(value: Option<&Value>) -> Option<i64> {
-    match value? {
-        Value::String(text) => chrono::DateTime::parse_from_rfc3339(text.trim())
-            .ok()
-            .map(|instant| instant.timestamp_millis()),
-        other => {
-            let number = json_number(Some(other)).filter(|number| *number > 0.0)?;
-            Some(if number >= EPOCH_MILLISECONDS_FLOOR {
-                number.round() as i64
-            } else {
-                (number * MS_PER_SECOND).round() as i64
-            })
+fn percentage(value: Option<&Value>, path: &str) -> Result<f64, String> {
+    let percent = claimed_number(value, path)?;
+    if !(0.0..=PERCENT_SCALE).contains(&percent) {
+        return Err(format!("`{path}` must be between 0 and 100"));
+    }
+    Ok(percent / PERCENT_SCALE)
+}
+
+fn positive_number(value: Option<&Value>, path: &str) -> Result<f64, String> {
+    let number = claimed_number(value, path)?;
+    if number <= 0.0 {
+        return Err(format!("`{path}` must be greater than zero"));
+    }
+    Ok(number)
+}
+
+fn nonnegative_number(value: Option<&Value>, path: &str) -> Result<f64, String> {
+    let number = claimed_number(value, path)?;
+    if number < 0.0 {
+        return Err(format!("`{path}` must not be negative"));
+    }
+    Ok(number)
+}
+
+fn epoch_number_ms(number: f64, path: &str) -> Result<i64, String> {
+    if !number.is_finite() || number <= 0.0 {
+        return Err(format!("`{path}` must be a positive finite instant"));
+    }
+    let milliseconds = if number >= EPOCH_MILLISECONDS_FLOOR {
+        number
+    } else {
+        number * MS_PER_SECOND
+    };
+    if !milliseconds.is_finite() || milliseconds >= i64::MAX as f64 {
+        return Err(format!("`{path}` is outside the supported instant range"));
+    }
+    Ok(milliseconds.round() as i64)
+}
+
+/// An optional instant may be RFC 3339, epoch seconds, or epoch milliseconds.
+/// A present but malformed claim is an error rather than an absent reset.
+fn optional_instant_ms(value: Option<&Value>, path: &str) -> Result<Option<i64>, String> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    if let Value::String(text) = value {
+        let text = text.trim();
+        if let Ok(instant) = chrono::DateTime::parse_from_rfc3339(text) {
+            let milliseconds = instant.timestamp_millis();
+            if milliseconds <= 0 {
+                return Err(format!("`{path}` must be a positive instant"));
+            }
+            return Ok(Some(milliseconds));
         }
+        let number = text
+            .parse::<f64>()
+            .map_err(|error| format!("`{path}` is not RFC 3339 or an epoch number: {error}"))?;
+        return epoch_number_ms(number, path).map(Some);
     }
+    epoch_number_ms(claimed_number(Some(value), path)?, path).map(Some)
 }
 
-/// Turn one provider's usage report into limit readings.
-///
-/// The limit ids are the ones the header path already writes, so a window read
-/// from a report and the same window read from a later answer are one row in the
-/// ledger rather than two that disagree.
+fn delayed_reset_ms(seconds: f64, recorded_at_ms: i64, path: &str) -> Result<i64, String> {
+    if !seconds.is_finite() || seconds < 0.0 {
+        return Err(format!("`{path}` must be a nonnegative finite duration"));
+    }
+    let milliseconds = seconds * MS_PER_SECOND;
+    if !milliseconds.is_finite() || milliseconds >= i64::MAX as f64 {
+        return Err(format!("`{path}` is outside the supported duration range"));
+    }
+    recorded_at_ms
+        .checked_add(milliseconds.round() as i64)
+        .ok_or_else(|| format!("`{path}` overflows the reset instant"))
+}
+
+/// Turn one provider's usage report into validated limit readings.
 fn plan_usage_readings(
     shape: PlanUsageShape,
     body: &Value,
     recorded_at_ms: i64,
-) -> Vec<LimitReading> {
+) -> Result<Vec<LimitReading>, String> {
     match shape {
-        PlanUsageShape::AnthropicOauth => ANTHROPIC_USAGE_WINDOWS
-            .iter()
-            .filter_map(|(field, limit_id, label, window_label)| {
-                let window = body.get(field)?;
-                let used = json_number(window.get("utilization"))?;
-                Some(LimitReading {
+        PlanUsageShape::AnthropicOauth => {
+            let root = required_object(Some(body), "$")?;
+            let mut readings = Vec::new();
+            for (field, limit_id, label, window_label, optional) in ANTHROPIC_USAGE_WINDOWS {
+                let Some(value) = root.get(*field) else {
+                    if *optional {
+                        continue;
+                    }
+                    return Err(format!("missing `$.{field}`"));
+                };
+                // Anthropic uses null to explicitly say a plan has no such
+                // window. That is distinct from a malformed object.
+                if value.is_null() {
+                    continue;
+                }
+                let window = required_object(Some(value), &format!("$.{field}"))?;
+                let used =
+                    percentage(window.get("utilization"), &format!("$.{field}.utilization"))?;
+                if !window.contains_key("resets_at") {
+                    return Err(format!("missing `$.{field}.resets_at`"));
+                }
+                let resets_at_ms =
+                    optional_instant_ms(window.get("resets_at"), &format!("$.{field}.resets_at"))?;
+                readings.push(LimitReading {
                     limit_id: (*limit_id).to_string(),
                     label: (*label).to_string(),
                     window_label: Some((*window_label).to_string()),
-                    used_fraction: (used / PERCENT_SCALE).clamp(0.0, 1.0),
-                    resets_at_ms: instant_ms(window.get("resets_at")),
+                    used_fraction: used,
+                    resets_at_ms,
                     recorded_at_ms,
-                })
-            })
-            .collect(),
-        PlanUsageShape::CodexWham => ["primary", "secondary"]
-            .into_iter()
-            .filter_map(|meter| {
-                let window = body.pointer(&format!("/rate_limit/{meter}_window"))?;
-                let used = json_number(window.get("used_percent"))?;
-                let minutes = json_number(window.get("limit_window_seconds"))
-                    .map(|seconds| seconds / SECONDS_PER_MINUTE);
-                // The report states one or the other, and a delay is only
-                // meaningful against the instant the report was read.
-                let resets = instant_ms(window.get("reset_at")).or_else(|| {
-                    json_number(window.get("reset_after_seconds"))
-                        .map(|seconds| recorded_at_ms + (seconds * MS_PER_SECOND).round() as i64)
                 });
-                Some(LimitReading {
+            }
+            Ok(readings)
+        }
+        PlanUsageShape::CodexWham => {
+            let root = required_object(Some(body), "$")?;
+            let rate_limit = required_object(root.get("rate_limit"), "$.rate_limit")?;
+            let mut readings = Vec::new();
+            for (meter, optional) in [("primary", false), ("secondary", true)] {
+                let field = format!("{meter}_window");
+                let path = format!("$.rate_limit.{field}");
+                let Some(value) = rate_limit.get(&field) else {
+                    if optional {
+                        continue;
+                    }
+                    return Err(format!("missing `{path}`"));
+                };
+                if value.is_null() {
+                    if optional {
+                        continue;
+                    }
+                    return Err(format!("`{path}` must be an object"));
+                }
+                let window = required_object(Some(value), &path)?;
+                let used = percentage(window.get("used_percent"), &format!("{path}.used_percent"))?;
+                let seconds = positive_number(
+                    window.get("limit_window_seconds"),
+                    &format!("{path}.limit_window_seconds"),
+                )?;
+                let absolute_reset =
+                    optional_instant_ms(window.get("reset_at"), &format!("{path}.reset_at"))?;
+                let delayed_reset = match window.get("reset_after_seconds") {
+                    None | Some(Value::Null) => None,
+                    value => {
+                        let delay =
+                            nonnegative_number(value, &format!("{path}.reset_after_seconds"))?;
+                        Some(delayed_reset_ms(
+                            delay,
+                            recorded_at_ms,
+                            &format!("{path}.reset_after_seconds"),
+                        )?)
+                    }
+                };
+                let resets_at_ms = absolute_reset.or(delayed_reset).ok_or_else(|| {
+                    format!("`{path}` must contain `reset_at` or `reset_after_seconds`")
+                })?;
+                readings.push(LimitReading {
                     limit_id: format!("codex:{meter}"),
                     label: format!("Codex {meter} window"),
-                    window_label: minutes.map(window_label_from_minutes),
-                    used_fraction: (used / PERCENT_SCALE).clamp(0.0, 1.0),
-                    resets_at_ms: resets,
+                    window_label: Some(window_label_from_minutes(seconds / SECONDS_PER_MINUTE)),
+                    used_fraction: used,
+                    resets_at_ms: Some(resets_at_ms),
                     recorded_at_ms,
-                })
-            })
-            .collect(),
+                });
+            }
+            Ok(readings)
+        }
         PlanUsageShape::KimiUsages => kimi_usage_readings(body, recorded_at_ms),
     }
 }
 
-/// Kimi states a quota as a count rather than a fraction: a `limit` with a
-/// `used` or a `remaining`. The whole-plan `usage` object and every entry of the
-/// `limits` array carry that same shape, so both go through one reader.
-fn kimi_usage_readings(body: &Value, recorded_at_ms: i64) -> Vec<LimitReading> {
+/// Kimi states quotas as counts. Its top-level usage may explicitly be null and
+/// its limits array may be empty; every object it does publish must be complete.
+fn kimi_usage_readings(body: &Value, recorded_at_ms: i64) -> Result<Vec<LimitReading>, String> {
+    let root = required_object(Some(body), "$")?;
+    let usage = root
+        .get("usage")
+        .ok_or_else(|| "missing `$.usage`".to_string())?;
+    let limits = root
+        .get("limits")
+        .ok_or_else(|| "missing `$.limits`".to_string())?
+        .as_array()
+        .ok_or_else(|| "`$.limits` must be an array".to_string())?;
     let mut readings = Vec::new();
     if let Some(reading) = kimi_reading(
-        body.get("usage"),
+        usage,
         "kimi:usage",
         "Kimi plan quota",
+        "$.usage",
         recorded_at_ms,
-    ) {
+    )? {
         readings.push(reading);
     }
-    let entries = body
-        .get("limits")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default();
-    for (index, entry) in entries.iter().enumerate() {
+    for (index, entry) in limits.iter().enumerate() {
+        let path = format!("$.limits[{index}]");
+        let object = required_object(Some(entry), &path)?;
         // The position is the id because the report names its windows in prose:
-        // keying on that prose would turn a reworded label into a second row for
-        // the same quota.
+        // keying on that prose would turn a reworded label into a second row.
         let label = ["name", "title", "scope"]
             .into_iter()
-            .filter_map(|field| entry.get(field).and_then(Value::as_str))
+            .filter_map(|field| object.get(field).and_then(Value::as_str))
             .map(str::trim)
             .find(|label| !label.is_empty())
             .map(str::to_string)
             .unwrap_or_else(|| format!("Kimi quota {}", index + 1));
-        if let Some(reading) = kimi_reading(
-            Some(entry),
+        let reading = kimi_reading(
+            entry,
             &format!("kimi:limit-{index}"),
             &label,
+            &path,
             recorded_at_ms,
-        ) {
-            readings.push(reading);
-        }
+        )?
+        .ok_or_else(|| format!("`{path}` cannot be null"))?;
+        readings.push(reading);
     }
-    readings
+    Ok(readings)
 }
 
 fn kimi_reading(
-    value: Option<&Value>,
+    value: &Value,
     limit_id: &str,
     label: &str,
+    path: &str,
     recorded_at_ms: i64,
-) -> Option<LimitReading> {
-    let value = value?;
-    // The counters sit either directly on the entry or one level in under
-    // `detail`; the report uses both spellings for the same thing.
-    let counters = value
-        .get("detail")
-        .filter(|detail| detail.is_object())
-        .unwrap_or(value);
-    let limit = json_number(counters.get("limit"))?;
-    // A quota of zero is not a window, and it is also the one value a fraction
-    // cannot be computed against.
-    if limit <= 0.0 {
-        return None;
+) -> Result<Option<LimitReading>, String> {
+    if value.is_null() {
+        return Ok(None);
     }
-    let used = json_number(counters.get("used"))
-        .or_else(|| json_number(counters.get("remaining")).map(|remaining| limit - remaining))?;
-    let window = value.get("window").filter(|window| window.is_object());
-    Some(LimitReading {
+    let object = required_object(Some(value), path)?;
+    // Counters sit either directly on the entry or one level under `detail`.
+    // A claimed non-object detail is not silently treated as absent.
+    let (counters, counters_path) = match object.get("detail") {
+        None | Some(Value::Null) => (object, path.to_string()),
+        Some(Value::Object(detail)) => (detail, format!("{path}.detail")),
+        Some(_) => return Err(format!("`{path}.detail` must be an object")),
+    };
+    let limit = positive_number(counters.get("limit"), &format!("{counters_path}.limit"))?;
+    let claimed_used = optional_number(counters.get("used"), &format!("{counters_path}.used"))?;
+    let claimed_remaining = optional_number(
+        counters.get("remaining"),
+        &format!("{counters_path}.remaining"),
+    )?;
+    let used = match (claimed_used, claimed_remaining) {
+        (None, None) => {
+            return Err(format!(
+                "`{counters_path}` must contain either `used` or `remaining`"
+            ));
+        }
+        (Some(used), None) => used,
+        (None, Some(remaining)) => limit - remaining,
+        (Some(used), Some(remaining)) => {
+            let derived = limit - remaining;
+            let tolerance = f64::EPSILON * limit.abs().max(1.0) * 8.0;
+            if (used - derived).abs() > tolerance {
+                return Err(format!(
+                    "`{counters_path}.used` and `{counters_path}.remaining` disagree with `{counters_path}.limit`"
+                ));
+            }
+            used
+        }
+    };
+    if !(0.0..=limit).contains(&used) {
+        return Err(format!(
+            "`{counters_path}.used` must be between zero and `{counters_path}.limit`"
+        ));
+    }
+    if let Some(remaining) = claimed_remaining {
+        if !(0.0..=limit).contains(&remaining) {
+            return Err(format!(
+                "`{counters_path}.remaining` must be between zero and `{counters_path}.limit`"
+            ));
+        }
+    }
+    let window = match object.get("window") {
+        None | Some(Value::Null) => None,
+        Some(Value::Object(window)) => Some(window),
+        Some(_) => return Err(format!("`{path}.window` must be an object")),
+    };
+    Ok(Some(LimitReading {
         limit_id: limit_id.to_string(),
         label: label.to_string(),
-        window_label: window.and_then(kimi_window_label),
-        used_fraction: (used / limit).clamp(0.0, 1.0),
-        resets_at_ms: kimi_resets_at_ms(value, window, recorded_at_ms),
+        window_label: match window {
+            Some(window) => kimi_window_label(window, &format!("{path}.window"))?,
+            None => None,
+        },
+        used_fraction: used / limit,
+        resets_at_ms: kimi_resets_at_ms(object, window, path, recorded_at_ms)?,
         recorded_at_ms,
-    })
+    }))
 }
 
-/// When a Kimi window resets, whichever of the report's spellings carries it.
-///
-/// The window object is preferred over the entry because it is the more specific
-/// statement; an absolute instant is preferred over a delay because a delay is
-/// only true at the moment it was read.
-fn kimi_resets_at_ms(entry: &Value, window: Option<&Value>, recorded_at_ms: i64) -> Option<i64> {
+/// Read Kimi's optional reset. A present malformed alias is rejected rather
+/// than skipped in favor of a later field.
+fn kimi_resets_at_ms(
+    entry: &Map<String, Value>,
+    window: Option<&Map<String, Value>>,
+    path: &str,
+    recorded_at_ms: i64,
+) -> Result<Option<i64>, String> {
     const RESET_INSTANT_FIELDS: &[&str] = &["reset_at", "resetAt", "reset_time", "resetTime"];
     const RESET_DELAY_FIELDS: &[&str] = &["reset_in", "resetIn", "ttl"];
-    for source in [window, Some(entry)].into_iter().flatten() {
-        if let Some(instant) = RESET_INSTANT_FIELDS
-            .iter()
-            .find_map(|field| instant_ms(source.get(*field)))
-        {
-            return Some(instant);
+    let mut absolute_reset = None;
+    let mut delayed_reset = None;
+    for (source, source_path) in [
+        (window, format!("{path}.window")),
+        (Some(entry), path.to_string()),
+    ] {
+        let Some(source) = source else {
+            continue;
+        };
+        for field in RESET_INSTANT_FIELDS {
+            if let Some(value) = source.get(*field) {
+                let parsed = optional_instant_ms(Some(value), &format!("{source_path}.{field}"))?;
+                if absolute_reset.is_none() {
+                    absolute_reset = parsed;
+                }
+            }
         }
-        if let Some(delay) = RESET_DELAY_FIELDS
-            .iter()
-            .find_map(|field| json_number(source.get(*field)))
-            .filter(|delay| *delay > 0.0)
-        {
-            return Some(recorded_at_ms + (delay * MS_PER_SECOND).round() as i64);
+        for field in RESET_DELAY_FIELDS {
+            if let Some(value) = source.get(*field) {
+                if value.is_null() {
+                    continue;
+                }
+                let delay = nonnegative_number(Some(value), &format!("{source_path}.{field}"))?;
+                let parsed =
+                    delayed_reset_ms(delay, recorded_at_ms, &format!("{source_path}.{field}"))?;
+                if delayed_reset.is_none() {
+                    delayed_reset = Some(parsed);
+                }
+            }
         }
     }
-    None
+    Ok(absolute_reset.or(delayed_reset))
 }
 
-/// The human label for a Kimi window, from the duration and unit it states.
-fn kimi_window_label(window: &Value) -> Option<String> {
-    let duration = json_number(window.get("duration"))?;
-    let unit = window
-        .get("timeUnit")
-        .or_else(|| window.get("time_unit"))
-        .and_then(Value::as_str)?
-        .to_ascii_uppercase();
+/// The optional human label for a Kimi window. If either half of a claimed
+/// duration is present, both must be valid.
+fn kimi_window_label(window: &Map<String, Value>, path: &str) -> Result<Option<String>, String> {
+    let duration_value = window.get("duration");
+    let read_unit = |value: Option<&Value>, field: &str| -> Result<Option<String>, String> {
+        let Some(value) = value else {
+            return Ok(None);
+        };
+        let unit = value
+            .as_str()
+            .map(str::trim)
+            .filter(|unit| !unit.is_empty())
+            .ok_or_else(|| format!("`{path}.{field}` must be a non-empty string"))?;
+        Ok(Some(unit.to_ascii_uppercase()))
+    };
+    let camel_unit = read_unit(window.get("timeUnit"), "timeUnit")?;
+    let snake_unit = read_unit(window.get("time_unit"), "time_unit")?;
+    if duration_value.is_none() && camel_unit.is_none() && snake_unit.is_none() {
+        return Ok(None);
+    }
+    if let (Some(camel), Some(snake)) = (&camel_unit, &snake_unit) {
+        if camel != snake {
+            return Err(format!("`{path}.timeUnit` and `{path}.time_unit` disagree"));
+        }
+    }
+    let duration = positive_number(duration_value, &format!("{path}.duration"))?;
+    let unit = camel_unit
+        .or(snake_unit)
+        .ok_or_else(|| format!("missing `{path}.timeUnit`"))?;
     let minutes = if unit.contains("MINUTE") {
         duration
     } else if unit.contains("HOUR") {
@@ -811,11 +1129,12 @@ fn kimi_window_label(window: &Value) -> Option<String> {
     } else if unit.contains("SECOND") {
         duration / SECONDS_PER_MINUTE
     } else {
-        // An unknown unit is not a label. The reading still stands; it just does
-        // not claim a window length the provider did not name.
-        return None;
+        return Err(format!("`{path}.timeUnit` has unsupported value `{unit}`"));
     };
-    Some(window_label_from_minutes(minutes))
+    if !minutes.is_finite() || minutes >= i64::MAX as f64 {
+        return Err(format!("`{path}.duration` is outside the supported range"));
+    }
+    Ok(Some(window_label_from_minutes(minutes)))
 }
 
 fn valid_model_id(value: &str) -> bool {
@@ -2441,7 +2760,7 @@ async fn bounded_response_text(
     while let Some(chunk) = response
         .chunk()
         .await
-        .map_err(|_| "dependency_unavailable: provider response read failed".to_string())?
+        .map_err(|error| transport_error_message(&error))?
     {
         if body.len().saturating_add(chunk.len()) > max_provider_response_bytes() {
             return Err("provider_failure: provider response exceeded byte limit".to_string());
@@ -2636,8 +2955,14 @@ fn provider_refusal(status: reqwest::StatusCode, body: &str) -> (&'static str, S
             value
                 .pointer("/error/message")
                 .or_else(|| value.get("message"))
+                .or_else(|| value.get("detail"))
+                .or_else(|| value.get("error"))
                 .and_then(Value::as_str)
                 .map(str::to_string)
+        })
+        .or_else(|| {
+            let detail = body.trim();
+            (!detail.is_empty()).then(|| detail.to_string())
         })
         .unwrap_or_else(|| format!("provider returned HTTP {}", status.as_u16()));
     let detail = detail

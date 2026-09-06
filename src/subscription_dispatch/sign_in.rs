@@ -95,7 +95,7 @@ pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, String> {
         weles_provider,
         options.login_item.as_deref().map(str::trim),
     )?;
-    if selecting_declared_primary {
+    if options.subscription_id.is_some() {
         let declared_subscription = health
             .get("login_items")
             .and_then(Value::as_array)
@@ -127,6 +127,7 @@ pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, String> {
                     Value::Null,
                 ));
             }
+            (Some(_), None) if !selecting_declared_primary => {}
             (Some(expected), None) => {
                 let detail = format!(
                     "Weles does not declare which subscription {login_item} renews; refusing \
@@ -162,7 +163,11 @@ pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, String> {
         .await
         .map_err(|error| format!("Weles worker API refused the sign-in request: {error}"))?;
     let status = response.status().as_u16();
-    let answer: Value = response.json().await.unwrap_or_else(|_| json!({}));
+    let answer: Value = response.json().await.map_err(|error| {
+        format!(
+            "Weles sign-in response at {base}/reauth (HTTP {status}) is not valid JSON: {error}"
+        )
+    })?;
 
     // Echoing the row proves attribution; `ok` proves the browser trajectory
     // finished. A failed trajectory used to return its exact stderr in this
@@ -315,23 +320,33 @@ async fn worker_api_base() -> Result<String, String> {
                 .join("bin")
                 .join("stado")
         });
-    let output = tokio::process::Command::new(&stado)
-        .args([
-            "service",
-            "directory",
-            "connect",
-            "weles-admission",
-            "--no-verify",
-            "--json",
-        ])
-        .output()
-        .await
-        .map_err(|error| {
-            format!(
-                "cannot resolve weles-admission through {}: {error}",
-                stado.display()
-            )
-        })?;
+    let output = tokio::time::timeout(
+        Duration::from_secs(30),
+        tokio::process::Command::new(&stado)
+            .kill_on_drop(true)
+            .args([
+                "service",
+                "directory",
+                "connect",
+                "weles-admission",
+                "--no-verify",
+                "--json",
+            ])
+            .output(),
+    )
+    .await
+    .map_err(|_| {
+        format!(
+            "Stado weles-admission lookup through {} timed out after 30 seconds",
+            stado.display()
+        )
+    })?
+    .map_err(|error| {
+        format!(
+            "cannot resolve weles-admission through {}: {error}",
+            stado.display()
+        )
+    })?;
     if !output.status.success() {
         let detail: String = String::from_utf8_lossy(&output.stderr)
             .trim()
@@ -401,15 +416,11 @@ fn worker_api_token() -> Result<String, String> {
 async fn read_health(client: &reqwest::Client, base: &str) -> Result<Value, String> {
     let response = client
         .get(format!("{base}/healthz"))
+        .timeout(Duration::from_secs(30))
         .send()
         .await
         .and_then(reqwest::Response::error_for_status)
-        .map_err(|error| {
-            format!(
-                "Weles worker API does not answer its own health check at {base}/healthz \
-                 ({error}); start it before signing an account in"
-            )
-        })?;
+        .map_err(|error| format!("Weles health request at {base}/healthz failed: {error}"))?;
     response
         .json()
         .await
