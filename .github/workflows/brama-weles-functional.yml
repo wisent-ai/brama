@@ -14,7 +14,15 @@ jobs:
   real-sign-in:
     runs-on: [self-hosted, macOS, ARM64, stado-release]
     timeout-minutes: 45
+    env:
+      GIT_CONFIG_NOSYSTEM: "1"
+      GIT_TERMINAL_PROMPT: "0"
+      GIT_ASKPASS: /usr/bin/false
     steps:
+      - name: Use job-local Git configuration
+        run: |
+          git_config=$(mktemp "$RUNNER_TEMP/brama-gitconfig.XXXXXX")
+          printf 'GIT_CONFIG_GLOBAL=%s\n' "$git_config" >> "$GITHUB_ENV"
       - name: Check out Brama
         uses: actions/checkout@v4
       - name: Check out pinned Probierz
