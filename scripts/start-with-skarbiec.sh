@@ -510,7 +510,7 @@ control_config=${control_config:-${HOME:-/nonexistent}/.config/brama/control.jso
 printf '%s\n' "control:  $control_config" >/dev/stderr
 policy_dir=$(mktemp -d "$runtime_dir/policy.XXXXXX")
 trap 'rm -rf "$policy_dir"' EXIT HUP INT TERM
-"$PYTHON_BIN" - "$control_config" "$policy_dir/allowed-models" "$policy_dir/model-aliases" <<'PY'
+"$PYTHON_BIN" - "$control_config" "$policy_dir/allowed-models" "$policy_dir/model-aliases" "$policy_dir/backend-models" <<'PY'
 import json
 import os
 import stat
@@ -518,7 +518,7 @@ import sys
 
 arguments = iter(sys.argv)
 next(arguments)
-config_path, allowed_path, aliases_path = arguments
+config_path, allowed_path, aliases_path, backend_path = arguments
 with open(config_path, "r", encoding="utf-8") as source:
     document = json.load(source)
 try:
@@ -606,10 +606,15 @@ def write_policy(path, value):
 
 write_policy(allowed_path, ",".join(allowed_models))
 write_policy(aliases_path, json.dumps(aliases, separators=(",", ":"), sort_keys=True))
+write_policy(
+    backend_path,
+    json.dumps(sorted(alias for alias in required_aliases if alias.startswith("wisent-backend/"))),
+)
 PY
 BRAMA_ALLOWED_MODELS=$(cat "$policy_dir/allowed-models")
 BRAMA_MODEL_ALIASES=$(cat "$policy_dir/model-aliases")
-export BRAMA_ALLOWED_MODELS BRAMA_MODEL_ALIASES
+BRAMA_BACKEND_ALLOWED_MODELS=$(cat "$policy_dir/backend-models")
+export BRAMA_ALLOWED_MODELS BRAMA_MODEL_ALIASES BRAMA_BACKEND_ALLOWED_MODELS
 rm -rf "$policy_dir"
 trap - EXIT HUP INT TERM
 unset policy_dir control_config BRAMA_CONTROL_CONFIG
@@ -662,7 +667,9 @@ arguments = iter(sys.argv)
 next(arguments)
 router = next(arguments)
 all_models = os.environ["BRAMA_ALLOWED_MODELS"].split(",")
-backend_models = [model for model in all_models if model.startswith("wisent-backend/")]
+# The backend's identity uses the required contract, not every optional alias
+# whose name happens to share its prefix in the deployment's route table.
+backend_models = json.loads(os.environ["BRAMA_BACKEND_ALLOWED_MODELS"])
 # Keep both Brama-owned paths the worker may request. `weles` is the worker's
 # own alias and selects whatever the route table declares for it; `best` remains
 # its subscription-funded fallback. The server validates this exact pair for the
@@ -741,7 +748,7 @@ rm -f "$identities_file"
 # Unknown bearers are intentionally absent here and resolved by the
 # introspection grant configured above.
 export BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES
-unset BRAMA_ALLOWED_MODELS
+unset BRAMA_ALLOWED_MODELS BRAMA_BACKEND_ALLOWED_MODELS
 
 # Product request-sign identities are projected from their exact Skarbiec items.
 # `wisent-app` is Jeden's public runtime identity and uses the dedicated

@@ -330,10 +330,21 @@ impl ModelIngressAuth {
         if valid {
             Ok(())
         } else {
+            let mut required = aliases.to_vec();
+            required.sort_unstable();
+            let mut observed = self
+                .credentials
+                .iter()
+                .find(|credential| credential.identity.client_id == client_id)
+                .and_then(|credential| credential.identity.allowed_models.as_ref())
+                .map(|models| models.iter().map(String::as_str).collect::<Vec<_>>());
+            if let Some(models) = &mut observed {
+                models.sort_unstable();
+            }
             Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 format!(
-                    "{MODEL_ROUTER_CLIENT_IDENTITIES_ENV} must give `{client_id}` its exact required alias set"
+                    "{MODEL_ROUTER_CLIENT_IDENTITIES_ENV} must give `{client_id}` its exact required alias set; expected={required:?}; observed={observed:?}"
                 ),
             ))
         }

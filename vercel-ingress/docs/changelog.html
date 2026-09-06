@@ -124,7 +124,12 @@ footer a { color: var(--muted); text-decoration: none; }
       <article class="doc"><h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Link to this section">&para;</a></h1>
 <p>All notable Brama changes are documented here. Brama follows Semantic
 Versioning and the pre-one compatibility policy in <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
-<h2 id="unreleased">Unreleased<a class="headerlink" href="#unreleased" title="Link to this section">&para;</a></h2>
+<h2 id="0276">0.2.76<a class="headerlink" href="#0276" title="Link to this section">&para;</a></h2>
+<p>The managed launcher and server use the single <code>wisent-backend/chat</code>
+alias and the <code>weles</code> alias. The backend identity is derived from the
+four required backend aliases, so optional route names cannot make its
+startup allowlist contradict the server contract. A mismatch reports the
+expected and observed names without printing credentials.</p>
 <h3 id="existing-route-configuration-can-be-reviewed-and-adopted">Existing route configuration can be reviewed and adopted<a class="headerlink" href="#existing-route-configuration-can-be-reviewed-and-adopted" title="Link to this section">&para;</a></h3>
 <p><code>brama adopt</code>, first-use <code>--adopt-*</code> options, and Brama
 Desktop now share one Brama-owned preview/apply operation for schema-1
