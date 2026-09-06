@@ -249,16 +249,16 @@ async fn main() {
             adopt_replace_conflicts,
         } => {
             if let Some(from) = adopt_from.as_deref() {
-                match run_adoption(
+                match run_adoption(AdoptionOptions {
                     from,
-                    adopt_into.as_deref(),
-                    &agent_id,
-                    adopt_apply,
-                    &adopt_selected_aliases,
-                    adopt_all_importable,
-                    adopt_replace_conflicts,
-                    false,
-                )
+                    into: adopt_into.as_deref(),
+                    agent_id: &agent_id,
+                    apply: adopt_apply,
+                    selected_aliases: &adopt_selected_aliases,
+                    all_importable: adopt_all_importable,
+                    replace_conflicts: adopt_replace_conflicts,
+                    json: false,
+                })
                 .await
                 {
                     Ok(false) => {
@@ -306,16 +306,16 @@ async fn main() {
             replace_conflicts,
             json,
         } => {
-            if let Err(error) = run_adoption(
-                &from,
-                into.as_deref(),
-                &agent_id,
+            if let Err(error) = run_adoption(AdoptionOptions {
+                from: &from,
+                into: into.as_deref(),
+                agent_id: &agent_id,
                 apply,
-                &selected_aliases,
+                selected_aliases: &selected_aliases,
                 all_importable,
                 replace_conflicts,
                 json,
-            )
+            })
             .await
             {
                 eprintln!("Configuration adoption error: {error}");
@@ -541,16 +541,28 @@ async fn main() {
     }
 }
 
-async fn run_adoption(
-    from: &Path,
-    into: Option<&Path>,
-    agent_id: &str,
+struct AdoptionOptions<'a> {
+    from: &'a Path,
+    into: Option<&'a Path>,
+    agent_id: &'a str,
     apply: bool,
-    selected_aliases: &[String],
+    selected_aliases: &'a [String],
     all_importable: bool,
     replace_conflicts: bool,
     json: bool,
-) -> Result<bool, String> {
+}
+
+async fn run_adoption(options: AdoptionOptions<'_>) -> Result<bool, String> {
+    let AdoptionOptions {
+        from,
+        into,
+        agent_id,
+        apply,
+        selected_aliases,
+        all_importable,
+        replace_conflicts,
+        json,
+    } = options;
     if !apply && (all_importable || replace_conflicts || !selected_aliases.is_empty()) {
         return Err(
             "--apply is required with --select, --all-importable, or --replace-conflicts"
