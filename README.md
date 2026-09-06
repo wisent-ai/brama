@@ -764,6 +764,10 @@ recorded and the discarded attempt stays `in_progress` forever on the Echo side.
   `scripts/start-with-skarbiec.sh` from operator-owned configuration and scoped
   secret consumers. Missing, malformed, duplicate, or contradictory security
   configuration fails startup.
+  The launcher derives `wisent-backend`'s four required model aliases from that
+  validated policy, rather than granting every name with the same prefix.
+  Additional operator aliases remain available to clients whose grants name
+  them; they do not prevent this required client from starting.
 - **Dynamic inference routes:** `BRAMA_INFERENCE_ROUTES_FILE` points at an
   owner-only snapshot maintained by the deployment operator. Brama reloads it
   per request, rejects symlinks and group/other-readable files, accepts only

@@ -1,7 +1,8 @@
 {
-  "version": "0.2.72",
-  "source": "stado://releases/brama/0.2.72/darwin-arm64 source_revision=f166f3d8e63905bd49b018ef8e41a35276518707 -- signed release object the Stado release plane published and hosts install from",
+  "version": "0.2.75",
+  "source": "stado://releases/brama/0.2.75/darwin-arm64 source_revision=734f7edf9c5ebf591ccb14c6385892e66804db31 -- signed release object the Stado release plane published and hosts install from",
   "surface": [
+    "aliases",
     "collect-task-quality",
     "detect",
     "mcp",

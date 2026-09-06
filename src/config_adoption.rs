@@ -6,9 +6,7 @@ use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
-use crate::core::inference_routes::{
-    self, RouteImport, RouteImportDisposition, RouteImportResult,
-};
+use crate::core::inference_routes::{self, RouteImport, RouteImportDisposition, RouteImportResult};
 use crate::core::server::{
     alias_requires_direct_capability, alias_route_shape_supported, valid_alias, BEST_ALIAS,
 };
@@ -182,7 +180,9 @@ pub fn default_destination() -> Result<std::path::PathBuf, String> {
     }
     let home = std::env::var_os("HOME")
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| "HOME is required when BRAMA_INFERENCE_ROUTES_FILE is not set".to_string())?;
+        .ok_or_else(|| {
+            "HOME is required when BRAMA_INFERENCE_ROUTES_FILE is not set".to_string()
+        })?;
     Ok(std::path::PathBuf::from(home)
         .join(".config")
         .join("brama")
@@ -276,17 +276,13 @@ pub async fn preview_document(
             .map(|value| {
                 value
                     .as_array()
-                    .ok_or_else(|| {
-                        format!("fallback route '{alias}' must be an array")
-                    })?
+                    .ok_or_else(|| format!("fallback route '{alias}' must be an array"))?
                     .iter()
                     .map(|destination| {
                         destination
                             .as_str()
                             .map(str::to_string)
-                            .ok_or_else(|| {
-                                format!("fallback route '{alias}' must contain strings")
-                            })
+                            .ok_or_else(|| format!("fallback route '{alias}' must contain strings"))
                     })
                     .collect::<Result<Vec<_>, _>>()
             })
@@ -319,9 +315,8 @@ pub async fn preview_document(
                 match &discovered_subscriptions {
                     Ok(entries) if entries.is_empty() => {
                         disposition = AdoptionDisposition::Rejected;
-                        detail = format!(
-                            "agent '{agent_id}' has no discoverable Skarbiec subscription"
-                        );
+                        detail =
+                            format!("agent '{agent_id}' has no discoverable Skarbiec subscription");
                         break;
                     }
                     Err(error) => {
@@ -338,9 +333,8 @@ pub async fn preview_document(
                     && !configured_providers.contains(provider)
                 {
                     disposition = AdoptionDisposition::Rejected;
-                    detail = format!(
-                        "provider '{provider}' has no configured Brama acquisition route"
-                    );
+                    detail =
+                        format!("provider '{provider}' has no configured Brama acquisition route");
                     break;
                 }
             }
@@ -430,7 +424,10 @@ pub async fn apply_document(
         .map(|candidate| candidate.alias.as_str())
         .collect::<HashSet<_>>();
     if let Some(alias) = selected.iter().find(|alias| !known.contains(*alias)) {
-        return Err(format!("selected alias '{}' is not present in the source", alias));
+        return Err(format!(
+            "selected alias '{}' is not present in the source",
+            alias
+        ));
     }
 
     let source = parse_source(encoded)?;
@@ -470,11 +467,8 @@ pub async fn apply_document(
         });
     }
 
-    let (routes, merged) = inference_routes::import_routes(
-        destination,
-        &imports,
-        replace_alias_conflicts,
-    )?;
+    let (routes, merged) =
+        inference_routes::import_routes(destination, &imports, replace_alias_conflicts)?;
     let mut items = merged
         .into_iter()
         .map(map_route_result)
@@ -531,7 +525,9 @@ fn validate_source(source: &SourceRegistry) -> Result<(), String> {
         ));
     }
     if source.routes.len() > MAX_ALIASES || source.fallbacks.len() > MAX_ALIASES {
-        return Err(format!("inference routes may contain at most {MAX_ALIASES} aliases"));
+        return Err(format!(
+            "inference routes may contain at most {MAX_ALIASES} aliases"
+        ));
     }
     if source.deployments.len() > MAX_DEPLOYMENTS {
         return Err(format!(
@@ -540,8 +536,7 @@ fn validate_source(source: &SourceRegistry) -> Result<(), String> {
     }
     let mut deployment_names = HashSet::new();
     for deployment in &source.deployments {
-        if !valid_identifier(&deployment.name)
-            || !deployment_names.insert(deployment.name.as_str())
+        if !valid_identifier(&deployment.name) || !deployment_names.insert(deployment.name.as_str())
         {
             return Err(format!(
                 "deployment names must be valid and unique; rejected '{}'",
@@ -564,7 +559,11 @@ fn validate_source(source: &SourceRegistry) -> Result<(), String> {
         if !valid_alias(alias) {
             return Err(format!("invalid route alias '{alias}'"));
         }
-        let fallbacks = source.fallbacks.get(alias).map(Vec::as_slice).unwrap_or_default();
+        let fallbacks = source
+            .fallbacks
+            .get(alias)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
         let mut seen = HashSet::from([primary.as_str()]);
         if !valid_destination(primary)
             || fallbacks
@@ -613,9 +612,7 @@ fn valid_identifier(value: &str) -> bool {
         && value.len() <= 128
         && value.trim() == value
         && value.bytes().all(|byte| {
-            byte.is_ascii_lowercase()
-                || byte.is_ascii_digit()
-                || matches!(byte, b'-' | b'_' | b'.')
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'_' | b'.')
         })
 }
 

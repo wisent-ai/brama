@@ -200,9 +200,15 @@ context. The raw bearer is never logged (<code>src/core/server.rs</code>).</p>
 </ul>
 <p>In managed deployments, startup additionally requires two exact allowlists as
 internal consistency checks when the table is present: <code>wisent-backend</code> must
-hold exactly the five <code>wisent-backend/*</code> aliases, and <code>weles</code> must hold
-exactly <code>best</code>.</p>
+hold exactly <code>wisent-backend/chat</code>, <code>wisent-backend/evaluation</code>,
+<code>wisent-backend/embeddings</code>, and <code>wisent-backend/moderation</code>.
+The <code>weles</code> identity holds exactly <code>best</code> and <code>weles</code>.
+The launcher derives the backend identity from these required aliases, not
+from optional deployment aliases that share the <code>wisent-backend/</code> prefix.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
+<p>A startup refusal reports the expected and observed alias lists after
+<code>must give CLIENT its exact required alias set</code>. <code>observed=None</code>
+means that the client or its allowlist is absent; no bearer value is printed.</p>
 <p>Observed against a running gateway (0.2.38):</p>
 <pre><code class="language-text">$ curl -s http://127.0.0.1:8080/v1/models        # no bearer
 {&quot;error&quot;:{&quot;attempts&quot;:0,&quot;code&quot;:&quot;unauthenticated&quot;,&quot;message&quot;:&quot;unauthorized&quot;,
