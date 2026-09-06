@@ -96,7 +96,9 @@ def repository_slug() -> str:
 
 def revision(reference: str) -> tuple[list[str], str]:
     surface = scanner()
-    workspace = tempfile.mkdtemp(prefix="brama-baseline-")
+    work_root = pathlib.Path.home() / ".stado" / "work"
+    work_root.mkdir(parents=True, exist_ok=True)
+    workspace = tempfile.mkdtemp(prefix="brama-baseline-", dir=work_root)
     try:
         archive = subprocess.run(
             ["git", "archive", "--format=tar", reference],

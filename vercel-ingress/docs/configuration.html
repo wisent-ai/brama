@@ -186,7 +186,7 @@ therefore does not cause the startup refusal
 <tr>
 <td><code>BRAMA_MODEL_ALIASES</code></td>
 <td>required in managed mode</td>
-<td>JSON object of alias → canonical route. Must contain the six required aliases; extra names are permitted. In standalone mode absent means <code>{}</code></td>
+<td>JSON object of alias → canonical route. Must contain <code>wisent-backend/chat</code>, <code>wisent-backend/evaluation</code>, <code>wisent-backend/embeddings</code>, <code>wisent-backend/moderation</code>, <code>weles</code>, and <code>best</code>; extra names are permitted without widening the required clients' allowlists. In standalone mode absent means <code>{}</code></td>
 </tr>
 <tr>
 <td><code>BRAMA_INFERENCE_ROUTES_FILE</code></td>
