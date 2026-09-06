@@ -133,9 +133,11 @@ reads, then the launcher's own inputs.</p>
 four-alias grant from the required policy: <code>wisent-backend/chat</code>,
 <code>wisent-backend/evaluation</code>, <code>wisent-backend/embeddings</code>,
 and <code>wisent-backend/moderation</code>. Extra operator aliases remain in the
-route table but are not automatically granted to this client. Their presence
-therefore does not cause the startup refusal
-<code>BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES must give &#96;wisent-backend&#96; its exact required alias set</code>.</p>
+route table but are not automatically granted to this client. Startup checks
+that every required alias is in the client's grant and accepts a grant that
+holds more; the refusal when one is missing is
+<code>BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES must give &#96;wisent-backend&#96; every required alias</code>,
+followed by <code>required=</code> and <code>observed=</code> lists.</p>
 <h2 id="listener">Listener<a class="headerlink" href="#listener" title="Link to this section">&para;</a></h2>
 <table>
 <thead>
