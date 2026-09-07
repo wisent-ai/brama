@@ -50,6 +50,10 @@
       "destination": "/docs/cli.html"
     },
     {
+      "source": "/docs/command-surface",
+      "destination": "/docs/command-surface.html"
+    },
+    {
       "source": "/docs/cli/version",
       "destination": "/docs/cli/version.html"
     },
@@ -64,6 +68,10 @@
     {
       "source": "/docs/cli/adopt",
       "destination": "/docs/cli/adopt.html"
+    },
+    {
+      "source": "/docs/cli/aliases",
+      "destination": "/docs/cli/aliases.html"
     },
     {
       "source": "/docs/cli/test",

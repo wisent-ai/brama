@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Command surface — Brama Docs</title>
+  <meta name="description" content="What Brama's command surface measures at one named revision, which capabilities replace its per-incident verbs, and the order the replacement lands in.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/command-surface">
+  <style>
+:root {
+  color-scheme: dark;
+  --bg: #080a0d;
+  --panel: #101319;
+  --panel-2: #151922;
+  --line: #282e3a;
+  --muted: #9ba5b5;
+  --text: #f2f5f9;
+  --accent: #b7ff52;
+  --accent-soft: rgba(183, 255, 82, .12);
+  --code: #111723;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 6rem; }
+body { margin: 0; background: radial-gradient(circle at 75% -10%, rgba(69, 108, 89, .24), transparent 32rem), var(--bg); color: var(--text); line-height: 1.65; }
+a { color: inherit; }
+.topbar { position: sticky; top: 0; z-index: 10; height: 4.25rem; display: flex; align-items: center; justify-content: space-between; padding: 0 2rem; border-bottom: 1px solid rgba(255,255,255,.09); background: rgba(8, 10, 13, .86); backdrop-filter: blur(18px); }
+.brand { display: inline-flex; align-items: center; gap: .65rem; font-size: 1.05rem; text-decoration: none; letter-spacing: -.01em; }
+.brand-mark { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .55rem; background: var(--accent); color: #10140b; font-weight: 900; }
+.brand strong { padding: .15rem .5rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+.topbar nav { display: flex; align-items: center; gap: 1.5rem; }
+.topbar nav a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.topbar nav a:hover { color: var(--text); }
+.layout { display: grid; grid-template-columns: 17.5rem minmax(0, 1fr); max-width: 94rem; min-height: calc(100vh - 4.25rem); margin: 0 auto; }
+aside { border-right: 1px solid var(--line); padding: 2rem 1.5rem 4rem; }
+aside > nav { position: sticky; top: 6.25rem; max-height: calc(100vh - 8rem); overflow: auto; scrollbar-width: thin; }
+.nav-group { margin-bottom: 1.75rem; }
+.nav-group h2 { margin: 0 0 .45rem; color: #737f90; font-size: .69rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.nav-group a { display: block; margin: .08rem 0; padding: .36rem .55rem; border-radius: .4rem; color: var(--muted); font-size: .82rem; line-height: 1.35; text-decoration: none; }
+.nav-group a:hover { color: var(--text); background: var(--panel); }
+.nav-group a.active { color: var(--accent); background: var(--accent-soft); }
+.mobile-nav { display: none; }
+main { width: 100%; min-width: 0; max-width: 65rem; padding: 3.5rem clamp(2rem, 6vw, 6rem) 2rem; }
+.source-note { margin: 0 0 1rem; color: #6f7a89; font: 600 .7rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
+.doc > h1:first-child { margin-top: 0; font-size: clamp(2.35rem, 5vw, 4rem); line-height: 1.04; letter-spacing: -.045em; }
+.doc h2 { margin: 3.25rem 0 1rem; padding-top: .5rem; font-size: 1.7rem; line-height: 1.2; letter-spacing: -.025em; }
+.doc h3 { margin: 2.25rem 0 .75rem; font-size: 1.22rem; line-height: 1.3; }
+.doc h4 { margin: 1.75rem 0 .5rem; font-size: 1rem; }
+.doc p, .doc li { color: #c7ced9; }
+.doc p { margin: 1rem 0; }
+.doc a { color: var(--accent); text-underline-offset: .2em; }
+.doc h1 .headerlink, .doc h2 .headerlink, .doc h3 .headerlink, .doc h4 .headerlink { margin-left: .5rem; color: #4d5765; font-size: .65em; text-decoration: none; opacity: 0; }
+.doc h1:hover .headerlink, .doc h2:hover .headerlink, .doc h3:hover .headerlink, .doc h4:hover .headerlink { opacity: 1; }
+.doc blockquote { margin: 1.5rem 0; padding: .85rem 1.1rem; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+.doc blockquote p { margin: .3rem 0; }
+.doc code { padding: .13rem .35rem; border: 1px solid #273143; border-radius: .35rem; background: var(--code); color: #dce7f7; font: .88em/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.doc pre { margin: 1.4rem 0; padding: 1.1rem 1.2rem; overflow: auto; border: 1px solid var(--line); border-radius: .7rem; background: var(--code); box-shadow: 0 18px 55px rgba(0,0,0,.2); }
+.doc pre code { padding: 0; border: 0; background: transparent; color: #dce7f7; overflow-wrap: normal; }
+.doc table { display: block; width: 100%; margin: 1.5rem 0; overflow-x: auto; border-collapse: collapse; font-size: .87rem; }
+.doc th, .doc td { min-width: 8rem; padding: .65rem .75rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.doc th { background: var(--panel-2); color: var(--text); }
+.doc td { color: #bcc5d2; }
+.doc img { max-width: 100%; height: auto; border-radius: .6rem; }
+.doc hr { margin: 3rem 0; border: 0; border-top: 1px solid var(--line); }
+.doc ul, .doc ol { padding-left: 1.4rem; }
+.doc li + li { margin-top: .35rem; }
+footer { display: flex; justify-content: space-between; margin-top: 5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: #6f7a89; font-size: .78rem; }
+footer a { color: var(--muted); text-decoration: none; }
+.hero { padding: clamp(1rem, 5vw, 4.5rem) 0 4rem; }
+.eyebrow { margin: 0 0 .85rem; color: var(--accent) !important; font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.hero h1 { max-width: 14ch; margin: 0; font-size: clamp(3rem, 7vw, 5.8rem); line-height: .96; letter-spacing: -.06em; }
+.hero > p:not(.eyebrow) { max-width: 48rem; margin: 1.5rem 0 0; color: var(--muted); font-size: 1.12rem; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+.button { display: inline-flex; align-items: center; min-height: 2.8rem; padding: .6rem 1rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--panel); text-decoration: none; }
+.button.primary { border-color: var(--accent); background: var(--accent); color: #11160c; font-weight: 750; }
+.featured, .directory { margin-top: 2.5rem; }
+.card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; }
+.card { min-height: 13rem; padding: 1.3rem; border: 1px solid var(--line); border-radius: .75rem; background: linear-gradient(145deg, rgba(21,25,34,.92), rgba(13,16,21,.92)); text-decoration: none; transition: border-color .16s, transform .16s; }
+.card:hover { transform: translateY(-2px); border-color: #526137; }
+.card span { color: var(--accent); font-size: .68rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.card h2 { margin: .9rem 0 .45rem; font-size: 1.3rem; line-height: 1.2; }
+.card p { margin: 0; color: var(--muted); font-size: .85rem; }
+.directory > h2 { margin: 0 0 1.2rem; font-size: 2.2rem; }
+.directory-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 2.5rem; }
+.directory-grid section { padding-top: 1rem; border-top: 1px solid var(--line); }
+.directory-grid h2 { margin: 0 0 .65rem; font-size: 1rem; }
+.directory-grid ul { margin: 0; padding: 0; list-style: none; }
+.directory-grid li { margin: .35rem 0; }
+.directory-grid a { color: var(--muted); font-size: .88rem; text-decoration: none; }
+.directory-grid a:hover { color: var(--accent); }
+@media (max-width: 860px) {
+  .topbar { padding: 0 1rem; }
+  .topbar nav a:not(:last-child) { display: none; }
+  .layout { display: block; }
+  aside { display: none; }
+  .mobile-nav { display: block; margin: 1rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--panel); }
+  .mobile-nav summary { padding: .75rem 1rem; cursor: pointer; color: var(--muted); font-size: .85rem; }
+  .mobile-nav nav { max-height: 70vh; overflow: auto; padding: .5rem 1rem 1rem; }
+  main { max-width: none; padding: 2.5rem 1.25rem 2rem; }
+  .doc > h1:first-child { font-size: clamp(2.1rem, 12vw, 3.3rem); }
+  .card-grid, .directory-grid { grid-template-columns: 1fr; }
+  .hero { padding-top: 1rem; }
+  .hero h1 { font-size: clamp(3rem, 15vw, 4.5rem); }
+}
+@media print {
+  .topbar, aside, .mobile-nav, footer { display: none; }
+  body { background: white; color: black; }
+  .layout { display: block; }
+  main { max-width: none; padding: 0; }
+  .doc p, .doc li { color: #222; }
+}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <details class="mobile-nav"><summary>Browse documentation</summary><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a class="active" aria-current="page" href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></details>
+  <div class="layout">
+    <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a class="active" aria-current="page" href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
+    <main>
+      <p class="source-note">Measured command surface</p>
+      <article class="doc"><h1 id="command-surface">Command surface<a class="headerlink" href="#command-surface" title="Link to this section">&para;</a></h1>
+<p>Brama's invocable surface is larger than its command tree, because Brama Desktop, the
+account routes and the agent routes reach the same subscription operations over HTTP
+that an operator reaches over <code>argv</code>. This page measures both at one named
+revision, names the capabilities that replace the verbs which accumulated one per
+incident, and states the order in which the replacement lands.</p>
+<h2 id="what-was-measured">What was measured, and with what<a class="headerlink" href="#what-was-measured" title="Link to this section">&para;</a></h2>
+<p>Revision <code>070275a036f35130918948b66f4be8b7e26fcf50</code> of
+<a href="https://github.com/wisent-ai/brama">wisent-ai/brama</a>, crate version
+<code>0.2.78</code>, measured on 2026-09-07 (UTC) on <code>darwin-arm64</code>. The
+binary states its own revision, so the numbers below are bound to a build and not to
+prose:</p>
+<pre><code class="language-console">git fetch origin &amp;&amp; git rev-parse origin/main
+BRAMA_SOURCE_REVISION=$(git rev-parse origin/main) BRAMA_BUILD_PLATFORM=darwin-arm64 \
+  cargo build --release --bin brama
+target/release/brama version
+{"product":"brama","version":"0.2.78","source_revision":"070275a036f35130918948b66f4be8b7e26fcf50","platform":"darwin-arm64","built_at":"not-recorded"}
+
+BRAMA_BIN=target/release/brama node --test tests/docs/cli-commands.probierz.spec.mjs</code></pre>
+<p>That last command is the measurement. It walks <code>brama help</code> from the root to
+every leaf, reads one invocation per HTTP method per registered path out of the router in
+<code>src/core/server.rs</code>, and reads the site's own rewrite table in
+<code>vercel-ingress/vercel.json</code> to decide which of those invocations resolve to a
+published page. It writes nothing. A number on this page that the command does not print
+does not belong on this page.</p>
+<h2 id="the-counts">The counts<a class="headerlink" href="#the-counts" title="Link to this section">&para;</a></h2>
+<p><strong>50 leaf invocations in 7 groups.</strong> 13 of them are command-tree leaves in
+3 command groups carrying 42 options between them; the other 37 are HTTP method
+invocations over 30 registered paths.</p>
+<table><thead><tr><th>Group</th><th>Leaf invocations</th></tr></thead><tbody>
+<tr><td><code>/v1/admin</code></td><td>18</td></tr>
+<tr><td><code>brama</code> (root)</td><td>12</td></tr>
+<tr><td><code>/v1</code></td><td>11</td></tr>
+<tr><td><code>/v1/account</code></td><td>5</td></tr>
+<tr><td><code>/</code> (public and process)</td><td>3</td></tr>
+<tr><td><code>brama subscription</code></td><td>2</td></tr>
+<tr><td><code>brama subscriptions</code></td><td>1</td></tr>
+</tbody></table>
+<p><code>/v1/admin</code> is the largest group and it is the one that grew per incident:
+every diagnostic and repair reached for during an outage was added beside the last one
+rather than in place of it. The command tree is small by comparison, and its duplication
+shows up in options instead — <code>brama onboard</code> carries 6
+<code>--adopt-*</code> options, which is the whole <code>brama adopt</code> command
+spelled a second time at a second entry point.</p>
+<h2 id="families">The families, and what replaces each<a class="headerlink" href="#families" title="Link to this section">&para;</a></h2>
+<p>A family here is one operation spelled more than once because a different audience asked
+for it. 30 of the 50 invocations fall into five families. Each capability is named by
+Brama's own vocabulary, and each reads a declaration rather than taking an
+operator's word for the current state.</p>
+<table><thead><tr><th>Family</th><th>Count</th><th>Capability that replaces it</th><th>Declaration it reads</th></tr></thead><tbody>
+<tr><td>subscription inventory, once per audience</td><td>11</td><td>the subscription pool</td><td>the vault entitlement declaration: <code>brama:subscription</code> with its <code>brama:agent</code>, <code>brama:provider</code> and <code>brama:id</code> tags</td></tr>
+<tr><td>credential repair, once per incident</td><td>7</td><td>subscription credential state</td><td>the usage ledger's recorded credential state and the journal's <code>subscription_refresh</code> records</td></tr>
+<tr><td>route adoption, once per entry point</td><td>5</td><td>the alias registry</td><td>the route registry <code>BRAMA_INFERENCE_ROUTES_FILE</code> names and the launcher table <code>BRAMA_MODEL_ALIASES</code></td></tr>
+<tr><td>plan-usage reading, once per audience</td><td>4</td><td>subscription plan usage</td><td>the usage ledger and the provider's own usage report</td></tr>
+<tr><td>provider credential administration</td><td>3</td><td>capability redemption at final use</td><td>the provider capability declaration this installation was given</td></tr>
+</tbody></table>
+<p><strong>Subscription inventory (11).</strong>
+<code>brama subscriptions list</code>;
+<code>GET</code>, <code>POST</code> and <code>DELETE /v1/subscriptions/:agent_id</code>;
+<code>GET</code> and <code>POST /v1/account/subscriptions</code>;
+<code>DELETE /v1/account/subscriptions/:subscription_id</code>;
+<code>GET</code> and <code>POST /v1/admin/subscriptions/:agent_id</code>;
+<code>DELETE /v1/admin/subscriptions/:agent_id/:subscription_id</code>;
+<code>GET /v1/admin/subscription-pool</code>. Three audiences, one question: which
+subscriptions exist and who owns them. The pool capability answers it once from the vault
+declaration and scopes the answer by the caller's proven identity, which is where
+ownership already lives (<a href="/docs/concepts/entitlement">entitlement</a>).</p>
+<p><strong>Credential repair (7).</strong>
+<code>brama subscription refresh</code>; <code>brama subscription sign-in</code>;
+<code>POST /v1/account/subscription-sign-in/:subscription_id</code>;
+<code>POST /v1/admin/subscription-sign-in/:agent_id/:subscription_id</code>;
+<code>POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe</code>;
+<code>POST /v1/admin/subscription-pool/sign-in</code>;
+<code>POST /v1/admin/subscription-pool/refresh</code>. Each of these was added because
+one incident needed one repair, and each requires the operator to already know which
+repair applies. The ledger records why a credential is unusable —
+<code>needs_reauthorization</code>, a recorded quota block, a definitive refusal — so the
+capability reads that state and performs the repair the state names, instead of offering
+one verb per guess (<a href="/docs/concepts/capability">capability</a>,
+<a href="/docs/runbook">runbook</a>).</p>
+<p><strong>Route adoption (5).</strong> <code>brama adopt</code>;
+<code>PUT</code> and <code>DELETE /v1/admin/routes</code>;
+<code>POST /v1/admin/configuration-adoption/preview</code>;
+<code>POST /v1/admin/configuration-adoption/apply</code>, plus the 6
+<code>--adopt-*</code> options on <code>brama onboard</code>. Reviewing and adopting
+aliases is one operation with one declaration behind it; it currently has three entry
+points and two implementations of the same review
+(<a href="/docs/concepts/alias">alias</a>).</p>
+<p><strong>Plan-usage reading (4).</strong>
+<code>POST /v1/subscription-usage/:agent_id</code>;
+<code>POST /v1/account/subscription-usage</code>;
+<code>POST /v1/admin/subscription-usage/:agent_id</code>;
+<code>POST /v1/admin/subscription-pool/usage</code>. One sweep, one ledger, four ways to
+ask for it.</p>
+<p><strong>Provider credential administration (3).</strong>
+<code>GET</code>, <code>PUT</code> and <code>DELETE /v1/admin/credentials</code>.
+Skarbiec is the authority for credentials and Brama holds capability handles until final
+use; a credential-administration surface inside the routing gateway is a second authority
+for something Brama does not own (<a href="/docs/architecture">architecture</a>).</p>
+<h2 id="primitives">The 20 primitives that stay<a class="headerlink" href="#primitives" title="Link to this section">&para;</a></h2>
+<p>Nothing replaces these, because none of them is a second way to do something else.
+Inference and translation: <code>POST /v1/chat/completions</code>,
+<code>POST /v1/messages</code>, <code>POST /v1/responses</code>,
+<code>POST /v1/embeddings</code>, <code>POST /v1/moderations</code>. Reading what this
+gateway can serve: <code>GET /v1/models</code>, <code>GET /v1/aliases</code>,
+<code>GET /v1/admin/snapshot</code>, <code>GET /stats</code>, <code>brama aliases</code>.
+Liveness and readiness, which answer different questions:
+<code>GET /health</code>, <code>GET /readyz</code>. Process and operator primitives:
+<code>brama serve</code>, <code>brama version</code>, <code>brama detect</code>,
+<code>brama mcp</code>, <code>brama onboard</code>, <code>brama test</code>,
+<code>brama collect-task-quality</code>, <code>brama help</code>.</p>
+<h2 id="no-prose-page">Invocations with no prose page<a class="headerlink" href="#no-prose-page" title="Link to this section">&para;</a></h2>
+<p>Four, at the revision measured: <code>brama aliases</code>, whose page file existed in
+the site source while no rewrite pointed at it, so <code>/docs/cli/aliases</code> was
+linked from the CLI tree and did not resolve; and
+<code>GET</code>, <code>PUT</code> and <code>DELETE /v1/admin/credentials</code>, which
+the <a href="/docs/http-api">HTTP API</a> page does not mention at all. This change
+registers the <code>brama aliases</code> route, so the same command on this branch reports
+three. The remaining three are the family this page says Brama should not own; they are
+documented by their removal, not by a new page.</p>
+<h2 id="removal-rule">The removal rule<a class="headerlink" href="#removal-rule" title="Link to this section">&para;</a></h2>
+<p><strong>A replaced command is deleted in the same change as its replacement.</strong>
+Not deprecated, not left answering with a notice, not kept "until callers move" — deleted,
+with its route, its option, its example and its documentation paragraph, in the one commit
+that introduces what replaces it. A superseded command standing beside its replacement is a
+second source of truth, and a second source of truth is not a documentation problem: it is
+an operator reading the wrong state during an incident, which is how a refused
+authorization came to be reported as capacity and cost a day
+(<a href="/docs/errors">errors</a>). This is Brama's instance of the fleet rule that a
+replacement and its predecessor do not coexist.</p>
+<h2 id="migration-order">Migration order<a class="headerlink" href="#migration-order" title="Link to this section">&para;</a></h2>
+<ol>
+<li><strong>Subscription inventory</strong> (11 invocations). First, because every other
+family names a subscription, so the identity and ownership scoping have to be settled
+before anything else can be expressed in terms of them.</li>
+<li><strong>Plan-usage reading</strong> (4). Second, because the usage ledger is what the
+repair capability reads to decide which repair applies; a capability that reads a
+declaration cannot land before the declaration is single-sourced.</li>
+<li><strong>Credential repair</strong> (7). Third, and only now, because it is the family
+that consumes the previous two: it selects a subscription from the pool and a verdict from
+the ledger.</li>
+<li><strong>Route adoption</strong> (5). Fourth. It is independent of the subscription
+families and can be sequenced anywhere after them; it goes here because collapsing three
+entry points into one changes <code>brama onboard</code>, and changing a first-use path
+while the pool is mid-migration puts both risks in one release.</li>
+<li><strong>Provider credential administration</strong> (3). Last, because it is the only
+family whose replacement is a boundary decision rather than a consolidation: the surface
+moves to Skarbiec, and removing it needs the consumers named in the service directory to
+have stopped calling it.</li>
+</ol>
+<p>The order is dependency-first and blast-radius-second. Reversing it would mean building
+the repair capability on inventory that still has three owners, which is the defect this
+page exists to remove rather than relocate.</p>
+<p>The command tree itself is <a href="/docs/cli">the CLI reference</a>; the routes are
+<a href="/docs/http-api">the HTTP API</a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>
