@@ -90,10 +90,6 @@
       "destination": "/docs/cli/subscriptions.html"
     },
     {
-      "source": "/docs/cli/subscriptions/list",
-      "destination": "/docs/cli/subscriptions/list.html"
-    },
-    {
       "source": "/docs/cli/subscription",
       "destination": "/docs/cli/subscription.html"
     },

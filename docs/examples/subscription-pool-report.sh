@@ -20,9 +20,9 @@ export BRAMA_SUBSCRIPTION_USAGE_FILE="${STATE}/subscription-usage.json"
 export BRAMA_DONATED_SUBSCRIPTIONS_FILE="${STATE}/donated-subscriptions.json"
 export ENTITLEMENTS_ROUTER_BIN="${STATE}/entitlements-router-absent"
 
-echo "== brama subscriptions list"
-"${BRAMA_BIN}" subscriptions list
+echo "== brama subscriptions"
+"${BRAMA_BIN}" subscriptions
 
 echo
-echo "== brama subscriptions list --json"
-"${BRAMA_BIN}" subscriptions list --json
+echo "== brama subscriptions --json"
+"${BRAMA_BIN}" subscriptions --json

@@ -9,7 +9,7 @@ use axum::extract::{ConnectInfo, Extension, Path, State};
 use axum::http::{header::AUTHORIZATION, HeaderMap, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, post, put};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use futures_util::future::join_all;
 use serde::{Deserialize, Serialize};
@@ -1044,6 +1044,22 @@ async fn ask_authority(bearer: &str) -> WorkloadAuthorityAnswer {
     })
 }
 
+/// Where the Wisent Identity authority answers.
+///
+/// The anon key this gateway presents was already deployment-configurable
+/// while the origin it presents it to was compiled in, which left the human
+/// half of every identity decision unprovable anywhere except against the
+/// production project. A deployment overriding this is choosing its own
+/// identity authority, exactly as `WC_SKARBIEC_URL` chooses the workload one;
+/// unset, it is canonical Wisent Supabase and nothing changes.
+fn wisent_identity_origin() -> String {
+    std::env::var("BRAMA_WISENT_AUTH_URL")
+        .ok()
+        .map(|configured| configured.trim().trim_end_matches('/').to_owned())
+        .filter(|configured| !configured.is_empty())
+        .unwrap_or_else(|| WISENT_SUPABASE_URL.to_owned())
+}
+
 async fn ask_wisent_identity(bearer: &str) -> WisentIdentityAnswer {
     let anon_key = std::env::var("BRAMA_WISENT_AUTH_ANON_KEY")
         .unwrap_or_else(|_| WISENT_SUPABASE_ANON_KEY.to_string());
@@ -1055,7 +1071,7 @@ async fn ask_wisent_identity(bearer: &str) -> WisentIdentityAnswer {
         Err(_) => return WisentIdentityAnswer::Unavailable,
     };
     let response = match client
-        .get(format!("{WISENT_SUPABASE_URL}/auth/v1/user"))
+        .get(format!("{}/auth/v1/user", wisent_identity_origin()))
         .header("apikey", &anon_key)
         .bearer_auth(bearer)
         .send()
@@ -1101,7 +1117,8 @@ async fn authorize_organization(
         .map_err(|_| IdentityResolutionError::UpstreamUnavailable)?;
     let response = client
         .post(format!(
-            "{WISENT_SUPABASE_URL}/rest/v1/rpc/authorize_organization"
+            "{}/rest/v1/rpc/authorize_organization",
+            wisent_identity_origin()
         ))
         .header("apikey", anon_key)
         .header("Accept", "application/vnd.pgrst.object+json")
@@ -1145,25 +1162,22 @@ async fn authorize_organization(
     })
 }
 
-fn is_account_path(path: &str) -> bool {
-    path == "/v1/account/subscriptions" || path.starts_with("/v1/account/subscriptions/")
-}
-
-/// The agent-scoped subscription routes: read one agent's pool, donate a fresh
-/// grant, retire a spent row.
+/// The one subscription-pool path a model-scoped bearer may reach.
 ///
-/// Their handlers authorize with `authorize_caller`, which verifies an HMAC
-/// signature over the exact body and binds it to the agent named in the path --
-/// strictly more than a bearer proves. The allowlist below excluded them
-/// anyway, and every workload identity is model-scoped, because the workload
-/// authority always resolves one with `allowed_models: Some(routes)`. So these
-/// routes were unreachable by construction for the only caller they exist for:
-/// on charless-mac-mini the Weles renewal trajectory read
-/// `list subscriptions -> 401` on every tick while the pool it was there to
-/// refill stayed empty, and the refusal named neither the path nor the reason.
-fn is_agent_subscription_path(path: &str) -> bool {
-    path.strip_prefix("/v1/subscriptions/")
-        .is_some_and(|agent| !agent.is_empty() && !agent.contains('/'))
+/// Every workload identity the authority resolves is model-scoped, because
+/// that authority always answers with `allowed_models: Some(routes)`, and a
+/// human identity carries an empty allowlist. Leaving this path out of the
+/// allowlist makes the capability unreachable by construction for the only
+/// callers it exists for: on charless-mac-mini the Weles renewal trajectory
+/// read `list subscriptions -> 401` on every tick while the pool it was there
+/// to refill stayed empty, and the refusal named neither the path nor the
+/// reason.
+///
+/// Reaching the path is not being served by it. The handler still resolves the
+/// caller's identity, requires a signature over the exact body for an
+/// agent-scoped write, and narrows the answer to what that identity owns.
+fn is_subscription_pool_path(path: &str) -> bool {
+    path == "/v1/subscription-pool"
 }
 
 async fn require_model_bearer(
@@ -1207,8 +1221,7 @@ async fn require_model_bearer(
         },
     };
     if identity.allowed_models.is_some()
-        && !is_account_path(request.uri().path())
-        && !is_agent_subscription_path(request.uri().path())
+        && !is_subscription_pool_path(request.uri().path())
         && !matches!(
             request.uri().path(),
             // Every inference and discovery path a model-scoped bearer may
@@ -3771,13 +3784,6 @@ async fn account_agent_for_route(identity: &ModelClientIdentity, route: &str) ->
         .then_some(agent_id)
 }
 
-async fn list_subscriptions(agent_id: String) -> Result<Json<Value>, ApiError> {
-    if !valid_agent_id(&agent_id) {
-        return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
-    }
-    Ok(Json(pool::report_agent(&agent_id, false).await))
-}
-
 async fn account_credential_provider(value: Option<&str>) -> Option<String> {
     let provider = match value.map(str::trim) {
         Some("claude_code") => "claude-code",
@@ -3944,17 +3950,126 @@ async fn retire_managed_subscription(
     Ok(Json(json!({"ok": true})))
 }
 
-async fn list_account_subscriptions(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-) -> Result<Json<Value>, ApiError> {
-    list_subscriptions(account_agent_id(&client_identity)?).await
+/// Which pool one caller may be answered about, from what that caller proved.
+///
+/// Three audiences reach this capability and none of them is taken at its
+/// word: the signed agent proves an agent, the account holder proves a Wisent
+/// user, and the console proves this installation. Ownership is read off the
+/// proof rather than off a path segment or a body field -- both of which the
+/// caller chooses -- so the three answers are one answer narrowed three ways
+/// instead of three implementations that can disagree.
+///
+/// Order matters. A caller presenting the HMAC trio is held to it even when
+/// its bearer would also pass for something wider: a signature over this exact
+/// body is the strongest statement available, and ignoring a broken one to
+/// serve the request on a weaker credential is how a mis-signed mutation gets
+/// through.
+async fn subscription_pool_scope(
+    identity: &ModelClientIdentity,
+    headers: &HeaderMap,
+    body: &[u8],
+) -> Result<pool::PoolScope, ApiError> {
+    if has_caller_auth_headers(headers) {
+        let caller = authorize_caller(identity, headers, body, None).await?;
+        if !valid_agent_id(&caller) {
+            return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
+        }
+        return Ok(pool::PoolScope::Agent(caller));
+    }
+    if identity.human_context().is_some() {
+        return Ok(pool::PoolScope::Agent(account_agent_id(identity)?));
+    }
+    require_brama_desktop(identity)?;
+    Ok(pool::PoolScope::Deployment)
 }
 
+/// The subscription pool, answered once, for whoever proved they may read it.
+async fn read_subscription_pool(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    let scope = subscription_pool_scope(&client_identity, &headers, &[]).await?;
+    Ok(Json(pool::report(&scope, false).await))
+}
+
+/// Bank a credential into the pool, or retire one out of it.
+///
+/// One surface for both, because both are the same statement about membership
+/// made by the same proven owner against the same declaration. Only the
+/// console may name an agent, being the only caller whose proof is not itself
+/// an agent; for anybody else naming one would be choosing an owner rather
+/// than proving it, which is exactly what the per-audience routes let a caller
+/// attempt.
+async fn write_subscription_pool(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    headers: HeaderMap,
+    body: axum::body::Bytes,
+) -> Result<Json<Value>, ApiError> {
+    let scope = subscription_pool_scope(&client_identity, &headers, &body).await?;
+    let request: SubscriptionPoolWrite = serde_json::from_slice(&body).map_err(|error| {
+        api_error(
+            StatusCode::BAD_REQUEST,
+            &format!("invalid subscription request: {error}"),
+        )
+    })?;
+    let named_agent = request.agent_id.as_deref().map(str::trim);
+    let agent_id = match (&scope, named_agent) {
+        (pool::PoolScope::Agent(proven), None) => proven.clone(),
+        (pool::PoolScope::Agent(_), Some(_)) => {
+            return Err(api_error(
+                StatusCode::BAD_REQUEST,
+                "agent_id is derived from the proven identity and must not be sent",
+            ))
+        }
+        (pool::PoolScope::Deployment, Some(named)) if valid_agent_id(named) => named.to_owned(),
+        (pool::PoolScope::Deployment, Some(_)) => {
+            return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"))
+        }
+        (pool::PoolScope::Deployment, None) => {
+            return Err(api_error(
+                StatusCode::BAD_REQUEST,
+                "agent_id names the agent whose pool is written and is required for a \
+                 deployment-scoped write",
+            ))
+        }
+    };
+    match request.action.as_deref().map(str::trim) {
+        Some("bank") => {
+            create_subscription(
+                agent_id,
+                DonateSubscriptionRequest {
+                    provider: request.provider,
+                    label: request.label,
+                    api_key: request.api_key,
+                    login_item: request.login_item,
+                    subscription_id: request.subscription_id,
+                },
+            )
+            .await
+        }
+        Some("retire") => {
+            let subscription_id = request
+                .subscription_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+                .ok_or_else(|| api_error(StatusCode::BAD_REQUEST, "subscription_id is required"))?
+                .to_owned();
+            retire_managed_subscription(agent_id, subscription_id).await
+        }
+        _ => Err(api_error(
+            StatusCode::BAD_REQUEST,
+            "action must be \"bank\" or \"retire\"",
+        )),
+    }
+}
 async fn refresh_account_subscription_usage(
     Extension(client_identity): Extension<ModelClientIdentity>,
 ) -> Result<Json<Value>, ApiError> {
     let agent_id = account_agent_id(&client_identity)?;
-    Ok(Json(pool::report_agent(&agent_id, true).await))
+    Ok(Json(
+        pool::report(&pool::PoolScope::Agent(agent_id), true).await,
+    ))
 }
 
 async fn sign_in_account_subscription(
@@ -3966,28 +4081,6 @@ async fn sign_in_account_subscription(
     sign_in_selected_subscription(Some(&agent_id), &subscription_id, request).await
 }
 
-async fn create_account_subscription(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-    Json(request): Json<DonateSubscriptionRequest>,
-) -> Result<Json<Value>, ApiError> {
-    create_subscription(account_agent_id(&client_identity)?, request).await
-}
-
-async fn retire_account_subscription(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-    Path(subscription_id): Path<String>,
-) -> Result<Json<Value>, ApiError> {
-    retire_managed_subscription(account_agent_id(&client_identity)?, subscription_id).await
-}
-
-async fn list_admin_subscriptions(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-    Path(agent_id): Path<String>,
-) -> Result<Json<Value>, ApiError> {
-    require_brama_desktop(&client_identity)?;
-    list_subscriptions(agent_id).await
-}
-
 async fn refresh_admin_subscription_usage(
     Extension(client_identity): Extension<ModelClientIdentity>,
     Path(agent_id): Path<String>,
@@ -3996,7 +4089,9 @@ async fn refresh_admin_subscription_usage(
     if !valid_agent_id(&agent_id) {
         return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
     }
-    Ok(Json(pool::report_agent(&agent_id, true).await))
+    Ok(Json(
+        pool::report(&pool::PoolScope::Agent(agent_id), true).await,
+    ))
 }
 
 async fn sign_in_admin_subscription(
@@ -4009,23 +4104,6 @@ async fn sign_in_admin_subscription(
         return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
     }
     sign_in_selected_subscription(Some(&agent_id), &subscription_id, request).await
-}
-
-async fn create_admin_subscription(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-    Path(agent_id): Path<String>,
-    Json(request): Json<DonateSubscriptionRequest>,
-) -> Result<Json<Value>, ApiError> {
-    require_brama_desktop(&client_identity)?;
-    create_subscription(agent_id, request).await
-}
-
-async fn retire_admin_subscription(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-    Path((agent_id, subscription_id)): Path<(String, String)>,
-) -> Result<Json<Value>, ApiError> {
-    require_brama_desktop(&client_identity)?;
-    retire_managed_subscription(agent_id, subscription_id).await
 }
 
 /// Spend one minimal completion against one subscription, because an operator
@@ -4065,26 +4143,12 @@ async fn probe_admin_subscription(
         "subscription": pool::subscription_view(&entry),
     })))
 }
-/// The dispatch pool exactly as the process that dispatches requests believes
-/// it: the same document `pool::report` builds for the operator-facing
-/// listing, served by the process that owns the ledger instead of a second
-/// process asked to reconstruct it.
-///
-/// It is not mounted under `/v1/admin/subscriptions/pool` because this
-/// router's matcher (matchit 0.7) refuses a static segment beside the
-/// `:agent_id` parameter already registered there.
-async fn admin_subscription_pool(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-) -> Result<Json<Value>, ApiError> {
-    require_brama_desktop(&client_identity)?;
-    Ok(Json(crate::subscription_dispatch::pool::report().await))
-}
 
 async fn refresh_admin_pool_usage(
     Extension(client_identity): Extension<ModelClientIdentity>,
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
-    Ok(Json(pool::refresh_usage().await))
+    Ok(Json(pool::report(&pool::PoolScope::Deployment, true).await))
 }
 
 async fn sign_in_admin_pool_subscription(
@@ -4248,9 +4312,23 @@ struct DonateSubscriptionRequest {
     subscription_id: Option<String>,
 }
 
+/// One membership change to the pool: `bank` a credential onto an account, or
+/// `retire` one out of the pool.
+///
+/// `deny_unknown_fields` is what makes a mistyped field a refusal rather than
+/// a silently dropped intention. A donation whose `subscription_id` was
+/// quietly ignored overwrites the deterministic primary account instead of the
+/// one the caller named, and the one copy of a working credential is what it
+/// overwrites.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RetireSubscriptionRequest {
+struct SubscriptionPoolWrite {
+    action: Option<String>,
+    agent_id: Option<String>,
+    provider: Option<String>,
+    label: Option<String>,
+    api_key: Option<String>,
+    login_item: Option<String>,
     subscription_id: Option<String>,
 }
 #[derive(Debug, Deserialize)]
@@ -4371,15 +4449,6 @@ async fn authorize_caller(
     Ok(caller)
 }
 
-async fn list_agent_subscriptions(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-    headers: axum::http::HeaderMap,
-    Path(agent_id): Path<String>,
-) -> Result<Json<serde_json::Value>, ApiError> {
-    authorize_caller(&client_identity, &headers, &[], Some(&agent_id)).await?;
-    list_subscriptions(agent_id).await
-}
-
 async fn refresh_agent_subscription_usage(
     Extension(client_identity): Extension<ModelClientIdentity>,
     headers: axum::http::HeaderMap,
@@ -4389,74 +4458,9 @@ async fn refresh_agent_subscription_usage(
     if !valid_agent_id(&agent_id) {
         return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
     }
-    Ok(Json(pool::report_agent(&agent_id, true).await))
-}
-
-async fn donate_subscription(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-    headers: axum::http::HeaderMap,
-    Path(agent_id): Path<String>,
-    body: axum::body::Bytes,
-) -> Result<Json<Value>, ApiError> {
-    authorize_caller(&client_identity, &headers, &body, Some(&agent_id)).await?;
-    let request: DonateSubscriptionRequest = serde_json::from_slice(&body).map_err(|error| {
-        api_error(
-            StatusCode::BAD_REQUEST,
-            &format!("invalid subscription request: {error}"),
-        )
-    })?;
-    create_subscription(agent_id, request).await
-}
-
-async fn retire_subscription(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-    headers: axum::http::HeaderMap,
-    Path(agent_id): Path<String>,
-    body: axum::body::Bytes,
-) -> ApiError {
-    if let Err(error) = authorize_caller(&client_identity, &headers, &body, Some(&agent_id)).await {
-        return error;
-    }
-    let req: RetireSubscriptionRequest = match serde_json::from_slice(&body) {
-        Ok(req) => req,
-        Err(error) => {
-            return api_error(
-                StatusCode::BAD_REQUEST,
-                &format!("invalid subscription request: {error}"),
-            )
-        }
-    };
-    let subscription_id = req.subscription_id.as_deref().map(str::trim).unwrap_or("");
-    if subscription_id.is_empty() {
-        return api_error(StatusCode::BAD_REQUEST, "subscription_id is required");
-    }
-    let entries = match crate::gateway::broker::discover_subscriptions(&agent_id).await {
-        Ok(entries) => entries,
-        Err(detail) => return api_error(StatusCode::SERVICE_UNAVAILABLE, &detail),
-    };
-    let owned = entries
-        .into_iter()
-        .find(|entry| entry.id == subscription_id);
-    let Some(owned) = owned else {
-        return api_error(StatusCode::NOT_FOUND, "subscription not found");
-    };
-    crate::journal::retire(subscription_id);
-    // The same record the managed path writes: a retired row states `disabled`
-    // with the instant it happened instead of an empty credential object.
-    crate::subscription_dispatch::usage::record_credential_disabled(
-        subscription_id,
-        &owned.provider,
-        "retired by an operator",
-    );
-    if let Err(message) = crate::gateway::broker::donated_remove(subscription_id) {
-        return api_error(StatusCode::INTERNAL_SERVER_ERROR, &message);
-    }
-    if let Err(message) =
-        crate::gateway::broker::remove_donated_credential(&owned.provider, subscription_id)
-    {
-        return api_error(StatusCode::INTERNAL_SERVER_ERROR, &message);
-    }
-    (StatusCode::OK, Json(json!({"ok": true})))
+    Ok(Json(
+        pool::report(&pool::PoolScope::Agent(agent_id), true).await,
+    ))
 }
 
 pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Error> {
@@ -4502,19 +4506,17 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
         .route("/v1/moderations", post(moderations))
         .route("/v1/models", get(list_models))
         .route("/v1/aliases", get(list_aliases))
+        // The subscription pool: one read and one write, reached by the
+        // console, an account holder and a signed agent alike. Which accounts
+        // an answer carries follows from the identity the caller proved, so
+        // there is nothing per-audience left to register.
         .route(
-            "/v1/subscriptions/:agent_id",
-            get(list_agent_subscriptions)
-                .post(donate_subscription)
-                .delete(retire_subscription),
+            "/v1/subscription-pool",
+            get(read_subscription_pool).post(write_subscription_pool),
         )
         .route(
             "/v1/subscription-usage/:agent_id",
             post(refresh_agent_subscription_usage),
-        )
-        .route(
-            "/v1/account/subscriptions",
-            get(list_account_subscriptions).post(create_account_subscription),
         )
         .route(
             "/v1/account/subscription-usage",
@@ -4523,10 +4525,6 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
         .route(
             "/v1/account/subscription-sign-in/:subscription_id",
             post(sign_in_account_subscription),
-        )
-        .route(
-            "/v1/account/subscriptions/:subscription_id",
-            delete(retire_account_subscription),
         )
         .route("/stats", get(get_stats))
         .route("/v1/admin/snapshot", get(admin_snapshot))
@@ -4549,10 +4547,6 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
                 .delete(delete_admin_credential),
         )
         .route(
-            "/v1/admin/subscriptions/:agent_id",
-            get(list_admin_subscriptions).post(create_admin_subscription),
-        )
-        .route(
             "/v1/admin/subscription-usage/:agent_id",
             post(refresh_admin_subscription_usage),
         )
@@ -4561,14 +4555,9 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
             post(sign_in_admin_subscription),
         )
         .route(
-            "/v1/admin/subscriptions/:agent_id/:subscription_id",
-            delete(retire_admin_subscription),
-        )
-        .route(
             "/v1/admin/subscriptions/:agent_id/:subscription_id/probe",
             post(probe_admin_subscription),
         )
-        .route("/v1/admin/subscription-pool", get(admin_subscription_pool))
         .route(
             "/v1/admin/subscription-pool/usage",
             post(refresh_admin_pool_usage),

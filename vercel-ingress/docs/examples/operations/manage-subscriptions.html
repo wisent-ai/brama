@@ -135,7 +135,7 @@ footer a { color: var(--muted); text-decoration: none; }
   -H &quot;x-agent-id: $AGENT_ID&quot; \
   -H &quot;x-agent-timestamp: $AGENT_TIMESTAMP&quot; \
   -H &quot;x-agent-signature: $AGENT_SIGNATURE&quot; \
-  &quot;$BRAMA_URL/v1/subscriptions/$AGENT_ID&quot;
+  &quot;$BRAMA_URL/v1/subscription-pool&quot;
 </code></pre>
 <p>Expected result is metadata for that exact agent only; credential bytes never appear.</p>
 <h2 id="donate-claude-code-access">Donate Claude Code access<a class="headerlink" href="#donate-claude-code-access" title="Link to this section">&para;</a></h2>
@@ -156,7 +156,7 @@ PY
   -H &quot;x-agent-signature: $AGENT_SIGNATURE&quot; \
   -H 'Content-Type: application/json' \
   --data-binary @donation.json \
-  &quot;$BRAMA_URL/v1/subscriptions/$AGENT_ID&quot;
+  &quot;$BRAMA_URL/v1/subscription-pool&quot;
 </code></pre>
 <p>Success is endpoint JSON identifying metadata/state, not a returned secret.</p>
 <h2 id="retire-exact-delegated-access">Retire exact delegated access<a class="headerlink" href="#retire-exact-delegated-access" title="Link to this section">&para;</a></h2>
@@ -169,7 +169,7 @@ PY
   -H &quot;x-agent-signature: $AGENT_SIGNATURE&quot; \
   -H 'Content-Type: application/json' \
   --data-binary @retire.json \
-  &quot;$BRAMA_URL/v1/subscriptions/$AGENT_ID&quot;
+  &quot;$BRAMA_URL/v1/subscription-pool&quot;
 </code></pre>
 <h2 id="failure-and-recovery">Failure and recovery<a class="headerlink" href="#failure-and-recovery" title="Link to this section">&para;</a></h2>
 <p><code>401</code> means signature/bearer repair; <code>403</code> means identity ownership mismatch; <code>404</code> means the exact item is not visible; <code>409 conflict</code> means lifecycle state prevents the mutation. Do not retry mutation blindly. Re-list metadata, reconcile owner intent, and issue a newly signed exact request. Brama retirement is not vault deletion; restore/re-donate only through the owning lifecycle.</p>

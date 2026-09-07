@@ -109,8 +109,12 @@ enum Commands {
     Mcp,
     /// Report the subscription pool this gateway routes over
     Subscriptions {
-        #[command(subcommand)]
-        command: SubscriptionsCommand,
+        /// Print the report as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
+        /// Read current free provider usage reports; never starts a sign-in or model request
+        #[arg(long, default_value_t = false)]
+        refresh_usage: bool,
     },
     /// Report every model alias this gateway declares and whether it can serve
     Aliases {
@@ -152,19 +156,6 @@ enum Commands {
         /// Acknowledge that this command performs billable provider requests
         #[arg(long, default_value_t = false)]
         allow_provider_cost: bool,
-    },
-}
-
-#[derive(Subcommand)]
-enum SubscriptionsCommand {
-    /// List every subscription in the pool with the state of its credential
-    List {
-        /// Print the report as JSON instead of lines
-        #[arg(long, default_value_t = false)]
-        json: bool,
-        /// Read current free provider usage reports; never starts a sign-in or model request
-        #[arg(long, default_value_t = false)]
-        refresh_usage: bool,
     },
 }
 
@@ -391,26 +382,26 @@ async fn main() {
         Commands::Mcp => {
             brama::mcp::serve();
         }
-        Commands::Subscriptions { command } => match command {
-            SubscriptionsCommand::List {
-                json,
+        // The operator's own console: this process holds the vault and the
+        // ledger, so the deployment scope is what it can prove.
+        Commands::Subscriptions {
+            json,
+            refresh_usage,
+        } => {
+            let report = brama::subscription_dispatch::pool::report(
+                &brama::subscription_dispatch::pool::PoolScope::Deployment,
                 refresh_usage,
-            } => {
-                let report = if refresh_usage {
-                    brama::subscription_dispatch::pool::refresh_usage().await
-                } else {
-                    brama::subscription_dispatch::pool::report().await
-                };
-                if json {
-                    print_json(&report);
-                } else {
-                    print_pool(&report);
-                }
-                if report.get("ok").and_then(Value::as_bool) != Some(true) {
-                    std::process::exit(1);
-                }
+            )
+            .await;
+            if json {
+                print_json(&report);
+            } else {
+                print_pool(&report);
             }
-        },
+            if report.get("ok").and_then(Value::as_bool) != Some(true) {
+                std::process::exit(1);
+            }
+        }
         Commands::Aliases { json, strict } => {
             let report = match brama::core::server::alias_report() {
                 Ok(report) => report,
@@ -764,7 +755,7 @@ fn print_json(report: &Value) {
 /// The same subscription report as the desktop, including partial failures.
 fn print_pool(report: &Value) {
     let rows: &[Value] = report
-        .get("providers")
+        .get("subscriptions")
         .and_then(Value::as_array)
         .map(Vec::as_slice)
         .unwrap_or_default();
@@ -786,7 +777,7 @@ fn print_pool(report: &Value) {
             "{:<8} {:<14} {}{}",
             text(row, "state").unwrap_or("unknown"),
             text(row, "provider").unwrap_or("unknown"),
-            text(row, "subscription_id").unwrap_or("unknown"),
+            text(row, "id").unwrap_or("unknown"),
             text(row, "label")
                 .map(|label| format!(" ({label})"))
                 .unwrap_or_default()

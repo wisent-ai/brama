@@ -195,39 +195,15 @@ from a running 0.2.38 gateway.</p>
 </tr>
 <tr>
 <td>GET</td>
-<td><code>/v1/subscriptions/:agent_id</code></td>
-<td>bearer + agent HMAC</td>
-<td>list one agent's subscriptions</td>
+<td><code>/v1/subscription-pool</code></td>
+<td>bearer, plus whichever identity the caller can prove</td>
+<td>the subscription pool, narrowed to what that identity owns</td>
 </tr>
 <tr>
 <td>POST</td>
-<td><code>/v1/subscriptions/:agent_id</code></td>
-<td>bearer + agent HMAC</td>
-<td>donate a subscription credential</td>
-</tr>
-<tr>
-<td>DELETE</td>
-<td><code>/v1/subscriptions/:agent_id</code></td>
-<td>bearer + agent HMAC</td>
-<td>retire a subscription</td>
-</tr>
-<tr>
-<td>GET</td>
-<td><code>/v1/account/subscriptions</code></td>
-<td>Wisent user session</td>
-<td>list the account's stored keys</td>
-</tr>
-<tr>
-<td>POST</td>
-<td><code>/v1/account/subscriptions</code></td>
-<td>Wisent user session</td>
-<td>store a provider API key</td>
-</tr>
-<tr>
-<td>DELETE</td>
-<td><code>/v1/account/subscriptions/:subscription_id</code></td>
-<td>Wisent user session</td>
-<td>retire an account key</td>
+<td><code>/v1/subscription-pool</code></td>
+<td>bearer, plus whichever identity the caller can prove</td>
+<td>bank a credential into the pool, or retire one out of it</td>
 </tr>
 <tr>
 <td>GET</td>
@@ -248,34 +224,10 @@ from a running 0.2.38 gateway.</p>
 <td>update one alias route</td>
 </tr>
 <tr>
-<td>GET</td>
-<td><code>/v1/admin/subscriptions/:agent_id</code></td>
-<td><code>brama-desktop</code> only</td>
-<td>list an agent's subscriptions</td>
-</tr>
-<tr>
-<td>POST</td>
-<td><code>/v1/admin/subscriptions/:agent_id</code></td>
-<td><code>brama-desktop</code> only</td>
-<td>store a subscription credential</td>
-</tr>
-<tr>
-<td>DELETE</td>
-<td><code>/v1/admin/subscriptions/:agent_id/:subscription_id</code></td>
-<td><code>brama-desktop</code> only</td>
-<td>retire a subscription</td>
-</tr>
-<tr>
 <td>POST</td>
 <td><code>/v1/admin/subscriptions/:agent_id/:subscription_id/probe</code></td>
 <td><code>brama-desktop</code> only</td>
 <td>spend one completion to test a credential</td>
-</tr>
-<tr>
-<td>GET</td>
-<td><code>/v1/admin/subscription-pool</code></td>
-<td><code>brama-desktop</code> only</td>
-<td>the dispatch pool as the serving process sees it</td>
 </tr>
 <tr>
 <td>POST</td>
@@ -293,7 +245,7 @@ from a running 0.2.38 gateway.</p>
 </tbody>
 </table>
 <h2 id="subscription-usage-results">Subscription usage results<a class="headerlink" href="#subscription-usage-results" title="Link to this section">&para;</a></h2>
-<p>Subscription list and usage-refresh responses contain <code>ok</code>, <code>observed_at_ms</code>, <code>errors</code>, and <code>subscriptions</code> (or <code>providers</code> for the administrator's pool). A completed report can return HTTP 200 with <code>ok: false</code>: the body retains successful rows and standard Wisent failure envelopes for the failures. Clients must inspect <code>ok</code>, not infer success from HTTP status. Admission failures still use the ordinary HTTP error body.</p>
+<p>Subscription list and usage-refresh responses contain <code>ok</code>, <code>observed_at_ms</code>, <code>errors</code>, <code>scope</code> and <code>subscriptions</code>. A completed report can return HTTP 200 with <code>ok: false</code>: the body retains successful rows and standard Wisent failure envelopes for the failures. Clients must inspect <code>ok</code>, not infer success from HTTP status. Admission failures still use the ordinary HTTP error body.</p>
 <p>Each row carries <code>usage_check</code> with the latest free report attempt's <code>attempted_at_ms</code>, <code>ok</code>, <code>detail</code> and <code>source</code>, separately from a completion <code>probe</code>. Window percentages come only from valid provider metrics; their reset and observation instants are preserved. An unsuccessful refresh immediately marks retained measurements stale. Missing measurements, unsupported reports and failed reads are distinct; none implies zero usage.</p>
 <p>The usage POSTs accept no credential and require the same identity as the corresponding list. They use Brama's existing provider and Skarbiec handling, do not spend model quota, and never launch Weles or open a sign-in. A dependency timeout, invalid response or storage failure appears in the result with the failed operation and actual reason.</p>
 <p>Sign-in is separate and explicitly requested. The sign-in routes require a nonempty <code>reason</code>, accept <code>login_item</code> and <code>login_timeout_ms</code>, and the pool route additionally requires <code>subscription_id</code>. Brama verifies current ownership, refuses retired or mismapped accounts, derives the provider from the selected subscription, and invokes the existing Weles flow on the Stado-selected host. It returns the native <code>signed_in</code>/<code>failed</code> verdict and actual detail. Ordinary list and usage routes never invoke this flow.</p>
@@ -445,44 +397,81 @@ route — with the state the gateway would put it in right now. Captured shape:<
 contract; <code>authorized</code> says the presenting bearer may name it. A completion
 naming a declared alias whose state is not <code>serving</code> is refused with <code>503</code>
 and code <code>alias_unserviceable</code> carrying the same <code>reason</code> as <code>message</code>.</p>
-<h2 id="subscription-lifecycle-agent-signed">Subscription lifecycle (agent-signed)<a class="headerlink" href="#subscription-lifecycle-agent-signed" title="Link to this section">&para;</a></h2>
-<p>All three verbs on <code>/v1/subscriptions/:agent_id</code> require bearer + HMAC, and
-the bearer-bound agent, signed agent, and path agent must agree
-(<code>403 forbidden</code> on any mismatch — captured). Field semantics are in
-<a href="/docs/concepts/subscription">concepts/subscription</a>.</p>
+<h2 id="the-subscription-pool">The subscription pool<a class="headerlink" href="#the-subscription-pool" title="Link to this section">&para;</a></h2>
+<p>One read and one write on <code>/v1/subscription-pool</code>, for three audiences.
+Which subscriptions exist and who owns them was previously asked eleven ways —
+an agent-signed lifecycle, an account lifecycle, an administered lifecycle, a
+console pool listing and a CLI leaf — and each of them answered the same
+question from the same vault declaration. The capability answers it once and
+narrows the answer by the identity the caller proved
+(<a href="/docs/concepts/entitlement">entitlement</a>), which is where ownership
+already lives.</p>
+<p>The scope is read off the proof, in this order:</p>
 <ul>
-<li><strong>GET</strong> → <code>{"subscriptions": [...]}</code> (captured empty:
-  <code>{"subscriptions":[]}</code>). Each row is the subscription view: <code>id</code>,
-  <code>provider</code>, <code>status</code>, <code>limits</code> (provider-reported plan windows),
-  <code>measured</code>, <code>block</code>, <code>observed_at_ms</code>, <code>probe</code>, <code>credential</code>
-  (<code>state</code>: <code>active</code> | <code>needs_reauthorization</code> | <code>disabled</code>, with <code>cause</code>
-  and instants), <code>usage_source</code> (<code>provider</code> | <code>traffic</code> | <code>probe</code>), <code>stale</code>
-  (<code>src/core/server.rs:2800</code>).</li>
-<li><strong>POST</strong> — body <code>{"provider", "label"?, "api_key",
-  "subscription_id"?, "login_item"?}</code> (unknown fields refused). Without
-  <code>subscription_id</code>, the deterministic primary slot is used. An explicit
-  id may select another existing subscription owned by this agent; it never
-  silently overwrites the primary. An unknown or unowned selection returns
-  <code>404 subscription not found</code>; a provider mismatch returns
-  <code>409 selected subscription belongs to a different provider</code>.
-  Other refusals: <code>provider must name a supported remote API or
-  subscription provider</code> (400), <code>api_key must contain 1..8000 characters</code>
-  (400), a document that does not reduce to a bearer (400), an existing
-  subscription or login mapping conflict (409), and a failed vault write (500).
-  Success returns <code>{"subscription": {"id": "&lt;selected-subscription&gt;",
-  "provider", "agent_id", "status": "active", "label", "login_item"}}</code>.
-  The credential value is never returned.</li>
-<li><strong>DELETE</strong> — body <code>{"subscription_id"}</code>; <code>subscription_id is required</code>
-  (400), <code>subscription not found</code> (404) for a target the signed agent does
-  not own. Success <code>{"ok": true}</code>. Retirement is a journal record that
-  outranks whatever the last refresh concluded, never a vault deletion.</li>
+<li>a caller presenting the HMAC trio is <strong>that agent</strong>, and is held to the
+  signature even when its bearer would also pass for something wider;</li>
+<li>a verified Wisent user session is <strong>that account</strong>, whose pool is keyed on
+  the session's own user id and never on a caller-supplied identifier;</li>
+<li>a <code>brama-desktop</code> identity with no model allowlist is <strong>this
+  deployment</strong>: every account it holds, whichever agent owns it, plus the
+  accounts only the usage ledger still remembers.</li>
 </ul>
-<h2 id="account-lifecycle-wisent-user-session">Account lifecycle (Wisent user session)<a class="headerlink" href="#account-lifecycle-wisent-user-session" title="Link to this section">&para;</a></h2>
-<p>The <code>/v1/account/subscriptions</code> family is the same lifecycle for
-authenticated Wisent users: the owner is derived from the verified session,
-never from a caller-supplied account or agent identifier, and <code>POST</code> accepts
-an API key for any supported remote provider except <code>local-openai</code>. A plain
-service bearer is refused (<code>403 forbidden</code>, captured).</p>
+<p>Anything else is <code>403 forbidden</code>; a request with no bearer at all is
+<code>401 unauthorized</code>. A model-scoped bearer reaches this path and no other
+non-inference path.</p>
+<p><strong>GET</strong> answers one document for every audience:
+<code>{"ok", "observed_at_ms", "scope", "errors", "subscriptions"}</code>. <code>scope</code> is
+<code>deployment</code> or the agent id the answer was narrowed to, so a caller reads the
+narrowing instead of inferring it from the row count. Every row carries the same
+fields whoever asked: <code>id</code>, <code>provider</code>, <code>status</code>, <code>state</code>
+(<code>live</code> | <code>expired</code> | <code>burnt</code> | <code>unknown</code>), <code>expires_at</code>,
+<code>last_redeem_error</code>, <code>limits</code>, <code>measured</code>, <code>block</code>,
+<code>observed_at_ms</code>, <code>probe</code>, <code>usage_check</code>, <code>credential</code>
+(<code>state</code>: <code>active</code> | <code>needs_reauthorization</code> | <code>disabled</code>, with
+<code>cause</code> and instants), <code>usage_source</code> and <code>stale</code>. A completed
+report can return HTTP 200 with <code>ok: false</code>: the body retains successful rows
+and standard Wisent failure envelopes for the failures, so clients inspect
+<code>ok</code> rather than infer success from the status. An account whose plan usage
+has never been read makes the report incomplete and says so per account; a
+missing measurement is never reported as zero usage. No error names an account
+outside the caller's narrowing.</p>
+<p><strong>POST</strong> takes <code>{"action", "agent_id"?, "provider"?, "label"?,
+"api_key"?, "login_item"?, "subscription_id"?}</code> and unknown fields are refused
+with the deserializer's own sentence. <code>action</code> is <code>bank</code> or
+<code>retire</code>; anything else is
+<code>400 action must be "bank" or "retire"</code>.</p>
+<ul>
+<li><code>agent_id</code> names the owner and may be sent <strong>only</strong> by the
+  deployment scope, which is the one caller whose proof is not itself an agent.
+  Sending it as an agent or an account holder is
+  <code>400 agent_id is derived from the proven identity and must not be sent</code>;
+  omitting it as the deployment is <code>400 agent_id names the agent whose pool
+  is written and is required for a deployment-scoped write</code>; a malformed one is
+  <code>400 invalid agent id</code>.</li>
+<li><code>bank</code> stores a credential on the coordinate the routes table already
+  names for that subscription. Without <code>subscription_id</code> the deterministic
+  primary slot is used; an explicit id may select another existing subscription
+  owned by that agent and never silently overwrites the primary. Refusals:
+  <code>404 subscription not found</code> for an unknown or unowned selection,
+  <code>409 selected subscription belongs to a different provider</code>,
+  <code>400 provider must name a supported remote API or subscription
+  provider</code>, <code>400 api_key must contain 1..8000 characters</code>,
+  <code>400 login_item must contain 1..160 ASCII letters, digits, hyphens,
+  underscores or dots</code>, a document that does not reduce to a bearer (400), a
+  mapping conflict (409) and a failed vault write (500). Success is
+  <code>{"subscription": {"id", "provider", "agent_id", "status": "active",
+  "label", "login_item"}}</code>; the credential value is never returned.</li>
+<li><code>retire</code> requires <code>subscription_id</code>
+  (<code>400 subscription_id is required</code>) and answers
+  <code>404 subscription not found</code> for a target the proven owner does not own —
+  including one the deployment holds for somebody else. Success is
+  <code>{"ok": true}</code>. Retirement is a journal record that outranks whatever
+  the last refresh concluded, never a vault deletion.</li>
+</ul>
+<p>Field semantics are in
+<a href="/docs/concepts/subscription">concepts/subscription</a>; the migration this
+capability is the first step of is
+<a href="/docs/command-surface">command surface</a>.</p>
 <h2 id="get-stats"><code>GET /stats</code><a class="headerlink" href="#get-stats" title="Link to this section">&para;</a></h2>
 <p>Bearer-protected, no dependency probing. Captured keys: <code>build</code>,
 <code>configuredDirectProviders</code>, <code>dependencyPolicy</code> (<code>{"capabilityBroker":
@@ -535,23 +524,12 @@ credentials remain write-only.</p>
   invalid files, identities, routes, selections, or destination state, and
   <code>403 forbidden</code> for callers other than Brama Desktop. Error paths
   leave the route file unchanged and never return credential contents.</li>
-<li><strong>GET <code>/v1/admin/subscriptions/:agent_id</code></strong> — captured:
-  <code>{"agentId":"&lt;agent&gt;","subscriptions":[]}</code>; rows are the same
-  subscription view as the signed listing.</li>
-<li><strong>POST <code>/v1/admin/subscriptions/:agent_id</code></strong> — same body and refusals as
-  the agent-signed donation, authenticated by the desktop identity instead
-  of the HMAC trio.</li>
-<li><strong>DELETE <code>/v1/admin/subscriptions/:agent_id/:subscription_id</code></strong> — retire;
-  <code>404 subscription not found</code> for an unknown target.</li>
-<li><strong>POST <code>.../probe</code></strong> — the one endpoint in the product that deliberately
+<li><strong>POST <code>/v1/admin/subscriptions/:agent_id/:subscription_id/probe</code></strong> — the one endpoint in the product that deliberately
   spends plan quota: one minimal completion against one named subscription,
   recorded as a <code>probe</code> with source <code>completion</code>, refused with <code>409</code> when
   the subscription is inside a recorded block, <code>404 subscription not found</code>
   otherwise absent (captured), and never triggered by any timer. Success
   <code>{"ok": true, "probe": {...}, "subscription": {...}}</code>.</li>
-<li><strong>GET <code>/v1/admin/subscription-pool</code></strong> — the same report as
-  <code>brama subscriptions list --json</code> (captured empty:
-  <code>{"providers":[]}</code>).</li>
 <li><strong>POST <code>/v1/admin/subscription-pool/refresh</code></strong> — body
   <code>{"provider", "reason"}</code>; runs the same audited refresh as
   <code>brama subscription refresh</code> and answers the verdict with status 200

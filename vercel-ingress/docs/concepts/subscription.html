@@ -146,7 +146,7 @@ to see, which is why <code>/readyz</code> reports such accounts explicitly as
 <code>unroutable_accounts</code> (metadata only, recognised by tags or by the
 coordinate an untagged item lives at).</p>
 <h2 id="states">States<a class="headerlink" href="#states" title="Link to this section">&para;</a></h2>
-<p><code>brama subscriptions list</code> and <code>GET /v1/admin/subscription-pool</code> report one
+<p><code>brama subscriptions</code> and <code>GET /v1/subscription-pool</code> report one
 of four states per row (<code>src/subscription_dispatch/pool.rs</code>):</p>
 <table>
 <thead>
@@ -200,7 +200,7 @@ single-flighted per subscription; the sweep runs every
 <code>BRAMA_PLAN_USAGE_SWEEP_SECS</code> (default 60, <code>0</code> disables). A failed read
 never blanks a row: the last good reading is served with <code>stale: true</code> and
 dropped only past <code>BRAMA_PLAN_USAGE_RETENTION_SECS</code> (default 86400).</p>
-<p><code>brama subscriptions list --refresh-usage</code> and Brama Desktop's
+<p><code>brama subscriptions --refresh-usage</code> and Brama Desktop's
 <strong>Refresh usage</strong> explicitly request new reports through that same
 bounded operation. Neither starts a sign-in nor sends a model request.
 Concurrent attempts for one subscription cannot silently skip their result.
@@ -256,7 +256,7 @@ CLI or Desktop action by default. The existing automatic Weles renewal runs
 only when the deployment sets <code>BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN=1</code>;
 usage reporting itself never schedules a sign-in.</p>
 <h2 id="donation-and-retirement">Donation and retirement<a class="headerlink" href="#donation-and-retirement" title="Link to this section">&para;</a></h2>
-<p><code>POST /v1/subscriptions/:agent_id</code> (and the account/admin variants) banks a
+<p><code>POST /v1/subscription-pool</code> (and the account/admin variants) banks a
 credential onto the coordinate the operator's routes table already names for
 that subscription. A donation is refused unless the document reduces to a
 bearer — the same reduction the request path applies — so a non-credential

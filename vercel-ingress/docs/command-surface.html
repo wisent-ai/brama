@@ -128,7 +128,7 @@ that an operator reaches over <code>argv</code>. This page measures both at one 
 revision, names the capabilities that replace the verbs which accumulated one per
 incident, and states the order in which the replacement lands.</p>
 <h2 id="what-was-measured">What was measured, and with what<a class="headerlink" href="#what-was-measured" title="Link to this section">&para;</a></h2>
-<p>Revision <code>070275a036f35130918948b66f4be8b7e26fcf50</code> of
+<p>Revision <code>15c27474b3a870e1a399697068e2b96f4e72d8dd</code> of
 <a href="https://github.com/wisent-ai/brama">wisent-ai/brama</a>, crate version
 <code>0.2.78</code>, measured on 2026-09-07 (UTC) on <code>darwin-arm64</code>. The
 binary states its own revision, so the numbers below are bound to a build and not to
@@ -137,7 +137,7 @@ prose:</p>
 BRAMA_SOURCE_REVISION=$(git rev-parse origin/main) BRAMA_BUILD_PLATFORM=darwin-arm64 \
   cargo build --release --bin brama
 target/release/brama version
-{"product":"brama","version":"0.2.78","source_revision":"070275a036f35130918948b66f4be8b7e26fcf50","platform":"darwin-arm64","built_at":"not-recorded"}
+{"product":"brama","version":"0.2.78","source_revision":"15c27474b3a870e1a399697068e2b96f4e72d8dd","platform":"darwin-arm64","built_at":"not-recorded"}
 
 BRAMA_BIN=target/release/brama node --test tests/docs/cli-commands.probierz.spec.mjs</code></pre>
 <p>That last command is the measurement. It walks <code>brama help</code> from the root to
@@ -147,18 +147,22 @@ every leaf, reads one invocation per HTTP method per registered path out of the 
 published page. It writes nothing. A number on this page that the command does not print
 does not belong on this page.</p>
 <h2 id="the-counts">The counts<a class="headerlink" href="#the-counts" title="Link to this section">&para;</a></h2>
-<p><strong>50 leaf invocations in 7 groups.</strong> 13 of them are command-tree leaves in
-3 command groups carrying 42 options between them; the other 37 are HTTP method
-invocations over 30 registered paths.</p>
+<p><strong>42 leaf invocations in 6 groups.</strong> 13 of them are command-tree leaves in
+2 command groups carrying 42 options between them; the other 29 are HTTP method
+invocations over 25 registered paths.</p>
 <table><thead><tr><th>Group</th><th>Leaf invocations</th></tr></thead><tbody>
-<tr><td><code>/v1/admin</code></td><td>18</td></tr>
+<tr><td><code>/v1/admin</code></td><td>14</td></tr>
 <tr><td><code>brama</code> (root)</td><td>12</td></tr>
-<tr><td><code>/v1</code></td><td>11</td></tr>
-<tr><td><code>/v1/account</code></td><td>5</td></tr>
+<tr><td><code>/v1</code></td><td>10</td></tr>
 <tr><td><code>/</code> (public and process)</td><td>3</td></tr>
+<tr><td><code>/v1/account</code></td><td>2</td></tr>
 <tr><td><code>brama subscription</code></td><td>2</td></tr>
-<tr><td><code>brama subscriptions</code></td><td>1</td></tr>
 </tbody></table>
+<p>The first family has landed. It was 50 invocations in 7 groups at
+<code>070275a036f35130918948b66f4be8b7e26fcf50</code>, and the eleven the subscription
+pool replaced are gone from the router, the command tree and this site: two invocations
+stand where eleven did, <code>brama subscriptions</code> is a leaf rather than a group,
+and <code>brama subscriptions list</code> no longer parses.</p>
 <p><code>/v1/admin</code> is the largest group and it is the one that grew per incident:
 every diagnostic and repair reached for during an outage was added beside the last one
 rather than in place of it. The command tree is small by comparison, and its duplication
@@ -167,17 +171,18 @@ shows up in options instead — <code>brama onboard</code> carries 6
 spelled a second time at a second entry point.</p>
 <h2 id="families">The families, and what replaces each<a class="headerlink" href="#families" title="Link to this section">&para;</a></h2>
 <p>A family here is one operation spelled more than once because a different audience asked
-for it. 30 of the 50 invocations fall into five families. Each capability is named by
+for it. 19 of the 42 invocations still fall into four unlanded families, and the fifth is
+done. Each capability is named by
 Brama's own vocabulary, and each reads a declaration rather than taking an
 operator's word for the current state.</p>
 <table><thead><tr><th>Family</th><th>Count</th><th>Capability that replaces it</th><th>Declaration it reads</th></tr></thead><tbody>
-<tr><td>subscription inventory, once per audience</td><td>11</td><td>the subscription pool</td><td>the vault entitlement declaration: <code>brama:subscription</code> with its <code>brama:agent</code>, <code>brama:provider</code> and <code>brama:id</code> tags</td></tr>
+<tr><td>subscription inventory, once per audience</td><td>11 → <strong>0, landed</strong></td><td>the subscription pool (<code>GET</code> and <code>POST /v1/subscription-pool</code>)</td><td>the vault entitlement declaration: <code>brama:subscription</code> with its <code>brama:agent</code>, <code>brama:provider</code> and <code>brama:id</code> tags</td></tr>
 <tr><td>credential repair, once per incident</td><td>7</td><td>subscription credential state</td><td>the usage ledger's recorded credential state and the journal's <code>subscription_refresh</code> records</td></tr>
 <tr><td>route adoption, once per entry point</td><td>5</td><td>the alias registry</td><td>the route registry <code>BRAMA_INFERENCE_ROUTES_FILE</code> names and the launcher table <code>BRAMA_MODEL_ALIASES</code></td></tr>
 <tr><td>plan-usage reading, once per audience</td><td>4</td><td>subscription plan usage</td><td>the usage ledger and the provider's own usage report</td></tr>
 <tr><td>provider credential administration</td><td>3</td><td>capability redemption at final use</td><td>the provider capability declaration this installation was given</td></tr>
 </tbody></table>
-<p><strong>Subscription inventory (11).</strong>
+<p><strong>Subscription inventory (11 → 0, landed).</strong> It was
 <code>brama subscriptions list</code>;
 <code>GET</code>, <code>POST</code> and <code>DELETE /v1/subscriptions/:agent_id</code>;
 <code>GET</code> and <code>POST /v1/account/subscriptions</code>;
@@ -185,9 +190,15 @@ operator's word for the current state.</p>
 <code>GET</code> and <code>POST /v1/admin/subscriptions/:agent_id</code>;
 <code>DELETE /v1/admin/subscriptions/:agent_id/:subscription_id</code>;
 <code>GET /v1/admin/subscription-pool</code>. Three audiences, one question: which
-subscriptions exist and who owns them. The pool capability answers it once from the vault
-declaration and scopes the answer by the caller's proven identity, which is where
-ownership already lives (<a href="/docs/concepts/entitlement">entitlement</a>).</p>
+subscriptions exist and who owns them. The pool capability now answers it once from the
+vault declaration over <a href="/docs/http-api#the-subscription-pool"><code>GET</code>
+and <code>POST /v1/subscription-pool</code></a> and
+<a href="/docs/cli/subscriptions"><code>brama subscriptions</code></a>, scoping the
+answer by the caller's proven identity, which is where ownership already lives
+(<a href="/docs/concepts/entitlement">entitlement</a>). All eleven were deleted in the
+same change: their routes, their handlers, their tests, the desktop calls that reached
+them and their paragraphs on this site. A signed agent, an account holder and this
+installation's own console get one answer narrowed by who they are.</p>
 <p><strong>Credential repair (7).</strong>
 <code>brama subscription refresh</code>; <code>brama subscription sign-in</code>;
 <code>POST /v1/account/subscription-sign-in/:subscription_id</code>;
@@ -227,20 +238,24 @@ Inference and translation: <code>POST /v1/chat/completions</code>,
 <code>POST /v1/embeddings</code>, <code>POST /v1/moderations</code>. Reading what this
 gateway can serve: <code>GET /v1/models</code>, <code>GET /v1/aliases</code>,
 <code>GET /v1/admin/snapshot</code>, <code>GET /stats</code>, <code>brama aliases</code>.
+The subscription pool, which is a capability rather than a per-audience verb:
+<code>GET</code> and <code>POST /v1/subscription-pool</code>,
+<code>brama subscriptions</code>.
 Liveness and readiness, which answer different questions:
 <code>GET /health</code>, <code>GET /readyz</code>. Process and operator primitives:
 <code>brama serve</code>, <code>brama version</code>, <code>brama detect</code>,
 <code>brama mcp</code>, <code>brama onboard</code>, <code>brama test</code>,
 <code>brama collect-task-quality</code>, <code>brama help</code>.</p>
 <h2 id="no-prose-page">Invocations with no prose page<a class="headerlink" href="#no-prose-page" title="Link to this section">&para;</a></h2>
-<p>Four, at the revision measured: <code>brama aliases</code>, whose page file existed in
-the site source while no rewrite pointed at it, so <code>/docs/cli/aliases</code> was
-linked from the CLI tree and did not resolve; and
+<p>Three, at the revision measured:
 <code>GET</code>, <code>PUT</code> and <code>DELETE /v1/admin/credentials</code>, which
-the <a href="/docs/http-api">HTTP API</a> page does not mention at all. This change
-registers the <code>brama aliases</code> route, so the same command on this branch reports
-three. The remaining three are the family this page says Brama should not own; they are
-documented by their removal, not by a new page.</p>
+the <a href="/docs/http-api">HTTP API</a> page does not mention at all. They are the
+family this page says Brama should not own; they will be documented by their removal, not
+by a new page. It was four at
+<code>070275a036f35130918948b66f4be8b7e26fcf50</code>: <code>brama aliases</code> had a
+page file in the site source with no rewrite pointing at it, so
+<code>/docs/cli/aliases</code> was linked from the CLI tree and did not resolve. That
+route is registered.</p>
 <h2 id="removal-rule">The removal rule<a class="headerlink" href="#removal-rule" title="Link to this section">&para;</a></h2>
 <p><strong>A replaced command is deleted in the same change as its replacement.</strong>
 Not deprecated, not left answering with a notice, not kept "until callers move" — deleted,
@@ -253,9 +268,10 @@ authorization came to be reported as capacity and cost a day
 replacement and its predecessor do not coexist.</p>
 <h2 id="migration-order">Migration order<a class="headerlink" href="#migration-order" title="Link to this section">&para;</a></h2>
 <ol>
-<li><strong>Subscription inventory</strong> (11 invocations). First, because every other
-family names a subscription, so the identity and ownership scoping have to be settled
-before anything else can be expressed in terms of them.</li>
+<li><strong>Subscription inventory</strong> (11 invocations). <strong>Landed</strong> at
+<code>15c27474b3a870e1a399697068e2b96f4e72d8dd</code>. First, because every other
+family names a subscription, so the identity and ownership scoping had to be settled
+before anything else could be expressed in terms of them.</li>
 <li><strong>Plan-usage reading</strong> (4). Second, because the usage ledger is what the
 repair capability reads to decide which repair applies; a capability that reads a
 declaration cannot land before the declaration is single-sourced.</li>

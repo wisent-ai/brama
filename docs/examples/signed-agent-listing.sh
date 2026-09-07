@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # List one agent's subscriptions through the signed route:
-#   GET /v1/subscriptions/<agent>  with bearer + the x-agent-* HMAC trio.
+#   GET /v1/subscription-pool  with bearer + the x-agent-* HMAC trio.
 #
 # Signature scheme (src/crypto/hmac_auth.rs): HMAC-SHA256 hex over
 #   "{agent_id}:{timestamp}:{body_sha256_hex}"
@@ -34,5 +34,5 @@ curl -sS \
   -H "x-agent-id: ${BRAMA_AGENT}" \
   -H "x-agent-timestamp: ${ts}" \
   -H "x-agent-signature: ${sig}" \
-  "${BRAMA_URL}/v1/subscriptions/${BRAMA_AGENT}"
+  "${BRAMA_URL}/v1/subscription-pool"
 echo
