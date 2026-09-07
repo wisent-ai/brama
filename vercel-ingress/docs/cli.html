@@ -154,7 +154,7 @@ from the installed build.</p>
 </ul>
 <h2 id="safety-boundaries">Safety boundaries<a class="headerlink" href="#safety-boundaries" title="Link to this section">&para;</a></h2>
 <p><code>version</code>, <code>detect</code>, <code>subscriptions</code> without <code>--refresh-usage</code>, and
-<code>help</code> are read-only. <code>--refresh-usage</code> reads provider reports and persists their outcome through Brama's normal credential handling; it starts neither a sign-in nor model inference. <code>mcp</code> exposes local detection only.
+<code>help</code> are read-only. <code>--refresh-usage</code> reads the plan-usage capability, which reads provider reports and persists their outcome through Brama's normal credential handling; it starts neither a sign-in nor model inference. <code>mcp</code> exposes local detection only.
 <code>adopt</code> is review-only unless <code>--apply</code> is combined with an exact
 selection; it never reads credential material or calls a provider.
 <code>test</code>, the provider-requesting part of <code>onboard</code>, and

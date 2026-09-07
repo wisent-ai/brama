@@ -525,8 +525,9 @@ it.
 Without options this reads recorded state, contacts no provider and changes no
 credential. It joins live Skarbiec discovery with the usage ledger and reports
 discovery failures rather than treating them as an empty pool. Add
-`--refresh-usage` to read the providers' free usage reports through Brama's
-normal credential handling, including renewal of an expired OAuth grant.
+`--refresh-usage` to read the same plan-usage capability the gateway serves at
+`POST /v1/plan-usage`: the providers' free usage reports through Brama's normal
+credential handling, including renewal of an expired OAuth grant.
 Neither form starts a sign-in or calls a model.
 
 ```bash
@@ -559,15 +560,15 @@ history access, or any active account's usage is unavailable or stale.
 A confirmed empty inventory succeeds on a plain read; asking to refresh it
 fails with `no active subscription is available to refresh`.
 
-Brama Desktop's **Refresh usage** action calls the same native implementation:
-`POST /v1/admin/subscription-pool/usage` for the whole pool,
-`POST /v1/admin/subscription-usage/:agent_id` for an administered agent,
-`POST /v1/account/subscription-usage` for the signed-in account, or
-`POST /v1/subscription-usage/:agent_id` for a bearer-and-HMAC signed agent.
-The responses preserve successful rows and report failures with `ok: false`;
-an HTTP 200 alone is not a successful refresh. The desktop retains last-good
-rows after a connection or discovery failure, marks them stale, and shows the
-failed operation instead of an empty or healthy screen.
+Brama Desktop's **Refresh usage** action reads the same capability over one
+route, `POST /v1/plan-usage`, whose answer is narrowed by the identity the
+caller proved: this deployment for the console, that account for a signed-in
+account holder, that agent for a signed agent. The four per-audience refreshes
+it used to call are gone from the router. The responses preserve successful rows
+and report failures with `ok: false`; an HTTP 200 alone is not a complete
+reading. The desktop retains last-good rows after a connection or discovery
+failure, marks them stale, and shows the failed operation instead of an empty or
+healthy screen.
 
 ### `brama subscription refresh <provider> --reason <text>`
 
