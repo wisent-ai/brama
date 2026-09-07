@@ -34,11 +34,13 @@ permissions:
 jobs:
   release-control:
     runs-on: [self-hosted, macOS, ARM64, stado-release]
-    environment: ${{ inputs.action == 'prepare' && 'release-qualification' || inputs.action == 'promote-stable' && 'release-production' || 'release-operations' }}
+    environment: ${{ (inputs.action == 'prepare' || inputs.action == 'submit-stable') && 'release-qualification' || inputs.action == 'promote-stable' && 'release-production' || 'release-operations' }}
     env:
       GIT_CONFIG_NOSYSTEM: "1"
       GIT_TERMINAL_PROMPT: "0"
       GIT_ASKPASS: /usr/bin/false
+      STADO_CONFIG: /Users/charles/.config/stado/config.json
+      STADO_BIN: /Users/charles/.stado/bin/stado
     steps:
       - name: Use job-local Git configuration
         run: |
@@ -46,44 +48,73 @@ jobs:
           printf 'GIT_CONFIG_GLOBAL=%s\n' "$git_config" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
-          path: release-control-source
-      - uses: actions/checkout@v4
-        with:
           ref: v${{ inputs.version }}
           path: brama-source
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ vars.STADO_REPOSITORY }}
-          ref: ${{ vars.STADO_RELEASE_CLI_REVISION }}
-          path: stado-source
       - name: Prepare ephemeral release workspace
         env:
           BRAMA_RELEASE_SIGNING_KEY_B64: ${{ secrets.BRAMA_RELEASE_SIGNING_KEY_B64 }}
         run: |
           umask 077
           mkdir -p "$RUNNER_TEMP/release-control"
-          if [ "${{ inputs.action }}" = prepare ]; then
-            : "${BRAMA_RELEASE_SIGNING_KEY_B64:?BRAMA_RELEASE_SIGNING_KEY_B64 is required for prepare}"
+          if [ "${{ inputs.action }}" = prepare ] || [ "${{ inputs.action }}" = submit-stable ]; then
+            : "${BRAMA_RELEASE_SIGNING_KEY_B64:?BRAMA_RELEASE_SIGNING_KEY_B64 is required to prepare release objects}"
             printf '%s' "$BRAMA_RELEASE_SIGNING_KEY_B64" | base64 --decode > "$RUNNER_TEMP/release-control/brama-release.pk8"
           fi
       - name: Verify managed Stado release client
-        run: /Users/charles/.stado/bin/stado --version
+        run: $STADO_BIN --version
       - name: Keep the release credential service responsive
-        run: release-control-source/scripts/ensure-skarbiec-responsive.sh
-      - name: Build and publish through the Stado release pipeline
-        if: inputs.action == 'submit-stable'
-        env:
-          STADO_CONFIG: /Users/charles/.config/stado/config.json
-          STADO_BIN: /Users/charles/.stado/bin/stado
         run: |
-          release-control-source/scripts/run-retryable-stado.sh "$STADO_BIN" release submit \
-            --source "$GITHUB_WORKSPACE/brama-source" \
-            --version "${{ inputs.version }}" \
-            --channel stable \
-            --json
+          set -euo pipefail
+
+          PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+          export PATH
+
+          url=${SKARBIEC_HEALTH_URL:-http://127.0.0.1:8895/health}
+          if curl --fail --silent --max-time 5 "$url" >/dev/null; then
+            printf 'skarbiec already responsive\n'
+            exit 0
+          fi
+
+          uid=$(id -u)
+          label=''
+          domain=''
+          for plist in "$HOME"/Library/LaunchAgents/*.plist /Library/LaunchDaemons/*.plist; do
+            [ -f "$plist" ] || continue
+            candidate=$(/usr/libexec/PlistBuddy -c 'Print :Label' "$plist" 2>/dev/null || true)
+            arguments=$(/usr/libexec/PlistBuddy -c 'Print :ProgramArguments' "$plist" 2>/dev/null || true)
+            case "$arguments" in
+              *skarbiec*serve*8895*)
+                label=$candidate
+                case "$plist" in
+                  /Library/LaunchDaemons/*) domain=system ;;
+                  *) domain="gui/$uid" ;;
+                esac
+                break
+                ;;
+            esac
+          done
+
+          [ -n "$label" ] || {
+            printf 'no launchd unit owns the Skarbiec listener on port 8895\n' >&2
+            exit 69
+          }
+
+          # Preserve the loaded definition. Unload/bootstrap can destroy the only known
+          # working state; kickstart replaces only the unhealthy process in place.
+          launchctl kickstart -k "$domain/$label"
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail --silent --max-time 5 "$url" >/dev/null; then
+              printf 'skarbiec responsive after in-place recovery (%s)\n' "$label"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          printf 'skarbiec unit %s did not become responsive\n' "$label" >&2
+          exit 69
       - name: Download exact GitHub release bytes
-        if: inputs.action == 'prepare'
+        if: inputs.action == 'prepare' || inputs.action == 'submit-stable'
         working-directory: brama-source
         env:
           RELEASE_BASE_URL: https://github.com/${{ github.repository }}/releases/download/v${{ inputs.version }}
@@ -93,31 +124,49 @@ jobs:
               --output "brama-v${{ inputs.version }}-$platform.tar.gz" \
               "$RELEASE_BASE_URL/brama-v${{ inputs.version }}-$platform.tar.gz"
           done
-      - name: Publish signed qualified candidate to Stado
-        if: inputs.action == 'prepare'
+      - name: Publish signed qualified artifacts to Stado
+        if: inputs.action == 'prepare' || inputs.action == 'submit-stable'
         working-directory: brama-source
         env:
-          STADO_CONFIG: /Users/charles/.config/stado/config.json
-          STADO_BIN: /Users/charles/.stado/bin/stado
           RECEIPT_DIR: ${{ runner.temp }}/release-control
           ADDITIONAL_ROLLBACK_COMPATIBILITY: ${{ inputs.rollback_compatible_with }}
         run: |
+          run_stado() {
+            attempts=${STADO_RETRY_ATTEMPTS:-5}
+            delay=${STADO_RETRY_DELAY_SECONDS:-15}
+            case "$attempts" in
+              ''|*[!0-9]*|0) printf 'STADO_RETRY_ATTEMPTS must be a positive integer\n' >&2; return 64 ;;
+            esac
+            case "$delay" in
+              ''|*[!0-9]*) printf 'STADO_RETRY_DELAY_SECONDS must be a non-negative integer\n' >&2; return 64 ;;
+            esac
+            attempt=1
+            while :; do
+              if "$@"; then
+                return 0
+              else
+                status=$?
+              fi
+              [ "$status" -eq 69 ] || return "$status"
+              [ "$attempt" -lt "$attempts" ] || return "$status"
+              printf 'Stado dependency unavailable; retrying in %ss (%s/%s)\n' "$delay" "$attempt" "$attempts" >&2
+              sleep "$delay"
+              attempt=$((attempt + 1))
+            done
+          }
           source_revision="$(git rev-parse HEAD)"
           source_archive="$RUNNER_TEMP/release-control/brama-source.tar.gz"
           git archive --format=tar HEAD | gzip -9 -n > "$source_archive"
           source_sha256="$(openssl dgst -sha256 "$source_archive")"
           source_sha256="${source_sha256##* }"
-          pipeline_manifest_sha256="$(openssl dgst -sha256 .wisent-release.json)"
+          pipeline_manifest_sha256="$(openssl dgst -sha256 .github/workflows/release.yml)"
           pipeline_manifest_sha256="${pipeline_manifest_sha256##* }"
           builder="github-actions/${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}"
           status_file="$RECEIPT_DIR/brama-rollout-status.json"
           if ! "$STADO_BIN" release status brama --json > "$status_file"; then
-            printf '%s\n' "The rollout is not settled; using its observed active versions for compatibility."
+            printf '%s\n' 'The rollout is not settled; using its observed active versions for compatibility.'
           fi
-          jq -e \
-            '(.targets | type) == "array" and (.targets | length) > 0' \
-            "$status_file" >/dev/null
-
+          jq -e '(.targets | type) == "array" and (.targets | length) > 0' "$status_file" >/dev/null
           compatibility=()
           seen_versions=" "
           while IFS= read -r active_version; do
@@ -129,23 +178,15 @@ jobs:
                 seen_versions="${seen_versions}${active_version} "
                 ;;
             esac
-          done < <(
-            jq -r '.targets[].observed.active_version // empty' "$status_file" |
-              sort -u
-          )
+          done < <(jq -r '.targets[].observed.active_version // empty' "$status_file" | sort -u)
           if [ -n "$ADDITIONAL_ROLLBACK_COMPATIBILITY" ]; then
             case "$seen_versions" in
               *" $ADDITIONAL_ROLLBACK_COMPATIBILITY "*) ;;
-              *)
-                compatibility+=(
-                  --rollback-compatible-with "$ADDITIONAL_ROLLBACK_COMPATIBILITY"
-                )
-                ;;
+              *) compatibility+=(--rollback-compatible-with "$ADDITIONAL_ROLLBACK_COMPATIBILITY") ;;
             esac
           fi
           if [ "${#compatibility[@]}" -eq 0 ]; then
-            printf '%s\n' \
-              "No active Brama version was observed; refusing an unsafe release manifest."
+            printf '%s\n' 'No active Brama version was observed; refusing an unsafe release manifest.'
             false
           fi
           for platform in linux-amd64 darwin-arm64; do
@@ -174,7 +215,7 @@ jobs:
                 build:{name:"github-release-build",argv:["cargo","build","--release"],status:"passed",exit_code:0},
                 status:"passed",artifact:{sha256:$artifact_sha256,bytes:$artifact_bytes,path:$artifact_path},
                 completed_at:$completed_at,failure:null}' > "$qualification"
-            "$GITHUB_WORKSPACE/release-control-source/scripts/run-retryable-stado.sh" "$STADO_BIN" release prepare brama "${{ inputs.version }}" "$platform" \
+            run_stado "$STADO_BIN" release prepare brama "${{ inputs.version }}" "$platform" \
               --archive "$archive" \
               --source-revision "$source_revision" \
               --binary bin/brama \
@@ -189,31 +230,143 @@ jobs:
               --builder "$builder" \
               --json
           done
+          if [ "${{ inputs.action }}" = submit-stable ]; then
+            run_stado "$STADO_BIN" release promote brama "${{ inputs.version }}" --channel stable --json
+          fi
       - name: Promote candidate routing
         if: inputs.action == 'promote-candidate'
-        env:
-          STADO_CONFIG: /Users/charles/.config/stado/config.json
-        run: release-control-source/scripts/run-retryable-stado.sh /Users/charles/.stado/bin/stado release promote brama "${{ inputs.version }}" --channel candidate --json
+        run: |
+          run_stado() {
+            attempts=${STADO_RETRY_ATTEMPTS:-5}
+            delay=${STADO_RETRY_DELAY_SECONDS:-15}
+            case "$attempts" in
+              ''|*[!0-9]*|0) printf 'STADO_RETRY_ATTEMPTS must be a positive integer\n' >&2; return 64 ;;
+            esac
+            case "$delay" in
+              ''|*[!0-9]*) printf 'STADO_RETRY_DELAY_SECONDS must be a non-negative integer\n' >&2; return 64 ;;
+            esac
+            attempt=1
+            while :; do
+              if "$@"; then
+                return 0
+              else
+                status=$?
+              fi
+              [ "$status" -eq 69 ] || return "$status"
+              [ "$attempt" -lt "$attempts" ] || return "$status"
+              printf 'Stado dependency unavailable; retrying in %ss (%s/%s)\n' "$delay" "$attempt" "$attempts" >&2
+              sleep "$delay"
+              attempt=$((attempt + 1))
+            done
+          }
+          run_stado "$STADO_BIN" release promote brama "${{ inputs.version }}" --channel candidate --json
       - name: Promote stable routing
         if: inputs.action == 'promote-stable'
-        env:
-          STADO_CONFIG: /Users/charles/.config/stado/config.json
         run: |
-          release-control-source/scripts/run-retryable-stado.sh /Users/charles/.stado/bin/stado release promote brama "${{ inputs.version }}" --channel stable --json
-          stado-source/stado-rs/scripts/reconcile-release-funnel-host.sh
+          run_stado() {
+            attempts=${STADO_RETRY_ATTEMPTS:-5}
+            delay=${STADO_RETRY_DELAY_SECONDS:-15}
+            case "$attempts" in
+              ''|*[!0-9]*|0) printf 'STADO_RETRY_ATTEMPTS must be a positive integer\n' >&2; return 64 ;;
+            esac
+            case "$delay" in
+              ''|*[!0-9]*) printf 'STADO_RETRY_DELAY_SECONDS must be a non-negative integer\n' >&2; return 64 ;;
+            esac
+            attempt=1
+            while :; do
+              if "$@"; then
+                return 0
+              else
+                status=$?
+              fi
+              [ "$status" -eq 69 ] || return "$status"
+              [ "$attempt" -lt "$attempts" ] || return "$status"
+              printf 'Stado dependency unavailable; retrying in %ss (%s/%s)\n' "$delay" "$attempt" "$attempts" >&2
+              sleep "$delay"
+              attempt=$((attempt + 1))
+            done
+          }
+          run_stado "$STADO_BIN" release promote brama "${{ inputs.version }}" --channel stable --json
+          for candidate in \
+            /Applications/Tailscale.app/Contents/MacOS/tailscale \
+            /usr/bin/tailscale \
+            /usr/local/bin/tailscale \
+            /opt/homebrew/bin/tailscale
+          do
+            if [ -x "$candidate" ]; then tailscale_bin=$candidate; break; fi
+          done
+          : "${tailscale_bin:?Tailscale CLI is not installed}"
+          "$tailscale_bin" funnel --bg --yes 8765 >/dev/null
+          "$tailscale_bin" funnel status --json
       - name: Reconcile public release origin only
         if: inputs.action == 'reconcile-origin'
-        run: stado-source/stado-rs/scripts/reconcile-release-funnel-host.sh
+        run: |
+          set -eu
+          for candidate in \
+            /Applications/Tailscale.app/Contents/MacOS/tailscale \
+            /usr/bin/tailscale \
+            /usr/local/bin/tailscale \
+            /opt/homebrew/bin/tailscale
+          do
+            if [ -x "$candidate" ]; then tailscale_bin=$candidate; break; fi
+          done
+          : "${tailscale_bin:?Tailscale CLI is not installed}"
+          "$tailscale_bin" funnel --bg --yes 8765 >/dev/null
+          "$tailscale_bin" funnel status --json
       - name: Read rollout status
         if: inputs.action == 'status'
-        env:
-          STADO_CONFIG: /Users/charles/.config/stado/config.json
-        run: release-control-source/scripts/run-retryable-stado.sh /Users/charles/.stado/bin/stado release status brama --json
+        run: |
+          run_stado() {
+            attempts=${STADO_RETRY_ATTEMPTS:-5}
+            delay=${STADO_RETRY_DELAY_SECONDS:-15}
+            case "$attempts" in
+              ''|*[!0-9]*|0) printf 'STADO_RETRY_ATTEMPTS must be a positive integer\n' >&2; return 64 ;;
+            esac
+            case "$delay" in
+              ''|*[!0-9]*) printf 'STADO_RETRY_DELAY_SECONDS must be a non-negative integer\n' >&2; return 64 ;;
+            esac
+            attempt=1
+            while :; do
+              if "$@"; then
+                return 0
+              else
+                status=$?
+              fi
+              [ "$status" -eq 69 ] || return "$status"
+              [ "$attempt" -lt "$attempts" ] || return "$status"
+              printf 'Stado dependency unavailable; retrying in %ss (%s/%s)\n' "$delay" "$attempt" "$attempts" >&2
+              sleep "$delay"
+              attempt=$((attempt + 1))
+            done
+          }
+          run_stado "$STADO_BIN" release status brama --json
       - name: Request rollback
         if: inputs.action == 'rollback'
-        env:
-          STADO_CONFIG: /Users/charles/.config/stado/config.json
-        run: release-control-source/scripts/run-retryable-stado.sh /Users/charles/.stado/bin/stado release rollback brama --json
+        run: |
+          run_stado() {
+            attempts=${STADO_RETRY_ATTEMPTS:-5}
+            delay=${STADO_RETRY_DELAY_SECONDS:-15}
+            case "$attempts" in
+              ''|*[!0-9]*|0) printf 'STADO_RETRY_ATTEMPTS must be a positive integer\n' >&2; return 64 ;;
+            esac
+            case "$delay" in
+              ''|*[!0-9]*) printf 'STADO_RETRY_DELAY_SECONDS must be a non-negative integer\n' >&2; return 64 ;;
+            esac
+            attempt=1
+            while :; do
+              if "$@"; then
+                return 0
+              else
+                status=$?
+              fi
+              [ "$status" -eq 69 ] || return "$status"
+              [ "$attempt" -lt "$attempts" ] || return "$status"
+              printf 'Stado dependency unavailable; retrying in %ss (%s/%s)\n' "$delay" "$attempt" "$attempts" >&2
+              sleep "$delay"
+              attempt=$((attempt + 1))
+            done
+          }
+          run_stado "$STADO_BIN" release rollback brama --json
       - name: Remove ephemeral release credentials
         if: always()
         run: rm -rf "$RUNNER_TEMP/release-control"

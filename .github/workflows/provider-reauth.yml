@@ -1,20 +1,9 @@
 name: provider-reauth
 
-# Brama's codex, claude-code and kimi subscription pools burn out when a
-# provider refresh token dies, and each has a checked-in reauth runner in the
-# weles repository designed to run hourly on charless-mac-mini
-# (scripts/worker/deploy/<provider>-reauth/reauth-launch.sh). Their launchd
-# scheduling is gone from the mini, so the pools stayed burnt behind a
-# healthy-looking beacon until Jeden failed with
-# subscription_reauthorization_required. This workflow restores the tick: the
-# stado-release runner is the mini itself, and it executes the same launchers
-# from the host's own managed weles checkout on an hourly schedule.
-#
-# Every runner is self-guarding: it probes its pool first, exits 0 when
-# healthy, never triggers a fresh browser login on a quota-burnt tick, and only
-# donates or logs in through the credentials its own Skarbiec items describe. A
-# green run therefore costs nothing, and a red one names the pool that needs an
-# operator.
+# The self-hosted release runner is the Brama host. Each hourly pass asks the
+# installed product to refresh one subscription pool first and starts the real
+# Weles sign-in only when that proof fails. Healthy and quota-exhausted pools
+# therefore do not open a browser.
 
 on:
   schedule:
@@ -24,7 +13,7 @@ on:
       providers:
         description: "Comma-separated subset of pools to run (default: all)"
         required: false
-        default: "codex,claude,kimi"
+        default: "codex,claude-code,kimi"
 
 permissions:
   contents: read
@@ -40,55 +29,36 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        provider: [codex, claude, kimi]
-    env:
-      GIT_CONFIG_NOSYSTEM: "1"
-      GIT_TERMINAL_PROMPT: "0"
-      GIT_ASKPASS: /usr/bin/false
+        provider: [codex, claude-code, kimi]
     steps:
-      - name: Use job-local Git configuration
-        run: |
-          git_config=$(mktemp "$RUNNER_TEMP/brama-gitconfig.XXXXXX")
-          printf 'GIT_CONFIG_GLOBAL=%s\n' "$git_config" >> "$GITHUB_ENV"
       - name: Skip providers not requested in this dispatch
         if: >-
           ${{ github.event_name == 'workflow_dispatch' &&
               !contains(format(',{0},', github.event.inputs.providers),
                         format(',{0},', matrix.provider)) }}
         run: echo "skipped=1" >> "$GITHUB_ENV"
-      # The host's ~/weles is a deployed copy without .git, so it cannot be
-      # advanced here — and the auto-deploy unit that kept it current is gone.
-      # Run the pinned main revision instead, the same way release-control.yml
-      # already clones a second private repository on this runner: vault-backed
-      # login material (weles@06135cc6) is exactly what a burnt pool needs, and
-      # a pinned checkout never drifts behind the store it must reach.
-      - name: Check out the weles runners at main
+      - name: Refresh or sign in the ${{ matrix.provider }} subscription
         if: env.skipped != '1'
-        uses: actions/checkout@v4
-        with:
-          repository: wisent-ai/weles
-          path: weles-source
-      - name: Put Homebrew on PATH
-        if: env.skipped != '1'
-        run: echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
-      # `dist/` is a build output: weles gitignores it and tracks no file under
-      # it, so a fresh checkout carries none and every launcher dies on
-      # ERR_MODULE_NOT_FOUND for dist/utils/login-accounts.js before it can
-      # probe its pool -- the pools then stay burnt behind a green-looking
-      # schedule. The host's old ~/weles copy was deployed already built, which
-      # is why pointing WELES_DIR at a source checkout lost the artefact without
-      # anything saying so. node_modules is needed at run time too, not only to
-      # compile, and `npm ci` installs exactly the lockfile, so what runs is
-      # reproducible against whatever revision the checkout resolved.
-      - name: Build the weles runners this job executes
-        if: env.skipped != '1'
-        working-directory: weles-source
         run: |
-          npm ci
-          npm run build
-      - name: Run the ${{ matrix.provider }} reauth launcher
-        if: env.skipped != '1'
-        env:
-          WELES_DIR: ${{ github.workspace }}/weles-source
-          REAUTH_ENTRY: ${{ github.workspace }}/weles-source/scripts/trajectories/${{ matrix.provider }}/reauth.mjs
-        run: bash "weles-source/scripts/worker/deploy/${{ matrix.provider }}-reauth/reauth-launch.sh"
+          set -eu
+          launcher=
+          for candidate in \
+            "$HOME/.stado/services/brama/current/darwin-arm64/bin/start-with-skarbiec" \
+            "$HOME/.stado/services/brama/current/darwin-arm/bin/start-with-skarbiec"
+          do
+            if [ -x "$candidate" ]; then
+              launcher=$candidate
+              break
+            fi
+          done
+          test -n "$launcher" || {
+            printf '%s\n' 'the installed Brama runtime launcher is unavailable' >&2
+            exit 69
+          }
+          reason="hourly provider credential renewal from GitHub Actions run $GITHUB_RUN_ID"
+          if "$launcher" subscription refresh "${{ matrix.provider }}" --reason "$reason" --json; then
+            printf '%s\n' "${{ matrix.provider }} subscription refreshed without a sign-in"
+            exit 0
+          fi
+          "$launcher" subscription sign-in "${{ matrix.provider }}" \
+            --reason "$reason; refresh required a real sign-in" --json
