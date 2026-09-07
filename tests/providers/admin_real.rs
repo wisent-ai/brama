@@ -15,6 +15,7 @@ const CLIENT_BEARER: &str = "brama-admin-real-client";
 const ROUTE: &str = "openrouter/openai/gpt-4o-mini";
 const ALIAS: &str = "qualification/admin-real";
 const AGENT: &str = "brama-real-qualification";
+const POOL: &str = "/v1/subscription-pool";
 
 fn real_provider_credential(provider: &str) -> String {
     let resource = format!("provider:{provider}");
@@ -385,21 +386,26 @@ fn every_chat_surface_and_operational_read_uses_real_openrouter_state() {
 }
 
 #[test]
-fn subscription_add_replace_probe_and_delete_uses_real_openrouter_account() {
+fn banking_probing_and_retiring_a_pool_account_uses_a_real_openrouter_account() {
     let credential = real_provider_credential("openrouter");
     let gateway = Gateway::start();
-    let collection = format!("/v1/admin/subscriptions/{AGENT}");
     let (status, created) = gateway.admin(
         reqwest::Method::POST,
-        &collection,
-        Some(json!({"provider":"openrouter","label":"primary","api_key":credential})),
+        POOL,
+        Some(json!({
+            "action": "bank",
+            "agent_id": AGENT,
+            "provider": "openrouter",
+            "label": "primary",
+            "api_key": credential,
+        })),
     );
     assert_eq!(status, 200, "{created}");
     let id = created["subscription"]["id"]
         .as_str()
         .expect("subscription id")
         .to_owned();
-    let probe = format!("{collection}/{id}/probe");
+    let probe = format!("/v1/admin/subscriptions/{AGENT}/{id}/probe");
     let (status, proved) = gateway.admin(reqwest::Method::POST, &probe, None);
     assert_eq!(status, 200, "{proved}");
     assert_eq!(proved["ok"], true);
@@ -407,8 +413,14 @@ fn subscription_add_replace_probe_and_delete_uses_real_openrouter_account() {
     let credential = real_provider_credential("openrouter");
     let (status, replaced) = gateway.admin(
         reqwest::Method::POST,
-        &collection,
-        Some(json!({"provider":"openrouter","label":"replacement","api_key":credential})),
+        POOL,
+        Some(json!({
+            "action": "bank",
+            "agent_id": AGENT,
+            "provider": "openrouter",
+            "label": "replacement",
+            "api_key": credential,
+        })),
     );
     assert_eq!(status, 200, "{replaced}");
     assert_eq!(replaced["subscription"]["id"], id);
@@ -416,9 +428,24 @@ fn subscription_add_replace_probe_and_delete_uses_real_openrouter_account() {
     let (status, proved) = gateway.admin(reqwest::Method::POST, &probe, None);
     assert_eq!(status, 200, "{proved}");
 
-    let item = format!("{collection}/{id}");
-    let (status, deleted) = gateway.admin(reqwest::Method::DELETE, &item, None);
-    assert_eq!(status, 200, "{deleted}");
+    let (status, pooled) = gateway.admin(reqwest::Method::GET, POOL, None);
+    assert_eq!(status, 200, "{pooled}");
+    assert_eq!(pooled["scope"], "deployment");
+    assert!(
+        pooled["subscriptions"]
+            .as_array()
+            .expect("pool rows")
+            .iter()
+            .any(|row| row["id"] == id.as_str()),
+        "the banked account is missing from the pool: {pooled}"
+    );
+
+    let (status, retired) = gateway.admin(
+        reqwest::Method::POST,
+        POOL,
+        Some(json!({"action": "retire", "agent_id": AGENT, "subscription_id": id})),
+    );
+    assert_eq!(status, 200, "{retired}");
     let (status, missing) = gateway.admin(reqwest::Method::POST, &probe, None);
     assert_eq!(status, 404, "{missing}");
 }

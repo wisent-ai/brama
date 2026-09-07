@@ -42,24 +42,50 @@ const UNATTRIBUTED: &str = "unattributed";
 const REFRESHED: &str = "refreshed";
 const FAILED: &str = "failed";
 
-/// The whole pool as the gateway sees it, read-only.
-pub async fn report() -> Value {
-    report_scope(None, false).await
+/// How much of the pool one proven identity may be told about.
+///
+/// The pool is one document, and which rows it carries follows from what the
+/// caller proved rather than from which route was asked. An operator console,
+/// an account holder and a signed agent put the same question; the answers
+/// differ because the identities do, not because three implementations of the
+/// answer exist beside each other.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PoolScope {
+    /// Every account this deployment holds, whichever agent owns it, together
+    /// with the accounts only the usage ledger still remembers. Nothing short
+    /// of this installation's own console proves this much.
+    Deployment,
+    /// Exactly the accounts one agent owns.
+    Agent(String),
 }
 
-/// Read free provider reports through the serving process's credential path.
-/// This never starts a sign-in or sends a model request.
-pub async fn refresh_usage() -> Value {
-    report_scope(None, true).await
+impl PoolScope {
+    fn agent(&self) -> Option<&str> {
+        match self {
+            Self::Deployment => None,
+            Self::Agent(agent_id) => Some(agent_id),
+        }
+    }
+
+    /// What the document says it answered. A caller reads the narrowing here
+    /// instead of inferring it from how many rows came back.
+    pub fn named(&self) -> &str {
+        match self {
+            Self::Deployment => "deployment",
+            Self::Agent(agent_id) => agent_id,
+        }
+    }
 }
 
-/// The same report, restricted to the caller's authorized agent.
-pub async fn report_agent(agent_id: &str, refresh: bool) -> Value {
-    report_scope(Some(agent_id), refresh).await
-}
-
-async fn report_scope(agent_id: Option<&str>, refresh: bool) -> Value {
-    let (entries, mut errors) = inventory(agent_id).await;
+/// The pool as the gateway sees it, narrowed to what the caller proved.
+///
+/// With `refresh` unset this contacts no provider and redeems no capability --
+/// it joins the deployment's subscription listing to the ledger and states what
+/// is already recorded -- so it is safe against a gateway serving traffic. With
+/// `refresh` set it reads each provider's own free usage report first, which
+/// spends no model quota and starts no sign-in either.
+pub async fn report(scope: &PoolScope, refresh: bool) -> Value {
+    let (entries, mut errors) = inventory(scope).await;
     if refresh && errors.is_empty() {
         let attempts: Vec<_> = entries
             .iter()
@@ -88,6 +114,10 @@ async fn report_scope(agent_id: Option<&str>, refresh: bool) -> Value {
         .map(|error| failure_json(&error))
         .collect();
     let observed_at_ms = now_ms();
+    // One row shape for every audience. The rows an agent may see are fewer
+    // than the operator's, and that is the whole of the difference: a console
+    // and an agent reading the same account read the same fields about it,
+    // because a second projection is a second thing to be wrong.
     let rows = entries
         .iter()
         .map(|entry| {
@@ -105,22 +135,17 @@ async fn report_scope(agent_id: Option<&str>, refresh: bool) -> Value {
                     errors.push(error);
                 }
             }
-            if agent_id.is_some() {
-                subscription_row(entry, recorded.as_ref(), windows)
+            let mut row = subscription_row(entry, recorded.as_ref(), windows);
+            row["state"] = json!(if entry.status == "undiscovered" {
+                "unknown"
+            } else if retired(&entry.id, recorded.as_ref()) {
+                "burnt"
             } else {
-                let mut row = subscription_row(entry, recorded.as_ref(), windows);
-                row["subscription_id"] = json!(entry.id);
-                row["state"] = json!(if entry.status == "undiscovered" {
-                    "unknown"
-                } else if retired(&entry.id, recorded.as_ref()) {
-                    "burnt"
-                } else {
-                    state(recorded.as_ref(), observed_at_ms)
-                });
-                row["expires_at"] = expires_at(recorded.as_ref());
-                row["last_redeem_error"] = last_redeem_error(recorded.as_ref(), observed_at_ms);
-                row
-            }
+                state(recorded.as_ref(), observed_at_ms)
+            });
+            row["expires_at"] = expires_at(recorded.as_ref());
+            row["last_redeem_error"] = last_redeem_error(recorded.as_ref(), observed_at_ms);
+            row
         })
         .collect::<Vec<_>>();
     if let Some(detail) = usage::storage_error() {
@@ -134,26 +159,22 @@ async fn report_scope(agent_id: Option<&str>, refresh: bool) -> Value {
             .with_context("attempted_at_ms", observed_at_ms.to_string()),
         ));
     }
-    let mut report = json!({
-        "ok": errors.is_empty(),
+    let ok = errors.is_empty();
+    json!({
+        "ok": ok,
         "observed_at_ms": observed_at_ms,
+        "scope": scope.named(),
         "errors": errors,
-    });
-    if let Some(agent_id) = agent_id {
-        report["agentId"] = json!(agent_id);
-        report["subscriptions"] = json!(rows);
-    } else {
-        report["providers"] = json!(rows);
-    }
-    report
+        "subscriptions": rows,
+    })
 }
 
 fn failure_json(failure: &Failure) -> Value {
     serde_json::from_str(&failure.to_json()).expect("Wisent failure serialization is JSON")
 }
 
-async fn inventory(agent_id: Option<&str>) -> (Vec<SubscriptionEntry>, Vec<Failure>) {
-    let discovered = match agent_id {
+async fn inventory(scope: &PoolScope) -> (Vec<SubscriptionEntry>, Vec<Failure>) {
+    let discovered = match scope.agent() {
         Some(agent_id) => broker::discover_subscriptions(agent_id).await,
         None => broker::list_all_subscriptions().await,
     };
@@ -167,7 +188,7 @@ async fn inventory(agent_id: Option<&str>) -> (Vec<SubscriptionEntry>, Vec<Failu
                 detail,
             )
             .with_context("attempted_at_ms", now_ms().to_string());
-            if let Some(agent_id) = agent_id {
+            if let Some(agent_id) = scope.agent() {
                 error = error.with_context("agent", agent_id);
             }
             (Vec::new(), vec![error])
@@ -177,9 +198,9 @@ async fn inventory(agent_id: Option<&str>) -> (Vec<SubscriptionEntry>, Vec<Failu
         .into_iter()
         .map(|entry| (entry.id.clone(), entry))
         .collect();
-    // Only the administrator's pool can include historical accounts. A scoped
-    // read must never widen an agent's ownership from a shared usage ledger.
-    if agent_id.is_none() {
+    // Only the deployment scope can include historical accounts. A scoped read
+    // must never widen an agent's ownership from a shared usage ledger.
+    if scope.agent().is_none() {
         for (id, recorded) in usage::recorded_subscriptions() {
             entries
                 .entry(id.clone())

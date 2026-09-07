@@ -111,38 +111,65 @@ fn mcp_exposes_only_the_read_only_hardware_tool() {
     assert!(detected.contains("recommended_model"), "{detected}");
 }
 
+/// The console's own read of the pool, against state nothing has written yet.
+///
+/// The vault is unreachable here -- the router this directory names does not
+/// exist -- and that is the point: an inventory Brama could not read is
+/// reported as a failure with the reason it failed, and exits non-zero. It is
+/// never flattened into an empty pool, because an empty pool and an unread
+/// vault are the same picture and opposite repairs.
 #[test]
-fn subscription_commands_read_isolated_state_and_require_explicit_mutation_context() {
+fn the_pool_reports_an_unreadable_inventory_instead_of_an_empty_one() {
     let directory = TestDirectory::new("cli-subscriptions");
     let list = command(&directory)
-        .args(["subscriptions", "list", "--json"])
+        .args(["subscriptions", "--json"])
         .output()
-        .expect("subscription list");
-    assert!(
-        list.status.success(),
-        "{}",
-        String::from_utf8_lossy(&list.stderr)
+        .expect("brama subscriptions");
+    assert_eq!(list.status.code(), Some(1), "an incomplete pool exits 1");
+    let body: Value = serde_json::from_slice(&list.stdout).expect("pool report JSON");
+    assert_eq!(body["scope"], "deployment");
+    assert_eq!(body["ok"], false);
+    assert_eq!(body["subscriptions"], Value::Array(Vec::new()));
+    assert_eq!(
+        body["errors"][0]["failure_point"],
+        "brama.subscriptions.discovery"
     );
-    let body: Value = serde_json::from_slice(&list.stdout).expect("subscription list JSON");
-    assert_eq!(body["providers"], Value::Array(Vec::new()));
+    assert!(
+        body["errors"][0]["detail"]
+            .as_str()
+            .is_some_and(|detail| detail.starts_with("list all subscriptions: ")),
+        "the refusal must name the operation that failed: {body}"
+    );
+}
 
+/// A repair that could not read the inventory it repairs refuses in the
+/// inventory's own words and records nothing.
+///
+/// Journaling a verdict here would record an attempt that never happened, and
+/// an operator reading the journal during an incident would find a refresh
+/// that "failed" against a provider nothing was ever asked about.
+#[test]
+fn subscription_refresh_refuses_with_the_inventory_reason_and_journals_nothing() {
+    let directory = TestDirectory::new("cli-refresh-refusal");
     let refresh = command(&directory)
         .args([
             "subscription",
             "refresh",
             "openai",
             "--reason",
-            "contract verifies an empty provider pool",
+            "contract verifies a refusal before any provider is reached",
             "--json",
         ])
         .output()
         .expect("subscription refresh");
-    assert!(!refresh.status.success());
-    let body: Value = serde_json::from_slice(&refresh.stdout).expect("refresh verdict JSON");
-    assert_eq!(body["provider"], "openai");
-    assert_eq!(body["attempted"], 0);
-    assert_eq!(body["result"], "failed");
-    assert!(directory.path().join("state/journal.jsonl").is_file());
+    assert_eq!(refresh.status.code(), Some(1));
+    assert!(refresh.stdout.is_empty(), "a refusal prints no verdict");
+    assert!(
+        String::from_utf8_lossy(&refresh.stderr).starts_with("list all subscriptions: "),
+        "{}",
+        String::from_utf8_lossy(&refresh.stderr)
+    );
+    assert!(!directory.path().join("state/journal.jsonl").exists());
 }
 
 #[test]

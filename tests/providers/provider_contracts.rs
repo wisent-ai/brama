@@ -17,7 +17,7 @@ mod support;
 use std::process::Command;
 
 use serde_json::Value;
-use support::TestDirectory;
+use support::{isolated_router, vault_item, write_isolated_vault, TestDirectory};
 
 /// Every provider id in the descriptor table, in declaration order.
 const ALL_PROVIDERS: &[&str] = &[
@@ -50,6 +50,9 @@ const ALL_PROVIDERS: &[&str] = &[
 /// refresh and Weles can sign in.
 const OAUTH_PROVIDERS: &[&str] = &["claude-code", "codex", "kimi"];
 
+/// The agent the isolated vault names as owner of every seeded account.
+const AGENT: &str = "brama-provider-contracts";
+
 fn is_oauth(provider: &str) -> bool {
     OAUTH_PROVIDERS.contains(&provider)
 }
@@ -60,6 +63,10 @@ fn command(directory: &TestDirectory) -> Command {
         .env_remove("WELES_API_TOKEN")
         .env_remove("WELES_WORKER_ENV_FILE")
         .env_remove("BRAMA_SUBSCRIPTION_CATALOG")
+        .env_remove("SKARBIEC_CAPABILITY_ROUTES_FILE")
+        .env_remove("BRAMA_STADO_BIN")
+        .env_remove("BRAMA_WELES_URL")
+        .env_remove("BRAMA_WELES_REAUTH_TOKEN")
         .env("HOME", directory.path().join("home"))
         .env("XDG_STATE_HOME", directory.path().join("xdg-state"))
         .env("BRAMA_STATE_DIR", directory.path().join("state"))
@@ -67,15 +74,18 @@ fn command(directory: &TestDirectory) -> Command {
             "BRAMA_SUBSCRIPTION_USAGE_FILE",
             directory.path().join("usage.json"),
         )
-        .env(
-            "ENTITLEMENTS_ROUTER_BIN",
-            directory.path().join("absent-router"),
-        );
+        // An isolated vault that answers and holds whatever this story seeded.
+        // A router path that does not exist is an unreadable vault, not an
+        // empty one, and Brama reports those as different things on purpose.
+        .env("ENTITLEMENTS_ROUTER_BIN", isolated_router(directory.path()));
     command
 }
 
 /// A usage ledger holding exactly one never-touched subscription per provider,
 /// id `probe-<provider>`, in the shape `subscription_dispatch::usage` persists.
+/// One never-touched subscription per provider, id `probe-<provider>`, in both
+/// places a subscription has to exist to be one: the isolated vault that
+/// declares it and the usage ledger that records what is known about it.
 fn seed_ledger(directory: &TestDirectory, providers: &[&str]) {
     let rows: Vec<String> = providers
         .iter()
@@ -86,6 +96,11 @@ fn seed_ledger(directory: &TestDirectory, providers: &[&str]) {
         format!(r#"{{"subscriptions":{{{}}}}}"#, rows.join(",")),
     )
     .expect("seed usage ledger");
+    let items: Vec<Value> = providers
+        .iter()
+        .map(|provider| vault_item(AGENT, provider, &format!("probe-{provider}")))
+        .collect();
+    write_isolated_vault(directory.path(), &items);
 }
 
 fn stdout_of(output: &std::process::Output) -> String {
@@ -210,8 +225,7 @@ fn refresh_attempts_oauth_providers_and_reports_the_redeem_refusal() {
         );
         assert!(
             stdout.contains(&format!(
-                "probe-{provider}: no capability or read grant produced this subscription's \
-                 credential"
+                "no usable credential source is configured for `{provider}` in this environment"
             )),
             "{provider}: {stdout}"
         );
@@ -255,6 +269,10 @@ fn sign_in_refuses_oauth_providers_without_a_weles_worker() {
         // An isolated command receives no Brama-Weles credential. The refusal
         // names the exact Skarbiec item the service launcher must acquire.
         let output = command(&directory)
+            // The worker URL is pinned so this story is about the credential
+            // it says it is about, not about whether a Stado install happens
+            // to sit under this isolated HOME.
+            .env("BRAMA_WELES_URL", "http://127.0.0.1:1")
             .args([
                 "subscription",
                 "sign-in",
@@ -290,15 +308,8 @@ fn sign_in_refuses_oauth_providers_without_a_weles_worker() {
             .expect("brama subscription sign-in");
         assert_eq!(output.status.code(), Some(1), "{provider} must exit 1");
         assert!(
-            stderr_of(&output).contains(
-                "Weles worker API does not answer its own health check at \
-                 http://127.0.0.1:1/healthz"
-            ),
-            "{provider}: {}",
             stderr_of(&output)
-        );
-        assert!(
-            stderr_of(&output).contains("start it before signing an account in"),
+                .contains("Weles health request at http://127.0.0.1:1/healthz failed"),
             "{provider}: {}",
             stderr_of(&output)
         );
@@ -310,16 +321,19 @@ fn sign_in_refuses_oauth_providers_without_a_weles_worker() {
 }
 
 #[test]
-fn subscriptions_list_reports_one_row_per_seeded_provider() {
+fn the_pool_reports_one_row_per_seeded_provider() {
     let directory = TestDirectory::new("providers-list");
     seed_ledger(&directory, ALL_PROVIDERS);
     let before = std::fs::read(directory.path().join("usage.json")).expect("seeded ledger");
 
     let output = command(&directory)
-        .args(["subscriptions", "list"])
+        .args(["subscriptions"])
         .output()
-        .expect("brama subscriptions list");
-    assert!(output.status.success(), "{}", stderr_of(&output));
+        .expect("brama subscriptions");
+    // An account nobody has read plan usage for makes the report incomplete
+    // and says so per account, so the console read exits 1. A missing
+    // measurement is never reported as zero usage.
+    assert_eq!(output.status.code(), Some(1), "{}", stderr_of(&output));
     let stdout = stdout_of(&output);
     assert!(
         stdout.contains(&format!(
@@ -339,21 +353,22 @@ fn subscriptions_list_reports_one_row_per_seeded_provider() {
     }
 
     let json = command(&directory)
-        .args(["subscriptions", "list", "--json"])
+        .args(["subscriptions", "--json"])
         .output()
-        .expect("brama subscriptions list --json");
-    assert!(json.status.success());
+        .expect("brama subscriptions --json");
+    assert_eq!(json.status.code(), Some(1));
     let report: Value = serde_json::from_slice(&json.stdout).expect("report is JSON");
-    let rows = report["providers"].as_array().expect("providers array");
+    assert_eq!(
+        report["scope"], "deployment",
+        "the console proves the deployment scope"
+    );
+    let rows = report["subscriptions"].as_array().expect("pool rows");
     assert_eq!(rows.len(), ALL_PROVIDERS.len());
     for row in rows {
         let provider = row["provider"].as_str().expect("provider");
         assert!(ALL_PROVIDERS.contains(&provider), "unexpected {provider}");
         assert_eq!(row["state"], "unknown");
-        assert_eq!(
-            row["subscription_id"],
-            Value::String(format!("probe-{provider}"))
-        );
+        assert_eq!(row["id"], Value::String(format!("probe-{provider}")));
         assert_eq!(row["expires_at"], Value::Null);
         assert_eq!(row["last_redeem_error"], Value::Null);
     }
