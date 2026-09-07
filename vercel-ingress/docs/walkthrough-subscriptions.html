@@ -125,13 +125,13 @@ footer a { color: var(--muted); text-decoration: none; }
 <p>Use Brama's native commands or Brama Desktop. The commands below describe
 the product workflow; they are not captured execution results.</p>
 <h2 id="read">Read the recorded state</h2>
-<pre><code class="language-console">brama subscriptions list --json</code></pre>
+<pre><code class="language-console">brama subscriptions --json</code></pre>
 <p>The response includes <code>ok</code>, <code>observed_at_ms</code>,
 <code>errors</code>, and <code>providers</code>. Each account carries its identity,
 credential state, actual plan windows, observation/reset times, and latest
 <code>usage_check</code>. A live credential alone is not proof of current usage.</p>
 <h2 id="refresh">Refresh free usage reports</h2>
-<pre><code class="language-console">brama subscriptions list --refresh-usage --json</code></pre>
+<pre><code class="language-console">brama subscriptions --refresh-usage --json</code></pre>
 <p>In Desktop choose <strong>Refresh usage</strong> on Subscriptions or
 Subscription Pool. Both use the same Brama function, which obtains credentials
 from Skarbiec and reads the provider's own report without sending a model
@@ -154,7 +154,7 @@ a different working account cannot make the operation succeed.</p>
 <p>After a successful sign-in, refresh usage again. A provider rejection,
 unavailable Weles worker or failed Skarbiec write remains an explicit error,
 not an instruction to infer success from stored metadata.</p>
-<p>See <a href="/docs/cli/subscriptions/list">the CLI report contract</a>,
+<p>See <a href="/docs/cli/subscriptions">the CLI report contract</a>,
 <a href="/docs/cli/subscription/sign-in">sign-in refusals</a>, and
 <a href="/docs/http-api#subscription-usage-results">HTTP result semantics</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>

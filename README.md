@@ -267,8 +267,8 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   an invalid bearer `401`, no membership `403`, and an unavailable identity
   authority `503`.
 - **Account API keys and subscriptions:** authenticated Wisent users use
-  `GET|POST /v1/account/subscriptions` and
-  `DELETE /v1/account/subscriptions/:subscription_id`. Every human request sends
+  `GET` and `POST /v1/subscription-pool`, whose owner comes from the verified
+  session and never from a caller-supplied identifier. Every human request sends
   `Authorization: Bearer <Supabase JWT>` and
   `X-Wisent-Organization-ID: <uuid>`. Brama validates the JWT with the canonical
   Wisent Supabase at `https://alvaewvbyxpgwdpugnxy.supabase.co`, calls
@@ -286,8 +286,8 @@ operator paths. Runnable, risk-labeled workflows are indexed in
 - **HTTP discovery:** `GET /v1/models`; account discovery combines public
   catalog metadata with models executable by that account's stored keys, while
   signed agent discovery includes agent-owned subscriptions.
-- **Subscription lifecycle:** `GET`, `POST`, and `DELETE`
-  `/v1/subscriptions/:agent_id`; always bearer- and HMAC-protected. A `GET`
+- **Subscription lifecycle:** `GET` and `POST` on
+  `/v1/subscription-pool`; the signed agent is bearer- and HMAC-protected. A `GET`
   returns, per subscription, the plan windows the provider itself reported
   (`limits`: `used_fraction`, `window_label`, `resets_at_ms`, and the
   `recorded_at_ms` the reading was taken at), what Brama measured (`measured`:
@@ -343,8 +343,8 @@ operator paths. Runnable, risk-labeled workflows are indexed in
 - **Desktop control plane:** `brama-desktop` alone may call
   `GET /v1/admin/snapshot`, `PUT /v1/admin/routes`,
   `POST /v1/admin/configuration-adoption/preview`,
-  `POST /v1/admin/configuration-adoption/apply`, the `GET`, `POST`, and
-  `DELETE` `/v1/admin/subscriptions/:agent_id` family, and
+  `POST /v1/admin/configuration-adoption/apply`,
+  the pool capability’s own read and write, and
   `POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe`, which is the
   only endpoint in the product that deliberately spends plan quota. The
   adoption endpoints review and atomically persist selected route aliases but
@@ -352,7 +352,7 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   identifiers, usage and status only; subscription credentials remain
   write-only.
 - **CLI:** `serve`, `version`, `detect`, `adopt`, `onboard`, `onboard --reset`,
-  `test`, `subscriptions list`, `subscription refresh`,
+  `test`, `subscriptions`, `subscription refresh`,
   `collect-task-quality`, and `mcp`. Billable commands require an explicit cost
   acknowledgement; adoption is review-only until `--apply` names an exact
   selection.
@@ -413,7 +413,7 @@ Brama process over standard input.
 ### Managed agent subscriptions
 
 List one agent's subscriptions with
-`GET /v1/admin/subscriptions/:agent_id`. Add one with:
+`GET /v1/subscription-pool` with the console identity. Add one with:
 
 ```http
 POST /v1/admin/subscriptions/wisent-app
@@ -433,7 +433,7 @@ A deliberate provider check is
 `POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe`; it performs one
 minimal real completion and therefore spends provider quota. Retire the
 subscription and its credential with
-`DELETE /v1/admin/subscriptions/:agent_id/:subscription_id`. Listing, probing,
+`POST /v1/subscription-pool` with `{"action":"retire", …}`. Listing, probing,
 and deleting never return the credential.
 
 Brama Desktop exposes this lifecycle under **Subscriptions** → **Managed
@@ -442,15 +442,15 @@ agent**: **Connect a subscription** adds an agent/provider subscription,
 label, **Verify with provider…** runs the deliberate one-request probe, and
 **Retire this subscription…** removes it. Under **My account**, the same
 add-or-replace and retire semantics remain scoped by the signed-in Wisent user
-through `GET`/`POST /v1/account/subscriptions` and
-`DELETE /v1/account/subscriptions/:subscription_id`; an account can never read
+through `GET` and `POST /v1/subscription-pool`, where a write may not name an
+owner it did not prove; an account can never read
 or mutate another user's subscriptions. These calls require both the Supabase
 bearer and a server-verified `X-Wisent-Organization-ID`, but switching
 organizations does not move, duplicate, or relabel user-owned subscriptions.
 
 ### Subscription pool
 
-`GET /v1/admin/subscription-pool` and `brama subscriptions list` expose the
+`GET /v1/subscription-pool` and `brama subscriptions` expose the
 same secret-free pool states. Refresh one provider through
 `POST /v1/admin/subscription-pool/refresh` with
 `{"provider":"codex","reason":"<operator reason>"}`, or through
@@ -520,7 +520,7 @@ sentence beside it -- was reachable only by grepping `brama-always-on.err` for
 the code and reading timestamps by hand. Two commands report that pool and repair
 it.
 
-### `brama subscriptions list`
+### `brama subscriptions`
 
 Without options this reads recorded state, contacts no provider and changes no
 credential. It joins live Skarbiec discovery with the usage ledger and reports
@@ -530,8 +530,8 @@ normal credential handling, including renewal of an expired OAuth grant.
 Neither form starts a sign-in or calls a model.
 
 ```bash
-brama subscriptions list --json
-brama subscriptions list --refresh-usage --json
+brama subscriptions --json
+brama subscriptions --refresh-usage --json
 ```
 
 The JSON report includes `ok`, `observed_at_ms`, `errors`, and `providers`.

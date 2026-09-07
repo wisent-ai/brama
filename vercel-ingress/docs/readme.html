@@ -402,17 +402,16 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   stopped. Rotation across models and credentials happens only before the
   first byte, so a committed stream is never silently re-run.</li>
 <li><strong>Account API keys and subscriptions:</strong> authenticated Wisent users use
-  <code>GET|POST /v1/account/subscriptions</code> and
-  <code>DELETE /v1/account/subscriptions/:subscription_id</code>. Brama derives the owner
+  <code>GET</code> and <code>POST /v1/subscription-pool</code>. Brama derives the owner
   from the verified Wisent session; the caller never supplies an account or
-  agent identifier. <code>POST</code> accepts an API key for any supported remote provider,
+  agent identifier, and a write that names one is refused. <code>POST</code> accepts an API key for any supported remote provider,
   stores it through Skarbiec without returning it, and makes that account's
   canonical <code>provider/model</code> routes available for buffered and streamed calls.</li>
 <li><strong>HTTP discovery:</strong> <code>GET /v1/models</code>; account discovery combines public
   catalog metadata with models executable by that account's stored keys, while
   signed agent discovery includes agent-owned subscriptions.</li>
-<li><strong>Subscription lifecycle:</strong> <code>GET</code>, <code>POST</code>, and <code>DELETE</code>
-  <code>/v1/subscriptions/:agent_id</code>; always bearer- and HMAC-protected. A <code>GET</code>
+<li><strong>Subscription lifecycle:</strong> <code>GET</code> and <code>POST</code> on
+  <code>/v1/subscription-pool</code>; the signed agent is bearer- and HMAC-protected. A <code>GET</code>
   returns, per subscription, the plan windows the provider itself reported
   (<code>limits</code>: <code>used_fraction</code>, <code>window_label</code>, <code>resets_at_ms</code>, and the
   <code>recorded_at_ms</code> the reading was taken at), what Brama measured (<code>measured</code>:
@@ -459,13 +458,13 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   match, and classifying it as capacity sends the caller into retries and the
   operator into the subscription catalogue.</li>
 <li><strong>Desktop control plane:</strong> <code>brama-desktop</code> alone may call
-  <code>GET /v1/admin/snapshot</code>, <code>PUT /v1/admin/routes</code>, the <code>GET</code>, <code>POST</code>, and
-  <code>DELETE</code> <code>/v1/admin/subscriptions/:agent_id</code> family, and
+  <code>GET /v1/admin/snapshot</code>, <code>PUT /v1/admin/routes</code>,
+  the pool capability’s own read and write, and
   <code>POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe</code>, which is the
   only endpoint in the product that deliberately spends plan quota. These
   endpoints return identifiers, usage and status only; subscription credentials
   remain write-only.</li>
-<li><strong>CLI:</strong> <code>serve</code>, <code>version</code>, <code>detect</code>, <code>test</code>, <code>subscriptions list</code>,
+<li><strong>CLI:</strong> <code>serve</code>, <code>version</code>, <code>detect</code>, <code>test</code>, <code>subscriptions</code>,
   <code>subscription refresh</code>, <code>collect-task-quality</code>, and <code>mcp</code>. Billable commands
   require an explicit cost acknowledgement, and commands that mutate state
   require an explicit <code>--reason</code>.</li>
@@ -483,14 +482,14 @@ the state that explained it -- <code>needs_reauthorization</code> with the provi
 sentence beside it -- was reachable only by grepping <code>brama-always-on.err</code> for
 the code and reading timestamps by hand. Two commands report that pool and repair
 it.</p>
-<h3 id="brama-subscriptions-list"><code>brama subscriptions list</code><a class="headerlink" href="#brama-subscriptions-list" title="Link to this section">&para;</a></h3>
+<h3 id="brama-subscriptions-list"><code>brama subscriptions</code><a class="headerlink" href="#brama-subscriptions-list" title="Link to this section">&para;</a></h3>
 <p>Without options this reads recorded state, contacts no provider and changes
 no credential. It reports live Skarbiec discovery failures instead of an empty
 pool. <code>--refresh-usage</code> reads the providers' free usage reports through
 Brama's normal credential handling, including renewal of expired OAuth grants.
 Neither form starts a sign-in nor sends a model request.</p>
-<pre><code class="language-bash">brama subscriptions list --json
-brama subscriptions list --refresh-usage --json
+<pre><code class="language-bash">brama subscriptions --json
+brama subscriptions --refresh-usage --json
 </code></pre>
 <p>The JSON report includes <code>ok</code>, <code>observed_at_ms</code>,
 <code>errors</code> and <code>providers</code>. Each row contains account identity,

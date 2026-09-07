@@ -124,6 +124,40 @@ footer a { color: var(--muted); text-decoration: none; }
       <article class="doc"><h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Link to this section">&para;</a></h1>
 <p>All notable Brama changes are documented here. Brama follows Semantic
 Versioning and the pre-one compatibility policy in <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-subscription-pool">Unreleased: the subscription pool replaces eleven invocations</h2>
+<p>Which subscriptions exist and who owns them was asked eleven ways —
+<code>brama subscriptions list</code>; <code>GET</code>, <code>POST</code> and
+<code>DELETE /v1/subscriptions/:agent_id</code>; <code>GET</code> and
+<code>POST /v1/account/subscriptions</code>;
+<code>DELETE /v1/account/subscriptions/:subscription_id</code>; <code>GET</code> and
+<code>POST /v1/admin/subscriptions/:agent_id</code>;
+<code>DELETE /v1/admin/subscriptions/:agent_id/:subscription_id</code>; and
+<code>GET /v1/admin/subscription-pool</code> — and every one of them answered it from
+the same vault declaration. One capability answers it now:
+<a href="/docs/http-api#the-subscription-pool"><code>GET</code> and
+<code>POST /v1/subscription-pool</code></a>, scoped by the identity the caller proved,
+plus <a href="/docs/cli/subscriptions"><code>brama subscriptions</code></a> as a leaf
+command. All eleven were deleted in the same change: their routes, their handlers,
+their tests, the Brama Desktop calls that reached them, and their paragraphs on this
+site. <code>brama subscriptions list</code> no longer parses.</p>
+<p>The pool document is one shape for every audience —
+<code>{"ok", "observed_at_ms", "scope", "errors", "subscriptions"}</code> — so the
+per-audience <code>providers</code> key and the <code>agentId</code> key are gone, and the
+row key <code>subscription_id</code> is now <code>id</code>, which every row already
+carried. <code>scope</code> is <code>deployment</code> or the agent id the answer was narrowed
+to. A write names an owner only from the deployment scope; an agent or account holder
+that sends <code>agent_id</code> is refused with
+<code>agent_id is derived from the proven identity and must not be sent</code>, and a
+deployment-scoped write that omits it is refused too. Retiring a subscription the caller
+does not own is <code>404 subscription not found</code> even when the deployment holds it.</p>
+<p><code>BRAMA_WISENT_AUTH_URL</code> now selects the Wisent Identity origin, defaulting
+to canonical Wisent Supabase. The anon key was already deployment-configurable while the
+origin it was presented to was compiled in, which left the human half of every identity
+decision unprovable anywhere except against the production project; the account holder's
+scope is now driven end to end in <code>tests/pool</code>.</p>
+<p>The measured command surface is 42 leaf invocations in 6 groups at
+<code>15c27474b3a870e1a399697068e2b96f4e72d8dd</code>, down from 50 in 7
+(<a href="/docs/command-surface">command surface</a>).</p>
 <h2 id="unreleased-consumer-name-alias">Unreleased: the backend alias is the client's name</h2>
 <p>The Wisent App backend's chat alias is <code>wisent-backend</code>. It was
 <code>wisent-backend/chat/primary</code> with a <code>/fallback</code> twin, which spelled a

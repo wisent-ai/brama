@@ -202,7 +202,7 @@ stream, or one normalized error, as the request asked.</p>
 <p>No subscription credential is eligible for this workflow.</p>
 <h2 id="public-workflow-account-owned-api-key">Public workflow: account-owned API key<a class="headerlink" href="#public-workflow-account-owned-api-key" title="Link to this section">&para;</a></h2>
 <p>An authenticated Wisent user stores a remote provider credential with
-<code>POST /v1/account/subscriptions</code>. The verified session determines the internal
+<code>POST /v1/subscription-pool</code>. The verified session determines the internal
 owner; account and agent identifiers in the request are neither accepted nor
 trusted. The provider must be a supported built-in adapter or an executable
 models.dev provider. <code>local-openai</code> is refused because an account credential
