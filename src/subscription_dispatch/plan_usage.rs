@@ -26,6 +26,8 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 
+use futures_util::{stream, StreamExt};
+use serde_json::Value;
 use tokio::sync::watch;
 use tracing::{info, warn};
 use wisent_errors::{Code, Failure};
@@ -33,7 +35,7 @@ use wisent_errors::{Code, Failure};
 use crate::core::failure::{self, POINT_CREDENTIAL_REDEEM, POINT_PROVIDER_CALL};
 use crate::gateway::broker;
 use crate::providers::adapter::{self as provider_registry, PlanUsage};
-use crate::subscription_dispatch::usage;
+use crate::subscription_dispatch::{pool, usage};
 
 const SWEEP_INTERVAL_ENV: &str = "BRAMA_PLAN_USAGE_SWEEP_SECS";
 /// How often to look for subscriptions whose report has aged out.
@@ -399,4 +401,55 @@ pub async fn refresh(subscription_id: &str, provider: &str) -> Result<(), Failur
         provider,
     )
     .await
+}
+
+/// Subscription plan usage: what every plan the caller proved it owns has
+/// left, from this ledger and each provider's own usage report.
+///
+/// One capability for three audiences. Which accounts it answers about follows
+/// from the [`PoolScope`](pool::PoolScope) the caller proved, so the console,
+/// an account holder and a signed agent are answered by one implementation
+/// narrowed three ways instead of by four refreshes that can disagree. It
+/// spends no plan quota: reading a report costs a request and no completion,
+/// and nothing here starts a sign-in.
+///
+/// An unreadable inventory stops the reads. A listing that failed says nothing
+/// about which accounts exist, and asking a provider about accounts nobody
+/// confirmed puts the wrong question to it; the failure is reported instead. A
+/// read that fails leaves the last good reading in place, marked stale, with
+/// its refusal in `errors` -- so an incomplete answer says which account it is
+/// incomplete about rather than reporting a missing measurement as zero usage.
+pub async fn report(scope: &pool::PoolScope) -> Value {
+    let (entries, mut errors) = pool::inventory(scope).await;
+    if errors.is_empty() {
+        let attempts: Vec<_> = entries
+            .iter()
+            .filter(|entry| entry.status == "active" && !crate::journal::is_retired(&entry.id))
+            .map(|entry| refresh(&entry.id, &entry.provider))
+            .collect();
+        if attempts.is_empty() {
+            errors.push(
+                failure::envelope(
+                    "brama.subscriptions.usage",
+                    Code::Config,
+                    "subscription usage refresh",
+                    "no active subscription is available to refresh",
+                )
+                .with_context("attempted_at_ms", now_ms().to_string()),
+            );
+        }
+        // Bounded fan-out: several accounts on one host share one source
+        // address, and a provider that rate-limits per address refuses the
+        // burst that asking about all of them at once would produce.
+        let results = stream::iter(attempts)
+            .buffer_unordered(4)
+            .collect::<Vec<_>>()
+            .await;
+        errors.extend(results.into_iter().filter_map(Result::err));
+    }
+    pool::document(scope, &entries, errors)
+}
+
+fn now_ms() -> i64 {
+    chrono::Utc::now().timestamp_millis()
 }

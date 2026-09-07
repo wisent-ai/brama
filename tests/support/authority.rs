@@ -7,6 +7,7 @@
 //! verification are real product paths; the project answering them is not a
 //! test fixture, so an isolated authority answers here instead. The isolated
 //! vault behind the same gateway is `tests/support`'s.
+#![allow(dead_code)]
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};

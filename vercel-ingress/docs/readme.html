@@ -485,9 +485,10 @@ it.</p>
 <h3 id="brama-subscriptions-list"><code>brama subscriptions</code><a class="headerlink" href="#brama-subscriptions-list" title="Link to this section">&para;</a></h3>
 <p>Without options this reads recorded state, contacts no provider and changes
 no credential. It reports live Skarbiec discovery failures instead of an empty
-pool. <code>--refresh-usage</code> reads the providers' free usage reports through
-Brama's normal credential handling, including renewal of expired OAuth grants.
-Neither form starts a sign-in nor sends a model request.</p>
+pool. <code>--refresh-usage</code> reads the same plan-usage capability the
+gateway serves at <code>POST /v1/plan-usage</code>: the providers' free usage
+reports through Brama's normal credential handling, including renewal of expired
+OAuth grants. Neither form starts a sign-in nor sends a model request.</p>
 <pre><code class="language-bash">brama subscriptions --json
 brama subscriptions --refresh-usage --json
 </code></pre>
@@ -510,13 +511,12 @@ operator looking for a sign-in nothing needs.</p>
 Both modes exit non-zero if discovery, ledger access or any active account's
 usage is unavailable or stale. Successful rows survive another account's
 failure; old readings remain visibly stale, never silently current.</p>
-<p>Brama Desktop's <strong>Refresh usage</strong> uses the same native function
-through <code>POST /v1/admin/subscription-pool/usage</code>, or the scoped
-<code>/v1/admin/subscription-usage/:agent_id</code>,
-<code>/v1/account/subscription-usage</code>, and
-<code>/v1/subscription-usage/:agent_id</code> routes. HTTP 200 may contain
-<code>ok: false</code>; clients must read the verdict. Desktop retains old rows
-after a connection failure and displays the failed operation beside them.</p>
+<p>Brama Desktop's <strong>Refresh usage</strong> reads the same capability over
+one route, <code>POST /v1/plan-usage</code>, whose answer is narrowed by the
+identity the console proved; the four per-audience refreshes it used to call are
+gone from the router. HTTP 200 may contain <code>ok: false</code>; clients must
+read the verdict. Desktop retains old rows after a connection failure and
+displays the failed operation beside them.</p>
 <h3 id="brama-subscription-refresh-provider-reason-text"><code>brama subscription refresh &lt;provider&gt; --reason &lt;text&gt;</code><a class="headerlink" href="#brama-subscription-refresh-provider-reason-text" title="Link to this section">&para;</a></h3>
 <p>Runs the refresh the gateway's own timer runs, for one provider, now. A burnt or
 expired grant is never inside the timer's skew window, and a timer that will not

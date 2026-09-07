@@ -23,14 +23,13 @@
 
 use std::collections::BTreeMap;
 
-use futures_util::{stream, StreamExt};
 use serde_json::{json, Value};
 use wisent_errors::{Code, Failure};
 
 use crate::core::failure::{self, POINT_CREDENTIAL_REDEEM};
 use crate::gateway::broker::{self, SubscriptionEntry};
+use crate::subscription_dispatch::usage;
 use crate::subscription_dispatch::usage::{CredentialState, SubscriptionUsage};
-use crate::subscription_dispatch::{plan_usage, usage};
 
 /// The provider named for a subscription whose record carries none, so a row is
 /// never keyed on an empty string.
@@ -79,36 +78,30 @@ impl PoolScope {
 
 /// The pool as the gateway sees it, narrowed to what the caller proved.
 ///
-/// With `refresh` unset this contacts no provider and redeems no capability --
-/// it joins the deployment's subscription listing to the ledger and states what
-/// is already recorded -- so it is safe against a gateway serving traffic. With
-/// `refresh` set it reads each provider's own free usage report first, which
-/// spends no model quota and starts no sign-in either.
-pub async fn report(scope: &PoolScope, refresh: bool) -> Value {
-    let (entries, mut errors) = inventory(scope).await;
-    if refresh && errors.is_empty() {
-        let attempts: Vec<_> = entries
-            .iter()
-            .filter(|entry| entry.status == "active" && !crate::journal::is_retired(&entry.id))
-            .map(|entry| plan_usage::refresh(&entry.id, &entry.provider))
-            .collect();
-        if attempts.is_empty() {
-            errors.push(
-                failure::envelope(
-                    "brama.subscriptions.usage",
-                    Code::Config,
-                    "subscription usage refresh",
-                    "no active subscription is available to refresh",
-                )
-                .with_context("attempted_at_ms", now_ms().to_string()),
-            );
-        }
-        let results = stream::iter(attempts)
-            .buffer_unordered(4)
-            .collect::<Vec<_>>()
-            .await;
-        errors.extend(results.into_iter().filter_map(Result::err));
-    }
+/// This contacts no provider and redeems no capability -- it joins the
+/// deployment's subscription listing to the ledger and states what is already
+/// recorded -- so it is safe against a gateway that is serving traffic.
+/// Bringing each plan reading current from the provider's own usage report is
+/// the plan-usage capability beside it,
+/// [`plan_usage::report`](crate::subscription_dispatch::plan_usage::report),
+/// which reads those reports and then answers this same document.
+pub async fn report(scope: &PoolScope) -> Value {
+    let (entries, errors) = inventory(scope).await;
+    document(scope, &entries, errors)
+}
+
+/// The one pool document, whoever asked and whatever was read to answer it.
+///
+/// Both capabilities end here deliberately. They differ in what they read
+/// before answering -- the ledger alone, or the ledger with every provider
+/// report brought current -- and not in what they say about an account,
+/// because a second projection of a subscription is a second thing to be wrong
+/// about it.
+pub(crate) fn document(
+    scope: &PoolScope,
+    entries: &[SubscriptionEntry],
+    errors: Vec<Failure>,
+) -> Value {
     let mut errors: Vec<Value> = errors
         .into_iter()
         .map(|error| failure_json(&error))
@@ -173,7 +166,7 @@ fn failure_json(failure: &Failure) -> Value {
     serde_json::from_str(&failure.to_json()).expect("Wisent failure serialization is JSON")
 }
 
-async fn inventory(scope: &PoolScope) -> (Vec<SubscriptionEntry>, Vec<Failure>) {
+pub(crate) async fn inventory(scope: &PoolScope) -> (Vec<SubscriptionEntry>, Vec<Failure>) {
     let discovered = match scope.agent() {
         Some(agent_id) => broker::discover_subscriptions(agent_id).await,
         None => broker::list_all_subscriptions().await,

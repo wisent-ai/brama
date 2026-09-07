@@ -9,6 +9,11 @@
 //! because the operator's vault and the production identity project are not
 //! test fixtures and a test that mutated either would be the incident it is
 //! meant to prevent.
+//!
+//! Shared by every capability test area, so an item one area does not present
+//! is not dead: `tests/pool` drives the write surface and `tests/usage` drives
+//! the provider reports, and each leaves parts of the fixture unused.
+#![allow(dead_code)]
 
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener};
@@ -39,7 +44,11 @@ pub const AGENT_SIGNING_SECRET: &str = "pool-capability-agent-signing-secret";
 /// The other agent in the isolated vault, owned by nobody in this test: it is
 /// what proves a scoped answer is narrowed rather than merely filtered.
 pub const OTHER_AGENT: &str = "lem";
+/// The two subscription capabilities this fixture drives. Both answer one
+/// document, narrowed by what the caller proved; they differ in whether each
+/// provider's own usage report was read before answering.
 pub const POOL: &str = "/v1/subscription-pool";
+pub const PLAN_USAGE: &str = "/v1/plan-usage";
 
 fn available_port() -> u16 {
     TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
@@ -60,6 +69,13 @@ impl Gateway {
     /// Start the released binary over an isolated vault holding exactly the
     /// accounts this story needs.
     pub fn start(story: &str, vault_items: &[Value]) -> Self {
+        Self::start_with(story, vault_items, &[])
+    }
+
+    /// The same gateway, with the extra environment a story needs to isolate
+    /// something further out: a provider whose own usage report is answered by
+    /// an endpoint this test owns rather than by the vendor.
+    pub fn start_with(story: &str, vault_items: &[Value], environment: &[(&str, String)]) -> Self {
         let directory = TestDirectory::new(story);
         let root = directory.path().to_owned();
         let router = write_isolated_vault(&root, vault_items);
@@ -121,6 +137,11 @@ impl Gateway {
             // a story is asserting what the pool says right now.
             .env("BRAMA_PLAN_USAGE_SWEEP_SECS", "0")
             .env("BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS", "0")
+            .envs(
+                environment
+                    .iter()
+                    .map(|(name, value)| (*name, value.as_str())),
+            )
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -171,9 +192,21 @@ impl Gateway {
         self.directory.path().join("donated.json")
     }
 
-    /// One request with exactly the headers the named audience presents.
+    /// Rewrite the isolated vault behind this gateway.
+    ///
+    /// The entitlements router reads the listing on every call, so an account
+    /// can stop existing mid-story exactly as it does when its tag is dropped
+    /// or its item is deleted. Only the deployment listing is uncached, which
+    /// is why the console is the audience that observes the change.
+    pub fn rewrite_vault(&self, vault_items: &[Value]) {
+        write_isolated_vault(self.directory.path(), vault_items);
+    }
+
+    /// One request to one capability, with exactly the headers the named
+    /// audience presents.
     pub fn request(
         &self,
+        path: &str,
         method: reqwest::Method,
         bearer: Option<&str>,
         body: Option<&Value>,
@@ -183,7 +216,7 @@ impl Gateway {
         let raw = body.map(|body| serde_json::to_vec(body).expect("request body"));
         let mut request = self
             .client
-            .request(method, format!("{}{POOL}", self.origin));
+            .request(method, format!("{}{path}", self.origin));
         if let Some(bearer) = bearer {
             request = request.bearer_auth(bearer);
         }
@@ -218,16 +251,27 @@ impl Gateway {
         (status, body)
     }
 
-    pub fn console(&self, method: reqwest::Method, body: Option<&Value>) -> (u16, Value) {
-        self.request(method, Some(CONSOLE_BEARER), body, None, false)
+    pub fn console(
+        &self,
+        path: &str,
+        method: reqwest::Method,
+        body: Option<&Value>,
+    ) -> (u16, Value) {
+        self.request(path, method, Some(CONSOLE_BEARER), body, None, false)
     }
 
-    pub fn account(&self, method: reqwest::Method, body: Option<&Value>) -> (u16, Value) {
-        self.request(method, Some(ACCOUNT_BEARER), body, None, true)
+    pub fn account(
+        &self,
+        path: &str,
+        method: reqwest::Method,
+        body: Option<&Value>,
+    ) -> (u16, Value) {
+        self.request(path, method, Some(ACCOUNT_BEARER), body, None, true)
     }
 
-    pub fn agent(&self, method: reqwest::Method, body: Option<&Value>) -> (u16, Value) {
+    pub fn agent(&self, path: &str, method: reqwest::Method, body: Option<&Value>) -> (u16, Value) {
         self.request(
+            path,
             method,
             Some(AGENT_BEARER),
             body,
@@ -277,8 +321,10 @@ pub fn refusal(body: &Value) -> (String, String, String) {
     )
 }
 
-/// The pool answered from its declaration, and told this caller nothing about
-/// an account it was not answered about.
+/// The capability answered from its declaration, and told this caller nothing
+/// about an account it was not answered about.
+///
+/// The pool and plan usage answer one document, so this holds for both.
 ///
 /// A complete answer is not the same as `ok`. An account whose plan usage has
 /// never been read makes the report incomplete and says so per account, which

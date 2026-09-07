@@ -200,9 +200,12 @@ single-flighted per subscription; the sweep runs every
 <code>BRAMA_PLAN_USAGE_SWEEP_SECS</code> (default 60, <code>0</code> disables). A failed read
 never blanks a row: the last good reading is served with <code>stale: true</code> and
 dropped only past <code>BRAMA_PLAN_USAGE_RETENTION_SECS</code> (default 86400).</p>
-<p><code>brama subscriptions --refresh-usage</code> and Brama Desktop's
-<strong>Refresh usage</strong> explicitly request new reports through that same
-bounded operation. Neither starts a sign-in nor sends a model request.
+<p><code>brama subscriptions --refresh-usage</code>, Brama Desktop's
+<strong>Refresh usage</strong> and
+<a href="/docs/http-api#post-v1plan-usage"><code>POST /v1/plan-usage</code></a> are one
+capability: they explicitly request new reports through that same
+bounded operation, and the route narrows its answer to the accounts the caller proved it
+owns. Neither starts a sign-in nor sends a model request.
 Concurrent attempts for one subscription cannot silently skip their result.
 A failed attempt, an elapsed reset or an aged retained window marks the
 reading stale immediately; one fresh window does not make older windows current.</p>

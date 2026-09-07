@@ -12,10 +12,10 @@
 //! $ cargo test --release --test pool -- --nocapture
 //! ```
 
-#[path = "authority.rs"]
+#[path = "../support/authority.rs"]
 mod authority;
-#[path = "harness.rs"]
-mod harness;
+#[path = "../support/gateway.rs"]
+mod gateway;
 #[path = "../support/mod.rs"]
 mod support;
 
@@ -23,9 +23,9 @@ use reqwest::Method;
 use serde_json::json;
 
 use authority::account_agent_id;
-use harness::{
+use gateway::{
     answered_ids, assert_pool_answered, refusal, Gateway, AGENT, AGENT_SIGNING_SECRET, OTHER_AGENT,
-    STRANGER_BEARER,
+    POOL, STRANGER_BEARER,
 };
 use support::vault_item;
 
@@ -72,7 +72,7 @@ fn assert_pool_row_shape(report: &serde_json::Value, audience: &str) {
 #[test]
 fn the_pool_answers_the_console_about_every_account_the_deployment_holds() {
     let gateway = Gateway::start("pool-console", &vault());
-    let (status, report) = gateway.console(Method::GET, None);
+    let (status, report) = gateway.console(POOL, Method::GET, None);
     assert_eq!(status, 200, "{report}");
     assert_pool_answered(&report);
     assert_eq!(report["scope"], "deployment");
@@ -96,7 +96,7 @@ fn the_pool_answers_the_console_about_every_account_the_deployment_holds() {
 #[test]
 fn the_pool_answers_a_signed_agent_only_about_its_own_accounts() {
     let gateway = Gateway::start("pool-agent", &vault());
-    let (status, report) = gateway.agent(Method::GET, None);
+    let (status, report) = gateway.agent(POOL, Method::GET, None);
     assert_eq!(status, 200, "{report}");
     assert_pool_answered(&report);
     assert_eq!(report["scope"], AGENT);
@@ -111,7 +111,7 @@ fn the_pool_answers_a_signed_agent_only_about_its_own_accounts() {
 #[test]
 fn the_pool_answers_an_account_holder_only_about_the_session_it_proved() {
     let gateway = Gateway::start("pool-account", &vault());
-    let (status, report) = gateway.account(Method::GET, None);
+    let (status, report) = gateway.account(POOL, Method::GET, None);
     assert_eq!(status, 200, "{report}");
     assert_pool_answered(&report);
     assert_eq!(report["scope"], account_agent_id());
@@ -125,6 +125,7 @@ fn the_pool_answers_an_account_holder_only_about_the_session_it_proved() {
 fn banking_and_retiring_through_the_pool_records_the_proven_owner() {
     let gateway = Gateway::start("pool-write", &vault());
     let (status, banked) = gateway.agent(
+        POOL,
         Method::POST,
         Some(&json!({
             "action": "bank",
@@ -145,7 +146,7 @@ fn banking_and_retiring_through_the_pool_records_the_proven_owner() {
         .expect("the banked subscription is named")
         .to_owned();
 
-    let (status, mine) = gateway.agent(Method::GET, None);
+    let (status, mine) = gateway.agent(POOL, Method::GET, None);
     assert_eq!(status, 200, "{mine}");
     assert!(
         answered_ids(&mine).contains(&banked_id),
@@ -153,6 +154,7 @@ fn banking_and_retiring_through_the_pool_records_the_proven_owner() {
     );
 
     let (status, retired) = gateway.agent(
+        POOL,
         Method::POST,
         Some(&json!({"action": "retire", "subscription_id": banked_id})),
     );
@@ -168,7 +170,7 @@ fn banking_and_retiring_through_the_pool_records_the_proven_owner() {
         }),
         "no retirement record for {banked_id} in {journal}"
     );
-    let (status, after) = gateway.agent(Method::GET, None);
+    let (status, after) = gateway.agent(POOL, Method::GET, None);
     assert_eq!(status, 200, "{after}");
     assert!(
         !answered_ids(&after).contains(&banked_id),
@@ -181,7 +183,7 @@ fn banking_and_retiring_through_the_pool_records_the_proven_owner() {
 #[test]
 fn the_pool_refuses_a_caller_that_proved_no_identity() {
     let gateway = Gateway::start("pool-unproven", &vault());
-    let (status, body) = gateway.request(Method::GET, None, None, None, false);
+    let (status, body) = gateway.request(POOL, Method::GET, None, None, None, false);
     assert_eq!(status, 401, "{body}");
     assert_eq!(
         refusal(&body),
@@ -192,7 +194,8 @@ fn the_pool_refuses_a_caller_that_proved_no_identity() {
         ),
     );
 
-    let (status, body) = gateway.request(Method::GET, Some(STRANGER_BEARER), None, None, false);
+    let (status, body) =
+        gateway.request(POOL, Method::GET, Some(STRANGER_BEARER), None, None, false);
     assert_eq!(status, 403, "{body}");
     assert_eq!(
         refusal(&body),
@@ -211,6 +214,7 @@ fn the_pool_refuses_a_caller_that_proved_no_identity() {
 fn the_pool_refuses_a_caller_that_names_an_owner_it_did_not_prove() {
     let gateway = Gateway::start("pool-wrong-owner", &vault());
     let (status, body) = gateway.agent(
+        POOL,
         Method::POST,
         Some(&json!({
             "action": "retire",
@@ -229,6 +233,7 @@ fn the_pool_refuses_a_caller_that_names_an_owner_it_did_not_prove() {
     );
 
     let (status, body) = gateway.agent(
+        POOL,
         Method::POST,
         Some(&json!({"action": "retire", "subscription_id": "pool-other-openai"})),
     );
@@ -246,8 +251,9 @@ fn the_pool_refuses_a_caller_that_names_an_owner_it_did_not_prove() {
     // itself, and a contradiction between two proofs is never resolved in
     // favour of either.
     let (status, body) = gateway.request(
+        POOL,
         Method::GET,
-        Some(harness::AGENT_BEARER),
+        Some(gateway::AGENT_BEARER),
         None,
         Some((OTHER_AGENT, AGENT_SIGNING_SECRET)),
         false,
@@ -269,6 +275,7 @@ fn the_pool_refuses_a_caller_that_names_an_owner_it_did_not_prove() {
 fn the_pool_refuses_an_unknown_subscription_and_an_unknown_action() {
     let gateway = Gateway::start("pool-unknown", &vault());
     let (status, body) = gateway.agent(
+        POOL,
         Method::POST,
         Some(&json!({"action": "retire", "subscription_id": "pool-nothing-owns-this"})),
     );
@@ -282,7 +289,7 @@ fn the_pool_refuses_an_unknown_subscription_and_an_unknown_action() {
         ),
     );
 
-    let (status, body) = gateway.agent(Method::POST, Some(&json!({"action": "borrow"})));
+    let (status, body) = gateway.agent(POOL, Method::POST, Some(&json!({"action": "borrow"})));
     assert_eq!(status, 400, "{body}");
     assert_eq!(
         refusal(&body).2,
@@ -290,7 +297,7 @@ fn the_pool_refuses_an_unknown_subscription_and_an_unknown_action() {
     );
 
     // The console is the only caller that may name an owner, and it must.
-    let (status, body) = gateway.console(Method::POST, Some(&json!({"action": "retire"})));
+    let (status, body) = gateway.console(POOL, Method::POST, Some(&json!({"action": "retire"})));
     assert_eq!(status, 400, "{body}");
     assert_eq!(
         refusal(&body).2,
