@@ -7,7 +7,7 @@ repositories:
     mappings:
       - paths:
           - src/**
-          - scripts/start-with-skarbiec.sh
+          - src/release/bin/start-with-skarbiec
           - tests/subscriptions/**
         journeys: [real-weles-sign-in]
 surfaces:

@@ -15,7 +15,7 @@
 //! launcher's environment and must run inside it:
 //!
 //! ```console
-//! $ scripts/start-with-skarbiec.sh --exec cargo test --test http_api_real
+//! $ src/release/bin/start-with-skarbiec --exec cargo test --test http_api_real
 //! ```
 //!
 //! Only the caller's side is test-owned: each serve gets one client identity

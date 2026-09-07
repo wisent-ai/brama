@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Configuration — Brama Docs</title>
-  <meta name="description" content="Configuration Production configuration is generated, not hand-authored: scripts/start-with-skarbiec.sh assembles the security-bearing variables from operator-owned policy and scope">
+  <meta name="description" content="Configuration Production configuration is generated, not hand-authored: src/release/bin/start-with-skarbiec assembles the security-bearing variables from operator-owned policy and scope">
   <link rel="canonical" href="https://brama.wisent.com/docs/configuration">
   <style>
 :root {
@@ -123,7 +123,7 @@ footer a { color: var(--muted); text-decoration: none; }
       <p class="source-note">Documentation topic: docs/configuration.md</p>
       <article class="doc"><h1 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Link to this section">&para;</a></h1>
 <p>Production configuration is generated, not hand-authored:
-<code>scripts/start-with-skarbiec.sh</code> assembles the security-bearing variables
+<code>src/release/bin/start-with-skarbiec</code> assembles the security-bearing variables
 from operator-owned policy and scoped Skarbiec consumers, then <code>exec</code>s
 <code>brama serve</code>. Missing, malformed, duplicate, or contradictory security
 configuration fails startup, and no credential, provider, identity, or
@@ -396,7 +396,7 @@ separate CLI or Desktop action unless automatic Weles renewal was explicitly ena
 <code>BRAMA_BUILD_PLATFORM</code>, and <code>BRAMA_BUILD_TIMESTAMP</code>, and reported by
 <code>brama version</code>, <code>/health</code>, <code>/readyz</code>, and <code>/stats</code>.</p>
 <h2 id="the-launchers-own-inputs">The launcher's own inputs<a class="headerlink" href="#the-launchers-own-inputs" title="Link to this section">&para;</a></h2>
-<p><code>scripts/start-with-skarbiec.sh</code> reads <code>BRAMA_SERVICE_ENV_FILE</code> (default
+<p><code>src/release/bin/start-with-skarbiec</code> reads <code>BRAMA_SERVICE_ENV_FILE</code> (default
 <code>~/.config/brama/service.env</code>) first, then requires:</p>
 <ul>
 <li><code>BRAMA_GNUPG_HOME</code> — the service's GnuPG home; startup fails without it.</li>

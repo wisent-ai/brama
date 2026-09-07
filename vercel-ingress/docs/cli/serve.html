@@ -135,8 +135,8 @@ footer a { color: var(--muted); text-decoration: none; }
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <p>A failed stdin read prints <code>Server error: cannot read local credentials: &lt;error&gt;</code>. An invalid credential object or any server startup failure prints <code>Server error: &lt;error&gt;</code>. All exit 1. A bare managed start without generated aliases refuses exactly:</p>
 <pre><code class="language-text">Server error: BRAMA_MODEL_ALIASES is required and is assembled by
-scripts/start-with-skarbiec.sh from the sealed policy directory. Starting the
-binary directly cannot obtain it: launch the gateway through that script, or
+src/release/bin/start-with-skarbiec from the sealed policy directory. Starting the
+binary directly cannot obtain it: launch the gateway through that launcher, or
 export the variable yourself. Restarting an unlaunched process will not
 change this answer.</code></pre>
 <p>See <a href="/docs/runbook#brama-serve-refuses-to-start">the runbook</a> and <a href="/docs/cli">the CLI tree</a>.</p></article>

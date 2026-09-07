@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 const repo = process.env.BRAMA_REPO_ROOT
   ? resolve(process.env.BRAMA_REPO_ROOT)
   : resolve(import.meta.dirname, '../..');
-const launcher = resolve(repo, 'scripts/start-with-skarbiec.sh');
+const launcher = resolve(repo, 'src/release/bin/start-with-skarbiec');
 const cargo = process.env.CARGO || resolve(process.env.HOME, '.cargo/bin/cargo');
 const result = spawnSync(
   launcher,

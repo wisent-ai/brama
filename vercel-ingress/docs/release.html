@@ -134,7 +134,7 @@ came to claim that no release existed while five were published. Two records
 answer it instead, and a machine maintains both:</p>
 <ul>
 <li><code>released-surface.json</code> names the newest release this repository has recorded;
-  <code>scripts/baseline.py --write</code> regenerates it from that release rather than
+  <code>tests/versioning/baseline.py --write</code> regenerates it from that release rather than
   from the working tree;</li>
 <li>the canonical Stado release receipt names the immutable source snapshot,
   staged archive, digest, qualification, and promoted channel.</li>
@@ -175,7 +175,7 @@ all five identities is not releasable.</p>
 <li>release archive layout and launcher behavior;</li>
 <li>documented limits, retry, cost, compatibility, and recovery behavior.</li>
 </ul>
-<p><code>scripts/surface.py</code> extracts the mechanically visible part of this contract: the
+<p><code>tests/versioning/surface.py</code> extracts the mechanically visible part of this contract: the
 command list a caller invokes by name. <code>released-surface.json</code> is the immutable
 published baseline, never a candidate regenerated from the same working tree.</p>
 <p>Two entries in the list above — the release archive layout and the launcher's
@@ -260,7 +260,7 @@ service is the account the registry must name. Copying an installation to a new
 directory, which is what the fleet does every time it materialises an artifact
 under a digest-named path, therefore heals on the next start instead of
 producing a gateway that answers <code>/health</code> and serves nothing.</p>
-<p><code>scripts/brama-diagnose.py</code> prints that comparison for every installed
+<p><code>src/release/libexec/brama-diagnose.py</code> prints that comparison for every installed
 generation, beside the units that start Brama, the capabilities actually issued
 against the providers the policy grants, each alias route against those
 capabilities, where the gateway is reachable and by which scheme, and the

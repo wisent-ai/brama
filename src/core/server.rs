@@ -400,9 +400,9 @@ impl ModelAliases {
                     std::io::ErrorKind::InvalidInput,
                     format!(
                         "{MODEL_ALIASES_ENV} is required and is assembled by \
-                         scripts/start-with-skarbiec.sh from the sealed policy directory. \
+                         src/release/bin/start-with-skarbiec from the sealed policy directory. \
                          Starting the binary directly cannot obtain it: launch the gateway \
-                         through that script, or export the variable yourself. Restarting \
+                         through that launcher, or export the variable yourself. Restarting \
                          an unlaunched process will not repair this."
                     ),
                 ));

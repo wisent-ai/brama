@@ -14,7 +14,7 @@ name: version-check
 # the candidate is recomputed. A check that rebuilt both sides would always agree with
 # itself and would gate nothing.
 #
-# `scripts/check-baseline.py` checks that file against the channel that published it.
+# `tests/versioning/check_baseline.py` checks that file against the channel that published it.
 # Brama's releases are published by the Stado release plane, which is what every host
 # installs; GitHub Releases are a second, secondary channel and stalled at v0.2.53 when
 # the tag job below stopped running. Asserting the baseline had to be the newest GitHub
@@ -44,7 +44,7 @@ jobs:
     with:
       manifest: Cargo.toml
       baseline: released-surface.json
-      surface-command: python3 scripts/surface.py
+      surface-command: python3 tests/versioning/surface.py
 
   baseline:
     if: github.event_name != 'pull_request'
@@ -60,7 +60,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
-        run: python3 scripts/check-baseline.py
+        run: python3 tests/versioning/check_baseline.py
 
   tag:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

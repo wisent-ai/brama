@@ -181,7 +181,7 @@ command, and workload proof key. Re-running it replaces the installation's
 identity, so it refuses without <code>--force</code>. The launcher refuses to start
 until this material exists.</p>
 <h2 id="start-the-gateway">Start the gateway<a class="headerlink" href="#start-the-gateway" title="Link to this section">&para;</a></h2>
-<pre><code class="language-bash">scripts/start-with-skarbiec.sh
+<pre><code class="language-bash">src/release/bin/start-with-skarbiec
 </code></pre>
 <p>The launcher is the supported start path: it materializes the vault, starts
 the owner-bound capability socket, reads client bearers and request-sign
@@ -190,8 +190,8 @@ capability maps, and finally <code>exec</code>s <code>brama serve --port 8080</c
 <code>BRAMA_PORT_OVERRIDE</code> or <code>PORT</code>). Starting the binary directly fails closed —
 captured, exit 1:</p>
 <pre><code class="language-text">Server error: BRAMA_MODEL_ALIASES is required and is assembled by
-scripts/start-with-skarbiec.sh from the sealed policy directory. Starting the
-binary directly cannot obtain it: launch the gateway through that script, or
+src/release/bin/start-with-skarbiec from the sealed policy directory. Starting the
+binary directly cannot obtain it: launch the gateway through that launcher, or
 export the variable yourself. Restarting an unlaunched process will not
 repair this.
 </code></pre>

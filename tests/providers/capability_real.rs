@@ -16,7 +16,7 @@
 //! the request is a real billable completion:
 //!
 //! ```console
-//! $ scripts/start-with-skarbiec.sh --exec cargo test --test capability_real
+//! $ src/release/bin/start-with-skarbiec --exec cargo test --test capability_real
 //! ```
 //!
 //! Which providers appear here is not taste: `/readyz` on the deployment

@@ -16,7 +16,7 @@
 //! serializes them whatever thread count the runner uses:
 //!
 //! ```console
-//! $ scripts/start-with-skarbiec.sh --exec cargo test --test subscription_real
+//! $ src/release/bin/start-with-skarbiec --exec cargo test --test subscription_real
 //! ```
 //!
 //! The real-world costs, stated here so nobody discovers them from a bill:

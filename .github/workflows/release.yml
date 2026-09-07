@@ -93,15 +93,15 @@ jobs:
         # capability-issue`. Free to catch here, days of a dead gateway
         # otherwise.
         run: |
-          python3 scripts/check-router-verbs.py \
-            scripts/start-with-skarbiec.sh \
+          python3 tests/release/check_router_verbs.py \
+            src/release/bin/start-with-skarbiec \
             skarbiec-source/target/release/skarbiec
       - name: Refuse a launcher that does not parse
         # `sh -n` cannot see inside the heredoc Python the launcher carries, and
         # a block that does not compile fails at boot on the host instead.
         run: |
-          sh -n scripts/start-with-skarbiec.sh
-          python3 scripts/check-launcher-blocks.py scripts/start-with-skarbiec.sh
+          sh -n src/release/bin/start-with-skarbiec
+          python3 tests/release/check_launcher_blocks.py src/release/bin/start-with-skarbiec
       - name: Publish immutable tagged artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -117,9 +117,9 @@ jobs:
           mkdir -p "$stage/bin" "$stage/libexec" "$stage/etc/brama-skarbiec"
           cp target/release/brama "$stage/bin/brama"
           cp skarbiec-source/target/release/skarbiec "$stage/bin/skarbiec-entitlements-router"
-          cp scripts/start-with-skarbiec.sh "$stage/bin/start-with-skarbiec"
-          cp scripts/provision-skarbiec-trust.sh "$stage/bin/provision-skarbiec-trust"
-          cp scripts/skarbiec-recipient-public-keys.asc "$stage/etc/brama-skarbiec/recipient-public-keys.asc"
+          cp src/release/bin/start-with-skarbiec "$stage/bin/start-with-skarbiec"
+          cp src/release/bin/provision-skarbiec-trust "$stage/bin/provision-skarbiec-trust"
+          cp src/release/etc/brama-skarbiec/recipient-public-keys.asc "$stage/etc/brama-skarbiec/recipient-public-keys.asc"
           cp LICENSE "$stage/"
           # The trust material is NOT generated here. It pins the absolute path
           # and SHA-256 of the binary allowed to redeem a capability, which a
@@ -127,21 +127,21 @@ jobs:
           # workload proof key in every copy of this archive. The operator runs
           # bin/provision-skarbiec-trust once per installation instead, so the
           # generator ships as data rather than being executed now.
-          cp scripts/generate-skarbiec-config.mjs "$stage/libexec/generate-skarbiec-config.mjs"
+          cp src/release/libexec/generate-skarbiec-config.mjs "$stage/libexec/generate-skarbiec-config.mjs"
           # The diagnostic and the two repairs ship beside the generator for the
           # same reason the generator ships at all: the questions they answer —
           # which pinned field this host disagrees with, which capability was
           # never issued, where the gateway is actually reachable — can only be
           # asked where the installation is.
-          cp scripts/brama-diagnose.py "$stage/libexec/brama-diagnose.py"
-          cp scripts/brama-subscription-report.py "$stage/libexec/brama-subscription-report.py"
+          cp src/release/libexec/brama-diagnose.py "$stage/libexec/brama-diagnose.py"
+          cp src/release/libexec/brama-subscription-report.py "$stage/libexec/brama-subscription-report.py"
           # The registration is the other half of provisioning: the broker looks
           # in the vault for the public key the provisioner just minted, so a
           # bundle that cannot register cannot redeem.
-          cp scripts/brama-register-workload.py "$stage/libexec/brama-register-workload.py"
-          cp scripts/brama-route-probe.py "$stage/libexec/brama-route-probe.py"
-          cp scripts/brama-clear-stale-broker.py "$stage/libexec/brama-clear-stale-broker.py"
-          cp scripts/brama-repair-inference-routes.py "$stage/libexec/brama-repair-inference-routes.py"
+          cp src/release/libexec/brama-register-workload.py "$stage/libexec/brama-register-workload.py"
+          cp src/release/libexec/brama-route-probe.py "$stage/libexec/brama-route-probe.py"
+          cp src/release/libexec/brama-clear-stale-broker.py "$stage/libexec/brama-clear-stale-broker.py"
+          cp src/release/libexec/brama-repair-inference-routes.py "$stage/libexec/brama-repair-inference-routes.py"
           chmod 0755 \
             "$stage/bin/brama" \
             "$stage/bin/skarbiec-entitlements-router" \
