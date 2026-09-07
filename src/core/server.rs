@@ -20,7 +20,6 @@ use tracing::{info, warn};
 
 use crate::core::failure::{self, IMPACT_MODEL_REQUEST, POINT_MODEL_REQUEST};
 use crate::providers::stream::{StreamDelta, StreamItem};
-use crate::subscription_dispatch::pool;
 use crate::subscription_dispatch::{
     authenticate_agent, dispatch_any_subscription, dispatch_any_subscription_stream,
     dispatch_any_vision_capable_subscription, dispatch_any_vision_capable_subscription_stream,
@@ -32,6 +31,7 @@ use crate::subscription_dispatch::{
     dispatch_task_subscription, dispatch_task_subscription_stream, is_subscription_model,
     provider_requires_caller_identity, registry_models_for_agent, RoutedStream,
 };
+use crate::subscription_dispatch::{plan_usage, pool};
 use crate::types::{BillingTarget, Message, ModelRequest, ModelResponse, Tool, ToolCall};
 
 static TOTAL_REQUESTS: AtomicU64 = AtomicU64::new(0);
@@ -1162,22 +1162,24 @@ async fn authorize_organization(
     })
 }
 
-/// The one subscription-pool path a model-scoped bearer may reach.
+/// The subscription capability paths a model-scoped bearer may reach.
 ///
 /// Every workload identity the authority resolves is model-scoped, because
 /// that authority always answers with `allowed_models: Some(routes)`, and a
-/// human identity carries an empty allowlist. Leaving this path out of the
-/// allowlist makes the capability unreachable by construction for the only
-/// callers it exists for: on charless-mac-mini the Weles renewal trajectory
-/// read `list subscriptions -> 401` on every tick while the pool it was there
-/// to refill stayed empty, and the refusal named neither the path nor the
-/// reason.
+/// human identity carries an empty allowlist. Leaving one of these paths out
+/// of the allowlist makes that capability unreachable by construction for the
+/// only callers it exists for: on charless-mac-mini the Weles renewal
+/// trajectory read `list subscriptions -> 401` on every tick while the pool it
+/// was there to refill stayed empty, and the refusal named neither the path
+/// nor the reason. The four per-audience usage refreshes plan usage replaces
+/// were never in this list at all, so the one audience that signs for itself
+/// could not reach its own usage on any of them.
 ///
 /// Reaching the path is not being served by it. The handler still resolves the
 /// caller's identity, requires a signature over the exact body for an
 /// agent-scoped write, and narrows the answer to what that identity owns.
-fn is_subscription_pool_path(path: &str) -> bool {
-    path == "/v1/subscription-pool"
+fn is_subscription_capability_path(path: &str) -> bool {
+    matches!(path, "/v1/subscription-pool" | "/v1/plan-usage")
 }
 
 async fn require_model_bearer(
@@ -1221,7 +1223,7 @@ async fn require_model_bearer(
         },
     };
     if identity.allowed_models.is_some()
-        && !is_subscription_pool_path(request.uri().path())
+        && !is_subscription_capability_path(request.uri().path())
         && !matches!(
             request.uri().path(),
             // Every inference and discovery path a model-scoped bearer may
@@ -3989,7 +3991,41 @@ async fn read_subscription_pool(
     headers: HeaderMap,
 ) -> Result<Json<Value>, ApiError> {
     let scope = subscription_pool_scope(&client_identity, &headers, &[]).await?;
-    Ok(Json(pool::report(&scope, false).await))
+    Ok(Json(pool::report(&scope).await))
+}
+
+/// Subscription plan usage: what every plan the caller proved it owns has
+/// left, read from the usage ledger and each provider's own usage report.
+///
+/// One sweep and one ledger were asked for four ways -- a signed agent's
+/// refresh, an account holder's, an administered agent's, and the console's
+/// whole-pool refresh -- and every one of them read this ledger and these
+/// reports. This answers it once and narrows the answer by the identity the
+/// caller proved, through the same scope the pool resolves: there is one
+/// scoping decision in this gateway, not one per family.
+///
+/// It is a `POST` because answering reads each provider's own usage report and
+/// records what they said. That costs no plan quota: no completion is sent, no
+/// sign-in is started, and a provider that publishes no free report says so
+/// rather than being reported as unused.
+///
+/// The signed body is empty and stays empty. A caller has nothing to say here
+/// -- the answer follows from what it proved, not from what it asked for -- so
+/// a request that carries a body is refused instead of being answered from a
+/// signature over something this handler then ignores.
+async fn read_plan_usage(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    headers: HeaderMap,
+    body: axum::body::Bytes,
+) -> Result<Json<Value>, ApiError> {
+    let scope = subscription_pool_scope(&client_identity, &headers, &body).await?;
+    if !body.is_empty() {
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            "plan usage takes no request fields; the answer follows from the proven identity",
+        ));
+    }
+    Ok(Json(plan_usage::report(&scope).await))
 }
 
 /// Bank a credential into the pool, or retire one out of it.
@@ -4063,14 +4099,6 @@ async fn write_subscription_pool(
         )),
     }
 }
-async fn refresh_account_subscription_usage(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-) -> Result<Json<Value>, ApiError> {
-    let agent_id = account_agent_id(&client_identity)?;
-    Ok(Json(
-        pool::report(&pool::PoolScope::Agent(agent_id), true).await,
-    ))
-}
 
 async fn sign_in_account_subscription(
     Extension(client_identity): Extension<ModelClientIdentity>,
@@ -4079,19 +4107,6 @@ async fn sign_in_account_subscription(
 ) -> Result<Json<Value>, ApiError> {
     let agent_id = account_agent_id(&client_identity)?;
     sign_in_selected_subscription(Some(&agent_id), &subscription_id, request).await
-}
-
-async fn refresh_admin_subscription_usage(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-    Path(agent_id): Path<String>,
-) -> Result<Json<Value>, ApiError> {
-    require_brama_desktop(&client_identity)?;
-    if !valid_agent_id(&agent_id) {
-        return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
-    }
-    Ok(Json(
-        pool::report(&pool::PoolScope::Agent(agent_id), true).await,
-    ))
 }
 
 async fn sign_in_admin_subscription(
@@ -4142,13 +4157,6 @@ async fn probe_admin_subscription(
         "probe": probe,
         "subscription": pool::subscription_view(&entry),
     })))
-}
-
-async fn refresh_admin_pool_usage(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-) -> Result<Json<Value>, ApiError> {
-    require_brama_desktop(&client_identity)?;
-    Ok(Json(pool::report(&pool::PoolScope::Deployment, true).await))
 }
 
 async fn sign_in_admin_pool_subscription(
@@ -4449,20 +4457,6 @@ async fn authorize_caller(
     Ok(caller)
 }
 
-async fn refresh_agent_subscription_usage(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-    headers: axum::http::HeaderMap,
-    Path(agent_id): Path<String>,
-) -> Result<Json<Value>, ApiError> {
-    authorize_caller(&client_identity, &headers, &[], Some(&agent_id)).await?;
-    if !valid_agent_id(&agent_id) {
-        return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
-    }
-    Ok(Json(
-        pool::report(&pool::PoolScope::Agent(agent_id), true).await,
-    ))
-}
-
 pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Error> {
     let _ = STARTED_AT.elapsed();
     let ingress_auth = ModelIngressAuth::from_env()?;
@@ -4490,7 +4484,7 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
     // than only from whatever traffic happens to arrive, so a subscription
     // nobody routed through today still reports what its plan says -- and no
     // timer spends a completion to find out.
-    crate::subscription_dispatch::plan_usage::spawn();
+    plan_usage::spawn();
     // A grant is replaced before it expires rather than when a request trips
     // over it, and a grant the provider has disowned is recorded the first time
     // it says so instead of being rediscovered by every later request.
@@ -4514,14 +4508,10 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
             "/v1/subscription-pool",
             get(read_subscription_pool).post(write_subscription_pool),
         )
-        .route(
-            "/v1/subscription-usage/:agent_id",
-            post(refresh_agent_subscription_usage),
-        )
-        .route(
-            "/v1/account/subscription-usage",
-            post(refresh_account_subscription_usage),
-        )
+        // Subscription plan usage, on the same terms: one invocation whose
+        // answer is narrowed by the same proof, in place of the four
+        // per-audience refreshes that all read this one ledger.
+        .route("/v1/plan-usage", post(read_plan_usage))
         .route(
             "/v1/account/subscription-sign-in/:subscription_id",
             post(sign_in_account_subscription),
@@ -4547,20 +4537,12 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
                 .delete(delete_admin_credential),
         )
         .route(
-            "/v1/admin/subscription-usage/:agent_id",
-            post(refresh_admin_subscription_usage),
-        )
-        .route(
             "/v1/admin/subscription-sign-in/:agent_id/:subscription_id",
             post(sign_in_admin_subscription),
         )
         .route(
             "/v1/admin/subscriptions/:agent_id/:subscription_id/probe",
             post(probe_admin_subscription),
-        )
-        .route(
-            "/v1/admin/subscription-pool/usage",
-            post(refresh_admin_pool_usage),
         )
         .route(
             "/v1/admin/subscription-pool/sign-in",

@@ -388,11 +388,15 @@ async fn main() {
             json,
             refresh_usage,
         } => {
-            let report = brama::subscription_dispatch::pool::report(
-                &brama::subscription_dispatch::pool::PoolScope::Deployment,
-                refresh_usage,
-            )
-            .await;
+            let scope = brama::subscription_dispatch::pool::PoolScope::Deployment;
+            // Two capabilities, one per question, and the same document from
+            // either: the pool states what this deployment has recorded, plan
+            // usage reads each provider's own usage report first.
+            let report = if refresh_usage {
+                brama::subscription_dispatch::plan_usage::report(&scope).await
+            } else {
+                brama::subscription_dispatch::pool::report(&scope).await
+            };
             if json {
                 print_json(&report);
             } else {

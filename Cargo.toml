@@ -52,6 +52,10 @@ path = "tests/routing/discovery_reason_contract.rs"
 name = "pool"
 path = "tests/pool/main.rs"
 
+[[test]]
+name = "usage"
+path = "tests/usage/main.rs"
+
 
 [dependencies]
 async-trait = "0.1"
