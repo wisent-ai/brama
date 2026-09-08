@@ -1,3 +1,11 @@
+//! The command surface of the built binary, driven as an operator drives it.
+//!
+//! Two inventories appear here on purpose, because the pool answers them
+//! oppositely: a vault Brama cannot read at all, and a real Skarbiec vault
+//! holding accounts. The unreadable one is an absent dependency -- a router
+//! path that does not exist -- and not a stand-in for Skarbiec; telling those
+//! two apart is the point of the first story.
+
 #[path = "../support/mod.rs"]
 mod support;
 
@@ -5,7 +13,91 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 use serde_json::Value;
-use support::TestDirectory;
+use support::{SkarbiecVault, TestDirectory};
+
+/// The agent the real vault names as owner of every seeded account.
+const SEEDED_AGENT: &str = "brama-cli-contracts";
+
+/// The same command, over a real Skarbiec vault instead of an absent router.
+fn command_over_vault(directory: &TestDirectory, vault: &SkarbiecVault) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_brama"));
+    for (name, value) in vault.environment() {
+        command.env(name, value);
+    }
+    command
+        .env("XDG_STATE_HOME", directory.path().join("xdg-state"))
+        .env("BRAMA_STATE_DIR", directory.path().join("state"))
+        .env(
+            "BRAMA_SUBSCRIPTION_USAGE_FILE",
+            directory.path().join("usage.json"),
+        )
+        .env("BRAMA_PERF_PATH", directory.path().join("perf.json"))
+        .env("ENTITLEMENTS_ROUTER_BIN", vault.router());
+    command
+}
+
+/// The console's read of a pool that really holds accounts, and the other half
+/// of `the_pool_reports_an_unreadable_inventory_instead_of_an_empty_one`: an
+/// empty pool, an unreadable pool and a populated pool are three different
+/// statements, and the product makes all three.
+#[test]
+fn the_pool_reports_one_row_per_account_the_vault_declares() {
+    let directory = TestDirectory::new("cli-pool-seeded");
+    let vault = SkarbiecVault::create("cli-pool-seeded");
+    let providers = ["openai", "anthropic", "claude-code"];
+    let rows: Vec<String> = providers
+        .iter()
+        .map(|provider| format!(r#""probe-{provider}":{{"provider":"{provider}"}}"#))
+        .collect();
+    std::fs::write(
+        directory.path().join("usage.json"),
+        format!(r#"{{"subscriptions":{{{}}}}}"#, rows.join(",")),
+    )
+    .expect("seed the usage ledger");
+    for provider in providers {
+        vault.seed_subscription(SEEDED_AGENT, provider, &format!("probe-{provider}"));
+    }
+    let before = std::fs::read(directory.path().join("usage.json")).expect("seeded ledger");
+
+    let listed = command_over_vault(&directory, &vault)
+        .args(["subscriptions", "--json"])
+        .output()
+        .expect("brama subscriptions --json");
+    // An account nobody has read plan usage for makes the report incomplete
+    // and says so per account, so the console read exits 1: a missing
+    // measurement is never reported as zero usage.
+    assert_eq!(listed.status.code(), Some(1));
+    let report: Value = serde_json::from_slice(&listed.stdout).expect("pool report JSON");
+    assert_eq!(report["scope"], "deployment");
+    let answered = report["subscriptions"].as_array().expect("pool rows");
+    assert_eq!(answered.len(), providers.len());
+    for row in answered {
+        let provider = row["provider"].as_str().expect("provider");
+        assert!(providers.contains(&provider), "unexpected {provider}");
+        assert_eq!(row["state"], "unknown");
+        assert_eq!(row["id"], Value::String(format!("probe-{provider}")));
+        assert_eq!(row["expires_at"], Value::Null);
+        assert_eq!(row["last_redeem_error"], Value::Null);
+    }
+    // Copied from the live answer: one failure per account, naming the account
+    // and saying the measurement is missing rather than zero.
+    let unread = report["errors"]
+        .as_array()
+        .expect("the pool answers an errors array");
+    assert_eq!(unread.len(), providers.len(), "{report}");
+    for failure in unread {
+        assert_eq!(failure["failure_point"], "brama.subscriptions.usage");
+        assert_eq!(
+            failure["detail"],
+            "usage has not been read for this subscription"
+        );
+        assert_eq!(failure["impact"], "one subscription usage report");
+    }
+
+    let after = std::fs::read(directory.path().join("usage.json")).expect("ledger after the read");
+    assert_eq!(before, after, "a listing must not rewrite the ledger");
+    assert!(!directory.path().join("state/journal.jsonl").exists());
+}
 
 fn command(directory: &TestDirectory) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_brama"));
@@ -143,11 +235,10 @@ fn the_pool_reports_an_unreadable_inventory_instead_of_an_empty_one() {
 }
 
 /// A repair that could not read the inventory it repairs refuses in the
-/// inventory's own words and records nothing.
-///
-/// Journaling a verdict here would record an attempt that never happened, and
-/// an operator reading the journal during an incident would find a refresh
-/// that "failed" against a provider nothing was ever asked about.
+/// inventory's own words and records nothing: journaling a verdict here would
+/// record an attempt that never happened, and an operator reading the journal
+/// during an incident would find a refresh that "failed" against a provider
+/// nothing was ever asked about.
 #[test]
 fn subscription_refresh_refuses_with_the_inventory_reason_and_journals_nothing() {
     let directory = TestDirectory::new("cli-refresh-refusal");

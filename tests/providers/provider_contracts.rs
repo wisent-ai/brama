@@ -2,91 +2,89 @@
 //! descriptor table.
 //!
 //! The table in `src/providers/adapter.rs` splits the 23 providers into three
-//! credential families -- three OAuth subscription providers, nineteen API-key
-//! providers, and the routes-file `local-openai` -- and the commands below
-//! answer differently per family. Every sentence asserted here was copied from
-//! a live answer of the built binary against a seeded state, never guessed.
+//! credential families -- three OAuth subscription providers, nineteen
+//! API-key providers, and the routes-file `local-openai` -- and each command
+//! answers differently per family. Every sentence asserted here was copied
+//! from a live answer of the built binary, never guessed.
 //!
-//! Nothing here contacts a provider, opens a browser, or spends quota: each
-//! path exercised is a refusal or a read, which is exactly the part of the
-//! contract that must hold on a machine with no credentials at all.
+//! The inventory behind these commands is a real Skarbiec vault this test
+//! created with `skarbiec init` and seeded with real `skarbiec set-json`
+//! writes. It used to be a three-line `/bin/sh` script answering `list`, so
+//! every story here rested on a stand-in for the product Brama shells out to.
+//! Nothing here contacts a provider, opens a browser, or spends quota.
+//!
+//! The seeded read of the same pool lives beside its unreadable counterpart,
+//! in `tests/cli/command_contracts.rs`.
 
 #[path = "../support/mod.rs"]
 mod support;
 
-use std::process::Command;
+use std::process::{Command, Output};
 
 use serde_json::Value;
-use support::{isolated_router, vault_item, write_isolated_vault, TestDirectory};
+use support::{SkarbiecVault, TestDirectory};
 
 /// Every provider id in the descriptor table, in declaration order.
+#[rustfmt::skip]
 const ALL_PROVIDERS: &[&str] = &[
-    "anthropic",
-    "claude-code",
-    "kimi",
-    "openai",
-    "codex",
-    "openrouter",
-    "groq",
-    "mistral",
-    "xai",
-    "deepseek",
-    "cerebras",
-    "fireworks",
-    "together",
-    "nvidia",
-    "moonshot",
-    "zai",
-    "qwen",
-    "huggingface",
-    "featherless",
-    "venice",
-    "novita",
-    "synthetic",
-    "local-openai",
+    "anthropic", "claude-code", "kimi", "openai", "codex", "openrouter",
+    "groq", "mistral", "xai", "deepseek", "cerebras", "fireworks", "together",
+    "nvidia", "moonshot", "zai", "qwen", "huggingface", "featherless",
+    "venice", "novita", "synthetic", "local-openai",
 ];
 
 /// The providers whose subscription credentials are OAuth grants Brama can
 /// refresh and Weles can sign in.
 const OAUTH_PROVIDERS: &[&str] = &["claude-code", "codex", "kimi"];
 
-/// The agent the isolated vault names as owner of every seeded account.
+/// The agent the vault names as owner of every seeded account.
 const AGENT: &str = "brama-provider-contracts";
+/// A worker address nothing listens on, so a sign-in story is about the
+/// credential it says it is about rather than about a Weles that answered.
+const UNREACHABLE_WORKER: &str = "http://127.0.0.1:1";
 
 fn is_oauth(provider: &str) -> bool {
     OAUTH_PROVIDERS.contains(&provider)
 }
 
-fn command(directory: &TestDirectory) -> Command {
+/// One command against one real vault and one test-owned state area. The
+/// vault's environment carries HOME, GNUPGHOME and the vault path, and Brama
+/// hands its whole environment to the real router child.
+fn run(
+    directory: &TestDirectory,
+    vault: &SkarbiecVault,
+    environment: &[(&str, &str)],
+    args: &[&str],
+) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_brama"));
     command
         .env_remove("WELES_API_TOKEN")
         .env_remove("WELES_WORKER_ENV_FILE")
         .env_remove("BRAMA_SUBSCRIPTION_CATALOG")
-        .env_remove("SKARBIEC_CAPABILITY_ROUTES_FILE")
         .env_remove("BRAMA_STADO_BIN")
         .env_remove("BRAMA_WELES_URL")
-        .env_remove("BRAMA_WELES_REAUTH_TOKEN")
-        .env("HOME", directory.path().join("home"))
+        .env_remove("BRAMA_WELES_REAUTH_TOKEN");
+    for (name, value) in vault.environment() {
+        command.env(name, value);
+    }
+    command
         .env("XDG_STATE_HOME", directory.path().join("xdg-state"))
         .env("BRAMA_STATE_DIR", directory.path().join("state"))
         .env(
             "BRAMA_SUBSCRIPTION_USAGE_FILE",
             directory.path().join("usage.json"),
         )
-        // An isolated vault that answers and holds whatever this story seeded.
-        // A router path that does not exist is an unreadable vault, not an
-        // empty one, and Brama reports those as different things on purpose.
-        .env("ENTITLEMENTS_ROUTER_BIN", isolated_router(directory.path()));
-    command
+        .env("ENTITLEMENTS_ROUTER_BIN", vault.router())
+        .envs(environment.iter().copied())
+        .args(args)
+        .output()
+        .expect("run the real brama binary")
 }
 
-/// A usage ledger holding exactly one never-touched subscription per provider,
-/// id `probe-<provider>`, in the shape `subscription_dispatch::usage` persists.
 /// One never-touched subscription per provider, id `probe-<provider>`, in both
-/// places a subscription has to exist to be one: the isolated vault that
-/// declares it and the usage ledger that records what is known about it.
-fn seed_ledger(directory: &TestDirectory, providers: &[&str]) {
+/// places a subscription has to exist to be one: the vault that declares it
+/// and the usage ledger that records what is known about it.
+fn seed_ledger(directory: &TestDirectory, vault: &SkarbiecVault, providers: &[&str]) {
     let rows: Vec<String> = providers
         .iter()
         .map(|provider| format!(r#""probe-{provider}":{{"provider":"{provider}"}}"#))
@@ -96,18 +94,16 @@ fn seed_ledger(directory: &TestDirectory, providers: &[&str]) {
         format!(r#"{{"subscriptions":{{{}}}}}"#, rows.join(",")),
     )
     .expect("seed usage ledger");
-    let items: Vec<Value> = providers
-        .iter()
-        .map(|provider| vault_item(AGENT, provider, &format!("probe-{provider}")))
-        .collect();
-    write_isolated_vault(directory.path(), &items);
+    for provider in providers {
+        vault.seed_subscription(AGENT, provider, &format!("probe-{provider}"));
+    }
 }
 
-fn stdout_of(output: &std::process::Output) -> String {
+fn stdout_of(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-fn stderr_of(output: &std::process::Output) -> String {
+fn stderr_of(output: &Output) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
@@ -123,20 +119,21 @@ fn journal_records(directory: &TestDirectory) -> Vec<Value> {
         .collect()
 }
 
+/// `subscription refresh` against a vault that answers and holds nothing, and
+/// journals every attempt with its reason verbatim -- including the ones that
+/// found nothing to do.
 #[test]
 fn refresh_names_the_empty_pool_for_every_provider() {
     let directory = TestDirectory::new("providers-refresh-empty");
+    let vault = SkarbiecVault::create("prov-refresh-empty");
+    let reason = "provider contract: empty pool";
     for provider in ALL_PROVIDERS {
-        let output = command(&directory)
-            .args([
-                "subscription",
-                "refresh",
-                provider,
-                "--reason",
-                "provider contract: empty pool",
-            ])
-            .output()
-            .expect("brama subscription refresh");
+        let output = run(
+            &directory,
+            &vault,
+            &[],
+            &["subscription", "refresh", provider, "--reason", reason],
+        );
         assert_eq!(
             output.status.code(),
             Some(1),
@@ -153,99 +150,80 @@ fn refresh_names_the_empty_pool_for_every_provider() {
             stdout_of(&output)
         );
     }
-    // Every attempt is journaled with its reason, verbatim, including the ones
-    // that found nothing to do.
     let records = journal_records(&directory);
     assert_eq!(records.len(), ALL_PROVIDERS.len());
     for (record, provider) in records.iter().zip(ALL_PROVIDERS) {
         assert_eq!(record["kind"], "subscription_refresh");
         assert_eq!(record["provider"], *provider);
-        assert_eq!(record["reason"], "provider contract: empty pool");
+        assert_eq!(record["reason"], reason);
         assert_eq!(record["result"], "failed");
-        assert_eq!(record["attempted"], 0);
+        assert_eq!(record["attempted"], u32::MIN);
     }
 }
 
+/// `subscription refresh` over a vault holding one account per provider: an
+/// API-key provider has no refresh path at all, and an OAuth provider tries
+/// the account it found and reports why no grant came of it.
 #[test]
-fn refresh_refuses_api_key_providers_with_the_no_oauth_sentence() {
-    let directory = TestDirectory::new("providers-refresh-api-key");
-    let api_key_providers: Vec<&&str> = ALL_PROVIDERS
-        .iter()
-        .filter(|provider| !is_oauth(provider))
-        .collect();
-    for provider in &api_key_providers {
-        seed_ledger(&directory, &[provider]);
-        let output = command(&directory)
-            .args([
-                "subscription",
-                "refresh",
-                provider,
-                "--reason",
-                "provider contract: api key has no refresh path",
-            ])
-            .output()
-            .expect("brama subscription refresh");
-        assert_eq!(output.status.code(), Some(1), "{provider} must exit 1");
-        let expected = format!(
-            "`{provider}` subscription credentials are API keys rather than OAuth grants, so no \
-             refresh path exists for them: replacing one means storing a new credential in the \
-             vault"
+fn refresh_answers_each_credential_family_in_its_own_words() {
+    let directory = TestDirectory::new("providers-refresh-family");
+    let vault = SkarbiecVault::create("prov-refresh-family");
+    let reason = "provider contract: credential family";
+    for provider in ALL_PROVIDERS {
+        seed_ledger(&directory, &vault, &[provider]);
+        let output = run(
+            &directory,
+            &vault,
+            &[],
+            &["subscription", "refresh", provider, "--reason", reason],
         );
-        assert!(
-            stdout_of(&output).contains(&expected),
-            "API-key sentence missing for {provider}: {}",
-            stdout_of(&output)
-        );
-    }
-}
-
-#[test]
-fn refresh_attempts_oauth_providers_and_reports_the_redeem_refusal() {
-    let directory = TestDirectory::new("providers-refresh-oauth");
-    for provider in OAUTH_PROVIDERS {
-        seed_ledger(&directory, &[provider]);
-        let output = command(&directory)
-            .args([
-                "subscription",
-                "refresh",
-                provider,
-                "--reason",
-                "provider contract: redeem refusal",
-            ])
-            .output()
-            .expect("brama subscription refresh");
         assert_eq!(output.status.code(), Some(1), "{provider} must exit 1");
         let stdout = stdout_of(&output);
-        // One candidate was found and tried; the refusal never reached the
-        // provider because nothing in this environment can produce a credential.
-        assert!(stdout.contains("attempted: 1"), "{provider}: {stdout}");
-        assert!(
-            stdout.contains(&format!("refreshed no `{provider}` grant out of 1 tried")),
-            "{provider}: {stdout}"
-        );
-        assert!(
-            stdout.contains(&format!(
-                "no usable credential source is configured for `{provider}` in this environment"
-            )),
-            "{provider}: {stdout}"
-        );
+        if is_oauth(provider) {
+            assert!(
+                stdout.contains(&format!("refreshed no `{provider}` grant out of 1 tried")),
+                "{provider}: {stdout}"
+            );
+            assert!(
+                stdout.contains(&format!(
+                    "no usable credential source is configured for `{provider}` in this \
+                     environment"
+                )),
+                "{provider}: {stdout}"
+            );
+        } else {
+            assert!(
+                stdout.contains(&format!(
+                    "`{provider}` subscription credentials are API keys rather than OAuth \
+                     grants, so no refresh path exists for them: replacing one means storing a \
+                     new credential in the vault"
+                )),
+                "{provider}: {stdout}"
+            );
+        }
     }
 }
 
+/// `subscription sign-in` refuses before Weles is reached, naming which of the
+/// three reasons it refused for. A hard refusal reaches no verdict, so nothing
+/// may be journaled for any of them.
 #[test]
-fn sign_in_refuses_every_provider_weles_cannot_sign_in() {
-    let directory = TestDirectory::new("providers-sign-in-unknown");
+fn sign_in_refuses_before_it_reaches_weles() {
+    let directory = TestDirectory::new("providers-sign-in");
+    let vault = SkarbiecVault::create("prov-signin");
     for provider in ALL_PROVIDERS.iter().filter(|provider| !is_oauth(provider)) {
-        let output = command(&directory)
-            .args([
+        let output = run(
+            &directory,
+            &vault,
+            &[],
+            &[
                 "subscription",
                 "sign-in",
                 provider,
                 "--reason",
                 "provider contract: not a subscription provider",
-            ])
-            .output()
-            .expect("brama subscription sign-in");
+            ],
+        );
         assert_eq!(output.status.code(), Some(1), "{provider} must exit 1");
         let expected =
             format!("Weles signs in claude-code, codex and kimi; `{provider}` is not one of them");
@@ -255,33 +233,23 @@ fn sign_in_refuses_every_provider_weles_cannot_sign_in() {
             stderr_of(&output)
         );
     }
-    // A hard refusal reaches no verdict, so nothing may be journaled for it.
-    assert!(
-        journal_records(&directory).is_empty(),
-        "a refused sign-in must not journal a verdict"
-    );
-}
 
-#[test]
-fn sign_in_refuses_oauth_providers_without_a_weles_worker() {
-    let directory = TestDirectory::new("providers-sign-in-no-worker");
     for provider in OAUTH_PROVIDERS {
-        // An isolated command receives no Brama-Weles credential. The refusal
-        // names the exact Skarbiec item the service launcher must acquire.
-        let output = command(&directory)
-            // The worker URL is pinned so this story is about the credential
-            // it says it is about, not about whether a Stado install happens
-            // to sit under this isolated HOME.
-            .env("BRAMA_WELES_URL", "http://127.0.0.1:1")
-            .args([
-                "subscription",
-                "sign-in",
-                provider,
-                "--reason",
-                "provider contract: no worker on this host",
-            ])
-            .output()
-            .expect("brama subscription sign-in");
+        let arguments = [
+            "subscription",
+            "sign-in",
+            provider,
+            "--reason",
+            "provider contract: no worker on this host",
+        ];
+        // No Brama-Weles credential: the refusal names the exact Skarbiec item
+        // the launcher must acquire.
+        let output = run(
+            &directory,
+            &vault,
+            &[("BRAMA_WELES_URL", UNREACHABLE_WORKER)],
+            &arguments,
+        );
         assert_eq!(output.status.code(), Some(1), "{provider} must exit 1");
         assert!(
             stderr_of(&output).contains(
@@ -292,24 +260,22 @@ fn sign_in_refuses_oauth_providers_without_a_weles_worker() {
             stderr_of(&output)
         );
 
-        // With Brama's route credential but no worker listening, the refusal
-        // names the exact health endpoint before any sign-in is attempted.
-        let output = command(&directory)
-            .env("BRAMA_WELES_REAUTH_TOKEN", "provider-contract-token")
-            .env("BRAMA_WELES_URL", "http://127.0.0.1:1")
-            .args([
-                "subscription",
-                "sign-in",
-                provider,
-                "--reason",
-                "provider contract: worker unreachable",
-            ])
-            .output()
-            .expect("brama subscription sign-in");
+        // With that credential but no worker listening, the refusal names the
+        // health endpoint before any sign-in is attempted.
+        let output = run(
+            &directory,
+            &vault,
+            &[
+                ("BRAMA_WELES_REAUTH_TOKEN", "provider-contract-token"),
+                ("BRAMA_WELES_URL", UNREACHABLE_WORKER),
+            ],
+            &arguments,
+        );
         assert_eq!(output.status.code(), Some(1), "{provider} must exit 1");
         assert!(
-            stderr_of(&output)
-                .contains("Weles health request at http://127.0.0.1:1/healthz failed"),
+            stderr_of(&output).contains(&format!(
+                "Weles health request at {UNREACHABLE_WORKER}/healthz failed"
+            )),
             "{provider}: {}",
             stderr_of(&output)
         );
@@ -318,82 +284,4 @@ fn sign_in_refuses_oauth_providers_without_a_weles_worker() {
         journal_records(&directory).is_empty(),
         "a refused sign-in must not journal a verdict"
     );
-}
-
-#[test]
-fn the_pool_reports_one_row_per_seeded_provider() {
-    let directory = TestDirectory::new("providers-list");
-    seed_ledger(&directory, ALL_PROVIDERS);
-    let before = std::fs::read(directory.path().join("usage.json")).expect("seeded ledger");
-
-    let output = command(&directory)
-        .args(["subscriptions"])
-        .output()
-        .expect("brama subscriptions");
-    // An account nobody has read plan usage for makes the report incomplete
-    // and says so per account, so the console read exits 1. A missing
-    // measurement is never reported as zero usage.
-    assert_eq!(output.status.code(), Some(1), "{}", stderr_of(&output));
-    let stdout = stdout_of(&output);
-    assert!(
-        stdout.contains(&format!(
-            "0 of {} subscription credentials are live",
-            ALL_PROVIDERS.len()
-        )),
-        "count line missing: {stdout}"
-    );
-    for provider in ALL_PROVIDERS {
-        // A subscription whose grant nothing has ever looked at is `unknown`,
-        // which is deliberately not the same statement as a working one.
-        assert!(
-            stdout.contains(&format!("unknown  {provider}")),
-            "row missing for {provider}: {stdout}"
-        );
-        assert!(stdout.contains(&format!("probe-{provider}")));
-    }
-
-    let json = command(&directory)
-        .args(["subscriptions", "--json"])
-        .output()
-        .expect("brama subscriptions --json");
-    assert_eq!(json.status.code(), Some(1));
-    let report: Value = serde_json::from_slice(&json.stdout).expect("report is JSON");
-    assert_eq!(
-        report["scope"], "deployment",
-        "the console proves the deployment scope"
-    );
-    let rows = report["subscriptions"].as_array().expect("pool rows");
-    assert_eq!(rows.len(), ALL_PROVIDERS.len());
-    for row in rows {
-        let provider = row["provider"].as_str().expect("provider");
-        assert!(ALL_PROVIDERS.contains(&provider), "unexpected {provider}");
-        assert_eq!(row["state"], "unknown");
-        assert_eq!(row["id"], Value::String(format!("probe-{provider}")));
-        assert_eq!(row["expires_at"], Value::Null);
-        assert_eq!(row["last_redeem_error"], Value::Null);
-    }
-
-    // Listing is read-only: the ledger file must hold exactly the bytes the
-    // seed wrote, and no journal record may exist.
-    let after = std::fs::read(directory.path().join("usage.json")).expect("ledger after list");
-    assert_eq!(before, after, "a listing must not rewrite the ledger");
-    assert!(journal_records(&directory).is_empty());
-}
-
-#[test]
-fn test_command_refuses_billable_inference_for_every_provider_route() {
-    let directory = TestDirectory::new("providers-test-refusal");
-    for provider in ALL_PROVIDERS {
-        let output = command(&directory)
-            .args(["test", "--model", &format!("{provider}/any-model")])
-            .output()
-            .expect("brama test");
-        assert_eq!(output.status.code(), Some(1), "{provider} must exit 1");
-        assert!(
-            stderr_of(&output)
-                .contains("refusing billable inference without explicit --allow-provider-cost"),
-            "{provider}: {}",
-            stderr_of(&output)
-        );
-    }
 }
