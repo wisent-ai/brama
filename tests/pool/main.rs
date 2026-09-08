@@ -1,19 +1,17 @@
-//! The subscription pool, driven as the three audiences that ask it.
+//! The subscription pool, driven as the audiences that ask it.
 //!
 //! One capability replaced eleven invocations, and the claim that makes the
-//! replacement worth making is that the three audiences get one answer
-//! narrowed by who they are. That is what these stories drive: the real
-//! released binary over real HTTP, one isolated vault holding two agents'
-//! accounts, and each audience presenting exactly the proof it has. A story
-//! asserts what the pool answered and what the gateway persisted, with the
-//! refusal sentences quoted as a caller receives them.
+//! replacement worth making is that each audience gets one answer narrowed by
+//! who they are. That is what these stories drive: the real released binary
+//! over real HTTP, a real Skarbiec vault this test created and seeded with
+//! real `skarbiec` writes, and each audience presenting exactly the proof it
+//! has. A story asserts what the pool answered and what the gateway
+//! persisted, with the refusal sentences quoted as a caller receives them.
 //!
-//! ```console
-//! $ cargo test --release --test pool -- --nocapture
-//! ```
+//! The account holder is missing on purpose: that audience proves a session
+//! against the production Wisent Identity project, and the in-test HTTP
+//! authority that used to answer in its place has been deleted.
 
-#[path = "../support/authority.rs"]
-mod authority;
 #[path = "../support/gateway.rs"]
 mod gateway;
 #[path = "../support/mod.rs"]
@@ -22,23 +20,18 @@ mod support;
 use reqwest::Method;
 use serde_json::json;
 
-use authority::account_agent_id;
 use gateway::{
     answered_ids, assert_pool_answered, refusal, Gateway, AGENT, AGENT_SIGNING_SECRET, OTHER_AGENT,
     POOL, STRANGER_BEARER,
 };
-use support::vault_item;
 
-/// The accounts the isolated vault holds: two for the agent, one for another
-/// agent it must never be told about, one for the account holder's own user.
-fn vault() -> Vec<serde_json::Value> {
-    vec![
-        vault_item(AGENT, "openai", "pool-agent-openai"),
-        vault_item(AGENT, "anthropic", "pool-agent-anthropic"),
-        vault_item(OTHER_AGENT, "openai", "pool-other-openai"),
-        vault_item(&account_agent_id(), "openai", "pool-account-openai"),
-    ]
-}
+/// The accounts the vault holds: two for the agent, one for another agent it
+/// must never be told about.
+const VAULT: &[(&str, &str, &str)] = &[
+    (AGENT, "openai", "pool-agent-openai"),
+    (AGENT, "anthropic", "pool-agent-anthropic"),
+    (OTHER_AGENT, "openai", "pool-other-openai"),
+];
 
 /// Every row the pool answers carries the same fields, whoever asked.
 fn assert_pool_row_shape(report: &serde_json::Value, audience: &str) {
@@ -71,7 +64,7 @@ fn assert_pool_row_shape(report: &serde_json::Value, audience: &str) {
 /// called, which is the whole point of a deployment-scoped read.
 #[test]
 fn the_pool_answers_the_console_about_every_account_the_deployment_holds() {
-    let gateway = Gateway::start("pool-console", &vault());
+    let gateway = Gateway::start("pool-console", VAULT);
     let (status, report) = gateway.console(POOL, Method::GET, None);
     assert_eq!(status, 200, "{report}");
     assert_pool_answered(&report);
@@ -81,7 +74,6 @@ fn the_pool_answers_the_console_about_every_account_the_deployment_holds() {
     assert_eq!(
         answered,
         vec![
-            "pool-account-openai",
             "pool-agent-anthropic",
             "pool-agent-openai",
             "pool-other-openai",
@@ -95,7 +87,7 @@ fn the_pool_answers_the_console_about_every_account_the_deployment_holds() {
 /// unavailable: an agent is not told what it may not spend.
 #[test]
 fn the_pool_answers_a_signed_agent_only_about_its_own_accounts() {
-    let gateway = Gateway::start("pool-agent", &vault());
+    let gateway = Gateway::start("pool-agent", VAULT);
     let (status, report) = gateway.agent(POOL, Method::GET, None);
     assert_eq!(status, 200, "{report}");
     assert_pool_answered(&report);
@@ -106,24 +98,11 @@ fn the_pool_answers_a_signed_agent_only_about_its_own_accounts() {
     assert_pool_row_shape(&report, "a signed agent");
 }
 
-/// The account holder proves a Wisent session, and the owner is derived from
-/// that verified session rather than from anything the request carried.
-#[test]
-fn the_pool_answers_an_account_holder_only_about_the_session_it_proved() {
-    let gateway = Gateway::start("pool-account", &vault());
-    let (status, report) = gateway.account(POOL, Method::GET, None);
-    assert_eq!(status, 200, "{report}");
-    assert_pool_answered(&report);
-    assert_eq!(report["scope"], account_agent_id());
-    assert_eq!(answered_ids(&report), vec!["pool-account-openai"]);
-    assert_pool_row_shape(&report, "an account holder");
-}
-
 /// The write surface banks onto the owner the caller proved and retires out of
 /// it, and both are visible in the pool and on disk afterwards.
 #[test]
 fn banking_and_retiring_through_the_pool_records_the_proven_owner() {
-    let gateway = Gateway::start("pool-write", &vault());
+    let gateway = Gateway::start("pool-write", VAULT);
     let (status, banked) = gateway.agent(
         POOL,
         Method::POST,
@@ -161,7 +140,7 @@ fn banking_and_retiring_through_the_pool_records_the_proven_owner() {
     assert_eq!(status, 200, "{retired}");
     assert_eq!(retired["ok"], true);
 
-    let journal = std::fs::read_to_string(gateway.state_dir().join("journal.jsonl"))
+    let journal = std::fs::read_to_string(gateway.root().join("state").join("journal.jsonl"))
         .expect("the gateway journaled the retirement");
     assert!(
         journal.lines().any(|line| {
@@ -182,8 +161,8 @@ fn banking_and_retiring_through_the_pool_records_the_proven_owner() {
 /// is the one the gateway's own envelope carries.
 #[test]
 fn the_pool_refuses_a_caller_that_proved_no_identity() {
-    let gateway = Gateway::start("pool-unproven", &vault());
-    let (status, body) = gateway.request(POOL, Method::GET, None, None, None, false);
+    let gateway = Gateway::start("pool-unproven", VAULT);
+    let (status, body) = gateway.request(POOL, Method::GET, None, None, None);
     assert_eq!(status, 401, "{body}");
     assert_eq!(
         refusal(&body),
@@ -194,8 +173,7 @@ fn the_pool_refuses_a_caller_that_proved_no_identity() {
         ),
     );
 
-    let (status, body) =
-        gateway.request(POOL, Method::GET, Some(STRANGER_BEARER), None, None, false);
+    let (status, body) = gateway.request(POOL, Method::GET, Some(STRANGER_BEARER), None, None);
     assert_eq!(status, 403, "{body}");
     assert_eq!(
         refusal(&body),
@@ -212,7 +190,7 @@ fn the_pool_refuses_a_caller_that_proved_no_identity() {
 /// though the deployment holds it.
 #[test]
 fn the_pool_refuses_a_caller_that_names_an_owner_it_did_not_prove() {
-    let gateway = Gateway::start("pool-wrong-owner", &vault());
+    let gateway = Gateway::start("pool-wrong-owner", VAULT);
     let (status, body) = gateway.agent(
         POOL,
         Method::POST,
@@ -256,7 +234,6 @@ fn the_pool_refuses_a_caller_that_names_an_owner_it_did_not_prove() {
         Some(gateway::AGENT_BEARER),
         None,
         Some((OTHER_AGENT, AGENT_SIGNING_SECRET)),
-        false,
     );
     assert_eq!(status, 403, "{body}");
     assert_eq!(
@@ -273,7 +250,7 @@ fn the_pool_refuses_a_caller_that_names_an_owner_it_did_not_prove() {
 /// recognised action is refused before anything is written.
 #[test]
 fn the_pool_refuses_an_unknown_subscription_and_an_unknown_action() {
-    let gateway = Gateway::start("pool-unknown", &vault());
+    let gateway = Gateway::start("pool-unknown", VAULT);
     let (status, body) = gateway.agent(
         POOL,
         Method::POST,
@@ -307,7 +284,7 @@ fn the_pool_refuses_an_unknown_subscription_and_an_unknown_action() {
     );
 
     assert!(
-        !gateway.donated_file().exists(),
+        !gateway.root().join("donated.json").exists(),
         "a refused write must not create the donated-subscription overlay"
     );
 }
