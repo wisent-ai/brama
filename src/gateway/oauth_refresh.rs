@@ -1,65 +1,33 @@
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+//! Refreshing a stored OAuth credential with its provider.
+//!
+//! This file owns the exchange itself: one bounded HTTP call, the grant it
+//! returns, and writing that grant back into the credential. The three things
+//! it needs to know are each their own module, because they change for
+//! different reasons — `provider` is the per-provider table and credential
+//! shape, `expiry` reads when an access token dies, and `refusal` decides
+//! whether a refused refresh means the grant is dead or the network blinked.
 
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+mod expiry;
+mod provider;
+mod refusal;
+
+use std::time::Duration;
+
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::Value;
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::capability::Secret;
-use crate::core::failure::{self, IMPACT_CREDENTIAL_REFRESH, POINT_OAUTH_REFRESH};
 use wisent_errors::{Code, Failure};
 
-/// One refresh failure, in the fleet's shape. The detail is whatever the layer
-/// below said, word for word: a provider that answers `invalid_grant` is the
-/// only thing that explains the refusal the dispatcher reports later.
-fn refresh_failure(code: Code, detail: impl Into<String>) -> Failure {
-    failure::envelope(POINT_OAUTH_REFRESH, code, IMPACT_CREDENTIAL_REFRESH, detail)
-}
+use provider::{oauth_provider, oauth_refresh_token, patch_oauth_blob, zeroize_json_strings};
+use refusal::{refresh_failure, rejection_failure};
 
-const EXPIRY_KEYS: &[&str] = &["expiresAt", "expires_at", "expires", "expiry"];
-
-#[derive(Clone, Copy)]
-enum OAuthWire {
-    Json,
-    Form,
-}
-
-struct OAuthProvider {
-    token_endpoint: &'static str,
-    client_id: &'static str,
-    wire: OAuthWire,
-}
-
-fn oauth_provider(provider: &str) -> Option<OAuthProvider> {
-    match provider {
-        "claude-code" => Some(OAuthProvider {
-            token_endpoint: "https://claude.ai/v1/oauth/token",
-            client_id: "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
-            wire: OAuthWire::Json,
-        }),
-        "codex" => Some(OAuthProvider {
-            token_endpoint: "https://auth.openai.com/oauth/token",
-            client_id: "app_EMoamEEZ73f0CkXaXp7hrann",
-            wire: OAuthWire::Form,
-        }),
-        "kimi" => Some(OAuthProvider {
-            token_endpoint: "https://auth.kimi.com/api/oauth/token",
-            client_id: "17e5f671-d194-4dfb-9706-5516cb48c098",
-            wire: OAuthWire::Form,
-        }),
-        _ => None,
-    }
-}
-
-/// Whether this provider's credentials are OAuth grants Brama can refresh at
-/// all.
-///
-/// A caller that sweeps every subscription asks this before reading anything:
-/// an API-key subscription has no access token that expires, so redeeming its
-/// credential to discover that costs a vault read and learns nothing.
-pub(super) fn supports_refresh(provider: &str) -> bool {
-    oauth_provider(provider).is_some()
-}
+// The surface `gateway` has always used, named one by one so the module's
+// callers keep their exact paths and nothing else leaks with them.
+pub(super) use expiry::{access_token_expiry_ms, expires_within, needs_refresh};
+pub(super) use provider::supports_refresh;
+pub(super) use refusal::{classify_refusal, RefreshRefusal};
 
 #[derive(Serialize)]
 struct OAuthRefreshRequest<'a> {
@@ -68,6 +36,9 @@ struct OAuthRefreshRequest<'a> {
     client_id: &'static str,
 }
 
+/// One provider answer, held only as long as it takes to write it into the
+/// credential. The fields are read by `provider::patch_oauth_blob`, which is
+/// a child of this module and sees them without them being public.
 struct RefreshGrant {
     access_token: String,
     refresh_token: Option<String>,
@@ -87,10 +58,6 @@ impl Drop for RefreshGrant {
     }
 }
 
-fn expiry_margin_seconds() -> i64 {
-    "60".parse().expect("valid OAuth expiry margin")
-}
-
 fn refresh_timeout() -> Duration {
     Duration::from_secs("15".parse().expect("valid OAuth refresh timeout"))
 }
@@ -101,201 +68,6 @@ fn max_response_bytes() -> usize {
 
 fn max_credential_bytes() -> usize {
     "8192".parse().expect("valid credential size limit")
-}
-
-fn epoch_millis_threshold() -> f64 {
-    "100000000000"
-        .parse()
-        .expect("valid epoch millisecond threshold")
-}
-
-fn millis_per_second_f64() -> f64 {
-    "1000".parse().expect("valid milliseconds per second")
-}
-
-fn millis_per_second_i64() -> i64 {
-    "1000".parse().expect("valid milliseconds per second")
-}
-
-fn now_seconds() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_secs() as i64)
-        .unwrap_or_default()
-}
-
-fn normalize_epoch(epoch: f64) -> i64 {
-    if epoch.abs() >= epoch_millis_threshold() {
-        (epoch / millis_per_second_f64()) as i64
-    } else {
-        epoch as i64
-    }
-}
-
-fn expiry_epoch_seconds(value: &Value) -> Option<i64> {
-    match value {
-        Value::Number(number) => number.as_f64().map(normalize_epoch),
-        Value::String(text) => {
-            let text = text.trim();
-            if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(text) {
-                return Some(parsed.timestamp());
-            }
-            text.parse::<i64>()
-                .ok()
-                .map(|epoch| normalize_epoch(epoch as f64))
-        }
-        _ => None,
-    }
-}
-
-fn expiry_in_value(value: &Value) -> Option<i64> {
-    match value {
-        Value::Object(fields) => EXPIRY_KEYS
-            .iter()
-            .find_map(|key| fields.get(*key).and_then(expiry_epoch_seconds))
-            .or_else(|| fields.values().find_map(expiry_in_value)),
-        Value::Array(values) => values.iter().find_map(expiry_in_value),
-        _ => None,
-    }
-}
-
-fn access_token<'a>(blob: &'a Value, provider: &str) -> Option<&'a str> {
-    let value = match provider {
-        "claude-code" => blob.get("claudeAiOauth")?.get("accessToken")?,
-        "codex" => blob.get("tokens")?.get("access_token")?,
-        "kimi" => blob.get("access_token")?,
-        _ => return None,
-    };
-    value.as_str().filter(|token| !token.is_empty())
-}
-
-fn jwt_expiry(token: &str) -> Option<i64> {
-    let mut segments = token.split('.');
-    segments.next()?;
-    let payload = segments.next()?;
-    let mut decoded = Zeroizing::new(URL_SAFE_NO_PAD.decode(payload).ok()?);
-    let mut claims: Value = serde_json::from_slice(&decoded).ok()?;
-    decoded.zeroize();
-    let expiry = claims.get("exp").and_then(expiry_epoch_seconds);
-    zeroize_json_strings(&mut claims);
-    expiry
-}
-
-/// The instant this credential says its access token stops working, in epoch
-/// seconds, or `None` when it says nothing an expiry can be read from.
-///
-/// One reader for three questions -- is a refresh due now, is one due inside a
-/// sweep's skew window, and until when is this grant good -- because a second
-/// copy of this parsing is a second answer that disagrees with the first.
-fn expiry_epoch(secret: &Secret, provider: &str) -> Option<i64> {
-    oauth_provider(provider)?;
-    let raw = secret.expose_utf8().ok()?;
-    let mut blob: Value = match serde_json::from_str(raw) {
-        Ok(Value::Object(fields)) => Value::Object(fields),
-        _ => return None,
-    };
-    let expiry =
-        expiry_in_value(&blob).or_else(|| access_token(&blob, provider).and_then(jwt_expiry));
-    zeroize_json_strings(&mut blob);
-    expiry
-}
-
-pub(super) fn needs_refresh(secret: &Secret, provider: &str) -> bool {
-    expiry_epoch(secret, provider)
-        .is_some_and(|expiry| now_seconds() + expiry_margin_seconds() >= expiry)
-}
-
-/// Whether this access token dies inside `skew`.
-///
-/// The refresh-ahead sweep asks a wider question than the request path does:
-/// the margin above is the last moment a token can still be used, while the
-/// skew is how far ahead of that moment the grant should already have been
-/// replaced.
-pub(super) fn expires_within(secret: &Secret, provider: &str, skew: Duration) -> bool {
-    let skew_seconds = i64::try_from(skew.as_secs()).unwrap_or(i64::MAX);
-    expiry_epoch(secret, provider)
-        .is_some_and(|expiry| now_seconds().saturating_add(skew_seconds) >= expiry)
-}
-
-/// The instant this credential's access token stops working, in epoch
-/// milliseconds, so a reader can compare it against its own clock.
-pub(super) fn access_token_expiry_ms(secret: &Secret, provider: &str) -> Option<i64> {
-    expiry_epoch(secret, provider).map(|expiry| expiry.saturating_mul(millis_per_second_i64()))
-}
-
-/// The words a provider uses when a refresh token is gone for good.
-///
-/// Matched as text rather than by status alone because OAuth 2.0 states the
-/// definitive answer in the body of an HTTP 400: a classifier that reads only
-/// the status calls `invalid_grant` a mystery and keeps presenting a dead grant
-/// every minute for as long as nobody reads the log.
-const DEFINITIVE_REFUSALS: &[&str] = &[
-    "invalid_grant",
-    "invalid_token",
-    "revoked",
-    // The OAuth code for a client that may not use this refresh token, which is
-    // the same repair as a refusal of the token itself: sign in again.
-    "unauthorized_client",
-];
-
-/// Whether a refused refresh is the provider disowning the grant, or a blip.
-pub(super) enum RefreshRefusal {
-    /// The provider will not accept this grant again. Only a sign-in that
-    /// replaces it repairs this, so the credential must stop being presented.
-    Definitive,
-    /// Nothing was learned about the grant. The next sweep asks again.
-    Transient,
-}
-
-/// Classify one refused refresh.
-///
-/// The asymmetry is deliberate: a refusal is only called definitive on evidence
-/// the provider itself produced, and everything else is left for the next
-/// sweep. Disabling a healthy credential costs an account until someone signs
-/// in again, while waiting one more minute costs a minute.
-pub(super) fn classify_refusal(failure: &Failure) -> RefreshRefusal {
-    // A transport failure carries no opinion about the grant: the request never
-    // reached the provider, so the provider disowned nothing. Timeouts,
-    // refused connections and DNS failures all arrive here.
-    if matches!(failure.code, Code::Timeout | Code::InfraDown) {
-        return RefreshRefusal::Transient;
-    }
-    let detail = failure
-        .detail
-        .as_deref()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if DEFINITIVE_REFUSALS
-        .iter()
-        .any(|refusal| detail.contains(refusal))
-    {
-        return RefreshRefusal::Definitive;
-    }
-    // A 401 or 403 that got here answered without naming a reason, and an
-    // endpoint refusing the refresh token it was given is the reason. The
-    // transport arm above already took the network blips that never got a
-    // status at all.
-    if matches!(failure.code, Code::Auth) {
-        return RefreshRefusal::Definitive;
-    }
-    // What is left is Brama's own configuration and shape refusals, and a body
-    // that named nothing recognisable. None of them is the provider saying the
-    // grant is dead, and a subscription that stores a plain API key reaches
-    // exactly here, so none of them may demand a sign-in.
-    RefreshRefusal::Transient
-}
-
-fn oauth_refresh_token(blob: &Value, provider: &str) -> Option<Zeroizing<String>> {
-    let value = match provider {
-        "claude-code" => blob.get("claudeAiOauth")?.get("refreshToken")?,
-        "codex" => blob.get("tokens")?.get("refresh_token")?,
-        "kimi" => blob.get("refresh_token")?,
-        _ => return None,
-    };
-    value
-        .as_str()
-        .filter(|token| !token.is_empty())
-        .map(|token| Zeroizing::new(token.to_owned()))
 }
 
 fn parse_refresh_grant(body: &Value) -> Option<RefreshGrant> {
@@ -322,40 +94,6 @@ fn parse_refresh_grant(body: &Value) -> Option<RefreshGrant> {
     })
 }
 
-/// The provider's own words for a refused refresh.
-///
-/// OAuth 2.0 states the reason in `error` and `error_description`, and that
-/// pair is the sentence an operator needs: `invalid_grant -- Refresh token not
-/// found or invalid` says the grant is gone, which no retry repairs. A body
-/// shaped some other way is carried through as it stands. Nothing here is
-/// paraphrased; the provider's text is data.
-fn provider_rejection_text(body: &str) -> Option<String> {
-    let parsed = serde_json::from_str::<Value>(body).ok()?;
-    let field = |key: &str| {
-        parsed
-            .get(key)
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|text| !text.is_empty())
-            .map(str::to_owned)
-    };
-    let code = field("error");
-    let description = field("error_description")
-        .or_else(|| {
-            parsed
-                .pointer("/error/message")
-                .and_then(Value::as_str)
-                .map(str::to_owned)
-        })
-        .or_else(|| field("message"));
-    match (code, description) {
-        (Some(code), Some(description)) => Some(format!("{code} -- {description}")),
-        (Some(code), None) => Some(code),
-        (None, Some(description)) => Some(description),
-        (None, None) => None,
-    }
-}
-
 /// Read a refused response's body under the same bound the success path uses. A
 /// provider that answers with a megabyte of HTML does not get to fill the log.
 async fn bounded_error_body(response: &mut reqwest::Response) -> String {
@@ -369,24 +107,8 @@ async fn bounded_error_body(response: &mut reqwest::Response) -> String {
     text
 }
 
-/// What a refused refresh reports: the fleet's classification of the status the
-/// provider answered with, and the provider's own sentence as the detail.
-///
-/// The status alone was all this used to log, and the status alone is what a day
-/// went into supplementing by hand. The body says which of `invalid_grant`, a
-/// revoked client or a throttle it was, so it travels with the failure.
-pub(super) fn rejection_failure(status: u16, body: &str) -> Failure {
-    let stated = provider_rejection_text(body).unwrap_or_else(|| body.trim().to_owned());
-    let detail = if stated.is_empty() {
-        format!("OAuth refresh rejected with HTTP {status}")
-    } else {
-        format!("OAuth refresh rejected with HTTP {status}: {stated}")
-    };
-    refresh_failure(Code::from_upstream_status(status), detail)
-}
-
 async fn request_refresh_grant(
-    config: &OAuthProvider,
+    config: &provider::OAuthProvider,
     refresh_token: &str,
 ) -> Result<RefreshGrant, Failure> {
     // One client for every refresh. A fresh `Client` per call brings a fresh
@@ -411,8 +133,8 @@ async fn request_refresh_grant(
         .post(config.token_endpoint)
         .header(reqwest::header::ACCEPT, "application/json");
     let mut response = match config.wire {
-        OAuthWire::Json => request.json(&parameters),
-        OAuthWire::Form => request.form(&parameters),
+        provider::OAuthWire::Json => request.json(&parameters),
+        provider::OAuthWire::Form => request.form(&parameters),
     }
     .send()
     .await
@@ -425,8 +147,9 @@ async fn request_refresh_grant(
         refresh_failure(code, "OAuth refresh transport failure")
     })?;
     // The status alone was all this returned, and the status alone is what a
-    // day went into supplementing by hand. The body says which of `invalid_grant`,
-    // a revoked client or a throttle it was, so it travels with the failure.
+    // day went into supplementing by hand. The body says which of
+    // `invalid_grant`, a revoked client or a throttle it was, so it travels
+    // with the failure.
     if !response.status().is_success() {
         let status = response.status().as_u16();
         let body = bounded_error_body(&mut response).await;
@@ -464,72 +187,6 @@ async fn request_refresh_grant(
         .ok_or_else(|| refresh_failure(Code::Unknown, "OAuth refresh response has no access token"))
 }
 
-fn patch_oauth_blob(blob: &mut Value, provider: &str, grant: &RefreshGrant, now: i64) -> bool {
-    match provider {
-        "claude-code" => {
-            let Some(oauth) = blob.get_mut("claudeAiOauth").and_then(Value::as_object_mut) else {
-                return false;
-            };
-            oauth.insert("accessToken".to_owned(), json!(grant.access_token));
-            if let Some(token) = &grant.refresh_token {
-                oauth.insert("refreshToken".to_owned(), json!(token));
-            }
-            if let Some(expires_in) = grant.expires_in {
-                oauth.insert(
-                    "expiresAt".to_owned(),
-                    json!((now + expires_in as i64) * millis_per_second_i64()),
-                );
-            }
-            true
-        }
-        "codex" => {
-            {
-                let Some(tokens) = blob.get_mut("tokens").and_then(Value::as_object_mut) else {
-                    return false;
-                };
-                tokens.insert("access_token".to_owned(), json!(grant.access_token));
-                if let Some(token) = &grant.refresh_token {
-                    tokens.insert("refresh_token".to_owned(), json!(token));
-                }
-                if let Some(token) = &grant.id_token {
-                    tokens.insert("id_token".to_owned(), json!(token));
-                }
-            }
-            if blob.get("last_refresh").is_some() {
-                if let Some(stamp) = chrono::DateTime::from_timestamp(now, Default::default())
-                    .map(|at| at.to_rfc3339())
-                {
-                    blob["last_refresh"] = json!(stamp);
-                }
-            }
-            true
-        }
-        "kimi" => {
-            let Some(fields) = blob.as_object_mut() else {
-                return false;
-            };
-            fields.insert("access_token".to_owned(), json!(grant.access_token));
-            if let Some(token) = &grant.refresh_token {
-                fields.insert("refresh_token".to_owned(), json!(token));
-            }
-            if let Some(expires_in) = grant.expires_in {
-                fields.insert("expires_at".to_owned(), json!(now + expires_in as i64));
-            }
-            true
-        }
-        _ => false,
-    }
-}
-
-fn zeroize_json_strings(value: &mut Value) {
-    match value {
-        Value::String(text) => text.zeroize(),
-        Value::Array(values) => values.iter_mut().for_each(zeroize_json_strings),
-        Value::Object(fields) => fields.values_mut().for_each(zeroize_json_strings),
-        _ => {}
-    }
-}
-
 pub(super) async fn refresh(
     secret: &Secret,
     provider: &str,
@@ -563,7 +220,7 @@ pub(super) async fn refresh(
     };
     let result = async {
         let grant = request_refresh_grant(&config, &refresh_token).await?;
-        if !patch_oauth_blob(&mut blob, provider, &grant, now_seconds()) {
+        if !patch_oauth_blob(&mut blob, provider, &grant, expiry::now_seconds()) {
             return Err(refresh_failure(
                 Code::Config,
                 "OAuth credential shape mismatch",
