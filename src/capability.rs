@@ -1,7 +1,18 @@
+//! Redeeming a capability at the final-use boundary.
+//!
+//! This file owns the handshake: the handle Brama presents, the proof it signs
+//! over, the line protocol with the local authority, and the secret that comes
+//! back. What a capability may say lives in `purpose`, what comes back lives in
+//! `secret`, and reading this workload's own key lives in `workload_key` —
+//! three subjects that change for reasons of their own.
+
+mod purpose;
+mod secret;
+mod workload_key;
+
 use std::fmt;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 
@@ -9,37 +20,20 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use ed25519_dalek::{Signer, SigningKey};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use zeroize::{Zeroize, Zeroizing};
 
-pub const TARGET: &str = "brama";
+use purpose::{is_lower_hex_64, valid_resource};
+use workload_key::read_owner_key;
+
+// The names the rest of the crate already uses, re-exported one by one so
+// every existing path keeps working and nothing else travels with them.
+pub use purpose::{CapabilityError, Purpose, TARGET};
+pub use secret::Secret;
+
 pub const WIRE_VERSION: &str = "skarbiec.redeem.v1";
 const PROOF_DOMAIN: &[u8] = b"SKARBIEC-WORKLOAD-PROOF\0v1\0";
 const MAX_CONTROL_LINE: usize = 4096;
 const MAX_SECRET_BYTES: usize = 64 * 1024;
-const MAX_KEY_BYTES: u64 = 4096;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Purpose {
-    ProviderAuthenticate,
-    RequestSign,
-}
-
-impl Purpose {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::ProviderAuthenticate => "brama.provider.authenticate",
-            Self::RequestSign => "brama.request.sign",
-        }
-    }
-
-    const fn resource_prefix(self) -> &'static str {
-        match self {
-            Self::ProviderAuthenticate => "provider:",
-            Self::RequestSign => "agent:",
-        }
-    }
-}
 
 /// An opaque broker handle plus the tuple Brama expects it to represent.
 ///
@@ -96,58 +90,6 @@ impl<'a> CapabilityRef<'a> {
 
     pub fn resource(&self) -> &str {
         self.resource
-    }
-}
-
-fn valid_resource(purpose: Purpose, resource: &str) -> bool {
-    let Some(concrete) = resource.strip_prefix(purpose.resource_prefix()) else {
-        return false;
-    };
-    !concrete.is_empty()
-        && !concrete.trim().is_empty()
-        && concrete == concrete.trim()
-        && !concrete
-            .chars()
-            .any(|ch| matches!(ch, '*' | '?' | '[' | ']'))
-}
-
-fn is_lower_hex_64(value: &str) -> bool {
-    value.len() == 64
-        && value
-            .as_bytes()
-            .iter()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
-}
-
-#[derive(Error, Debug, PartialEq, Eq)]
-pub enum CapabilityError {
-    #[error("invalid capability binding")]
-    InvalidBinding,
-    #[error("invalid capability client configuration")]
-    InvalidConfiguration,
-    #[error("capability redemption denied")]
-    RedemptionDenied,
-}
-
-pub struct Secret(Zeroizing<Vec<u8>>);
-
-impl Secret {
-    pub(crate) fn from_bytes(bytes: Vec<u8>) -> Self {
-        Self(Zeroizing::new(bytes))
-    }
-
-    pub fn expose(&self) -> &[u8] {
-        self.0.as_slice()
-    }
-
-    pub fn expose_utf8(&self) -> Result<&str, CapabilityError> {
-        std::str::from_utf8(self.expose()).map_err(|_| CapabilityError::RedemptionDenied)
-    }
-}
-
-impl fmt::Debug for Secret {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("Secret([redacted])")
     }
 }
 
@@ -282,7 +224,7 @@ impl CapabilityClient {
         }
         let mut extra = [0_u8; 1];
         match stream.read(&mut extra) {
-            Ok(0) => Ok(Secret(secret)),
+            Ok(0) => Ok(Secret::from_zeroizing(secret)),
             Ok(_) | Err(_) => Err(CapabilityError::RedemptionDenied),
         }
     }
@@ -326,49 +268,4 @@ fn read_control_line(stream: &mut UnixStream) -> Result<Vec<u8>, CapabilityError
             _ => return Err(CapabilityError::RedemptionDenied),
         }
     }
-}
-
-fn read_owner_key(path: &Path) -> Result<SigningKey, CapabilityError> {
-    let mut file = OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
-        .open(path)
-        .map_err(|_| CapabilityError::InvalidConfiguration)?;
-    let metadata = file
-        .metadata()
-        .map_err(|_| CapabilityError::InvalidConfiguration)?;
-    if !metadata.file_type().is_file()
-        || metadata.uid() != unsafe { libc::geteuid() }
-        || metadata.mode() & 0o077 != 0
-        || metadata.len() == 0
-        || metadata.len() > MAX_KEY_BYTES
-    {
-        return Err(CapabilityError::InvalidConfiguration);
-    }
-    let mut encoded = Zeroizing::new(Vec::with_capacity(metadata.len() as usize));
-    file.read_to_end(&mut encoded)
-        .map_err(|_| CapabilityError::InvalidConfiguration)?;
-    parse_signing_key(&encoded)
-}
-
-fn parse_signing_key(encoded: &[u8]) -> Result<SigningKey, CapabilityError> {
-    let trimmed = encoded
-        .strip_suffix(b"\n")
-        .unwrap_or(encoded)
-        .strip_suffix(b"\r")
-        .unwrap_or_else(|| encoded.strip_suffix(b"\n").unwrap_or(encoded));
-    let mut raw = Zeroizing::new([0_u8; 32]);
-    if trimmed.len() == 32 {
-        raw.copy_from_slice(trimmed);
-    } else if trimmed.len() == 64
-        && trimmed
-            .iter()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
-    {
-        hex::decode_to_slice(trimmed, raw.as_mut_slice())
-            .map_err(|_| CapabilityError::InvalidConfiguration)?;
-    } else {
-        return Err(CapabilityError::InvalidConfiguration);
-    }
-    Ok(SigningKey::from_bytes(&raw))
 }
