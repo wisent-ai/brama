@@ -157,11 +157,11 @@ in the environment of a running process cannot be refreshed at all.</p>
 <li>On the request path, immediately before the provider HTTP call, the
    gateway obtains a fresh capability for the purpose and resource and
    redeems it through the owner-bound broker socket.</li>
-<li>Where issuance or redemption is refused, the gateway falls back to the
-   exact field-scoped <strong>read grant</strong> the vault may carry for that coordinate
-   (<code>read:provider:local-openai#token</code> is exactly that shape). Nothing is
-   widened: the router presents this host's consumer identity and the
-   authority still decides.</li>
+<li>Where issuance or redemption is refused, the gateway asks the authority
+   once more for the exact field-scoped <strong>read grant</strong> the vault may carry
+   for that coordinate (<code>read:provider:local-openai#token</code> is exactly that
+   shape), and a refusal there is the answer. Nothing is widened: the router
+   presents this host's consumer identity and the authority still decides.</li>
 <li>The returned secret is used once and dropped; plaintext never outlives
    the call.</li>
 </ol>
@@ -179,7 +179,8 @@ the in-memory map without contacting the provider.</p>
 <li><strong>Two pools, no substitution.</strong> Holding a direct capability for a provider
   does not let a caller spend an agent's <a href="/docs/concepts/subscription">subscription</a> on
   that provider, and owning a subscription does not unlock the deployment's
-  direct credential. No fallback between the pools is silent.</li>
+  direct credential. Neither pool is ever charged in the other's place, and
+  the refusal says which pool was asked.</li>
 <li><strong>Final-use only.</strong> <code>/stats</code> reports the dependency policy as
   <code>"capabilityBroker": "final-use"</code>: no timer, listing, or catalog read
   redeems a capability; only a request that is about to spend does, plus the

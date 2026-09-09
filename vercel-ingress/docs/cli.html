@@ -143,6 +143,11 @@ from the installed build.</p>
 <li><a href="/docs/cli/mcp"><code>brama mcp</code></a> — serve the read-only stdio MCP hardware-detection surface.</li>
 <li><a href="/docs/cli/aliases"><code>brama aliases [--json] [--strict]</code></a> — report every declared model alias, the route behind it, and whether this gateway can serve it; <code>--strict</code> exits non-zero when any cannot.</li>
 <li><a href="/docs/cli/subscriptions"><code>brama subscriptions [--json] [--refresh-usage]</code></a> — report the subscription pool this gateway routes over: every subscription, its state, its usage window and its failure, optionally reading current free provider reports.</li>
+<li><a href="/docs/cli/routes/migrate"><code>brama routes &lt;COMMAND&gt;</code></a> — act on this gateway's inference-route registry.
+  <ul>
+  <li><a href="/docs/cli/routes/migrate"><code>brama routes migrate [--file &lt;FILE&gt;] [--json]</code></a> — rewrite the route registry into the current document shape: keep the known top-level fields, validate, and commit with the same atomic owner-only replacement every other registry write uses. Idempotent.</li>
+  </ul>
+</li>
 <li><a href="/docs/cli/subscription"><code>brama subscription &lt;COMMAND&gt;</code></a> — enter the credential mutation group.
   <ul>
   <li><a href="/docs/cli/subscription/refresh"><code>brama subscription refresh &lt;PROVIDER&gt; --reason &lt;REASON&gt; [--json]</code></a> — refresh one provider's OAuth grants now.</li>
@@ -157,6 +162,8 @@ from the installed build.</p>
 <code>help</code> are read-only. <code>--refresh-usage</code> reads the plan-usage capability, which reads provider reports and persists their outcome through Brama's normal credential handling; it starts neither a sign-in nor model inference. <code>mcp</code> exposes local detection only.
 <code>adopt</code> is review-only unless <code>--apply</code> is combined with an exact
 selection; it never reads credential material or calls a provider.
+<code>routes migrate</code> reads and rewrites one registry file and contacts no
+provider.
 <code>test</code>, the provider-requesting part of <code>onboard</code>, and
 <code>collect-task-quality</code> require <code>--allow-provider-cost</code>.
 <code>subscription refresh</code> and <code>subscription sign-in</code> require

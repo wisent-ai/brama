@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Discovery and subscriptions — Brama Docs</title>
+  <meta name="description" content="What a caller may name, what it may execute, which subscriptions it owns and what those plans have left.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/http-api/discovery-and-subscriptions">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>HTTP API</h2><a href="/docs/http-api">Overview</a><a href="/docs/http-api/transport-and-identity">Transport and identity</a><a href="/docs/http-api/inference">Inference</a><a class="active" aria-current="page" href="/docs/http-api/discovery-and-subscriptions">Discovery and subscriptions</a><a href="/docs/http-api/administration-and-operations">Administration and operations</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama HTTP API reference</p>
+      <article class="doc"><h1 id="discovery-and-subscriptions">Discovery and subscriptions<a class="headerlink" href="#discovery-and-subscriptions" title="Link to this section">&para;</a></h1>
+<p>Four paths answer what a caller may ask for and what it owns: the model catalog, the
+alias listing, the subscription pool and plan usage. A fifth signs one subscription in for
+the authenticated account. All of them require a bearer
+(<a href="/docs/http-api/transport-and-identity">transport and identity</a>).</p>
+<h2 id="get-v1models"><code>GET /v1/models</code><a class="headerlink" href="#get-v1models" title="Link to this section">&para;</a></h2>
+<p>Public catalog metadata combined with what the caller can execute: account discovery
+marks the models executable by that account's stored keys, and signed agent discovery
+includes agent-owned subscriptions. Captured shape:</p>
+<pre><code class="language-json">{&quot;data&quot;:[{&quot;id&quot;:&quot;&lt;provider&gt;/&lt;model&gt;&quot;,&quot;object&quot;:&quot;model&quot;,&quot;owned_by&quot;:&quot;&lt;provider&gt;&quot;}, ...]}
+</code></pre>
+<p>A declared alias the caller may name but that cannot serve is listed with
+<code>available: false</code> and an <code>unavailable_reason</code>; it is not omitted from
+the answer. The reason is a fact about this gateway's configuration, so it is shown to
+every caller. See
+<a href="/docs/concepts/alias">an alias that cannot serve says so</a>.</p>
+<h2 id="get-v1aliases"><code>GET /v1/aliases</code><a class="headerlink" href="#get-v1aliases" title="Link to this section">&para;</a></h2>
+<p>Every alias this gateway declares — the compiled-in contract plus every operator route —
+with the state the gateway would put it in right now and the one route it resolves to.
+Captured shape:</p>
+<pre><code class="language-json">{&quot;object&quot;:&quot;list&quot;,
+ &quot;unserviceable&quot;:1,
+ &quot;aliases&quot;:[
+  {&quot;alias&quot;:&quot;weles&quot;,&quot;state&quot;:&quot;serving&quot;,&quot;route&quot;:&quot;best&quot;,
+   &quot;reason&quot;:null,&quot;required&quot;:true,&quot;authorized&quot;:true},
+  {&quot;alias&quot;:&quot;ox-alpha&quot;,&quot;state&quot;:&quot;capability_absent&quot;,
+   &quot;route&quot;:&quot;openrouter/stealth/ox-alpha&quot;,
+   &quot;reason&quot;:&quot;alias `ox-alpha` routes to openrouter/stealth/ox-alpha but this gateway holds no provider credential for openrouter; issue the provider capability on this host or point the alias at a route it can reach, such as `best`&quot;,
+   &quot;required&quot;:false,&quot;authorized&quot;:true}]}
+</code></pre>
+<p>A row is exactly
+<code>{"alias", "state", "route", "reason", "required", "authorized"}</code>.
+<code>route</code> is the single destination the registry maps the alias to, so a row
+states one route and never a list. <code>state</code> is one of <code>serving</code>,
+<code>no_route</code>, <code>capability_absent</code> or <code>routes_file_invalid</code>;
+<code>reason</code> is <code>null</code> for a serving alias and otherwise the sentence a
+refusal would carry; <code>required</code> says the alias is part of the compiled-in
+contract; <code>authorized</code> says the presenting bearer may name it. A completion
+naming an alias whose state is not <code>serving</code> is refused with <code>503</code> and
+code <code>alias_unserviceable</code>, carrying that same sentence as its
+<code>message</code> and the row's <code>state</code> and <code>route</code> in
+<code>details</code>.</p>
+<p>The same listing on the terminal is <a href="/docs/cli">
+<code>brama aliases</code></a>, which prints alias, state and route.
+<a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a> is what moves an
+existing registry document to the shape this listing reads.</p>
+<h2 id="the-subscription-pool">The subscription pool<a class="headerlink" href="#the-subscription-pool" title="Link to this section">&para;</a></h2>
+<p>One read and one write on <code>/v1/subscription-pool</code>, for three audiences. Which
+subscriptions exist and who owns them was previously asked eleven ways — an agent-signed
+lifecycle, an account lifecycle, an administered lifecycle, a console pool listing and a
+CLI leaf — and each answered the same question from the same vault declaration. This
+capability answers it once and narrows the answer by the identity the caller proved
+(<a href="/docs/concepts/entitlement">entitlement</a>), which is where ownership already
+lives.</p>
+<p>The scope is read off the proof, in this order:</p>
+<ul>
+<li>a caller presenting the HMAC trio is <strong>that agent</strong>, and is held to the
+  signature even when its bearer would also pass for something wider;</li>
+<li>a verified Wisent user session is <strong>that account</strong>, whose pool is keyed on
+  the session's own user id and never on a caller-supplied identifier;</li>
+<li>a <code>brama-desktop</code> identity with no model allowlist is <strong>this
+  deployment</strong>: every account it holds, whichever agent owns it, plus the accounts
+  only the usage ledger still remembers.</li>
+</ul>
+<p>Anything else is <code>403 forbidden</code>; a request with no bearer at all is
+<code>401 unauthorized</code>. A model-scoped bearer reaches this path and plan usage;
+together with <code>/v1/models</code> those are the only paths outside inference it may
+reach at all.</p>
+<h3 id="reading-the-pool">Reading the pool<a class="headerlink" href="#reading-the-pool" title="Link to this section">&para;</a></h3>
+<p><strong>GET</strong> answers one document for every audience:
+<code>{"ok", "observed_at_ms", "scope", "errors", "subscriptions"}</code>.
+<code>scope</code> is <code>deployment</code> or the agent id the answer was narrowed to, so
+a caller reads the narrowing instead of inferring it from the row count. Every row carries
+the same fields whoever asked: <code>id</code>, <code>provider</code>,
+<code>status</code>, <code>state</code>
+(<code>live</code> | <code>expired</code> | <code>burnt</code> | <code>unknown</code>),
+<code>expires_at</code>, <code>last_redeem_error</code>, <code>limits</code>,
+<code>measured</code>, <code>block</code>, <code>observed_at_ms</code>,
+<code>probe</code>, <code>usage_check</code>, <code>credential</code>
+(<code>state</code>: <code>active</code> | <code>needs_reauthorization</code> |
+<code>disabled</code>, with <code>cause</code> and instants), <code>usage_source</code> and
+<code>stale</code>. No error names an account outside the caller's narrowing. Field
+semantics are in <a href="/docs/concepts/subscription">concepts/subscription</a>.</p>
+<h3 id="writing-the-pool">Writing the pool<a class="headerlink" href="#writing-the-pool" title="Link to this section">&para;</a></h3>
+<p><strong>POST</strong> takes
+<code>{"action", "agent_id"?, "provider"?, "label"?, "api_key"?, "login_item"?, "subscription_id"?}</code>,
+and an unknown field is refused with the deserializer's own sentence.
+<code>action</code> is <code>bank</code> or <code>retire</code>; anything else is
+<code>400 action must be "bank" or "retire"</code>.</p>
+<ul>
+<li><code>agent_id</code> names the owner and may be sent <strong>only</strong> by the
+  deployment scope, which is the one caller whose proof is not itself an agent. Sending it
+  as an agent or an account holder is
+  <code>400 agent_id is derived from the proven identity and must not be sent</code>;
+  omitting it as the deployment is
+  <code>400 agent_id names the agent whose pool is written and is required for a
+  deployment-scoped write</code>; a malformed one is <code>400 invalid agent id</code>.</li>
+<li><code>bank</code> stores a credential on the coordinate the routes table already names
+  for that subscription. With no <code>subscription_id</code> the deterministic primary slot
+  is written; an explicit id selects another existing subscription owned by that agent, and
+  the primary slot is overwritten only when the request names it. Refusals:
+  <code>404 subscription not found</code> for an unknown or unowned selection,
+  <code>409 selected subscription belongs to a different provider</code>,
+  <code>400 provider must name a supported remote API or subscription provider</code>,
+  <code>400 api_key must contain 1..8000 characters</code>,
+  <code>400 login_item must contain 1..160 ASCII letters, digits, hyphens, underscores or
+  dots</code>, a document that does not reduce to a bearer (400), a mapping conflict (409)
+  and a failed vault write (500). Success is
+  <code>{"subscription": {"id", "provider", "agent_id", "status": "active", "label",
+  "login_item"}}</code>; the credential value is never returned.</li>
+<li><code>retire</code> requires <code>subscription_id</code>
+  (<code>400 subscription_id is required</code>) and answers
+  <code>404 subscription not found</code> for a target the proven owner does not own,
+  including one the deployment holds for somebody else. Success is
+  <code>{"ok": true}</code>. Retirement is a journal record that outranks whatever the last
+  refresh concluded, never a vault deletion.</li>
+</ul>
+<h2 id="post-v1plan-usage"><code>POST /v1/plan-usage</code><a class="headerlink" href="#post-v1plan-usage" title="Link to this section">&para;</a></h2>
+<p>What every plan the caller proved it owns has left. One invocation for the same three
+audiences, replacing the four per-audience refreshes this page used to list —
+<code>POST /v1/subscription-usage/:agent_id</code>,
+<code>POST /v1/account/subscription-usage</code>,
+<code>POST /v1/admin/subscription-usage/:agent_id</code> and
+<code>POST /v1/admin/subscription-pool/usage</code> — each of which read this same ledger
+and these same reports. They are gone from the router
+(<a href="/docs/command-surface">command surface</a>).</p>
+<p>The scope is read off the proof in exactly the order
+<a href="#the-subscription-pool">the pool</a> reads it, through the same resolver. Anything
+else is <code>403 forbidden</code>; a request with no bearer at all is
+<code>401 unauthorized</code>. A model-scoped bearer reaches this path, which is what makes
+a signed workload able to read its own plans at all.</p>
+<p>It is a <code>POST</code> because answering reads each provider's own usage report and
+records what it said. That spends no plan quota: no completion is sent and no sign-in is
+started. A read asked for here is taken now, unlike the timer's sweep, which reads an
+account only once per its own cache window (<code>BRAMA_PLAN_USAGE_TTL_SECS</code>);
+concurrent readers join one bounded read per account rather than asking a provider the same
+question twice in the same second, and no more than four accounts are read at a time
+because several accounts on one host share one source address.</p>
+<p>The body is empty and signed empty — the answer follows from the proven identity, so a
+request carrying any field is
+<code>400 plan usage takes no request fields; the answer follows from the proven
+identity</code> rather than answered from a signature over something the handler
+disregards.</p>
+<h2 id="subscription-usage-results">Subscription usage results<a class="headerlink" href="#subscription-usage-results" title="Link to this section">&para;</a></h2>
+<p>The pool read and plan usage answer one document: <code>ok</code>,
+<code>observed_at_ms</code>, <code>errors</code>, <code>scope</code> and
+<code>subscriptions</code>, with every reading in the plan-usage answer brought current. A
+completed report can return HTTP 200 with <code>ok: false</code>: the body retains the
+successful rows and carries standard Wisent failure envelopes for the failures, so clients
+inspect <code>ok</code> rather than read success out of the HTTP status. An admission
+failure still uses the ordinary HTTP error body.</p>
+<p>Three outcomes stay distinct per account.</p>
+<ul>
+<li>A report the provider answered sets <code>limits</code> with each window's
+  <code>used_fraction</code>, its reset and observation instants, and
+  <code>usage_source: "provider"</code>. Window percentages come only from valid provider
+  metrics.</li>
+<li>A report the provider refused keeps the last good reading, marks it
+  <code>stale</code>, sets <code>usage_check.ok: false</code>, and puts the refusal in
+  <code>errors</code> in the provider's own words with its status — an incomplete answer
+  that names the account it is incomplete about. A missing measurement is never reported as
+  zero usage.</li>
+<li>A provider with no supported free report is recorded as exactly that, which is a third
+  statement and not a failure.</li>
+</ul>
+<p>Each row carries <code>usage_check</code> with the latest free report attempt's
+<code>attempted_at_ms</code>, <code>ok</code>, <code>detail</code> and
+<code>source</code>, kept separate from a completion <code>probe</code>. An inventory Brama
+could not read stops the reads and is reported instead, because a listing that failed says
+nothing about which accounts exist. A dependency timeout, an invalid response or a storage
+failure appears in the result naming the failed operation and the actual reason.</p>
+<h2 id="sign-in-is-asked-for-explicitly">Sign-in is asked for explicitly<a class="headerlink" href="#sign-in-is-asked-for-explicitly" title="Link to this section">&para;</a></h2>
+<p><code>POST /v1/account/subscription-sign-in/:subscription_id</code> signs in one
+subscription owned by the authenticated account. Neither the pool read nor plan usage ever
+starts this flow; it happens because a caller asked for it on this path.</p>
+<p>The sign-in routes require a nonempty <code>reason</code> and accept
+<code>login_item</code> and <code>login_timeout_ms</code>; the pooled administrative
+variant additionally requires <code>subscription_id</code> in the body. Brama verifies
+current ownership, refuses a retired or mismapped account, derives the provider from the
+selected subscription, and invokes the existing Weles flow on the Stado-selected host. It
+returns the native <code>signed_in</code> or <code>failed</code> verdict with the actual
+detail. The two administered variants are in
+<a href="/docs/http-api/administration-and-operations#administered-subscriptions">administration and operations</a>.</p>
+</article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

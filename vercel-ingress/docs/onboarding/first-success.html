@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>First success — Brama Docs</title>
+  <meta name="description" content="Safe local detection, zero-state behavior, the authenticated loopback gateway, the production host service, and the machine onboarding contract.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/onboarding/first-success">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Onboarding</h2><a href="/docs/onboarding">Overview</a><a href="/docs/onboarding/paths-and-prerequisites">Paths and prerequisites</a><a href="/docs/onboarding/existing-configuration">Bring existing configuration</a><a class="active" aria-current="page" href="/docs/onboarding/first-success">First success</a><a href="/docs/onboarding/failures-and-reset">Failures and reset</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama onboarding: reaching first success</p>
+      <article class="doc"><h1 id="first-success">First success<a class="headerlink" href="#first-success" title="Link to this section">&para;</a></h1>
+<p>Brama's first success is a real routed model response: one alias, its one
+route, and an answer the caller can read. This page walks the three paths that
+lead there and states the interfaces automation may depend on.</p>
+<h2 id="safe-local-first-success">Safe local first success<a class="headerlink" href="#safe-local-first-success" title="Link to this section">&para;</a></h2>
+<h3 id="starting-state">Starting state<a class="headerlink" href="#starting-state" title="Link to this section">&para;</a></h3>
+<p>Use a clean shell. No Brama, Skarbiec, provider, or agent environment variables
+are required. The command below performs local hardware inspection only.</p>
+<h3 id="run-detection">Run detection<a class="headerlink" href="#run-detection" title="Link to this section">&para;</a></h3>
+<pre><code class="language-bash">git clone https://github.com/wisent-ai/brama.git brama
+cd brama
+cargo run --locked -- detect
+</code></pre>
+<h3 id="observe-the-result">Observe the result<a class="headerlink" href="#observe-the-result" title="Link to this section">&para;</a></h3>
+<p>Expected output has host-specific values and these stable labels:</p>
+<pre><code class="language-text">GPU Type: ...
+GPU Name: ...
+VRAM: ... GB
+RAM: ... GB
+CPU Cores: ...
+CUDA: ...
+Metal: ...
+Recommended model: ...
+Recommended backend: ...
+</code></pre>
+<p>The successful result is the detected resource report and recommendation, not
+merely exit code zero.</p>
+<h3 id="confirm-the-safe-boundary">Confirm the safe boundary<a class="headerlink" href="#confirm-the-safe-boundary" title="Link to this section">&para;</a></h3>
+<p>This path does not:</p>
+<ul>
+<li>start the HTTP service;</li>
+<li>read or create a Brama state directory;</li>
+<li>redeem a capability;</li>
+<li>list subscriptions;</li>
+<li>contact a model or catalog provider;</li>
+<li>incur model cost.</li>
+</ul>
+<h3 id="stop-and-clean-up">Stop and clean up<a class="headerlink" href="#stop-and-clean-up" title="Link to this section">&para;</a></h3>
+<p>No background process is started. Remove the checkout to remove source and the
+<code>target/</code> build cache. No product state or provider resource requires cleanup.</p>
+<p>The canonical task is
+<a href="/docs/examples/getting-started/detect-local-resources"><code>examples/getting-started/detect-local-resources.md</code></a>.</p>
+<h2 id="zero-state-behavior">Zero-state behavior<a class="headerlink" href="#zero-state-behavior" title="Link to this section">&para;</a></h2>
+<p>Running <code>brama</code> without a subcommand prints the product purpose, command list,
+and help supplied by Clap. It must not create state or contact external systems.</p>
+<p><code>brama serve</code> refuses to start when required generated configuration is absent.
+The first error names the missing configuration category; the operator then uses
+the packaged launcher rather than hand-authoring capability maps. A bare service
+startup is not the safe first-user path.</p>
+<p>With an empty route registry document, no alias is declared, so every completion
+naming one is answered <code>404</code> with <code>state</code> and <code>route</code> in its <code>details</code>. Declare
+an alias with <code>PUT /v1/admin/routes</code>, whose body is exactly
+<code>{&quot;alias&quot;,&quot;primary&quot;}</code> and whose answer is
+<code>{&quot;ok&quot;:true,&quot;routes&quot;:&lt;document&gt;}</code>.</p>
+<h2 id="authenticated-loopback-path">Authenticated loopback path<a class="headerlink" href="#authenticated-loopback-path" title="Link to this section">&para;</a></h2>
+<p>Provision this installation once, before its first start:</p>
+<pre><code class="language-bash">bin/provision-skarbiec-trust
+</code></pre>
+<p>That writes the signed policy, the workload registry, the trust root, the receipt
+command and the workload proof key into <code>etc/brama-skarbiec</code>. The release archive
+ships none of them, because the registry pins the absolute path and SHA-256 of
+the binary allowed to redeem a capability and a build machine cannot know either.
+Re-running it replaces this installation's identity, so it refuses without
+<code>--force</code>.</p>
+<p>Use the packaged <code>start-with-skarbiec</code> launcher. It owns these steps:</p>
+<ol>
+<li>load the selected service environment file without overriding individual
+   central policy values;</li>
+<li>materialize the authorized encrypted vault;</li>
+<li>import the scoped Brama recipient key into an owner-only runtime directory;</li>
+<li>verify this installation's Skarbiec trust, policy, and workload files are
+   present, and refuse to start when any of them is missing;</li>
+<li>read each accepted client bearer from its dedicated item;</li>
+<li>load central Echo, legacy Content Platform, Oko, and Weles request-sign identities;</li>
+<li>derive provider and agent capability maps from live vault resources;</li>
+<li>start the owner-bound capability socket;</li>
+<li>exec <code>brama serve --port &lt;port&gt;</code>.</li>
+</ol>
+<h3 id="confirm-the-aliases">Confirm the aliases<a class="headerlink" href="#confirm-the-aliases" title="Link to this section">&para;</a></h3>
+<p>Before spending quota, read what the gateway can serve:</p>
+<pre><code class="language-bash">brama aliases
+curl -sS -H &quot;Authorization: Bearer $BRAMA_TOKEN&quot; http://127.0.0.1:8080/v1/aliases
+</code></pre>
+<p><code>brama aliases</code> prints alias, state and route. Each <code>GET /v1/aliases</code> row
+carries <code>alias</code>, <code>state</code>, <code>route</code>, <code>reason</code>, <code>required</code> and <code>authorized</code>. One
+alias has one route, so one row describes the whole resolution: if that route
+cannot serve, the alias cannot serve, and the completion is answered <code>503</code>
+<code>alias_unserviceable</code> with <code>details.state</code> and <code>details.route</code>. Expect every
+alias you intend to call to read <code>serving</code> first.</p>
+<h3 id="the-first-call">The first call<a class="headerlink" href="#the-first-call" title="Link to this section">&para;</a></h3>
+<p>Use loopback HTTP only from an authenticated local caller. A generic bearer-only
+<code>GET /v1/models</code> is the first non-billable machine workflow. Do not use
+<code>/v1/chat/completions</code>, <code>/v1/messages</code>, or <code>/v1/responses</code> until the intended
+provider, account, and cost are explicit: the three formats are one workflow and
+every one of them spends real quota, whether it answers in one piece or as a
+stream. The request deadline you set is the deadline of that one attempt against
+that one route; it is not multiplied by anything.</p>
+<p>A routed answer from a <code>serving</code> alias is first success. A refusal from the
+route is the caller's result, and the repair belongs to the named dependency:
+see <a href="/docs/onboarding/failures-and-reset">failures and reset</a>.</p>
+<h2 id="production-path">Production path<a class="headerlink" href="#production-path" title="Link to this section">&para;</a></h2>
+<p>Production uses the exact runtime published by the release workflow. The
+operator downloads the platform archive and checksum from GitHub Releases,
+verifies the digest, extracts it under an immutable versioned directory, and
+configures:</p>
+<ul>
+<li>the host service account, immutable installation root, and service manager;</li>
+<li>the local Brama control document containing client allowlists and aliases;</li>
+<li>verifier-only consumers for dedicated client token items;</li>
+<li>request-sign consumers for the exact central identities;</li>
+<li>Brama's provider capability grants;</li>
+<li>the trusted TLS terminator IP list;</li>
+<li>journal backup and rollback retention.</li>
+</ul>
+<p>Ingress, DNS, host registration, vault authorization, and consumer grants remain
+operator-owned prerequisites. The repository does not create them; the operator
+does, explicitly.</p>
+<p>Where a host still runs an older registry file, run
+<a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a> as the registry
+owner before the first start; it commits the known-fields-only document with the
+same atomic replacement every other registry write uses and prints what it
+committed.</p>
+<h2 id="machine-onboarding-contract">Machine onboarding contract<a class="headerlink" href="#machine-onboarding-contract" title="Link to this section">&para;</a></h2>
+<p>Automation must use stable machine interfaces:</p>
+<ul>
+<li><code>brama version</code> emits one JSON object with product/build identity;</li>
+<li><code>GET /health</code> emits one secret-free JSON object;</li>
+<li><code>GET /v1/aliases</code> emits one row per alias with its single route and state;</li>
+<li><code>PUT /v1/admin/routes</code> takes exactly <code>{&quot;alias&quot;,&quot;primary&quot;}</code> and
+  <code>DELETE /v1/admin/routes</code> takes <code>{&quot;alias&quot;}</code>; both answer
+  <code>{&quot;ok&quot;:true,&quot;routes&quot;:&lt;document&gt;}</code>, so a writer can assert the committed
+  document without a second read;</li>
+<li>protected HTTP endpoints use stable status and error codes from
+  <a href="/docs/core"><code>CORE.md</code></a>;</li>
+<li>non-health HTTP uses exactly one bearer authorization value;</li>
+<li>agent-scoped operations additionally sign timestamp, agent ID, and exact body;</li>
+<li>configuration is noninteractive and is rejected before serving on invalid
+  input.</li>
+</ul>
+<p>An unknown field in an admin route body is refused with the deserializer's own
+sentence, so automation gets a specific message rather than a guess. Automation
+must not parse decorative human log output.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

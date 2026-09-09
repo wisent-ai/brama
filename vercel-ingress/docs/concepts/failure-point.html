@@ -222,9 +222,10 @@ never by the call site.</p>
 <ul>
 <li>One point per envelope; the point names a seam, not a symptom.</li>
 <li>A point this module got wrong is kept verbatim and flagged in the
-  envelope's own context instead of being dropped — the constructor is
-  <code>Failure::or_fallback</code>, because this is only ever called from an error
-  path, and a report that refuses to be made takes the diagnosis with it.</li>
+  envelope's own context instead of being dropped — the constructor for it is
+  the error-path one in <code>src/core/failure.rs</code>, because this is only ever
+  called from an error path, and a report that refuses to be made takes the
+  diagnosis with it.</li>
 <li>Points are log vocabulary only. They never appear in an HTTP error body:
   a new key there would be a wire change (<a href="/docs/errors">errors</a>).</li>
 </ul>

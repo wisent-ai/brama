@@ -124,8 +124,8 @@ footer a { color: var(--muted); text-decoration: none; }
       <article class="doc"><h1 id="entitlement">Entitlement<a class="headerlink" href="#entitlement" title="Link to this section">&para;</a></h1>
 <p>Which account pays for which request. An entitlement is the decision — made
 per request, from the caller's proven identity and the request's shape —
-about the one pool that may fund it. There is no silent fallback across
-providers, agents, accounts, or credentials.</p>
+about the one pool that may fund it. No other provider, agent, account, or
+credential is quietly put in its place: a refusal is returned as a refusal.</p>
 <h2 id="the-signed-identity">The signed identity<a class="headerlink" href="#the-signed-identity" title="Link to this section">&para;</a></h2>
 <p>Spending a <a href="/docs/concepts/subscription">subscription</a> requires the caller's own signed
 HMAC identity: the trio <code>x-agent-id</code>, <code>x-agent-timestamp</code>,
@@ -137,7 +137,8 @@ a ±300-second timestamp window and constant-time comparison
 before verification; <code>echo</code>, <code>content-platform</code>, <code>oko</code>, <code>weles</code>, <code>lem</code>,
 <code>probierz</code>, and <code>wisent-app</code> are strict central-item projections through
 <code>BRAMA_REQUEST_SIGN_IDENTITIES</code> / <code>BRAMA_REQUEST_SIGN_CAPABILITY_IDS</code> and
-never fall back to another product's secret (<code>src/gateway/broker.rs</code>).</p>
+never read another product's secret in its place
+(<code>src/gateway/broker.rs</code>).</p>
 <p>Where present, three identities must agree: the bearer-bound agent, the
 signed agent, and the path agent — any contradiction is <code>403 forbidden</code>.
 A missing trio on a route that needs one is <code>401</code>:</p>
@@ -155,7 +156,7 @@ A missing trio on a route that needs one is <code>401</code>:</p>
 <tbody>
 <tr>
 <td>canonical <code>provider/model</code> route</td>
-<td>the deployment's direct <a href="/docs/concepts/capability">capability</a> for that provider; one attempt, fallback routes only after a failed attempt</td>
+<td>the deployment's direct <a href="/docs/concepts/capability">capability</a> for that provider; one attempt, and its refusal is the caller's answer</td>
 </tr>
 <tr>
 <td>alias resolving to a canonical route</td>

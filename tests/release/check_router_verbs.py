@@ -9,7 +9,10 @@ release built for weeks produced a bundle that could not start, and the only
 symptom on the host was a gateway that answered /health and served nothing.
 
 This reads the verbs the launcher invokes out of the launcher itself, asks the
-built router about each one, and fails naming the difference.
+built router about each one, and fails naming the difference. The launcher is a
+family of files - an entry point and the stages it sources - and every one of
+them is named here, because the verbs live in the stages and reading the entry
+point alone would find none.
 
 The question is put by invoking the verb, not by reading `--help`: the
 capability verbs are dispatched ahead of the documented command table, so help
@@ -17,7 +20,7 @@ omits them and a help-based check answers no for a router that has them. A
 router without the verb says `unknown command`. The vault is pointed at a path
 that does not exist, so nothing real is touched either way.
 
-    check-router-verbs.py <launcher> <router-binary>
+    check-router-verbs.py <router-binary> <launcher> [<launcher-stage>...]
 """
 
 import os
@@ -29,19 +32,22 @@ SHELL_CALL = re.compile(r'"\$ENTITLEMENTS_ROUTER_BIN"\s+([a-z][a-z-]*)')
 PYTHON_CALL = re.compile(r'^\s*router,\s*$\n\s*"([a-z][a-z-]*)"', re.MULTILINE)
 REFUSAL = "unknown command"
 
-arguments = iter(sys.argv)
-next(arguments)
-try:
-    launcher_path, router_path = arguments
-except ValueError:
-    raise SystemExit("usage: check-router-verbs.py <launcher> <router-binary>")
+arguments = list(sys.argv)[1:]
+if len(arguments) < 2:
+    raise SystemExit(
+        "usage: check-router-verbs.py <router-binary> <launcher> [<launcher-stage>...]"
+    )
+router_path = arguments[0]
+launcher_paths = arguments[1:]
 
-launcher = open(launcher_path, encoding="utf-8").read()
+launcher = "\n".join(
+    open(launcher_path, encoding="utf-8").read() for launcher_path in launcher_paths
+)
 required = sorted(set(SHELL_CALL.findall(launcher)) | set(PYTHON_CALL.findall(launcher)))
 if not required:
     raise SystemExit(
-        f"{launcher_path} invokes no router verb this check can see; the "
-        "patterns and the launcher have drifted apart"
+        f"{', '.join(launcher_paths)} invokes no router verb this check can see; "
+        "the patterns and the launcher have drifted apart"
     )
 
 environment = dict(os.environ)

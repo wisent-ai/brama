@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Paths and prerequisites — Brama Docs</title>
+  <meta name="description" content="The three onboarding paths, the prerequisites each one needs, and how an installation selects an immutable Brama release.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/onboarding/paths-and-prerequisites">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Onboarding</h2><a href="/docs/onboarding">Overview</a><a class="active" aria-current="page" href="/docs/onboarding/paths-and-prerequisites">Paths and prerequisites</a><a href="/docs/onboarding/existing-configuration">Bring existing configuration</a><a href="/docs/onboarding/first-success">First success</a><a href="/docs/onboarding/failures-and-reset">Failures and reset</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama onboarding: paths and prerequisites</p>
+      <article class="doc"><h1 id="paths-and-prerequisites">Paths and prerequisites<a class="headerlink" href="#paths-and-prerequisites" title="Link to this section">&para;</a></h1>
+<p>Brama gives Wisent services one authenticated gateway for provider-neutral LLM
+inference without distributing provider credentials to callers. This page picks
+the path you are on, lists what that path requires, and states how an
+installation selects the release it runs.</p>
+<h2 id="choose-a-path">Choose a path<a class="headerlink" href="#choose-a-path" title="Link to this section">&para;</a></h2>
+<ul>
+<li><strong>Safe local detection:</strong> no credentials, service, state, provider network, or
+  model cost. Every maintainer starts here.</li>
+<li><strong>Authenticated loopback gateway:</strong> real HTTP boundary on one host; requires
+  generated client and Skarbiec capability configuration and may contact a
+  provider only when an inference endpoint is called.</li>
+<li><strong>Production host service:</strong> operator-managed Linux host, immutable GitHub
+  Release, trusted TLS terminator, local service policy, and scoped Skarbiec
+  grants.</li>
+</ul>
+<p>Do not begin with production configuration or a provider call. Each path is
+walked in <a href="/docs/onboarding/first-success">first success</a>.</p>
+<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this section">&para;</a></h2>
+<p>Required for safe local detection:</p>
+<ul>
+<li>macOS or Linux;</li>
+<li>Git;</li>
+<li>Rust/Cargo compatible with <code>Cargo.lock</code>;</li>
+<li>either the newest published release archive or a source checkout.</li>
+</ul>
+<p>Required for an authenticated loopback gateway:</p>
+<ul>
+<li>all safe-path prerequisites;</li>
+<li>the packaged or explicitly selected <code>entitlements-router</code>;</li>
+<li>GnuPG and an authorized local Skarbiec vault;</li>
+<li>this installation's provisioned trust material and its owner-bound capability
+  socket;</li>
+<li>generated client identities, aliases, and capability maps;</li>
+<li>one free loopback port.</li>
+</ul>
+<p>Additional production prerequisites:</p>
+<ul>
+<li>supported Linux architecture and the runtime shared libraries in the release;</li>
+<li>an operator-owned host service account and service manager;</li>
+<li>HTTPS ingress whose exact peer IP is in <code>BRAMA_TRUSTED_PROXY_IPS</code>;</li>
+<li>access to the selected GitHub Release archive and checksum;</li>
+<li>scoped Skarbiec consumers documented in <code>deploy/*.env.example</code>;</li>
+<li>operator-owned backup and rollback access to the materialized vault and Brama
+  journal.</li>
+</ul>
+<p>Check prerequisites with their own version/help commands. Do not paste tokens or
+private keys into a shell command merely to check them.</p>
+<h3 id="what-an-alias-requires">What an alias requires<a class="headerlink" href="#what-an-alias-requires" title="Link to this section">&para;</a></h3>
+<p>An alias you intend to serve needs exactly one destination route and the
+capability that route requires. There is no ordered list of spare routes for an
+alias: an alias resolves to one route, and when that route refuses, the refusal
+is what the caller receives. Plan capabilities per alias accordingly, and read
+the per-alias readiness rows from <code>brama aliases</code>, which prints alias, state
+and route.</p>
+<p>The four alias states are <code>serving</code>, <code>no_route</code>, <code>capability_absent</code> and
+<code>routes_file_invalid</code>. Only <code>serving</code> means the alias can answer a completion;
+the other three name the exact repair, described in
+<a href="/docs/onboarding/failures-and-reset">failures and reset</a>.</p>
+<h2 id="release-selection">Release selection<a class="headerlink" href="#release-selection" title="Link to this section">&para;</a></h2>
+<p>Immutable Brama releases are published. <code>main</code> is development source and must
+never be represented as a release. For which release is newest, read
+<code>released-surface.json</code> or the repository's GitHub Releases list; this page does
+not restate a version it cannot keep current.</p>
+<p>Installation must select:</p>
+<pre><code class="language-text">product version + source revision + platform + archive SHA-256 + provenance
+</code></pre>
+<p>from the GitHub Release described in <a href="/docs/release"><code>RELEASE.md</code></a>, verify the
+digest, and install the packaged binary and launcher. A source checkout is never
+the normal production installation model.</p>
+<p>A release whose registry document predates the current shape is moved forward
+with <a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a> before the
+service is started, so the document carries only the known top-level fields the
+deserializer accepts.</p>
+<h2 id="next">Next<a class="headerlink" href="#next" title="Link to this section">&para;</a></h2>
+<ul>
+<li>Seed a new installation from an existing one:
+  <a href="/docs/onboarding/existing-configuration">bring existing configuration</a>.</li>
+<li>Reach a real routed response:
+  <a href="/docs/onboarding/first-success">first success</a>.</li>
+<li>Read the alias and route contract in full:
+  <a href="/docs/configuration">Configuration</a> and
+  <a href="/docs/http-api">HTTP API</a>.</li>
+</ul></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

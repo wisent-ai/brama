@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Unreleased changes — Brama Docs</title>
+  <meta name="description" content="The Brama changes that are committed but not yet published in an immutable release.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/changelog/current">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Changelog</h2><a href="/docs/changelog">Overview</a><a class="active" aria-current="page" href="/docs/changelog/current">Unreleased</a><a href="/docs/changelog/released-0-2-7x">Released 0.2.77 to 0.2.42</a><a href="/docs/changelog/released-0-2-early">Released 0.2.5 to 0.2.2</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama changelog: unreleased</p>
+      <article class="doc"><h1 id="unreleased-changes">Unreleased changes<a class="headerlink" href="#unreleased-changes" title="Link to this section">&para;</a></h1>
+<p>These changes are committed and documented but carry no published release
+coordinate yet. Released entries live in
+<a href="/docs/changelog/released-0-2-7x">0.2.77 to 0.2.42</a> and
+<a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
+Semantic Versioning and the pre-one compatibility policy in
+<a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-one-route-per-alias">Unreleased: an alias resolves to exactly one route<a class="headerlink" href="#unreleased-one-route-per-alias" title="Link to this section">&para;</a></h2>
+<p>An alias now names one destination and nothing else. When that route refuses,
+the refusal is what the caller receives: no second route is attempted, so the
+answer an operator reads is the answer the route gave. The request deadline is
+the deadline of that one attempt and is not multiplied by a number of routes.</p>
+<p>The route registry document carries exactly three known top-level fields:
+<code>schema_version</code>, whose value is the number one, <code>deployments</code>, and
+<code>routes</code>, which maps an alias to its single destination. Any other
+top-level field is refused by the deserializer, so a document that carries one
+is rejected whole rather than partly read.</p>
+<p><a href="/docs/http-api/administration-and-operations#the-route-registry"><code>PUT /v1/admin/routes</code></a> takes exactly
+the two fields below and <code>DELETE /v1/admin/routes</code> takes
+<code>{"alias"}</code>; both answer
+<code>{"ok":true,"routes":&lt;document&gt;</code>&hairsp;<code>}</code> with the
+committed document.</p>
+<pre><code class="language-json">{"alias": "wisent-backend", "primary": "codex/gpt-5.3-codex-spark"}
+</code></pre>
+<p><a href="/docs/http-api/discovery-and-subscriptions#get-v1aliases"><code>GET /v1/aliases</code></a> returns rows of
+<code>{"alias", "state", "route", "reason", "required", "authorized"}</code>, and
+the four alias states are unchanged: <code>serving</code>, <code>no_route</code>,
+<code>capability_absent</code> and <code>routes_file_invalid</code>. A completion that
+names a declared alias which cannot serve is <code>503</code>
+<code>alias_unserviceable</code> carrying <code>details.state</code> and
+<code>details.route</code>; an unknown alias is <code>404</code> whose
+<code>details</code> also carry <code>state</code> and <code>route</code>.
+<a href="/docs/cli/aliases"><code>brama aliases</code></a> prints alias, state and
+route, and <a href="/docs/cli/adopt"><code>brama adopt</code></a> reviews one route
+per alias.</p>
+<p><a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a> is new and
+is how an existing registry file reaches this shape without hand editing. It
+reads the configured document, keeps only the known top-level fields, validates
+the result, and commits it with the same atomic owner-only replacement every
+other registry write uses. It is idempotent and prints the resulting document,
+so a second run reports the same document the first run committed.</p>
+<h2 id="unreleased-plan-usage">Unreleased: subscription plan usage replaces four invocations<a class="headerlink" href="#unreleased-plan-usage" title="Link to this section">&para;</a></h2>
+<p>One sweep and one ledger were asked for four ways &mdash;
+<code>POST /v1/subscription-usage/:agent_id</code>,
+<code>POST /v1/account/subscription-usage</code>,
+<code>POST /v1/admin/subscription-usage/:agent_id</code> and
+<code>POST /v1/admin/subscription-pool/usage</code> &mdash; and every one of them read
+the same usage ledger and the same provider reports. One capability answers it
+now: <a href="/docs/http-api/discovery-and-subscriptions#post-v1plan-usage"><code>POST /v1/plan-usage</code></a>, scoped
+by the identity the caller proved through the same resolver the subscription
+pool uses. All four were deleted in the same change: their routes, their
+handlers, the Brama Desktop calls that reached them, and their paragraphs on
+this site.</p>
+<p>The answer is the pool's document with every reading brought current, so a row
+means the same thing whichever capability produced it. A provider that answered
+sets <code>limits</code> and <code>usage_source: "provider"</code>; a provider that
+refused keeps its last reading, marks it <code>stale</code>, and records the
+refusal in <code>errors</code> in the provider's own words; a provider with no
+supported free report is recorded as exactly that. None of the three reads as a
+plan reported unused. A request body is refused with <code>plan usage takes no
+request fields; the answer follows from the proven identity</code>, and an
+inventory Brama could not read stops the provider reads rather than asking about
+accounts nobody confirmed.</p>
+<p>A model-scoped bearer may now reach the capability, which every workload
+identity the authority resolves is: none of the four routes it replaced was
+reachable by one, so the single audience that signs its own requests could not
+read its own plan usage over any of them.
+<code>brama subscriptions --refresh-usage</code> and Brama Desktop's
+<strong>Refresh usage</strong> both read this capability. <code>tests/usage</code>
+drives it over real HTTP against an isolated vault, an isolated Wisent Identity
+authority and an isolated endpoint answering the providers' own usage
+reports.</p>
+<h2 id="unreleased-subscription-pool">Unreleased: the subscription pool replaces eleven invocations<a class="headerlink" href="#unreleased-subscription-pool" title="Link to this section">&para;</a></h2>
+<p>Which subscriptions exist and who owns them was asked eleven ways &mdash;
+<code>brama subscriptions list</code>; <code>GET</code>, <code>POST</code> and
+<code>DELETE /v1/subscriptions/:agent_id</code>; <code>GET</code> and
+<code>POST /v1/account/subscriptions</code>;
+<code>DELETE /v1/account/subscriptions/:subscription_id</code>; <code>GET</code>
+and <code>POST /v1/admin/subscriptions/:agent_id</code>;
+<code>DELETE /v1/admin/subscriptions/:agent_id/:subscription_id</code>; and
+<code>GET /v1/admin/subscription-pool</code> &mdash; and every one of them answered it
+from the same vault declaration. One capability answers it now:
+<a href="/docs/http-api/discovery-and-subscriptions#the-subscription-pool"><code>GET</code> and
+<code>POST /v1/subscription-pool</code></a>, scoped by the identity the caller
+proved, plus <a href="/docs/cli/subscriptions"><code>brama subscriptions</code></a>
+as a leaf command. All eleven were deleted in the same change: their routes,
+their handlers, their tests, the Brama Desktop calls that reached them, and
+their paragraphs on this site. <code>brama subscriptions list</code> no longer
+parses.</p>
+<p>The pool document is one shape for every audience &mdash;
+<code>{"ok", "observed_at_ms", "scope", "errors", "subscriptions"}</code> &mdash;
+so the per-audience <code>providers</code> key and the <code>agentId</code> key are
+gone, and the row key <code>subscription_id</code> is now <code>id</code>, which
+every row already carried. <code>scope</code> is <code>deployment</code> or the
+agent id the answer was narrowed to. A write names an owner only from the
+deployment scope; an agent or account holder that sends <code>agent_id</code> is
+refused with <code>agent_id is derived from the proven identity and must not be
+sent</code>, and a deployment-scoped write that omits it is refused too. Retiring
+a subscription the caller does not own is <code>404 subscription not found</code>
+even when the deployment holds it.</p>
+<p><code>BRAMA_WISENT_AUTH_URL</code> now selects the Wisent Identity origin, and
+an unset variable means canonical Wisent Supabase. The anon key was already
+deployment-configurable while the origin it was presented to was compiled in,
+which left the human half of every identity decision unprovable anywhere except
+against the production project; the account holder's scope is now driven end to
+end in <code>tests/pool</code>.</p>
+<p>The measured command surface is 42 leaf invocations in 6 groups at
+<code>15c27474b3a870e1a399697068e2b96f4e72d8dd</code>, down from 50 in 7
+(<a href="/docs/command-surface">command surface</a>).</p>
+<h2 id="unreleased-consumer-name-alias">Unreleased: the backend alias is the client's name<a class="headerlink" href="#unreleased-consumer-name-alias" title="Link to this section">&para;</a></h2>
+<p>The Wisent App backend's chat alias is <code>wisent-backend</code>. It was
+<code>wisent-backend/chat/primary</code> beside a rank-suffixed twin, which spelled
+in the alias name the same rank that the registry's own per-alias column of
+spare destinations then carried; that column is removed by the current contract,
+under which an alias carries exactly one route. The name then became
+<code>wisent-backend/chat</code>, which spelled a shape
+<code>POST /v1/chat/completions</code> already names. The alias now carries only
+who is asking. <code>wisent-backend/embeddings</code> and
+<code>wisent-backend/moderation</code> keep their purpose segment for one stated
+reason: each needs a route of its own and the registry is keyed by alias name
+alone.</p>
+<h2 id="unreleased-subscription-usage">Unreleased: subscription usage and failure reporting<a class="headerlink" href="#unreleased-subscription-usage" title="Link to this section">&para;</a></h2>
+<p><code>brama subscriptions list --refresh-usage</code> and Brama Desktop's
+<strong>Refresh usage</strong> share native free provider reports, bounded
+credential access and OAuth renewal. Account rows retain their last readings,
+reset and observation times, independent <code>usage_check</code> results and
+complete stored failure causes. Discovery, storage, malformed replies and
+partial refresh failures are all reported as themselves rather than as a healthy
+empty pool. An integration whose provider publishes no free report is recorded
+as unmeasured, which is not the same row as a plan measured at zero.</p>
+<p>Desktop exposes the same account-specific errors, retained stale windows and
+explicit Weles/Stado <strong>Sign in</strong> action. A missing measurement time
+is reported as unknown. Refresh operations may wait longer than ordinary reads
+so that a provider or credential refusal is reported by Brama itself rather than
+by the caller's own transport. OAuth renewal opens no browser unless
+<code>BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN=1</code> is set. No OMP integration is
+used.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

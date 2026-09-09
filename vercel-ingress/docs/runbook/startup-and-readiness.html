@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Startup and readiness — Brama Docs</title>
+  <meta name="description" content="Runbook entries for a gateway that will not start, answers ok while nothing works, reports 503 from /readyz, refuses a remote request with 426, or sits behind an unpublished endpoint.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/runbook/startup-and-readiness">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Runbook</h2><a href="/docs/runbook">Overview</a><a class="active" aria-current="page" href="/docs/runbook/startup-and-readiness">Startup and readiness</a><a href="/docs/runbook/credentials-and-subscriptions">Credentials and subscriptions</a><a href="/docs/runbook/routes-and-ledger">Routes and ledger</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama runbook: startup, reachability and readiness</p>
+      <article class="doc"><h1 id="startup-and-readiness">Startup and readiness<a class="headerlink" href="#startup-and-readiness" title="Link to this section">&para;</a></h1>
+<p>Five symptoms that appear before any model request succeeds: the public
+endpoint is not published, the process refuses to start, <code>/health</code> says
+<code>ok</code> while nothing serves, <code>/readyz</code> answers 503, or a request from another
+machine is refused at the transport. Each entry quotes the sentence the
+product actually prints and names the repair. The error vocabulary itself is
+in <a href="/docs/errors">errors</a>; the rest of the runbook is at
+<a href="/docs/runbook">runbook</a>.</p>
+
+<h2 id="public-endpoint-and-ci-checkout">The public endpoint fails while CI waits for a key<a class="headerlink" href="#public-endpoint-and-ci-checkout" title="Link to this section">&para;</a></h2>
+<p>The <code>funnel-keepalive</code> workflow publishes Brama's origin from Stado's
+service directory every five minutes. Its checked-in
+<code>.github/workflows/funnel-keepalive.yml</code> step changes only the root path
+on HTTPS port 443; it preserves the Stado object and integration paths on the
+same port. A queued workflow has not published anything, even when the runner
+is online.</p>
+<p>For an empty HTTP 502 from the public endpoint, compare the declared origin
+with the current forwarding rule and inspect the publisher's job:</p>
+<pre><code class="language-shell">stado service directory bind brama --target charless-mac-mini --json
+stado host exec charless-mac-mini -- tailscale serve status --json
+gh run list --repo wisent-ai/brama --workflow funnel-keepalive.yml
+</code></pre>
+<p>If a checkout waits in <code>git-credential-osxkeychain</code>, do not approve a
+system dialog or restart the runner. Brama's jobs on the release runner create
+an empty, job-local Git configuration before checkout, ignore system Git
+configuration, and disable terminal and askpass prompts. Checkout uses its
+GitHub token; private dependency authorization writes only to that job's Git
+configuration, not the host's shared configuration. A missing credential makes
+the job fail visibly instead of opening a consent window. Jobs started from an
+older revision retain their old settings; cancel a stuck old run before
+scheduling the corrected publisher, rather than rerunning the old revision.</p>
+<p>A completed publication proves the forwarding rule, not model inference.
+Confirm the original authenticated request against Brama before treating the
+caller as repaired.</p>
+
+<h2 id="brama-serve-refuses-to-start"><code>brama serve</code> refuses to start<a class="headerlink" href="#brama-serve-refuses-to-start" title="Link to this section">&para;</a></h2>
+<p>The sentence, verbatim (exit 1):</p>
+<pre><code class="language-text">Server error: BRAMA_MODEL_ALIASES is required and is assembled by
+src/release/bin/start-with-skarbiec from the sealed policy directory. Starting the
+binary directly cannot obtain it: launch the gateway through that launcher, or
+export the variable yourself. Restarting an unlaunched process will not
+repair this.
+</code></pre>
+<p>The refusal names its own repair: managed configuration is generated by the
+launcher, and restarting the same bare invocation cannot change the answer.
+Start through <code>src/release/bin/start-with-skarbiec</code>; a standalone desktop
+deployment instead passes <code>--local-credentials-stdin</code>
+(<a href="/docs/configuration">configuration</a>). Other startup refusals in the same
+class — duplicate client tokens, malformed identities, an alias route with
+<code>*</code> or stray whitespace — also stop the process before it binds; the log
+names the offending entry.</p>
+<p>An alias declares exactly one route, so a startup refusal about a route is a
+statement about that one destination. If the registry document itself is the
+thing being refused, repair it with <code>brama routes migrate</code>
+(<a href="/docs/cli/routes/migrate">cli/routes/migrate</a>) and see
+<a href="/docs/runbook/routes-and-ledger">routes and ledger</a>.</p>
+
+<h2 id="health-is-ok-but-nothing-works"><code>/health</code> is <code>ok</code> but nothing works<a class="headerlink" href="#health-is-ok-but-nothing-works" title="Link to this section">&para;</a></h2>
+<p>That is <code>/health</code> doing its job, not a contradiction: its body says
+<code>&quot;dependencies&quot;: &quot;not_probed&quot;</code>, and it answers <code>ok</code> from a gateway
+whose every credential redemption is being refused. The only readiness
+evidence is <code>/readyz</code>
+(<a href="/docs/architecture/request-path-and-state#health-versus-readyz">architecture</a>). Point deploy
+checks and uptime monitors at <code>/readyz</code>; treat a monitor on <code>/health</code>
+as a monitor of the process, nothing more.</p>
+
+<h2 id="readyz-answers-503"><code>/readyz</code> answers 503<a class="headerlink" href="#readyz-answers-503" title="Link to this section">&para;</a></h2>
+<p><code>reason</code> is one of five sentences (<code>src/core/server.rs:2343-2355</code>), each
+naming a different repair:</p>
+<table>
+<thead>
+<tr>
+<th><code>reason</code></th>
+<th>Meaning</th>
+<th>Check</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>no provider capability is configured</code></td>
+<td>zero direct providers — the gateway can route nothing on its own account</td>
+<td>launcher policy: <code>required_provider_capabilities</code> and the authority-owned capability routes table</td>
+</tr>
+<tr>
+<td><code>a configured provider credential could not be obtained; the authorization chain is broken, not busy</code></td>
+<td>a capability or read grant refused just now</td>
+<td><code>denied[]</code> names the providers; check broker socket, workload registry, proof key (<a href="/docs/concepts/capability">concepts/capability</a>)</td>
+</tr>
+<tr>
+<td><code>an active subscription's credential did not redeem just now, so the next request that needs it will be refused whatever the catalogue lists</code></td>
+<td>a subscription is listed but its credential does not redeem</td>
+<td><code>unredeemable[]</code>, then <code>brama subscriptions</code> for the refusal sentence</td>
+</tr>
+<tr>
+<td><code>the vault holds a subscription account whose item carries no agent tag: it is unroutable, and no subscription listing can report it</code></td>
+<td>an account lost its <code>brama:agent:</code> tag; the credential still works and nothing can route to it</td>
+<td><code>unroutable_accounts[]</code> names item and coordinate; restore the tag in the vault</td>
+</tr>
+<tr>
+<td><code>every credential was obtained, and at least one active subscription contributes no model: it cannot be routed to</code></td>
+<td>a redeemable account whose provider offers it no discoverable model</td>
+<td><code>unroutable[]</code>; check provider model discovery and the account's plan</td>
+</tr>
+</tbody>
+</table>
+<p>Waiting repairs none of these — every 503 here is an authorization or
+inventory statement, not load. The three subscription-shaped rows are worked
+through in
+<a href="/docs/runbook/credentials-and-subscriptions">credentials and subscriptions</a>.</p>
+
+<h2 id="requests-from-another-machine-answer-426">Requests from another machine answer 426<a class="headerlink" href="#requests-from-another-machine-answer-426" title="Link to this section">&para;</a></h2>
+<pre><code class="language-json">{&quot;error&quot;:{&quot;code&quot;:&quot;secure_transport_required&quot;,
+ &quot;message&quot;:&quot;HTTPS is required except for direct loopback requests&quot;, ...}}
+</code></pre>
+<p>The transport guard accepts loopback, the gateway's own bound address, peers
+in <code>BRAMA_ENCRYPTED_PEER_IPS</code>, and proxies in
+<code>BRAMA_TRUSTED_PROXY_IPS</code> whose forwarded headers state <code>https</code> —
+nothing else, and forwarded headers from an unlisted peer are never trusted (a
+forged <code>X-Forwarded-Proto: https</code> changes nothing; captured). Repair: front
+the gateway with the approved TLS terminator and list that terminator's peer
+IP, or call over the mesh hop that is already encrypted.</p>
+</article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

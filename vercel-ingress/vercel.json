@@ -238,6 +238,42 @@
       "destination": "/docs/agent-skill.html"
     },
     {
+      "source": "/docs/cli/routes/migrate",
+      "destination": "/docs/cli/routes/migrate.html"
+    },
+    {
+      "source": "/docs/http-api/:slug",
+      "destination": "/docs/http-api/:slug.html"
+    },
+    {
+      "source": "/docs/core/:slug",
+      "destination": "/docs/core/:slug.html"
+    },
+    {
+      "source": "/docs/configuration/:slug",
+      "destination": "/docs/configuration/:slug.html"
+    },
+    {
+      "source": "/docs/onboarding/:slug",
+      "destination": "/docs/onboarding/:slug.html"
+    },
+    {
+      "source": "/docs/integrations/:slug",
+      "destination": "/docs/integrations/:slug.html"
+    },
+    {
+      "source": "/docs/runbook/:slug",
+      "destination": "/docs/runbook/:slug.html"
+    },
+    {
+      "source": "/docs/architecture/:slug",
+      "destination": "/docs/architecture/:slug.html"
+    },
+    {
+      "source": "/docs/changelog/:slug",
+      "destination": "/docs/changelog/:slug.html"
+    },
+    {
       "source": "/:path*",
       "destination": "https://charless-mac-mini.tail6443b3.ts.net/:path*"
     }

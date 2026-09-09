@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Request path and state — Brama Docs</title>
+  <meta name="description" content="The one listener and its two route sets, how a single request flows to one provider call, the evidence rule for /health versus /readyz, and every file Brama writes.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/architecture/request-path-and-state">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Architecture</h2><a href="/docs/architecture">Overview</a><a href="/docs/architecture/ownership-and-boundaries">Ownership and boundaries</a><a class="active" aria-current="page" href="/docs/architecture/request-path-and-state">Request path and state</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama architecture: listener, request path, state</p>
+      <article class="doc"><h1 id="request-path-and-state">Request path and state<a class="headerlink" href="#request-path-and-state" title="Link to this section">&para;</a></h1>
+<p>How one request reaches one provider call, what the two health endpoints are
+each evidence of, and every file the process writes. For the ownership split
+and the rule at each trust boundary, see
+<a href="/docs/architecture/ownership-and-boundaries">ownership and boundaries</a>.</p>
+<h2 id="one-listener-two-routers">One listener, two routers<a class="headerlink" href="#one-listener-two-routers" title="Link to this section">&para;</a></h2>
+<p><code>brama serve</code> binds one address (loopback unless <code>BRAMA_BIND_ADDRESS</code> names
+an IP) and mounts two route sets (<code>src/core/server.rs:3400-3455</code>): a public
+pair — <code>/health</code>, <code>/readyz</code> — and seventeen bearer-protected routes. Every
+route, including <code>/health</code>, sits behind the transport guard.</p>
+<h2 id="the-request-path">The request path<a class="headerlink" href="#the-request-path" title="Link to this section">&para;</a></h2>
+<pre><code class="language-mermaid">flowchart TD
+    A[peer connects] --&gt; B{transport guard}
+    B -- not loopback/trusted --&gt; B426[426 secure_transport_required]
+    B --&gt; C{bearer}
+    C -- unknown --&gt; C1[Skarbiec introspection / Wisent Identity, 5s cache]
+    C -- invalid --&gt; C401[401 unauthenticated]
+    C --&gt; D{path scope / allowlist}
+    D -- out of scope --&gt; D403[403 forbidden]
+    D --&gt; E{model name}
+    E -- alias --&gt; F[alias resolution: the registry's single route]
+    E -- provider/model --&gt; G[direct dispatch: capability at final use]
+    E -- best / selector --&gt; H{HMAC trio}
+    H -- missing/expired/wrong --&gt; H401[401]
+    H --&gt; I[subscription dispatch: rank candidates, pin the chosen account]
+    F -- alias undeclared --&gt; F404[404, details.state + details.route]
+    F -- route cannot serve --&gt; F503[503 alias_unserviceable, details.state + details.route]
+    F --&gt; G
+    G --&gt; J[provider HTTP call, 16MiB body bound]
+    I --&gt; J
+    J -- provider refuses --&gt; JR[refusal returned to the caller]
+    J --&gt; K[response in caller's dialect + records]
+</code></pre>
+<p>Alias resolution has exactly one outcome per alias: the destination recorded
+in <code>routes</code>. If that route refuses the call, its refusal is what the caller
+receives, and Brama dispatches nowhere else. The request deadline is the
+deadline of that one attempt; it is not multiplied by a count of routes.
+<a href="/docs/cli/aliases"><code>brama aliases</code></a> prints the alias, its state and its
+route, and <code>GET /v1/aliases</code> returns the same reading as rows of
+<code>{"alias","state","route","reason","required","authorized"}</code> with the four
+states <code>serving</code>, <code>no_route</code>, <code>capability_absent</code> and
+<code>routes_file_invalid</code>.</p>
+<p>Validation is strict before any provider is considered: unknown JSON fields
+are refused, <code>max_tokens</code> is bounded at 32768, <code>temperature</code> at 2, and a
+model name outside the four-part vocabulary is
+<code>400 invalid_request</code> (<a href="/docs/http-api">http-api</a>). Every failure is logged
+beside the client body as a fleet envelope
+(<a href="/docs/concepts/envelope">concepts/envelope</a>).</p>
+<h2 id="health-versus-readyz"><code>/health</code> versus <code>/readyz</code><a class="headerlink" href="#health-versus-readyz" title="Link to this section">&para;</a></h2>
+<p>The evidence rule, stated once: <strong>a green <code>/health</code> is evidence the process
+exists; a green <code>/readyz</code> is evidence the product works. Nothing else about
+the gateway may be concluded from <code>/health</code>.</strong></p>
+<p><code>/health</code> never redeems a credential, lists subscriptions, or contacts a
+provider, and its body says so — <code>"dependencies": "not_probed"</code>. It answers
+<code>ok</code> from a gateway whose every redemption is being refused (verified: a
+standalone gateway with a garbage credential answers <code>/health</code> <code>ok</code>).</p>
+<p><code>/readyz</code> earns its verdict per request: it redeems one capability per
+configured provider through the same broker call the request path makes,
+checks that every active subscription contributes at least one discoverable
+model, redeems one credential per active subscription, and reports vault
+subscription accounts that carry no <code>brama:agent:</code> tag. <code>ready</code> is true only
+when all four pass and at least one provider capability is configured;
+otherwise the status is <code>503</code> and <code>reason</code> is one of the five sentences in
+the <a href="/docs/runbook/startup-and-readiness#readyz-answers-503">runbook</a> — with <code>providers</code>, <code>denied</code>,
+<code>routing</code>, <code>unroutable</code>, <code>subscriptions</code>, <code>unredeemable</code>,
+<code>unroutable_accounts</code>, <code>operator_action_required</code>, and <code>build</code> beside it,
+and never a secret. Deploy gates and uptime monitors read <code>/readyz</code>.</p>
+<h2 id="state-on-disk">State on disk<a class="headerlink" href="#state-on-disk" title="Link to this section">&para;</a></h2>
+<p>Everything Brama writes, and what it never writes:</p>
+<table>
+<thead>
+<tr>
+<th>Path (default)</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>$BRAMA_STATE_DIR/journal.jsonl</code> (<code>~/.brama/</code>)</td>
+<td>append-only records: <code>retire</code>, <code>subscription_refresh</code>, <code>check</code> (task quality); readers take the last matching record; never credential material</td>
+</tr>
+<tr>
+<td><code>BRAMA_SUBSCRIPTION_USAGE_FILE</code> (<code>~/.config/brama/subscription-usage.json</code>)</td>
+<td>the usage ledger: measured counters, plan windows, blocks, credential state, probe verdicts; atomic owner-only writes</td>
+</tr>
+<tr>
+<td><code>BRAMA_DONATED_SUBSCRIPTIONS_FILE</code> (<code>/tmp/brama-skarbiec/donated-subscriptions.json</code>)</td>
+<td>donation metadata only, atomic 0600 rewrite</td>
+</tr>
+<tr>
+<td><code>BRAMA_PERF_PATH</code> (<code>/tmp/brama-perf.json</code>)</td>
+<td>replaceable per-model latency/throughput telemetry</td>
+</tr>
+<tr>
+<td><code>BRAMA_MODEL_CATALOG_CACHE</code> (<code>/tmp/brama-models-dev-cache.json</code>)</td>
+<td>replaceable models.dev cache</td>
+</tr>
+<tr>
+<td><code>~/.local/state/brama/onboarding.json</code></td>
+<td>onboarding journey progress</td>
+</tr>
+</tbody>
+</table>
+<p>The route registry document is read, not owned: Stado stages it and the admin
+routes commit to it, each write an atomic owner-only replacement of the whole
+document. <a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a> uses that same
+replacement to rewrite an existing file into the three known top-level fields
+(<code>schema_version</code>, whose value is the number one, plus <code>deployments</code> and
+<code>routes</code>), and prints the committed result.</p>
+<p>Secrets live in Skarbiec; tokens and grants cross Brama only in memory.
+Process telemetry is not durable billing evidence; the ledger is the record
+that spans months.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

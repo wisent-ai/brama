@@ -94,14 +94,37 @@ jobs:
         # otherwise.
         run: |
           python3 tests/release/check_router_verbs.py \
+            skarbiec-source/target/release/skarbiec \
             src/release/bin/start-with-skarbiec \
-            skarbiec-source/target/release/skarbiec
+            src/release/bin/launcher/bundle-coordinates.sh \
+            src/release/bin/launcher/service-identity.sh \
+            src/release/bin/launcher/workload-trust.sh \
+            src/release/bin/launcher/capability-broker-socket.sh \
+            src/release/bin/launcher/policy/control-policy.sh \
+            src/release/bin/launcher/policy/router-identities.sh \
+            src/release/bin/launcher/policy/subscription-catalog.sh \
+            src/release/bin/launcher/gateway-launch.sh
       - name: Refuse a launcher that does not parse
         # `sh -n` cannot see inside the heredoc Python the launcher carries, and
-        # a block that does not compile fails at boot on the host instead.
+        # a block that does not compile fails at boot on the host instead. The
+        # launcher is an entry point plus the stages it sources, so every file
+        # of that family is parsed and every embedded block compiled.
         run: |
-          sh -n src/release/bin/start-with-skarbiec
-          python3 tests/release/check_launcher_blocks.py src/release/bin/start-with-skarbiec
+          for launcher_file in src/release/bin/start-with-skarbiec \
+            src/release/bin/launcher/*.sh \
+            src/release/bin/launcher/policy/*.sh; do
+            sh -n "$launcher_file"
+          done
+          python3 tests/release/check_launcher_blocks.py \
+            src/release/bin/start-with-skarbiec \
+            src/release/bin/launcher/bundle-coordinates.sh \
+            src/release/bin/launcher/service-identity.sh \
+            src/release/bin/launcher/workload-trust.sh \
+            src/release/bin/launcher/capability-broker-socket.sh \
+            src/release/bin/launcher/policy/control-policy.sh \
+            src/release/bin/launcher/policy/router-identities.sh \
+            src/release/bin/launcher/policy/subscription-catalog.sh \
+            src/release/bin/launcher/gateway-launch.sh
       - name: Publish immutable tagged artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -114,11 +137,24 @@ jobs:
           archive="brama-${GITHUB_REF_NAME}-${{ matrix.platform }}.tar.gz"
           checksum="${archive}.sha256"
           stage="$(mktemp -d)"
-          mkdir -p "$stage/bin" "$stage/libexec" "$stage/etc/brama-skarbiec"
+          mkdir -p "$stage/bin" "$stage/bin/launcher" "$stage/bin/launcher/policy" \
+            "$stage/libexec" "$stage/etc/brama-skarbiec"
           cp target/release/brama "$stage/bin/brama"
           cp skarbiec-source/target/release/skarbiec "$stage/bin/skarbiec-entitlements-router"
           cp src/release/bin/start-with-skarbiec "$stage/bin/start-with-skarbiec"
           cp src/release/bin/provision-skarbiec-trust "$stage/bin/provision-skarbiec-trust"
+          # The launcher is an entry point plus the stages it sources by a path
+          # derived from its own directory. Each stage is copied by name: a
+          # missing one is not a degraded start but a launcher that dies on its
+          # first line, on the host, after the release is already published.
+          cp src/release/bin/launcher/bundle-coordinates.sh "$stage/bin/launcher/bundle-coordinates.sh"
+          cp src/release/bin/launcher/service-identity.sh "$stage/bin/launcher/service-identity.sh"
+          cp src/release/bin/launcher/workload-trust.sh "$stage/bin/launcher/workload-trust.sh"
+          cp src/release/bin/launcher/capability-broker-socket.sh "$stage/bin/launcher/capability-broker-socket.sh"
+          cp src/release/bin/launcher/gateway-launch.sh "$stage/bin/launcher/gateway-launch.sh"
+          cp src/release/bin/launcher/policy/control-policy.sh "$stage/bin/launcher/policy/control-policy.sh"
+          cp src/release/bin/launcher/policy/router-identities.sh "$stage/bin/launcher/policy/router-identities.sh"
+          cp src/release/bin/launcher/policy/subscription-catalog.sh "$stage/bin/launcher/policy/subscription-catalog.sh"
           cp src/release/etc/brama-skarbiec/recipient-public-keys.asc "$stage/etc/brama-skarbiec/recipient-public-keys.asc"
           cp LICENSE "$stage/"
           # The trust material is NOT generated here. It pins the absolute path

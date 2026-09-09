@@ -1,0 +1,25 @@
+{
+  "probierz": {
+    "runId": "2026-08-31T03-22-28-008Z-c51d01ba-e23c-4368-9849-62091c5e2a6a",
+    "captureErrors": []
+  },
+  "total": 1,
+  "passed": 0,
+  "failed": 1,
+  "flaky": 0,
+  "skipped": 0,
+  "tests": [
+    {
+      "title": "brama-weles-real",
+      "passed": false,
+      "status": "failed",
+      "flaky": false,
+      "attempts": 1,
+      "duration": 2935,
+      "startedAt": "2026-08-31T03:22:29.983Z",
+      "completedAt": "2026-08-31T03:22:32.920Z",
+      "error": "{\n  \"added\": [],\n  \"backup\": null,\n  \"skipped\": [\n    {\n      \"item\": \"content-platform-agent-auth\",\n      \"problem\": \"gpg failed: gpg: encrypted with ECDH key, ID 7E0441E08C5CEAAC\\ngpg: encrypted with ECDH key, ID 6C6746F4AB546CB4\\ngpg: encrypted with ECDH key, ID C30E7BF28DDE114E\\ngpg: public key decryption failed: No secret key\\ngpg: decryption failed: No secret key\"\n    },\n    {\n      \"item\": \"echo-agent-auth\",\n      \"problem\": \"gpg failed: gpg: encrypted with ECDH key, ID 7E0441E08C5CEAAC\\ngpg: encrypted with ECDH key, ID 6C6746F4AB546CB4\\ngpg: encrypted with ECDH key, ID C30E7BF28DDE114E\n…\nclient identity echo-model-router\nreading oko-model-router through the entitlements router failed: Error: gpg failed: gpg: encrypted with ECDH key, ID 7E0441E08C5CEAAC\ngpg: encrypted with ECDH key, ID 6C6746F4AB546CB4\ngpg: encrypted with ECDH key, ID C30E7BF28DDE114E\ngpg: public key decryption failed: No secret key\ngpg: decryption failed: No secret key\nskipping client identity oko-model-router\nreading weles-model-router through the entitlements router failed: Error: gpg failed: gpg: encrypted with ECDH key, ID 7E0441E08C5CEAAC\ngpg: encrypted with ECDH key, ID 6C6746F4AB546CB4\ngpg: encrypted with ECDH key, ID C30E7BF28DDE114E\ngpg: public key decryption failed: No secret key\ngpg: decryption failed: No secret key\nfile:///Users/charles/.stado/actions-runner-work/brama/brama/probierz-source/packages/tui/specs/brama-weles-real.spec.mjs:37\n  throw new Error(`all three real Weles sign-ins must pass (exit ${result.status ?? 'unknown'})`);\n        ^\n\nError: all three real Weles sign-ins must pass (exit 1)\n    at file:///Users/charles/.stado/actions-runner-work/brama/brama/probierz-source/packages/tui/specs/brama-weles-real.spec.mjs:37:9\n    at ModuleJob.run (node:internal/modules/esm/module_job:437:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:639:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)\n\nNode.js v25.9.0\n",
+      "media": []
+    }
+  ]
+}

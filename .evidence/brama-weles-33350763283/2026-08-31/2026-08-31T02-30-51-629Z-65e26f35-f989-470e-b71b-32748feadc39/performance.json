@@ -1,0 +1,629 @@
+{
+  "schemaVersion": 1,
+  "subject": "run-and-app-processes",
+  "firstOutputMs": 1134,
+  "intervalMs": 1000,
+  "peakRssKb": 1255072,
+  "averageCpuPercent": 74.90113636363637,
+  "appProcessName": null,
+  "appPeakRssKb": null,
+  "appAverageCpuPercent": null,
+  "samples": [
+    {
+      "at": "2026-08-31T02:30:52.329Z",
+      "processes": 1,
+      "rssKb": 480,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:30:53.376Z",
+      "processes": 3,
+      "rssKb": 141904,
+      "cpuPercent": 92.8,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:30:54.362Z",
+      "processes": 7,
+      "rssKb": 253568,
+      "cpuPercent": 20.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:30:55.381Z",
+      "processes": 6,
+      "rssKb": 251856,
+      "cpuPercent": 1.4,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:30:56.362Z",
+      "processes": 8,
+      "rssKb": 266928,
+      "cpuPercent": 3.5,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:30:57.372Z",
+      "processes": 9,
+      "rssKb": 268016,
+      "cpuPercent": 16.3,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:30:58.384Z",
+      "processes": 6,
+      "rssKb": 240480,
+      "cpuPercent": 0.3,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:30:59.374Z",
+      "processes": 7,
+      "rssKb": 370688,
+      "cpuPercent": 66.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:00.394Z",
+      "processes": 8,
+      "rssKb": 266816,
+      "cpuPercent": 0.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:01.383Z",
+      "processes": 7,
+      "rssKb": 438640,
+      "cpuPercent": 54.099999999999994,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:02.389Z",
+      "processes": 7,
+      "rssKb": 370736,
+      "cpuPercent": 64.2,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:03.395Z",
+      "processes": 7,
+      "rssKb": 389008,
+      "cpuPercent": 45.300000000000004,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:04.380Z",
+      "processes": 7,
+      "rssKb": 245920,
+      "cpuPercent": 2.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:05.397Z",
+      "processes": 7,
+      "rssKb": 313344,
+      "cpuPercent": 46.5,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:06.419Z",
+      "processes": 9,
+      "rssKb": 491248,
+      "cpuPercent": 59.5,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:07.457Z",
+      "processes": 9,
+      "rssKb": 697600,
+      "cpuPercent": 191.89999999999998,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:08.534Z",
+      "processes": 9,
+      "rssKb": 920592,
+      "cpuPercent": 243.6,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:09.401Z",
+      "processes": 8,
+      "rssKb": 729360,
+      "cpuPercent": 158.8,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:10.417Z",
+      "processes": 11,
+      "rssKb": 912912,
+      "cpuPercent": 123.39999999999999,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:11.397Z",
+      "processes": 10,
+      "rssKb": 928592,
+      "cpuPercent": 283.4,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:12.395Z",
+      "processes": 9,
+      "rssKb": 858848,
+      "cpuPercent": 186.39999999999998,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:13.432Z",
+      "processes": 11,
+      "rssKb": 1067088,
+      "cpuPercent": 227.5,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:14.403Z",
+      "processes": 10,
+      "rssKb": 747104,
+      "cpuPercent": 76.4,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:15.467Z",
+      "processes": 9,
+      "rssKb": 672960,
+      "cpuPercent": 36.6,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:16.415Z",
+      "processes": 9,
+      "rssKb": 701824,
+      "cpuPercent": 25.8,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:17.420Z",
+      "processes": 9,
+      "rssKb": 769504,
+      "cpuPercent": 49.4,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:18.435Z",
+      "processes": 9,
+      "rssKb": 789312,
+      "cpuPercent": 49,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:19.538Z",
+      "processes": 9,
+      "rssKb": 817792,
+      "cpuPercent": 136.9,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:20.464Z",
+      "processes": 9,
+      "rssKb": 831920,
+      "cpuPercent": 85.6,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:21.490Z",
+      "processes": 9,
+      "rssKb": 855392,
+      "cpuPercent": 63.6,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:22.420Z",
+      "processes": 9,
+      "rssKb": 883472,
+      "cpuPercent": 87.8,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:23.453Z",
+      "processes": 9,
+      "rssKb": 923696,
+      "cpuPercent": 101.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:24.418Z",
+      "processes": 9,
+      "rssKb": 965504,
+      "cpuPercent": 101.2,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:25.501Z",
+      "processes": 9,
+      "rssKb": 992016,
+      "cpuPercent": 74.7,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:26.448Z",
+      "processes": 9,
+      "rssKb": 1020384,
+      "cpuPercent": 31.9,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:27.500Z",
+      "processes": 9,
+      "rssKb": 1037616,
+      "cpuPercent": 28.9,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:28.453Z",
+      "processes": 9,
+      "rssKb": 1057664,
+      "cpuPercent": 32,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:29.491Z",
+      "processes": 10,
+      "rssKb": 1148992,
+      "cpuPercent": 206.2,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:30.463Z",
+      "processes": 10,
+      "rssKb": 916048,
+      "cpuPercent": 216,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:31.452Z",
+      "processes": 9,
+      "rssKb": 894592,
+      "cpuPercent": 186.2,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:32.471Z",
+      "processes": 9,
+      "rssKb": 947712,
+      "cpuPercent": 179.20000000000002,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:33.446Z",
+      "processes": 9,
+      "rssKb": 913472,
+      "cpuPercent": 63.9,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:34.458Z",
+      "processes": 8,
+      "rssKb": 659776,
+      "cpuPercent": 52.8,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:35.532Z",
+      "processes": 8,
+      "rssKb": 678896,
+      "cpuPercent": 75.4,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:36.505Z",
+      "processes": 8,
+      "rssKb": 708464,
+      "cpuPercent": 24.3,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:37.472Z",
+      "processes": 8,
+      "rssKb": 724272,
+      "cpuPercent": 77.7,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:38.522Z",
+      "processes": 9,
+      "rssKb": 892560,
+      "cpuPercent": 227.2,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:39.538Z",
+      "processes": 9,
+      "rssKb": 861248,
+      "cpuPercent": 98.19999999999999,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:40.455Z",
+      "processes": 8,
+      "rssKb": 629920,
+      "cpuPercent": 40.5,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:41.471Z",
+      "processes": 8,
+      "rssKb": 630400,
+      "cpuPercent": 9.7,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:42.540Z",
+      "processes": 9,
+      "rssKb": 667984,
+      "cpuPercent": 89.89999999999999,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:43.450Z",
+      "processes": 8,
+      "rssKb": 673872,
+      "cpuPercent": 8.899999999999999,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:44.478Z",
+      "processes": 8,
+      "rssKb": 728320,
+      "cpuPercent": 46.6,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:45.526Z",
+      "processes": 8,
+      "rssKb": 751824,
+      "cpuPercent": 41.6,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:46.516Z",
+      "processes": 8,
+      "rssKb": 768368,
+      "cpuPercent": 22.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:47.480Z",
+      "processes": 8,
+      "rssKb": 805264,
+      "cpuPercent": 87.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:48.481Z",
+      "processes": 8,
+      "rssKb": 822272,
+      "cpuPercent": 54.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:49.476Z",
+      "processes": 8,
+      "rssKb": 831744,
+      "cpuPercent": 41.7,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:50.494Z",
+      "processes": 8,
+      "rssKb": 850528,
+      "cpuPercent": 94,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:51.479Z",
+      "processes": 8,
+      "rssKb": 884544,
+      "cpuPercent": 97.69999999999999,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:52.499Z",
+      "processes": 8,
+      "rssKb": 900384,
+      "cpuPercent": 106.19999999999999,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:53.567Z",
+      "processes": 8,
+      "rssKb": 917008,
+      "cpuPercent": 99.3,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:54.495Z",
+      "processes": 8,
+      "rssKb": 923760,
+      "cpuPercent": 45.2,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:55.519Z",
+      "processes": 8,
+      "rssKb": 921456,
+      "cpuPercent": 4.5,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:56.484Z",
+      "processes": 8,
+      "rssKb": 927728,
+      "cpuPercent": 2.6,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:57.484Z",
+      "processes": 8,
+      "rssKb": 935824,
+      "cpuPercent": 2.7,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:58.479Z",
+      "processes": 8,
+      "rssKb": 957760,
+      "cpuPercent": 29.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:31:59.483Z",
+      "processes": 8,
+      "rssKb": 972560,
+      "cpuPercent": 14.8,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:00.483Z",
+      "processes": 9,
+      "rssKb": 1022816,
+      "cpuPercent": 111.19999999999999,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:01.479Z",
+      "processes": 8,
+      "rssKb": 1079664,
+      "cpuPercent": 126.9,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:02.481Z",
+      "processes": 8,
+      "rssKb": 1140128,
+      "cpuPercent": 65.2,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:03.518Z",
+      "processes": 8,
+      "rssKb": 1244560,
+      "cpuPercent": 174.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:04.517Z",
+      "processes": 8,
+      "rssKb": 1252480,
+      "cpuPercent": 166.7,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:05.498Z",
+      "processes": 8,
+      "rssKb": 1255072,
+      "cpuPercent": 157.6,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:06.507Z",
+      "processes": 8,
+      "rssKb": 1101136,
+      "cpuPercent": 183.9,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:07.497Z",
+      "processes": 8,
+      "rssKb": 1029552,
+      "cpuPercent": 1.3,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:08.496Z",
+      "processes": 9,
+      "rssKb": 648784,
+      "cpuPercent": 13,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:09.505Z",
+      "processes": 9,
+      "rssKb": 675680,
+      "cpuPercent": 6.2,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:10.499Z",
+      "processes": 10,
+      "rssKb": 678912,
+      "cpuPercent": 2.2,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:11.500Z",
+      "processes": 10,
+      "rssKb": 683776,
+      "cpuPercent": 52.4,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:12.502Z",
+      "processes": 11,
+      "rssKb": 712608,
+      "cpuPercent": 81.5,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:13.498Z",
+      "processes": 11,
+      "rssKb": 830784,
+      "cpuPercent": 105.19999999999999,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:14.500Z",
+      "processes": 8,
+      "rssKb": 690464,
+      "cpuPercent": 22.5,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:15.510Z",
+      "processes": 8,
+      "rssKb": 723696,
+      "cpuPercent": 9.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:16.504Z",
+      "processes": 8,
+      "rssKb": 693008,
+      "cpuPercent": 55.8,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:17.513Z",
+      "processes": 10,
+      "rssKb": 880528,
+      "cpuPercent": 35.300000000000004,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:18.528Z",
+      "processes": 9,
+      "rssKb": 515904,
+      "cpuPercent": 7.6000000000000005,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T02:32:19.064Z",
+      "processes": 0,
+      "rssKb": 0,
+      "cpuPercent": 0,
+      "app": null
+    }
+  ]
+}

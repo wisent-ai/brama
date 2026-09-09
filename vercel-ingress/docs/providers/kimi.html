@@ -152,7 +152,7 @@ loop, Brama Desktop, or a signed donation through
 </code></pre>
 <p><code>expires_at</code> is epoch seconds, written back on every refresh from the token
 endpoint&#x27;s <code>expires_in</code>; the gateway also accepts <code>expiresAt</code>,
-<code>expires</code> and <code>expiry</code>, and falls back to the access token&#x27;s JWT
+<code>expires</code> and <code>expiry</code>, and reads the access token&#x27;s JWT
 <code>exp</code> claim when the blob states nothing
 (<code>src/gateway/oauth_refresh.rs</code>). The item carries the discovery tags
 (<code>brama:subscription</code>, <code>brama:agent:&lt;agent&gt;</code>,
@@ -185,7 +185,7 @@ costs no plan quota.</p>
 <code>cause</code>, blocks the account for 30 minutes, lists it <code>burnt</code>, and waits
 for the sign-in above; everything else is transient and left for the next sweep
 (<a href="/docs/concepts/subscription#states">subscription</a>,
-<a href="/docs/runbook#a-subscription-reads-burnt">runbook</a>).</p>
+<a href="/docs/runbook/credentials-and-subscriptions#a-subscription-reads-burnt">runbook</a>).</p>
 <h2 id="plan-usage">Plan usage<a class="headerlink" href="#plan-usage" title="Link to this section">&para;</a></h2>
 <p>Kimi publishes a free usage report at
 <code>https://api.kimi.com/coding/v1/usages</code>, issued to exactly the OAuth bearer the

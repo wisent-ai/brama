@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>models.dev catalog — Brama Docs</title>
+  <meta name="description" content="The models.dev integration contract: public provider and model metadata, its origin and cache, and the limits of what advisory metadata may authorise.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/integrations/catalog">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Integrations</h2><a href="/docs/integrations">Overview</a><a href="/docs/integrations/model-providers">Model providers</a><a class="active" aria-current="page" href="/docs/integrations/catalog">models.dev catalog</a><a href="/docs/integrations/skarbiec-and-entitlements">Skarbiec and entitlements</a><a href="/docs/integrations/publication-and-health">Publication and health</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama integration contracts</p>
+      <article class="doc"><h1 id="modelsdev-catalog">models.dev catalog<a class="headerlink" href="#modelsdev-catalog" title="Link to this section">&para;</a></h1>
+<p>models.dev is a public metadata boundary Brama reads and does not own. This
+page carries its contract: what the catalog provides, the data and limits Brama
+applies to it, and what happens when the catalog cannot be reached or the
+integration is removed.</p>
+<h2 id="outcome">Outcome<a class="headerlink" href="#outcome" title="Link to this section">&para;</a></h2>
+<p>Provide public provider/model metadata without making the catalog a
+credential, subscription, or billing authority.</p>
+<h2 id="data-and-limits">Data and limits<a class="headerlink" href="#data-and-limits" title="Link to this section">&para;</a></h2>
+<ul>
+<li>default origin: <code>https://models.dev/api.json</code>;</li>
+<li>request timeout: 30 seconds;</li>
+<li>default cache TTL: 900 seconds;</li>
+<li>default replaceable cache: <code>/tmp/brama-models-dev-cache.json</code>;</li>
+<li>provider/model identifiers and numeric metadata are validated and
+  normalized;</li>
+<li>unsupported protocols remain non-executable.</li>
+</ul>
+<p>Catalog metadata is untrusted advisory data throughout. A model listed by
+models.dev is executable only when Brama also has a supported protocol
+adapter, a trusted endpoint, and the correct capability; the per-entry
+declarations Brama derives are described on
+<a href="/docs/integrations/model-providers">Model providers</a>.</p>
+<h2 id="failure-and-removal">Failure and removal<a class="headerlink" href="#failure-and-removal" title="Link to this section">&para;</a></h2>
+<p>When models.dev cannot be reached, dynamic discovery reports the catalog as
+unavailable and Brama answers from its own local cache for as long as that
+cache is inside its TTL. A catalog outage never unlocks a credential, never
+manufactures availability for a model Brama cannot execute, and never writes
+journal state.</p>
+<p>A request that needed catalog metadata Brama does not have surfaces to the
+caller as <code>dependency_unavailable</code>; see
+<a href="/docs/errors">Errors</a> and
+<a href="/docs/integrations/publication-and-health">Publication and health</a>
+for the observable codes.</p>
+<p>Removing the integration disables dynamic public metadata. Statically
+registered, explicitly configured routes remain governed by their own
+contract: each alias still names exactly one destination route in the registry
+document, and an alias whose route is not executable reports state
+<code>no_route</code> rather than borrowing one from the catalog. An existing
+registry file is brought to the current shape with
+<a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a>.</p>
+</article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

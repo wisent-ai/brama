@@ -64,13 +64,6 @@ for alias, route in list(routes.items()):
         routes[alias] = qualified
         changed.append(f"{alias}: {route} -> {qualified}")
 
-fallbacks = document.get("fallbacks", {})
-for alias, entries in list(fallbacks.items()):
-    rewritten = [qualify(route) for route in entries]
-    if rewritten != entries:
-        fallbacks[alias] = rewritten
-        changed.append(f"{alias} (fallback): {entries} -> {rewritten}")
-
 for line in changed:
     print(f"qualified {line}")
 for route in sorted(set(unresolved)):

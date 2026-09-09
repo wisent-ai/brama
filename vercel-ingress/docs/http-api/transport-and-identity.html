@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Transport and identity — Brama Docs</title>
+  <meta name="description" content="Which peers Brama's listener accepts, how a caller proves who it is, and what a refused request receives.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/http-api/transport-and-identity">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>HTTP API</h2><a href="/docs/http-api">Overview</a><a class="active" aria-current="page" href="/docs/http-api/transport-and-identity">Transport and identity</a><a href="/docs/http-api/inference">Inference</a><a href="/docs/http-api/discovery-and-subscriptions">Discovery and subscriptions</a><a href="/docs/http-api/administration-and-operations">Administration and operations</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama HTTP API reference</p>
+      <article class="doc"><h1 id="transport-and-identity">Transport and identity<a class="headerlink" href="#transport-and-identity" title="Link to this section">&para;</a></h1>
+<p>Two guards stand in front of every path in the <a href="/docs/http-api">route table</a>:
+the transport guard, which every route passes through including <code>/health</code>, and
+the identity guard, which every route except <code>/health</code> and <code>/readyz</code>
+passes through. This page is what both of them check, what a caller sends to satisfy them,
+and the shape of the answer when one of them refuses.</p>
+<h2 id="accepted-transports">Accepted transports<a class="headerlink" href="#accepted-transports" title="Link to this section">&para;</a></h2>
+<p>A request is accepted only when its peer is loopback, the address the gateway itself
+bound, a peer named in <code>BRAMA_ENCRYPTED_PEER_IPS</code> (a mesh hop that is already
+encrypted), or a proxy named in <code>BRAMA_TRUSTED_PROXY_IPS</code> whose
+<code>Forwarded</code>/<code>X-Forwarded-Proto</code> headers state <code>https</code>.
+Anything else receives status <code>426</code> with this body (captured):</p>
+<pre><code class="language-json">{&quot;error&quot;:{&quot;attempts&quot;:0,&quot;code&quot;:&quot;secure_transport_required&quot;,
+ &quot;message&quot;:&quot;HTTPS is required except for direct loopback requests&quot;,
+ &quot;retryable&quot;:false,&quot;type&quot;:&quot;transport_error&quot;}}
+</code></pre>
+<p>Forwarded headers presented by a peer that is not in <code>BRAMA_TRUSTED_PROXY_IPS</code>
+are never read as evidence of the scheme. The guard runs before the handler, so a refused
+request never reaches a provider and never touches the vault.</p>
+<h2 id="bearers">Bearers<a class="headerlink" href="#bearers" title="Link to this section">&para;</a></h2>
+<p>Protected routes take exactly one <code>Authorization: Bearer &lt;token&gt;</code> value.
+The token is compared in constant time against the identities in
+<code>BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES</code>. A bearer that is not in that table is
+resolved against Skarbiec, the authority that issued it, and, for account-scoped routes,
+against Wisent Identity. When an authority cannot answer, the request is refused rather
+than admitted, and a resolved verdict is cached for five seconds so that a revocation
+takes effect without restarting the gateway.</p>
+<p>A model-scoped bearer — one carrying <code>allowed_models</code> — may reach the five
+inference paths, <code>/v1/models</code>, the subscription pool and plan usage; the
+allowlist itself is then enforced per request, further in. Every other path, including
+<code>/v1/aliases</code> and the whole admin family, answers <code>403 forbidden</code>. A
+request with no bearer at all on a protected path is <code>401 unauthorized</code>.</p>
+<h2 id="the-organization-header">The organization header<a class="headerlink" href="#the-organization-header" title="Link to this section">&para;</a></h2>
+<p>A human bearer is not yet an identity: it names a user, and a user may belong to several
+organizations. The request states which one with a single
+<code>X-Wisent-Organization-ID</code> header carrying a UUID, and Brama asks Wisent Identity
+to authorize that user for that organization with that same bearer. The identity it caches
+is keyed on the token digest <em>and</em> the organization id, so a bearer authorized for
+one organization is not an identity in another.</p>
+<p>A missing header, more than one of them, a value that is not a UUID, or an organization
+the bearer is not authorized for is refused. The first three answer
+<code>400 a valid X-Wisent-Organization-ID header is required</code>; an unauthorized pairing
+answers <code>403 forbidden</code>. Workload bearers carry no organization context and send
+no such header.</p>
+<h2 id="agent-signatures">Agent signatures<a class="headerlink" href="#agent-signatures" title="Link to this section">&para;</a></h2>
+<p>An agent-scoped operation additionally signs the exact raw request body with the HMAC
+trio described in <a href="/docs/concepts/entitlement">concepts/entitlement</a>. The
+signature is over the bytes as sent, so a proxy that reformats the body invalidates it. A
+route that requires the trio and does not receive it names the header that is missing, for
+example <code>401 {"message":"missing x-agent-id header"}</code> (captured on
+<code>model:"best"</code>).</p>
+<p>Where a request field would restate an identity the signature already proves, sending it
+is refused instead of being ignored — see
+<a href="/docs/http-api/discovery-and-subscriptions">discovery and subscriptions</a> for the
+two cases, <code>agent_id</code> on a pool write and any field at all on plan usage.</p>
+<h2 id="shared-request-limits">Shared request limits<a class="headerlink" href="#shared-request-limits" title="Link to this section">&para;</a></h2>
+<p>Three limits hold for every request the gateway admits.</p>
+<ul>
+<li>The requested output size is bounded by the gateway's own maximum, which
+  <a href="/docs/http-api/administration-and-operations#get-stats"><code>GET /stats</code></a>
+  reports as <code>limits.maxOutputTokens</code>. An inference request asking for more is
+  refused with the sentence in <a href="/docs/http-api/inference">inference</a>.</li>
+<li>The request deadline, reported as <code>limits.requestDeadlineSeconds</code>, is the
+  deadline of the one attempt the request makes. Because an alias resolves to exactly one
+  route, there is no number of routes for it to be multiplied by.</li>
+<li>Unknown request fields are refused with the deserializer's own sentence, naming the
+  field it did not expect and listing the fields it did. The bodies on every page in this
+  family are therefore exhaustive.</li>
+</ul>
+<h2 id="the-refusal-envelope">The refusal envelope<a class="headerlink" href="#the-refusal-envelope" title="Link to this section">&para;</a></h2>
+<p>Every refusal on every route uses one envelope, whose fields —
+<code>type</code>, <code>code</code>, <code>message</code>, <code>retryable</code> and
+<code>attempts</code> — are documented in <a href="/docs/errors">errors</a>. Two cases are
+worth stating here because they are the shape of the route contract.</p>
+<p>A request naming an alias this gateway declares, whose state is anything other than
+<code>serving</code>, is refused with <code>503</code> and code
+<code>alias_unserviceable</code>. Its <code>details</code> carry <code>state</code>, one of
+<code>no_route</code>, <code>capability_absent</code> or <code>routes_file_invalid</code>,
+and <code>route</code>, the single destination the registry maps that alias to. The
+<code>message</code> is the same sentence
+<a href="/docs/http-api/discovery-and-subscriptions#get-v1aliases"><code>GET /v1/aliases</code></a>
+gives as the row's <code>reason</code>, so the refusal and the listing agree.</p>
+<p>A request naming an alias this gateway does not declare is <code>404</code>, and its
+<code>details</code> carry the same two fields, with <code>state</code> reporting that there
+is no route for that name. In both cases the refusal is what the caller receives: the
+resolved route is attempted once, and its answer, including its refusal, is the answer to
+the request.</p>
+<pre><code class="language-json">{&quot;error&quot;:{&quot;code&quot;:&quot;alias_unserviceable&quot;,&quot;type&quot;:&quot;invalid_request_error&quot;,
+ &quot;message&quot;:&quot;alias `ox-alpha` routes to openrouter/stealth/ox-alpha but this gateway holds no provider credential for openrouter&quot;,
+ &quot;retryable&quot;:false,&quot;attempts&quot;:0,
+ &quot;details&quot;:{&quot;state&quot;:&quot;capability_absent&quot;,&quot;route&quot;:&quot;openrouter/stealth/ox-alpha&quot;}}}
+</code></pre>
+<p>Repairing the state an alias is in is an operator action, not a client one: point the
+alias at a route this gateway can reach, or issue the provider capability here. The
+registry write is <a href="/docs/http-api/administration-and-operations#the-route-registry"><code>PUT /v1/admin/routes</code></a>,
+and <a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a> brings an
+existing registry document to the current shape.</p>
+</article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

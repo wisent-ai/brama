@@ -22,14 +22,22 @@ and API money is going. Host it anywhere — even on remote devices.
 Canonical repository: [`wisent-ai/brama`](https://github.com/wisent-ai/brama).
 The product, Rust crate, binary, CLI, MCP server, and service are named `brama`.
 
+The published documentation at [brama.wisent.com/docs](https://brama.wisent.com/docs)
+is the contract: this page owns the product promise, the boundaries, and how to
+get the binary running, and it links the page that owns each detail rather than
+restating it. Where a sentence here and a documentation page disagree, the
+documentation page is the one that was written against the code.
+
 ## Problem and intended users
 
 Wisent services need models from several providers without copying provider
 credentials into every caller, coupling callers to provider wire formats, or
-silently charging the wrong account. Direct provider integrations also duplicate
-model discovery, OAuth refresh, retry, error handling, and access policy.
+charging the wrong account. Direct provider integrations also duplicate model
+discovery, OAuth refresh, credential rotation, error handling, and access
+policy.
 
 Brama serves four audiences:
+
 - **Desktop users** run a private Brama process on their own computer and add
   their own provider credentials or subscriptions.
 - **Wisent service developers** use one OpenAI-compatible API and stable logical
@@ -44,6 +52,26 @@ Brama is preferable to direct integrations when the required outcome is one
 least-privilege enforcement point with explicit billing ownership, bounded
 provider attempts, normalized errors, and auditable routing decisions.
 
+## What an alias promises
+
+An alias is a deployment-owned model name that resolves to exactly one
+canonical `provider/model` route. There is no ordered list of spare
+destinations behind it: when the route refuses, that refusal is the caller's
+answer, carrying the state and the route it was refused for. An operator who
+wants a different destination changes the one route.
+
+The route registry is a JSON document with three known top-level fields —
+`schema_version`, `deployments`, and `routes`, which maps each alias to its
+single destination. An unknown top-level field is refused by name and the whole
+document is rejected, so nothing in it serves until it is repaired.
+`brama routes migrate` performs that repair in one idempotent operation, and
+[`/docs/cli/routes/migrate`](https://brama.wisent.com/docs/cli/routes/migrate)
+documents it. The shape, the validation guards, and the atomic owner-only write
+are in
+[`/docs/configuration/route-registry`](https://brama.wisent.com/docs/configuration/route-registry);
+the alias vocabulary and its four states are in
+[`/docs/concepts/alias`](https://brama.wisent.com/docs/concepts/alias).
+
 ## Product boundaries
 
 ### Included
@@ -52,10 +80,10 @@ provider attempts, normalized errors, and auditable routing decisions.
 - Native Anthropic Messages and OpenAI Responses ingress on the same routing
   decision, so a caller that speaks one of those two first-party formats needs
   no shim in front of Brama.
-- Server-sent event streaming on all three chat formats, with every retry
-  bounded to the time before the first caller byte.
+- Server-sent event streaming on all three chat formats, with every credential
+  rotation bounded to the time before the first caller byte.
 - Canonical `provider/model` routing and deployment-owned logical aliases,
-  including `-best` for the strongest operator-approved subscription route.
+  including `best` for the strongest operator-approved subscription route.
 - Agent-scoped selectors: `any`, `any-vision-capable`, and `task:<task-name>`.
 - Direct provider capabilities owned by Brama and subscription capabilities
   delegated to one agent.
@@ -72,16 +100,21 @@ provider attempts, normalized errors, and auditable routing decisions.
 
 - Running Claude Code, Codex, Kimi Code, OpenCode, or any other agent runtime.
   Jeden is the agent runtime; Brama performs provider HTTP requests only.
-- Starting or supervising a local inference engine. The deployment owner controls the
-  digest-pinned vLLM lifecycle; Brama reads its owner-only route snapshot and performs
-  authenticated OpenAI-compatible requests over the target's Tailscale address.
+- Starting or supervising a local inference engine. The deployment owner controls
+  the digest-pinned vLLM lifecycle; Brama reads its owner-only route snapshot and
+  performs authenticated OpenAI-compatible requests over the target's Tailscale
+  address.
 - Acting as a general secret store, identity provider, billing ledger, or system
   of record for provider accounts.
 - Inferring task intent from prompt text. `task:` uses previously recorded,
   explicitly named quality evidence only.
-- Silent fallback across products, agents, provider accounts, credentials, or
-  storage authorities.
-- Owning production DNS, ingress, host registration, orchestration, or Skarbiec grants.
+- Quietly substituting another product, agent, provider account, credential, or
+  storage authority for the one that was named. The named one either answers or
+  its refusal reaches the caller.
+- Serving a second route for an alias whose route refused. One alias, one route,
+  one answer.
+- Owning production DNS, ingress, host registration, orchestration, or Skarbiec
+  grants.
 - Continuing a cut generation. Once a stream has committed, a provider failure
   ends that stream; Brama never resumes it on another credential, because a
   second attempt would double both the bill and the text.
@@ -104,87 +137,7 @@ provider attempts, normalized errors, and auditable routing decisions.
 The current-state column is authoritative. Unavailable capability must not be
 advertised by the API, MCP server, examples, or release notes.
 
-## Core use cases
-
-### Call a deployment-owned model alias
-
-- **Actor:** an authenticated Wisent service.
-- **Initial state:** the service has its dedicated bearer and the alias maps to a
-  configured direct-provider route, optionally followed by ordered fallback
-  routes.
-- **Outcome:** Brama validates transport, identity, allowlist, and request limits;
-  invokes the primary, then each fallback only after a failed attempt, and
-  returns the first normalized success or the final normalized failure.
-- **Safety boundary:** no agent subscription is discovered or charged; every
-  fallback names an explicit provider capability.
-
-### Use an exact agent subscription
-
-- **Actor:** a Jeden runtime with a bearer bound to its `agent_id`.
-- **Initial state:** the agent signs the exact request body and owns an active
-  delegated provider capability.
-- **Outcome:** Brama redeems the selected credential at final use and returns the
-  normalized provider result.
-- **Safety boundary:** `billingTarget` must name the same provider and an active
-  subscription belonging to the signed agent.
-
-### Select an available or task-ranked model
-
-- **Actor:** an authenticated Jeden runtime.
-- **Initial state:** the agent has active subscriptions; `task:` additionally
-  requires persisted quality observations for the named task.
-- **Outcome:** Brama chooses eligible candidates, applies the documented bounded
-  attempt policy, and stops at the first successful provider result.
-- **Cost boundary:** selectors may invoke more than one provider attempt; limits
-  are defined in [`CORE.md`](https://brama.wisent.com/docs/core). They never retry without a finite bound.
-
-### Operate and recover the gateway
-
-- **Actor:** a Brama operator.
-- **Initial state:** an immutable runtime and its scoped Skarbiec grants are
-  available on the operator-managed Linux host.
-- **Outcome:** health and version output identify the build; structured routing
-  logs and protected stats explain bounded decisions without secret material.
-- **Recovery boundary:** rollback restores one immutable runtime coordinate and
-  compatible non-secret journal state as described in [`RELEASE.md`](https://brama.wisent.com/docs/release).
-
-## How Brama works
-
-```text
-Wisent service / Jeden
-        │ HTTPS or authenticated loopback
-        │ dedicated bearer
-        │ optional exact-body agent HMAC
-        ▼
-     Axum ingress ── client binding + model allowlist + request limits
-        │
-        ├── logical alias ──────────────── direct provider capability
-        ├── canonical provider/model ──── direct or agent subscription
-        └── any / vision / task ───────── bounded candidate selection
-                                                │
-                                                ▼
-                            entitlements-router metadata discovery
-                                                │
-                                                ▼
-                         Skarbiec final-use capability redemption
-                                                │
-                                                ▼
-                              provider protocol adapter + timeout
-                                                │
-                                                ▼
-                         normalized response, error, metrics, journal
-```
-
-Skarbiec is authoritative for secret capability redemption. The entitlements
-router is authoritative for live subscription resources. `-best` is an explicit
-deployment alias for `codex/gpt-5.3-codex-spark`; a caller still needs both an
-allowlisted bearer and the HMAC identity that owns the eligible subscription.
-It does not infer quality from prompt text or unlock a direct provider
-credential. Brama's journal stores only retirement markers and task-quality
-observations; provider credentials are forbidden. Public model metadata is read
-from models.dev and is never credential authority.
-
-## Quick start
+## Get the binary running
 
 The normal path is the newest published release. `brama detect` is the safe first
 command either way: it reads local hardware, performs no provider request, reads
@@ -213,7 +166,8 @@ tar -xzf "brama-v${version}-${platform}.tar.gz"
 Serving traffic takes more than the archive. Provision this installation's trust
 material once with `bin/provision-skarbiec-trust` — the archive ships no signing
 key and the launcher refuses to start until that material exists — then read
-[`ONBOARDING.md`](https://brama.wisent.com/docs/onboarding) before the first authenticated request.
+[the onboarding journey](https://brama.wisent.com/docs/onboarding) before the
+first authenticated request.
 
 Maintainers working on unreleased source run the same command from a checkout,
 which needs Git and the Rust toolchain required by `Cargo.lock` (the production
@@ -238,675 +192,71 @@ Recommended backend: ...
 
 Neither command starts a service. The checkout path may leave build output under
 `target/`; it is a local build cache, not product state. Continue with
-[`ONBOARDING.md`](https://brama.wisent.com/docs/onboarding) for the authenticated loopback and production
-operator paths. Runnable, risk-labeled workflows are indexed in
-[`examples/`](https://brama.wisent.com/docs/examples).
-
-## Primary interfaces
-
-- **HTTP inference:** `POST /v1/chat/completions`, `/v1/messages`,
-  `/v1/responses`, `/v1/embeddings`, and `/v1/moderations` are the canonical
-  model-execution interfaces. The three chat formats share one routing
-  decision, one identity contract, and one attempt budget; they differ only in
-  the shape of the request and the answer.
-- **Streaming:** any of the three chat formats streams when the request asks
-  for it -- `"stream": true` on chat completions and Anthropic Messages,
-  `"stream": true` on Responses. The response is `text/event-stream` in the
-  caller's own dialect: `chat.completion.chunk` frames closed by
-  `data: [DONE]`, Anthropic `message_start`/`content_block_*`/`message_stop`
-  events, or `response.*` events closed by `response.completed`. A stream that
-  ends without its terminal event is a generation that was cut after it
-  committed; the caller holds an incomplete answer and Brama has already
-  stopped. Rotation across models and credentials happens only before the
-  first byte, so a committed stream is never silently re-run.
-- **Authentication:** static and Skarbiec-issued workload/model-client bearers
-  remain workload identities and do not send an organization header. A bearer
-  validated by Wisent Supabase is a human identity on account, discovery, and
-  model routes, and always requires the server-verified organization context
-  described below. A missing or malformed organization header returns `400`,
-  an invalid bearer `401`, no membership `403`, and an unavailable identity
-  authority `503`.
-- **Account API keys and subscriptions:** authenticated Wisent users use
-  `GET` and `POST /v1/subscription-pool`, whose owner comes from the verified
-  session and never from a caller-supplied identifier. Every human request sends
-  `Authorization: Bearer <Supabase JWT>` and
-  `X-Wisent-Organization-ID: <uuid>`. Brama validates the JWT with the canonical
-  Wisent Supabase at `https://alvaewvbyxpgwdpugnxy.supabase.co`, calls
-  `authorize_organization` with the same bearer, and accepts only the returned
-  user, organization, and typed `owner`, `admin`, or `member` role. The
-  `BRAMA_WISENT_AUTH_ANON_KEY` may override the built-in public anon key for a
-  different identity deployment; an explicitly empty override makes the
-  identity authority unavailable instead of weakening authentication. The
-  organization is verified request context, not subscription ownership: Brama
-  continues to derive the subscription owner from the verified user, and the
-  caller never supplies an account or agent identifier. `POST` accepts an API
-  key for any supported remote provider, stores it through Skarbiec without
-  returning it, and makes that user's canonical `provider/model` routes
-  available for buffered and streamed calls.
-- **HTTP discovery:** `GET /v1/models`; account discovery combines public
-  catalog metadata with models executable by that account's stored keys, while
-  signed agent discovery includes agent-owned subscriptions.
-- **Subscription lifecycle:** `GET` and `POST` on
-  `/v1/subscription-pool`; the signed agent is bearer- and HMAC-protected. A `GET`
-  returns, per subscription, the plan windows the provider itself reported
-  (`limits`: `used_fraction`, `window_label`, `resets_at_ms`, and the
-  `recorded_at_ms` the reading was taken at), what Brama measured (`measured`:
-  requests, failures, input and output tokens, first and last use), any
-  rate-limit `block` in force, when the record last changed
-  (`observed_at_ms`), where the newest window came from and whether it is still
-  current (`usage_source`: `provider`, `traffic` or `probe`, and `stale`), the
-  newest completion check (`probe`) and the independent latest free usage
-  attempt (`usage_check`: `attempted_at_ms`, `ok`, `detail`, `source`), and
-  where the credential itself stands (`credential`: `state` -- `active`,
-  `needs_reauthorization` or `disabled` -- with `cause`, `recorded_at_ms`,
-  `expires_at_ms` and `refreshed_at_ms`; `null` while nothing has been recorded
-  about the grant). `credential.state` is what separates a subscription that is
-  quiet from one whose sign-in is overdue, and `cause` is the provider's own
-  sentence for the refusal.
-- **How fresh a plan window is:** `usage_source` names which statement the
-  newest window is -- the provider's own usage report, the headers of real
-  traffic, or an operator's probe -- and is `null` when there is no window to
-  attribute. `stale` is true after a failed usage attempt, a window reset, or
-  any retained reading aging past `BRAMA_PLAN_USAGE_TTL_SECS` (default 300).
-  A stale reading is still
-  served, because a number that says when it was taken is information and an
-  empty plan is not; a reading older than the retention window
-  (`BRAMA_PLAN_USAGE_RETENTION_SECS`, default 86400) stops being served, because
-  a fraction of a five-hour window that has since reset several times describes
-  nothing.
-- **What an empty `limits` array means:** `usage_check` distinguishes an
-  unread subscription, a failed read, expired history, and a provider that
-  does not publish a report. `usage_check.ok: false` carries the actual
-  operation and reason; a missing check is not a successful measurement.
-  Providers that publish reports must return valid usage windows. Missing or
-  malformed metrics are errors, never zero usage or an unsupported plan.
-  Listings include `ok`, `observed_at_ms` and `errors`; failures use the
-  Wisent envelope and preserve account, operation, reason and attempt time.
-- **Operations:** public `GET /health` and `GET /readyz`; protected `GET /stats`.
-  `/health` is liveness only and says so in its body (`dependencies:
-  not_probed`): it answers `ok` from a gateway whose every credential
-  redemption is being refused. A background readiness loop redeems one
-  capability per configured provider, discovers active subscription models and
-  redeems each active subscription through the request path; `/readyz` returns
-  the latest completed result immediately, with no secret in the body. HTTP 200
-  and `ready: true` mean at least one configured direct-provider or subscription
-  route can carry traffic. `degraded: true` keeps every other denied,
-  unredeemable, or unroutable account visible without blocking a release that
-  contains its repair; HTTP 503 means no configured route can serve. Deploy
-  checks and uptime monitors should read `/readyz`; `/health` only proves the
-  process is running.
-- **Error contract:** a refused redemption is `503 authorization_error` with
-  code `credential_unauthorized` and `retryable: false`, never a `429
-  capacity_error`. Waiting does not repair an authorization id that does not
-  match, and classifying it as capacity sends the caller into retries and the
-  operator into the subscription catalogue.
-- **Desktop control plane:** `brama-desktop` alone may call
-  `GET /v1/admin/snapshot`, `PUT /v1/admin/routes`,
-  `POST /v1/admin/configuration-adoption/preview`,
-  `POST /v1/admin/configuration-adoption/apply`,
-  the pool capability’s own read and write, and
-  `POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe`, which is the
-  only endpoint in the product that deliberately spends plan quota. The
-  adoption endpoints review and atomically persist selected route aliases but
-  never receive or return credential material. The other endpoints return
-  identifiers, usage and status only; subscription credentials remain
-  write-only.
-- **CLI:** `serve`, `version`, `detect`, `adopt`, `onboard`, `onboard --reset`,
-  `test`, `subscriptions`, `subscription refresh`,
-  `collect-task-quality`, and `mcp`. Billable commands require an explicit cost
-  acknowledgement; adoption is review-only until `--apply` names an exact
-  selection.
-- **MCP:** read-only stdio JSON-RPC exposing `brama_detect` only. Model execution,
-  credential discovery, collection, and mutation are deliberately excluded.
-
-## Complete administration lifecycles
-
-Every mutable Brama resource has one owner, one full create/read/update/delete
-path, and one equivalent Brama Desktop surface. The desktop bearer may call the
-administration endpoints; ordinary model clients may not. Credential values are
-write-only and never appear in list, snapshot, stats, readiness, or error
-responses.
-
-### Route aliases
-
-Read the registry with `GET /v1/admin/snapshot`. Create an alias with:
-
-```http
-PUT /v1/admin/routes
-Authorization: Bearer <brama-desktop bearer>
-Content-Type: application/json
-
-{"alias":"support/chat","primary":"openai/gpt-5.4","fallbacks":["anthropic/claude-sonnet-4-6"]}
-```
-
-Send another `PUT` for the same alias to replace its primary and ordered
-fallback chain. Delete it with
-`DELETE /v1/admin/routes` and `{"alias":"support/chat"}`. Names must use
-lowercase ASCII letters, digits, `-`, `_`, `.`, or `/`; every route must be
-available and support the alias's request shape; duplicate routes are refused.
-The required product aliases cannot be deleted. Brama Desktop exposes the same
-create, replace, and delete lifecycle under **Routing**: **Add alias…**, select a
-user-owned alias and **Edit this alias…**, or **Delete this alias…**.
-
-### Standalone provider keys
-
-This lifecycle exists only when Brama was started with its standalone
-in-memory credential store:
-
-```http
-GET /v1/admin/credentials
-PUT /v1/admin/credentials
-{"provider":"openai","credential":"<new key>"}
-DELETE /v1/admin/credentials
-{"provider":"openai"}
-```
-
-`GET` returns provider names only. The first `PUT` adds the key; another `PUT`
-for that provider atomically replaces it; `DELETE` removes it. An empty,
-unsupported, local-only, or absent provider is refused without changing the
-store. Brama Desktop exposes the same lifecycle under **Subscriptions** →
-**Local provider keys**: **Add local key…**, select the provider and **Replace
-this provider key…**, or **Remove this provider key…**. The desktop app keeps
-the durable copy in macOS Keychain and sends the current set to its private
-Brama process over standard input.
-
-### Managed agent subscriptions
-
-List one agent's subscriptions with
-`GET /v1/subscription-pool` with the console identity. Add one with:
-
-```http
-POST /v1/admin/subscriptions/wisent-app
-Authorization: Bearer <brama-desktop bearer>
-Content-Type: application/json
-
-{"provider":"openai","label":"primary","api_key":"<credential>"}
-```
-
-Without `subscription_id`, Brama uses the deterministic primary subscription for
-that agent and provider. Repeating the `POST` replaces that credential in place.
-To renew a secondary or other existing subscription, include its exact
-`subscription_id` from the listing. An unknown or unowned selection returns
-`404 subscription not found`; a provider mismatch returns
-`409 selected subscription belongs to a different provider`.
-A deliberate provider check is
-`POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe`; it performs one
-minimal real completion and therefore spends provider quota. Retire the
-subscription and its credential with
-`POST /v1/subscription-pool` with `{"action":"retire", …}`. Listing, probing,
-and deleting never return the credential.
-
-Brama Desktop exposes this lifecycle under **Subscriptions** → **Managed
-agent**: **Connect a subscription** adds an agent/provider subscription,
-**Replace this subscription credential…** replaces the credential and optional
-label, **Verify with provider…** runs the deliberate one-request probe, and
-**Retire this subscription…** removes it. Under **My account**, the same
-add-or-replace and retire semantics remain scoped by the signed-in Wisent user
-through `GET` and `POST /v1/subscription-pool`, where a write may not name an
-owner it did not prove; an account can never read
-or mutate another user's subscriptions. These calls require both the Supabase
-bearer and a server-verified `X-Wisent-Organization-ID`, but switching
-organizations does not move, duplicate, or relabel user-owned subscriptions.
-
-### Subscription pool
-
-`GET /v1/subscription-pool` and `brama subscriptions` expose the
-same secret-free pool states. Refresh one provider through
-`POST /v1/admin/subscription-pool/refresh` with
-`{"provider":"codex","reason":"<operator reason>"}`, or through
-`brama subscription refresh codex --reason '<operator reason>'`. Repair a
-provider-disowned Claude Code, Codex, or Kimi grant with
-`brama subscription sign-in <provider> --reason '<operator reason>'`; Brama
-calls Weles's real `/reauth` trajectory, confirms the exact account row, then
-refreshes the grant. Brama Desktop exposes these operations under
-**Subscription Pool**. A non-empty reason is required, the result is appended
-to the operational journal, and no credential value is returned.
-
-The complete state, error, retry, authorization, and resource contract is in
-[`CORE.md`](https://brama.wisent.com/docs/core). Provider capability and lifecycle contracts are in
-[`INTEGRATIONS.md`](https://brama.wisent.com/docs/integrations).
-
-### Functional test journeys
-
-The provider-facing tests run the public Brama binary against the real
-Skarbiec vault, real provider accounts, real quota, and Weles sign-ins. They
-contain no provider server, canned provider response, fake key, dry run, or
-smoke-test substitute. Run them inside the launcher environment, with the
-source-tree binary named explicitly so Skarbiec binds capabilities to the
-binary Cargo executes:
-
-```console
-BRAMA_BIN_OVERRIDE="$PWD/target/debug/brama" \
-  src/release/bin/start-with-skarbiec --exec "$HOME/.cargo/bin/cargo" \
-  test --test admin_real -- --test-threads=1
-BRAMA_BIN_OVERRIDE="$PWD/target/debug/brama" \
-  src/release/bin/start-with-skarbiec --exec "$HOME/.cargo/bin/cargo" \
-  test --test http_api_real -- --test-threads=1
-BRAMA_BIN_OVERRIDE="$PWD/target/debug/brama" \
-  src/release/bin/start-with-skarbiec --exec "$HOME/.cargo/bin/cargo" \
-  test --test capability_real -- --test-threads=1
-BRAMA_BIN_OVERRIDE="$PWD/target/debug/brama" \
-  src/release/bin/start-with-skarbiec --exec "$HOME/.cargo/bin/cargo" \
-  test --test subscription_real -- --test-threads=1
-```
-
-`admin_real` reads the real OpenRouter credential through Brama's configured
-Skarbiec route without printing it. It then proves the full alias, standalone
-key, and managed-subscription lifecycles: add, read or provider probe, replace,
-another real completion, delete, and the final refusal. Its subscription uses
-a dedicated qualification agent and removes that credential before the test
-returns. The same target sends real buffered and streamed requests through the
-OpenAI Chat, Anthropic Messages, and OpenAI Responses surfaces, then reads the
-resulting model catalogue, readiness, and statistics. `http_api_real` starts
-`brama serve` and requires a real authenticated
-completion plus Brama's persisted perf record. `capability_real` requires a
-real completion funded by each deployment capability. `subscription_real`
-requires a real completion, a provider-side OAuth rotation, and a Weles-driven
-sign-in for each subscription provider, checking the usage ledger and journal
-after every operation.
-
-An expired grant, invalid key, exhausted provider balance, missing Weles token,
-or unavailable account fails the corresponding journey with the provider or
-product sentence; none is converted into a pass. Lower-level parser and refusal
-contracts remain useful tests, but they are not reported as functional evidence.
-
-## Reading and repairing the subscription pool
-
-Every `best`-aliased call is paid for by a subscription credential, so an empty
-pool stops browser automation across the company. It did: both codex grants were
-burnt at the same time, every call answered `429 subscription_unavailable`, and
-the state that explained it -- `needs_reauthorization` with the provider's own
-sentence beside it -- was reachable only by grepping `brama-always-on.err` for
-the code and reading timestamps by hand. Two commands report that pool and repair
-it.
-
-### `brama subscriptions`
-
-Without options this reads recorded state, contacts no provider and changes no
-credential. It joins live Skarbiec discovery with the usage ledger and reports
-discovery failures rather than treating them as an empty pool. Add
-`--refresh-usage` to read the same plan-usage capability the gateway serves at
-`POST /v1/plan-usage`: the providers' free usage reports through Brama's normal
-credential handling, including renewal of an expired OAuth grant.
-Neither form starts a sign-in or calls a model.
-
-```bash
-brama subscriptions --json
-brama subscriptions --refresh-usage --json
-```
-
-The JSON report includes `ok`, `observed_at_ms`, `errors`, and `providers`.
-Each provider row contains the subscription identity, label, credential
-state, `limits` with usage/reset/observation instants, `usage_check`, and
-`stale`. `errors` contains the standard Wisent failure envelopes; their
-context identifies the subscription or agent and the attempt time.
-
-`state` is one of four words. `live`: nothing has refused this grant and its
-expiry, if it states one at all, is still ahead. `expired`: the recorded expiry
-has passed. `burnt`: the provider disowned the grant, or somebody retired the
-subscription, and only a sign-in returns it to the pool. `unknown`: nothing has
-ever been recorded about this grant, which is not the same statement as a working
-one. `expires_at` is the provider's own instant, and `null` for an API key that
-states none. `last_redeem_error` is the refusal standing in the way, in the words
-of whatever refused it: the credential's own cause first, then a rate-limit block
-still in force, then the newest failed check. A lapsed block is deliberately not
-reported, because a stale refusal printed beside a `live` grant is what sends an
-operator looking for a sign-in nothing needs.
-
-Without `--json`, each plan window and its observation/reset time is printed
-beside the account. An incomplete report is labelled explicitly and its errors
-are printed to stderr. Both output modes exit non-zero when discovery,
-history access, or any active account's usage is unavailable or stale.
-A confirmed empty inventory succeeds on a plain read; asking to refresh it
-fails with `no active subscription is available to refresh`.
-
-Brama Desktop's **Refresh usage** action reads the same capability over one
-route, `POST /v1/plan-usage`, whose answer is narrowed by the identity the
-caller proved: this deployment for the console, that account for a signed-in
-account holder, that agent for a signed agent. The four per-audience refreshes
-it used to call are gone from the router. The responses preserve successful rows
-and report failures with `ok: false`; an HTTP 200 alone is not a complete
-reading. The desktop retains last-good rows after a connection or discovery
-failure, marks them stale, and shows the failed operation instead of an empty or
-healthy screen.
-
-### `brama subscription refresh <provider> --reason <text>`
-
-Runs the refresh the gateway's own timer runs, for one provider, now. A burnt or
-expired grant is never inside the timer's skew window, and a timer that will not
-try it is exactly why an empty pool stays empty. `--reason` is required because
-this rotates a grant -- the provider invalidates the previous refresh token the
-moment it issues a new one -- and the reason is appended to the journal beside
-the verdict.
-
-```bash
-brama subscription refresh codex --reason 'pool empty; every best call answered 429' --json
-```
-
-```json
-{
-  "provider": "codex",
-  "attempted": 2,
-  "result": "failed",
-  "detail": "refreshed no `codex` grant out of 2 tried; brama-sub-wisent-app-codex-primary: invalid_grant: refresh token is no longer accepted"
-}
-```
-
-`attempted` counts the subscriptions a refresh was tried for, so `0` means the
-command found nothing to do and `detail` says which of three reasons it was: no
-usable subscription for that provider in the pool, a provider whose credentials
-are API keys and have no refresh path at all, or no usable credential source in
-this environment -- the last being what a shell without the launcher's capability
-environment gets, and not a broken account. A retired subscription is never
-refreshed, because rotating its grant would put back what somebody removed. The
-exit status is non-zero unless every attempted credential was obtained.
-
-
-### `brama subscription sign-in <provider> --reason <text>`
-
-Repairs a provider-disowned `claude-code`, `codex`, or `kimi` grant by running
-the provider's real login trajectory through Weles. Before any browser opens,
-Brama reads Weles's health contract, resolves the named `login_item` or the one
-Weles explicitly declares primary, and verifies any declared row mapping
-belongs to the exact subscription being repaired. Success requires Weles to
-echo that row and the exact subscription refresh to answer `refreshed`.
-
-```bash
-brama subscription sign-in codex \
-  --login-item codex-wisent-google-sso \
-  --subscription-id brama-sub-wisent-app-codex-primary \
-  --reason 'provider disowned the stored grant' \
-  --json
-```
-
-Brama and Weles each acquire `brama-weles-reauth/token` from Skarbiec under
-their own workload identities when their service starts. Brama receives
-`BRAMA_WELES_REAUTH_TOKEN` and presents it only to `POST /reauth`; Weles
-receives the same field and accepts it only on that route. At every start the
-Brama launcher reads `agent_skarbiec_url` from the host's fleet Stado config
-while retaining the dedicated `brama-service` identity; a stale endpoint in an
-older service-specific config therefore cannot disconnect Brama from the
-canonical vault. `BRAMA_WELES_URL` is an explicit override; otherwise Brama
-resolves `weles-admission` from Stado's service directory at the moment a
-sign-in starts, using the declared `brama` consumer and
-`credential-lifecycle` capability. Once the `brama-service` private key is
-present in Brama's dedicated GPG home, later starts reuse that exact key instead
-of asking Skarbiec to decrypt and import it again. A fresh installation still
-acquires the key from Skarbiec and fails closed if that first acquisition cannot
-complete. Neither service reads the other's files, the token is never placed in
-argv or the journal, and no browser opens on the machine running the Brama
-command.
-
-The in-process refresh sweep renews OAuth tokens before expiry, without opening
-a login. Browser sign-in requires the explicit CLI or Desktop action by
-default. Deployments that deliberately want the existing automatic Weles
-renewal may set `BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN=1`; only then can a
-provider refusal or incomplete account mapping schedule a browser sign-in.
-Completed browser runs and permanent account-mapping refusals keep their
-cooldown in the journal, so a Brama restart does not repeat them; a transient
-Weles preflight failure does not consume that cooldown. Historical vault items
-that still carry `brama:id:` and `brama:provider:` but lost routing tags remain
-unavailable to callers; the
-policy grants only Brama enough access to repair them, Weles proves their primary
-account mapping, and a successful donation restores `brama:subscription`,
-`brama:agent:`, and `brama:login:`.
-
-The real functional journeys in `tests/providers/subscription_real.rs` run one
-Weles login and one provider refresh for each of Claude Code, Codex, and Kimi.
-They pass only when the exact login row is confirmed, the provider returns a
-usable grant, the pool leaves `needs_reauthorization`, and Brama records the
-`subscription_sign_in` journal entry.
-
-No credential material is printed by either command: the listing reads a ledger
-that has never held any, and the refresh drops the credential it obtains without
-looking at it.
-
-## Adopt routes you already use
-
-`brama adopt --from <file>` reads an existing Brama
-`inference-routes` schema-1 JSON document and reports every alias and ordered
-fallback, required local deployment, configured direct-provider acquisition,
-and Skarbiec subscription identity for the selected agent. It is a review:
-there is no write, credential redemption, subscription activation, or model
-call.
-
-```bash
-brama adopt --from ~/.config/brama/inference-routes.json
-brama adopt --from old-routes.json --apply --select '<alias>'
-brama adopt --from old-routes.json --apply --all-importable
-```
-
-The source must be a regular non-symlink UTF-8 file of at most 1 MiB. A
-whitespace-only file is a valid empty registry. The complete source and current
-destination are validated before mutation; unknown fields, duplicate keys or
-deployment names, repeated destinations, unsafe local endpoints, and
-unsupported route shapes reject without a partial write. Unreferenced
-deployments are reported rather than silently copied.
-
-Nothing is imported until `--apply` is paired with repeated `--select <alias>`
-or `--all-importable`. Identical aliases are unchanged, so repeat imports are
-idempotent. Existing aliases win by default; `--replace-conflicts` replaces
-only reviewed alias conflicts, never a conflicting deployment name. Every
-unselected alias, fallback, and deployment remains intact. The destination is
-`BRAMA_INFERENCE_ROUTES_FILE`, or
-`~/.config/brama/inference-routes.json` when that variable is unset, and an
-accepted selection is committed with the same atomic route-registry operation
-used by the service and Brama Desktop.
-
-Brama Desktop exposes the same review during first use and under
-**Settings → Existing configuration**. Managed credentials and subscription
-identities stay in Skarbiec; standalone provider keys stay in the local
-runtime’s existing Keychain owner. Adoption creates no second credential
-store.
-
-## The first-use walkthrough, and asking for it again
-
-`brama onboard` walks the first-use journey: optional adoption of routes the
-user already has, routing, the request and response contract, and the one real
-model response that completes it. Progress is recorded per workload under
-`$XDG_STATE_HOME/brama/onboarding.json`, defaulting to
-`~/.local/state/brama/onboarding.json`. `--adopt-from <file>` first prints the
-same review as `brama adopt` and stops; pair it with `--adopt-apply` plus an
-exact `--adopt-select <alias>` or `--adopt-all-importable` to persist and
-continue the walkthrough. Adoption never marks the journey complete. Add
-`--allow-provider-cost` to send the single billable request that finishes the
-journey; without it the steps are printed and nothing is sent.
-
-```bash
-brama onboard
-brama onboard --adopt-from old-routes.json
-brama onboard --adopt-from old-routes.json --adopt-apply --adopt-all-importable
-brama onboard --allow-provider-cost
-```
-
-Once the journey is complete the command answers with one line and stops, which
-is right for a script and useless for the operator who wanted to read the steps
-again:
-
-```text
-Brama first-use journey is already complete: a real model response was received.
-```
-
-`--reset` is that operator's verb. It discards recorded progress through the
-onboarding client -- a new attempt, an `onboarding_reset` event, and the entry
-screen again -- and then prints the walkthrough in the same invocation, rather
-than arming something for the next one. It is not a billable command on its own;
-it sends a provider request only when `--allow-provider-cost` is also given.
-
-```bash
-brama onboard --reset
-```
-
-```text
-Brama first-use journey reset: recorded progress discarded, showing it again now.
-
-Route once, independent of provider
-Brama accepts one routing request and selects the configured provider/model route behind it. ...
-
-Use the OpenAI-compatible request and response contract
-Send model, messages, max_tokens, and temperature to POST /v1/chat/completions. ...
-request_example: {"model":"openai/default","messages":[...],"max_tokens":256,"temperature":0.7}
-response_example: {"id":"chatcmpl-...","model":"...","choices":[...],"usage":{...}}
-
-Receive one real model response
-Run the onboarding request through your configured route. ...
-
-Next: configure provider/auth separately if needed, then re-run this command with --allow-provider-cost.
-No provider request was sent and onboarding remains in progress.
-```
-
-Deleting `onboarding.json` is not the same operation. It drops the attempt the
-journey platform is holding open instead of closing it, so the reset is never
-recorded and the discarded attempt stays `in_progress` forever on the Echo side.
-
-## Operational model
-
-- **Configuration:** production policy is generated by
-  `src/release/bin/start-with-skarbiec` from operator-owned configuration and scoped
-  secret consumers. Missing, malformed, duplicate, or contradictory security
-  configuration fails startup.
-  The launcher derives `wisent-backend`'s four required model aliases from that
-  validated policy, rather than granting every name with the same prefix.
-  Additional operator aliases remain available to clients whose grants name
-  them; they do not prevent this required client from starting.
-- **Dynamic inference routes:** `BRAMA_INFERENCE_ROUTES_FILE` points at an
-  owner-only snapshot maintained by the deployment operator. Brama reloads it
-  per request, rejects symlinks and group/other-readable files, accepts only
-  loopback or Tailscale IPv4 deployment endpoints, fails closed on malformed
-  updates, and attempts centrally declared fallback routes in order.
-- **Desktop credentials:** standalone Brama Desktop launches its bundled Brama
-  binary on loopback, sends provider credentials once over the child process's
-  standard input, and keeps both its router bearer and provider credentials out
-  of process arguments, files, logs, and Brama state. A Stado-discovered Brama
-  installation may instead acquire its scoped bearer from Skarbiec.
-- **State:** `$BRAMA_STATE_DIR/journal.jsonl` contains retirement and quality
-  records. `$BRAMA_SUBSCRIPTION_USAGE_FILE`, by default
-  `~/.config/brama/subscription-usage.json` and owner-readable only, holds the
-  per-subscription usage ledger: measured counters, the newest plan reading per
-  window with the instant it was read and where it came from, when the provider's
-  usage report was last checked, any block, and the newest check verdict. It is
-  written atomically and is not a cache — the
-  question it answers spans months, not process lifetimes. A ledger written by
-  an older gateway still loads. An unreadable or malformed ledger is reported
-  with its path and actual error, not overwritten with an empty history.
-  Failed writes remain visible, alongside the last in-memory readings.
-  `/tmp/brama-perf.json`
-  contains replaceable process telemetry. The entitlements router owns encrypted
-  subscription credential storage in managed deployments.
-- **Subscription discovery:** a provider subscription is a Skarbiec item tagged
-  `brama:subscription` and `brama:agent:<agent>`, carrying its provider and
-  subscription id in `brama:provider:<provider>` and `brama:id:<id>`. Brama
-  performs this discovery; Desktop consumes Brama's result and errors rather
-  than maintaining a second subscription list.
-- **Plan usage from the provider's own report:** every provider that rations a
-  subscription publishes a report of how much of the ration is gone, and reading
-  it spends no quota at all. `claude-code` publishes
-  `GET /api/oauth/usage` on `api.anthropic.com` (`five_hour`, `seven_day`,
-  `seven_day_opus` and `seven_day_sonnet`, each a utilization percentage with a
-  reset instant), `codex` publishes `GET /backend-api/wham/usage` on
-  `chatgpt.com` (`rate_limit.primary_window` and `.secondary_window`, each a
-  used percentage with its window length and reset), and `kimi` publishes
-  `GET /coding/v1/usages` on `api.kimi.com` (a `usage` object and a `limits`
-  array of limit/used/remaining counts with their windows). For other providers,
-  Brama explicitly records that no free usage-report endpoint is supported
-  with the current credential; it does not claim to have read their billing API.
-  Their observed traffic counters remain available. Background reads obey
-  `BRAMA_PLAN_USAGE_TTL_SECS` (default 300), spread by up to a
-  quarter either way from the subscription's own id so a fan-out of accounts on
-  one host never becomes one burst against a provider that rate-limits usage
-  reads per address, and single-flighted per subscription. The sweep that notices
-  aged-out rows runs every `BRAMA_PLAN_USAGE_SWEEP_SECS` (default 60, `0`
-  disables it) and is logged under `plan_usage_*`. An explicit usage refresh
-  reads now and shares the same bounded per-subscription operation. A failed
-  read immediately marks retained readings stale; their original observation
-  times remain unchanged. History older than `BRAMA_PLAN_USAGE_RETENTION_SECS`
-  (default 86400) is no longer presented as a usable plan window.
-- **Routing by what the plans have left:** the readings above are not only for
-  reading. A selector orders its candidate routes by the freest usable
-  subscription behind each one, and an explicit route orders its bounded
-  credentials the same way, both from the ledger and neither costing a provider
-  call. Chance still breaks exact ties, so accounts at equal utilization stay
-  decorrelated, but an account the provider says is 90 percent spent is no
-  longer tried ahead of one at 10 percent. A window whose own reset instant has
-  passed counts as empty; a subscription with no reading counts as free,
-  because its first call writes the reading that corrects the placement.
-- **One agent, one account, for the length of a window:** the credential that
-  served an agent is remembered per provider and tried first on that agent's
-  next request, until the tightest window it reported resets (five hours when
-  the provider named no reset, capped at a day). Two things depend on it: a
-  provider's prompt cache lives behind one account, so scattering an agent's
-  turns across a pool throws the cache away, and one conversation's spend
-  belongs in one account's ledger rather than smeared across every account the
-  agent owns. It is a preference and never a grant -- it is consulted after
-  eligibility, skipped for a credential inside a block or reporting a full
-  window, and it cannot outlive the process, because a pin whose window has
-  passed is worth nothing anyway.
-- **The one check that costs quota, and only on request:** whether a provider
-  will actually serve a credential can only be answered by a real request, so
-  `POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe` spends one
-  minimal completion against one named subscription and records the verdict as
-  `probe` with `source` `completion`. Nothing triggers it on a timer: with default
-  configuration no timer performs a quota-consuming request. It is a route rather
-  than a subcommand because redeeming the credential needs the capabilities and
-  identities the launcher installed in the serving process, and a standalone
-  desktop install holds its provider credentials only in that process's memory. A
-  subscription inside a recorded block is refused with `409` rather than probed:
-  the block already says the account is out of quota, and re-reading that sentence
-  is what the block exists to prevent. The probe rotates to no other credential,
-  retires nothing, and is logged under its own `usage_probe_*` events so it is
-  never mistaken for a caller's request.
-- **Refreshing ahead of expiry:** an access token is replaced before it dies
-  rather than when a request trips over it. Every
-  `BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS` seconds (default 60, `0` disables it)
-  the gateway refreshes every active subscription credential that expires within
-  `BRAMA_CREDENTIAL_REFRESH_SKEW_SECS` (default 300), single-flighted per
-  subscription so a slow refresh is never started twice. Refreshing costs no plan
-  quota: a token endpoint is not a metered endpoint. A refusal is classified. A
-  definitive one -- `invalid_grant`, `invalid_token`, a revoked or unauthorized
-  refresh token, or a 401/403 that is not a transport failure -- is recorded as
-  `credential.state` `needs_reauthorization` with the provider's own sentence as
-  `credential.cause`, and that credential is left alone until a sign-in replaces
-  it. A transient one -- a timeout, a refused connection, any transport failure --
-  changes nothing and is retried by the next sweep. A refreshed grant that cannot
-  be written back to the vault is a failed refresh, not a success: the rotated
-  grant is dropped rather than spent from memory, because the provider has
-  already invalidated the one still in the vault. Events are `credential_refresh_*`
-  and `credential_refreshed_ahead`.
-- **Credentials:** callers use dedicated bearer items. Request-sign identities
-  and provider capabilities remain separate. Secrets are redeemed at final use
-  and are not written to JSON configuration, logs, or Brama state. Standalone
-  launchers pass a provider-to-credential JSON object to
-  `brama serve --local-credentials-stdin` over standard input.
-- **Network:** Brama binds to loopback. Standalone desktop clients use their
-  bundled process; managed clients may discover a local Brama service through
-  Stado. Provider endpoints require approved HTTPS hosts, disable redirects,
-  and bypass ambient proxies.
-- **Failure:** stable HTTP error codes distinguish invalid input, authentication,
-  authorization, quota, timeout, dependency unavailability, and provider
-  failure. Retryability is included in the error envelope.
-- **Observability:** health and `brama version` expose secret-free build identity;
-  structured logs record routing mode, selected route, attempts, outcome, and
-  remediation class. `/stats` remains bearer-protected.
-- **Upgrade and rollback:** follow [`RELEASE.md`](https://brama.wisent.com/docs/release). Immutable product
-  version, source revision, platform, digest, and provenance are separate facts.
-- **Qualification:** evidence groups and consent boundaries are defined in
-  [`TESTING.md`](https://brama.wisent.com/docs/testing).
+[onboarding](https://brama.wisent.com/docs/onboarding) for the authenticated
+loopback and production operator paths. Runnable, risk-labeled workflows are
+indexed in [examples](https://brama.wisent.com/docs/examples).
+
+## Where each contract is documented
+
+| Subject | Page |
+|---|---|
+| What Brama is, in one read | [`/docs/what-is-brama`](https://brama.wisent.com/docs/what-is-brama) |
+| Every HTTP path, method, body and refusal | [`/docs/http-api`](https://brama.wisent.com/docs/http-api) |
+| Alias vocabulary, states and diagnosis | [`/docs/concepts/alias`](https://brama.wisent.com/docs/concepts/alias) |
+| Which account pays for a request | [`/docs/concepts/entitlement`](https://brama.wisent.com/docs/concepts/entitlement) |
+| The route registry document and its guards | [`/docs/configuration/route-registry`](https://brama.wisent.com/docs/configuration/route-registry) |
+| Every environment variable the gateway reads | [`/docs/configuration`](https://brama.wisent.com/docs/configuration) |
+| The complete command tree | [`/docs/cli`](https://brama.wisent.com/docs/cli) |
+| Moving a registry file onto the current shape | [`/docs/cli/routes/migrate`](https://brama.wisent.com/docs/cli/routes/migrate) |
+| Reading and repairing the subscription pool | [`/docs/walkthrough-subscriptions`](https://brama.wisent.com/docs/walkthrough-subscriptions) |
+| Routing, streaming, state and failure contract | [`/docs/core`](https://brama.wisent.com/docs/core) |
+| Error codes and retryability | [`/docs/errors`](https://brama.wisent.com/docs/errors) |
+| Symptom-first operator repairs | [`/docs/runbook`](https://brama.wisent.com/docs/runbook) |
+| Boundaries Brama depends on but does not own | [`/docs/integrations`](https://brama.wisent.com/docs/integrations) |
+| Release, upgrade and rollback | [`/docs/release`](https://brama.wisent.com/docs/release) |
+| Qualification evidence and consent boundaries | [`/docs/testing`](https://brama.wisent.com/docs/testing) |
+| Security posture and reporting | [`/docs/security`](https://brama.wisent.com/docs/security) |
+| What changed, release by release | [`/docs/changelog`](https://brama.wisent.com/docs/changelog) |
+
+## Operating rules that outrank convenience
+
+- Secrets are redeemed at final use and never written to JSON configuration,
+  logs, or Brama state. Standalone launchers pass a provider-to-credential JSON
+  object to `brama serve --local-credentials-stdin` over standard input.
+- Brama binds to loopback. Provider endpoints require approved HTTPS hosts,
+  disable redirects, and are reached without an ambient proxy.
+- Production policy is generated by `src/release/bin/start-with-skarbiec` from
+  operator-owned configuration and scoped secret consumers. Missing, malformed,
+  duplicate, or contradictory security configuration fails startup.
+- `BRAMA_INFERENCE_ROUTES_FILE` names an owner-only registry snapshot that Brama
+  re-reads per request, rejecting symlinks and group- or other-readable files and
+  accepting only loopback or Tailscale IPv4 deployment endpoints.
+- Every call is finitely bounded before the first byte, and the request deadline
+  is the deadline of the attempt being made — it is never multiplied by a number
+  of routes.
+- Stable HTTP error codes distinguish invalid input, authentication,
+  authorization, quota, timeout, dependency unavailability, and provider failure;
+  retryability is part of the envelope.
+- Health and `brama version` expose secret-free build identity; structured logs
+  record routing mode, selected route, attempts, and outcome. `/stats` stays
+  bearer-protected.
 
 ## Project status and support
 
 - **Maturity:** pre-1.0. Public contract changes follow the `0.x` policy in
-  [`RELEASE.md`](https://brama.wisent.com/docs/release).
+  [the release page](https://brama.wisent.com/docs/release).
 - **Current source version:** the `version` field in `Cargo.toml`, which is the
   single canonical source; this page does not duplicate the number.
 - **Supported source:** public `main` for development; immutable releases are
   built, stored, and promoted through Stado.
 - **Issues and operator support:**
-  [`wisent-ai/brama` issues](https://github.com/wisent-ai/brama/issues);
-  see [`SUPPORT.md`](https://brama.wisent.com/docs/support).
+  [`wisent-ai/brama` issues](https://github.com/wisent-ai/brama/issues); see
+  [support](https://brama.wisent.com/docs/support).
 - **Security reports:** use the private GitHub Security Advisory channel defined
-  in [`SECURITY.md`](https://brama.wisent.com/docs/security); never put credentials in an issue.
+  in [security](https://brama.wisent.com/docs/security); never put credentials in
+  an issue.
 - **License:** Apache License 2.0; see [`LICENSE`](LICENSE).
 
-Rust code defines executable behavior. This README owns the product promise,
-boundaries, use cases, terminology, status, and operator entry points. Detailed
-documents must link here and must not claim a conflicting capability state.
+Rust code defines executable behavior. This page owns the product promise, the
+boundaries, and the entry points; each documentation page above owns its own
+contract and must not be restated here.

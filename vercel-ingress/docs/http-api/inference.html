@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inference — Brama Docs</title>
+  <meta name="description" content="The three chat dialects, streaming, and the typed embeddings and moderations paths.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/http-api/inference">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>HTTP API</h2><a href="/docs/http-api">Overview</a><a href="/docs/http-api/transport-and-identity">Transport and identity</a><a class="active" aria-current="page" href="/docs/http-api/inference">Inference</a><a href="/docs/http-api/discovery-and-subscriptions">Discovery and subscriptions</a><a href="/docs/http-api/administration-and-operations">Administration and operations</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama HTTP API reference</p>
+      <article class="doc"><h1 id="inference">Inference<a class="headerlink" href="#inference" title="Link to this section">&para;</a></h1>
+<p>Five paths spend model quota: three chat dialects that share one routing decision, and
+two typed endpoints. All five require a bearer and an accepted transport
+(<a href="/docs/http-api/transport-and-identity">transport and identity</a>).</p>
+<h2 id="the-three-inference-dialects">The three inference dialects<a class="headerlink" href="#the-three-inference-dialects" title="Link to this section">&para;</a></h2>
+<p><code>POST /v1/chat/completions</code>, <code>POST /v1/messages</code> and
+<code>POST /v1/responses</code> are one workflow. Identity, allowlist, alias resolution,
+selector semantics, billing ownership and the error contract are identical; only the
+request and answer shapes differ.</p>
+<p>Each requires a <code>model</code> naming an allowed alias, a canonical
+<code>provider/model</code> route, or a selector. The alias names exactly one route, that
+route is attempted once, and its answer is the answer to the request; when it refuses, the
+refusal is what the caller receives and no other route is attempted. An alias that cannot
+serve is refused before any provider is contacted, with the <code>503</code>
+<code>alias_unserviceable</code> body in
+<a href="/docs/http-api/transport-and-identity#the-refusal-envelope">the refusal envelope</a>.</p>
+<h3 id="shared-validation">Shared validation<a class="headerlink" href="#shared-validation" title="Link to this section">&para;</a></h3>
+<ul>
+<li>A request with no <code>model</code> is <code>400 missing field `model`</code>, and a
+  bare vendor name is
+  <code>400 model must be a canonical provider/model route or a supported selector</code>
+  (both captured).</li>
+<li><code>max_tokens</code> is 1024 when the request omits it, and a stated value outside
+  1..32768 is refused with <code>max_tokens must be between one and 32768</code>.</li>
+<li><code>temperature</code> is 0.7 when the request omits it, and a stated value is
+  refused unless it is finite and no greater than two, with
+  <code>temperature must be finite and between zero and 2</code>.</li>
+<li>An empty conversation is refused with <code>messages must not be empty</code>.</li>
+</ul>
+<h3 id="post-v1chatcompletions"><code>POST /v1/chat/completions</code><a class="headerlink" href="#post-v1chatcompletions" title="Link to this section">&para;</a></h3>
+<p>Accepts exactly <code>model</code>, <code>messages</code>, <code>max_tokens</code>,
+<code>temperature</code>, <code>tools</code>, <code>tool_choice</code>,
+<code>billingTarget</code> (<code>providerId</code>/<code>accountId</code>/<code>subscriptionId</code>)
+and <code>stream</code>. An unknown field is refused with the deserializer's own sentence
+(captured):</p>
+<pre><code class="language-text">400 invalid JSON: unknown field `frequency_penalty`, expected one of `model`,
+`messages`, `max_tokens`, `temperature`, `tools`, `tool_choice`,
+`billingTarget`, `stream` at line 1 column 93
+</code></pre>
+<p>Success (captured):</p>
+<pre><code class="language-json">{&quot;choices&quot;:[{&quot;finish_reason&quot;:&quot;stop&quot;,&quot;index&quot;:0,
+  &quot;message&quot;:{&quot;content&quot;:&quot;...&quot;,&quot;role&quot;:&quot;assistant&quot;}}],
+ &quot;id&quot;:&quot;chatcmpl-...&quot;,&quot;model&quot;:&quot;&lt;route&gt;&quot;,&quot;object&quot;:&quot;chat.completion&quot;,
+ &quot;usage&quot;:{&quot;completion_tokens&quot;:7,&quot;prompt_tokens&quot;:9,&quot;total_tokens&quot;:16}}
+</code></pre>
+<p>The <code>model</code> in the answer is the route that served the request, which is the
+one route the named alias resolves to.</p>
+<p>With <code>"stream": true</code> the answer is a <code>text/event-stream</code> of
+<code>chat.completion.chunk</code> frames: a role delta first, then content deltas, a
+<code>finish_reason</code> frame, a usage frame, closed by <code>data: [DONE]</code>
+(captured in
+<a href="/docs/walkthrough-standalone-stub">the standalone walkthrough</a>).</p>
+<h3 id="post-v1messages"><code>POST /v1/messages</code><a class="headerlink" href="#post-v1messages" title="Link to this section">&para;</a></h3>
+<p>The Anthropic Messages dialect over the same routing decision. It accepts the Anthropic
+request shape: <code>model</code>, <code>max_tokens</code>, <code>messages</code>, system,
+tools and streaming. Anthropic fields the provider-neutral request cannot hold — stop
+sequences, cache-control hints, non-function tool types — are accepted and have no effect
+on the attempt; no approximation of them is sent in their place. Success (captured):</p>
+<pre><code class="language-json">{&quot;content&quot;:[{&quot;text&quot;:&quot;...&quot;,&quot;type&quot;:&quot;text&quot;}],&quot;id&quot;:&quot;msg_...&quot;,
+ &quot;model&quot;:&quot;&lt;route&gt;&quot;,&quot;role&quot;:&quot;assistant&quot;,&quot;stop_reason&quot;:&quot;end_turn&quot;,
+ &quot;stop_sequence&quot;:null,&quot;type&quot;:&quot;message&quot;,
+ &quot;usage&quot;:{&quot;input_tokens&quot;:9,&quot;output_tokens&quot;:7}}
+</code></pre>
+<p>Streaming emits <code>message_start</code>, <code>content_block_*</code>,
+<code>message_delta</code> and <code>message_stop</code> events, with no
+<code>[DONE]</code> sentinel.</p>
+<h3 id="post-v1responses"><code>POST /v1/responses</code><a class="headerlink" href="#post-v1responses" title="Link to this section">&para;</a></h3>
+<p>The OpenAI Responses dialect, with <code>input</code> in place of
+<code>messages</code>. Reasoning options and stored-response identifiers are accepted and
+have no effect on the attempt. Success (captured):</p>
+<pre><code class="language-json">{&quot;created_at&quot;:...,&quot;id&quot;:&quot;resp_...&quot;,&quot;model&quot;:&quot;&lt;route&gt;&quot;,&quot;object&quot;:&quot;response&quot;,
+ &quot;output&quot;:[{&quot;content&quot;:[{&quot;annotations&quot;:[],&quot;text&quot;:&quot;...&quot;,&quot;type&quot;:&quot;output_text&quot;}],
+   &quot;id&quot;:&quot;msg_...&quot;,&quot;role&quot;:&quot;assistant&quot;,&quot;status&quot;:&quot;completed&quot;,&quot;type&quot;:&quot;message&quot;}],
+ &quot;status&quot;:&quot;completed&quot;,
+ &quot;usage&quot;:{&quot;input_tokens&quot;:9,&quot;output_tokens&quot;:7,&quot;total_tokens&quot;:16}}
+</code></pre>
+<p>Streaming emits <code>response.*</code> events closed by
+<code>response.completed</code>.</p>
+<h3 id="streaming-commit-rule">Streaming commit rule<a class="headerlink" href="#streaming-commit-rule" title="Link to this section">&para;</a></h3>
+<p>Everything that can change about a request — which credential redeems it, which account
+is billed — is settled before the first byte reaches the caller. Once a byte has been
+written, the generation is committed: a stream that ends without its terminal event was cut
+after commit, and Brama has already stopped. It does not resume a committed generation
+anywhere, and the caller sees the truncated stream and decides what to do about it.</p>
+<p>Streaming a model reachable only through the shared catalogue is refused as
+<code>400 invalid_request</code> before any provider is contacted.</p>
+<h2 id="post-v1embeddings"><code>POST /v1/embeddings</code><a class="headerlink" href="#post-v1embeddings" title="Link to this section">&para;</a></h2>
+<p>A typed, alias-only endpoint on the <code>wisent-backend/embeddings</code> route. It
+accepts exactly <code>model</code>, <code>input</code>, <code>encoding_format</code>
+(<code>float</code> or <code>base64</code>), <code>dimensions</code> and
+<code>user</code>; its shape refusals are <code>invalid embedding input</code> and
+<code>invalid embedding encoding format</code>. Success is the OpenAI embeddings shape:
+<code>object: "list"</code>, <code>data[].embedding</code>, <code>usage</code>.</p>
+<p>On a deployment whose registry declares no embeddings alias, the captured answer is
+<code>500 {"code":"internal_error","message":"embedding alias missing"}</code>. Declaring the
+alias is a registry write
+(<a href="/docs/http-api/administration-and-operations#the-route-registry"><code>PUT /v1/admin/routes</code></a>);
+an existing registry document is brought to the current shape by
+<a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a>.</p>
+<h2 id="post-v1moderations"><code>POST /v1/moderations</code><a class="headerlink" href="#post-v1moderations" title="Link to this section">&para;</a></h2>
+<p>A typed, alias-only endpoint on <code>wisent-backend/moderation</code>. It requires
+<code>model</code> and <code>input</code>, and answers <code>invalid moderation input</code>
+on a shape error. Success is the OpenAI moderations shape.</p>
+<p>Which aliases the presenting bearer may name, and which of them can serve right now, is
+<a href="/docs/http-api/discovery-and-subscriptions#get-v1aliases"><code>GET /v1/aliases</code></a>.
+Which concrete models the caller can execute is
+<a href="/docs/http-api/discovery-and-subscriptions#get-v1models"><code>GET /v1/models</code></a>.</p>
+</article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

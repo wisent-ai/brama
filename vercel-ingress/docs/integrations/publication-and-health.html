@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Publication and health — Brama Docs</title>
+  <meta name="description" content="Publication on GitHub Releases, versioned host installation, what /health and /stats prove, the integration error codes, and the integration change gate.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/integrations/publication-and-health">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Integrations</h2><a href="/docs/integrations">Overview</a><a href="/docs/integrations/model-providers">Model providers</a><a href="/docs/integrations/catalog">models.dev catalog</a><a href="/docs/integrations/skarbiec-and-entitlements">Skarbiec and entitlements</a><a class="active" aria-current="page" href="/docs/integrations/publication-and-health">Publication and health</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama integration contracts</p>
+      <article class="doc"><h1 id="publication-and-health">Publication and health<a class="headerlink" href="#publication-and-health" title="Link to this section">&para;</a></h1>
+<p>Publication and the host that runs Brama are boundaries owned by the release
+owner and the deployment operator. This page carries their contract, what the
+health and statistics surfaces actually prove about an integration, and the
+gate an integration change has to pass.</p>
+<h2 id="publication-and-host-installation">Publication and host installation<a class="headerlink" href="#publication-and-host-installation" title="Link to this section">&para;</a></h2>
+<h3 id="outcome">Outcome<a class="headerlink" href="#outcome" title="Link to this section">&para;</a></h3>
+<p>Publish immutable per-platform archives and checksums on GitHub Releases.
+Deployment operators download one exact version, verify its digest, install it
+under a versioned host path, and control process activation with their own
+service manager.</p>
+<h3 id="identity">Identity<a class="headerlink" href="#identity" title="Link to this section">&para;</a></h3>
+<p>GitHub publication, host installation, bearer verification, request-sign
+reading, and provider access are separate identities. Runtime credentials never
+enter GitHub, a release archive, or a command line.</p>
+<h3 id="failure-and-removal">Failure and removal<a class="headerlink" href="#failure-and-removal" title="Link to this section">&para;</a></h3>
+<p>Build, checksum, publication, download, and host activation failures stop
+promotion. GitHub availability does not control an already installed service.
+Decommissioning stops the host process, revokes runtime grants separately,
+preserves the previous version until retention expires, and never deletes
+provider vault resources as a shortcut.</p>
+<p>A version that changes the route registry's accepted shape is installed the
+same way, and the operator brings the existing document forward with
+<a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a>: it
+keeps only the known top-level fields, validates the result, commits it with
+the atomic owner-only replacement every registry write uses, and prints what it
+committed. Running it a second time commits the same document. Promotion rules
+are in <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="integration-health">Integration health<a class="headerlink" href="#integration-health" title="Link to this section">&para;</a></h2>
+<p>Public <code>/health</code> proves only that ingress and static startup policy
+are ready. It returns <code>status: "ok"</code>, build identity, and
+<code>dependencies: "not_probed"</code>. It never redeems a credential, lists
+agent subscriptions, contacts a catalog or model provider, or performs a
+billable operation.</p>
+<p>Protected <code>/stats</code> exposes bounded aggregate routing telemetry and
+configured direct-provider count without probing dependencies. Per-request
+structured errors and logs carry actual integration state:</p>
+<ul>
+<li><code>dependency_unavailable</code>: the required broker, catalog, or
+  provider seam could not serve that workflow;</li>
+<li><code>dependency_timeout</code>: the request deadline elapsed, and that
+  deadline covers the single attempt the alias resolves to;</li>
+<li><code>provider_rate_limited</code> or <code>subscription_unavailable</code>:
+  bounded capacity was exhausted;</li>
+<li><code>provider_failure</code>: a permanent or malformed provider result
+  stopped replay and reached the caller;</li>
+<li><code>alias_unserviceable</code>: the alias is declared but its one route
+  cannot serve, and <code>details</code> carry the alias state and that
+  route.</li>
+</ul>
+<p>Logs identify the integration class, route, bounded attempt count, outcome, and
+remediation code without capability IDs, raw external payloads, prompts, or
+credentials. The four alias states an operator reads on <code>/v1/aliases</code>
+and <code>brama aliases</code> are <code>serving</code>,
+<code>no_route</code>, <code>capability_absent</code> and
+<code>routes_file_invalid</code>; the last one means the registry document was
+rejected whole, which happens when it carries a top-level field the
+deserializer does not know. Codes are catalogued in
+<a href="/docs/errors">Errors</a> and the recovery steps in
+<a href="/docs/runbook">Runbook</a>.</p>
+<h2 id="ownership-and-change-gate">Ownership and change gate<a class="headerlink" href="#ownership-and-change-gate" title="Link to this section">&para;</a></h2>
+<p>Brama maintainers own normalized protocols and routing. Provider-account
+owners own subscriptions, billing, quota, and revocation. Skarbiec owns secret
+authority; Brama release owners own GitHub publication; deployment operators
+own installation, process control, network, and host recovery.</p>
+<p>An integration change is complete only when capability, configuration, data,
+timeout, errors, compatibility, observability, disablement, removal, examples,
+and approved evidence agree.</p>
+</article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

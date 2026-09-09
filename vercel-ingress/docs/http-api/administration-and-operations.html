@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Administration and operations — Brama Docs</title>
+  <meta name="description" content="The admin family that writes the route registry and credentials, plus liveness, readiness and telemetry.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/http-api/administration-and-operations">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>HTTP API</h2><a href="/docs/http-api">Overview</a><a href="/docs/http-api/transport-and-identity">Transport and identity</a><a href="/docs/http-api/inference">Inference</a><a href="/docs/http-api/discovery-and-subscriptions">Discovery and subscriptions</a><a class="active" aria-current="page" href="/docs/http-api/administration-and-operations">Administration and operations</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama HTTP API reference</p>
+      <article class="doc"><h1 id="administration-and-operations">Administration and operations<a class="headerlink" href="#administration-and-operations" title="Link to this section">&para;</a></h1>
+<p>The <code>/v1/admin/*</code> family is how the console changes this deployment: the route
+registry, provider credentials, configuration adoption and the two deliberate actions
+against a named subscription. Alongside them sit the three paths an operator watches:
+<code>/health</code>, <code>/readyz</code> and <code>/stats</code>.</p>
+<h2 id="who-the-admin-family-answers">Who the admin family answers<a class="headerlink" href="#who-the-admin-family-answers" title="Link to this section">&para;</a></h2>
+<p>Every <code>/v1/admin/*</code> path answers only a <code>brama-desktop</code> identity
+carrying no model allowlist; every other caller receives <code>403 forbidden</code>
+(captured). Responses carry identifiers, usage and status only: a subscription credential
+is write-only and is never part of an answer, on any path, including an error path.</p>
+<h2 id="get-v1adminsnapshot"><code>GET /v1/admin/snapshot</code><a class="headerlink" href="#get-v1adminsnapshot" title="Link to this section">&para;</a></h2>
+<p>Routes and providers as this process currently holds them. Captured keys:
+<code>schemaVersion</code>, whose value is the number one; <code>automaticRollback</code>,
+which is <code>true</code>; <code>boundaries</code>
+(<code>{"credentials":"skarbiec","releases":"stado","routing":"brama"}</code>);
+<code>providers[]</code> in the same shape <code>/stats</code> reports; and
+<code>routes</code>, the registry document as read from the configured file. When that file
+will not read, the answer is <code>503 route registry unavailable</code>.</p>
+<p>The registry document under <code>routes</code> carries exactly three known top-level
+fields — the schema version, <code>deployments</code> and <code>routes</code> — and
+<code>routes</code> maps each alias to its single destination:</p>
+<pre><code class="language-json">{&quot;deployments&quot;:[],
+ &quot;routes&quot;:{&quot;weles&quot;:&quot;best&quot;,&quot;ox-alpha&quot;:&quot;openrouter/stealth/ox-alpha&quot;}}
+</code></pre>
+<p>The document also carries <code>schema_version</code>, whose value is the number one. Any
+top-level field beyond those three is refused by the deserializer and the whole document is
+rejected, so a file written for an earlier shape is refused rather than read in part. That
+refusal is what puts every alias into <code>routes_file_invalid</code>.
+<a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a> reads the configured
+document, keeps the known fields, validates the result and commits it with the same atomic
+owner-only replacement the writes below use; it is idempotent and prints the document it
+committed.</p>
+<h2 id="the-route-registry">The route registry<a class="headerlink" href="#the-route-registry" title="Link to this section">&para;</a></h2>
+<p><strong>PUT <code>/v1/admin/routes</code></strong> takes exactly
+<code>{"alias", "primary"}</code>: the alias, and the one route it resolves to. An unknown
+field is refused with the deserializer's own sentence (captured), so a body carrying
+anything else — including a list of further routes — does not write. Refusals:</p>
+<ul>
+<li><code>409 runtime route registry is not configured</code> (captured) when no registry
+  file is in effect, because there is nothing to write into;</li>
+<li><code>400 unknown route alias</code> for a name this gateway does not accept as an
+  alias;</li>
+<li>a <code>400</code> route-validation refusal when the stated route is unsupported,
+  duplicates the destination the alias already holds, or is unavailable on this
+  deployment;</li>
+<li><code>409 route update was rejected</code> when validation of the resulting document
+  fails.</li>
+</ul>
+<p><strong>DELETE <code>/v1/admin/routes</code></strong> takes exactly
+<code>{"alias"}</code> and removes that alias from the document. It answers
+<code>400 invalid route alias</code> for a malformed name,
+<code>409 required route aliases cannot be deleted</code> for an alias in the compiled-in
+contract, <code>404 route alias not found</code> for one the document does not carry, and
+<code>409 route deletion was rejected</code> when the resulting document does not
+validate.</p>
+<p>Both answer <code>{"ok": true, "routes": &lt;document&gt;}</code>, the whole registry
+document as committed, so the caller reads the new state rather than assuming it. The write
+is validated first and then committed by atomic owner-only replacement: either the file is
+the new document or it is the old one. Nothing partial is left on disk, and a rejected write
+leaves the file exactly as it was.</p>
+<p>What the resulting states look like from the client side is
+<a href="/docs/http-api/discovery-and-subscriptions#get-v1aliases"><code>GET /v1/aliases</code></a>.</p>
+<h2 id="configuration-adoption">Configuration adoption<a class="headerlink" href="#configuration-adoption" title="Link to this section">&para;</a></h2>
+<p>Two paths take a whole configuration document and merge the aliases an operator picks
+out of it. Both work on the registry shape above, so an alias adopted from a source
+document arrives with one destination.</p>
+<p><strong>POST <code>/v1/admin/configuration-adoption/preview</code></strong> takes exactly
+<code>{"document":"&lt;schema-1 JSON&gt;","source_name":"&lt;display name&gt;","agent_id":"wisent-app"}</code>,
+where <code>agent_id</code> is <code>wisent-app</code> when the request omits it. It
+validates the complete source and the current destination, reads the secret-free configured
+acquisition and subscription identities, and returns <code>providers</code>,
+<code>subscriptions</code>, <code>subscription_discovery</code>, <code>candidates</code> and
+<code>unreferenced_deployments</code>. It performs no write, no credential redemption, no
+subscription activation and no inference.</p>
+<p><strong>POST <code>/v1/admin/configuration-adoption/apply</code></strong> takes exactly
+<code>{"document":"&lt;schema-1 JSON&gt;","source_name":"&lt;display name&gt;","agent_id":"wisent-app","selected_aliases":["&lt;alias&gt;"],"replace_alias_conflicts":false}</code>.
+It repeats the preview validation, rejects a duplicate or unknown selection, and atomically
+merges only the accepted selections into the configured registry file. The answer contains
+the resulting secret-free <code>routes</code>, per-alias <code>items</code>, and exact
+<code>imported</code>, <code>unchanged</code>, <code>conflicting</code> and
+<code>rejected</code> counts. An existing alias keeps its route unless the request
+explicitly asked for replacement, and a deployment conflict is never replaced.</p>
+<p>Both adoption paths answer <code>409 runtime route registry is not configured</code> when
+no live registry file exists, <code>400 &lt;reason&gt;</code> for an invalid document,
+identity, route, selection or destination state, and <code>403 forbidden</code> for any
+caller other than Brama Desktop. Every error path leaves the registry file unchanged and
+returns no credential contents.</p>
+<h2 id="provider-credentials">Provider credentials<a class="headerlink" href="#provider-credentials" title="Link to this section">&para;</a></h2>
+<p><code>/v1/admin/credentials</code> administers the standalone provider credential store
+this host keeps, the one a deployment without Skarbiec redeems from.</p>
+<ul>
+<li><strong>GET</strong> answers <code>{"providers": ["&lt;provider&gt;", ...]}</code>, the
+  providers a credential is stored for. Names only: no credential value is returned.</li>
+<li><strong>PUT</strong> takes <code>{"provider", "credential"}</code> and answers
+  <code>{"ok": true, "provider": "&lt;provider&gt;"}</code>. A provider the build does not
+  support is <code>400 provider must name a supported remote API provider</code>, and a
+  credential the store refuses is a <code>400</code> carrying the store's own sentence.</li>
+<li><strong>DELETE</strong> takes <code>{"provider"}</code> and answers
+  <code>{"ok": true, "provider": "&lt;provider&gt;"}</code>. A provider with nothing stored
+  is <code>404 provider credential not found</code>.</li>
+</ul>
+<p>When this deployment keeps no standalone store at all, the read and the delete answer
+<code>409 standalone credential store is not enabled</code> and the write is refused with
+the store's own sentence as a <code>400</code>. In every case the request is refused, and
+credentials continue to be redeemed from the authority that owns them
+(<a href="/docs/architecture">architecture</a>).</p>
+<h2 id="administered-subscriptions">Administered subscriptions<a class="headerlink" href="#administered-subscriptions" title="Link to this section">&para;</a></h2>
+<p>Four paths act on a subscription the console administers. Each one happens because the
+console asked for it; no timer reaches any of them.</p>
+<ul>
+<li><strong>POST <code>/v1/admin/subscriptions/:agent_id/:subscription_id/probe</code></strong>
+  is the one path in the product that deliberately spends plan quota: one minimal completion
+  against one named subscription, recorded as a <code>probe</code> with source
+  <code>completion</code>. It is refused with <code>409</code> when the subscription is
+  inside a recorded block, and <code>404 subscription not found</code> when it is otherwise
+  absent (captured). Success is
+  <code>{"ok": true, "probe": {...}, "subscription": {...}}</code>.</li>
+<li><strong>POST <code>/v1/admin/subscription-sign-in/:agent_id/:subscription_id</code></strong>
+  signs in one subscription owned by the administered agent. It requires a nonempty
+  <code>reason</code> and accepts <code>login_item</code> and
+  <code>login_timeout_ms</code>.</li>
+<li><strong>POST <code>/v1/admin/subscription-pool/sign-in</code></strong> signs in the
+  selected pooled account through Weles. It requires a nonempty <code>reason</code> and
+  <code>subscription_id</code>, and accepts <code>login_item</code> and
+  <code>login_timeout_ms</code>. Both sign-in paths verify current ownership, refuse a
+  retired or mismapped account, derive the provider from the selected subscription, and
+  return the native <code>signed_in</code> or <code>failed</code> verdict with its actual
+  detail.</li>
+<li><strong>POST <code>/v1/admin/subscription-pool/refresh</code></strong> takes
+  <code>{"provider", "reason"}</code> and runs the same audited refresh as
+  <code>brama subscription refresh</code>, answering the verdict with status 200 (captured:
+  <code>{"attempted":0,"detail":"no usable `codex` subscription is in this deployment's
+  pool, ...","provider":"codex","result":"failed"}</code>). The verdict is the answer; only
+  the CLI turns a <code>failed</code> verdict into a non-zero exit code.</li>
+</ul>
+<p>Reading the pool, rather than acting on it, is
+<a href="/docs/http-api/discovery-and-subscriptions#the-subscription-pool">discovery and
+subscriptions</a>.</p>
+<h2 id="get-health"><code>GET /health</code><a class="headerlink" href="#get-health" title="Link to this section">&para;</a></h2>
+<p>Liveness only, no request fields, no bearer. Captured:</p>
+<pre><code class="language-json">{&quot;build&quot;:{&quot;built_at&quot;:&quot;...&quot;,&quot;platform&quot;:&quot;...&quot;,&quot;product&quot;:&quot;brama&quot;,
+ &quot;source_revision&quot;:&quot;...&quot;,&quot;version&quot;:&quot;0.2.38&quot;},
+ &quot;dependencies&quot;:&quot;not_probed&quot;,&quot;status&quot;:&quot;ok&quot;}
+</code></pre>
+<p>It never redeems a credential, lists subscriptions or contacts a provider: it answers
+<code>ok</code> from a gateway whose every redemption is being refused
+(<a href="/docs/architecture">architecture</a>). Treat it as evidence the process is
+running, and nothing else.</p>
+<h2 id="get-readyz"><code>GET /readyz</code><a class="headerlink" href="#get-readyz" title="Link to this section">&para;</a></h2>
+<p>The only evidence that the product works. Per request it (1) redeems one capability per
+configured provider through the same broker call the request path makes, (2) checks that
+every active subscription contributes at least one discoverable model, (3) redeems one
+credential per active subscription, and (4) reports vault subscription accounts carrying no
+<code>brama:agent:</code> tag. Captured healthy body:</p>
+<pre><code class="language-json">{&quot;build&quot;:{...},&quot;denied&quot;:[],&quot;operator_action_required&quot;:false,
+ &quot;providers&quot;:[{&quot;credential&quot;:true,&quot;provider&quot;:&quot;openai&quot;}],
+ &quot;ready&quot;:true,
+ &quot;reason&quot;:&quot;every configured provider credential was obtained, every active subscription redeemed, and every vault account carries the agent tag that makes it routable&quot;,
+ &quot;routing&quot;:[],&quot;subscriptions&quot;:[],&quot;unredeemable&quot;:[],&quot;unroutable&quot;:[],
+ &quot;unroutable_accounts&quot;:[]}
+</code></pre>
+<p>Otherwise the status is <code>503</code> with <code>ready: false</code> and a
+<code>reason</code> naming the failing half; the five sentences and their repairs are in the
+<a href="/docs/runbook">runbook</a>. An alias whose route this gateway cannot reach appears
+under <code>routing</code>. Rows in <code>subscriptions[]</code> carry per-subscription
+<code>redeemable</code> and the refusal in the words of whatever refused it, and never a
+secret.</p>
+<h2 id="get-stats"><code>GET /stats</code><a class="headerlink" href="#get-stats" title="Link to this section">&para;</a></h2>
+<p>Bearer-protected process telemetry, with no dependency probing. Captured keys:
+<code>build</code>, <code>configuredDirectProviders</code>, <code>dependencyPolicy</code>
+(<code>{"capabilityBroker":"final-use","catalog":"lazy","subscriptions":"lazy"}</code>),
+<code>limits</code> (<code>maxOutputTokens</code> and
+<code>requestDeadlineSeconds</code> as this gateway is configured), <code>models[]</code>
+with per-model <code>count</code>, <code>latencyMs</code>, <code>lastLatencyMs</code>,
+<code>tps</code> and <code>lastTps</code>, <code>perfModels</code>, and
+<code>providers[]</code> with per-descriptor <code>id</code>, <code>displayName</code>,
+<code>wireProtocol</code> and <code>configured</code>. It also carries the cumulative
+<code>total_requests</code>, <code>total_failures</code>,
+<code>total_provider_attempts</code>, <code>total_input_tokens</code>,
+<code>total_output_tokens</code> and <code>uptimeSeconds</code>.</p>
+<p>Because an alias resolves to one route, <code>total_provider_attempts</code> counts one
+attempt per request that reached a provider, plus any credential rotation the gateway made
+before the first byte. Process telemetry is not durable billing evidence: it resets with the
+process.</p>
+</article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

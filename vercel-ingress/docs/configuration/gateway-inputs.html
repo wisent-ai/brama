@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gateway inputs — Brama Docs</title>
+  <meta name="description" content="Every variable the brama serve process reads: listener and transport trust, identity and policy, state and ledgers, timers and freshness, catalog and providers.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/configuration/gateway-inputs">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Configuration</h2><a href="/docs/configuration">Overview</a><a class="active" aria-current="page" href="/docs/configuration/gateway-inputs">Gateway inputs</a><a href="/docs/configuration/route-registry">Route registry</a><a href="/docs/configuration/launcher-inputs">Launcher inputs</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama configuration reference</p>
+      <article class="doc">
+        <h1 id="gateway-inputs">Gateway inputs<a class="headerlink" href="#gateway-inputs" title="Link to this section">&para;</a></h1>
+        <p>These are the variables the <code>brama serve</code> process itself reads.
+        In a managed installation the launcher assembles the security-bearing ones
+        before <code>exec</code>; see
+        <a href="/docs/configuration/launcher-inputs">Launcher inputs</a>. A missing,
+        malformed, duplicate, or contradictory value ends startup with a refusal that
+        names the variable. The route registry file has its own page:
+        <a href="/docs/configuration/route-registry">Route registry</a>.</p>
+
+        <h2 id="listener">Listener<a class="headerlink" href="#listener" title="Link to this section">&para;</a></h2>
+        <table><thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
+          <tr><td><code>--port</code> (serve flag)</td><td><code>8080</code></td><td>listen port</td></tr>
+          <tr><td><code>BRAMA_BIND_ADDRESS</code></td><td>loopback</td><td>bind IP; must parse as an IP address. Requests from this address count as local for the transport guard</td></tr>
+          <tr><td><code>BRAMA_TRUSTED_PROXY_IPS</code></td><td>unset</td><td>comma-separated TLS-terminator peer IPs whose <code>https</code> forwarded headers are trusted; an empty value trusts none of them</td></tr>
+          <tr><td><code>BRAMA_ENCRYPTED_PEER_IPS</code></td><td>unset</td><td>comma-separated peer IPs whose hop is already encrypted (mesh nodes); accepted without forwarded headers</td></tr>
+        </tbody></table>
+
+        <h2 id="identity-and-policy">Identity and policy<a class="headerlink" href="#identity-and-policy" title="Link to this section">&para;</a></h2>
+        <table><thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
+          <tr><td><code>BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES</code></td><td>unset</td><td>JSON array of <code>{client_id, token, agent_id?, allowed_models?}</code>. Absent means &quot;ask the authority&quot;, not &quot;misconfigured&quot;: a bearer that is not in this table is resolved against Skarbiec, and Skarbiec's answer is the answer</td></tr>
+          <tr><td><code>BRAMA_MODEL_ALIASES</code></td><td>required in managed mode</td><td>JSON object of alias &rarr; canonical route. Must contain <code>wisent-backend</code>, <code>wisent-backend/evaluation</code>, <code>wisent-backend/embeddings</code>, <code>wisent-backend/moderation</code>, <code>weles</code>, and <code>best</code>; extra names are permitted without widening the required clients' allowlists. In standalone mode an absent value is an empty map</td></tr>
+          <tr><td><code>BRAMA_INFERENCE_ROUTES_FILE</code></td><td>unset (launcher default <code>~/.config/brama/inference-routes.json</code>)</td><td>owner-only route registry document, re-read per request; symlinks and group- or other-readable files are rejected. See <a href="/docs/configuration/route-registry">Route registry</a></td></tr>
+          <tr><td><code>BRAMA_REQUEST_SIGN_IDENTITIES</code></td><td>unset</td><td>central request-sign identity map (Echo, legacy Content Platform, Oko, Weles)</td></tr>
+          <tr><td><code>BRAMA_REQUEST_SIGN_CAPABILITY_IDS</code></td><td>unset</td><td>optional request-sign capability seeds; the managed launcher clears them and issues at final use</td></tr>
+          <tr><td><code>BRAMA_PROVIDER_CAPABILITY_IDS</code></td><td>unset</td><td>optional direct-provider capability seeds; the managed launcher clears them and issues at final use</td></tr>
+          <tr><td><code>BRAMA_SUBSCRIPTION_CATALOG</code></td><td>unset</td><td>trusted startup subscription metadata the operator declares, read to seed the inventory before live discovery has answered; a discovery refusal is still reported as a refusal</td></tr>
+          <tr><td><code>WC_SKARBIEC_URL</code>, <code>BRAMA_SKARBIEC_CONSUMER</code>, <code>BRAMA_SKARBIEC_TOKEN_FILE</code></td><td>unset</td><td>bearer introspection against Skarbiec for tokens not in the boot table</td></tr>
+          <tr><td><code>BRAMA_WISENT_AUTH_ANON_KEY</code></td><td>unset</td><td>public anon key for human identity and organization authorization at canonical Wisent Supabase <code>https://alvaewvbyxpgwdpugnxy.supabase.co</code>; never a service-role key</td></tr>
+          <tr><td><code>ENTITLEMENTS_ROUTER_BIN</code></td><td><code>entitlements-router</code></td><td>binary shelled for vault listing and credential writes</td></tr>
+        </tbody></table>
+        <p>Alias policy and the route registry are separate inputs with separate
+        jobs. <code>BRAMA_MODEL_ALIASES</code> declares which aliases this
+        installation is required to serve; the registry says which single destination
+        each alias resolves to. A declared alias with no destination is a real state,
+        <code>no_route</code>, and a completion naming it answers <code>503</code>
+        <code>alias_unserviceable</code> with <code>details.state</code> and
+        <code>details.route</code> rather than being routed somewhere else. See
+        <a href="/docs/concepts/alias">Alias</a> and <a href="/docs/errors">Errors</a>.</p>
+
+        <h2 id="state-and-ledgers">State and ledgers<a class="headerlink" href="#state-and-ledgers" title="Link to this section">&para;</a></h2>
+        <table><thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
+          <tr><td><code>BRAMA_STATE_DIR</code></td><td><code>$HOME/.brama</code></td><td>holds <code>journal.jsonl</code>, the append-only retirement/quality/refresh journal; readers take the last matching record; credential material is never written here</td></tr>
+          <tr><td><code>BRAMA_SUBSCRIPTION_USAGE_FILE</code></td><td><code>~/.config/brama/subscription-usage.json</code></td><td>per-subscription usage ledger, owner-readable, atomic writes</td></tr>
+          <tr><td><code>BRAMA_DONATED_SUBSCRIPTIONS_FILE</code></td><td><code>/tmp/brama-skarbiec/donated-subscriptions.json</code></td><td>metadata-only donation overlay, atomic 0600 rewrite</td></tr>
+          <tr><td><code>BRAMA_PERF_PATH</code></td><td><code>/tmp/brama-perf.json</code></td><td>replaceable process telemetry</td></tr>
+        </tbody></table>
+
+        <h2 id="timers-and-freshness">Timers and freshness<a class="headerlink" href="#timers-and-freshness" title="Link to this section">&para;</a></h2>
+        <table><thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
+          <tr><td><code>BRAMA_PLAN_USAGE_TTL_SECS</code></td><td><code>300</code></td><td>freshness window per subscription's provider usage report; also when a reading turns <code>stale</code></td></tr>
+          <tr><td><code>BRAMA_PLAN_USAGE_SWEEP_SECS</code></td><td><code>60</code></td><td>how often aged-out readings are looked for; <code>0</code> disables the sweep</td></tr>
+          <tr><td><code>BRAMA_PLAN_USAGE_RETENTION_SECS</code></td><td><code>86400</code></td><td>when a stale reading stops being served</td></tr>
+          <tr><td><code>BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS</code></td><td><code>60</code></td><td>refresh-ahead sweep interval; <code>0</code> disables it</td></tr>
+          <tr><td><code>BRAMA_CREDENTIAL_REFRESH_SKEW_SECS</code></td><td><code>300</code></td><td>refresh credentials expiring within this window</td></tr>
+          <tr><td><code>BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN</code></td><td>unset (off)</td><td>only <code>1</code> enables automatic Weles browser sign-in after a credential refusal or a missing account mapping; OAuth token renewal remains enabled independently</td></tr>
+        </tbody></table>
+        <p>With these defaults no timer performs a quota-consuming request: usage
+        reports and token refreshes are free, and the only quota-spending check is the
+        explicit admin probe route. No default timer opens a browser; signing in
+        requires the separate CLI or Desktop action unless automatic Weles renewal was
+        explicitly enabled.</p>
+        <p>These windows govern how fresh a reading is, not how long a request may
+        run. A completion carries the deadline of its one attempt against its one
+        route; that deadline is not multiplied by anything.</p>
+
+        <h2 id="catalog-and-providers">Catalog and providers<a class="headerlink" href="#catalog-and-providers" title="Link to this section">&para;</a></h2>
+        <table><thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
+          <tr><td><code>BRAMA_MODEL_CATALOG_URL</code></td><td><code>https://models.dev/api.json</code></td><td>public metadata origin</td></tr>
+          <tr><td><code>BRAMA_MODEL_CATALOG_TTL_SECONDS</code></td><td><code>900</code></td><td>in-memory catalog TTL</td></tr>
+          <tr><td><code>BRAMA_MODEL_CATALOG_PATH</code></td><td>unset</td><td>read the catalog from a local file instead of the origin</td></tr>
+          <tr><td><code>BRAMA_MODEL_CATALOG_CACHE</code></td><td><code>/tmp/brama-models-dev-cache.json</code></td><td>replaceable on-disk cache</td></tr>
+          <tr><td><code>BRAMA_CATALOG_REVISION</code></td><td><code>brama-v1</code></td><td>revision string reported by <code>/v1/models</code></td></tr>
+          <tr><td><code>BRAMA_PROVIDER_&lt;PROVIDER&gt;_BASE_URL</code></td><td>built-in</td><td>per-provider base override; an exact trusted HTTPS host or an explicit loopback address only</td></tr>
+          <tr><td><code>STADO_INTEGRATION_API_URL</code>, <code>BRAMA_STADO_INTEGRATION_TOKEN</code></td><td>unset</td><td>optional remote Stado transport for <code>brama onboard</code></td></tr>
+        </tbody></table>
+        <p>The catalog describes models; it does not decide routing. An alias is
+        served only through its registered destination, and a model present in the
+        catalog but absent from the registry has no route.</p>
+        <p>Build identity is baked at compile time from
+        <code>BRAMA_SOURCE_REVISION</code>, <code>BRAMA_BUILD_PLATFORM</code>, and
+        <code>BRAMA_BUILD_TIMESTAMP</code>, and reported by
+        <code>brama version</code>, <code>/health</code>, <code>/readyz</code>, and
+        <code>/stats</code>.</p>
+      </article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

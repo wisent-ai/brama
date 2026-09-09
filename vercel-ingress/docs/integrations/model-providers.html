@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Model providers — Brama Docs</title>
+  <meta name="description" content="The model-provider integration contract: registering an existing model bearer, the adapter boundary, capability declaration, identity, reliability and removal.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/integrations/model-providers">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Integrations</h2><a href="/docs/integrations">Overview</a><a class="active" aria-current="page" href="/docs/integrations/model-providers">Model providers</a><a href="/docs/integrations/catalog">models.dev catalog</a><a href="/docs/integrations/skarbiec-and-entitlements">Skarbiec and entitlements</a><a href="/docs/integrations/publication-and-health">Publication and health</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama integration contracts</p>
+      <article class="doc"><h1 id="model-providers">Model providers<a class="headerlink" href="#model-providers" title="Link to this section">&para;</a></h1>
+<p>A model provider is a boundary Brama depends on but does not own. This page
+carries the provider side of the integration contract: how an existing model
+bearer is registered as a caller, where the adapter boundary sits, what a
+catalog entry is allowed to declare, and the provider integration's own
+identity, reliability, compatibility and removal rules.</p>
+<h2 id="register-existing-model-bearer">Register an existing model bearer<a class="headerlink" href="#register-existing-model-bearer" title="Link to this section">&para;</a></h2>
+<p>Reading a bearer from Skarbiec does not register it as a Brama caller. On the
+Skarbiec owner host,
+<code>python3 scripts/provision-model-consumer.py probierz --model codex/gpt-5.6-sol</code>
+registers the existing <code>probierz-model-router#token</code> value with the
+authority for that exact route and audience <code>probierz</code>. It does not
+rotate the stored bearer or restart Brama. Repeat <code>--model</code> for
+additional exact routes; existing model grants are retained.</p>
+<p>The command prints the grant expiry. Running it again renews the same bearer
+registration. A grant with another audience, a workload key, or non-model
+capabilities is refused, and that grant is left exactly as it was. Supplying
+the optional workload public-key path also provisions the caller's separate
+one-use acquisition grant, as before.</p>
+<p>Brama reads this registration through token introspection, so the registered
+bearer must still meet the request-signing and subscription-ownership
+requirements. An HTTP 401 means authentication did not succeed; it is not proof
+that the selected model ran.</p>
+<h2 id="adapter-boundary">Adapter boundary<a class="headerlink" href="#adapter-boundary" title="Link to this section">&para;</a></h2>
+<p><code>subscription_dispatch</code> owns provider-neutral eligibility and bounded
+selection. <code>providers</code> owns external protocol adapters. An adapter
+owns:</p>
+<ul>
+<li>endpoint and trusted-host policy;</li>
+<li>credential extraction and provider authorization shape;</li>
+<li>request and response translation;</li>
+<li>model discovery and capability declaration;</li>
+<li>timeout and response limits;</li>
+<li>provider-specific error classification and telemetry;</li>
+<li>compatibility and disable/removal behavior.</li>
+</ul>
+<p>Core HTTP handlers never construct raw provider requests. Protocol adapters are
+shared only when their wire behavior is genuinely compatible; provider identity
+and endpoint policy remain explicit.</p>
+<p><code>POST /v1/chat/completions</code> accepts OpenAI-compatible
+<code>tool_choice</code>. OpenAI Chat providers receive it unchanged; the
+Responses, Anthropic, and Google adapters translate a named function choice
+into their native forced-tool shape. See
+<a href="/docs/http-api">HTTP API</a> for the request surface.</p>
+<h2 id="capability-declaration">Capability declaration<a class="headerlink" href="#capability-declaration" title="Link to this section">&para;</a></h2>
+<p>Every catalog entry distinguishes:</p>
+<ul>
+<li>executable versus unsupported protocol;</li>
+<li>text and image input modalities;</li>
+<li>tool calling;</li>
+<li>reasoning metadata;</li>
+<li>context and output limits;</li>
+<li>input, output, cache-read, and cache-write price metadata;</li>
+<li>direct capability configured versus agent subscription available.</li>
+</ul>
+<p>Catalog metadata is untrusted advisory data. A model is not executable merely
+because models.dev lists it; Brama must have a supported protocol, trusted
+endpoint, and correct capability. The catalog contract is on
+<a href="/docs/integrations/catalog">models.dev catalog</a>.</p>
+<h2 id="outcome">Outcome<a class="headerlink" href="#outcome" title="Link to this section">&para;</a></h2>
+<p>Execute one provider-neutral <code>ModelRequest</code> and return one normalized
+<code>ModelResponse</code> without exposing provider credentials or raw SDK types
+to the caller.</p>
+<h2 id="configuration-and-identity">Configuration and identity<a class="headerlink" href="#configuration-and-identity" title="Link to this section">&para;</a></h2>
+<ul>
+<li>direct capabilities use key <code>provider:&lt;slugged-provider&gt;</code>;</li>
+<li>account and agent credentials use internal subscription ID and resource
+  <code>provider:&lt;provider&gt;:&lt;subscription&gt;</code>;</li>
+<li>account API keys are written through the local Skarbiec boundary and selected
+  only by the verified Wisent account that owns them;</li>
+<li>endpoint overrides are namespaced by provider and accept HTTPS approved hosts
+  or explicit loopback only;</li>
+<li>only the credential named for the selected route is used: an ambient proxy
+  setting, a redirect, a host metadata identity, and a credential belonging to
+  another provider are never read;</li>
+<li>credentials are redeemed immediately before each attempt.</li>
+</ul>
+<p>The alias being served names exactly one destination route, so an attempt
+reaches exactly one provider. When that provider refuses, the refusal is what
+the caller receives.</p>
+<h2 id="reliability">Reliability<a class="headerlink" href="#reliability" title="Link to this section">&para;</a></h2>
+<ul>
+<li>provider attempt timeout: 255 seconds; the request deadline is the deadline
+  of that one attempt;</li>
+<li>provider response bodies are capped at 16 MiB before UTF-8 or JSON parsing;</li>
+<li>selector and credential attempts are bounded by
+  <a href="/docs/core"><code>CORE.md</code></a>;</li>
+<li>only authentication, quota, and rate-limit exhaustion move to another
+  credential for the same route;</li>
+<li>permanent authentication failure appends a retirement marker;</li>
+<li>a malformed or permanent provider result stops replay and returns a
+  normalized failure to the caller;</li>
+<li>provider status and body are treated as untrusted and bounded before
+  parsing.</li>
+</ul>
+<h2 id="compatibility">Compatibility<a class="headerlink" href="#compatibility" title="Link to this section">&para;</a></h2>
+<p>Brama supports the request/response shapes implemented by its protocol
+adapters, not every feature exposed by a provider SDK. Streaming output, batch
+APIs, files, assistants, fine-tuning, and provider control planes are
+unsupported. Provider-only corrections may remain compatible when the
+normalized contract is unchanged; schema, behavior, or error changes visible to
+callers follow <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="disable-and-removal">Disable and removal<a class="headerlink" href="#disable-and-removal" title="Link to this section">&para;</a></h2>
+<p>Remove the provider capability mapping and its alias entries, stop advertising
+its executable routes, revoke the exact direct or subscription capability, and
+retain journal evidence according to policy. An alias entry is removed with
+<code>DELETE /v1/admin/routes</code> carrying <code>{"alias"}</code>, which
+answers with <code>ok</code> and the whole registry document; if the file on
+disk still carries fields from an older shape, bring it forward first with
+<a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a>.</p>
+<p>An alias left declared with no serving destination reports state
+<code>no_route</code>, and a completion naming it answers
+<code>503 alias_unserviceable</code> with that state and route in
+<code>details</code>. Removing one provider must not prevent unrelated direct
+routes, local detection, version, or MCP startup.</p>
+</article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

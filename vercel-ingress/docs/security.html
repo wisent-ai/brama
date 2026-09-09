@@ -172,8 +172,8 @@ contain GitHub publication credentials. Callers own prompt/data incident respons
 </ol>
 <h3 id="desktop-failure-policy">Failure policy and residual risk</h3>
 <ul>
-<li>Failed Stado discovery may reuse only a previously validated Brama origin. Missing or rejected Skarbiec acquisition disables authenticated controls; there is no plaintext or manual-bearer fallback.</li>
-<li>Invalid or oversized API responses retain known-good state. Malformed route chains fail before registry replacement, and destructive retirement or rollback requires explicit confirmation.</li>
+<li>Failed Stado discovery may reuse only a previously validated Brama origin. Missing or rejected Skarbiec acquisition disables authenticated controls; no plaintext secret and no hand-typed bearer is accepted in its place.</li>
+<li>Invalid or oversized API responses retain known-good state. A route registry document that does not validate is refused before the registry is replaced, and destructive retirement or rollback requires explicit confirmation.</li>
 <li>A process running as the logged-in user may still attempt Keychain access under macOS controls. Aggregate metrics reveal volume and timing, and Stado release commands depend on the operator account's Stado and SSH authorization.</li>
 <li>External distribution requires Developer ID signing and notarization. A mismatched Sparkle key pair makes every update fail verification; write access to the release repository is equivalent to code-execution authority on installed clients.</li>
 </ul>

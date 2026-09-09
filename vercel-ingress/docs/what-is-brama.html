@@ -153,8 +153,8 @@ through the entitlements router by vault tags, and is redeemed at the same
 final-use boundary. Which account pays is explicit: a direct route spends the
 deployment's provider capability, <code>best</code> and the selectors spend a
 subscription owned by the caller's signed HMAC identity, and <code>billingTarget</code>
-names an exact subscription. There is no silent fallback across providers,
-agents, accounts, or credentials. The two pools are
+names an exact subscription. No other provider, agent, account, or credential
+is quietly charged in place of the named one. The two pools are
 <a href="/docs/concepts/capability">concepts/capability</a> and
 <a href="/docs/concepts/subscription">concepts/subscription</a>; who may spend what is
 <a href="/docs/concepts/entitlement">concepts/entitlement</a>.</p>

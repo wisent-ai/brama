@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Skarbiec and entitlements — Brama Docs</title>
+  <meta name="description" content="The secret boundary: final-use capability redemption over the Skarbiec socket, and the entitlements router that discovers subscriptions and persists credentials.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/integrations/skarbiec-and-entitlements">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Integrations</h2><a href="/docs/integrations">Overview</a><a href="/docs/integrations/model-providers">Model providers</a><a href="/docs/integrations/catalog">models.dev catalog</a><a class="active" aria-current="page" href="/docs/integrations/skarbiec-and-entitlements">Skarbiec and entitlements</a><a href="/docs/integrations/publication-and-health">Publication and health</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama integration contracts</p>
+      <article class="doc"><h1 id="skarbiec-and-entitlements">Skarbiec and entitlements<a class="headerlink" href="#skarbiec-and-entitlements" title="Link to this section">&para;</a></h1>
+<p>Two boundaries own the secret material Brama uses and never stores: the
+Skarbiec capability broker, which redeems one capability at the final-use seam,
+and the entitlements router, which lists an agent's subscription resources and
+persists credentials into the vault. Brama owns neither; it owns the shape of
+the exchange.</p>
+<h2 id="skarbiec-capability-broker">Skarbiec capability broker<a class="headerlink" href="#skarbiec-capability-broker" title="Link to this section">&para;</a></h2>
+<h3 id="outcome">Outcome<a class="headerlink" href="#outcome" title="Link to this section">&para;</a></h3>
+<p>Redeem one opaque capability for one expected purpose/resource tuple at the
+trusted final-use boundary.</p>
+<h3 id="identity-and-data">Identity and data<a class="headerlink" href="#identity-and-data" title="Link to this section">&para;</a></h3>
+<p>Brama signs <code>skarbiec.redeem.v1</code> with its owner-protected workload
+key. It accepts one bounded control line and at most 64 KiB of secret bytes
+followed by EOF. Capability IDs are lowercase 64-character hexadecimal handles;
+local tuple validation prevents accidental use at another seam, while the
+broker remains authoritative.</p>
+<h3 id="failure-and-removal">Failure and removal<a class="headerlink" href="#failure-and-removal" title="Link to this section">&para;</a></h3>
+<p>A missing socket, a missing registry, a missing proof key, invalid ownership or
+mode, a malformed response, or a tuple mismatch fails closed. The broker is the
+only place Brama obtains the secret: no environment variable and no remote
+vault is read in its place, and a refused acquisition is returned to the caller
+as a refusal.</p>
+<p>Stopping the broker prevents credentialed inference. It must not prevent
+<code>brama detect</code>, <code>brama version</code>, or read-only MCP
+detection.</p>
+<h2 id="entitlements-router">Entitlements router<a class="headerlink" href="#entitlements-router" title="Link to this section">&para;</a></h2>
+<h3 id="outcome_1">Outcome<a class="headerlink" href="#outcome_1" title="Link to this section">&para;</a></h3>
+<p>Discover one agent's non-deleted subscription resources and persist an OAuth
+refresh or authorized donation without placing plaintext in Brama state.</p>
+<h3 id="data-and-reliability">Data and reliability<a class="headerlink" href="#data-and-reliability" title="Link to this section">&para;</a></h3>
+<ul>
+<li>live <code>list</code> output is validated as untrusted JSON;</li>
+<li>only resource tails beginning
+  <code>brama-sub-&lt;slugged-agent&gt;-</code> are eligible;</li>
+<li>successful live results are cached per agent for 60 seconds;</li>
+<li>when the live <code>list</code> call fails, the trusted startup metadata
+  snapshot is the only other source Brama reads, and it is read as metadata
+  only: it authorizes nothing on its own;</li>
+<li>credential writes pass secret bytes through child stdin;</li>
+<li>donation metadata uses an owner-only atomic file replacement.</li>
+</ul>
+<h3 id="disable-and-removal">Disable and removal<a class="headerlink" href="#disable-and-removal" title="Link to this section">&para;</a></h3>
+<p>Stop new subscription selection, revoke router/vault access, preserve existing
+journal evidence, and remove only Brama-owned non-secret overlay state after
+its retention decision. Direct provider routes remain usable when configured;
+their contract is on
+<a href="/docs/integrations/model-providers">Model providers</a>.</p>
+<h2 id="what-the-caller-sees">What the caller sees<a class="headerlink" href="#what-the-caller-sees" title="Link to this section">&para;</a></h2>
+<p>An alias whose route needs a credential Brama cannot obtain reports state
+<code>capability_absent</code>, and a completion naming that alias answers
+<code>503 alias_unserviceable</code> carrying the state and the route in
+<code>details</code>. The alias still names exactly one destination route, so
+no other account or route is used in its place. <code>brama aliases</code>
+prints the alias, its state and its route; see
+<a href="/docs/cli">CLI</a> and <a href="/docs/errors">Errors</a>.</p>
+<p>When the registry document on disk predates the current shape, bring it
+forward with
+<a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a> before
+reviewing alias state.</p>
+</article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

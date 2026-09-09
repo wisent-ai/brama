@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ownership and boundaries — Brama Docs</title>
+  <meta name="description" content="What Brama owns, what it deliberately does not, the trust boundary at each seam, and the neighbouring services it talks to.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/architecture/ownership-and-boundaries">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Architecture</h2><a href="/docs/architecture">Overview</a><a class="active" aria-current="page" href="/docs/architecture/ownership-and-boundaries">Ownership and boundaries</a><a href="/docs/architecture/request-path-and-state">Request path and state</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama architecture: ownership and trust</p>
+      <article class="doc"><h1 id="ownership-and-boundaries">Ownership and boundaries<a class="headerlink" href="#ownership-and-boundaries" title="Link to this section">&para;</a></h1>
+<p>Brama is one Rust process (axum) serving one HTTP listener. Its entire job is
+to turn an authenticated, alias-shaped model request into one provider HTTP
+call, paying with a credential it held for exactly that call. This page states
+what belongs to Brama, what belongs to somebody else, the rule enforced at
+each trust boundary, and who the neighbours are. For the listener, the request
+path and the files on disk, see
+<a href="/docs/architecture/request-path-and-state">request path and state</a>.</p>
+<h2 id="what-brama-owns">What Brama owns<a class="headerlink" href="#what-brama-owns" title="Link to this section">&para;</a></h2>
+<ul>
+<li><strong>Routing.</strong> Alias resolution produces exactly one route: the registry
+  maps an alias to a single destination, and that destination is the one
+  Brama dispatches to. Selector ranking is a separate mechanism — it picks a
+  subscription candidate for a signed agent asking for <code>best</code> or a
+  <code>task:</code> selector. When a resolved route refuses the call, the refusal is
+  reported to the caller; no second route is attempted
+  (<a href="/docs/concepts/alias">concepts/alias</a>,
+  <a href="/docs/concepts/entitlement">concepts/entitlement</a>). The admin snapshot
+  states the boundary split Brama operates under:
+  <code>"boundaries": {"credentials": "skarbiec", "releases": "stado",
+  "routing": "brama"}</code> (captured from <code>/v1/admin/snapshot</code>).</li>
+<li><strong>The credential seam.</strong> Redeeming capabilities and subscription
+  credentials at final use, refreshing OAuth grants ahead of expiry, and
+  recording what each redemption concluded
+  (<a href="/docs/concepts/capability">concepts/capability</a>,
+  <a href="/docs/concepts/subscription">concepts/subscription</a>).</li>
+<li><strong>Its own records.</strong> The usage ledger, the append-only journal, process
+  telemetry, and the donated-subscriptions metadata overlay
+  (<a href="/docs/architecture/request-path-and-state#state-on-disk">state on disk</a>).</li>
+<li><strong>The shape of the route registry.</strong> Brama reads a document with three
+  known top-level fields — <code>schema_version</code> (whose value is the number one),
+  <code>deployments</code> and <code>routes</code> — and rejects a document carrying any other
+  top-level field. <a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a>
+  brings an operator's existing file to that shape without hand editing.</li>
+</ul>
+<h2 id="what-brama-is-not">What Brama is not<a class="headerlink" href="#what-brama-is-not" title="Link to this section">&para;</a></h2>
+<ul>
+<li>Not an agent runtime — Jeden is the runtime; Brama performs provider HTTP
+  requests only.</li>
+<li>Not placement — Stado owns placement and stages the owner-only inference
+  route snapshot Brama re-reads per request
+  (<a href="/docs/concepts/alias#dynamic-routes-the-routes-file">concepts/alias</a>).</li>
+<li>Not a secret store — Skarbiec is the authority for credentials; Brama
+  receives capability handles until the final-use seam and holds no secret
+  at rest.</li>
+<li>Not a router of second chances — an alias has one destination, so an
+  unhealthy destination is an unserviceable alias
+  (<code>503 alias_unserviceable</code> carrying <code>details.state</code> and
+  <code>details.route</code>), not a signal to dispatch somewhere else.</li>
+<li>Not an identity provider, billing ledger, or system of record for
+  provider accounts; and it never infers task intent from prompt text —
+  <code>task:</code> selectors use previously recorded, explicitly named quality
+  evidence only.</li>
+</ul>
+<h2 id="trust-boundaries">Trust boundaries<a class="headerlink" href="#trust-boundaries" title="Link to this section">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Boundary</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Transport</td>
+<td>loopback, own bound address, <code>BRAMA_ENCRYPTED_PEER_IPS</code>, or <code>BRAMA_TRUSTED_PROXY_IPS</code> with <code>https</code> forwarded headers; everything else <code>426</code>. Forwarded headers from unlisted peers are never trusted</td>
+</tr>
+<tr>
+<td>Caller</td>
+<td>bearer table and Skarbiec introspection classify workload/model clients; canonical Wisent Supabase plus <code>authorize_organization</code> classifies humans and verifies <code>X-Wisent-Organization-ID</code>; human cache keys include bearer digest + organization ID; a caller that cannot be classified is refused (<a href="/docs/concepts/client-identity">concepts/client-identity</a>)</td>
+</tr>
+<tr>
+<td>Agent</td>
+<td>HMAC-SHA256 trio over the exact raw body, ±300 s; bearer-bound, signed, and path agents must agree (<a href="/docs/concepts/entitlement">concepts/entitlement</a>)</td>
+</tr>
+<tr>
+<td>Admin</td>
+<td><code>/v1/admin/*</code> answers only <code>brama-desktop</code>; <code>/v1/account/*</code> only a verified Wisent human (<code>brama-user</code>) with organization context, while subscription ownership remains user-scoped</td>
+</tr>
+<tr>
+<td>Secrets</td>
+<td>Skarbiec broker socket, owner-bound; capabilities single-use, ≤1 h; plaintext only inside the one provider call; standalone mode keeps a zeroizing in-memory map</td>
+</tr>
+<tr>
+<td>Providers</td>
+<td>exact trusted HTTPS hosts, redirects disabled, ambient proxies bypassed; loopback only via explicit <code>BRAMA_PROVIDER_&lt;X&gt;_BASE_URL</code> override (<a href="/docs/concepts/provider">concepts/provider</a>)</td>
+</tr>
+<tr>
+<td>Route registry</td>
+<td>owner-only regular file, no symlink, no group/other access; endpoints loopback or Tailscale IPv4 only; an unknown top-level field makes the deserializer reject the whole document</td>
+</tr>
+<tr>
+<td>Vault listing</td>
+<td>shelled to the local entitlements router; donated plaintext crosses only the request body and the router's stdin pipe</td>
+</tr>
+</tbody>
+</table>
+<h2 id="admin-writes-to-the-registry">Admin writes to the registry<a class="headerlink" href="#admin-writes-to-the-registry" title="Link to this section">&para;</a></h2>
+<p>The routing boundary is writable only through two admin calls, both answering
+<code>{"ok":true,"routes":&lt;document&gt;}</code> with the committed document:</p>
+<pre><code class="language-json">PUT /v1/admin/routes
+{"alias": "chat-prod", "primary": "deploy-oslo"}
+
+DELETE /v1/admin/routes
+{"alias": "chat-prod"}
+</code></pre>
+<p>The <code>PUT</code> body is exactly <code>{"alias","primary"}</code>; there is no field for a
+second destination, and an unknown field is refused with the deserializer's
+own sentence. See <a href="/docs/http-api">http-api</a> for the full surface.</p>
+<h2 id="neighbours">Neighbours<a class="headerlink" href="#neighbours" title="Link to this section">&para;</a></h2>
+<ul>
+<li><strong>Skarbiec</strong> issues and redeems capabilities, introspects bearers, and
+  stores subscription grants; the launcher provisions this installation's
+  workload trust material once.</li>
+<li><strong>Stado</strong> declares inference deployments and the desired alias-to-route
+  mapping, and stages the route snapshot; Brama reloads it per request and
+  never supervises the engine behind it.</li>
+<li><strong>Jeden</strong> (and the other agents) call Brama with a bearer plus their HMAC
+  identity; their subscriptions pay for <code>best</code> and the selectors.</li>
+<li><strong>Brama Desktop</strong> is the operator console behind the <code>brama-desktop</code>
+  identity; <strong>Wisent Identity</strong> verifies desktop user sessions for the
+  account routes.</li>
+</ul></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

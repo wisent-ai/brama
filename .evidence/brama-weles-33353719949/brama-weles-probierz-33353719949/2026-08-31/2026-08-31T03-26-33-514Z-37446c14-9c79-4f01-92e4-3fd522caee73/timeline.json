@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "runId": "2026-08-31T03-26-33-514Z-37446c14-9c79-4f01-92e4-3fd522caee73",
+  "artifactsDir": "/Users/charles/.stado/actions-runner-work/brama/brama/probierz-source/test-results/brama/tui/2026-08-31/2026-08-31T03-26-33-514Z-37446c14-9c79-4f01-92e4-3fd522caee73",
+  "generatedAt": "2026-08-31T03:32:52.509Z",
+  "counts": {
+    "assertion": 1,
+    "log": 11
+  },
+  "diagnostics": [],
+  "events": [
+    {
+      "at": "2026-08-31T03:26:34.699Z",
+      "type": "log",
+      "source": "stdout",
+      "message": "> probierz@0.1.0 test:tui"
+    },
+    {
+      "at": "2026-08-31T03:26:34.699Z",
+      "type": "log",
+      "source": "stdout",
+      "message": "> npm --workspace packages/tui run test"
+    },
+    {
+      "at": "2026-08-31T03:26:35.207Z",
+      "type": "log",
+      "source": "stdout",
+      "message": "> @probierz/tui@0.1.0 test"
+    },
+    {
+      "at": "2026-08-31T03:26:35.207Z",
+      "type": "log",
+      "source": "stdout",
+      "message": "> node run-specs.mjs"
+    },
+    {
+      "at": "2026-08-31T03:26:35.463Z",
+      "completedAt": "2026-08-31T03:32:52.387Z",
+      "durationMs": 376922,
+      "type": "assertion",
+      "source": "playwright",
+      "title": "brama-weles-real",
+      "status": "failed",
+      "error": "Error: Skarbiec request failed: error sending request for url (http://127.0.0.1:8895/v1/items/read)\ninfrastructure we depend on is unreachable — our failure [infra_down]; retry later\n\u001b[2m2026-08-31T03:32:52.368733Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mstado::failure\u001b[0m\u001b[2m:\u001b[0m infrastructure we depend on is unreachable \u001b[3mfailure_point\u001b[0m\u001b[2m=\u001b[0m\"cli.credentials.get\" \u001b[3merror_code\u001b[0m\u001b[2m=\u001b[0m\"infra_down\" \u001b[3mservice\u001b[0m\u001b[2m=\u001b[0m\"stado\" \u001b[3mretryable\u001b[0m\u001b[2m=\u001b[0mtrue \u001b[3mseverity\u001b[0m\u001b[2m=\u001b[0m\"critical\" \u001b[3mdetail\u001b[0m\u001b[2m=\u001b[0mSkarbiec request failed: error sending request for url (http://127.0.0.1:8895/v1/items/read)\ncannot read this service identity from Skarbiec (brama-service.gpg_private_key)\nfile:///Users/charles/.stado/actions-runner-work/brama/brama/probierz-source/packages/tui/specs/brama-weles-real.spec.mjs:37\n  throw new Error(`all three real Weles sign-ins must pass (exit ${result.status ?? 'unknown'})`);\n        ^\n\nError: all three real Weles sign-ins must pass (exit 1)\n    at file:///Users/charles/.stado/actions-runner-work/brama/brama/probierz-source/packages/tui/specs/brama-weles-real.spec.mjs:37:9\n    at ModuleJob.run (node:internal/modules/esm/module_job:437:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:639:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)\n\nNode.js v25.9.0\n"
+    },
+    {
+      "at": "2026-08-31T03:32:52.404Z",
+      "type": "log",
+      "source": "stderr",
+      "message": "npm error Lifecycle script `test` failed with error:"
+    },
+    {
+      "at": "2026-08-31T03:32:52.405Z",
+      "type": "log",
+      "source": "stderr",
+      "message": "npm error code 1"
+    },
+    {
+      "at": "2026-08-31T03:32:52.405Z",
+      "type": "log",
+      "source": "stderr",
+      "message": "npm error path /Users/charles/.stado/actions-runner-work/brama/brama/probierz-source/packages/tui"
+    },
+    {
+      "at": "2026-08-31T03:32:52.405Z",
+      "type": "log",
+      "source": "stderr",
+      "message": "npm error workspace @probierz/tui@0.1.0"
+    },
+    {
+      "at": "2026-08-31T03:32:52.405Z",
+      "type": "log",
+      "source": "stderr",
+      "message": "npm error location /Users/charles/.stado/actions-runner-work/brama/brama/probierz-source/packages/tui"
+    },
+    {
+      "at": "2026-08-31T03:32:52.405Z",
+      "type": "log",
+      "source": "stderr",
+      "message": "npm error command failed"
+    },
+    {
+      "at": "2026-08-31T03:32:52.405Z",
+      "type": "log",
+      "source": "stderr",
+      "message": "npm error command sh -c node run-specs.mjs"
+    }
+  ]
+}

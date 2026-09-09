@@ -1,0 +1,5382 @@
+{
+  "schemaVersion": 1,
+  "subject": "run-and-app-processes",
+  "firstOutputMs": 1120,
+  "intervalMs": 1000,
+  "peakRssKb": 1701184,
+  "averageCpuPercent": 11.155410691003908,
+  "appProcessName": null,
+  "appPeakRssKb": null,
+  "appAverageCpuPercent": null,
+  "samples": [
+    {
+      "at": "2026-08-31T04:12:55.587Z",
+      "processes": 1,
+      "rssKb": 384,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:12:56.644Z",
+      "processes": 3,
+      "rssKb": 140720,
+      "cpuPercent": 102.6,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:12:57.650Z",
+      "processes": 6,
+      "rssKb": 241808,
+      "cpuPercent": 16.2,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:12:58.652Z",
+      "processes": 6,
+      "rssKb": 241808,
+      "cpuPercent": 0.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:12:59.654Z",
+      "processes": 6,
+      "rssKb": 241808,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:00.642Z",
+      "processes": 6,
+      "rssKb": 241808,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:01.657Z",
+      "processes": 6,
+      "rssKb": 241808,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:02.648Z",
+      "processes": 6,
+      "rssKb": 241808,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:03.642Z",
+      "processes": 6,
+      "rssKb": 241840,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:04.661Z",
+      "processes": 6,
+      "rssKb": 241840,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:05.650Z",
+      "processes": 6,
+      "rssKb": 241840,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:06.666Z",
+      "processes": 6,
+      "rssKb": 241840,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:07.668Z",
+      "processes": 6,
+      "rssKb": 241840,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:08.670Z",
+      "processes": 6,
+      "rssKb": 241840,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:09.672Z",
+      "processes": 6,
+      "rssKb": 241840,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:10.673Z",
+      "processes": 6,
+      "rssKb": 241840,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:11.662Z",
+      "processes": 6,
+      "rssKb": 241840,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:12.676Z",
+      "processes": 6,
+      "rssKb": 241840,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:13.654Z",
+      "processes": 6,
+      "rssKb": 241840,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:14.683Z",
+      "processes": 6,
+      "rssKb": 241840,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:15.683Z",
+      "processes": 6,
+      "rssKb": 241840,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:16.686Z",
+      "processes": 6,
+      "rssKb": 241840,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:17.688Z",
+      "processes": 6,
+      "rssKb": 241840,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:18.690Z",
+      "processes": 6,
+      "rssKb": 241920,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:19.692Z",
+      "processes": 6,
+      "rssKb": 241920,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:20.693Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 2.6,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:21.685Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:22.665Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:23.699Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:24.701Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:25.700Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:26.704Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:27.707Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:28.709Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:29.708Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:30.683Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:31.712Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:32.702Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:33.717Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:34.693Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:35.720Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:36.723Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:37.727Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:38.728Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:39.729Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:40.731Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:41.731Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:42.736Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:43.738Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:44.737Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:45.737Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:46.727Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:47.718Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:48.747Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:49.748Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:50.747Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:51.749Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:52.749Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:53.753Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:54.756Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:55.757Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:56.760Z",
+      "processes": 6,
+      "rssKb": 241872,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:57.762Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 2.2,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:58.763Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0.2,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:13:59.765Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:00.767Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0.3,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:01.770Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:02.771Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:03.754Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0.3,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:04.777Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:05.776Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:06.779Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:07.783Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:08.785Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:09.787Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0.3,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:10.790Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0.4,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:11.791Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0.5,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:12.793Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0.6,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:13.794Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0.8,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:14.798Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0.9,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:15.796Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0.9,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:16.799Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0.3,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:17.800Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0.4,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:18.801Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0.4,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:19.803Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0.6,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:20.806Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:21.795Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:22.811Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:23.815Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:24.799Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:25.818Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:26.818Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:27.822Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:28.826Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:29.826Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:30.829Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:31.829Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:32.831Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:33.834Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:34.834Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:35.837Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:36.831Z",
+      "processes": 6,
+      "rssKb": 241792,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:37.841Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:38.839Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:39.846Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:40.846Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:41.842Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:42.852Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:43.843Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:44.844Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:45.855Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:46.841Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:47.859Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:48.850Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:49.863Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:50.855Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:51.864Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:52.867Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:53.869Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:54.869Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:55.853Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:56.865Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:57.876Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:58.880Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:14:59.881Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:00.883Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:01.883Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:02.886Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:03.889Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:04.887Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:05.893Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:06.893Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:07.896Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:08.889Z",
+      "processes": 6,
+      "rssKb": 241824,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:09.899Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 1.8,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:10.902Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:11.903Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:12.900Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:13.903Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:14.889Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:15.910Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:16.900Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:17.915Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:18.917Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:19.918Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:20.894Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:21.920Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:22.923Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:23.924Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:24.915Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:25.929Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:26.931Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:27.934Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:28.936Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:29.930Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:30.927Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:31.942Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:32.944Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:33.946Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:34.939Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:35.950Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:36.952Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:37.954Z",
+      "processes": 7,
+      "rssKb": 252752,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:38.956Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:39.958Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:40.958Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:41.938Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:42.949Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:43.937Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:44.945Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:45.967Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:46.975Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:47.957Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:48.960Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:49.975Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:50.979Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:51.984Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:52.987Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:53.983Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:54.992Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:56.135Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:57.136Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:58.125Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:15:59.152Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:00.148Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:01.125Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:02.155Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:03.157Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:04.164Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:05.160Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:06.149Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:07.150Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:08.167Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:09.169Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:10.158Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:11.169Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:12.170Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:13.171Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:14.174Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:15.170Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:16.178Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:17.176Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:18.169Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:19.158Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:20.187Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:21.187Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:22.162Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:23.185Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:24.177Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:25.196Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:26.198Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:27.201Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:28.203Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:29.196Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:30.207Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:31.206Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:32.210Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:33.197Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:34.215Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:35.216Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:36.191Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:37.219Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:38.210Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:39.224Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:40.220Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:41.224Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:42.226Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:43.229Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:44.230Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:45.232Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:46.235Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:47.216Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:48.240Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:49.241Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:50.226Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:51.246Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:52.247Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:53.251Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:54.252Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:55.250Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:56.251Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:57.254Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:58.258Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:16:59.258Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:00.261Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:01.255Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:02.265Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:03.261Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:04.255Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:05.258Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:06.247Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:07.269Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:08.272Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:09.264Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:10.256Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:11.274Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:12.275Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:13.284Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:14.288Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:15.259Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:16.282Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:17.294Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:18.295Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:19.296Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:20.289Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:21.300Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:22.298Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:23.302Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:24.294Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:25.311Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:26.299Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:27.313Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:28.302Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:29.302Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:30.317Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:31.309Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:32.308Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:33.303Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:34.315Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:35.330Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:36.334Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:37.315Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:38.336Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:39.327Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:40.341Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:41.340Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:42.342Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:43.345Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:44.332Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:45.324Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:46.349Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:47.326Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:48.355Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:49.357Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:50.359Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:51.345Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:52.364Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:53.368Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:54.340Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:55.371Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:56.370Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:57.363Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:58.376Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:17:59.358Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:00.381Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:01.382Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:02.382Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:03.387Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:04.389Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:05.389Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:06.393Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:07.396Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:08.379Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:09.386Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:10.402Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:11.404Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:12.406Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:13.407Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:14.409Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:15.393Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:16.412Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:17.416Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:18.418Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:19.420Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:20.409Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:21.425Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:22.424Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:23.425Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:24.427Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:25.429Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:26.431Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:27.435Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:28.435Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:29.438Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:30.439Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:31.440Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:32.442Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:33.442Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:34.446Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:35.449Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:36.433Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:37.453Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:38.454Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:39.453Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:40.458Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:41.461Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:42.463Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:43.463Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:44.466Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:45.467Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:46.469Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:47.475Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:48.475Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:49.477Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:50.479Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:51.481Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:52.482Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:53.481Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:54.472Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:55.487Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:56.488Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:57.491Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:58.492Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:18:59.494Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:00.493Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:01.483Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:02.498Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:03.501Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:04.503Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:05.504Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:06.504Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:07.483Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:08.497Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:09.513Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:10.514Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:11.517Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:12.519Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:13.510Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:14.521Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:15.524Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:16.525Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:17.529Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:18.513Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:19.533Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:20.535Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:21.538Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:22.541Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:23.544Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:24.545Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:25.547Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:26.547Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:27.551Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:28.533Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:29.540Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:30.558Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:31.559Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:32.562Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:33.565Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:34.567Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:35.568Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:36.568Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:37.571Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:38.565Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:39.575Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:40.578Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:41.580Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:42.567Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:43.582Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:44.584Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:45.586Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:46.583Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:47.567Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:48.587Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:49.592Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:50.580Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:51.595Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:52.595Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:53.597Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:54.574Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:55.593Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:56.599Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:57.604Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:58.574Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:19:59.595Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:00.608Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:01.609Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:02.609Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:03.611Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:04.613Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:05.600Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:06.611Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:07.615Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:08.611Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:09.620Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:10.619Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:11.619Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:12.617Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:13.619Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:14.590Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:15.623Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:16.619Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:17.624Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:18.625Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:19.627Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:20.612Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:21.628Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:22.629Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:23.631Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:24.625Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:25.627Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:26.630Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:27.634Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:28.635Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:29.622Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:30.637Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:31.639Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:32.639Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:33.641Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:34.642Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:35.644Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:36.644Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:37.645Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:38.645Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:39.648Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:40.647Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:41.651Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:42.652Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:43.650Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:44.654Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:45.655Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:46.657Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:47.658Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:48.658Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:49.661Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:50.661Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:51.644Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:52.664Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:53.663Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:54.666Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:55.668Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:56.668Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:57.670Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:58.666Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:20:59.657Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:00.674Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:01.674Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:02.665Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:03.676Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:04.676Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:05.677Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:06.678Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:07.679Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:08.680Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:09.682Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:10.683Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:11.684Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:12.671Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:13.687Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:14.688Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:15.688Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:16.691Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:17.693Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:18.695Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:19.695Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:20.697Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:21.697Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:22.698Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:23.695Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:24.696Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:25.701Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:26.702Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:27.702Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:28.703Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:29.704Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:30.706Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:31.706Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:32.709Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:33.710Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:34.711Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:35.676Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:36.711Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:37.711Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:38.699Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:39.713Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:40.714Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:41.716Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:42.717Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:43.705Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:44.720Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:45.720Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:46.720Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:47.721Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:48.722Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:49.709Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:50.726Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:51.718Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:52.727Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:53.727Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:54.715Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:55.729Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:56.732Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:57.732Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:58.730Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:21:59.721Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:00.723Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:01.737Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:02.738Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:03.739Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:04.726Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:05.737Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:06.741Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:07.743Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:08.744Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:09.727Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:10.748Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:11.749Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:12.747Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:13.750Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:14.752Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:15.754Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:16.754Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:17.755Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:18.757Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:19.758Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:20.759Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:21.760Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:22.760Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:23.761Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:24.750Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:25.763Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:26.763Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:27.765Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:28.766Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:29.767Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:30.768Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:31.769Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:32.771Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:33.765Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:34.773Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:35.756Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:36.765Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:37.778Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:38.779Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:39.780Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:40.783Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:41.774Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:42.782Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:43.770Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:44.783Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:45.784Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:46.787Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:47.787Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:48.787Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:49.790Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:50.792Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:51.793Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:52.779Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:53.789Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:54.796Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:55.795Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:56.769Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:57.797Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:58.798Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:22:59.787Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:00.802Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:01.802Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:02.803Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:03.773Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:04.806Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:05.806Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:06.806Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:07.808Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:08.809Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:09.810Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:10.803Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:11.813Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:12.814Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:13.815Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:14.816Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:15.818Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:16.819Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:17.819Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:18.823Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:19.823Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:20.825Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:21.826Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:22.826Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:23.826Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:24.830Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:25.830Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:26.830Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:27.817Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:28.834Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:29.835Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:30.837Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:31.837Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:32.839Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:33.826Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:34.827Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:35.842Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:36.822Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:37.845Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:38.845Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:39.845Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:40.848Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:41.823Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:42.835Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:43.851Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:44.851Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:45.839Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:46.853Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:47.855Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:48.840Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:49.856Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:50.859Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:51.860Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:52.860Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:53.861Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:54.826Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:55.863Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:56.848Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:57.851Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:58.866Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:23:59.868Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:00.862Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:01.871Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:02.859Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:03.873Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:04.875Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:05.877Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:06.877Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:07.880Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:08.869Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:09.882Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:10.860Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:11.884Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:12.885Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:13.886Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:14.887Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:15.889Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:16.903Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:17.890Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:18.891Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:19.875Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:20.875Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:21.895Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:22.893Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:23.895Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:24.894Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:25.880Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:26.897Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:27.890Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:28.901Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:29.881Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:30.891Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:31.903Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:32.893Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:33.906Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:34.907Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:35.908Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:36.909Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:37.908Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:38.910Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:39.908Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:40.900Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:41.916Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:42.903Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:43.918Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:44.919Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:45.919Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:46.908Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:47.921Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:48.918Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:49.928Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:50.914Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:51.929Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:52.930Z",
+      "processes": 7,
+      "rssKb": 252768,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:53.917Z",
+      "processes": 6,
+      "rssKb": 238720,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:54.929Z",
+      "processes": 6,
+      "rssKb": 238720,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:55.913Z",
+      "processes": 6,
+      "rssKb": 238720,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:56.907Z",
+      "processes": 7,
+      "rssKb": 250464,
+      "cpuPercent": 8.9,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:57.926Z",
+      "processes": 9,
+      "rssKb": 263840,
+      "cpuPercent": 8.5,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:58.920Z",
+      "processes": 8,
+      "rssKb": 261632,
+      "cpuPercent": 3.4,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:24:59.938Z",
+      "processes": 7,
+      "rssKb": 446656,
+      "cpuPercent": 67.60000000000001,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:00.932Z",
+      "processes": 7,
+      "rssKb": 388544,
+      "cpuPercent": 47.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:01.937Z",
+      "processes": 7,
+      "rssKb": 321936,
+      "cpuPercent": 3.5,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:02.936Z",
+      "processes": 7,
+      "rssKb": 414880,
+      "cpuPercent": 70.8,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:03.937Z",
+      "processes": 7,
+      "rssKb": 351920,
+      "cpuPercent": 22,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:04.929Z",
+      "processes": 7,
+      "rssKb": 240912,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:05.948Z",
+      "processes": 10,
+      "rssKb": 684848,
+      "cpuPercent": 200.2,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:06.941Z",
+      "processes": 9,
+      "rssKb": 875904,
+      "cpuPercent": 262.3,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:07.934Z",
+      "processes": 9,
+      "rssKb": 1013072,
+      "cpuPercent": 197,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:08.941Z",
+      "processes": 8,
+      "rssKb": 793888,
+      "cpuPercent": 98.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:09.954Z",
+      "processes": 10,
+      "rssKb": 945120,
+      "cpuPercent": 266.9,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:10.957Z",
+      "processes": 9,
+      "rssKb": 883424,
+      "cpuPercent": 193,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:11.971Z",
+      "processes": 11,
+      "rssKb": 1181296,
+      "cpuPercent": 235.3,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:12.962Z",
+      "processes": 10,
+      "rssKb": 976448,
+      "cpuPercent": 190.39999999999998,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:13.959Z",
+      "processes": 9,
+      "rssKb": 941888,
+      "cpuPercent": 272.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:14.954Z",
+      "processes": 9,
+      "rssKb": 1049472,
+      "cpuPercent": 297.5,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:15.969Z",
+      "processes": 10,
+      "rssKb": 1325168,
+      "cpuPercent": 409.2,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:16.990Z",
+      "processes": 10,
+      "rssKb": 1372720,
+      "cpuPercent": 391.4,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:17.984Z",
+      "processes": 10,
+      "rssKb": 1456624,
+      "cpuPercent": 382.49999999999994,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:18.959Z",
+      "processes": 9,
+      "rssKb": 1132160,
+      "cpuPercent": 257.4,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:20.030Z",
+      "processes": 9,
+      "rssKb": 1296208,
+      "cpuPercent": 411.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:20.969Z",
+      "processes": 9,
+      "rssKb": 1112624,
+      "cpuPercent": 196.70000000000002,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:21.979Z",
+      "processes": 8,
+      "rssKb": 839424,
+      "cpuPercent": 173.3,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:22.968Z",
+      "processes": 8,
+      "rssKb": 962672,
+      "cpuPercent": 196.4,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:23.985Z",
+      "processes": 8,
+      "rssKb": 1009184,
+      "cpuPercent": 195.2,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:24.980Z",
+      "processes": 8,
+      "rssKb": 1031312,
+      "cpuPercent": 197.3,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:25.990Z",
+      "processes": 8,
+      "rssKb": 1091456,
+      "cpuPercent": 153.4,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:26.979Z",
+      "processes": 8,
+      "rssKb": 1160288,
+      "cpuPercent": 169.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:27.988Z",
+      "processes": 8,
+      "rssKb": 1211072,
+      "cpuPercent": 167.4,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:28.992Z",
+      "processes": 8,
+      "rssKb": 1237600,
+      "cpuPercent": 162.2,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:29.971Z",
+      "processes": 9,
+      "rssKb": 1335680,
+      "cpuPercent": 174.7,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:30.979Z",
+      "processes": 8,
+      "rssKb": 1398352,
+      "cpuPercent": 194.4,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:31.999Z",
+      "processes": 8,
+      "rssKb": 1468576,
+      "cpuPercent": 138.9,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:33.001Z",
+      "processes": 8,
+      "rssKb": 1484656,
+      "cpuPercent": 100.3,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:34.003Z",
+      "processes": 8,
+      "rssKb": 1557456,
+      "cpuPercent": 159.9,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:35.009Z",
+      "processes": 8,
+      "rssKb": 1637712,
+      "cpuPercent": 248.8,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:36.014Z",
+      "processes": 8,
+      "rssKb": 1701184,
+      "cpuPercent": 316.7,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:37.013Z",
+      "processes": 8,
+      "rssKb": 1674032,
+      "cpuPercent": 286.5,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:38.052Z",
+      "processes": 7,
+      "rssKb": 1131328,
+      "cpuPercent": 321,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:39.015Z",
+      "processes": 7,
+      "rssKb": 1123504,
+      "cpuPercent": 302,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:40.014Z",
+      "processes": 7,
+      "rssKb": 899616,
+      "cpuPercent": 96.3,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:41.019Z",
+      "processes": 10,
+      "rssKb": 666096,
+      "cpuPercent": 127,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:42.022Z",
+      "processes": 9,
+      "rssKb": 523648,
+      "cpuPercent": 49.9,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T04:25:42.703Z",
+      "processes": 0,
+      "rssKb": 0,
+      "cpuPercent": 0,
+      "app": null
+    }
+  ]
+}

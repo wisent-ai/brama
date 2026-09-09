@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Released 0.2.5 to 0.2.2 — Brama Docs</title>
+  <meta name="description" content="Published Brama releases 0.2.5, 0.2.4, 0.2.3 and 0.2.2, the earliest releases with recorded notes.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/changelog/released-0-2-early">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Changelog</h2><a href="/docs/changelog">Overview</a><a href="/docs/changelog/current">Unreleased</a><a href="/docs/changelog/released-0-2-7x">Released 0.2.77 to 0.2.42</a><a class="active" aria-current="page" href="/docs/changelog/released-0-2-early">Released 0.2.5 to 0.2.2</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama changelog: released 0.2.5 to 0.2.2</p>
+      <article class="doc"><h1 id="released-025-to-022">Released 0.2.5 to 0.2.2<a class="headerlink" href="#released-025-to-022" title="Link to this section">&para;</a></h1>
+<p>The earliest published releases with recorded notes. Each entry describes the contract as it stood when that release was
+cut, so a statement here about aliases, routes or limits is history rather than the current behaviour: the current route
+contract is on <a href="/docs/changelog/current">unreleased changes</a>, and the releases between these and today are on
+<a href="/docs/changelog/released-0-2-7x">0.2.77 to 0.2.42</a>.</p>
+<h2 id="025-2026-08-05">0.2.5 - 2026-08-05<a class="headerlink" href="#025-2026-08-05" title="Link to this section">&para;</a></h2>
+<p><em>Notes reconstructed from Git history; this release was published without them.</em></p>
+<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Link to this section">&para;</a></h3>
+<ul>
+<li>Provider adapters, the OAuth refresh path and the subscription model catalog share one HTTP client instead of
+  constructing one per request, so connections are reused across calls rather than repeating connection and TLS setup for
+  every request.</li>
+<li>The operator API source is rustfmt-clean.</li>
+<li><code>released-surface.json</code> was regenerated for the published <code>0.2.4</code> release.</li>
+</ul>
+<h3 id="compatibility-and-operator-action">Compatibility and operator action<a class="headerlink" href="#compatibility-and-operator-action" title="Link to this section">&para;</a></h3>
+<p>No HTTP, CLI, MCP, configuration or journal contract changed. No operator action is required.</p>
+<h2 id="024-2026-08-05">0.2.4 - 2026-08-05<a class="headerlink" href="#024-2026-08-05" title="Link to this section">&para;</a></h2>
+<p><em>Notes reconstructed from Git history; this release was published without them.</em></p>
+<h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Link to this section">&para;</a></h3>
+<ul>
+<li>The inference routes file is validated on the snapshot path as well, matching the validation already applied on the
+  update path.</li>
+</ul>
+<h3 id="compatibility-and-operator-action_1">Compatibility and operator action<a class="headerlink" href="#compatibility-and-operator-action_1" title="Link to this section">&para;</a></h3>
+<p>No contract change. No operator action is required.</p>
+<h2 id="023-2026-08-05">0.2.3 - 2026-08-05<a class="headerlink" href="#023-2026-08-05" title="Link to this section">&para;</a></h2>
+<p><em>Notes reconstructed from Git history; this release was published without them.</em></p>
+<h3 id="added">Added<a class="headerlink" href="#added" title="Link to this section">&para;</a></h3>
+<ul>
+<li>Desktop control plane: <code>GET /v1/admin/snapshot</code>, <code>PUT /v1/admin/routes</code>, and the <code>GET</code>,
+  <code>POST</code> and <code>DELETE</code> <code>/v1/admin/subscriptions/:agent_id</code> family. Only
+  <code>brama-desktop</code> may call them, and responses carry identifiers and status only; subscription credentials
+  remain write-only. The route write body is now exactly <code>{"alias","primary"}</code>
+  (<a href="/docs/changelog/current#unreleased-one-route-per-alias">unreleased</a>).</li>
+<li><code>lem</code> is declared a model-router client.</li>
+</ul>
+<h3 id="fixed_1">Fixed<a class="headerlink" href="#fixed_1" title="Link to this section">&para;</a></h3>
+<ul>
+<li>A refreshed provider OAuth grant is used even when it cannot be persisted through the local entitlements router. That
+  path previously returned the expired credential, so a request could fail with a grant Brama had already renewed.</li>
+<li><code>scripts/share-service-items.sh</code> provisions Jeden recipient access.</li>
+<li>Release control fails fast without a qualification record, and downloads release assets without requiring
+  <code>gh</code> on the host.</li>
+</ul>
+<h3 id="compatibility-and-operator-action_2">Compatibility and operator action<a class="headerlink" href="#compatibility-and-operator-action_2" title="Link to this section">&para;</a></h3>
+<p>HTTP additions only; the CLI surface is unchanged. An operator exposing the desktop control plane must give
+<code>brama-desktop</code> its own bearer and local Ed25519 workload identity as described in <code>README.md</code>.</p>
+<h2 id="022-2026-08-04">0.2.2 - 2026-08-04<a class="headerlink" href="#022-2026-08-04" title="Link to this section">&para;</a></h2>
+<p>The <code>v0.2.0</code> tag produced no release artifacts because its external onboarding source was not yet pinned for
+isolated CI builds. The <code>v0.2.1</code> artifacts were built but not qualified or promoted because the Weles
+reauthorization reader still expected the retired Skarbiec item shape.</p>
+<h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Link to this section">&para;</a></h3>
+<ul>
+<li>Product-contract README, onboarding, core, integration, release, security, support, example and qualification
+  documentation.</li>
+<li>Secret-free CLI and health build identity.</li>
+<li>Stable machine-readable error codes, retryability and attempt counts.</li>
+<li>Whole-request, selector, credential, output-token, collection and cost acknowledgement limits.</li>
+<li>Public-surface versioning for HTTP, MCP, configuration, state and CLI contracts rather than command names alone.</li>
+<li>Immutable release provenance and digest sidecars.</li>
+<li>Signed immutable Stado release publication, promotion, blue-green rollout, centralized status, quarantine and
+  automatic rollback integration.</li>
+</ul>
+<h3 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Link to this section">&para;</a></h3>
+<ul>
+<li>Brama is documented as an HTTP gateway and hardware detector, not a local inference runtime manager.</li>
+<li>Billable CLI operations require explicit cost acknowledgement.</li>
+<li>Selector routing is bounded to three model candidates and six provider calls; explicit subscription routing is bounded
+  to two provider calls. Those bounds are the model candidates a selector may rank and the credentials each may present;
+  an alias itself resolves to exactly one route
+  (<a href="/docs/changelog/current#unreleased-one-route-per-alias">unreleased</a>).</li>
+<li>The global output-token limit is 32768, and one inference request is bounded by a single whole-request deadline stated
+  in <a href="/docs/core"><code>CORE.md</code></a>.</li>
+<li>Provider failures use stable normalized HTTP semantics.</li>
+</ul>
+<h3 id="removed">Removed<a class="headerlink" href="#removed" title="Link to this section">&para;</a></h3>
+<ul>
+<li>The unused <code>subscriptionDecisionId</code> request field.</li>
+<li>The undocumented <code>brama_models</code> MCP claim. The read-only MCP surface exposes <code>brama_detect</code>
+  only.</li>
+</ul>
+<h3 id="security">Security<a class="headerlink" href="#security" title="Link to this section">&para;</a></h3>
+<ul>
+<li>No substitution path was added for a credential, an identity, a provider, a transport or stored state: when one of
+  them refuses, that refusal is what the caller receives and nothing else is put in its place.</li>
+<li>Routing logs are bounded and prohibit bearer, HMAC, capability, prompt and provider-secret material.</li>
+</ul>
+<h3 id="compatibility-and-operator-action_3">Compatibility and operator action<a class="headerlink" href="#compatibility-and-operator-action_3" title="Link to this section">&para;</a></h3>
+<p>These changes break the previous source contract and require version <code>0.2.0</code>. Callers must remove
+<code>subscriptionDecisionId</code>, honor structured error codes and attempt bounds, and pass explicit cost
+acknowledgement for billable CLI operations. No durable journal migration is required.</p>
+<h3 id="qualification">Qualification<a class="headerlink" href="#qualification" title="Link to this section">&para;</a></h3>
+<p>No test, test suite, smoke test, provider call, or deployment validation was created, modified, or executed while
+preparing these changes because explicit human testing consent was not provided. Release qualification remains
+blocked.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

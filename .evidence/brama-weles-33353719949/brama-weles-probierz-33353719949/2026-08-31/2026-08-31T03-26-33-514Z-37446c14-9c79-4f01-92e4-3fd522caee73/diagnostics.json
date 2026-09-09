@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "runId": "2026-08-31T03-26-33-514Z-37446c14-9c79-4f01-92e4-3fd522caee73",
+  "crashes": [],
+  "networkErrors": [],
+  "consoleErrors": [],
+  "performance": {
+    "tests": {
+      "count": 1,
+      "p50Ms": 376922,
+      "p95Ms": 376922,
+      "maxMs": 376922
+    },
+    "network": {
+      "count": 0,
+      "p50Ms": null,
+      "p95Ms": null,
+      "maxMs": null
+    },
+    "process": {
+      "firstOutputMs": 1184,
+      "peakRssKb": 252976,
+      "averageCpuPercent": 0.30817941952506595,
+      "appProcessName": null,
+      "appPeakRssKb": null,
+      "appAverageCpuPercent": null
+    }
+  }
+}

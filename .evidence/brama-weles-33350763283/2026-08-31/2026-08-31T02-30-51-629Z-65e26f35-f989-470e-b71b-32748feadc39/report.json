@@ -1,0 +1,25 @@
+{
+  "probierz": {
+    "runId": "2026-08-31T02-30-51-629Z-65e26f35-f989-470e-b71b-32748feadc39",
+    "captureErrors": []
+  },
+  "total": 1,
+  "passed": 0,
+  "failed": 1,
+  "flaky": 0,
+  "skipped": 0,
+  "tests": [
+    {
+      "title": "brama-weles-real",
+      "passed": false,
+      "status": "failed",
+      "flaky": false,
+      "attempts": 1,
+      "duration": 85440,
+      "startedAt": "2026-08-31T02:30:53.542Z",
+      "completedAt": "2026-08-31T02:32:18.984Z",
+      "error": "{\n  \"added\": [],\n  \"backup\": null,\n  \"skipped\": [\n    {\n      \"item\": \"jeden-agent-auth\",\n      \"problem\": \"agent identity item has no exact id field\"\n    },\n    {\n      \"item\": \"trading-autonomy-agent-auth\",\n      \"problem\": \"agent identity item has no exact id field\"\n    }\n  ]\n}\ncontrol:  /Users/charles/.stado/brama-28b-control.json\nskarbiec capability broker listening on /Users/charles/.stado/run/brama-capability.sock\nskarbiec: redemption denied: capability is not issued, has expired, has no uses left, or its authorization id does not match\nskarbiec: redemption denied: capability is not iss\n…\nshed credential: {\n  \"account\": \"\",\n  \"detail\": \"Weles answered HTTP 401 and named `no login_item` where `kimi-lukasz-google-sso` was asked for, so this run is not attributed to the account it was meant for; the credential it may have minted stands in the vault, and `brama subscriptions list` says whether the pool recovered\",\n  \"http_status\": 401,\n  \"login_item\": \"kimi-lukasz-google-sso\",\n  \"provider\": \"kimi\",\n  \"refresh\": null,\n  \"result\": \"failed\"\n}\n\n\n\nfailures:\n    sign_in_reauthorizes_the_real_claude_code_account\n    sign_in_reauthorizes_the_real_codex_account\n    sign_in_reauthorizes_the_real_kimi_account\n\ntest result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.59s\n\nfile:///Users/charles/.stado/actions-runner-work/brama/brama/probierz-source/packages/tui/specs/brama-weles-real.spec.mjs:37\n  throw new Error(`all three real Weles sign-ins must pass (exit ${result.status ?? 'unknown'})`);\n        ^\n\nError: all three real Weles sign-ins must pass (exit 101)\n    at file:///Users/charles/.stado/actions-runner-work/brama/brama/probierz-source/packages/tui/specs/brama-weles-real.spec.mjs:37:9\n    at ModuleJob.run (node:internal/modules/esm/module_job:437:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:639:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)\n\nNode.js v25.9.0\n",
+      "media": []
+    }
+  ]
+}

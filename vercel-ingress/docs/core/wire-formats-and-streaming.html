@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wire formats and streaming — Brama Docs</title>
+  <meta name="description" content="What belongs to Brama's core, the three accepted chat request formats, and the commit boundary that governs a streamed answer.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/core/wire-formats-and-streaming">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Core contract</h2><a href="/docs/core">Overview</a><a class="active" aria-current="page" href="/docs/core/wire-formats-and-streaming">Wire formats and streaming</a><a href="/docs/core/workflows">Public workflows</a><a href="/docs/core/state-and-failures">State and failures</a><a href="/docs/core/authorization-and-observability">Authorization and observability</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama core contract: request surface</p>
+      <article class="doc"><h1 id="wire-formats-and-streaming">Wire formats and streaming<a class="headerlink" href="#wire-formats-and-streaming" title="Link to this section">&para;</a></h1>
+<p>This page fixes the outer edge of the <a href="/docs/core">core contract</a>: which
+concerns core owns, which of them integrations are allowed to implement, the
+three chat request formats Brama accepts, and the one rule that governs a
+streamed answer.</p>
+<h2 id="core-versus-integrations">Core versus integrations<a class="headerlink" href="#core-versus-integrations" title="Link to this section">&para;</a></h2>
+<p>Core consists of:</p>
+<ul>
+<li>secure HTTP ingress and exact client/agent binding;</li>
+<li>provider-neutral model, message, tool, usage, and error contracts;</li>
+<li>canonical route, alias, selector, billing-target, and bounded-attempt policy;</li>
+<li>final-use capability redemption seams;</li>
+<li>append-only retirement and quality state;</li>
+<li>build identity, health, statistics, CLI, and read-only MCP boundaries.</li>
+</ul>
+<p>Provider protocols, models.dev, Skarbiec transport, the entitlements router,
+host deployment, and external model services are integrations. They may
+implement a core seam, but they must not redefine client identity, ownership,
+limits, state authority, or public error semantics. The route registry is a
+core artifact for the same reason: it names one destination per alias, and
+<a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a> is the supported way to
+bring an operator's existing document to that shape.</p>
+<h2 id="accepted-wire-formats">Accepted wire formats<a class="headerlink" href="#accepted-wire-formats" title="Link to this section">&para;</a></h2>
+<p>Three chat request formats are accepted and are one workflow, not three:
+OpenAI chat completions at <code>POST /v1/chat/completions</code>, Anthropic Messages at
+<code>POST /v1/messages</code>, and OpenAI Responses at <code>POST /v1/responses</code>. The format
+decides only how a request is read and how an answer is written. Client
+identity, model allowlist, alias resolution, selector semantics, caller-scoped
+ownership, attempt bounds, ledger accounting, and the
+<a href="/docs/core/state-and-failures">error contract</a> are identical across all
+three, and every one of them requires a canonical <code>provider/model</code> route or a
+supported selector: no format is permitted to guess a provider from a bare
+vendor model name.</p>
+<p>Inbound translation keeps only what the provider-neutral request can hold. Stop
+sequences, cache-control hints, reasoning options, stored-response identifiers,
+and non-function tool types are accepted and dropped rather than approximated.
+Outbound translation states only what the provider reported: a stream whose
+provider published no token meter yields no token numbers.</p>
+<h2 id="aliases-on-the-request-surface">Aliases on the request surface<a class="headerlink" href="#aliases-on-the-request-surface" title="Link to this section">&para;</a></h2>
+<p>An alias named in any of the three formats resolves to exactly one route. The
+registry holds one destination per alias, so there is no ordered list of spare
+destinations to walk and no second route behind the first. When the resolved
+route refuses, that refusal is the answer the caller receives, in the caller's
+own dialect. A declared alias that cannot serve answers <code>503</code>
+<code>alias_unserviceable</code> and carries <code>details.state</code> and <code>details.route</code>; an
+undeclared alias answers <code>404</code>, whose <code>details</code> carry the same two fields.
+<a href="/docs/core/workflows">Public workflows</a> describes the four alias states and
+how each one is reached.</p>
+<h2 id="streaming">Streaming<a class="headerlink" href="#streaming" title="Link to this section">&para;</a></h2>
+<p>Any of the three chat formats streams when its request asks for it. The
+response is <code>text/event-stream</code> in the caller's own dialect:
+<code>chat.completion.chunk</code> frames closed by <code>data: [DONE]</code>, Anthropic
+<code>message_start</code>, <code>content_block_*</code>, <code>message_delta</code> and <code>message_stop</code> events,
+or <code>response.*</code> events closed by <code>response.completed</code>.</p>
+<p>Streaming requires a route this gateway owns a protocol for. A model reached
+only through the shared catalogue is buffered by construction, so asking to
+stream one is refused as <code>400 invalid_request</code> before any provider is
+contacted, rather than reported as a provider failure.</p>
+<h3 id="the-commit-boundary">The commit boundary<a class="headerlink" href="#the-commit-boundary" title="Link to this section">&para;</a></h3>
+<p>One rule governs it. A stream is either committed or it is not, and the
+boundary is the provider's response status:</p>
+<ul>
+<li>before commit, every bound in the core contract applies unchanged &mdash; the
+  selector's model candidates, credential rotation within one route, one forced
+  OAuth refresh, the whole-request deadline &mdash; because the caller has
+  received nothing and a refusal is still an ordinary error document;</li>
+<li>after commit, nothing is retried. A provider that fails, stalls for longer
+  than the per-attempt timeout, or ends without its terminal event ends the
+  caller's stream without one too. Brama does not continue that generation on
+  another credential, because a second attempt would duplicate both cost and
+  emitted text.</li>
+</ul>
+<p>Credential rotation before the first streamed byte is rotation across
+credentials for the one route the request named. It never reaches a second
+route for an alias, and it never crosses into another account's inventory.</p>
+<p>A caller that receives no terminal event holds an incomplete generation. It may
+start a new request; Brama will not have done so on its behalf.</p>
+<p>Subscription spend is recorded once per stream, whether it completed, failed
+mid-flight, or was abandoned by the caller: the tokens the provider reported and
+the plan windows its headers carried are ledger facts regardless of who stopped
+listening.</p>
+<h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Link to this section">&para;</a></h2>
+<ul>
+<li><a href="/docs/core/workflows">Public workflows</a> &mdash; the four ways a request
+  reaches a provider, and how task-quality evidence is collected.</li>
+<li><a href="/docs/core/state-and-failures">State and failures</a> &mdash; ownership,
+  the error envelope, attempt bounds, and resource limits.</li>
+<li><a href="/docs/http-api">HTTP API</a> &mdash; the endpoint-by-endpoint reference for
+  these three formats.</li>
+</ul>
+</article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

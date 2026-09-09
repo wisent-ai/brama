@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Public workflows — Brama Docs</title>
+  <meta name="description" content="The four public ways a request reaches a provider — direct route or alias, account-owned API key, exact agent subscription, selectors — and task-quality collection.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/core/workflows">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Core contract</h2><a href="/docs/core">Overview</a><a href="/docs/core/wire-formats-and-streaming">Wire formats and streaming</a><a class="active" aria-current="page" href="/docs/core/workflows">Public workflows</a><a href="/docs/core/state-and-failures">State and failures</a><a href="/docs/core/authorization-and-observability">Authorization and observability</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama core contract: public workflows</p>
+      <article class="doc"><h1 id="public-workflows">Public workflows<a class="headerlink" href="#public-workflows" title="Link to this section">&para;</a></h1>
+<p>Four workflows carry a request to a provider. Each one names its inputs, the
+authority that decides which credential is redeemed, and the single result the
+caller receives. A fifth operator action, task-quality collection, produces the
+evidence the <code>task:</code> selector reads.</p>
+<h2 id="workflow-direct-route-or-alias">Workflow: direct route or alias<a class="headerlink" href="#workflow-direct-route-or-alias" title="Link to this section">&para;</a></h2>
+<h3 id="inputs">Inputs<a class="headerlink" href="#inputs" title="Link to this section">&para;</a></h3>
+<ul>
+<li>one accepted bearer bound to a client identity;</li>
+<li>an allowed logical alias or canonical <code>provider/model</code> route;</li>
+<li>nonempty messages;</li>
+<li><code>max_tokens</code> from 1 through 32768;</li>
+<li>temperature and optional provider-neutral tool definitions.</li>
+</ul>
+<h3 id="decision-and-result">Decision and result<a class="headerlink" href="#decision-and-result" title="Link to this section">&para;</a></h3>
+<p>Brama validates transport, bearer, allowlist, request shape, and limits before
+redeeming a provider capability. An alias resolves to the one
+deployment-owned canonical route the registry records for it. A generic
+canonical request with no caller-scoped fields uses Brama's direct provider
+capability and performs one provider attempt. The result is one buffered
+OpenAI-compatible response, one committed event stream, or one normalized
+error, as the request asked.</p>
+<p>No subscription credential is eligible for this workflow.</p>
+<h3 id="alias-states">Alias states<a class="headerlink" href="#alias-states" title="Link to this section">&para;</a></h3>
+<p>Resolution has four outcomes, reported identically by <code>GET /v1/aliases</code>, by
+<code>brama aliases</code>, and in the <code>details</code> of a refusal.</p>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Meaning</th>
+<th>Completion request</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>serving</code></td>
+<td>the alias names a route and that route can be redeemed</td>
+<td>proceeds</td>
+</tr>
+<tr>
+<td><code>no_route</code></td>
+<td>the registry declares the alias without a usable destination</td>
+<td><code>503 alias_unserviceable</code></td>
+</tr>
+<tr>
+<td><code>capability_absent</code></td>
+<td>the route exists but no capability behind it can be redeemed</td>
+<td><code>503 alias_unserviceable</code></td>
+</tr>
+<tr>
+<td><code>routes_file_invalid</code></td>
+<td>the registry document was rejected, so no alias resolves</td>
+<td><code>503 alias_unserviceable</code></td>
+</tr>
+</tbody>
+</table>
+<p>Every <code>503 alias_unserviceable</code> body carries <code>details.state</code> and
+<code>details.route</code>. An alias the registry never declared answers <code>404</code>, whose
+<code>details</code> carry the same two fields. In each case the refusal is the caller's
+answer: the registry holds one route per alias, and no other route is attempted
+on its behalf. Repairing the alias is an operator action &mdash; see
+<a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a> for moving an existing
+registry document to the current shape, and <code>brama adopt</code>, which reviews one
+route per alias.</p>
+<h2 id="workflow-account-owned-api-key">Workflow: account-owned API key<a class="headerlink" href="#workflow-account-owned-api-key" title="Link to this section">&para;</a></h2>
+<p>An authenticated Wisent user stores a remote provider credential with
+<code>POST /v1/subscription-pool</code>. The verified session determines the internal
+owner; account and agent identifiers in the request are neither accepted nor
+trusted. The provider must be a supported built-in adapter or an executable
+models.dev provider. <code>local-openai</code> is refused, because an account credential
+must never select the gateway host's loopback services.</p>
+<p>The plaintext credential crosses only the request and the local Skarbiec write
+pipe. Brama returns its generated subscription ID, provider, status and optional
+label, never the key. A later canonical <code>provider/model</code> request made with the
+same Wisent session selects only active, non-retired credentials owned by that
+account. It never reaches the deployment's provider capability, and it never
+reaches another account's credential: when that account has no usable key, the
+request is refused. The same owner selection applies before buffered and
+streamed dispatch, and <code>GET /v1/models</code> marks availability from that account's
+keys.</p>
+<p>Replacing a provider key writes the same account/provider coordinate. Deleting
+the returned subscription ID retires it immediately. API keys have no OAuth
+refresh path and no invented expiry; provider authentication, quota and
+rate-limit failures follow the same bounded credential-attempt policy as agent
+subscriptions.</p>
+<h2 id="workflow-exact-agent-subscription">Workflow: exact agent subscription<a class="headerlink" href="#workflow-exact-agent-subscription" title="Link to this section">&para;</a></h2>
+<p>The caller supplies the three agent HMAC headers over the exact raw request
+body. The bearer-bound agent, signed agent, and path agent must agree where
+present.</p>
+<p>The deployment alias <code>best</code> resolves to the one operator-selected subscription
+route recorded for it. It is accepted only for bearers whose model allowlist
+names <code>best</code>; the HMAC identity still selects the subscription owner. The alias
+never authorizes a direct provider credential, another agent's subscription, or
+a second route.</p>
+<p><code>billingTarget</code> contains <code>providerId</code>, <code>accountId</code>, and <code>subscriptionId</code>:</p>
+<ul>
+<li><code>providerId</code> must match the canonical route provider;</li>
+<li><code>accountId</code> is required as caller decision evidence but is not credential
+  authority;</li>
+<li><code>subscriptionId</code> must resolve to an active non-retired resource owned by the
+  signed agent.</li>
+</ul>
+<p>An explicit subscription route tries at most two eligible credentials on that
+one route, ordered by what their plans have left: the maximum used fraction the
+provider itself reported across that credential's current windows, freest
+first, read from the ledger and costing no provider call. A window whose reset
+instant has passed counts as empty; a credential with no reading counts as
+free. The agent's pinned credential, when it has one that is eligible and not
+reporting a full window, is tried first within that same bound. A credential is
+redeemed immediately before each provider call. Authentication, quota, and
+rate-limit failures may rotate to the second credential; other provider
+failures return immediately, because replay could duplicate cost or tool
+effects. Rotation stays inside the named route &mdash; it never changes which
+route serves the request.</p>
+<h3 id="credential-pinning">Credential pinning<a class="headerlink" href="#credential-pinning" title="Link to this section">&para;</a></h3>
+<p>The credential that last served one agent on one provider is remembered in
+process and preferred for that agent's later requests until the earliest reset
+instant its windows reported &mdash; five hours when the provider named none,
+capped at 24 hours. The pin reorders eligible candidates and nothing else: it
+never adds a credential, never survives a block, a retirement, or a full
+reported window, and never overrides <code>billingTarget</code>.</p>
+<h2 id="workflow-selectors">Workflow: selectors<a class="headerlink" href="#workflow-selectors" title="Link to this section">&para;</a></h2>
+<p>A selector is not an alias. An alias names one route; a selector asks Brama to
+rank candidate subscriptions the caller already owns and to try them in that
+order, within the bounds below.</p>
+<h3 id="any"><code>any</code><a class="headerlink" href="#any" title="Link to this section">&para;</a></h3>
+<p>Select active agent-owned stateless routes, order them by the freest usable
+subscription behind each route, randomize exact ties, and try at most three
+model candidates. Each candidate may try at most two credentials. The whole
+request therefore performs at most six provider calls.</p>
+<h3 id="any-vision-capable"><code>any-vision-capable</code><a class="headerlink" href="#any-vision-capable" title="Link to this section">&para;</a></h3>
+<p>Apply the <code>any</code> contract after filtering to catalog models whose input
+modalities include <code>image</code>.</p>
+<h3 id="tasktask-name"><code>task:&lt;task-name&gt;</code><a class="headerlink" href="#tasktask-name" title="Link to this section">&para;</a></h3>
+<p>Use the latest active quality observation per active model. Sort by score
+highest first and observation time newest first; inside one score, order by plan
+headroom and randomize exact ties. Try at most three model candidates and six
+provider calls in total.</p>
+<p>Selectors stop at the first successful result. They do not infer task names,
+reuse another agent's evidence, or continue beyond the documented limits. When
+every candidate is exhausted, the last classified refusal is the caller's
+answer.</p>
+<h2 id="task-quality-collection">Task-quality collection<a class="headerlink" href="#task-quality-collection" title="Link to this section">&para;</a></h2>
+<p>Collection is an explicit billable operator action. It requires:</p>
+<ul>
+<li>one agent ID and task name;</li>
+<li>a nonempty prompt;</li>
+<li>an exact or substring expectation;</li>
+<li>explicit provider-cost acknowledgement;</li>
+<li><code>max_models</code> from 1 through 25, and three models when the operator names no
+  value;</li>
+<li>explicit <code>--persist</code> before observations enter the journal.</li>
+</ul>
+<p>Each selected model receives one request through the real agent subscription
+path. Collection reports per-model status and score, and stops at
+<code>max_models</code>.</p>
+<h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Link to this section">&para;</a></h2>
+<ul>
+<li><a href="/docs/core/state-and-failures">State and failures</a> &mdash; who owns each
+  piece of state, and the error every workflow returns.</li>
+<li><a href="/docs/core/wire-formats-and-streaming">Wire formats and streaming</a>
+  &mdash; how each workflow's result is written back.</li>
+<li><a href="/docs/cli">CLI</a> &mdash; <code>brama aliases</code>, <code>brama adopt</code>, and the
+  registry commands.</li>
+</ul>
+</article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

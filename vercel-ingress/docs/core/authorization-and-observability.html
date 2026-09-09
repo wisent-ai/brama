@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Authorization and observability — Brama Docs</title>
+  <meta name="description" content="What startup configuration and the route registry must satisfy, how Brama handles identities and secrets, and the bounded fields a routing event records.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/core/authorization-and-observability">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Core contract</h2><a href="/docs/core">Overview</a><a href="/docs/core/wire-formats-and-streaming">Wire formats and streaming</a><a href="/docs/core/workflows">Public workflows</a><a href="/docs/core/state-and-failures">State and failures</a><a class="active" aria-current="page" href="/docs/core/authorization-and-observability">Authorization and observability</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama core contract: configuration, secrets, telemetry</p>
+      <article class="doc"><h1 id="authorization-and-observability">Authorization and observability<a class="headerlink" href="#authorization-and-observability" title="Link to this section">&para;</a></h1>
+<p>The <a href="/docs/core/workflows">public workflows</a> are only as trustworthy as the
+configuration that admits them, the secret handling behind them, and the record
+they leave. This page states all three.</p>
+<h2 id="configuration-contract">Configuration contract<a class="headerlink" href="#configuration-contract" title="Link to this section">&para;</a></h2>
+<p>Startup configuration is generated, not hand-authored. It must:</p>
+<ul>
+<li>reject missing, malformed, empty, duplicate, unknown, or contradictory client
+  identities and alias policy;</li>
+<li>use exact model allowlists without wildcards;</li>
+<li>validate capability IDs and expected resource tuples before redemption;</li>
+<li>keep direct and subscription capability names separate;</li>
+<li>reject non-HTTPS provider origins except explicit loopback overrides;</li>
+<li>reject untrusted forwarded transport headers;</li>
+<li>expose build identity and non-secret configuration categories without
+  exposing bearer, HMAC, OAuth, or provider material;</li>
+<li>require a restart after startup policy changes.</li>
+</ul>
+<p>A security, credential, provider, identity, or storage decision either uses the
+configured source or refuses. No other source is put in its place, and the
+refusal reaches both the caller's answer and the log.</p>
+<h3 id="the-route-registry-document">The route registry document<a class="headerlink" href="#the-route-registry-document" title="Link to this section">&para;</a></h3>
+<p>The registry has exactly three known top-level fields: <code>schema_version</code>,
+<code>deployments</code> and <code>routes</code>. The current <code>schema_version</code> is the number one.
+<code>routes</code> maps an alias to its single destination &mdash; one alias, one route,
+with nothing standing behind it. An unknown top-level field is refused by the
+deserializer, so a document carrying anything else is rejected whole and every
+alias then reports <code>routes_file_invalid</code>.</p>
+<p>Apart from the version line, which the loader supplies and validates, the
+document reads like this:</p>
+<pre><code class="language-json">{
+  &quot;deployments&quot;: {
+    &quot;primary&quot;: &quot;anthropic&quot;
+  },
+  &quot;routes&quot;: {
+    &quot;best&quot;: &quot;anthropic/claude-sonnet-4-5&quot;,
+    &quot;fast&quot;: &quot;openai/gpt-4o-mini&quot;
+  }
+}
+</code></pre>
+<p>Two admin endpoints edit it, and both answer
+<code>{&quot;ok&quot;:true,&quot;routes&quot;:&lt;document&gt;}</code>:</p>
+<ul>
+<li><code>PUT /v1/admin/routes</code> takes exactly <code>{&quot;alias&quot;,&quot;primary&quot;}</code>; an unknown field
+  is refused with the deserializer's own sentence;</li>
+<li><code>DELETE /v1/admin/routes</code> takes <code>{&quot;alias&quot;}</code>.</li>
+</ul>
+<p>An operator whose file predates this shape does not edit it by hand.
+<a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a> reads the configured
+document, keeps only the three known top-level fields, validates the result and
+commits it with the same atomic owner-only replacement the admin endpoints use.
+It is idempotent and prints the document it committed. <code>GET /v1/aliases</code> then
+reports each row as <code>{&quot;alias&quot;,&quot;state&quot;,&quot;route&quot;,&quot;reason&quot;,&quot;required&quot;,&quot;authorized&quot;}</code>,
+and <code>brama aliases</code> prints the alias, its state and its route.</p>
+<h2 id="authorization-and-secrets">Authorization and secrets<a class="headerlink" href="#authorization-and-secrets" title="Link to this section">&para;</a></h2>
+<p>Authorization is enforced at ingress and mutation boundaries. One valid bearer
+never implies agent authority. One agent identity never grants access to another
+agent's path or subscription. Brama receives only capability handles until the
+final-use seam, accepts bounded secret bytes from the owner-bound socket, and
+zeroizes scoped OAuth material.</p>
+<p>Donation accepts secret input only in the authorized request body, passes it to
+the entitlements router through child stdin, and stores only non-secret metadata
+in Brama's overlay. Logs and errors must never include the donated value.</p>
+<p>Alias authority is part of this boundary, not a routing convenience. A bearer
+whose allowlist does not name an alias is answered <code>403 forbidden</code>; naming an
+allowed alias reaches exactly the one route the registry records for it, and
+never a route the caller was not authorized for. <code>GET /v1/aliases</code> reports the
+<code>required</code> and <code>authorized</code> fields for precisely this reason.</p>
+<h2 id="observability-contract">Observability contract<a class="headerlink" href="#observability-contract" title="Link to this section">&para;</a></h2>
+<p>Secret-free build identity is available through <code>brama version</code> and <code>/health</code>.
+A routing event records bounded fields:</p>
+<ul>
+<li>request correlation ID;</li>
+<li>client identity and routing mode;</li>
+<li>requested logical model and the canonical route it resolved to;</li>
+<li>provider and attempt count;</li>
+<li>success or failure class, retryability, latency, and token totals;</li>
+<li>whether operator action is required.</li>
+</ul>
+<p>A refused alias is recorded the same way: the event names the alias, the one
+route it resolved to, and the state that made it unserviceable, which is the
+same pair the caller reads in <code>details</code>.</p>
+<p>The provider usage report reader is logged under its own <code>plan_usage_*</code> events,
+and the operator-triggered completion probe under <code>usage_probe_*</code>, each naming
+the subscription, the provider, and the provider's refusal when there was one,
+so a request nobody made is never read as a caller's traffic.</p>
+<p>Do not log bearer values, HMAC signatures, capability IDs, raw credentials,
+request bodies, prompt text, raw provider payloads, or donated secrets. <code>/stats</code>
+is bearer-protected. Process telemetry is not durable billing evidence.</p>
+<h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Link to this section">&para;</a></h2>
+<ul>
+<li><a href="/docs/configuration">Configuration</a> &mdash; the variables and files
+  behind the rules above.</li>
+<li><a href="/docs/core/state-and-failures">State and failures</a> &mdash; the error
+  envelope those events classify.</li>
+<li><a href="/docs/runbook">Runbook</a> &mdash; reading these events during an
+  incident.</li>
+</ul>
+</article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

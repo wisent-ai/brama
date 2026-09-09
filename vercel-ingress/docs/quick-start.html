@@ -217,8 +217,8 @@ makes it routable&quot;, ...}
 per active subscription, and is the only evidence the gateway can serve. A
 <code>503</code> body names the providers or subscriptions that failed, without secret
 material — the five <code>reason</code> sentences are decoded in the
-<a href="/docs/runbook#readyz-answers-503">runbook</a>; the evidence rule is stated in
-<a href="/docs/architecture#health-versus-readyz">architecture</a>.</p>
+<a href="/docs/runbook/startup-and-readiness#readyz-answers-503">runbook</a>; the evidence rule is stated in
+<a href="/docs/architecture/request-path-and-state#health-versus-readyz">architecture</a>.</p>
 <h2 id="first-authenticated-request">First authenticated request<a class="headerlink" href="#first-authenticated-request" title="Link to this section">&para;</a></h2>
 <p><code>GET /v1/models</code> is the first non-billable machine workflow:</p>
 <pre><code class="language-console">$ curl -s -H &quot;Authorization: Bearer $BRAMA_CLIENT_TOKEN&quot; \

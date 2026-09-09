@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Routes and ledger — Brama Docs</title>
+  <meta name="description" content="Runbook entries for a refused route update — registry validation sentences, the admin routes endpoint, and brama routes migrate — and for a usage ledger that reads wrong.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/runbook/routes-and-ledger">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Runbook</h2><a href="/docs/runbook">Overview</a><a href="/docs/runbook/startup-and-readiness">Startup and readiness</a><a href="/docs/runbook/credentials-and-subscriptions">Credentials and subscriptions</a><a class="active" aria-current="page" href="/docs/runbook/routes-and-ledger">Routes and ledger</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama runbook: the route registry and the usage ledger</p>
+      <article class="doc"><h1 id="routes-and-ledger">Routes and ledger<a class="headerlink" href="#routes-and-ledger" title="Link to this section">&para;</a></h1>
+<p>Two symptoms that are read from the gateway's own records rather than from a
+provider: a route update the registry refuses, and a usage ledger whose empty
+window is mistaken for a zero. The rest of the runbook is at
+<a href="/docs/runbook">runbook</a>.</p>
+
+<h2 id="a-route-update-is-refused">A route update is refused<a class="headerlink" href="#a-route-update-is-refused" title="Link to this section">&para;</a></h2>
+<p>An alias resolves to exactly one route. The registry document that says so
+carries three known top-level fields — <code>schema_version</code>,
+<code>deployments</code> and <code>routes</code> — and <code>routes</code> maps each alias to its
+single destination. Its <code>schema_version</code> is the number one. The
+deserializer refuses an unknown top-level field, and refusing it rejects the
+whole document, so a file that still carries an extra field stops being loaded
+at all:</p>
+<pre><code class="language-json">{
+  &quot;deployments&quot;: {
+    &quot;mini&quot;: {&quot;local&quot;: &quot;http://127.0.0.1:8080&quot;,
+              &quot;tailscale&quot;: &quot;https://mini.tail-scale.ts.net&quot;}
+  },
+  &quot;routes&quot;: {
+    &quot;fast&quot;: {&quot;primary&quot;: &quot;mini/llama-3.1-8b&quot;}
+  }
+}
+</code></pre>
+<p>The version line is left out of the example above on purpose; write it into
+the file as the top-level <code>schema_version</code> field with the value one.</p>
+
+<h3 id="what-the-file-validation-says">What the file validation says<a class="headerlink" href="#what-the-file-validation-says" title="Link to this section">&para;</a></h3>
+<p>These are the sentences an operator actually reads when the registry file is
+rejected (<a href="/docs/concepts/alias#dynamic-routes-the-routes-file">concepts/alias</a>):</p>
+<ul>
+<li><code>inference routes must be a regular non-symlink file</code> — the path is a
+  directory, a device, or a symlink; point the configuration at the real
+  file.</li>
+<li><code>inference routes must not be accessible by group or other</code> — the mode
+  has to be owner-only, matching every atomic write the gateway performs on
+  it.</li>
+<li><code>inference route '&lt;alias&gt;' repeats destination '&lt;destination&gt;'</code> — one
+  alias names the same destination twice; an alias has one destination, so
+  remove the duplicate.</li>
+<li><code>inference deployment '&lt;name&gt;' has no safe local or Tailscale endpoint</code>
+  — the deployment declares no endpoint the gateway is allowed to call.</li>
+</ul>
+
+<h3 id="the-admin-endpoint">The admin endpoint<a class="headerlink" href="#the-admin-endpoint" title="Link to this section">&para;</a></h3>
+<p><code>PUT /v1/admin/routes</code> takes exactly <code>{&quot;alias&quot;,&quot;primary&quot;}</code> and
+<code>DELETE /v1/admin/routes</code> takes <code>{&quot;alias&quot;}</code>; both answer
+<code>{&quot;ok&quot;:true,&quot;routes&quot;:&lt;document&gt;}</code> with the document as it
+now stands (<a href="/docs/http-api">http-api</a>). Any other field in the body is
+refused with the deserializer's own sentence. The two refusals an operator
+meets most often:</p>
+<ul>
+<li><code>runtime route registry is not configured</code> (<code>409</code>) — no
+  <code>BRAMA_INFERENCE_ROUTES_FILE</code> is in effect; configure it (the launcher
+  seeds one) before editing routes at runtime.</li>
+<li><code>unknown route alias</code> (<code>400</code>) — the alias in the body is not declared,
+  so there is nothing to point at a destination. <code>brama aliases</code> prints
+  each declared alias with its state and its route; a completion naming a
+  declared alias that cannot serve answers <code>503 alias_unserviceable</code> with
+  <code>details.state</code> and <code>details.route</code>, and an unknown alias answers
+  <code>404</code> whose <code>details</code> carry the same two keys.</li>
+</ul>
+<p>The file is re-read per request, so a repaired file needs no restart.</p>
+
+<h3 id="a-document-carrying-a-field-the-deserializer-refuses">A document carrying a field the deserializer refuses<a class="headerlink" href="#a-document-carrying-a-field-the-deserializer-refuses" title="Link to this section">&para;</a></h3>
+<p>A registry file written before this contract can still carry a top-level
+field that is no longer known. Every read of it — startup, an admin write,
+<code>brama aliases</code> — is refused, and the alias state reads
+<code>routes_file_invalid</code>. The repair is a command, not a text editor:</p>
+<pre><code class="language-console">$ brama routes migrate
+</code></pre>
+<p>It reads the configured registry document, keeps only the known top-level
+fields, validates the result, and commits it with the same atomic owner-only
+replacement every other registry write uses. It prints the resulting document
+and is idempotent: running it again on a document already in this shape
+commits the same content and prints the same thing
+(<a href="/docs/cli/routes/migrate">cli/routes/migrate</a>). Re-run
+<code>brama aliases</code> afterwards: each alias should read <code>serving</code>, or
+<code>no_route</code> where the migration removed a destination nothing declared, or
+<code>capability_absent</code> where the route names a provider this host was never
+granted
+(<a href="/docs/runbook/credentials-and-subscriptions">credentials and subscriptions</a>).</p>
+
+<h2 id="the-ledger-looks-wrong-not-the-pool">The ledger looks wrong, not the pool<a class="headerlink" href="#the-ledger-looks-wrong-not-the-pool" title="Link to this section">&para;</a></h2>
+<p>An empty <code>limits</code> array in a listing is one of four states told apart by
+the newest check — a refused credential, a subscription nothing has used, a
+provider that publishes no plan state, or windows that aged out
+(<code>BRAMA_PLAN_USAGE_RETENTION_SECS</code>, default 86400 seconds). Only the third
+may be read as "no plan window"; none of them is a zero. A reading marked
+<code>stale: true</code> is the last value the provider actually reported, kept and
+labelled because the report has been failing since — information about the
+report, not about health
+(<a href="/docs/concepts/subscription#the-usage-ledger">concepts/subscription</a>).</p>
+</article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

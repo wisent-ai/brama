@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bring existing configuration — Brama Docs</title>
+  <meta name="description" content="How the adoption review seeds a new Brama installation from an existing route registry, one route per alias, with every selection explicit.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/onboarding/existing-configuration">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Onboarding</h2><a href="/docs/onboarding">Overview</a><a href="/docs/onboarding/paths-and-prerequisites">Paths and prerequisites</a><a class="active" aria-current="page" href="/docs/onboarding/existing-configuration">Bring existing configuration</a><a href="/docs/onboarding/first-success">First success</a><a href="/docs/onboarding/failures-and-reset">Failures and reset</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama onboarding: adoption review</p>
+      <article class="doc"><h1 id="bring-existing-configuration">Bring existing configuration<a class="headerlink" href="#bring-existing-configuration" title="Link to this section">&para;</a></h1>
+<p>An existing Brama installation can seed a new one before any provider request.
+The adoption review reads a route registry document, shows you exactly what it
+would write, and writes only what you select.</p>
+<h2 id="start-the-review">Start the review<a class="headerlink" href="#start-the-review" title="Link to this section">&para;</a></h2>
+<pre><code class="language-bash">brama adopt --from /path/to/inference-routes.json
+brama onboard --adopt-from /path/to/inference-routes.json
+</code></pre>
+<p>Both are documented under <a href="/docs/cli/adopt"><code>brama adopt</code></a>. Brama
+Desktop offers the same <strong>Review existing setup&hellip;</strong> action during first
+use and under <strong>Settings &rarr; Existing configuration</strong>. Both surfaces
+call the Brama service's configuration-adoption operation and its owner-only
+route registry; the desktop neither parses nor writes routes on its own.</p>
+<h2 id="the-document-being-read">The document being read<a class="headerlink" href="#the-document-being-read" title="Link to this section">&para;</a></h2>
+<p>A route registry document carries exactly three known top-level fields:
+<code>schema_version</code>, whose value is the number one, plus <code>deployments</code> and
+<code>routes</code>. <code>routes</code> maps an alias to its single destination. The example below
+omits the <code>schema_version</code> line for the docs build; a real file carries it with
+the version stated in the previous sentence.</p>
+<pre><code class="language-json">{
+  &quot;deployments&quot;: {
+    &quot;llama-local&quot;: { &quot;backend&quot;: &quot;llama.cpp&quot;, &quot;model&quot;: &quot;llama-3.1-8b&quot; },
+    &quot;claude-direct&quot;: { &quot;provider&quot;: &quot;anthropic&quot;, &quot;model&quot;: &quot;claude-sonnet&quot; }
+  },
+  &quot;routes&quot;: {
+    &quot;fast&quot;: &quot;llama-local&quot;,
+    &quot;deep&quot;: &quot;claude-direct&quot;
+  }
+}
+</code></pre>
+<p>An unknown top-level field is refused by the deserializer, and the whole
+document is rejected rather than partly read. An older file that still carries
+extra top-level fields reaches this shape with
+<a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a>: it keeps only
+the known fields, validates the result, commits it with the same atomic
+owner-only replacement every other registry write uses, prints the resulting
+document, and is idempotent, so running it twice changes nothing the second
+time. Run it on the source file before the review when the review rejects the
+document.</p>
+<h2 id="what-the-review-reports">What the review reports<a class="headerlink" href="#what-the-review-reports" title="Link to this section">&para;</a></h2>
+<p>The review lists, for each alias in the source document:</p>
+<ul>
+<li>the alias name and its single source route;</li>
+<li>the alias's current destination in this installation when the alias already
+  exists here;</li>
+<li>whether the referenced deployment is present locally;</li>
+<li>the direct-provider acquisitions already configured for this Brama runtime;</li>
+<li>subscription identities discovered through the existing Skarbiec boundary for
+  the selected agent.</li>
+</ul>
+<p>One alias means one route on both sides of the comparison, so each row is a
+single pair: source route against current route. Deployments in the source
+document that no alias references are reported as unreferenced; they are never
+imported unless you select them.</p>
+<p>The review never requests or copies credential contents, never enables a
+subscription, and never calls a model.</p>
+<h2 id="selection-and-conflicts">Selection and conflicts<a class="headerlink" href="#selection-and-conflicts" title="Link to this section">&para;</a></h2>
+<p>Nothing is selected for you. A missing or empty source is reported as exactly
+that. Declining the review leaves an empty but usable setup. Applying a
+selection validates the complete source and destination first, then performs one
+atomic write.</p>
+<ul>
+<li><strong>Same route:</strong> an alias whose source route equals its current route is
+  reported unchanged and is not rewritten.</li>
+<li><strong>Different route:</strong> a source route that differs from the alias's current
+  route is a conflict. The current route stays in place unless that exact alias
+  was selected with <code>--replace-conflicts</code>, in which case the source route
+  becomes the alias's single destination.</li>
+<li><strong>Deployment name conflict:</strong> a source deployment whose name already exists
+  locally is never replaced; the local deployment stands and the alias that
+  needed the source definition is reported as rejected.</li>
+</ul>
+<p>Aliases, deployments, credentials, and the source file you did not select remain
+exactly as they were.</p>
+<h2 id="what-success-means-here">What success means here<a class="headerlink" href="#what-success-means-here" title="Link to this section">&para;</a></h2>
+<p>Successful persistence reports imported, unchanged, conflicting, and rejected
+aliases, and the committed document is the one the service will read. That
+advances the configuration step, but it is not Brama's first success: the
+journey stays in progress until the gateway produces a real routed model
+response, described in
+<a href="/docs/onboarding/first-success">first success</a>.</p>
+<p>After the write, confirm the result with <code>brama aliases</code>, which prints alias,
+state and route, or with <code>GET /v1/aliases</code>, whose rows carry <code>alias</code>,
+<code>state</code>, <code>route</code>, <code>reason</code>, <code>required</code> and <code>authorized</code>. An alias reported
+<code>capability_absent</code> or <code>no_route</code> needs the repair named in
+<a href="/docs/onboarding/failures-and-reset">failures and reset</a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

@@ -157,7 +157,7 @@ callers ship against them:</p>
 <tbody>
 <tr>
 <td><code>wisent-backend</code></td>
-<td>chat — the Wisent App backend's alias, spelled as the client's name and nothing more. The shape is the endpoint the caller posts to, the primary route and its ordered fallbacks are the route table's <code>fallbacks</code> column; neither is spelled into the name</td>
+<td>chat — the Wisent App backend's alias, spelled as the client's name and nothing more. The shape is the endpoint the caller posts to, and the one route behind the alias is the <code>routes</code> entry in the route table; neither is spelled into the name</td>
 </tr>
 <tr>
 <td><code>wisent-backend/evaluation</code></td>
@@ -210,10 +210,12 @@ this gateway holds no provider credential for …</code> instead of
 <code>not in the Brama catalog</code>.</li>
 <li>A completion request naming a declared alias that cannot serve is refused
 with <code>503</code>, code <code>alias_unserviceable</code>, the same sentence as
-<code>message</code>, and <code>details.state</code>, <code>details.route</code>,
-<code>details.fallbacks</code>. It is not refused as a malformed model name.</li>
-<li><a href="/docs/http-api#get-v1aliases"><code>GET /v1/aliases</code></a> is the operator's
-view: every alias with state, route, fallbacks, reason, whether the contract
+<code>message</code>, and <code>details.state</code>, <code>details.route</code>.
+It is not refused as a malformed model name. An alias this gateway does not
+declare at all is <code>404</code>, and its <code>details</code> carry the same
+<code>state</code> and <code>route</code> pair.</li>
+<li><a href="/docs/http-api/discovery-and-subscriptions"><code>GET /v1/aliases</code></a> is the operator's
+view: every alias with state, route, reason, whether the contract
 requires it, and whether the presenting bearer may use it.</li>
 <li><a href="/docs/cli/aliases"><code>brama aliases</code></a> prints the same table from an
 operator shell and names the route registry file it read; <code>--strict</code> exits
@@ -225,7 +227,7 @@ the gateway requires but has no route for appears there with an
 </ul>
 <p>In standalone desktop mode an absent <code>BRAMA_MODEL_ALIASES</code> means <code>{}</code>; in
 managed mode a bare <code>brama serve</code> fails closed with the exact sentence in the
-<a href="/docs/runbook#brama-serve-refuses-to-start">runbook</a>.</p>
+<a href="/docs/runbook/startup-and-readiness#brama-serve-refuses-to-start">runbook</a>.</p>
 <h2 id="best-is-delegation"><code>best</code> is delegation<a class="headerlink" href="#best-is-delegation" title="Link to this section">&para;</a></h2>
 <p><code>best</code> (and any alias whose route delegates to <code>best</code>) resolves through
 subscription dispatch, where the caller's signed HMAC identity selects the
@@ -234,16 +236,16 @@ A destination naming <code>best</code> inside the routes file passes through unt
 rather than being resolved as a local deployment
 (<code>src/core/inference_routes.rs</code>).</p>
 <h2 id="dynamic-routes-the-routes-file">Dynamic routes: the routes file<a class="headerlink" href="#dynamic-routes-the-routes-file" title="Link to this section">&para;</a></h2>
-<p>When <code>BRAMA_INFERENCE_ROUTES_FILE</code> is set, the owner-only snapshot it names
-is reloaded per request and its routes extend the launch aliases. The file is
-a JSON registry:</p>
+is reloaded per request and its routes extend the launch aliases. The document
+has exactly three known top-level fields — <code>schema_version</code> (the number
+one), <code>deployments</code>, and <code>routes</code>, which maps each alias to its
+single destination:</p>
 <pre><code class="language-json">{
   &quot;deployments&quot;: [
     {&quot;name&quot;: &quot;qwen3-8b&quot;, &quot;adapters&quot;: [{&quot;name&quot;: &quot;chat&quot;}],
      &quot;endpoint&quot;: {&quot;host&quot;: &quot;127.0.0.1&quot;, &quot;port&quot;: 8000}}
   ],
-  &quot;routes&quot;:    {&quot;wisent-backend&quot;: &quot;openai/gpt-4o-mini&quot;},
-  &quot;fallbacks&quot;: {&quot;wisent-backend&quot;: [&quot;anthropic/claude-3-5-haiku-latest&quot;]}
+  &quot;routes&quot;:    {&quot;wisent-backend&quot;: &quot;openai/gpt-4o-mini&quot;}
 }
 </code></pre>
 <p>Guards, each failing closed with its own sentence
@@ -253,8 +255,8 @@ a JSON registry:</p>
 <li><code>inference routes must be owned by the Brama user</code></li>
 <li><code>inference routes must not be accessible by group or other</code> (mode <code>0o077</code>
   bits must be clear)</li>
-<li>a fallback for an alias with no primary: <code>inference fallback route
-  '&lt;alias&gt;' has no primary destination</code></li>
+<li>an unknown top-level field: the deserializer refuses it by name and the
+  whole document is rejected</li>
 <li>a repeated destination: <code>inference route '&lt;alias&gt;' repeats destination
   '&lt;destination&gt;'</code></li>
 <li>a bare deployment name resolves to <code>local-openai/&lt;name&gt;</code> only when its
@@ -262,9 +264,12 @@ a JSON registry:</p>
   is nonzero; otherwise <code>inference deployment '&lt;name&gt;' has no safe local or
   Tailscale endpoint</code>.</li>
 </ul>
-<p><code>PUT /v1/admin/routes</code> (<code>{"alias", "primary", "fallbacks"}</code>) persists
+<p><code>PUT /v1/admin/routes</code> (<code>{"alias", "primary"}</code>) persists
 operator route changes into the same file atomically (staging file, <code>0600</code>,
-validate, rename). Without a configured routes file the update is refused:</p>
+validate, rename), and
+<a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a> moves a
+registry file written before this contract onto the shape above in one
+idempotent operation. Without a configured routes file the update is refused:</p>
 <pre><code class="language-text">409 {&quot;error&quot;:{&quot;code&quot;:&quot;state_conflict&quot;,
      &quot;message&quot;:&quot;runtime route registry is not configured&quot;, ...}}
 </code></pre>

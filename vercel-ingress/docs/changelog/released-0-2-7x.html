@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Released 0.2.77 to 0.2.42 — Brama Docs</title>
+  <meta name="description" content="Published Brama releases 0.2.77, 0.2.76 and 0.2.42, the release that carried streaming, plan usage and the credential-chain work.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/changelog/released-0-2-7x">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Changelog</h2><a href="/docs/changelog">Overview</a><a href="/docs/changelog/current">Unreleased</a><a class="active" aria-current="page" href="/docs/changelog/released-0-2-7x">Released 0.2.77 to 0.2.42</a><a href="/docs/changelog/released-0-2-early">Released 0.2.5 to 0.2.2</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama changelog: released 0.2.77 to 0.2.42</p>
+      <article class="doc"><h1 id="released-0277-to-0242">Released 0.2.77 to 0.2.42<a class="headerlink" href="#released-0277-to-0242" title="Link to this section">&para;</a></h1>
+<p>Published releases 0.2.77, 0.2.76 and 0.2.42. Each entry describes the contract as it stood when that release was cut; where a later change replaced that contract, the current behaviour is
+on <a href="/docs/changelog/current">unreleased changes</a>. Older releases are on <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>.</p>
+<h2 id="0277">0.2.77<a class="headerlink" href="#0277" title="Link to this section">&para;</a></h2>
+<p>The managed backend identity is derived from the four required backend aliases, so optional route names cannot make its startup allowlist contradict the server contract. A mismatch reports
+the expected and observed names without printing credentials.</p>
+<h2 id="0276">0.2.76<a class="headerlink" href="#0276" title="Link to this section">&para;</a></h2>
+<p>The managed launcher and server use the single <code>wisent-backend/chat</code> alias and the <code>weles</code> alias. That chat alias is now named <code>wisent-backend</code>
+(<a href="/docs/changelog/current#unreleased-consumer-name-alias">unreleased</a>).</p>
+<h3 id="existing-route-configuration-can-be-reviewed-and-adopted">Existing route configuration can be reviewed and adopted<a class="headerlink" href="#existing-route-configuration-can-be-reviewed-and-adopted" title="Link to this section">&para;</a></h3>
+<p><a href="/docs/cli/adopt"><code>brama adopt</code></a>, first-use <code>--adopt-*</code> options and Brama Desktop share one Brama-owned preview/apply operation for schema-1 inference-route
+registries. It discovers only configured provider acquisitions and secret-free Skarbiec subscription identities, requires exact route selection, validates the complete import before one
+atomic route-file write, keeps existing aliases unless told otherwise, and reports imported, unchanged, conflicting and rejected aliases. It never copies credentials, activates a
+subscription, or performs inference. An operator moving an older registry to the current document shape uses <a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a>.</p>
+<h2 id="0242-2026-08-27">0.2.42 - 2026-08-27<a class="headerlink" href="#0242-2026-08-27" title="Link to this section">&para;</a></h2>
+<p>Re-cut of 0.2.41, whose immutable release coordinate was half-published while the fleet object store was recovering from an outage; the changes below are 0.2.41's, unchanged.</p>
+<h3 id="brama-subscription-sign-in-closes-the-runbooks-repair-loop"><code>brama subscription sign-in</code> closes the runbook's repair loop<a class="headerlink" href="#brama-subscription-sign-in-closes-the-runbooks-repair-loop" title="Link to this section">&para;</a></h3>
+<p>The runbook's repair for a <code>burnt</code> credential &mdash; sign the subscription in again, then refresh &mdash; had no command. <code>brama subscription sign-in &lt;provider&gt; --reason
+&quot;&lt;why&gt;&quot;</code> is that command: on the host Weles runs on it asks Weles's worker API to drive one named sign-in row (<code>--login-item</code>, or the single row the provider has;
+two or more are refused by name, never guessed between), confirms Weles echoed the exact row asked for, runs the same refresh <code>brama subscription refresh</code> runs, and reports
+<code>signed_in</code>/<code>failed</code> with the refresh verdict nested beside it. Every run is journaled as <code>subscription_sign_in</code> with its reason, verbatim. No browser opens on
+the calling machine and no credential material is read or printed.</p>
+<h3 id="skarbiec-owns-capability-route-mapping">Skarbiec owns capability route mapping<a class="headerlink" href="#skarbiec-owns-capability-route-mapping" title="Link to this section">&para;</a></h3>
+<p>Brama no longer writes <code>capability-routes.json</code> or chooses provider credential fields. At startup it asks the bundled Skarbiec binary to reconcile identity routes from the live
+vault; Skarbiec validates the item schema, preserves every existing mapping, records a backup and audit entry, and reports ambiguous items without guessing.</p>
+<h3 id="wisent-accounts-can-route-models-through-their-own-provider-api-keys">Wisent accounts can route models through their own provider API keys<a class="headerlink" href="#wisent-accounts-can-route-models-through-their-own-provider-api-keys" title="Link to this section">&para;</a></h3>
+<p><code>POST /v1/account/subscriptions</code> accepted credentials for every supported remote provider, including OpenAI and Anthropic, instead of limiting the account surface to Claude Code,
+Codex and Kimi subscriptions. The verified Wisent session owns the stored coordinate; plaintext crosses only the request and Skarbiec write pipe and is never returned. Canonical
+<code>provider/model</code> calls made with that session use only the account's active credential, buffered and streaming alike, and <code>GET /v1/models</code> combines public metadata with
+availability discovered through those keys. Deployment credentials, another user's keys and loopback <code>local-openai</code> are never eligible. That account surface is now the one
+subscription pool capability (<a href="/docs/changelog/current#unreleased-subscription-pool">unreleased</a>).</p>
+<h3 id="best-became-a-selector-over-the-callers-own-subscription-models"><code>best</code> became a selector over the caller's own subscription models<a class="headerlink" href="#best-became-a-selector-over-the-callers-own-subscription-models" title="Link to this section">&para;</a></h3>
+<p>On 2026-08-18 a signed <code>best</code> call answered <code>503 credential_unauthorized</code> with &quot;no 'codex' credential could be redeemed for agent; a capability, read grant, or this
+installation's trust material is missing&quot; and <code>attempts: 0</code>, in a second when the same agent's kimi subscription was serving <code>200</code> on a canonical route.
+<code>best</code> was resolved as an alias &mdash; one configured provider route, here <code>codex/gpt-5.3-codex-spark</code> &mdash; so one refused redemption ended the request and the eleven
+other subscription models the caller held were never asked.</p>
+<p><code>best</code> became a selector rather than a route. A selector ranks models the caller's own subscriptions provide: the configured model leads, because an operator naming a model is
+naming a preference, and behind it stand that caller's remaining subscription models in the order the ledger already ranks them. That is model selection inside one request, not a set of
+destinations attached to an alias: an alias resolves to exactly one route and its refusal is what the caller receives
+(<a href="/docs/changelog/current#unreleased-one-route-per-alias">unreleased</a>). Every ranked selector shares one loop &mdash; <code>best</code>, <code>any</code>,
+<code>any-vision-capable</code> and <code>task:&lt;name&gt;</code>, buffered and streaming alike &mdash; and a refusal that empties a provider's whole credential pool retires that provider for
+the rest of the request, so its remaining models are skipped unasked instead of collecting the identical sentence. That distinction is carried as structure rather than re-parsed from the
+message, so a provider that answered and refused one model on its own merits still leaves its other models eligible, and the model budget is spent on provider round trips that actually
+happened. A failed request names everything it walked past &mdash; &quot;no working subscription model for signed agent; codex refused (...), kimi refused (...)&quot; &mdash; and
+<code>attempts</code> counts what was really attempted, so <code>0</code> again means no provider was ever asked.</p>
+<h3 id="a-donation-that-carries-no-credential-is-refused-instead-of-banked">A donation that carries no credential is refused instead of banked<a class="headerlink" href="#a-donation-that-carries-no-credential-is-refused-instead-of-banked" title="Link to this section">&para;</a></h3>
+<p>The vault item <code>provider:codex:brama-sub-wisent-app-codex-primary</code> &mdash; the codex account with 11,123 recorded requests &mdash; held a browser context options document
+(<code>deviceScaleFactor</code>, <code>extraHTTPHeaders</code>, <code>recordHar</code>, <code>recordVideo</code>, <code>viewport</code>) at revision 318 on 2026-08-19. The gateway's own
+plan-usage read reported that verbatim, so the coordinate redeemed perfectly and the thing at it was a re-authentication trajectory's configuration object rather than a credential; the
+ledger read <code>active</code> throughout, because storing a donation is what clears <code>needs_reauthorization</code>. The write paths bounded a donated credential by length alone (1..8000
+characters, which any JSON document satisfies) and wrote it to the single coordinate that provider's <code>-primary</code> subscription is read from, so a donation carrying anything else
+destroyed a working credential and recorded the destruction as a successful sign-in. A donation is now reduced to a bearer before anything is written, by the same reduction the request path
+performs, so nothing a request could have presented is refused; a document that carries no credential answers <code>400</code> naming the shape it had and the fields it could have carried,
+and the stored credential is left exactly as it was. A failed write answers as this installation's fault, which is a different repair and a different answer.</p>
+<h3 id="the-launcher-asserts-a-capability-route-for-every-banked-subscription">The launcher asserts a capability route for every banked subscription<a class="headerlink" href="#the-launcher-asserts-a-capability-route-for-every-banked-subscription" title="Link to this section">&para;</a></h3>
+<p>A signed <code>codex/gpt-5.6-sol</code> call as <code>wisent-app</code> answered <code>503 credential_unauthorized</code> with <code>attempts: 0</code> on 2026-08-19 in the same minute that
+the same agent's kimi subscription served <code>200</code>. Nothing was wrong with the credential: a banked subscription is spendable only when the vault holds the item, the signed policy
+allows its resource, the routes table maps that resource to an item and a field, and issuance succeeds &mdash; and that routes table was the one of the four written by a helper somebody had
+to remember to run, so the ChatGPT seat banked at 2026-08-18T21:42:04Z had no coordinate and <code>capability-issue</code> refused it by name.
+<code>start-with-skarbiec.sh</code> now asserts the table at every start from the host's own contents, through the packaged <code>provision-capability-routes.py</code>. It is additive: an
+existing entry is never repointed or removed, the coordinate is the item's own id, and the field is taken only when the item carries exactly one, which is a fact rather than a choice. An
+ambiguous item is named and skipped rather than guessed at, and a failed provisioning pass is reported without stopping a gateway that can still serve every other subscription. Adding a
+coordinate widens nothing: redemption is still authorised by the workload key the vault registers and by the recipients the item carries, never by this table.
+<code>SKARBIEC_CAPABILITY_ROUTES_FILE</code> is exported unconditionally rather than only when the file already exists, because the gateway's read-grant path resolves coordinates through that
+variable while the authority resolves its own path beside the vault, and an unset variable left the two readers disagreeing about which table is in force.</p>
+<h3 id="readiness-performs-the-act-instead-of-reading-a-declaration-about-it">Readiness performs the act instead of reading a declaration about it<a class="headerlink" href="#readiness-performs-the-act-instead-of-reading-a-declaration-about-it" title="Link to this section">&para;</a></h3>
+<p>All morning on 2026-08-18 <code>/readyz</code> answered <code>ready: true</code> on a gateway that could serve nothing: every live probe that morning was refused (codex
+<code>503 credential_unauthorized</code>, claude-code <code>429 all bounded 'claude-code' credentials unavailable for agent</code>, kimi <code>429 no active 'kimi' credential for
+agent</code>). Both halves the endpoint had were declarations &mdash; a provider credential obtained once at the top of the check, and a catalogue entry proving a model was listed at some
+point. <code>/readyz</code> keeps those halves and adds a third that performs the act: for every active subscription of every configured request-sign agent it redeems the credential at the
+same broker boundary a request redeems at (one attempt per subscription, no model call, the credential dropped unread) and reports <code>{ id, provider, redeemable, reason }</code>. The
+reason is the request path's own sentence, written once and used by the buffered path, the streaming path and this probe, so one broken chain cannot read as two different faults depending on
+which surface an operator looked at, and <code>ready</code> is false when any active subscription is not redeemable.</p>
+<p>The endpoint also reports the accounts nothing could see. On the always-on host <code>provider:kimi:brama-sub-wisent-app-kimi-primary</code> sat in the vault at revision 144, state active,
+with an empty tag list, because the pre-fix Skarbiec binary that host ran rewrote the item without its tags on every rotation. Subscription discovery finds an account by its
+<code>brama:agent:&lt;id&gt;</code> tag, so losing that tag removed a paid, working, unexpired account from the fleet, and the listing that lost it is the one thing that can never report it
+missing. <code>/readyz</code> reads the vault through the same entitlements router the gateway shells and names every subscription account carrying no <code>brama:agent:</code> tag; such an
+account is reported unroutable with the sentence a request for that provider receives, and it makes the gateway not ready. No secret crosses this endpoint: it answers with names, booleans
+and refusal sentences, and stays cheap enough to poll.</p>
+<h3 id="the-subscription-pool-can-be-read-and-refreshed-from-the-cli">The subscription pool can be read and refreshed from the CLI<a class="headerlink" href="#the-subscription-pool-can-be-read-and-refreshed-from-the-cli" title="Link to this section">&para;</a></h3>
+<p>Browser automation across the company stopped for most of a working day because this pool was empty: both codex subscription credentials were burnt at once, every <code>best</code>-aliased
+call answered <code>429 subscription_unavailable</code>, and the product would not say which of the two possible reasons was true. The gateway had known since its first refresh sweep &mdash;
+the ledger carried <code>needs_reauthorization</code> against both grants with the provider's own sentence beside them &mdash; and the only way to reach that was to grep
+<code>brama-always-on.err</code> and read timestamps by hand. Repairing it was worse: a burnt grant is never inside the refresh timer's skew window, so the timer that exists to replace grants
+was precisely the thing that would not touch these.</p>
+<p><code>brama subscriptions list</code> reports the pool as the gateway sees it: one row per subscription with its provider, its <code>state</code> (<code>live</code>, <code>expired</code>,
+<code>burnt</code> or <code>unknown</code>), the provider's stated expiry, and the refusal standing in its way in the words of whatever refused it. It is read-only in the strict sense: no
+provider is contacted, no capability is redeemed, and the ledger is read without being written back. Rows come from the deployment's subscription listing joined to the ledger, because either
+source alone hides accounts the other holds; that listing is now the leaf command <a href="/docs/cli/subscriptions"><code>brama subscriptions</code></a>.
+<code>brama subscription refresh &lt;provider&gt; --reason &lt;text&gt;</code> runs the same refresh the timer runs, for one provider, now, and reports whether a credential was obtained; it
+shares the sweep's code path, so a grant cannot come back alive here and dead there and every refusal is classified once. <code>--reason</code> is required, because rotating a grant
+invalidates the previous refresh token, and it is journaled beside the verdict. An attempt that cannot proceed says which of three reasons it was &mdash; no usable subscription in the pool, a
+provider whose credentials are API keys and have no refresh path, or no usable credential source in this environment &mdash; rather than reporting a broken account. A retired subscription is
+left alone, both commands support <code>--json</code>, and neither can print credential material.</p>
+<h3 id="a-credential-that-never-existed-is-no-longer-reported-as-a-busy-provider">A credential that never existed is no longer reported as a busy provider<a class="headerlink" href="#a-credential-that-never-existed-is-no-longer-reported-as-a-busy-provider" title="Link to this section">&para;</a></h3>
+<p>Running the first-use journey on a workstation with no capability and no read grant produced <code>429 capacity_error</code>, <code>retryable: true</code>, and &quot;all bounded 'codex'
+credentials unavailable for agent&quot; without any provider being asked anything: the vault produced nothing to present, which is a broken authorization chain &mdash; a missing capability,
+a missing read grant, or missing installation trust material &mdash; and no amount of waiting mends one. That reason is now its own answer, <code>503 authorization_error</code> with code
+<code>credential_unauthorized</code> and <code>retryable: false</code>, saying which of the three links is missing. The other two keep their verdicts: a provider that refused every credential
+answers <code>subscription_reauthorization_required</code>, and a genuinely exhausted pool answers <code>429 subscription_unavailable</code>, the only one of the three worth waiting out. This
+was the third time the same shape was fixed here, so classification is keyed on which link broke rather than on the sentence the last layer happened to write.</p>
+<h3 id="callers-can-stream-and-a-committed-stream-is-never-re-run">Callers can stream, and a committed stream is never re-run<a class="headerlink" href="#callers-can-stream-and-a-committed-stream-is-never-re-run" title="Link to this section">&para;</a></h3>
+<p>Brama answered every generation in one piece, which made the gateway unusable for anything interactive. <code>POST /v1/chat/completions</code> now streams when the request says
+<code>"stream": true</code>, as <code>text/event-stream</code> carrying <code>chat.completion.chunk</code> frames closed by <code>data: [DONE]</code>, with a periodic keep-alive comment frame
+so an idle proxy does not close a stream that is legitimately silent while the model thinks. The retry contract is what needed deciding, and the boundary is the provider's response status:
+before the stream commits, everything documented in <a href="/docs/core"><code>CORE.md</code></a> still applies &mdash; bounded model candidates for a selector, bounded credentials each, one
+forced OAuth refresh on an auth refusal, the whole-request deadline, and a refusal is an ordinary error document because the caller has received nothing. After it commits, nothing is retried
+at all: a provider that fails, stalls between reads past the read window, or ends without its terminal event ends the caller's stream without one either &mdash; no <code>data: [DONE]</code>
+&mdash; because a second attempt on another credential would duplicate both the bill and the emitted text. The whole-request budget stops applying at that same moment, because a total budget
+cannot tell a model that is thinking from a socket that has died and the per-read window can. Subscription spend is recorded once per stream whichever way it ends, including a stream the
+caller abandoned: the tokens the provider reported and the plan windows its headers carried are ledger facts regardless of who stopped listening. Kimi streams carry no token meter, because
+its coding endpoint's field set is pinned and publishes none; that absence is recorded as absence rather than filled in with an estimate.</p>
+<h3 id="anthropic-messages-and-openai-responses-are-accepted-at-the-ingress">Anthropic Messages and OpenAI Responses are accepted at the ingress<a class="headerlink" href="#anthropic-messages-and-openai-responses-are-accepted-at-the-ingress" title="Link to this section">&para;</a></h3>
+<p>Brama spoke one dialect, OpenAI chat completions, so every client speaking Anthropic Messages or OpenAI Responses &mdash; which includes the agent runtimes whose subscriptions this gateway
+holds &mdash; needed a translating proxy in front, holding one more copy of the routing policy. <code>POST /v1/messages</code> and <code>POST /v1/responses</code> are served directly, buffered
+or streamed, in the caller's own format: Anthropic <code>message_start</code>, <code>content_block_*</code>, <code>message_delta</code> and <code>message_stop</code> events, or
+<code>response.*</code> events closed by <code>response.completed</code>. They are one workflow with the chat endpoint, not three: client identity, model allowlist, alias resolution, selector
+semantics, caller-scoped subscription ownership, attempt bounds, ledger accounting and the error contract are shared line for line, and only the shape of the request and the answer differs.
+Each still requires a canonical <code>provider/model</code> route or a supported selector, because a bare vendor model name is not a routing decision Brama is willing to guess. Inbound
+translation keeps only what a provider-neutral request can hold: stop sequences, cache-control hints, reasoning options, stored-response identifiers and non-function tool types are accepted
+and dropped rather than approximated.</p>
+<h3 id="routing-reads-the-plan-windows-it-already-collects">Routing reads the plan windows it already collects<a class="headerlink" href="#routing-reads-the-plan-windows-it-already-collects" title="Link to this section">&para;</a></h3>
+<p>Brama had been reading each subscription's plan windows from the providers' own free usage reports and then choosing which subscription to spend by shuffling, so an account the provider said
+was 95 percent spent was as likely to be picked as an idle one and a fleet with four Claude subscriptions still walked into 429s it could have seen coming. Selection now orders candidates by
+what their plans have left, from the ledger and at no provider cost: a selector orders its model candidates by the freest usable subscription behind each, and an explicit route orders its
+bounded credentials the same way. Chance only breaks exact ties, so accounts at equal utilization still decorrelate. A window whose own reset instant has passed counts as empty, because the
+provider's clock says it rolled; a subscription with no reading counts as free, because its first call writes the reading that corrects the placement. Quality still outranks quota: inside one
+<code>task:</code> score, plan headroom is the tiebreak, not the ranking.</p>
+<h3 id="one-agent-stays-on-one-account-for-the-length-of-a-window">One agent stays on one account for the length of a window<a class="headerlink" href="#one-agent-stays-on-one-account-for-the-length-of-a-window" title="Link to this section">&para;</a></h3>
+<p>Consecutive requests from one agent could land on a different subscription each time, and two things were lost without anybody being told: a provider's prompt cache lives behind one account,
+so scattering an agent's turns across a pool threw the cache away on every turn, and one conversation's spend was smeared across every account the agent owned instead of accumulating where an
+operator could read it. The credential that served an agent is remembered per provider and tried first on that agent's next request, until the tightest window it reported resets &mdash; five
+hours when the provider named no reset, capped at a day. It is a preference and never a grant: consulted after eligibility, skipped for a credential inside a block or reporting a full window,
+never overrides <code>billingTarget</code>, and never widens the bounded attempt count. It lives in the serving process only, because a pin whose window has passed is worth nothing to the
+process that starts next.</p>
+<h3 id="a-credential-is-refreshed-before-it-dies-and-a-refused-one-says-so">A credential is refreshed before it dies, and a refused one says so<a class="headerlink" href="#a-credential-is-refreshed-before-it-dies-and-a-refused-one-says-so" title="Link to this section">&para;</a></h3>
+<p>Brama refreshed an OAuth grant at exactly one moment: inside a request, after the local expiry said the token was spent or after the provider rejected it. Nothing happened for a subscription
+no request reached, so four credentials whose refresh tokens their providers had already disowned sat in the vault reading as active for five days while every request that touched them failed.
+Brama now refreshes every active subscription credential expiring within <code>BRAMA_CREDENTIAL_REFRESH_SKEW_SECS</code> on the <code>BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS</code> cadence,
+single-flighted per subscription so a slow refresh is never started twice; refreshing spends no plan quota, because a token endpoint is not a metered endpoint. Every refresh failure is
+classified rather than logged and forgotten: a definitive refusal (<code>invalid_grant</code>, <code>invalid_token</code>, a revoked or unauthorized refresh token, or a 401/403 that is not a
+transport failure) is recorded against that subscription, which is left alone until a sign-in replaces it, while a transport failure changes nothing and is retried by the next sweep. A
+refreshed grant that cannot be written back to the vault is a failed refresh rather than a success with a warning attached: the rotated grant is dropped rather than spent from memory, because
+the provider has already invalidated the one still stored. A subscription row therefore carries a <code>credential</code> object &mdash; <code>state</code> (<code>active</code>,
+<code>needs_reauthorization</code>, <code>disabled</code>), the provider's own sentence as <code>cause</code>, and <code>recorded_at_ms</code>, <code>expires_at_ms</code> and
+<code>refreshed_at_ms</code> when known &mdash; absent while nothing has been recorded, and a ledger written by an older gateway still loads.</p>
+<h3 id="plan-usage-is-read-from-the-provider-not-bought-with-a-completion">Plan usage is read from the provider, not bought with a completion<a class="headerlink" href="#plan-usage-is-read-from-the-provider-not-bought-with-a-completion" title="Link to this section">&para;</a></h3>
+<p>A provider states its plan windows in the headers of an answer, so a window used to exist only for the account that happened to serve a request: of seven subscriptions on the fleet exactly
+one reported a plan and the other six were indistinguishable blanks. The first fix spent one deliberately minimal completion per active subscription every quarter hour, buying the statistic
+with the quota it was measuring; that timer is gone, and with stock configuration no timer performs a quota-consuming request at all. Brama reads each provider's own free usage report instead:
+<code>claude-code</code> from <code>GET /api/oauth/usage</code> on <code>api.anthropic.com</code>, <code>codex</code> from <code>GET /backend-api/wham/usage</code> on <code>chatgpt.com</code>,
+and <code>kimi</code> from <code>GET /coding/v1/usages</code> on <code>api.kimi.com</code>. A provider that publishes no report is recorded as publishing none, which is a fact about the vendor
+rather than an error. Each subscription is read at most once per <code>BRAMA_PLAN_USAGE_TTL_SECS</code>, spread by up to a quarter either way from the subscription's own id so seven accounts on
+one host never fan out into one burst against a provider that rate-limits usage reads per address, and single-flighted per subscription; the sweep that notices aged-out rows runs on
+<code>BRAMA_PLAN_USAGE_SWEEP_SECS</code>. A failed read never blanks a row: the last good reading is kept and served with <code>stale</code> true, and is discarded once it is older than
+<code>BRAMA_PLAN_USAGE_RETENTION_SECS</code>.</p>
+<p>A row therefore says where its newest window came from and how fresh it is: <code>usage_source</code> is <code>provider</code>, <code>traffic</code> or <code>probe</code>, and
+<code>stale</code> is true once the newest reading has aged past the freshness window. Together with the instant each reading was taken (<code>recorded_at_ms</code>), when the record last
+changed (<code>observed_at_ms</code>) and the newest check verdict (<code>probe</code>, carrying <code>source</code>: <code>usage_report</code> or <code>completion</code>), a reader can tell
+apart the reasons a plan can be blank &mdash; the provider publishes none, nothing has ever gone through this account, or the credential is being refused. The paid check still exists, because
+a free report cannot say whether a provider will actually serve a credential: it became the explicit operator action
+<code>POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe</code>, reachable by the desktop console's identity, which spends one minimal completion against one named subscription and
+returns the verdict it recorded as <code>probe</code>. A subscription inside a recorded rate-limit block is refused with <code>409</code> rather than probed, and the probe rotates to no other
+credential and retires nothing. Plan usage is now read through one capability (<a href="/docs/changelog/current#unreleased-plan-usage">unreleased</a>).</p>
+<h3 id="local-inference-yields-to-fleet-work">Local inference yields to fleet work<a class="headerlink" href="#local-inference-yields-to-fleet-work" title="Link to this section">&para;</a></h3>
+<p>A deployment-owned alias could name the same <code>TheDrummer/Cydonia-24B-v4.3</code> model on Featherless that local vLLM serves, so fleet work could be pointed at the hosted copy while the
+local one was busy. Under the current contract such an alias names one of the two and its refusal is what the caller receives. Featherless is a native OpenAI-compatible direct provider, and
+per-installation Skarbiec policy derives its direct-provider grants from the authoritative Brama control document instead of an unrelated subscription list.</p>
+<h3 id="oauth-credentials-recover-from-provider-rejection">OAuth credentials recover from provider rejection<a class="headerlink" href="#oauth-credentials-recover-from-provider-rejection" title="Link to this section">&para;</a></h3>
+<p>Subscription access grants can be rejected before their local expiry claim. Brama forces one refresh-token exchange after a provider authentication failure, persists the rotated credential,
+and retries the request once. An authentication failure that survives the refresh moves to the next bounded credential of that same subscription pool and is recorded as an authentication
+failure rather than as a 15-minute rate-limit block.</p>
+<h3 id="probierz-vision-calls-use-the-probierz-identity">Probierz vision calls use the Probierz identity<a class="headerlink" href="#probierz-vision-calls-use-the-probierz-identity" title="Link to this section">&para;</a></h3>
+<p>The <code>probierz-model-router</code> bearer is bound to <code>probierz</code>, whose dedicated request-signing secret is loaded from <code>probierz-agent-auth</code>. The two Codex
+subscription routes admit that identity, so <code>any-vision-capable</code> evaluations no longer fail after capture with a missing <code>x-agent-id</code> header or borrow another product's
+signing identity.</p>
+<h3 id="readiness-now-answers-for-the-credential-chain">Readiness now answers for the credential chain<a class="headerlink" href="#readiness-now-answers-for-the-credential-chain" title="Link to this section">&para;</a></h3>
+<p><code>GET /health</code> is liveness and always was: its own body says <code>dependencies: not_probed</code>. It was nevertheless what every deploy check in this repository used as proof that
+a release worked, and on 2026-08-11 it answered <code>ok</code> for a full day from a gateway whose every capability redemption was being refused; the failure surfaced only when a person asked
+a model a question. <code>GET /readyz</code> is new and public: it redeems one capability per configured provider and returns <code>503</code> naming the providers that failed, carrying no
+secret beyond the provider name and whether its credential could be obtained. Deploy checks and monitors read it; <code>/health</code> proves only that the process is running. A refused
+redemption is also classified honestly: it was reported as <code>429 capacity_error</code> with code <code>subscription_unavailable</code> and <code>retryable: true</code>, while Skarbiec was
+saying <code>capability is not issued, has expired, has no uses left, or its authorization id does not match</code>. It is now <code>503 authorization_error</code>, code
+<code>credential_unauthorized</code>, <code>retryable: false</code>, because no amount of waiting repairs an authorization id that does not match.</p>
+<h3 id="released-under-the-wrong-name">Released under the wrong name<a class="headerlink" href="#released-under-the-wrong-name" title="Link to this section">&para;</a></h3>
+<p><code>v0.2.9</code>, <code>v0.2.10</code>, <code>v0.2.11</code>, <code>v0.2.12</code> and <code>v0.2.13</code> were cut from trees that already declared <code>0.3.0</code>, so five published
+releases carry that breaking change under patch-looking names. Anyone who upgraded to one of them has a service that will not start until <code>bin/provision-skarbiec-trust</code> has run, and
+the version number gave no warning. A published coordinate is immutable, so the names cannot be corrected: each of the five release notes now opens with what the artifact actually contains and
+what the operator must do. <code>scripts/baseline.py</code> no longer aborts when it meets a release whose tree disagrees with its name &mdash; it reports it, skips it, and keeps looking
+&mdash; because before that fix one mis-named release froze the baseline eight releases behind.</p>
+<h3 id="security">Security<a class="headerlink" href="#security" title="Link to this section">&para;</a></h3>
+<ul>
+<li>The release archive no longer contains any signing key. Until then the release build ran <code>scripts/generate-skarbiec-config.mjs</code>, so every download of one archive carried the same
+  Ed25519 workload proof seed in <code>etc/brama-skarbiec/brama-proof.key</code>, alongside a signed ten-year <code>policy.json</code> granting provider authentication and request signing, a
+  <code>trust.json</code> vouching for both, and a <code>worm-receipt</code> stub that discarded audit records while the policy pinned its digest. The launcher pointed at exactly that
+  directory, which is always present in a published archive.</li>
+<li>Trust material is generated per installation by <code>bin/provision-skarbiec-trust</code>, and <code>bin/start-with-skarbiec</code> refuses to start while any of it is missing rather than
+  reaching for a shared copy. The registry pins the absolute path and SHA-256 of the binary allowed to redeem a capability, which is knowledge a build machine does not have, so generating it
+  on the host is also the only way that pin can be correct.</li>
+</ul>
+<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Link to this section">&para;</a></h3>
+<ul>
+<li><strong>Incompatible.</strong> <code>etc/brama-skarbiec</code> in the archive holds only <code>subscriptions.json</code> and <code>recipient-public-keys.asc</code>; the generator ships as
+  <code>libexec/generate-skarbiec-config.mjs</code> and is not executed at build time. An installation that relied on the bundled trust material must run
+  <code>bin/provision-skarbiec-trust</code> once and re-grant the capabilities that were bound to the discarded key. Under the pre-one policy a breaking change advances <code>MINOR</code> from
+  the published <code>0.2.5</code>, so this is <code>0.3.0</code>.</li>
+</ul>
+<h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Link to this section">&para;</a></h3>
+<ul>
+<li><code>POST /v1/chat/completions</code> accepts OpenAI-compatible <code>tool_choice</code> and carries forced tool selection through OpenAI Chat, OpenAI Responses, Anthropic Messages and
+  Google GenerateContent adapters instead of rejecting the request as an unknown field.</li>
+<li>Documentation asserted that no immutable public release existed while five were published. <code>README.md</code>, <code>ONBOARDING.md</code>, <code>RELEASE.md</code>,
+  <code>examples/README.md</code> and <code>examples/recovery/upgrade-and-rollback.md</code> give the download-and-verify install path instead of sending every reader to build from source.</li>
+<li>Documentation no longer restates which release is newest, which source version is current, or which version an example targets: every such literal went stale within hours of being written.
+  Prose points at the two machine-maintained records &mdash; <code>released-surface.json</code> and the GitHub Releases list &mdash; and <code>Cargo.toml</code> stays the single source of the
+  source version.</li>
+<li><code>RELEASE.md</code> records that a tag alone is not a release, because a tagged revision whose release workflow did not finish leaves a coordinate with nothing installable behind it;
+  this has happened twice, at <code>v0.2.0</code> and again at <code>v0.2.6</code>. It also records the real archive contents, including the bundled Skarbiec entitlements router and the
+  launcher's trust material, and states that bundled material as a known gap instead of claiming that credentials are never shipped.</li>
+<li><code>released-surface.json</code> recorded <code>0.2.4</code> after <code>0.2.5</code> was published; regenerated with <code>scripts/baseline.py --write</code>.</li>
+</ul>
+<h3 id="qualification">Qualification<a class="headerlink" href="#qualification" title="Link to this section">&para;</a></h3>
+<p>No test, test suite, smoke test, provider call, or deployment validation was created, modified, or executed while preparing these changes, because explicit human testing consent was not
+provided.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

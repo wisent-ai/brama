@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Route registry — Brama Docs</title>
+  <meta name="description" content="The Brama route registry document: three known top-level fields, one destination per alias, the validation guards, the atomic owner-only write, adoption, and brama routes migrate.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/configuration/route-registry">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Configuration</h2><a href="/docs/configuration">Overview</a><a href="/docs/configuration/gateway-inputs">Gateway inputs</a><a class="active" aria-current="page" href="/docs/configuration/route-registry">Route registry</a><a href="/docs/configuration/launcher-inputs">Launcher inputs</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama configuration reference</p>
+      <article class="doc">
+        <h1 id="route-registry">Route registry<a class="headerlink" href="#route-registry" title="Link to this section">&para;</a></h1>
+        <p>The route registry is the one file that decides where an alias is served.
+        Its path is <code>BRAMA_INFERENCE_ROUTES_FILE</code>, launcher default
+        <code>~/.config/brama/inference-routes.json</code>. The gateway re-reads it per
+        request, so a committed edit takes effect on the next completion without a
+        restart. It is owner-only, it is written atomically, and it is validated whole
+        before it is used or replaced.</p>
+
+        <h2 id="document-shape">Document shape<a class="headerlink" href="#document-shape" title="Link to this section">&para;</a></h2>
+        <p>The document has exactly three known top-level fields:</p>
+        <ul>
+          <li><code>schema_version</code> — the number one. A legacy document that
+          omits it is read as that version.</li>
+          <li><code>deployments</code> — the named deployment table a route may refer
+          to by bare name.</li>
+          <li><code>routes</code> — the map from an alias to its single
+          destination.</li>
+        </ul>
+        <p>An unknown top-level field is refused by the deserializer, and the whole
+        document is rejected with the deserializer's own sentence naming the field.
+        Nothing in the document names more than one destination for an alias: there is
+        no ordered list of spare routes for an alias to be tried in turn, and a
+        top-level field that once carried such a list is now simply an unknown field
+        and rejects the file. When the single destination refuses a request, that
+        refusal is what the caller receives.</p>
+        <p>The example below is a complete registry; its <code>schema_version</code>
+        is the number one, spelled here in prose because the value is a bare number:</p>
+        <pre><code class="language-json">{
+  "deployments": [],
+  "routes": {
+    "wisent-backend": "anthropic/claude-sonnet-4-5",
+    "wisent-backend/evaluation": "anthropic/claude-sonnet-4-5",
+    "wisent-backend/embeddings": "openai/text-embedding-3-large",
+    "best": "local-weles"
+  }
+}</code></pre>
+        <p>A zero-byte or whitespace-only file means an empty registry. Every alias in
+        <code>routes</code> resolves to the destination written next to it and to
+        nothing else; a bare name is resolved through <code>deployments</code>.</p>
+
+        <h2 id="validation-guards">Validation guards<a class="headerlink" href="#validation-guards" title="Link to this section">&para;</a></h2>
+        <p>The file is checked before it is read as configuration and again before any
+        replacement is committed. Any one of these rejects the complete document, and
+        the aliases it would have served report
+        <code>routes_file_invalid</code> rather than resolving to something else:</p>
+        <ul>
+          <li>the path must be a regular file, not a symlink, and no larger than
+          1 MiB;</li>
+          <li>it must be owned by the Brama user;</li>
+          <li>its mode must not be readable by group or other;</li>
+          <li>it must be valid UTF-8 JSON with no duplicate object keys and no unknown
+          top-level field;</li>
+          <li>two routes must not repeat a destination — one destination belongs to
+          one alias;</li>
+          <li>deployment names must be unique, and every deployment must carry an
+          endpoint that is either a safe loopback address or a Tailscale IPv4
+          address; anything else rejects the document;</li>
+          <li>provider and model shapes must be ones this build supports.</li>
+        </ul>
+        <p>An alias whose destination exists but whose capability is not present
+        reports <code>capability_absent</code>; a declared alias with no entry in
+        <code>routes</code> reports <code>no_route</code>; a healthy one reports
+        <code>serving</code>. A completion naming a declared alias that cannot serve
+        answers <code>503</code> <code>alias_unserviceable</code> with
+        <code>details.state</code> and <code>details.route</code>, and an unknown alias
+        answers <code>404</code> whose <code>details</code> also carry
+        <code>state</code> and <code>route</code>. See
+        <a href="/docs/errors">Errors</a>.</p>
+
+        <h2 id="writing-the-registry">Writing the registry<a class="headerlink" href="#writing-the-registry" title="Link to this section">&para;</a></h2>
+        <p><code>PUT /v1/admin/routes</code> takes exactly two fields:</p>
+        <pre><code class="language-json">{
+  "alias": "wisent-backend/moderation",
+  "primary": "anthropic/claude-sonnet-4-5"
+}</code></pre>
+        <p>An unknown field is refused with the deserializer's own sentence. There is
+        no field for a second destination in the request body and none in the
+        response. <code>DELETE /v1/admin/routes</code> takes
+        <code>{&quot;alias&quot;}</code>. Both answer
+        <code>{&quot;ok&quot;:true,&quot;routes&quot;:&lt;document&gt;}</code>, the
+        whole committed document as it now stands on disk.</p>
+        <p>Every registry write follows the same sequence: the new document is built
+        in memory, validated whole, serialized into a staging file created 0600 in the
+        destination directory, flushed, and then renamed over the destination. A
+        reader either sees the previous document or the new one, never a partial file,
+        and the file never widens beyond owner-only. A validation refusal happens
+        before the staging file is renamed, so the destination keeps the document it
+        had. <a href="/docs/http-api">HTTP API</a> documents the admin routes in
+        full.</p>
+
+        <h2 id="reading-the-registry">Reading what is registered<a class="headerlink" href="#reading-the-registry" title="Link to this section">&para;</a></h2>
+        <p><code>GET /v1/aliases</code> returns one row per alias with
+        <code>alias</code>, <code>state</code>, <code>route</code>,
+        <code>reason</code>, <code>required</code>, and <code>authorized</code>. The
+        <code>route</code> field is the single destination, and
+        <code>reason</code> is the sentence explaining a state that is not
+        <code>serving</code>. <a href="/docs/cli/aliases"><code>brama aliases</code></a>
+        prints alias, state, and route from the same source.</p>
+
+        <h2 id="migrating-an-existing-file">Migrating an existing file<a class="headerlink" href="#migrating-an-existing-file" title="Link to this section">&para;</a></h2>
+        <p><a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a> is
+        the one command that moves an operator's existing registry to this shape
+        without editing anything by hand. It reads the configured registry document,
+        keeps only the known top-level fields
+        (<code>schema_version</code>, <code>deployments</code>, <code>routes</code>),
+        validates the result against every guard above, and commits it with the same
+        atomic owner-only replacement every other registry write uses: 0600 staging
+        file, then rename. It then prints the resulting document. Running it a second
+        time on an already-migrated file produces the same document and the same
+        output, so it is safe to run from a script or twice in a row.</p>
+        <p>Use it when a file written against an older shape now carries a top-level
+        field this build does not know and the gateway therefore rejects the document.
+        The migration is the supported path from that file to a document the
+        deserializer accepts.</p>
+
+        <h2 id="adopting-an-existing-registry">Adopting an existing registry<a class="headerlink" href="#adopting-an-existing-registry" title="Link to this section">&para;</a></h2>
+        <p><a href="/docs/cli/adopt"><code>brama adopt</code></a>, the first-use
+        <code>--adopt-*</code> options, and Brama Desktop's
+        <strong>Review existing setup&hellip;</strong> sheet use one Brama-owned
+        preview/apply operation. The accepted source is an exact route registry
+        document of the shape above, not a guessed provider export. Every field,
+        alias, destination, deployment name, adapter, and endpoint is validated before
+        any mutation.</p>
+        <p>The review resolves bare deployment names through the source deployment
+        table, lists unreferenced deployments and keeps them, and classifies each
+        alias with exactly one reviewed route. Direct provider routes are importable
+        only when this process already has the corresponding acquisition route.
+        <code>best</code> is importable only when the selected agent has a
+        subscription identity discoverable through Brama's existing Skarbiec boundary.
+        Discovery does not redeem the credential, activate a subscription, or perform
+        inference.</p>
+        <p>Selection is explicit. An identical alias is left unchanged, which makes a
+        repeated import idempotent. An existing alias is kept unless the operator
+        explicitly asks to replace that reviewed alias; a deployment-name conflict is
+        never replaced, because an unselected existing alias may depend on it.
+        Unselected and unreferenced state is preserved. Apply merges in memory,
+        revalidates the whole destination, then replaces the owner-only file
+        atomically. The source file and the credential stores are left unchanged.
+        Results report the exact imported, unchanged, conflicting, and rejected
+        aliases through the CLI, HTTP, and desktop surfaces.</p>
+      </article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

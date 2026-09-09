@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>brama routes migrate — Brama CLI Docs</title>
+  <meta name="description" content="Rewrite the route registry into the current document shape, once and idempotently.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/cli/routes/migrate">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>brama routes</h2><a class="active" aria-current="page" href="/docs/cli/routes/migrate">routes migrate</a><a href="/docs/cli/aliases">aliases</a><a href="/docs/cli/adopt">adopt</a><a href="/docs/cli">CLI tree</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/configuration/route-registry">Route registry</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/http-api">HTTP API</a><a href="/docs/runbook/routes-and-ledger">Runbook: routes</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama CLI command reference</p>
+      <article class="doc"><h1 id="brama-routes-migrate"><code>brama routes migrate</code><a class="headerlink" href="#brama-routes-migrate" title="Link to this section">&para;</a></h1>
+<p>Rewrite this host's route registry into the document shape the gateway reads today: keep the known top-level fields, validate the result, and commit it with the same atomic owner-only replacement every other registry write uses. Run it once per file; running it again changes nothing.</p>
+<h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">brama routes migrate [--file &lt;FILE&gt;] [--json]</code></pre>
+<table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>--file &lt;FILE&gt;</code></td><td>optional; <code>BRAMA_INFERENCE_ROUTES_FILE</code>, then <code>~/.config/brama/inference-routes.json</code></td><td>The route registry to migrate. The same destination the service, <code>brama adopt</code> and <code>PUT /v1/admin/routes</code> write.</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td>Print one object instead of human-readable lines.</td></tr>
+</tbody></table>
+<h2 id="why-it-exists">Why it exists<a class="headerlink" href="#why-it-exists" title="Link to this section">&para;</a></h2>
+<p>A registry document carries exactly three known top-level fields — <code>schema_version</code> (the number one), <code>deployments</code>, and <code>routes</code>, which maps each alias to its single destination. An unknown top-level field is refused by name and the whole document is rejected, so a file written against an older shape stops the gateway from serving anything in it and reports the alias state <code>routes_file_invalid</code>.</p>
+<p>This command is the repair, and it is the only one: it reads the document as written, retains the known top-level fields, validates what remains exactly as the gateway would, and writes it back through a <code>0600</code> staging file and a rename. Nothing is edited by hand, nothing is merged, and no alias is invented — an alias whose destination does not validate keeps the file unchanged and the refusal is reported.</p>
+<h2 id="what-it-reads-and-writes">What it reads and writes<a class="headerlink" href="#what-it-reads-and-writes" title="Link to this section">&para;</a></h2>
+<p>One file: the registry named by <code>--file</code>, or the default destination. It contacts no provider, redeems no credential, and reads no subscription. The file must be a regular non-symlink file owned by the Brama user and unreadable by group or other, exactly as the gateway requires at request time; a violation of any of those is reported and the file is left as it was.</p>
+<h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
+<p>The path that was migrated, the size of each collection in the resulting document, and one line per alias with the single destination behind it:</p>
+<pre><code class="language-console">registry: /Users/operator/.config/brama/inference-routes.json
+deployments: 1
+routes: 3
+best                             best
+weles                            local-openai/chat-primary
+wisent-backend                   openai/gpt-4o-mini</code></pre>
+<p>With <code>--json</code> the answer is one object, <code>{&quot;registry&quot;, &quot;document&quot;}</code>, whose <code>document</code> is the migrated registry as it now stands on disk. Exit code is 0 on success. The command is idempotent: a document already in this shape is validated, written back identically, and reported the same way, so it is safe in a provisioning run that cannot know what shape the file is in.</p>
+<h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
+<p><code>route migration error: &lt;reason&gt;</code> on standard error, exit 1, when the file cannot be read, the retained document does not validate, or the replacement cannot be written. The reason is the registry's own sentence — the parser's message, one of the file-ownership and mode requirements, an alias repeating a destination, or a deployment with no safe loopback or Tailscale endpoint. The original file is untouched in every one of those cases. Clap refuses unsupported options before any file is opened.</p>
+<h2 id="after-migrating">After migrating<a class="headerlink" href="#after-migrating" title="Link to this section">&para;</a></h2>
+<p>Read the result with <a href="/docs/cli/aliases"><code>brama aliases</code></a>: every alias should report <code>serving</code>, or <code>no_route</code> and <code>capability_absent</code> for the reasons those states name. The running gateway needs no restart, because it re-reads the registry per request.</p>
+<p>See <a href="/docs/configuration/route-registry">the route registry</a>, <a href="/docs/concepts/alias">aliases</a>, or <a href="/docs/cli">the CLI tree</a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

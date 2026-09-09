@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>State and failures — Brama Docs</title>
+  <meta name="description" content="Who owns each piece of Brama state, the public error envelope and code table, the attempt and deadline bounds, resource limits, and how the contract evolves.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/core/state-and-failures">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Core contract</h2><a href="/docs/core">Overview</a><a href="/docs/core/wire-formats-and-streaming">Wire formats and streaming</a><a href="/docs/core/workflows">Public workflows</a><a class="active" aria-current="page" href="/docs/core/state-and-failures">State and failures</a><a href="/docs/core/authorization-and-observability">Authorization and observability</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama core contract: state, errors, limits</p>
+      <article class="doc"><h1 id="state-and-failures">State and failures<a class="headerlink" href="#state-and-failures" title="Link to this section">&para;</a></h1>
+<p>Every workflow on the <a href="/docs/core/workflows">public workflows</a> page ends in
+one of two things: a result, or one classified refusal. This page names who
+owns the state a request reads, what a refusal looks like, how many attempts
+precede it, and the resource ceilings that hold under load.</p>
+<h2 id="state-and-ownership">State and ownership<a class="headerlink" href="#state-and-ownership" title="Link to this section">&para;</a></h2>
+<table>
+<thead>
+<tr><th>Resource</th><th>Authority</th><th>Brama state</th><th>Freshness and recovery</th></tr>
+</thead>
+<tbody>
+<tr><td>Client bearer and binding</td><td>Dedicated central token item and service document</td><td>Digest in process memory</td><td>Restart after a policy or token change</td></tr>
+<tr><td>Request-sign identity</td><td>Exact central item or agent capability</td><td>Secret in scoped memory only</td><td>Re-redeemed per request or after restart</td></tr>
+<tr><td>Provider credential</td><td>Skarbiec or entitlements resource</td><td>Secret in scoped memory only</td><td>Re-redeemed at final use</td></tr>
+<tr><td>Subscription inventory</td><td>Live entitlements router</td><td>Per-agent cache, 60 seconds</td><td>When the live lookup fails, trusted startup metadata is the only other source read; nothing else is consulted in its place</td></tr>
+<tr><td>Route registry</td><td>Operator-owned registry document</td><td>Parsed map of alias to its one route</td><td>An unknown top-level field is refused by the deserializer and the whole document is rejected; every alias then reports <code>routes_file_invalid</code></td></tr>
+<tr><td>Retirement</td><td>Brama journal</td><td>Append-only <code>retire</code> record</td><td>Last matching record wins</td></tr>
+<tr><td>Task quality</td><td>Brama journal</td><td>Append-only <code>quality</code> record</td><td>Latest active record per agent, task and model wins</td></tr>
+<tr><td>Public model metadata</td><td>models.dev</td><td>memory and replaceable <code>/tmp</code> cache</td><td>A stale or partial catalogue is visible in health output and is never credential authority</td></tr>
+<tr><td>Performance telemetry</td><td>Brama process</td><td>bounded map and replaceable <code>/tmp</code> file</td><td>Diagnostic only; never business authority</td></tr>
+<tr><td>Donated-subscription metadata</td><td>Brama overlay</td><td>owner-only atomic JSON rewrite</td><td>The credential itself stays in entitlements authority</td></tr>
+<tr><td>Plan usage, its source, and the newest check verdict</td><td>The provider's own usage report, plus the answer headers of real traffic</td><td>owner-only atomic ledger holding each reading's instant</td><td>Refreshed by the free usage report sweep and by traffic; the last good reading is served while stale and dropped past <code>BRAMA_PLAN_USAGE_RETENTION_SECS</code>; a ledger that cannot be parsed yields no readings, and the next sweep rewrites it</td></tr>
+<tr><td>Operator credential refresh</td><td>Brama journal</td><td>Append-only <code>subscription_refresh</code> record naming provider, reason, verdict and how many grants were tried</td><td>Audit only; never consulted by routing, and never holds credential material</td></tr>
+</tbody>
+</table>
+<p>Journal credentials, encrypted secret overlays, and raw provider responses are
+prohibited. The journal schema is append-only; an incompatible interpretation
+requires a release migration contract. The registry document is rewritten only
+by an owner-only atomic replacement, whether the writer is
+<code>PUT /v1/admin/routes</code>, <code>DELETE /v1/admin/routes</code>, or
+<a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a>.</p>
+<h2 id="failure-contract">Failure contract<a class="headerlink" href="#failure-contract" title="Link to this section">&para;</a></h2>
+<p>Public errors use this envelope, where <code>attempts</code> counts the provider calls
+this request actually made:</p>
+<pre><code class="language-json">{
+  &quot;error&quot;: {
+    &quot;message&quot;: &quot;bounded human-readable detail&quot;,
+    &quot;type&quot;: &quot;stable_class&quot;,
+    &quot;code&quot;: &quot;stable_code&quot;,
+    &quot;retryable&quot;: false,
+    &quot;attempts&quot;: &lt;provider calls made&gt;
+  }
+}
+</code></pre>
+<table>
+<thead>
+<tr><th style="text-align: right;">HTTP</th><th>Code</th><th>Meaning</th><th>Caller action</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: right;">400</td><td><code>invalid_request</code></td><td>malformed JSON, route, selector, or limit</td><td>Correct the request; do not retry it unchanged</td></tr>
+<tr><td style="text-align: right;">401</td><td><code>unauthenticated</code></td><td>bearer or HMAC missing or invalid</td><td>Repair or rotate the exact identity</td></tr>
+<tr><td style="text-align: right;">403</td><td><code>forbidden</code></td><td>a valid identity lacks model, agent, or path authority</td><td>Correct the grant or the request; sending a different identity is not a repair</td></tr>
+<tr><td style="text-align: right;">404</td><td><code>subscription_not_found</code></td><td>an owned lifecycle target does not exist</td><td>Refresh inventory or correct the ID</td></tr>
+<tr><td style="text-align: right;">409</td><td><code>state_conflict</code></td><td>the requested mutation conflicts with current state</td><td>Read current state before retrying</td></tr>
+<tr><td style="text-align: right;">426</td><td><code>secure_transport_required</code></td><td>neither loopback nor a trusted HTTPS peer</td><td>Use the approved HTTPS ingress</td></tr>
+<tr><td style="text-align: right;">429</td><td><code>provider_rate_limited</code></td><td>bounded provider quota and rate attempts are exhausted</td><td>Wait, or name an explicit authorized target</td></tr>
+<tr><td style="text-align: right;">429</td><td><code>subscription_unavailable</code></td><td>no usable agent credential within the bound, and at least one was actually tried</td><td>Repair the intended subscription or wait</td></tr>
+<tr><td style="text-align: right;">502</td><td><code>provider_failure</code></td><td>the provider returned a permanent or malformed failure</td><td>Inspect the provider classification; retry only if the envelope says so</td></tr>
+<tr><td style="text-align: right;">503</td><td><code>alias_unserviceable</code></td><td>a declared alias cannot serve; <code>details</code> carry <code>state</code> and <code>route</code></td><td>Repair the alias in the registry; this is the caller's answer for that alias</td></tr>
+<tr><td style="text-align: right;">503</td><td><code>credential_unauthorized</code></td><td>redemption was refused, or no capability, read grant, or installation trust material could produce a credential at all</td><td>Repair the authorization chain; waiting does not reach it</td></tr>
+<tr><td style="text-align: right;">503</td><td><code>subscription_reauthorization_required</code></td><td>every credential within the bound was refused by the provider</td><td>Sign the subscription in again</td></tr>
+<tr><td style="text-align: right;">503</td><td><code>dependency_unavailable</code></td><td>a required catalogue, broker, vault, or provider is unavailable</td><td>Restore the named dependency</td></tr>
+<tr><td style="text-align: right;">504</td><td><code>dependency_timeout</code></td><td>the whole Brama request deadline expired</td><td>Inspect the dependency; retry only when it is safe</td></tr>
+<tr><td style="text-align: right;">500</td><td><code>internal_error</code></td><td>Brama failed outside a classified dependency</td><td>Operator investigation is required</td></tr>
+</tbody>
+</table>
+<p>An alias the registry never declared is answered <code>404</code>, and that body's
+<code>details</code> carry <code>state</code> and <code>route</code> as well, so one diagnosis reads the same
+whether the alias is unknown or known and unserviceable. In both cases the
+alias has exactly one route, and the refusal from it is what the caller
+receives.</p>
+<p>A response states <code>retryable</code> explicitly. Error message text is diagnostic, not
+the machine contract. Credential rotation inside one route never exceeds the
+attempt count the envelope reports. The full code list, with examples, is in
+<a href="/docs/errors">Errors</a>.</p>
+<h2 id="cancellation-timeout-and-retry">Cancellation, timeout, and retry<a class="headerlink" href="#cancellation-timeout-and-retry" title="Link to this section">&para;</a></h2>
+<ul>
+<li>One buffered HTTP inference request has a 300-second whole-request deadline.
+  That deadline covers the one attempt the request is entitled to; it is not
+  multiplied by a number of routes, because an alias has one route.</li>
+<li>One streaming request has that same deadline up to the moment its provider
+  stream commits, and none after: a committed generation is bounded by the
+  per-read timeout below, because a total budget cannot tell a model that is
+  thinking from a socket that has died.</li>
+<li>One buffered provider HTTP attempt has a 255-second timeout. A streaming
+  attempt applies those same 255 seconds between reads.</li>
+<li>Model catalogue calls have a 30-second timeout.</li>
+<li>Provider model discovery has a 20-second timeout.</li>
+<li>OAuth refresh has a 15-second timeout and a bounded response size.</li>
+<li>Direct routes perform one provider attempt.</li>
+<li>Explicit subscription routes perform at most two provider attempts, both on
+  the one route the request named.</li>
+<li>Selectors perform at most three model candidates and six provider attempts.</li>
+<li>Brama does not retry arbitrary 5xx or malformed results automatically.</li>
+<li>Dropping the client connection cancels the in-process future where the HTTP
+  stack propagates cancellation; Brama has no durable job to resume.</li>
+<li>A stream that has committed is never retried, on any credential, for any
+  failure class.</li>
+<li>A caller must treat an ambiguous provider outcome as potentially billable and
+  must not replay it automatically unless the returned code is retryable.</li>
+</ul>
+<h2 id="resource-behavior">Resource behavior<a class="headerlink" href="#resource-behavior" title="Link to this section">&para;</a></h2>
+<ul>
+<li>request body and provider response limits are enforced at their protocol
+  seams;</li>
+<li>provider response bodies are capped at 16 MiB before UTF-8 or JSON parsing;</li>
+<li><code>max_tokens</code> is globally bounded at 32768;</li>
+<li>OAuth credential input and response sizes are bounded;</li>
+<li>model and credential attempts are finite;</li>
+<li>the perf registry tracks at most 500 model keys;</li>
+<li>catalogue and subscription caches have explicit TTLs;</li>
+<li>the provider usage report sweep is bounded and spends no plan quota: one read
+  per active subscription per its own cache window
+  (<code>BRAMA_PLAN_USAGE_TTL_SECS</code>, spread by up to a quarter either way),
+  single-flighted per subscription, no retry inside a sweep, and the whole task
+  switched off by setting <code>BRAMA_PLAN_USAGE_SWEEP_SECS</code> to zero;</li>
+<li>the completion probe is bounded to what an operator asks for: one attempt
+  against one named subscription per request to
+  <code>POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe</code>, no retry, no
+  rotation to another credential, refused outright for a subscription inside a
+  recorded block, and never triggered by a timer &mdash; the shipped
+  configuration performs no quota-consuming request on any schedule;</li>
+<li>the credential refresh sweep is bounded: one refresh attempt per active
+  subscription per interval, single-flighted per subscription, no retry inside a
+  sweep, a definitively refused credential left alone until a sign-in replaces
+  it, and the whole task switched off by setting
+  <code>BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS</code> to zero;</li>
+<li>no unbounded background retry, queue, or provider worker exists;</li>
+<li>append-only journal growth is operator-monitored until a versioned compaction
+  contract exists.</li>
+</ul>
+<h2 id="evolution-and-completion">Evolution and completion<a class="headerlink" href="#evolution-and-completion" title="Link to this section">&para;</a></h2>
+<p>Public changes follow <a href="/docs/release"><code>RELEASE.md</code></a>. Provider integrations
+follow <a href="/docs/integrations"><code>INTEGRATIONS.md</code></a>. Every supported outcome maps
+to <a href="/docs/examples"><code>examples/</code></a> and approved evidence in
+<a href="/docs/testing"><code>TESTING.md</code></a>. Obsolete fields and aliases are removed once
+callers have moved; Brama keeps no hidden compatibility path and no second
+authority for the same decision. An operator whose registry document still
+carries retired top-level fields brings it to the current shape with
+<a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a>, which is idempotent and
+prints the document it committed.</p>
+<h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Link to this section">&para;</a></h2>
+<ul>
+<li><a href="/docs/core/authorization-and-observability">Authorization and
+  observability</a> &mdash; configuration rules, secret handling, and what a
+  routing event records.</li>
+<li><a href="/docs/errors">Errors</a> &mdash; the full public error reference.</li>
+<li><a href="/docs/runbook">Runbook</a> &mdash; operator procedures for the failures
+  above.</li>
+</ul>
+</article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

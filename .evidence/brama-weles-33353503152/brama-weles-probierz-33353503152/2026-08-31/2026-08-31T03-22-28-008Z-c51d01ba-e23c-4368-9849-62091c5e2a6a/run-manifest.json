@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 2,
+  "runId": "2026-08-31T03-22-28-008Z-c51d01ba-e23c-4368-9849-62091c5e2a6a",
+  "appId": "brama",
+  "kind": "adhoc",
+  "target": "tui",
+  "spec": "/Users/charles/.stado/actions-runner-work/brama/brama/tests/subscriptions/brama-weles-real.spec.mjs",
+  "status": "failed",
+  "startedAt": "2026-08-31T03:22:28.008Z",
+  "harness": {
+    "name": "probierz",
+    "gitSha": "521d02516a8f7ccc62179b4c6a0e76e56085d377",
+    "dirty": true,
+    "worktreeSha256": "08507d7b4861015e14507c581c42ab4f1c7f7dbbae90d67901091b7c1d959301",
+    "sha256": "cdded4d063d78e4be2f094fbda330b1627132649b7c76cfe1050d886db35215f"
+  },
+  "source": {
+    "sha256": "8f28e02754aa52bbe67a77f0a8bd780767e37ec03e38835b7a5b58fb1c300580",
+    "repositories": [
+      {
+        "index": 0,
+        "name": "brama",
+        "gitSha": "3bbd1ff141a9ae304ab05bd9bcadbd123cdaacc5",
+        "dirty": true,
+        "worktreeSha256": "efde57f4971de5acfc07c966fc21a01729b3b5c8aa85f82c207c74fe25818523",
+        "sha256": "54478225e8a6ffca3eb18382fd2c9092e6acec2fbd116e4ef3692bebd3280eb1"
+      }
+    ]
+  },
+  "build": {
+    "path": "/Users/charles/.stado/actions-runner-work/brama/brama/probierz-source/package-lock.json",
+    "sha256": "a3c231b1c99515e3ed307dc777123052e72d3e0db8f8ba45f829069a4771f09d"
+  },
+  "appVersion": null,
+  "appManifest": {
+    "file": "/Users/charles/.stado/actions-runner-work/brama/brama/probierz-source/apps/brama/probierz.yaml",
+    "owner": "Brama maintainers",
+    "journeys": [
+      "real-weles-sign-in"
+    ]
+  },
+  "host": {
+    "hostname": "Charless-Mac-mini.local",
+    "platform": "darwin",
+    "release": "25.5.0",
+    "arch": "arm64",
+    "node": "v25.9.0"
+  },
+  "device": {
+    "name": null,
+    "runtime": null
+  },
+  "conditions": {
+    "record": true
+  },
+  "paths": {
+    "artifactsDir": "/Users/charles/.stado/actions-runner-work/brama/brama/probierz-source/test-results/brama/tui/2026-08-31/2026-08-31T03-22-28-008Z-c51d01ba-e23c-4368-9849-62091c5e2a6a",
+    "reportPath": "/Users/charles/.stado/actions-runner-work/brama/brama/probierz-source/test-results/brama/tui/2026-08-31/2026-08-31T03-22-28-008Z-c51d01ba-e23c-4368-9849-62091c5e2a6a/report.json",
+    "stdoutPath": "/Users/charles/.stado/actions-runner-work/brama/brama/probierz-source/test-results/brama/tui/2026-08-31/2026-08-31T03-22-28-008Z-c51d01ba-e23c-4368-9849-62091c5e2a6a/stdout.log",
+    "stderrPath": "/Users/charles/.stado/actions-runner-work/brama/brama/probierz-source/test-results/brama/tui/2026-08-31/2026-08-31T03-22-28-008Z-c51d01ba-e23c-4368-9849-62091c5e2a6a/stderr.log"
+  },
+  "resources": [],
+  "command": "npm run test:tui (PROBIERZ_SPEC=/Users/charles/.stado/actions-runner-work/brama/brama/tests/subscriptions/brama-weles-real.spec.mjs)",
+  "timeoutMs": 2400000,
+  "dataSeeded": false,
+  "completedAt": "2026-08-31T03:22:33.070Z",
+  "exitCode": 1,
+  "signal": null,
+  "timedOut": false,
+  "canceled": false,
+  "durationMs": 5024,
+  "reportValidation": {
+    "ok": true,
+    "runId": "2026-08-31T03-22-28-008Z-c51d01ba-e23c-4368-9849-62091c5e2a6a",
+    "mtime": "2026-08-31T03:22:32.922Z"
+  },
+  "cleanup": {
+    "ok": true,
+    "result": null
+  },
+  "cleanupError": null,
+  "performance": {
+    "file": "/Users/charles/.stado/actions-runner-work/brama/brama/probierz-source/test-results/brama/tui/2026-08-31/2026-08-31T03-22-28-008Z-c51d01ba-e23c-4368-9849-62091c5e2a6a/performance.json",
+    "schemaVersion": 1,
+    "subject": "run-and-app-processes",
+    "firstOutputMs": 1229,
+    "intervalMs": 1000,
+    "peakRssKb": 258896,
+    "averageCpuPercent": 32.21666666666667,
+    "appProcessName": null,
+    "appPeakRssKb": null,
+    "appAverageCpuPercent": null
+  },
+  "platformDiagnostics": {
+    "supported": false,
+    "file": null
+  },
+  "artifacts": [
+    {
+      "file": "analysis.json",
+      "sha256": "d6bf1ea99c2bc65d9ed2f96c3d57834f917a48a9503a2de499ebbfc5dbddacc1",
+      "bytes": 5030
+    },
+    {
+      "file": "diagnostics.json",
+      "sha256": "58c8888972c82a1e2eb51b97354e6a5014fa1fa90d5d7b85800be0fc0210000e",
+      "bytes": 612
+    },
+    {
+      "file": "performance.json",
+      "sha256": "3f6585a0d9c313791bf210acdcaa250362965dfb952728ac936f81c45eb22941",
+      "bytes": 1113
+    },
+    {
+      "file": "report.json",
+      "sha256": "c02f7ce348ee8f4a20c3b75daeddceb2bae188b53fe034d4d4df97de6baa2aa0",
+      "bytes": 2581
+    },
+    {
+      "file": "stderr.log",
+      "sha256": "3a49dabee55ae00cb8bbd29ee42d72202c227dfb518be42835e23c88eb0f9aae",
+      "bytes": 553
+    },
+    {
+      "file": "stdout.log",
+      "sha256": "739e3c10f4e5c2e85db693ff1769618c1428b8989327d8ba537d668274ccf846",
+      "bytes": 218
+    },
+    {
+      "file": "timeline.json",
+      "sha256": "2e99e8090a3593e688d2a1f246641e6b0e7e7a8c442ba9987afcdda00cd91c33",
+      "bytes": 4557
+    }
+  ],
+  "evidence": {
+    "report": true,
+    "analysis": false,
+    "captureRequired": true,
+    "capturePresent": false,
+    "captureErrors": [],
+    "missingMedia": [],
+    "crashes": [],
+    "errors": [
+      "1 failed checks",
+      "recording requested but no report-typed capture was produced"
+    ]
+  },
+  "analysisPath": "/Users/charles/.stado/actions-runner-work/brama/brama/probierz-source/test-results/brama/tui/2026-08-31/2026-08-31T03-22-28-008Z-c51d01ba-e23c-4368-9849-62091c5e2a6a/analysis.json"
+}

@@ -186,7 +186,7 @@ makes it routable&quot;,
 </code></pre>
 <p><code>/health</code> answers <code>ok</code> from any live process; <code>/readyz</code> actually obtained
 the <code>openai</code> credential (here: from the standalone in-memory map). The
-<a href="/docs/architecture#health-versus-readyz">architecture</a> page states the
+<a href="/docs/architecture/request-path-and-state#health-versus-readyz">architecture</a> page states the
 evidence rule.</p>
 <h2 id="4-one-routed-completion">4. One routed completion<a class="headerlink" href="#4-one-routed-completion" title="Link to this section">&para;</a></h2>
 <pre><code class="language-console">$ curl -s -H &quot;Authorization: Bearer docs-test-token&quot; \
@@ -249,7 +249,7 @@ LAN address — instead of loopback — answers:</p>
 </code></pre>
 <p>A forged <code>X-Forwarded-Proto: https</code> from an unlisted peer changes nothing —
 forwarded headers are trusted only from <code>BRAMA_TRUSTED_PROXY_IPS</code>
-(<a href="/docs/architecture#trust-boundaries">architecture</a>).</p></article>
+(<a href="/docs/architecture/ownership-and-boundaries#trust-boundaries">architecture</a>).</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>
   </div>

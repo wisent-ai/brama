@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Launcher inputs — Brama Docs</title>
+  <meta name="description" content="What start-with-skarbiec requires before it execs brama serve: service env file, GnuPG home, vault, control config, trust material, capability socket, runtime directory.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/configuration/launcher-inputs">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Configuration</h2><a href="/docs/configuration">Overview</a><a href="/docs/configuration/gateway-inputs">Gateway inputs</a><a href="/docs/configuration/route-registry">Route registry</a><a class="active" aria-current="page" href="/docs/configuration/launcher-inputs">Launcher inputs</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama configuration reference</p>
+      <article class="doc">
+        <h1 id="launcher-inputs">Launcher inputs<a class="headerlink" href="#launcher-inputs" title="Link to this section">&para;</a></h1>
+        <p><code>src/release/bin/start-with-skarbiec</code> is the managed entry point.
+        It reads operator-owned policy, provisions or verifies this installation's
+        trust material, derives the security-bearing variables the gateway reads, and
+        then <code>exec</code>s <code>brama serve</code>. This page lists what the
+        launcher itself requires. What it hands to the gateway is on
+        <a href="/docs/configuration/gateway-inputs">Gateway inputs</a>.</p>
+
+        <h2 id="required-inputs">Required inputs<a class="headerlink" href="#required-inputs" title="Link to this section">&para;</a></h2>
+        <p>The launcher reads <code>BRAMA_SERVICE_ENV_FILE</code> (default
+        <code>~/.config/brama/service.env</code>) first, then requires:</p>
+        <ul>
+          <li><code>BRAMA_GNUPG_HOME</code> — the service's GnuPG home. Startup ends
+          without it; no other home is used in its place.</li>
+          <li><code>SKARBIEC_VAULT_FILE</code> — the authorized encrypted vault.</li>
+          <li><code>BRAMA_CONTROL_CONFIG</code> — the authoritative non-secret service
+          policy document. The launcher reads
+          <code>services.brama.{allowed_models,model_aliases,required_provider_capabilities}</code>
+          and rejects policy that is absent, malformed, or inconsistent with
+          itself.</li>
+        </ul>
+        <p>An input that is missing, malformed, duplicated, or contradicted by another
+        input ends startup with a message naming it. The launcher does not proceed on
+        a partial policy and does not choose a value the operator did not declare.</p>
+
+        <h2 id="derived-and-provisioned">What it derives and provisions<a class="headerlink" href="#derived-and-provisioned" title="Link to this section">&para;</a></h2>
+        <p>From those three inputs the launcher derives the identity and policy
+        variables the gateway reads, including the <code>wisent-backend</code> client's
+        exact four-alias grant, and it provisions or verifies this installation's trust
+        material.</p>
+        <table><thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
+          <tr><td><code>BRAMA_SKARBIEC_CONFIG_DIR</code></td><td>per installation</td><td>this installation's Skarbiec configuration directory</td></tr>
+          <tr><td><code>BRAMA_PROOF_KEY_FILE</code></td><td><code>~/.stado/brama-proof.key</code></td><td>the installation proof key, provisioned or verified at startup</td></tr>
+          <tr><td><code>BRAMA_CAP_SOCKET</code></td><td><code>~/.stado/run/brama-capability.sock</code></td><td>owner-bound capability socket the launcher starts before the gateway</td></tr>
+          <tr><td><code>BRAMA_RUNTIME_DIR</code></td><td><code>/tmp/brama-skarbiec-&lt;installation&gt;</code></td><td>holds the per-installation socket, GnuPG, and receipt directories</td></tr>
+          <tr><td><code>BRAMA_RENEWAL_ENABLED</code></td><td>on</td><td>whether the credential renewal loop is started</td></tr>
+        </tbody></table>
+        <p>The launcher also seeds the route registry file when it is absent, creating
+        it owner-only and empty rather than guessing routes. Its path and shape are on
+        <a href="/docs/configuration/route-registry">Route registry</a>; an existing
+        file written against an older shape is moved to the current one by
+        <a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a>, which
+        keeps only the known top-level fields, validates the result, commits it with
+        the same atomic owner-only replacement, and prints it.</p>
+
+        <h2 id="capability-material">Capability material is issued, not configured<a class="headerlink" href="#capability-material" title="Link to this section">&para;</a></h2>
+        <p>Runtime capability IDs are freshly issued from vault bindings at final use.
+        The launcher clears any capability seeds it finds in the environment before it
+        <code>exec</code>s the gateway. Never write capability IDs or provider
+        credentials into the non-secret env file: they belong to the vault and to the
+        capability socket, and a value placed in the env file is cleared rather than
+        honoured.</p>
+        <p><code>deploy/*.env.example</code> documents the operator-facing subset of
+        these inputs. <a href="/docs/security">Security</a> explains the trust
+        boundary the capability socket enforces.</p>
+
+        <h2 id="applying-a-change">Applying a change<a class="headerlink" href="#applying-a-change" title="Link to this section">&para;</a></h2>
+        <p>Restart after any startup policy change. The gateway re-reads the route
+        registry per request, but it does not re-read client identities, the alias
+        policy, or capability maps in place, so a change to those takes effect at the
+        next start. <a href="/docs/runbook">Runbook</a> has the restart sequence and
+        the checks to run afterwards.</p>
+      </article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

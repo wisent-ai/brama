@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Failures and reset — Brama Docs</title>
+  <meta name="description" content="Credential separation, the failures onboarding actually hits and the exact repair for each, and how to uninstall or reset a Brama installation.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/onboarding/failures-and-reset">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Onboarding</h2><a href="/docs/onboarding">Overview</a><a href="/docs/onboarding/paths-and-prerequisites">Paths and prerequisites</a><a href="/docs/onboarding/existing-configuration">Bring existing configuration</a><a href="/docs/onboarding/first-success">First success</a><a class="active" aria-current="page" href="/docs/onboarding/failures-and-reset">Failures and reset</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama onboarding: credentials, failures, reset</p>
+      <article class="doc"><h1 id="failures-and-reset">Failures and reset<a class="headerlink" href="#failures-and-reset" title="Link to this section">&para;</a></h1>
+<p>Every failure below has one named repair. Brama does not route around a refusal:
+an alias has one route, and when that route or a dependency it needs refuses,
+the refusal is what the caller receives. Fix the named thing.</p>
+<h2 id="credentials-and-permissions">Credentials and permissions<a class="headerlink" href="#credentials-and-permissions" title="Link to this section">&para;</a></h2>
+<p>Keep these identities separate:</p>
+<ul>
+<li>GitHub release publisher: repository contents permission only for tagged releases;</li>
+<li>host runtime: no GitHub publication permission and only its scoped Skarbiec grants;</li>
+<li>bearer verifier: read only each dedicated client token item;</li>
+<li>request-sign verifier: read only the named central HMAC items;</li>
+<li>Brama workload: redeem only configured Brama capability IDs;</li>
+<li>Weles reauthentication: one dedicated finite token, not a console token;</li>
+<li>caller: one dedicated bearer and, when needed, one exact agent identity.</li>
+</ul>
+<p>Credentials are rotated or revoked at their authority: GitHub, Skarbiec
+capability, or product-owned request-sign item. Never place them in committed
+env files, URLs, request examples, logs, screenshots, or provider payloads.</p>
+<h2 id="alias-state-failures">Alias state failures<a class="headerlink" href="#alias-state-failures" title="Link to this section">&para;</a></h2>
+<p>Read the state with <code>brama aliases</code> or <code>GET /v1/aliases</code>. The four states and
+their repairs:</p>
+<table>
+<thead><tr><th>State</th><th>Meaning</th><th>Repair</th></tr></thead>
+<tbody>
+<tr><td><code>serving</code></td><td>the alias's one route is present and authorized</td><td>none</td></tr>
+<tr><td><code>no_route</code></td><td>the alias has no destination in the registry document</td><td>declare it with <code>PUT /v1/admin/routes</code>, body <code>{&quot;alias&quot;,&quot;primary&quot;}</code></td></tr>
+<tr><td><code>capability_absent</code></td><td>the route exists but its required capability is not authorized for this runtime</td><td>grant the capability named in the row's <code>required</code> field at Skarbiec, then re-read the row</td></tr>
+<tr><td><code>routes_file_invalid</code></td><td>the registry document did not deserialize, for example because it carries an unknown top-level field</td><td>repair the document, or run <a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a> to keep only the known top-level fields and commit the validated result</td></tr>
+</tbody>
+</table>
+<p>A completion naming a declared alias that cannot serve is <code>503</code>
+<code>alias_unserviceable</code>, carrying <code>details.state</code> and <code>details.route</code> so the
+operator can see which route to repair. A completion naming an alias that was
+never declared is <code>404</code>, whose <code>details</code> also carry <code>state</code> and <code>route</code>. In
+both cases the caller receives that answer; no other route is consulted.</p>
+<h2 id="common-failures">Common failures<a class="headerlink" href="#common-failures" title="Link to this section">&para;</a></h2>
+<h3 id="missing-brama_model_router_client_identities">Missing <code>BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES</code><a class="headerlink" href="#missing-brama_model_router_client_identities" title="Link to this section">&para;</a></h3>
+<p><strong>Observed:</strong> startup fails before binding the port.</p>
+<p><strong>Meaning:</strong> the verifier registry was not generated.</p>
+<p><strong>Action:</strong> launch through the packaged wrapper and confirm each verifier-only
+Skarbiec consumer can read its dedicated client token item. Do not create one
+shared token standing in for several clients.</p>
+<h3 id="missing-or-invalid-model-aliases">Missing or invalid model aliases<a class="headerlink" href="#missing-or-invalid-model-aliases" title="Link to this section">&para;</a></h3>
+<p><strong>Observed:</strong> startup reports that the exact alias set or matching provider
+capability is unavailable.</p>
+<p><strong>Meaning:</strong> central service policy and capability grants disagree.</p>
+<p><strong>Action:</strong> correct the central policy or the grant, then restart. Do not
+hand-edit a runtime alias around the policy.</p>
+<h3 id="rejected-route-registry-document">Rejected route registry document<a class="headerlink" href="#rejected-route-registry-document" title="Link to this section">&para;</a></h3>
+<p><strong>Observed:</strong> the registry document is rejected whole and aliases read
+<code>routes_file_invalid</code>.</p>
+<p><strong>Meaning:</strong> the document carries a top-level field outside <code>schema_version</code>,
+<code>deployments</code> and <code>routes</code>, or a route names a deployment that is not defined.</p>
+<p><strong>Action:</strong> run <a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a> as
+the registry owner to reduce the document to the known top-level fields and
+commit the validated result, then repair any route whose deployment is still
+undefined. The command prints the document it committed, so the fix is visible
+before the service is restarted.</p>
+<h3 id="http-426-secure_transport_required">HTTP 426 <code>secure_transport_required</code><a class="headerlink" href="#http-426-secure_transport_required" title="Link to this section">&para;</a></h3>
+<p><strong>Observed:</strong> a remote request is rejected before auth dispatch.</p>
+<p><strong>Meaning:</strong> the peer is neither loopback nor an approved HTTPS terminator.</p>
+<p><strong>Action:</strong> use HTTPS and configure the exact terminator IP in
+<code>BRAMA_TRUSTED_PROXY_IPS</code>; do not trust arbitrary forwarded headers.</p>
+<h3 id="http-401-unauthenticated">HTTP 401 <code>unauthenticated</code><a class="headerlink" href="#http-401-unauthenticated" title="Link to this section">&para;</a></h3>
+<p><strong>Observed:</strong> bearer or agent HMAC is missing, malformed, expired, or unknown.</p>
+<p><strong>Action:</strong> identify the intended client and agent, rotate or repair that exact
+credential at its authority, and sign the exact transmitted body.</p>
+<h3 id="http-403-forbidden">HTTP 403 <code>forbidden</code><a class="headerlink" href="#http-403-forbidden" title="Link to this section">&para;</a></h3>
+<p><strong>Observed:</strong> identity is valid but not allowed for the requested model, agent,
+or path.</p>
+<p><strong>Action:</strong> inspect the central client binding and model allowlist, then widen
+that exact binding if the access is intended. Do not use a broader client's
+token.</p>
+<h3 id="http-429-provider_rate_limited-or-subscription_unavailable">HTTP 429 <code>provider_rate_limited</code> or <code>subscription_unavailable</code><a class="headerlink" href="#http-429-provider_rate_limited-or-subscription_unavailable" title="Link to this section">&para;</a></h3>
+<p><strong>Observed:</strong> the route's provider or subscription refused the attempt, and that
+refusal reached the caller.</p>
+<p><strong>Action:</strong> inspect protected stats and structured routing logs, then either wait
+for the window to reopen, repair the intended subscription, or have an operator
+point the alias at an authorized billing target with
+<code>PUT /v1/admin/routes</code>. Brama does not pick another account for you. Do not
+retry indefinitely.</p>
+<h3 id="http-503-dependency_unavailable">HTTP 503 <code>dependency_unavailable</code><a class="headerlink" href="#http-503-dependency_unavailable" title="Link to this section">&para;</a></h3>
+<p><strong>Observed:</strong> Skarbiec, the entitlements router, the catalog, or the configured
+provider is unavailable, and the request is refused with the dependency named.</p>
+<p><strong>Action:</strong> restore that named dependency. No substitute credential and no
+substitute storage is used in its place, so the refusal stands until the
+dependency is healthy. If the alias should point somewhere else while the
+dependency is down, an operator repoints it explicitly with
+<code>PUT /v1/admin/routes</code> and the change is visible in
+<code>{&quot;ok&quot;:true,&quot;routes&quot;:&lt;document&gt;}</code>.</p>
+<h3 id="port-unavailable">Port unavailable<a class="headerlink" href="#port-unavailable" title="Link to this section">&para;</a></h3>
+<p><strong>Observed:</strong> bind failure on the requested port.</p>
+<p><strong>Action:</strong> stop the conflicting process or select another loopback port. Do not
+bind an unauthenticated alternative interface.</p>
+<h2 id="uninstall-and-reset">Uninstall and reset<a class="headerlink" href="#uninstall-and-reset" title="Link to this section">&para;</a></h2>
+<ul>
+<li>Stop Brama through the operator-owned host service manager.</li>
+<li>Revoke runtime, verifier, request-sign, and GitHub publisher grants independently.</li>
+<li>Retain or securely remove the journal according to operator policy.</li>
+<li>Keep or archive the route registry document deliberately: it is the record of
+  which alias pointed at which route.</li>
+<li>Remove only the immutable staged release being decommissioned after its
+  rollback window closes.</li>
+<li>Remove <code>/tmp/brama-*</code> process caches only when no Brama process uses them.</li>
+<li>Provider vault resources remain owned by Skarbiec/entitlements policy; do not
+  delete them as an uninstall shortcut.</li>
+</ul>
+<p>To remove a single alias instead of an installation, use
+<code>DELETE /v1/admin/routes</code> with body <code>{&quot;alias&quot;}</code>; the answer is
+<code>{&quot;ok&quot;:true,&quot;routes&quot;:&lt;document&gt;}</code> and the alias afterwards reads
+<code>404</code> for callers.</p>
+<p>Continue with <a href="/docs/core"><code>CORE.md</code></a>,
+<a href="/docs/integrations"><code>INTEGRATIONS.md</code></a>, the
+<a href="/docs/runbook">runbook</a>, and the risk-labeled
+<a href="/docs/examples"><code>examples/</code></a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

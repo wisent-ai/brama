@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "subject": "run-and-app-processes",
+  "firstOutputMs": 1229,
+  "intervalMs": 1000,
+  "peakRssKb": 258896,
+  "averageCpuPercent": 32.21666666666667,
+  "appProcessName": null,
+  "appPeakRssKb": null,
+  "appAverageCpuPercent": null,
+  "samples": [
+    {
+      "at": "2026-08-31T03:22:28.803Z",
+      "processes": 1,
+      "rssKb": 416,
+      "cpuPercent": 0,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T03:22:29.863Z",
+      "processes": 3,
+      "rssKb": 162128,
+      "cpuPercent": 96.7,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T03:22:30.867Z",
+      "processes": 7,
+      "rssKb": 244368,
+      "cpuPercent": 79.2,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T03:22:31.864Z",
+      "processes": 6,
+      "rssKb": 238064,
+      "cpuPercent": 0.1,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T03:22:32.851Z",
+      "processes": 7,
+      "rssKb": 258896,
+      "cpuPercent": 17.3,
+      "app": null
+    },
+    {
+      "at": "2026-08-31T03:22:33.029Z",
+      "processes": 0,
+      "rssKb": 0,
+      "cpuPercent": 0,
+      "app": null
+    }
+  ]
+}
