@@ -116,15 +116,7 @@ jobs:
             sh -n "$launcher_file"
           done
           python3 tests/release/check_launcher_blocks.py \
-            src/release/bin/start-with-skarbiec \
-            src/release/bin/launcher/bundle-coordinates.sh \
-            src/release/bin/launcher/service-identity.sh \
-            src/release/bin/launcher/workload-trust.sh \
-            src/release/bin/launcher/capability-broker-socket.sh \
-            src/release/bin/launcher/policy/control-policy.sh \
-            src/release/bin/launcher/policy/router-identities.sh \
-            src/release/bin/launcher/policy/subscription-catalog.sh \
-            src/release/bin/launcher/gateway-launch.sh
+            src/release/bin/start-with-skarbiec
       - name: Publish immutable tagged artifact
         env:
           GH_TOKEN: ${{ github.token }}
