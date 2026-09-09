@@ -34,7 +34,7 @@
 /// merely fail to repair the grant, it destroyed the operator's own ability to
 /// repair it by hand. The ledger held the verdict that says a timer cannot fix
 /// this; nothing read it.
-pub(super) fn verdict_outranks_last_sign_in(
+pub fn verdict_outranks_last_sign_in(
     verdict_at_ms: Option<i64>,
     last_sign_in_at_ms: Option<i64>,
 ) -> bool {

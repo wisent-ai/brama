@@ -56,6 +56,11 @@ pub enum Blocked {
     WelesCannotTargetAccount { detail: String },
     /// The gateway cannot reach Weles.
     WelesUnreachable { detail: String },
+    /// This exact stored credential has already had a browser sign-in driven
+    /// against it, and it did not change. Another one cannot answer
+    /// differently, and driving them at a rate once locked two accounts'
+    /// authenticators, so the loop stops here and says so.
+    SignInAlreadyDriven,
     /// This process is a gateway on a host the registry places none on.
     NotPlacedHost {
         placed_on: String,
@@ -72,6 +77,7 @@ impl Blocked {
             Self::WelesAccountAmbiguous { .. } => "weles_account_ambiguous",
             Self::WelesAccountUnknown { .. } => "weles_account_unknown",
             Self::WelesCannotTargetAccount { .. } => "weles_cannot_target_account",
+            Self::SignInAlreadyDriven => "sign_in_already_driven",
             Self::WelesUnreachable { .. } => "weles_unreachable",
             Self::NotPlacedHost { .. } => "not_placed_host",
         }
@@ -94,6 +100,7 @@ impl Blocked {
             | Self::WelesAccountAmbiguous { provider, .. }
             | Self::WelesAccountUnknown { provider, .. } => Some(provider),
             Self::WelesCannotTargetAccount { .. }
+            | Self::SignInAlreadyDriven
             | Self::WelesUnreachable { .. }
             | Self::NotPlacedHost { .. } => None,
         }
@@ -108,6 +115,14 @@ impl Blocked {
                  tag, so nothing maps it to a Weles sign-in account; the gateway signs accounts in \
                  by itself and will not guess between this deployment's `{provider}` accounts, so \
                  this one stays unrepaired until that tag names its Weles account"
+            ),
+            Self::SignInAlreadyDriven => format!(
+                "Weles has already signed this exact stored credential in and the credential did \
+                 not change, so another sign-in cannot answer differently. The gateway stops \
+                 rather than repeating one: driving them at a rate spent one real login every ten \
+                 minutes for six days on 2026-09-02 and ended with the provider locking two \
+                 accounts' authenticator method. The account itself has to be able to yield a \
+                 credential again before this loop can do anything with it"
             ),
             Self::WelesHoldsNoAccount { provider, detail } => format!(
                 "Weles declares no sign-in account for `{provider}`, so the gateway has nothing to \

@@ -103,6 +103,10 @@ pub(super) async fn calculate_readiness() -> ReadinessReport {
                     crate::subscription_dispatch::sign_in::declared_account(&entry)
                 {
                     sign_in_blocked.entry(entry.id.clone()).or_insert(blocked);
+                } else if crate::subscription_dispatch::sign_in_already_driven(&entry.id) {
+                    sign_in_blocked.entry(entry.id.clone()).or_insert(
+                        crate::subscription_dispatch::sign_in::Blocked::SignInAlreadyDriven,
+                    );
                 }
             }
             let provider = entry.provider.trim().to_string();

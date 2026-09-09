@@ -60,6 +60,7 @@ use reauthorization::schedule_sign_in;
 use renewal::{refresh_one, Swept};
 
 pub use cadence::spawn;
+pub use verdict::verdict_outranks_last_sign_in;
 
 /// One account the loop could not repair, and the declaration that is missing.
 fn report_blocked(subscription_id: &str, blocked: &Blocked) {

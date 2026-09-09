@@ -71,6 +71,19 @@ fn automatic_sign_in_view(entry: &SubscriptionEntry) -> Value {
             "detail": Value::Null,
         });
     }
+    // A sign-in already driven against this exact stored credential is the
+    // other way the loop stops, and the only one an operator could not read
+    // anywhere before: the answer lives in the ledger and the journal, both
+    // local reads, so the row can state it.
+    if crate::subscription_dispatch::sign_in_already_driven(&entry.id) {
+        let blocked = crate::subscription_dispatch::sign_in::Blocked::SignInAlreadyDriven;
+        return json!({
+            "applies": true,
+            "automatic": false,
+            "blocked_by": blocked.code(),
+            "detail": blocked.detail(),
+        });
+    }
     match crate::subscription_dispatch::sign_in::declared_account(entry) {
         Ok(_) => json!({
             "applies": true,

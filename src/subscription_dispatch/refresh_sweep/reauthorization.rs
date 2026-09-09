@@ -65,12 +65,22 @@ pub(super) fn schedule_sign_in(
         usage::credential_recorded_at_ms(&subscription_id),
         crate::journal::latest_subscription_sign_in_at_ms(&subscription_id),
     ) {
+        // Not a silent stop any more. This state used to be one log line
+        // saying the account was "left to an operator", which is exactly the
+        // sentence the architecture does not allow: it named no surface an
+        // operator reads. It is a blocked reason now, so it appears per
+        // account in the pool document, in the readiness answer and in Brama
+        // Desktop. The stop itself stays -- repeating these locked two
+        // authenticators.
+        let blocked = super::super::sign_in::Blocked::SignInAlreadyDriven;
         warn!(
-            event = "credential_sign_in_withheld",
+            event = "credential_sign_in_blocked",
             subscription = %subscription_id,
             provider = %provider,
-            "a browser sign-in has already been driven against this exact stored credential; \
-             only replacing it changes the answer, so this one is left to an operator"
+            blocked_by = blocked.code(),
+            envelope = %blocked.failure(Some(&subscription_id)),
+            "{}",
+            blocked.detail()
         );
         return false;
     }
