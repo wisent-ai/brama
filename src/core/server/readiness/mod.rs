@@ -9,6 +9,7 @@
 
 mod accounts;
 pub(in crate::core::server) mod check;
+mod placement;
 
 use std::sync::LazyLock;
 use std::time::Duration;

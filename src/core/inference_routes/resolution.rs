@@ -46,7 +46,10 @@ fn deployment_for_model<'a>(registry: &'a Registry, model: &str) -> Result<&'a D
 /// and is rejected as an unknown local model. That forced every route to name
 /// one fixed provider and model, and left no way to point an alias at the
 /// subscription that pays.
-pub(super) fn resolved_destination(registry: &Registry, destination: &str) -> Result<String, String> {
+pub(super) fn resolved_destination(
+    registry: &Registry,
+    destination: &str,
+) -> Result<String, String> {
     if destination == crate::core::server::BEST_ALIAS {
         return Ok(destination.to_string());
     }

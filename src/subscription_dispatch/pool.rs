@@ -92,6 +92,19 @@ pub(crate) fn document(
                     errors.push(error);
                 }
             }
+            // An account the gateway cannot repair by itself is a defect of
+            // this deployment's declarations, so it belongs in `errors` and
+            // not only in the row: a console that prints errors and a gate
+            // that fails on them both have to see it.
+            if entry.status == "active"
+                && !retired(&entry.id, recorded.as_ref())
+                && crate::subscription_dispatch::sign_in::weles_provider(&entry.provider).is_some()
+            {
+                if let Err(blocked) = crate::subscription_dispatch::sign_in::declared_account(entry)
+                {
+                    errors.push(blocked.failure(Some(&entry.id)));
+                }
+            }
             let mut row = subscription_row(entry, recorded.as_ref(), windows);
             row["state"] = json!(if entry.status == "undiscovered" {
                 "unknown"

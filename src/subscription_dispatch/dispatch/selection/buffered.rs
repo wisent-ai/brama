@@ -13,9 +13,7 @@ use super::super::ranking::candidates::{
 };
 use super::super::ranking::task_quality::task_quality_models;
 use super::super::rotation::buffered::dispatch_subscription_attempt;
-use super::ranked_walk::{
-    dispatch_ranked_models, ANY_SUBSCRIPTION_CONTEXT, ANY_VISION_CONTEXT,
-};
+use super::ranked_walk::{dispatch_ranked_models, ANY_SUBSCRIPTION_CONTEXT, ANY_VISION_CONTEXT};
 
 /// `model: "any"` selects among active stateless provider routes for the
 /// signed agent and rotates across credentials on provider exhaustion.

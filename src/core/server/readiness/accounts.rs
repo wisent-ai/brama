@@ -19,6 +19,10 @@ pub(super) struct ServiceFacts {
     pub(super) active_subscriptions: usize,
     pub(super) subscriptions: Vec<Value>,
     pub(super) unredeemable: Vec<String>,
+    /// Accounts this gateway cannot sign in by itself, and why. Keyed by
+    /// subscription id so the reason travels with the account it is about.
+    pub(super) sign_in_blocked:
+        std::collections::BTreeMap<String, crate::subscription_dispatch::sign_in::Blocked>,
     pub(super) subscription_available: bool,
 }
 
@@ -81,11 +85,30 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
     // Keep the full account verdict in this same report as `degraded`; a single
     // broken account remains visible without taking working routes offline.
     let serving = facts.provider_available || facts.subscription_available;
+    // What the automatic loop can and cannot repair, which is a different
+    // question from whether a credential is currently good: a deployment can
+    // hold nothing but healthy grants and still be unable to replace any of
+    // them, and that is the state that ended in an outage.
+    let placement = super::placement::placement().await;
+    let mut blocked: Vec<Value> = facts
+        .sign_in_blocked
+        .iter()
+        .map(|(id, blocked)| {
+            let mut row = blocked.to_json();
+            row["id"] = json!(id);
+            row["provider"] = json!(blocked.provider());
+            row
+        })
+        .collect();
+    if let Some(drift) = placement.blocked() {
+        blocked.push(drift.to_json());
+    }
     let healthy = serving
         && facts.denied.is_empty()
         && facts.unredeemable.is_empty()
         && untagged.is_empty()
-        && facts.unroutable.is_empty();
+        && facts.unroutable.is_empty()
+        && blocked.is_empty();
     let status = if serving {
         axum::http::StatusCode::OK
     } else {
@@ -106,6 +129,8 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
         "traffic can be served, but the vault holds a subscription account with no agent route"
     } else if !facts.unroutable.is_empty() {
         "traffic can be served, but at least one active subscription contributes no model"
+    } else if !blocked.is_empty() {
+        "traffic can be served, but at least one account cannot be signed in by this gateway"
     } else {
         "every configured provider credential was obtained, every active subscription redeemed, and every active subscription account is routable"
     };
@@ -122,6 +147,10 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
             "subscriptions": facts.subscriptions,
             "unredeemable": facts.unredeemable,
             "unroutable_accounts": untagged,
+            "automatic_sign_in": json!({
+                "host": placement.to_json(),
+                "blocked": blocked,
+            }),
             "operator_action_required": !healthy,
             "build": crate::build_info::current(),
         }),

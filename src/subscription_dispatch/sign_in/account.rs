@@ -9,6 +9,8 @@
 
 use serde_json::Value;
 
+use super::blocked::Blocked;
+
 /// The selector Weles's health answer must advertise before a named account is
 /// asked for. A release without it would silently pick a sign-in row of its
 /// own, and the cost of finding that out afterwards is one real sign-in into
@@ -25,7 +27,7 @@ pub(super) fn resolve_login_item(
     health: &Value,
     weles_provider: &str,
     asked: Option<&str>,
-) -> Result<String, String> {
+) -> Result<String, Blocked> {
     let features = health.get("features").and_then(Value::as_array);
     let advertised = features.is_some_and(|features| {
         features
@@ -33,11 +35,13 @@ pub(super) fn resolve_login_item(
             .any(|feature| feature.as_str() == Some(LOGIN_ITEM_SELECTOR))
     });
     if !advertised {
-        return Err(format!(
-            "this Weles release does not advertise the {LOGIN_ITEM_SELECTOR} selector, so it \
-             would choose a sign-in row itself; deploy the release that carries it before \
-             signing a named account in"
-        ));
+        return Err(Blocked::WelesCannotTargetAccount {
+            detail: format!(
+                "this Weles release does not advertise the {LOGIN_ITEM_SELECTOR} selector, so it \
+                 would choose a sign-in row itself; deploy the release that carries it before \
+                 signing a named account in"
+            ),
+        });
     }
     let rows: Vec<&Value> = health
         .get("login_items")
@@ -59,22 +63,28 @@ pub(super) fn resolve_login_item(
                 .filter(|item| !item.is_empty())
                 .collect::<Vec<_>>()
                 .join(", ");
-            return Err(format!(
-                "Weles holds no sign-in row for {asked}; it holds {}. That account has to exist \
-                 in Weles before it can be signed in",
-                if held.is_empty() { "none".into() } else { held }
-            ));
+            return Err(Blocked::WelesAccountUnknown {
+                provider: weles_provider.to_string(),
+                detail: format!(
+                    "Weles holds no sign-in row for {asked}; it holds {}. That account has to \
+                     exist in Weles before it can be signed in",
+                    if held.is_empty() { "none".into() } else { held }
+                ),
+            });
         }
         let providers: Vec<&str> = named
             .iter()
             .filter_map(|row| row.get("provider").and_then(Value::as_str))
             .collect();
         if !providers.is_empty() && providers.iter().all(|held| *held != weles_provider) {
-            return Err(format!(
-                "{asked} is a {} account, not a {weles_provider} one; refusing to sign it in \
-                 for the wrong provider",
-                providers[0]
-            ));
+            return Err(Blocked::WelesAccountUnknown {
+                provider: weles_provider.to_string(),
+                detail: format!(
+                    "{asked} is a {} account, not a {weles_provider} one; refusing to sign it in \
+                     for the wrong provider",
+                    providers[0]
+                ),
+            });
         }
         return Ok(asked.to_string());
     }
@@ -98,18 +108,24 @@ pub(super) fn resolve_login_item(
         .filter(|item| !item.is_empty())
         .collect::<Vec<_>>();
     if held.is_empty() {
-        return Err(format!(
-            "Weles holds no sign-in row for provider {weles_provider}; that account has to \
-             exist in Weles before it can be signed in"
-        ));
+        return Err(Blocked::WelesHoldsNoAccount {
+            provider: weles_provider.to_string(),
+            detail: format!(
+                "Weles holds no sign-in row for provider {weles_provider}; that account has to \
+                 exist in Weles before it can be signed in"
+            ),
+        });
     }
-    Err(format!(
-        "Weles holds {} sign-in rows for provider {weles_provider} ({}) and marks {} primary; \
-         it must declare exactly one primary account before an unmapped subscription can renew",
-        held.len(),
-        held.join(", "),
-        primary.len()
-    ))
+    Err(Blocked::WelesAccountAmbiguous {
+        provider: weles_provider.to_string(),
+        detail: format!(
+            "Weles holds {} sign-in rows for provider {weles_provider} ({}) and marks {} primary; \
+             it must declare exactly one primary account before an unmapped subscription can renew",
+            held.len(),
+            held.join(", "),
+            primary.len()
+        ),
+    })
 }
 
 /// Whether the row about to be signed in renews a different subscription than

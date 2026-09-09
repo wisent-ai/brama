@@ -18,12 +18,23 @@
 //! started twice; the rotation lock in the broker already serialises the writes,
 //! and this is what stops a sweep from queueing behind its own previous attempt.
 //! One subscription's failure -- including a panic -- ends that subscription's
-//! turn and nothing else. A credential the provider has definitively refused is
-//! left alone until a sign-in replaces it, because asking again every minute
-//! cannot produce a different answer and would bury the one log line that
-//! matters. And the ledger is consulted before the vault is: reading a
-//! credential shells out to the entitlements router, so a grant whose recorded
-//! expiry is hours away is skipped without reading anything at all.
+//! turn and nothing else. A credential the provider has definitively refused
+//! is not refreshed again, because asking every minute cannot produce a
+//! different answer; it is handed to Weles for a sign-in instead, which is the
+//! only thing that replaces it. And the ledger is consulted before the vault
+//! is: reading a credential shells out to the entitlements router, so a grant
+//! whose recorded expiry is hours away is skipped without reading anything at
+//! all.
+//!
+//! Signing in is not optional and not an operator's errand. Until 2026-09-09
+//! this whole escalation sat behind `BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN=1`,
+//! unset on every host, so a credential a provider had disowned waited for a
+//! human to run a command -- and one waited from 2026-09-06, which is what
+//! took the app's chat down. The architecture has no manual step in it: the
+//! subscription list comes from Skarbiec and the sign-in comes from Weles. An
+//! account this loop cannot repair by itself is not skipped quietly either; it
+//! is reported with the declaration that is missing, in
+//! [`sign_in::blocked`](crate::subscription_dispatch::sign_in::blocked).
 //!
 //! Nothing here spends provider quota: a token endpoint is not a metered
 //! endpoint, so this sweep can run on a short timer without costing an account
@@ -38,22 +49,32 @@ mod verdict;
 use std::collections::BTreeSet;
 use std::time::Duration;
 
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::gateway::broker;
 use crate::subscription_dispatch::usage::{self, RefreshHint};
+
+use crate::subscription_dispatch::sign_in::{declared_account, Blocked};
 
 use reauthorization::schedule_sign_in;
 use renewal::{refresh_one, Swept};
 
 pub use cadence::spawn;
 
-/// Browser sign-in is separate from silent OAuth token renewal.
-const AUTOMATIC_SIGN_IN_ENV: &str = "BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN";
+/// One account the loop could not repair, and the declaration that is missing.
+fn report_blocked(subscription_id: &str, blocked: &Blocked) {
+    warn!(
+        event = "credential_sign_in_blocked",
+        subscription = subscription_id,
+        blocked_by = blocked.code(),
+        envelope = %blocked.failure(Some(subscription_id)),
+        "{}",
+        blocked.detail()
+    );
+}
 
 /// Walk every active subscription once, refreshing what is due.
 async fn sweep(skew: Duration) {
-    let automatic_sign_in = std::env::var(AUTOMATIC_SIGN_IN_ENV).is_ok_and(|value| value == "1");
     let mut visited = BTreeSet::new();
     let mut refreshed = usize::default();
     let mut refused = usize::default();
@@ -66,9 +87,7 @@ async fn sweep(skew: Duration) {
     // Incomplete historical items are never handed to request dispatch. They
     // enter only this repair loop; the Weles account declaration must map back
     // to the exact subscription id before a browser opens.
-    if automatic_sign_in {
-        entries.extend(broker::list_recoverable_subscriptions().await);
-    }
+    entries.extend(broker::list_recoverable_subscriptions().await);
     for entry in entries {
         if entry.status != "active" || crate::journal::is_retired(&entry.id) {
             continue;
@@ -91,14 +110,15 @@ async fn sweep(skew: Duration) {
         // identity now instead of waiting for an expiry or provider refusal:
         // the requested subscription id lets Weles accept only its declared
         // account, and a successful donation writes the durable login tag.
-        if automatic_sign_in
-            && entry
-                .login_item
-                .as_deref()
-                .map(str::trim)
-                .filter(|item| !item.is_empty())
-                .is_none()
-        {
+        //
+        // The sign-in still runs when the tag is absent, because Weles's sole
+        // row for a provider is an unambiguous answer and signing it in is
+        // what writes the tag. What cannot be repaired here is a provider with
+        // several accounts and nothing saying which one this subscription is:
+        // that is a missing declaration, so it is reported as one instead of
+        // being guessed at or passed over.
+        if let Err(blocked) = declared_account(&entry) {
+            report_blocked(&entry.id, &blocked);
             awaiting_signin = awaiting_signin.saturating_add(1);
             if schedule_sign_in(entry.id, entry.provider, entry.login_item) {
                 sign_ins_started = sign_ins_started.saturating_add(1);
@@ -115,8 +135,7 @@ async fn sweep(skew: Duration) {
         match usage::credential_refresh_hint(&entry.id, skew) {
             RefreshHint::AwaitingSignIn => {
                 awaiting_signin = awaiting_signin.saturating_add(1);
-                if automatic_sign_in && schedule_sign_in(entry.id, entry.provider, entry.login_item)
-                {
+                if schedule_sign_in(entry.id, entry.provider, entry.login_item) {
                     sign_ins_started = sign_ins_started.saturating_add(1);
                 }
                 continue;
@@ -133,7 +152,7 @@ async fn sweep(skew: Duration) {
                 provider,
             } => {
                 awaiting_signin = awaiting_signin.saturating_add(1);
-                if automatic_sign_in && schedule_sign_in(subscription_id, provider, login_item) {
+                if schedule_sign_in(subscription_id, provider, login_item) {
                     sign_ins_started = sign_ins_started.saturating_add(1);
                 }
             }
@@ -147,7 +166,7 @@ async fn sweep(skew: Duration) {
         refused,
         awaiting_signin,
         sign_ins_started,
-        automatic_sign_in,
+        blocked = awaiting_signin.saturating_sub(sign_ins_started),
         "finished one credential refresh sweep"
     );
 }

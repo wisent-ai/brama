@@ -86,12 +86,24 @@ pub(super) async fn calculate_readiness() -> ReadinessReport {
     let mut routable = Vec::new();
     let mut unroutable = Vec::new();
     let mut active = std::collections::BTreeMap::<String, String>::new();
+    // Which accounts this gateway cannot repair by itself. Read here because
+    // this is the only place readiness holds the subscription entry, and the
+    // answer is in the tags it already carries.
+    let mut sign_in_blocked =
+        std::collections::BTreeMap::<String, crate::subscription_dispatch::sign_in::Blocked>::new();
     let mut model_providers = std::collections::BTreeSet::<String>::new();
     for (agent, entries, models) in agent_results {
         let mut subscribed = Vec::new();
         for entry in entries {
             if entry.status != "active" {
                 continue;
+            }
+            if crate::subscription_dispatch::sign_in::weles_provider(&entry.provider).is_some() {
+                if let Err(blocked) =
+                    crate::subscription_dispatch::sign_in::declared_account(&entry)
+                {
+                    sign_in_blocked.entry(entry.id.clone()).or_insert(blocked);
+                }
             }
             let provider = entry.provider.trim().to_string();
             subscribed.push(provider.clone());
@@ -190,6 +202,7 @@ pub(super) async fn calculate_readiness() -> ReadinessReport {
         active_subscriptions: active.len(),
         subscriptions,
         unredeemable,
+        sign_in_blocked,
         subscription_available,
     })
     .await

@@ -1,8 +1,8 @@
 //! The candidate lists a selector walks: every route this agent can be served
 //! from, in the order the ledger ranks them.
 
-use super::plan_order::order_models_by_plan;
 use super::super::catalogue::subscription_models::registry_models_for_agent;
+use super::plan_order::order_models_by_plan;
 
 /// The candidate list `best` walks: every subscription model this agent can be
 /// served from, freest plan first, with the alias's configured route promoted

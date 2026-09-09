@@ -7,9 +7,7 @@ use std::path::Path;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::core::inference_routes::{
-    self, RouteImport, RouteImportDisposition, RouteImportResult,
-};
+use crate::core::inference_routes::{self, RouteImport, RouteImportDisposition, RouteImportResult};
 
 use super::document::{parse_source, source_deployments_by_name};
 use super::preview::preview_document;

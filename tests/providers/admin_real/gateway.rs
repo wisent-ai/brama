@@ -84,8 +84,11 @@ impl Gateway {
     pub(crate) fn start() -> Self {
         let scratch = scratch("admin-real");
         let routes = scratch.join("routes.json");
-        std::fs::write(&routes, br#"{"schema_version":1,"deployments":[],"routes":{}}"#)
-            .expect("create private routes file");
+        std::fs::write(
+            &routes,
+            br#"{"schema_version":1,"deployments":[],"routes":{}}"#,
+        )
+        .expect("create private routes file");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt as _;

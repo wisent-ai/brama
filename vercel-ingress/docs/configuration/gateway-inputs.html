@@ -72,13 +72,17 @@
           <tr><td><code>BRAMA_PLAN_USAGE_RETENTION_SECS</code></td><td><code>86400</code></td><td>when a stale reading stops being served</td></tr>
           <tr><td><code>BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS</code></td><td><code>60</code></td><td>refresh-ahead sweep interval; <code>0</code> disables it</td></tr>
           <tr><td><code>BRAMA_CREDENTIAL_REFRESH_SKEW_SECS</code></td><td><code>300</code></td><td>refresh credentials expiring within this window</td></tr>
-          <tr><td><code>BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN</code></td><td>unset (off)</td><td>only <code>1</code> enables automatic Weles browser sign-in after a credential refusal or a missing account mapping; OAuth token renewal remains enabled independently</td></tr>
+          <tr><td><code>BRAMA_CREDENTIAL_SIGN_IN_COOLDOWN_SECS</code></td><td><code>1800</code></td><td>how long the gateway waits before driving a second sign-in for the same stored credential</td></tr>
+          <tr><td><code>BRAMA_CREDENTIAL_SIGN_IN_TIMEOUT_MS</code></td><td><code>900000</code></td><td>how long Weles may spend driving one sign-in</td></tr>
         </tbody></table>
         <p>With these defaults no timer performs a quota-consuming request: usage
         reports and token refreshes are free, and the only quota-spending check is the
-        explicit admin probe route. No default timer opens a browser; signing in
-        requires the separate CLI or Desktop action unless automatic Weles renewal was
-        explicitly enabled.</p>
+        explicit admin probe route. Signing an account in is not configurable and not
+        an operator action: when a provider refuses a grant, or the stored document is
+        not a credential at all, the gateway asks Weles to sign that account in.
+        Weles drives the browser on its own host; nothing opens one here. The two
+        variables above bound how often and how long that may happen, and neither
+        turns it off.</p>
         <p>These windows govern how fresh a reading is, not how long a request may
         run. A completion carries the deadline of its one attempt against its one
         route; that deadline is not multiplied by anything.</p>

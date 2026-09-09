@@ -83,7 +83,10 @@ fn epoch_number_ms(number: f64, path: &str) -> Result<i64, String> {
 
 /// An optional instant may be RFC 3339, epoch seconds, or epoch milliseconds.
 /// A present but malformed claim is an error rather than an absent reset.
-pub(super) fn optional_instant_ms(value: Option<&Value>, path: &str) -> Result<Option<i64>, String> {
+pub(super) fn optional_instant_ms(
+    value: Option<&Value>,
+    path: &str,
+) -> Result<Option<i64>, String> {
     let Some(value) = value else {
         return Ok(None);
     };

@@ -112,17 +112,28 @@ pub(super) fn schedule_sign_in(
                     detail = verdict.get("detail").and_then(serde_json::Value::as_str).unwrap_or_default()
                 );
             }
-            // `Err` means a transient preflight dependency failed before Weles
-            // accepted a browser run: directory resolution or admission
-            // health. Nothing account-sensitive happened, so do not write the
-            // sign-in cooldown; the next sweep can use a repaired dependency.
-            Ok(Err(detail)) => {
+            // A blocked reason is a declaration this deployment is missing: it
+            // will read the same next minute, so it is logged with its own
+            // word and envelope rather than as a passing dependency failure.
+            // Neither writes the sign-in cooldown, because nothing
+            // account-sensitive happened: no browser ran and Weles accepted
+            // no account.
+            Ok(Err(error)) => {
+                let blocked = error.blocked();
                 warn!(
-                    event = "credential_sign_in_preflight_failed",
+                    event = if blocked.is_some() {
+                        "credential_sign_in_blocked"
+                    } else {
+                        "credential_sign_in_preflight_failed"
+                    },
                     subscription = %subscription_id,
                     provider = %provider,
                     login_item = %login_label,
-                    %detail
+                    blocked_by = blocked.map(super::super::sign_in::Blocked::code).unwrap_or("none"),
+                    envelope = blocked
+                        .map(|blocked| blocked.failure(Some(&subscription_id)).to_string())
+                        .unwrap_or_default(),
+                    detail = %error
                 );
             }
             // A failed join likewise proves no completed Weles verdict. Keeping

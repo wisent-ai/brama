@@ -151,9 +151,19 @@ as unmeasured, which is not the same row as a plan measured at zero.</p>
 explicit Weles/Stado <strong>Sign in</strong> action. A missing measurement time
 is reported as unknown. Refresh operations may wait longer than ordinary reads
 so that a provider or credential refusal is reported by Brama itself rather than
-by the caller's own transport. OAuth renewal opens no browser unless
-<code>BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN=1</code> is set. No OMP integration is
-used.</p></article>
+by the caller's own transport. No OMP integration is used.</p>
+<p>Signing an account in is the gateway's own work. Until 2026-09-09 the whole
+escalation sat behind <code>BRAMA_CREDENTIAL_AUTOMATIC_SIGN_IN=1</code>, which
+no host set, so a credential a provider had disowned waited for someone to run
+a command; that variable is gone and the sweep asks Weles by itself. A stored
+document that is not a credential is no longer read as a healthy grant either:
+it has no expiry, the sweep called it <code>NotDue</code> forever, and it is now
+recorded as needing a sign-in and handed to Weles. Everything that can stop
+that loop is named per account — <code>automatic_sign_in</code> on every pool
+row, <code>automatic_sign_in.blocked</code> in the readiness answer, and one of
+seven <code>blocked_by</code> words listed in the
+<a href="/docs/runbook/credentials-and-subscriptions">credentials runbook</a> —
+including a gateway running on a host the registry does not place one on.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>
   </div>

@@ -8,8 +8,8 @@ use serde_json::Value;
 use super::endpoint::PlanUsageShape;
 use super::window::window_label_from_minutes;
 use crate::types::LimitReading;
-use claim::{nonnegative_number, percentage, positive_number};
 use claim::{delayed_reset_ms, optional_instant_ms, required_object};
+use claim::{nonnegative_number, percentage, positive_number};
 use kimi_usage::kimi_usage_readings;
 
 /// The windows Anthropic's usage report names, mapped onto the very limit ids

@@ -68,8 +68,8 @@ pub fn migrate(path: &Path) -> Result<Value, String> {
         .lock()
         .map_err(|_| "inference route write lock is poisoned".to_string())?;
     let body = read_body(path)?;
-    let value: Value =
-        serde_json::from_str(&body).map_err(|error| format!("invalid inference routes: {error}"))?;
+    let value: Value = serde_json::from_str(&body)
+        .map_err(|error| format!("invalid inference routes: {error}"))?;
     let document = value
         .as_object()
         .ok_or_else(|| "inference routes must be a JSON object".to_string())?;

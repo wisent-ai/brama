@@ -57,7 +57,10 @@ fn alias_add_edit_and_delete_changes_real_openrouter_dispatch() {
         Some(json!({"alias":ALIAS})),
     );
     assert_eq!(status, 200, "{deleted}");
-    assert!(deleted["routes"]["routes"].get(ALIAS).is_none(), "{deleted}");
+    assert!(
+        deleted["routes"]["routes"].get(ALIAS).is_none(),
+        "{deleted}"
+    );
     let (status, _) = gateway.completion(ALIAS);
     assert_ne!(status, 200);
 }

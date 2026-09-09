@@ -78,6 +78,19 @@ fn print_pool(report: &Value) {
         if let Some(error) = text(row, "last_redeem_error") {
             println!("    last_redeem_error: {error}");
         }
+        // An account the gateway cannot sign in by itself is the state that
+        // outlives every other line here: a grant expires and is replaced, but
+        // a missing declaration stays until somebody reads this.
+        if let Some(automatic) = row.get("automatic_sign_in").filter(|state| {
+            state.get("applies").and_then(Value::as_bool) == Some(true)
+                && state.get("automatic").and_then(Value::as_bool) == Some(false)
+        }) {
+            println!(
+                "    sign_in_blocked: {}: {}",
+                text(automatic, "blocked_by").unwrap_or("unknown"),
+                text(automatic, "detail").unwrap_or("no reason was stated")
+            );
+        }
         if let Some(check) = row.get("usage_check").filter(|check| !check.is_null()) {
             println!(
                 "    usage checked: {} ({})",

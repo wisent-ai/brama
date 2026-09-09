@@ -23,7 +23,15 @@
 //! a fresh item nothing. These tests are the third occurrence failing here
 //! instead of in a pipeline.
 
+#[path = "../support/mod.rs"]
+mod support;
+
+use std::process::Command;
+
+use serde_json::Value;
+
 use brama::gateway::broker::subscription_tags_for_write;
+use support::{SkarbiecVault, TestDirectory};
 
 fn tags(values: &[&str]) -> Vec<String> {
     values.iter().map(|value| (*value).to_string()).collect()
@@ -151,4 +159,137 @@ fn every_existing_agent_binding_survives_the_write() {
             "{agent} must still be able to spend this plan: {stored:?}"
         );
     }
+}
+
+/// The fifth tag, and the one this fleet has never had: `brama:login:` is what
+/// maps a subscription to the Weles account that signs it in. Without it the
+/// gateway cannot repair the account by itself, because it will not guess
+/// between a provider's accounts -- and on 2026-09-09 every subscription in
+/// this fleet's vault was missing it, which is why five dead credentials
+/// waited for a human while the architecture says nobody is in the loop.
+///
+/// Driven through the built binary over a real Skarbiec vault: the pool
+/// document is what the console prints, what the admin route serves and what
+/// Brama Desktop reads, so it is the contract worth pinning. The command
+/// exits non-zero on a document that carries errors, and an account the
+/// gateway cannot repair is one of them, so the status is returned rather than
+/// asserted here.
+fn pool_document(directory: &TestDirectory, vault: &SkarbiecVault) -> (Value, bool) {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_brama"));
+    for (name, value) in vault.environment() {
+        command.env(name, value);
+    }
+    let listed = command
+        .env("HOME", directory.path().join("home"))
+        .env("XDG_STATE_HOME", directory.path().join("xdg-state"))
+        .env("BRAMA_STATE_DIR", directory.path().join("state"))
+        .env(
+            "BRAMA_SUBSCRIPTION_USAGE_FILE",
+            directory.path().join("usage.json"),
+        )
+        .env("BRAMA_PERF_PATH", directory.path().join("perf.json"))
+        .env("ENTITLEMENTS_ROUTER_BIN", vault.router())
+        .args(["subscriptions", "--json"])
+        .output()
+        .expect("brama subscriptions --json");
+    let document = serde_json::from_slice(&listed.stdout).unwrap_or_else(|error| {
+        panic!(
+            "the pool document must be JSON ({error}); stderr:\n{}",
+            String::from_utf8_lossy(&listed.stderr)
+        )
+    });
+    (document, listed.status.success())
+}
+
+fn row_of<'a>(document: &'a Value, subscription_id: &str) -> &'a Value {
+    document["subscriptions"]
+        .as_array()
+        .expect("the document lists subscriptions")
+        .iter()
+        .find(|row| row["id"] == subscription_id)
+        .unwrap_or_else(|| panic!("{subscription_id} is not in the document: {document}"))
+}
+
+/// An OAuth account with no `brama:login:` tag: the gateway says it cannot
+/// sign this one in, names the missing tag, and reports it as an error of the
+/// deployment rather than a property of the account.
+#[test]
+fn an_account_with_no_weles_account_declared_says_so() {
+    let directory = TestDirectory::new("login-tag-missing");
+    let vault = SkarbiecVault::create("login-tag-missing");
+    let agent = "brama-login-tag";
+    vault.seed_subscription(agent, "codex", "login-tag-codex");
+
+    let (document, complete) = pool_document(&directory, &vault);
+    assert!(
+        !complete,
+        "the console must fail on a deployment that cannot repair an account: {document}"
+    );
+    let state = &row_of(&document, "login-tag-codex")["automatic_sign_in"];
+    assert_eq!(
+        state["applies"],
+        Value::Bool(true),
+        "Weles signs codex accounts in, so the question applies here: {state}"
+    );
+    assert_eq!(
+        state["automatic"],
+        Value::Bool(false),
+        "nothing maps this subscription to a Weles account: {state}"
+    );
+    assert_eq!(
+        state["blocked_by"],
+        Value::String("no_weles_account".into())
+    );
+    let detail = state["detail"].as_str().unwrap_or_default();
+    assert!(
+        detail.contains("brama:login:"),
+        "the sentence must name the tag that is the repair: {detail}"
+    );
+
+    let errors = document["errors"]
+        .as_array()
+        .expect("the document carries an errors array");
+    assert!(
+        errors.iter().any(|error| {
+            error.pointer("/context/blocked_by").and_then(Value::as_str) == Some("no_weles_account")
+                && error
+                    .pointer("/context/subscription")
+                    .and_then(Value::as_str)
+                    == Some("login-tag-codex")
+        }),
+        "an account the gateway cannot repair is a defect of this deployment: {errors:?}"
+    );
+}
+
+/// The narrowing that keeps healthy accounts from looking broken: nobody signs
+/// an API key in, so an `openai` account is not awaiting anything, and the
+/// console prints nothing about it.
+#[test]
+fn an_api_key_account_is_not_awaiting_a_sign_in() {
+    let directory = TestDirectory::new("login-tag-api-key");
+    let vault = SkarbiecVault::create("login-tag-api-key");
+    let agent = "brama-login-tag";
+    vault.seed_subscription(agent, "openai", "login-tag-openai");
+
+    let (document, _) = pool_document(&directory, &vault);
+    let state = &row_of(&document, "login-tag-openai")["automatic_sign_in"];
+    assert_eq!(
+        state["applies"],
+        Value::Bool(false),
+        "Weles signs in claude-code, codex and kimi, and this is none of them: {state}"
+    );
+    assert_eq!(
+        state["blocked_by"],
+        Value::Null,
+        "an account nobody signs in has nothing blocking a sign-in: {state}"
+    );
+    let errors = document["errors"]
+        .as_array()
+        .expect("the document carries an errors array");
+    assert!(
+        !errors.iter().any(|error| {
+            error.pointer("/context/blocked_by").and_then(Value::as_str) == Some("no_weles_account")
+        }),
+        "an API-key account must not be reported as awaiting a sign-in: {errors:?}"
+    );
 }

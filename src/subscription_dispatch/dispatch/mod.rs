@@ -30,8 +30,8 @@ mod selection;
 pub(crate) use caller_identity::authenticate_agent;
 pub use catalogue::cache::discovery_failure;
 pub use catalogue::console::registry_models_for_console;
-pub use catalogue::route::{is_subscription_model, provider_requires_caller_identity};
 pub(crate) use catalogue::route::provider_for;
+pub use catalogue::route::{is_subscription_model, provider_requires_caller_identity};
 pub use catalogue::subscription_models::registry_models_for_agent;
 pub use credential::readiness::probe_subscription_redemption;
 pub use credential::usage_probe::probe_subscription_usage;
@@ -39,13 +39,13 @@ pub use direct_route::{dispatch_direct, dispatch_direct_openai_typed, dispatch_d
 pub use ranking::candidates::{
     active_supported_models_for_agent, active_vision_capable_models_for_agent,
 };
-pub use refusal::pool_empty::{pool_empty_summary, PoolEmptyCause};
 pub(crate) use refusal::pool_empty::no_active_credential_summary;
+pub use refusal::pool_empty::{pool_empty_summary, PoolEmptyCause};
 pub use routed_stream::RoutedStream;
 pub use selection::buffered::{
-    dispatch_any_subscription, dispatch_any_vision_capable_subscription, dispatch_best_subscription,
-    dispatch_best_subscription_for_agent, dispatch_subscription, dispatch_subscription_for_agent,
-    dispatch_task_subscription,
+    dispatch_any_subscription, dispatch_any_vision_capable_subscription,
+    dispatch_best_subscription, dispatch_best_subscription_for_agent, dispatch_subscription,
+    dispatch_subscription_for_agent, dispatch_task_subscription,
 };
 pub use selection::streaming::{
     dispatch_any_subscription_stream, dispatch_any_vision_capable_subscription_stream,

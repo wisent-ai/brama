@@ -205,6 +205,24 @@ pub enum RefreshAhead {
     Unavailable(Failure),
 }
 
+/// Why this stored document could not be presented to a provider, or nothing
+/// when it can be.
+///
+/// The vault holding bytes for a subscription is not the same statement as the
+/// subscription having a credential. A sign-in descriptor, an account record
+/// and an empty envelope are all bytes; none of them is a grant, and none of
+/// them becomes one by waiting, so the answer here decides whether the account
+/// goes to Weles.
+fn unusable_document(subscription_id: &str, provider: &str, credential: &Secret) -> Option<String> {
+    let item = format!("provider:{}:{}", slug(provider), slug(subscription_id));
+    match credential.expose_utf8() {
+        Ok(secret) => crate::providers::adapter::credential_key(&item, secret).err(),
+        Err(error) => Some(format!(
+            "Skarbiec item `{item}` holds bytes that are not valid UTF-8: {error}"
+        )),
+    }
+}
+
 /// Replace one subscription's access token before it expires, when it expires
 /// inside `skew`.
 ///
@@ -224,6 +242,31 @@ pub async fn refresh_subscription_credential_ahead(
         Err(refused) => return RefreshAhead::Unavailable(refused),
     };
     let expires_at_ms = oauth_refresh::access_token_expiry_ms(&credential, provider);
+    // Ask what the document is before asking when it dies. A document that is
+    // not a credential has no expiry either, and "no expiry" read as "nothing
+    // to do": five of this fleet's accounts held sign-in metadata instead of a
+    // grant, and every sweep for three days answered `NotDue` about them while
+    // every request answered `no active credential`. The reduction is the
+    // request path's own -- `credential_key`, the same call a dispatch makes
+    // before it builds an authorization header -- so the sweep and a real
+    // request cannot disagree about whether an account has a credential.
+    if let Some(detail) = unusable_document(subscription_id, provider, &credential) {
+        crate::subscription_dispatch::usage::record_reauthorization_needed(
+            subscription_id,
+            provider,
+            &detail,
+        );
+        return RefreshAhead::Unavailable(
+            failure::envelope(
+                POINT_CREDENTIAL_PERSIST,
+                Code::Config,
+                IMPACT_CREDENTIAL_PERSIST,
+                detail,
+            )
+            .with_context("subscription", subscription_id)
+            .with_context("provider", provider),
+        );
+    }
     if !oauth_refresh::expires_within(&credential, provider, skew) {
         return RefreshAhead::NotDue { expires_at_ms };
     }

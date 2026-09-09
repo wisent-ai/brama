@@ -34,6 +34,7 @@ pub(super) fn subscription_row(
         "label": entry.label,
         "login_item": entry.login_item,
         "sign_in": crate::journal::latest_subscription_sign_in(&entry.id),
+        "automatic_sign_in": automatic_sign_in_view(entry),
         "limits": windows.limits,
         "measured": recorded.map(|usage| &usage.measured),
         "block": recorded.and_then(|usage| usage.block.as_ref()),
@@ -44,6 +45,46 @@ pub(super) fn subscription_row(
         "usage_source": windows.source.map(|source| source.as_str()),
         "stale": windows.stale,
     })
+}
+
+/// Whether the gateway can repair this account by itself, and what is missing
+/// when it cannot.
+///
+/// Three answers, not two. Weles signs in `claude-code`, `codex` and `kimi`;
+/// an API-key account is not signed in by anybody, and a retired one is not
+/// repaired at all, so both say `applies: false` rather than being reported as
+/// awaiting something. For the accounts a sign-in does apply to, only the free
+/// half of the question is answered here: whether Skarbiec maps this
+/// subscription to a Weles account. The Weles-side half -- whether Weles holds
+/// that account, and whether this gateway can reach Weles at all -- costs a
+/// request, so readiness answers it once for the deployment instead of once
+/// per row.
+fn automatic_sign_in_view(entry: &SubscriptionEntry) -> Value {
+    let applies = crate::subscription_dispatch::sign_in::weles_provider(&entry.provider).is_some()
+        && entry.status == "active"
+        && !crate::journal::is_retired(&entry.id);
+    if !applies {
+        return json!({
+            "applies": false,
+            "automatic": false,
+            "blocked_by": Value::Null,
+            "detail": Value::Null,
+        });
+    }
+    match crate::subscription_dispatch::sign_in::declared_account(entry) {
+        Ok(_) => json!({
+            "applies": true,
+            "automatic": true,
+            "blocked_by": Value::Null,
+            "detail": Value::Null,
+        }),
+        Err(blocked) => json!({
+            "applies": true,
+            "automatic": false,
+            "blocked_by": blocked.code(),
+            "detail": blocked.detail(),
+        }),
+    }
 }
 
 fn credential_view(entry: &SubscriptionEntry, recorded: Option<&SubscriptionUsage>) -> Value {

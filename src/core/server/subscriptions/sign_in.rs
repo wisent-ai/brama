@@ -123,5 +123,15 @@ async fn sign_in_selected_subscription(
     )
     .await
     .map(Json)
-    .map_err(|detail| api_error(StatusCode::BAD_GATEWAY, &detail))
+    // A missing declaration is this deployment's own configuration, not a bad
+    // gateway upstream: Desktop reads the status apart from the sentence, so
+    // the two must not both say `502`.
+    .map_err(|error| {
+        let status = if error.blocked().is_some() {
+            StatusCode::CONFLICT
+        } else {
+            StatusCode::BAD_GATEWAY
+        };
+        api_error(status, &error.to_string())
+    })
 }
