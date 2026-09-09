@@ -1,6 +1,6 @@
 {
-  "version": "0.2.77",
-  "source": "stado://releases/brama/0.2.77/darwin-arm64 source_revision=ebcb8523932b1096a5af80811abf6bd5d043ea3f -- signed release object the Stado release plane published and hosts install from",
+  "version": "0.3.8",
+  "source": "stado://releases/brama/0.3.8/darwin-arm64 source_revision=fb6cdd03244d9a687e82c944977c7a2efc157819 -- signed release object the Stado release plane published and hosts install from",
   "surface": [
     "adopt",
     "aliases",
@@ -8,6 +8,7 @@
     "detect",
     "mcp",
     "onboard",
+    "routes",
     "serve",
     "subscription",
     "subscriptions",
