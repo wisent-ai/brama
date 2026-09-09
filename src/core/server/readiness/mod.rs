@@ -65,6 +65,8 @@ pub(in crate::core::server) async fn readyz() -> impl IntoResponse {
 }
 
 pub(in crate::core::server) fn spawn_readiness_probe() {
+    // Off the readiness path on purpose: this shells out to Stado.
+    placement::learn();
     tokio::spawn(async {
         loop {
             let report = check::calculate_readiness().await;

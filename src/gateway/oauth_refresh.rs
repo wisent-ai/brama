@@ -203,19 +203,13 @@ pub(super) async fn refresh(
         .map_err(|_| refresh_failure(Code::Config, "OAuth credential is not JSON"))?;
     if !blob.is_object() {
         zeroize_json_strings(&mut blob);
-        return Err(refresh_failure(
-            Code::Config,
-            "OAuth credential is not an object",
-        ));
+        return Err(refresh_failure(Code::Config, refusal::NOT_AN_OBJECT));
     }
     let refresh_token = match oauth_refresh_token(&blob, provider) {
         Some(token) => token,
         None => {
             zeroize_json_strings(&mut blob);
-            return Err(refresh_failure(
-                Code::Config,
-                "OAuth credential has no refresh token",
-            ));
+            return Err(refresh_failure(Code::Config, refusal::NO_REFRESH_TOKEN));
         }
     };
     let result = async {

@@ -32,6 +32,22 @@ const DEFINITIVE_REFUSALS: &[&str] = &[
     "unauthorized_client",
 ];
 
+/// What this module itself says when the *stored* document, not the provider,
+/// is why a refresh cannot happen.
+///
+/// These are not blips and no wait changes them: the vault holds a document
+/// with no refresh token in it, so every future sweep will read the same
+/// document and fail the same way. Only a sign-in replaces it. Treating them
+/// as transient is what kept `brama-sub-wisent-app-codex-primary` alive-looking
+/// on the mini for three days -- every sweep logged `the credential is left as
+/// it stands for the next sweep` about a document that could never refresh --
+/// while every request for that account was refused. The sentences are
+/// declared here and used by the reader below, so a reword cannot silently
+/// reclassify them.
+pub(super) const NO_REFRESH_TOKEN: &str = "OAuth credential has no refresh token";
+pub(super) const NOT_AN_OBJECT: &str = "OAuth credential is not an object";
+const STORED_DOCUMENT_REFUSALS: &[&str] = &[NO_REFRESH_TOKEN, NOT_AN_OBJECT];
+
 /// Whether a refused refresh is the provider disowning the grant, or a blip.
 pub(in crate::gateway) enum RefreshRefusal {
     /// The provider will not accept this grant again. Only a sign-in that
@@ -57,6 +73,15 @@ pub(in crate::gateway) fn classify_refusal(failure: &Failure) -> RefreshRefusal 
     if DEFINITIVE_REFUSALS
         .iter()
         .any(|refusal| detail.contains(refusal))
+    {
+        return RefreshRefusal::Definitive;
+    }
+    // Brama's own reading of the stored document. A document with no refresh
+    // token cannot be refreshed by anybody, so this is a sign-in case even
+    // though no provider said anything.
+    if STORED_DOCUMENT_REFUSALS
+        .iter()
+        .any(|refusal| detail.contains(&refusal.to_ascii_lowercase()))
     {
         return RefreshRefusal::Definitive;
     }

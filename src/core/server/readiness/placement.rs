@@ -167,9 +167,31 @@ async fn read_placement() -> Placement {
     }
 }
 
-/// The placement of this gateway, read once per process.
-pub(super) async fn placement() -> &'static Placement {
-    static PLACEMENT: LazyLock<tokio::sync::OnceCell<Placement>> =
-        LazyLock::new(tokio::sync::OnceCell::new);
-    PLACEMENT.get_or_init(read_placement).await
+static PLACEMENT: LazyLock<tokio::sync::OnceCell<Placement>> =
+    LazyLock::new(tokio::sync::OnceCell::new);
+
+/// The placement this process has already learned, or nothing yet.
+///
+/// Readiness never waits for it. The lookup runs a `stado` child process, and
+/// a readiness answer that pays for one is a readiness answer that can miss
+/// its deadline: 0.3.6 was quarantined on the mini with `/readyz did not
+/// answer within 3s` for exactly that reason. So the answer is filled in by
+/// [`learn`] in the background and read here without awaiting anything.
+pub(super) fn placement() -> Placement {
+    PLACEMENT.get().cloned().unwrap_or(Placement {
+        placed_on: None,
+        this_host: None,
+        detail: Some(
+            "this gateway has not yet read its own placement from the registry; the answer \
+             arrives without holding up a readiness reply"
+                .to_string(),
+        ),
+    })
+}
+
+/// Learn this gateway's placement once, off the readiness path.
+pub(in crate::core::server) fn learn() {
+    tokio::spawn(async {
+        let _ = PLACEMENT.set(read_placement().await);
+    });
 }

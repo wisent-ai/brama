@@ -89,7 +89,7 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
     // question from whether a credential is currently good: a deployment can
     // hold nothing but healthy grants and still be unable to replace any of
     // them, and that is the state that ended in an outage.
-    let placement = super::placement::placement().await;
+    let placement = super::placement::placement();
     let mut blocked: Vec<Value> = facts
         .sign_in_blocked
         .iter()
