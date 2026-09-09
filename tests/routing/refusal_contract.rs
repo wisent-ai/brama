@@ -21,9 +21,15 @@
 //! before any provider is asked, which is exactly why it can be pinned down
 //! cheaply and why it went uncovered for so long.
 
+#[path = "../support/mod.rs"]
+mod support;
+
+use std::process::Command;
+
 use axum::http::StatusCode;
 use brama::core::server::model_error_contract;
 use brama::subscription_dispatch::dispatch::{pool_empty_summary, PoolEmptyCause};
+use support::{SkarbiecVault, TestDirectory};
 
 const NOTHING_OBSERVED: PoolEmptyCause = PoolEmptyCause {
     auth_rejection: false,
@@ -180,4 +186,72 @@ fn a_refused_redemption_is_still_an_authorization_failure() {
         assert_eq!(contract.code, "credential_unauthorized");
         assert!(!contract.retryable);
     }
+}
+
+/// The third time, and the reason this file gained a test that runs the
+/// product: every arm above passed while the router was still telling callers
+/// to retry. They read `model_error_contract`, which is the HTTP edge's
+/// reading of a refusal sentence. The dispatch writes an envelope of its own,
+/// and for an agent that holds no account it wrote
+/// `"error_code":"rate_limit","retryable":true`, because the refusal reached
+/// for the default kind `subscription_unavailable`. On 2026-09-09 `jeden run`
+/// took that advice, retried twice against `codex/gpt-6-astra` and ended with
+/// `model stream first-event timeout`, while `brama test` on the same route
+/// had already said `no active 'codex' credential for agent`.
+///
+/// So this one drives the built binary over a real Skarbiec vault holding one
+/// agent's account and asks for the route as a different agent. Free to run:
+/// the roster is empty before any provider is asked.
+#[test]
+fn the_dispatch_envelope_agrees_with_the_edge_about_an_absent_account() {
+    let directory = TestDirectory::new("envelope-no-account");
+    let vault = SkarbiecVault::create("envelope-no-account");
+    vault.seed_subscription("brama-envelope-owner", "codex", "envelope-owner-codex");
+
+    let mut command = Command::new(env!("CARGO_BIN_EXE_brama"));
+    for (name, value) in vault.environment() {
+        command.env(name, value);
+    }
+    let refused = command
+        .env("HOME", directory.path().join("home"))
+        .env("XDG_STATE_HOME", directory.path().join("xdg-state"))
+        .env("BRAMA_STATE_DIR", directory.path().join("state"))
+        .env(
+            "BRAMA_SUBSCRIPTION_USAGE_FILE",
+            directory.path().join("usage.json"),
+        )
+        .env("BRAMA_PERF_PATH", directory.path().join("perf.json"))
+        .env("ENTITLEMENTS_ROUTER_BIN", vault.router())
+        .args([
+            "test",
+            "--model",
+            "codex/gpt-6-astra",
+            "--agent-id",
+            "brama-envelope-stranger",
+            "--allow-provider-cost",
+        ])
+        .output()
+        .expect("brama test for an agent with no account");
+
+    let said = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        !refused.status.success(),
+        "a call nothing can pay for must fail:\n{said}"
+    );
+    assert!(
+        said.contains("no active 'codex' credential for agent"),
+        "the refusal must name the provider and the agent:\n{said}"
+    );
+    assert!(
+        said.contains(r#""failure_point":"brama.dispatch.credential-selection""#),
+        "the envelope must say where the call broke:\n{said}"
+    );
+    assert!(
+        said.contains(r#""error_code":"auth""#) && said.contains(r#""retryable":false"#),
+        "an absent account is an authorization failure no wait repairs:\n{said}"
+    );
+    assert!(
+        !said.contains(r#""error_code":"rate_limit""#),
+        "the retry advice is back, and a caller will spend its attempts on it:\n{said}"
+    );
 }

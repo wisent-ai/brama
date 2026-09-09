@@ -8,7 +8,7 @@ use crate::types::{ModelRequest, ModelResponse};
 
 use super::super::credential::eligibility::eligible_subscription_entries;
 use super::super::ranking::pin::apply_pin;
-use super::super::refusal::envelope::refuse;
+use super::super::refusal::envelope::refuse_as;
 use super::super::refusal::pool_empty::no_active_credential_summary;
 
 pub(super) fn max_credential_attempts() -> usize {
@@ -36,9 +36,20 @@ pub(super) async fn ordered_candidate_rows(
     )
     .map_err(|error| ModelResponse::failure(&request.model, error))?;
     if rows.is_empty() {
-        return Err(refuse(
+        // Not capacity. This agent holds no account this call could be billed
+        // to at all, or the one it named is inactive, and no wait repairs
+        // either: the sign-in or the vault grant has to be repaired. The
+        // default `refuse` kind is `subscription_unavailable`, which the code
+        // table reads as `rate_limit` and every client reads as "try again" -
+        // Jeden retried twice and then reported a stream timeout, while Brama
+        // had known from the first attempt that nothing could pay for the
+        // call. `pool_empty.rs` records this same defect twice, one layer
+        // further out each time; this is the layer where the pool is empty
+        // before any provider is asked.
+        return Err(refuse_as(
             request,
             POINT_CREDENTIAL_SELECTION,
+            "credential_unauthorized",
             request.billing_target.as_ref().map_or_else(
                 || no_active_credential_summary(provider),
                 |target| {
