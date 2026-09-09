@@ -28,7 +28,9 @@ use std::process::Command;
 
 use axum::http::StatusCode;
 use brama::core::server::model_error_contract;
-use brama::subscription_dispatch::dispatch::{pool_empty_summary, PoolEmptyCause};
+use brama::subscription_dispatch::dispatch::{
+    pool_empty_summary, pool_is_capacity, PoolEmptyCause,
+};
 use support::{SkarbiecVault, TestDirectory};
 
 const NOTHING_OBSERVED: PoolEmptyCause = PoolEmptyCause {
@@ -86,6 +88,44 @@ fn the_aggregate_refusal_keeps_the_authorization_classification() {
     assert!(
         !contract.retryable,
         "the aggregate must not turn a sign-in into a retry: {aggregate}"
+    );
+}
+
+/// The fourth time, and the one production answered on 2026-09-09 after the
+/// gateway started recording sign-in-needed for accounts whose stored document
+/// is not a credential: `429 all bounded 'codex' credentials unavailable for
+/// agent`, retryable, while the ledger said every one of those credentials
+/// needed a sign-in. Both branches were right on their own; the capacity one
+/// was simply checked first.
+#[test]
+fn a_mixed_pool_is_authorization_not_capacity() {
+    let mixed = PoolEmptyCause {
+        reauthorization_block: true,
+        ..NOTHING_OBSERVED
+    };
+    assert!(
+        !pool_is_capacity(mixed, true),
+        "a pool holding one rate-limited credential and one that needs a sign-in is not \
+         capacity: no wait reaches the second"
+    );
+    assert!(
+        !pool_is_capacity(
+            PoolEmptyCause {
+                unredeemable_credential: true,
+                ..NOTHING_OBSERVED
+            },
+            true
+        ),
+        "a vault that produced no credential is not capacity either"
+    );
+    assert!(
+        pool_is_capacity(NOTHING_OBSERVED, true),
+        "a pool whose every credential is inside a rate-limit block is capacity, and a \
+         caller that waits for it gets served"
+    );
+    assert!(
+        !pool_is_capacity(NOTHING_OBSERVED, false),
+        "nothing observed at all is not capacity: there is no block to wait out"
     );
 }
 

@@ -7,7 +7,8 @@ use wisent_errors::Failure;
 
 use super::super::refusal::envelope::{failure_detail, refuse, refuse_as};
 use super::super::refusal::pool_empty::{
-    bounded_unavailable_summary, pool_empty_summary, rotation_failure_kind, PoolEmptyCause,
+    bounded_unavailable_summary, pool_empty_summary, pool_is_capacity, rotation_failure_kind,
+    PoolEmptyCause,
 };
 
 /// What one walk of a provider's bounded pool actually saw, as opposed to what
@@ -41,7 +42,16 @@ pub(super) fn emptied_pool_refusal(
         failure.attempts = provider_attempts;
         return failure;
     }
-    if observed.rate_limit_block {
+    let cause = PoolEmptyCause {
+        auth_rejection: observed.auth_rejection,
+        reauthorization_block: observed.reauthorization_block,
+        unredeemable_credential: observed.unredeemable_credential,
+    };
+    // Capacity only when nothing authorization-shaped was seen; the rule lives
+    // in `pool_empty::pool_is_capacity`, beside the sentences it chooses
+    // between, because this arm used to come first and answered capacity for a
+    // pool whose every credential the ledger said needed a sign-in.
+    if pool_is_capacity(cause, observed.rate_limit_block) {
         let mut failure = refuse(
             request,
             POINT_BOUNDED_ROTATION,
@@ -51,11 +61,6 @@ pub(super) fn emptied_pool_refusal(
         failure.attempts = provider_attempts;
         return failure;
     }
-    let cause = PoolEmptyCause {
-        auth_rejection: observed.auth_rejection,
-        reauthorization_block: observed.reauthorization_block,
-        unredeemable_credential: observed.unredeemable_credential,
-    };
     let message = credential_refusal
         .as_ref()
         .map(|refused| {

@@ -40,7 +40,7 @@ pub use ranking::candidates::{
     active_supported_models_for_agent, active_vision_capable_models_for_agent,
 };
 pub(crate) use refusal::pool_empty::no_active_credential_summary;
-pub use refusal::pool_empty::{pool_empty_summary, PoolEmptyCause};
+pub use refusal::pool_empty::{pool_empty_summary, pool_is_capacity, PoolEmptyCause};
 pub use routed_stream::RoutedStream;
 pub use selection::buffered::{
     dispatch_any_subscription, dispatch_any_vision_capable_subscription,

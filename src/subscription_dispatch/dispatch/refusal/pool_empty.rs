@@ -48,6 +48,21 @@ impl PoolEmptyCause {
     }
 }
 
+/// Whether an emptied pool is capacity, given everything one walk saw.
+///
+/// Authorization outranks capacity, and the order is the whole rule: a pool
+/// holding one credential inside a rate-limit block and another inside a
+/// reauthorization block is not a busy provider, because no wait reaches the
+/// second one. Production answered `429 all bounded 'codex' credentials
+/// unavailable for agent`, retryable, while its own ledger recorded that every
+/// one of those credentials needed a sign-in -- the two branches were checked
+/// in the wrong order in `emptied_pool_refusal`, which is why the decision is
+/// stated here beside the sentences instead of inside the walk that produced
+/// the observations.
+pub fn pool_is_capacity(cause: PoolEmptyCause, rate_limit_block: bool) -> bool {
+    rate_limit_block && !cause.needs_authorization()
+}
+
 /// The sentence one emptied pool is reported with.
 ///
 /// Four causes, and the caller acts on each differently: a provider that
