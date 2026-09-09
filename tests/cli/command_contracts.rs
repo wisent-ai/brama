@@ -79,20 +79,31 @@ fn the_pool_reports_one_row_per_account_the_vault_declares() {
         assert_eq!(row["expires_at"], Value::Null);
         assert_eq!(row["last_redeem_error"], Value::Null);
     }
-    // Copied from the live answer: one failure per account, naming the account
-    // and saying the measurement is missing rather than zero.
-    let unread = report["errors"]
-        .as_array()
-        .expect("the pool answers an errors array");
-    assert_eq!(unread.len(), providers.len(), "{report}");
-    for failure in unread {
-        assert_eq!(failure["failure_point"], "brama.subscriptions.usage");
-        assert_eq!(
-            failure["detail"],
-            "usage has not been read for this subscription"
+    // Copied from the live answer: one usage failure per account, saying the
+    // measurement is missing rather than zero, plus one automatic-sign-in
+    // failure for the `claude-code` account, whose seeded item names no Weles
+    // account for a provider the gateway signs in by itself.
+    let reported = report["errors"].as_array().expect("errors array");
+    for provider in providers {
+        assert!(
+            reported
+                .iter()
+                .any(
+                    |failure| failure["context"]["subscription"] == format!("probe-{provider}")
+                        && failure["failure_point"] == "brama.subscriptions.usage"
+                        && failure["detail"] == "usage has not been read for this subscription"
+                ),
+            "{report}"
         );
-        assert_eq!(failure["impact"], "one subscription usage report");
     }
+    assert!(
+        reported.iter().any(
+            |failure| failure["context"]["blocked_by"] == "no_weles_account"
+                && failure["context"]["subscription"] == "probe-claude-code"
+        ),
+        "{report}"
+    );
+    assert_eq!(reported.len(), providers.len() + 1, "{report}");
 
     let after = std::fs::read(directory.path().join("usage.json")).expect("ledger after the read");
     assert_eq!(before, after, "a listing must not rewrite the ledger");
