@@ -18,10 +18,8 @@ use std::time::Duration;
 use tracing::{info, warn};
 
 use crate::subscription_dispatch::sign_in;
-use crate::subscription_dispatch::usage;
 
 use super::claim::InFlight;
-use super::verdict::verdict_outranks_last_sign_in;
 
 const SIGN_IN_COOLDOWN_ENV: &str = "BRAMA_CREDENTIAL_SIGN_IN_COOLDOWN_SECS";
 const SIGN_IN_TIMEOUT_ENV: &str = "BRAMA_CREDENTIAL_SIGN_IN_TIMEOUT_MS";
@@ -33,7 +31,7 @@ const DEFAULT_SIGN_IN_TIMEOUT_MS: u64 = 15 * 60 * 1000;
 static SIGN_IN_SERIAL: LazyLock<tokio::sync::Mutex<()>> =
     LazyLock::new(|| tokio::sync::Mutex::new(()));
 
-fn sign_in_cooldown() -> Duration {
+pub(crate) fn sign_in_cooldown() -> Duration {
     let seconds = std::env::var(SIGN_IN_COOLDOWN_ENV)
         .ok()
         .and_then(|value| value.trim().parse::<u64>().ok())
@@ -56,57 +54,17 @@ fn sign_in_timeout_ms() -> u64 {
 ///
 /// Every path that can drive a browser funnels through here, so the verdict
 /// gate belongs here and nowhere else.
-pub(super) fn schedule_sign_in(
-    subscription_id: String,
-    provider: String,
-    login_item: Option<String>,
-) -> bool {
-    if !verdict_outranks_last_sign_in(
-        usage::credential_recorded_at_ms(&subscription_id),
-        crate::journal::latest_subscription_sign_in_at_ms(&subscription_id),
-    ) {
-        // Not a silent stop any more. This state used to be one log line
-        // saying the account was "left to an operator", which is exactly the
-        // sentence the architecture does not allow: it named no surface an
-        // operator reads. It is a blocked reason now, so it appears per
-        // account in the pool document, in the readiness answer and in Brama
-        // Desktop. The stop itself stays -- repeating these locked two
-        // authenticators.
-        let blocked = super::super::sign_in::Blocked::SignInAlreadyDriven;
-        warn!(
-            event = "credential_sign_in_blocked",
-            subscription = %subscription_id,
-            provider = %provider,
-            blocked_by = blocked.code(),
-            envelope = %blocked.failure(Some(&subscription_id)),
-            "{}",
-            blocked.detail()
-        );
-        return false;
-    }
-    let cooldown = sign_in_cooldown();
-    if !crate::journal::subscription_sign_in_due(&subscription_id, cooldown) {
-        return false;
-    }
+pub(super) fn schedule_sign_in(subscription_id: String, provider: String) -> bool {
     let Some(claim) = InFlight::claim(&subscription_id) else {
         return false;
     };
-    // Old primary subscriptions may predate the login tag. Weles declares one
-    // primary account per provider; the first successful donation writes that
-    // exact account back as `brama:login:`, completing the migration without a
-    // one-off vault helper.
-    let login_item = login_item.filter(|item| !item.trim().is_empty());
-    let login_label = login_item
-        .as_deref()
-        .unwrap_or("Weles-declared primary")
-        .to_owned();
     tokio::spawn(async move {
         let _claim = claim;
         let _serial = SIGN_IN_SERIAL.lock().await;
         let reason = "automatic OAuth credential renewal".to_owned();
         let options = sign_in::SignInOptions {
             provider: provider.clone(),
-            login_item: login_item.clone(),
+            login_item: None,
             subscription_id: Some(subscription_id.clone()),
             reason: reason.clone(),
             login_timeout_ms: sign_in_timeout_ms(),
@@ -117,7 +75,6 @@ pub(super) fn schedule_sign_in(
                     event = "credential_sign_in_finished",
                     subscription = %subscription_id,
                     provider = %provider,
-                    login_item = %login_label,
                     result = verdict.get("result").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
                     detail = verdict.get("detail").and_then(serde_json::Value::as_str).unwrap_or_default()
                 );
@@ -138,7 +95,6 @@ pub(super) fn schedule_sign_in(
                     },
                     subscription = %subscription_id,
                     provider = %provider,
-                    login_item = %login_label,
                     blocked_by = blocked.map(super::super::sign_in::Blocked::code).unwrap_or("none"),
                     envelope = blocked
                         .map(|blocked| blocked.failure(Some(&subscription_id)).to_string())
@@ -155,7 +111,6 @@ pub(super) fn schedule_sign_in(
                     event = "credential_sign_in_panicked",
                     subscription = %subscription_id,
                     provider = %provider,
-                    login_item = %login_label,
                     %detail
                 );
             }

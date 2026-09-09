@@ -100,28 +100,14 @@ pub fn record_subscription_refresh(
     }));
 }
 
-/// Record one subscription sign-in and the exact account Weles was asked to
-/// drive. `subscription_id` is present for automatic renewal; an older
-/// provider-wide CLI invocation may not have one.
-pub fn record_subscription_sign_in(
-    subscription_id: Option<&str>,
-    provider: &str,
-    login_item: &str,
-    reason: &str,
-    result: &str,
-    detail: &str,
-) {
-    append(json!({
-        "kind": "subscription_sign_in",
-        "subscription_id": subscription_id,
-        "provider": provider,
-        "login_item": login_item,
-        "reason": reason,
-        "result": result,
-        "detail": detail,
-        "at": now(),
-        "at_ms": chrono::Utc::now().timestamp_millis(),
-    }));
+/// Retain the exact non-secret authentication outcome, including its source
+/// revision, failed stage and Weles run id. Timestamps alone cannot say what ran.
+pub fn record_subscription_sign_in(outcome: &Value) {
+    let mut record = outcome.clone();
+    record["kind"] = json!("subscription_sign_in");
+    record["at"] = json!(now());
+    record["at_ms"] = json!(chrono::Utc::now().timestamp_millis());
+    append(record);
 }
 
 /// The newest completed automatic or operator sign-in for one subscription.

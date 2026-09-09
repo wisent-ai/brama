@@ -47,57 +47,25 @@ pub(super) fn subscription_row(
     })
 }
 
-/// Whether the gateway can repair this account by itself, and what is missing
-/// when it cannot.
-///
-/// Three answers, not two. Weles signs in `claude-code`, `codex` and `kimi`;
-/// an API-key account is not signed in by anybody, and a retired one is not
-/// repaired at all, so both say `applies: false` rather than being reported as
-/// awaiting something. For the accounts a sign-in does apply to, only the free
-/// half of the question is answered here: whether Skarbiec maps this
-/// subscription to a Weles account. The Weles-side half -- whether Weles holds
-/// that account, and whether this gateway can reach Weles at all -- costs a
-/// request, so readiness answers it once for the deployment instead of once
-/// per row.
+/// Display observations from the authentication run. A missing optional tag
+/// says nothing about whether Skarbiec can resolve the account.
 fn automatic_sign_in_view(entry: &SubscriptionEntry) -> Value {
     let applies = crate::subscription_dispatch::sign_in::weles_provider(&entry.provider).is_some()
         && entry.status == "active"
         && !crate::journal::is_retired(&entry.id);
-    if !applies {
-        return json!({
-            "applies": false,
-            "automatic": false,
-            "blocked_by": Value::Null,
-            "detail": Value::Null,
-        });
-    }
-    // A sign-in already driven against this exact stored credential is the
-    // other way the loop stops, and the only one an operator could not read
-    // anywhere before: the answer lives in the ledger and the journal, both
-    // local reads, so the row can state it.
-    if crate::subscription_dispatch::sign_in_already_driven(&entry.id) {
-        let blocked = crate::subscription_dispatch::sign_in::Blocked::SignInAlreadyDriven;
-        return json!({
-            "applies": true,
-            "automatic": false,
-            "blocked_by": blocked.code(),
-            "detail": blocked.detail(),
-        });
-    }
-    match crate::subscription_dispatch::sign_in::declared_account(entry) {
-        Ok(_) => json!({
-            "applies": true,
-            "automatic": true,
-            "blocked_by": Value::Null,
-            "detail": Value::Null,
-        }),
-        Err(blocked) => json!({
-            "applies": true,
-            "automatic": false,
-            "blocked_by": blocked.code(),
-            "detail": blocked.detail(),
-        }),
-    }
+    let failure = applies
+        .then(|| crate::subscription_dispatch::sign_in::observed_failure(&entry.id))
+        .flatten();
+    let latest = crate::journal::latest_subscription_sign_in(&entry.id);
+    json!({
+        "applies": applies,
+        "automatic": applies && failure.is_none(),
+        "state": if !applies { "not_applicable" } else if failure.is_some() { "failed" }
+            else if latest.is_some() { "succeeded" } else { "not_observed" },
+        "blocked_by": failure.as_ref().map(|failure| failure.code()),
+        "detail": failure.as_ref().map(|failure| failure.detail()),
+        "last_attempt": latest,
+    })
 }
 
 fn credential_view(entry: &SubscriptionEntry, recorded: Option<&SubscriptionUsage>) -> Value {

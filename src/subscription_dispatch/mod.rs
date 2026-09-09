@@ -21,17 +21,3 @@ pub use dispatch::{
     RoutedStream,
 };
 pub use quality::{collect_task_quality, TaskQualityOptions};
-
-/// Whether a browser sign-in has already been driven against this
-/// subscription's exact stored credential.
-///
-/// One reader for a question three surfaces ask: the sweep, to decide; the
-/// pool document, to say so per account; and readiness, to report the set. The
-/// gate itself lives in `refresh_sweep::verdict`, beside the incident that
-/// shaped it.
-pub fn sign_in_already_driven(subscription_id: &str) -> bool {
-    !refresh_sweep::verdict_outranks_last_sign_in(
-        usage::credential_recorded_at_ms(subscription_id),
-        crate::journal::latest_subscription_sign_in_at_ms(subscription_id),
-    )
-}

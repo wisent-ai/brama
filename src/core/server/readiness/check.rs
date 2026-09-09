@@ -86,11 +86,11 @@ pub(super) async fn calculate_readiness() -> ReadinessReport {
     let mut routable = Vec::new();
     let mut unroutable = Vec::new();
     let mut active = std::collections::BTreeMap::<String, String>::new();
-    // Which accounts this gateway cannot repair by itself. Read here because
-    // this is the only place readiness holds the subscription entry, and the
-    // answer is in the tags it already carries.
-    let mut sign_in_blocked =
-        std::collections::BTreeMap::<String, crate::subscription_dispatch::sign_in::Blocked>::new();
+    // Recorded authentication operations, not a prediction derived from tags.
+    let mut sign_in_blocked = std::collections::BTreeMap::<
+        String,
+        (String, crate::subscription_dispatch::sign_in::Blocked),
+    >::new();
     let mut model_providers = std::collections::BTreeSet::<String>::new();
     for (agent, entries, models) in agent_results {
         let mut subscribed = Vec::new();
@@ -98,15 +98,13 @@ pub(super) async fn calculate_readiness() -> ReadinessReport {
             if entry.status != "active" {
                 continue;
             }
-            if crate::subscription_dispatch::sign_in::weles_provider(&entry.provider).is_some() {
-                if let Err(blocked) =
-                    crate::subscription_dispatch::sign_in::declared_account(&entry)
+            if !crate::journal::is_retired(&entry.id) {
+                if let Some(failure) =
+                    crate::subscription_dispatch::sign_in::observed_failure(&entry.id)
                 {
-                    sign_in_blocked.entry(entry.id.clone()).or_insert(blocked);
-                } else if crate::subscription_dispatch::sign_in_already_driven(&entry.id) {
-                    sign_in_blocked.entry(entry.id.clone()).or_insert(
-                        crate::subscription_dispatch::sign_in::Blocked::SignInAlreadyDriven,
-                    );
+                    sign_in_blocked
+                        .entry(entry.id.clone())
+                        .or_insert((entry.provider.clone(), failure));
                 }
             }
             let provider = entry.provider.trim().to_string();

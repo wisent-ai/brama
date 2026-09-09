@@ -57,20 +57,49 @@ pub(in crate::gateway::broker) async fn put_credential(
     use std::process::Stdio;
     use tokio::io::AsyncWriteExt;
 
-    let document = serde_json::json!({
-        "kind": "bundle",
-        "schema": "skarbiec.item.v2",
-        "context": {"source_kind": "donation"},
-        "fields": {"value": String::from_utf8_lossy(secret)},
+    let listing = router_output("inspect credential target", |command| {
+        command.arg("list");
     })
-    .to_string();
+    .await?;
+    if !listing.status.success() {
+        return Err(router_refusal("inspect credential target", &listing));
+    }
+    let items: Vec<VaultListItem> = serde_json::from_slice(&listing.stdout)
+        .map_err(|error| format!("decode credential target inventory: {error}"))?;
+    let mut document = if items.iter().any(|item| item.id == item_id && !item.deleted) {
+        let current = router_output("read credential target metadata", |command| {
+            command.arg("get").arg(item_id);
+        })
+        .await?;
+        if !current.status.success() {
+            return Err(router_refusal("read credential target metadata", &current));
+        }
+        serde_json::from_slice::<serde_json::Value>(&current.stdout)
+            .map_err(|error| format!("decode credential target {item_id}: {error}"))?
+    } else {
+        serde_json::json!({"kind": "bundle", "schema": "skarbiec.item.v2",
+            "context": {"source_kind": "donation"}, "fields": {}})
+    };
+    let fields = document
+        .get_mut("fields")
+        .and_then(serde_json::Value::as_object_mut)
+        .ok_or_else(|| format!("credential target {item_id} has no canonical fields object"))?;
+    let value = std::str::from_utf8(secret)
+        .map_err(|error| format!("credential for {item_id} is not UTF-8: {error}"))?;
+    fields.insert("value".into(), serde_json::json!(value));
+    let kind = document
+        .get("kind")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| format!("credential target {item_id} has no canonical kind"))?
+        .to_owned();
+    let document = document.to_string();
     let mut command = tokio::process::Command::new(entitlements_router_bin());
     command
         .kill_on_drop(true)
         .arg("set-json")
         .arg(item_id)
         .arg("--type")
-        .arg("bundle");
+        .arg(kind);
     if let Some(tags) = tags {
         command.arg("--tags").arg(tags.join(","));
     }

@@ -124,21 +124,3 @@ pub(super) fn worker_api_token() -> Result<String, String> {
         Ok(token)
     }
 }
-
-/// Weles's own health answer, which advertises the selector contract and the
-/// sign-in rows it holds. `error_for_status` matters: a healthy exit from an
-/// unrelated service that happens to hold this port must not send a sign-in
-/// request nobody serves.
-pub(super) async fn read_health(client: &reqwest::Client, base: &str) -> Result<Value, String> {
-    let response = client
-        .get(format!("{base}/healthz"))
-        .timeout(Duration::from_secs(30))
-        .send()
-        .await
-        .and_then(reqwest::Response::error_for_status)
-        .map_err(|error| format!("Weles health request at {base}/healthz failed: {error}"))?;
-    response
-        .json()
-        .await
-        .map_err(|error| format!("Weles health answer is not JSON: {error}"))
-}

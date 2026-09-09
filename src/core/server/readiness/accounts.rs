@@ -21,8 +21,10 @@ pub(super) struct ServiceFacts {
     pub(super) unredeemable: Vec<String>,
     /// Accounts this gateway cannot sign in by itself, and why. Keyed by
     /// subscription id so the reason travels with the account it is about.
-    pub(super) sign_in_blocked:
-        std::collections::BTreeMap<String, crate::subscription_dispatch::sign_in::Blocked>,
+    pub(super) sign_in_blocked: std::collections::BTreeMap<
+        String,
+        (String, crate::subscription_dispatch::sign_in::Blocked),
+    >,
     pub(super) subscription_available: bool,
 }
 
@@ -93,10 +95,10 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
     let mut blocked: Vec<Value> = facts
         .sign_in_blocked
         .iter()
-        .map(|(id, blocked)| {
+        .map(|(id, (provider, blocked))| {
             let mut row = blocked.to_json();
             row["id"] = json!(id);
-            row["provider"] = json!(blocked.provider());
+            row["provider"] = json!(provider);
             row
         })
         .collect();

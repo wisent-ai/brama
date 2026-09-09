@@ -1,52 +1,79 @@
-//! The one shape a sign-in verdict takes, for the operator and for the audit
-//! record alike.
-//!
-//! This is separate because every exit from a sign-in -- an account refused
-//! before a browser opened, a trajectory Weles could not finish, a confirmed
-//! sign-in whose refresh obtained a credential -- leaves through this one
-//! function, and the two words the caller's exit status is read off are fixed
-//! beside it. Printing and recording happen in the same place on purpose: a
-//! record cannot say something the operator was never told.
-
+use super::{Blocked, SignInOptions};
 use serde_json::{json, Value};
 
-/// A run whose sign-in was confirmed and whose follow-up refresh obtained a
-/// credential, and every other run. The caller's exit status is read off this,
-/// so the two words are fixed here rather than spelled at each return.
 pub(super) const SIGNED_IN: &str = "signed_in";
 pub(super) const FAILED: &str = "failed";
 
-/// One verdict, in the shape the caller prints and the audit record keeps.
-/// Both are written here so a record cannot say something the operator was
-/// never told.
-#[allow(clippy::too_many_arguments)]
 pub(super) fn verdict(
-    subscription_id: Option<&str>,
-    provider: &str,
-    login_item: &str,
-    reason: &str,
+    options: &SignInOptions,
+    identity: &Value,
     result: &str,
-    http_status: u16,
-    account: &str,
     detail: String,
+    failure: Value,
     refresh: Value,
 ) -> Value {
-    crate::journal::record_subscription_sign_in(
-        subscription_id,
-        provider,
-        login_item,
-        reason,
-        result,
-        &detail,
-    );
-    json!({
-        "subscription_id": subscription_id,
-        "provider": provider,
-        "login_item": login_item,
-        "account": account,
+    let output = json!({
+        "subscription_id": options.subscription_id,
+        "provider": options.provider,
+        "login_item": identity.get("login_item").cloned().unwrap_or_else(|| json!(options.login_item)),
+        "subscription_item": identity.get("subscription_item"),
+        "account": identity.get("account_ref"),
+        "source_revision": identity.get("source_revision"),
+        "reason": options.reason,
         "result": result,
-        "http_status": http_status,
         "detail": detail,
+        "failure": failure,
         "refresh": refresh,
+    });
+    crate::journal::record_subscription_sign_in(&output);
+    output
+}
+
+/// Repeating a failed provider challenge with unchanged source data cannot
+/// repair it. A new Skarbiec identity revision permits a new, attributable run.
+pub(super) fn unchanged_failed_attempt(id: &str, revision: &str) -> Option<Value> {
+    let previous = crate::journal::latest_subscription_sign_in(id)?;
+    let same_source = previous.get("source_revision").and_then(Value::as_str) == Some(revision);
+    let failed = previous.get("result").and_then(Value::as_str) == Some(FAILED);
+    let rejected = previous
+        .pointer("/failure/browser_started")
+        .and_then(Value::as_bool)
+        == Some(true)
+        && previous
+            .pointer("/failure/retryable")
+            .and_then(Value::as_bool)
+            == Some(false);
+    let cooling_down = !crate::journal::subscription_sign_in_due(
+        id,
+        crate::subscription_dispatch::refresh_sweep::sign_in_cooldown(),
+    );
+    (same_source && failed && (rejected || cooling_down)).then_some(previous)
+}
+
+pub(super) fn observed_failure(id: &str) -> Option<Blocked> {
+    let previous = crate::journal::latest_subscription_sign_in(id)?;
+    if previous.get("result").and_then(Value::as_str) != Some(FAILED) {
+        return None;
+    }
+    Some(Blocked::Operation {
+        code: previous
+            .pointer("/failure/code")
+            .and_then(Value::as_str)
+            .unwrap_or("authentication_outcome_unclassified")
+            .into(),
+        stage: previous
+            .pointer("/failure/stage")
+            .and_then(Value::as_str)
+            .unwrap_or("unrecorded")
+            .into(),
+        detail: previous
+            .get("detail")
+            .and_then(Value::as_str)
+            .unwrap_or("The previous authentication attempt did not retain its outcome")
+            .into(),
+        status: previous
+            .pointer("/failure/http_status")
+            .and_then(Value::as_u64)
+            .and_then(|value| u16::try_from(value).ok()),
     })
 }

@@ -12,17 +12,6 @@ use serde_json::Value;
 
 use super::account::LOGIN_ITEM_SELECTOR;
 
-/// The account Weles reports it signed in, as it will be shown and recorded.
-/// Reported for a refused run too: the name of the account that was attempted
-/// is part of the refusal.
-pub(super) fn signed_in_account(answer: &Value) -> String {
-    answer
-        .get("display_name")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_string()
-}
-
 /// Why this reauth answer is not a sign-in of the row that was asked for, or
 /// `None` when it is.
 ///
