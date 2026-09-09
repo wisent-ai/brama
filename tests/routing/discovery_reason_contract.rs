@@ -25,20 +25,20 @@ const SUBSCRIPTION_PROVIDERS: [&str; 3] = ["claude-code", "codex", "kimi"];
 /// list, so discovery cannot return an empty list because a provider answered
 /// with nothing. `discover_models` appends `descriptor.static_models` after the
 /// live `/models` call and only errors when the combined list is empty, so an
-/// empty result proves the failure happened *before* the fallback — at
-/// credential derivation — which is a different owner from the provider.
+/// empty result proves the failure happened *before* that list was appended —
+/// at credential derivation — which is a different owner from the provider.
 ///
 /// If someone empties one of these lists, that deduction silently stops
 /// holding and "no model discovered" becomes ambiguous again. This is the test
 /// that fails instead.
 #[test]
-fn every_subscription_provider_has_a_static_model_fallback() {
+fn every_subscription_provider_has_a_static_model_list() {
     for id in SUBSCRIPTION_PROVIDERS {
         let descriptor = provider_registry::provider(id)
             .unwrap_or_else(|| panic!("{id} must be in the Wisent provider registry"));
         assert!(
             !descriptor.static_models.is_empty(),
-            "{id} has no static model fallback, so an empty discovery result would no longer \
+            "{id} has no static model list, so an empty discovery result would no longer \
              prove the refusal happened before the provider was asked"
         );
     }
@@ -46,7 +46,7 @@ fn every_subscription_provider_has_a_static_model_fallback() {
 
 /// The counts that made the measurement readable: codex contributing exactly
 /// five models on that host matched its static list exactly, which is what
-/// showed the fallback path was the live one and that it works there.
+/// showed the live listing was the one answering and that it works there.
 #[test]
 fn the_static_lists_are_the_ones_the_measurement_matched() {
     let codex = provider_registry::provider("codex").expect("codex descriptor");
@@ -54,14 +54,14 @@ fn the_static_lists_are_the_ones_the_measurement_matched() {
         codex.static_models.len(),
         5,
         "codex contributed 5 models on the measured host; a different static count would mean \
-         that reading no longer identifies the fallback path"
+         that reading no longer identifies which list answered"
     );
     for id in ["claude-code", "kimi"] {
         let descriptor = provider_registry::provider(id).expect("descriptor");
         assert!(
             !descriptor.static_models.is_empty(),
-            "{id} would have contributed {} models had discovery reached the fallback, and it \
-             contributed none",
+            "{id} would have contributed {} models had discovery reached its static list, and \
+             it contributed none",
             descriptor.static_models.len()
         );
     }

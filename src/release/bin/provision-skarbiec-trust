@@ -129,7 +129,7 @@ runtime_bin=$(CDPATH= cd -- "$(dirname -- "$brama_bin")" && pwd)/$(basename -- "
 # every start and exports it. This default disagreed with it, so a provision
 # run outside the launcher minted a second identity in a second place and the
 # vault kept the public half of a key nothing signed with. Prefer the canonical
-# file, keep the older path as a fallback for installations that still hold it.
+# file, and still read the older path on installations that only hold that one.
 canonical_proof_key="${HOME:-/nonexistent}/.stado/brama-proof.key"
 legacy_proof_key="${HOME:-/nonexistent}/.config/brama/brama-proof.key"
 if [ -z "${BRAMA_PROOF_KEY_FILE:-}" ]; then

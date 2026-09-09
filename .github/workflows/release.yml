@@ -138,7 +138,7 @@ jobs:
           checksum="${archive}.sha256"
           stage="$(mktemp -d)"
           mkdir -p "$stage/bin" "$stage/bin/launcher" "$stage/bin/launcher/policy" \
-            "$stage/libexec" "$stage/etc/brama-skarbiec"
+            "$stage/libexec" "$stage/libexec/diagnose" "$stage/etc/brama-skarbiec"
           cp target/release/brama "$stage/bin/brama"
           cp skarbiec-source/target/release/skarbiec "$stage/bin/skarbiec-entitlements-router"
           cp src/release/bin/start-with-skarbiec "$stage/bin/start-with-skarbiec"
@@ -170,6 +170,14 @@ jobs:
           # never issued, where the gateway is actually reachable — can only be
           # asked where the installation is.
           cp src/release/libexec/brama-diagnose.py "$stage/libexec/brama-diagnose.py"
+          # The diagnostic is an entry point plus the sections it imports by a
+          # path derived from its own directory, the same shape as the launcher
+          # stages above. A section left behind here is not a thinner report but
+          # an ImportError on the host, after the release is already published.
+          cp src/release/libexec/diagnose/host_layout.py "$stage/libexec/diagnose/host_layout.py"
+          cp src/release/libexec/diagnose/installation_report.py "$stage/libexec/diagnose/installation_report.py"
+          cp src/release/libexec/diagnose/capability_report.py "$stage/libexec/diagnose/capability_report.py"
+          cp src/release/libexec/diagnose/reachability_report.py "$stage/libexec/diagnose/reachability_report.py"
           cp src/release/libexec/brama-subscription-report.py "$stage/libexec/brama-subscription-report.py"
           # The registration is the other half of provisioning: the broker looks
           # in the vault for the public key the provisioner just minted, so a

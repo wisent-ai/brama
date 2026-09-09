@@ -121,6 +121,6 @@ pub fn select_model_for_resources(resources: &ComputeResources) -> (String, Stri
     if resources.has_cuda && resources.vram_gb >= 8.0 {
         return ("qwen3-4b".into(), "local".into());
     }
-    // No local GPU capacity: fall back to the configured remote provider.
+    // No local GPU capacity: this host's model runs at the configured remote provider.
     ("cydonia-24b".into(), "featherless".into())
 }
