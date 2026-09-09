@@ -236,41 +236,32 @@ the gateway refreshes every active credential expiring within
 <code>BRAMA_CREDENTIAL_REFRESH_SKEW_SECS</code> (default 300), single-flighted per
 subscription. Refreshing costs no plan quota. API keys have no refresh path
 and no invented expiry.</p>
-<p>A refusal is classified with deliberate asymmetry
-(<code>classify_refusal</code>): <strong>definitive</strong> only on evidence the provider itself
-produced — a body containing <code>invalid_grant</code>, <code>invalid_token</code>, <code>revoked</code>, or
-<code>unauthorized_client</code>, or a 401/403 that named no reason — and everything
-else is <strong>transient</strong>, left for the next sweep. A definitive refusal is
-recorded as <code>credential.state: needs_reauthorization</code> with the provider's
-own sentence as <code>cause</code>, and the credential is left alone until a sign-in
-replaces it. <code>brama subscription sign-in &lt;provider&gt;
---subscription-id &lt;id&gt; --login-item &lt;login-item&gt; --reason "&lt;why&gt;"</code>
-selects the exact account. Brama Desktop exposes the same explicit
-<strong>Sign in</strong> action. Weles performs the login on its Stado-selected
-host, and Brama requires a successful refresh of that subscription afterwards
-(<a href="/docs/cli/subscription/sign-in">CLI contract</a>).
-A refreshed grant that cannot be written back to the vault is a
-failed refresh — the rotated grant is dropped, because the provider already
-invalidated the one still stored. A provider rejecting a grant whose local
-expiry still claims validity triggers one forced refresh on the request
-path.</p>
-<p>Signing an account in is the gateway's own work, not an operator's. The
-refresh sweep walks every active subscription; when a provider has refused a
-grant, or the stored document is not a credential at all, the gateway asks
-Weles to sign that exact account in and proves the repair with the refresh that
-follows. Weles drives the browser on its own host, and nothing opens one on the
-machine an operator is looking at. Token renewal on its own never opens a
-browser, and usage reporting never schedules a sign-in.</p>
-<p>What the gateway cannot do by itself, it names. An account is repairable
-automatically only when its Skarbiec item carries <code>brama:login:&lt;account&gt;</code>,
-which maps the subscription to the Weles account that signs it in; the gateway
-refuses to guess between a provider's accounts. Every pool row therefore
-carries an <code>automatic_sign_in</code> object — <code>applies</code>,
-<code>automatic</code>, <code>blocked_by</code>, <code>detail</code> — and the
-readiness answer carries the whole set under <code>automatic_sign_in.blocked</code>
-beside the host the registry places this gateway on. The eight
-<code>blocked_by</code> words are listed in the
-<a href="/docs/runbook/credentials-and-subscriptions">credentials runbook</a>.</p>
+<p>A provider refusal such as <code>invalid_grant</code>, <code>invalid_token</code>,
+<code>revoked</code> or HTTP 401/403 records <code>needs_reauthorization</code>.
+A stored OAuth document with no refresh token also requires authentication;
+waiting cannot add a missing token. Transport failures remain separate from
+provider refusals.</p>
+<p>The gateway reads the live subscription inventory from Skarbiec. For a
+subscription requiring authentication it asks Weles to resolve the same
+subscription id against Skarbiec, then execute the provider OAuth flow on its
+Stado-selected host. Account identity, login method and login material come
+from Skarbiec; Weles has no independently maintained account catalogue.
+An optional existing login reference may identify the item, but no additional
+<code>brama:login:</code> tag is required to make an account eligible.</p>
+<p>Weles performs OAuth without launching provider CLIs or copying their local
+sessions. The captured grant is persisted for the same subscription and Brama
+checks the persisted grant through its refresh path. Credential writes preserve
+the item's context and other fields, rather than replacing its account identity.</p>
+<p><code>automatic_sign_in</code> reports <code>not_observed</code>,
+<code>failed</code>, <code>succeeded</code> or <code>not_applicable</code>.
+Its <code>last_attempt</code> retains the actual failed operation, HTTP status,
+Weles run id, account-data revision and returned detail. No authentication
+failure is inferred from an inventory tag. A non-retryable provider challenge
+is not repeated against unchanged account data; changed Skarbiec data is
+resolved again automatically. Readiness exposes these same observations under
+<code>automatic_sign_in.blocked</code>; unknown host placement is
+<code>null</code>, not a claim that the host is correct.
+See the <a href="/docs/runbook/credentials-and-subscriptions">credentials runbook</a>.</p>
 <h2 id="donation-and-retirement">Donation and retirement<a class="headerlink" href="#donation-and-retirement" title="Link to this section">&para;</a></h2>
 <p><code>POST /v1/subscription-pool</code> (and the account/admin variants) banks a
 credential onto the coordinate the operator's routes table already names for

@@ -36,15 +36,9 @@ pub(super) struct Placement {
 }
 
 impl Placement {
-    /// Whether this process is the gateway clients are routed to. Unknown
-    /// placement is not reported as drift: a registry this process cannot read
-    /// is its own fault to state, and calling every unreadable answer a second
-    /// gateway would cry wolf on every laptop that runs the test suite.
-    pub(super) fn is_placed_host(&self) -> bool {
-        match (self.placed_on.as_deref(), self.this_host.as_deref()) {
-            (Some(placed_on), Some(this_host)) => placed_on == this_host,
-            _ => true,
-        }
+    /// Unknown placement is not evidence of either a correct or a wrong host.
+    pub(super) fn is_placed_host(&self) -> Option<bool> {
+        Some(self.placed_on.as_deref()? == self.this_host.as_deref()?)
     }
 
     /// The drift reason, when this gateway is not the placed one.

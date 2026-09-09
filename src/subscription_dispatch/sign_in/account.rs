@@ -15,6 +15,7 @@ pub(super) struct ResolvedAccount {
     pub account_ref: String,
     pub login_method: String,
     pub source_revision: String,
+    pub account_revision: String,
 }
 
 pub(super) async fn resolve(
@@ -74,6 +75,7 @@ pub(super) async fn resolve(
         || resolved.login_item.is_empty()
         || resolved.account_ref.is_empty()
         || resolved.source_revision.is_empty()
+        || resolved.account_revision.is_empty()
     {
         return Err(Blocked::Operation {
             code: "subscription_identity_mismatch".into(), stage: "identity".into(),

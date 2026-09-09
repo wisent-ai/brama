@@ -2,9 +2,12 @@ use serde::Serialize;
 
 pub const PRODUCT: &str = "brama";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-pub const SOURCE_REVISION: &str = match option_env!("BRAMA_SOURCE_REVISION") {
+pub const SOURCE_REVISION: &str = match option_env!("WISENT_SOURCE_COMMIT") {
     Some(value) => value,
-    None => "development",
+    None => match option_env!("BRAMA_SOURCE_REVISION") {
+        Some(value) => value,
+        None => "development",
+    },
 };
 pub const PLATFORM: &str = match option_env!("BRAMA_BUILD_PLATFORM") {
     Some(value) => value,

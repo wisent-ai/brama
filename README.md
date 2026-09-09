@@ -38,8 +38,8 @@ policy.
 
 Brama serves four audiences:
 
-- **Desktop users** run a private Brama process on their own computer and add
-  their own provider credentials or subscriptions.
+- **Desktop users** connect to the Brama selected by Stado; an explicitly
+  selected standalone installation can run its own private gateway.
 - **Wisent service developers** use one OpenAI-compatible API and stable logical
   aliases instead of provider credentials and provider-specific clients.
 - **Jeden runtimes** use an agent-bound HMAC identity to discover and spend only
@@ -92,6 +92,8 @@ the alias vocabulary and its four states are in
   desktop deployments.
 - Bounded credential rotation for authentication, quota, and rate-limit failures.
 - OAuth refresh for Claude Code, Codex, and Kimi subscription credentials.
+- Automatic subscription sign-in through Weles, with account identity and
+  login material read from Skarbiec rather than a second account catalogue.
 - An append-only operational journal for retirement and task-quality evidence.
 - Secret-free build identity, health, statistics, hardware detection, and a
   read-only stdio MCP surface.
@@ -178,6 +180,13 @@ git clone https://github.com/wisent-ai/brama.git brama
 cd brama
 cargo run --locked -- detect
 ```
+
+The Stado release recipes call `src/release/build.sh`. `Cargo.lock` is the
+canonical dependency graph. For immutable source inputs,
+`src/release/prepare_inputs.py` derives a build-local lock and path overrides;
+it preserves package versions, registry checksums and dependency edges, and
+the build still runs with `cargo build --locked`. No source checkout is
+rewritten during this projection.
 
 Expected output contains these fields with host-specific values:
 

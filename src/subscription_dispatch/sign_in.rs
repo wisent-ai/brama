@@ -118,37 +118,64 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
     .await?;
     // The safety stop is bound to the actual account data read from Skarbiec,
     // not merely to the existence of any past attempt or to a missing tag.
-    if let Some(previous) = verdict::unchanged_failed_attempt(&id, &resolved.source_revision) {
+    if let Some(previous) = verdict::unchanged_failed_attempt(
+        &id,
+        &resolved.account_revision,
+        &resolved.source_revision,
+    ) {
         return Ok(previous);
     }
-    let identity = serde_json::to_value(&resolved).expect("resolved account serializes");
-    let response = client
+    let mut identity = serde_json::to_value(&resolved).expect("resolved account serializes");
+    identity["started_at_ms"] = json!(chrono::Utc::now().timestamp_millis());
+    let response = match client
         .post(format!("{base}/reauth"))
         .bearer_auth(&token)
         .json(&json!({
             "provider": provider, "subscription_id": id, "login_item": resolved.login_item,
-            "source_revision": resolved.source_revision, "timeout_ms": options.login_timeout_ms,
+            "account_revision": resolved.account_revision, "timeout_ms": options.login_timeout_ms,
         }))
         .send()
         .await
-        .map_err(|error| Blocked::WelesUnreachable {
-            detail: format!("POST {base}/reauth: {error:?}"),
-        })?;
+    {
+        Ok(response) => response,
+        Err(error) => {
+            return Ok(verdict(
+                options,
+                &identity,
+                FAILED,
+                format!("The result of POST {base}/reauth is unconfirmed: {error:?}"),
+                json!({"code": "weles_execution_unconfirmed", "stage": "weles_response",
+                    "browser_started": null, "retryable": false}),
+                Value::Null,
+            ));
+        }
+    };
     let status = response.status().as_u16();
-    let answer: Value = response.json().await.map_err(|error| Blocked::Operation {
-        code: "authentication_response_invalid".into(),
-        stage: "weles_response".into(),
-        detail: format!("Weles HTTP {status} returned invalid JSON: {error}"),
-        status: Some(status),
-    })?;
+    identity["http_status"] = json!(status);
+    let answer: Value = match response.json().await {
+        Ok(answer) => answer,
+        Err(error) => {
+            return Ok(verdict(
+                options,
+                &identity,
+                FAILED,
+                format!(
+                    "Weles HTTP {status} returned an unreadable authentication result: {error}"
+                ),
+                json!({"code": "authentication_response_invalid", "stage": "weles_response",
+                "http_status": status, "browser_started": null, "retryable": false}),
+                Value::Null,
+            ))
+        }
+    };
     if let Some(detail) = trajectory::refusal(&answer, status, &resolved.login_item) {
         let mut failure = answer.get("failure").filter(|value| value.is_object()).cloned().unwrap_or_else(|| json!({
             "code": answer.get("error").and_then(Value::as_str).unwrap_or("authentication_failed"),
             "stage": answer.get("stage").and_then(Value::as_str).unwrap_or("weles_execution"),
-            "browser_started": false, "retryable": true,
+            "browser_started": null, "retryable": false,
         }));
         failure["run_id"] = answer.get("run_id").cloned().unwrap_or(Value::Null);
-        failure["http_status"] = json!(status);
+        failure["weles_http_status"] = json!(status);
         return Ok(verdict(
             options,
             &identity,
@@ -158,7 +185,21 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
             Value::Null,
         ));
     }
-    let refresh = pool::refresh_subscription(&options.provider, &id, &options.reason).await?;
+    let refresh = match pool::refresh_subscription(&options.provider, &id, &options.reason).await {
+        Ok(refresh) => refresh,
+        Err(detail) => {
+            return Ok(verdict(
+                options,
+                &identity,
+                FAILED,
+                detail,
+                json!({"code": "persisted_credential_refresh_failed", "stage": "refresh_verification",
+                "http_status": status, "run_id": answer.get("run_id"),
+                "browser_started": true, "retryable": false}),
+                Value::Null,
+            ))
+        }
+    };
     let refreshed = refresh.get("result").and_then(Value::as_str) == Some("refreshed");
     let detail = if refreshed {
         format!("Weles authenticated Skarbiec subscription {} and Brama refreshed its persisted credential", resolved.subscription_item)
