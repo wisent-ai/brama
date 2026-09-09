@@ -28,6 +28,8 @@ import re
 import subprocess
 import sys
 
+from check_launcher_blocks import family, read_text
+
 SHELL_CALL = re.compile(r'"\$ENTITLEMENTS_ROUTER_BIN"\s+([a-z][a-z-]*)')
 PYTHON_CALL = re.compile(r'^\s*router,\s*$\n\s*"([a-z][a-z-]*)"', re.MULTILINE)
 REFUSAL = "unknown command"
@@ -40,9 +42,10 @@ if len(arguments) < 2:
 router_path = arguments[0]
 launcher_paths = arguments[1:]
 
-launcher = "\n".join(
-    open(launcher_path, encoding="utf-8").read() for launcher_path in launcher_paths
-)
+# The stage files are the launcher: `family` derives them from the entry
+# point, because the list a caller kept by hand is what drifted -- the router
+# calls moved into the stages while this check was still handed one file.
+launcher = "\n".join(read_text(path) for path in family(launcher_paths))
 required = sorted(set(SHELL_CALL.findall(launcher)) | set(PYTHON_CALL.findall(launcher)))
 if not required:
     raise SystemExit(

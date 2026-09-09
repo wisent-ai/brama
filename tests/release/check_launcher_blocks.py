@@ -34,44 +34,71 @@ def family(arguments):
         files.extend(stage for stage in stages if stage not in files)
     return files
 
-arguments = list(sys.argv)[1:]
-if not arguments:
-    raise SystemExit("usage: check-launcher-blocks.py <launcher> [<launcher-stage>...]")
 
-blocks = []
-for launcher_path in family(arguments):
-    lines = open(launcher_path, encoding="utf-8").read().splitlines()
-    current = None
-    for line in lines:
-        if current is None:
-            if line.endswith("<<'PY'"):
-                current = []
-            continue
-        if line == "PY":
-            blocks.append((launcher_path, "\n".join(current)))
-            current = None
-        else:
-            current.append(line)
-    if current is not None:
-        raise SystemExit(f"{launcher_path} contains an unterminated embedded Python block")
-if not blocks:
-    raise SystemExit(
-        "the launcher family named here contains no embedded Python block this "
-        "check can see; the launcher and the pattern have drifted apart: "
-        + ", ".join(arguments)
-    )
+def read_text(path):
+    """One launcher file as text, refusing a binary argument by name.
 
-for number, (launcher_path, block) in enumerate(blocks, start=len([None])):
-    print(
-        f"compiling embedded Python block {number} from {launcher_path}",
-        file=sys.stderr,
-        flush=True,
-    )
+    The release recipe passed the router-verb check's arguments in the wrong
+    order, the router binary landed where a launcher belongs, and Python
+    answered with a codec traceback naming a byte offset -- which says nothing
+    about which argument was wrong. A caller that hands over a binary is told
+    so. `check_router_verbs.py` imports both of these, so the family is
+    derived once for the whole release gate.
+    """
     try:
-        compile(block, f"{launcher_path}: embedded block {number}", "exec")
-    except SyntaxError as failure:
+        return Path(path).read_text(encoding="utf-8")
+    except UnicodeDecodeError as failure:
         raise SystemExit(
-            f"embedded block {number} in {launcher_path} does not compile: {failure}"
+            f"{path} is not a launcher: it is not UTF-8 text ({failure}). "
+            "The launcher and binary arguments are in the wrong order"
         )
 
-print(f"{len(blocks)} embedded Python blocks compile")
+
+def main(arguments):
+    if not arguments:
+        raise SystemExit(
+            "usage: check-launcher-blocks.py <launcher> [<launcher-stage>...]"
+        )
+    blocks = []
+    for launcher_path in family(arguments):
+        lines = read_text(launcher_path).splitlines()
+        current = None
+        for line in lines:
+            if current is None:
+                if line.endswith("<<'PY'"):
+                    current = []
+                continue
+            if line == "PY":
+                blocks.append((launcher_path, "\n".join(current)))
+                current = None
+            else:
+                current.append(line)
+        if current is not None:
+            raise SystemExit(
+                f"{launcher_path} contains an unterminated embedded Python block"
+            )
+    if not blocks:
+        raise SystemExit(
+            "the launcher family named here contains no embedded Python block this "
+            "check can see; the launcher and the pattern have drifted apart: "
+            + ", ".join(str(path) for path in family(arguments))
+        )
+
+    for number, (launcher_path, block) in enumerate(blocks, start=len([None])):
+        print(
+            f"compiling embedded Python block {number} from {launcher_path}",
+            file=sys.stderr,
+            flush=True,
+        )
+        try:
+            compile(block, f"{launcher_path}: embedded block {number}", "exec")
+        except SyntaxError as failure:
+            raise SystemExit(
+                f"embedded block {number} in {launcher_path} does not compile: {failure}"
+            )
+
+    print(f"{len(blocks)} embedded Python blocks compile")
+
+
+if __name__ == "__main__":
+    main(list(sys.argv)[1:])
