@@ -3,10 +3,11 @@
 
 use std::collections::HashMap;
 use std::time::Instant;
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::gateway::broker;
 use crate::providers::adapter as provider_registry;
+use crate::subscription_dispatch::usage;
 
 use super::super::refusal::envelope::failure_detail;
 use super::cache::{
@@ -32,6 +33,10 @@ pub(super) async fn discover_subscription_models(
         return Ok(Vec::new());
     }
 
+    let started = Instant::now();
+    let subscriptions = entries.len();
+    let mut awaiting_sign_in = 0usize;
+    let mut read = 0usize;
     let mut models_by_route = HashMap::new();
     let mut failures = Vec::new();
     for entry in entries {
@@ -46,6 +51,18 @@ pub(super) async fn discover_subscription_models(
         let models = if let Some(cached) = cached {
             cached
         } else {
+            // The ledger's verdict comes before anything else. A grant the
+            // provider disowned is refused again on every read, and the read
+            // is not free: a child process, a broker redemption and a provider
+            // round trip for the refresh, paid by the caller whose request
+            // ranked this subscription. The sweep already leaves such a grant
+            // alone until a sign-in replaces it; so does this, and it says so
+            // rather than reporting the sixty-second memo of the last refusal.
+            if let Some(cause) = usage::awaiting_sign_in_cause(&entry.id) {
+                awaiting_sign_in += 1;
+                failures.push(format!("{}: awaiting sign-in: {cause}", entry.id));
+                continue;
+            }
             let recent_failure = REGISTRY_MODEL_FAILURE_CACHE.lock().ok().and_then(|cache| {
                 cache
                     .get(&cache_key)
@@ -56,6 +73,7 @@ pub(super) async fn discover_subscription_models(
                 failures.push(format!("{}: {error}", entry.id));
                 continue;
             }
+            read += 1;
             let secret = match broker::subscription_credential(&entry.id, provider).await {
                 Ok(secret) => secret,
                 Err(refused) => {
@@ -68,6 +86,11 @@ pub(super) async fn discover_subscription_models(
                         "{}",
                         refused.render()
                     );
+                    // Remembered like a discovery failure, for the same reason:
+                    // the next request is not a new fact about this credential.
+                    if let Ok(mut cache) = REGISTRY_MODEL_FAILURE_CACHE.lock() {
+                        cache.insert(cache_key.clone(), (Instant::now(), detail.clone()));
+                    }
                     failures.push(format!("{}: {detail}", entry.id));
                     continue;
                 }
@@ -108,6 +131,18 @@ pub(super) async fn discover_subscription_models(
                 .or_insert(model);
         }
     }
+    // One line per discovery, so a slow request can be attributed: how many
+    // subscriptions were answered from the cache, how many from the vault, how
+    // many were left alone because a sign-in is owed, and what it all cost.
+    info!(
+        event = "subscription_models_discovered",
+        subscriptions,
+        read,
+        awaiting_sign_in,
+        failed = failures.len(),
+        elapsed_ms = started.elapsed().as_millis() as u64,
+        "discovered the models an agent's subscriptions publish"
+    );
     if models_by_route.is_empty() && !failures.is_empty() {
         return Err(format!(
             "could not discover native provider models: {}",

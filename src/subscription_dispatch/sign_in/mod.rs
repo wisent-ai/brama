@@ -1,8 +1,8 @@
 //! Brama requests authentication for a Skarbiec subscription; Weles executes it.
-mod worker;
 pub mod blocked;
 mod trajectory;
 mod verdict;
+mod worker;
 
 use crate::subscription_dispatch::pool;
 pub use blocked::{Blocked, SignInError};

@@ -21,7 +21,9 @@ use serde::{Deserialize, Serialize};
 
 use super::{now_ms, read_ledger, with_ledger, REASON_LIMIT};
 
-pub use refresh_hint::{credential_recorded_at_ms, credential_refresh_hint, RefreshHint};
+pub use refresh_hint::{
+    awaiting_sign_in_cause, credential_recorded_at_ms, credential_refresh_hint, RefreshHint,
+};
 pub use refusal::record_reauthorization_needed;
 
 /// Where one subscription's credential stands with its provider.

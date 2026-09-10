@@ -284,8 +284,7 @@ fn sign_in_refuses_before_it_reaches_weles() {
         );
         assert_eq!(output.status.code(), Some(1), "{provider} must exit 1");
         assert!(
-            stderr_of(&output)
-                .contains(&format!("POST {UNREACHABLE_WORKER}/reauth/resolve")),
+            stderr_of(&output).contains(&format!("POST {UNREACHABLE_WORKER}/reauth/resolve")),
             "{provider}: {}",
             stderr_of(&output)
         );

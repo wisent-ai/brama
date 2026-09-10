@@ -87,3 +87,33 @@ pub fn credential_recorded_at_ms(subscription_id: &str) -> Option<i64> {
             .map(|credential| credential.recorded_at_ms)
     })
 }
+
+/// The recorded reason a subscription's grant cannot be used, or `None` when
+/// the ledger holds nothing against it.
+///
+/// The request path asks this before it reads the vault. Reading a credential
+/// is a child process to the entitlements router and a broker redemption, and
+/// an expired grant then costs a provider round trip for a refresh the ledger
+/// already knows is refused: on the mini every request that ranked the four
+/// subscriptions paid that for `brama-sub-wisent-app-codex-primary` -- a
+/// document with no refresh token -- and the log filled with the same
+/// definitive refusal several times a minute while callers waited. The sweep
+/// already trusts this record; the request path trusting it too is what makes
+/// "the credential must stop being presented" true on both.
+pub fn awaiting_sign_in_cause(subscription_id: &str) -> Option<String> {
+    read_ledger(|ledger| {
+        let credential = ledger
+            .subscriptions
+            .get(subscription_id)
+            .and_then(|entry| entry.credential.as_ref())?;
+        if credential.state.usable() {
+            return None;
+        }
+        Some(
+            credential
+                .cause
+                .clone()
+                .unwrap_or_else(|| format!("credential is {}", credential.state.as_str())),
+        )
+    })
+}
