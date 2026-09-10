@@ -14,7 +14,7 @@ import pathlib
 import time
 
 SERVICE_LABEL = "com.wisent.always-on.brama"
-CAPABILITY_VERB = "capability-issue"
+CAPABILITY_COMMAND = ("grant", "capability")
 REFUSAL = "unknown command"
 BOOT_MARKER = "Starting server"
 BEST_ALIAS = "best"

@@ -172,14 +172,6 @@ export SKARBIEC_VAULT_FILE="$source_vault_file"
 SKARBIEC_CAPABILITY_ROUTES_FILE=${SKARBIEC_CAPABILITY_ROUTES_FILE:-"${source_vault_file%/*}/capability-routes.json"}
 export SKARBIEC_CAPABILITY_ROUTES_FILE
 
-# Skarbiec owns the mapping from capability resources to vault coordinates.
-# Provider and agent resources are item ids, so its reconcile command can add
-# identity mappings without Brama reading or writing the routes table. Existing
-# mappings are never repointed; ambiguous items are reported and skipped.
-SKARBIEC_VAULT_FILE="$SKARBIEC_VAULT_FILE" \
-SKARBIEC_CAPABILITY_ROUTES_FILE="$SKARBIEC_CAPABILITY_ROUTES_FILE" \
-"$ENTITLEMENTS_ROUTER_BIN" routes reconcile >/dev/stderr || \
-  printf '%s\n' "Skarbiec could not reconcile capability routes; newly banked credentials may remain unavailable" >/dev/stderr
 unset source_vault_file
 
 missing=

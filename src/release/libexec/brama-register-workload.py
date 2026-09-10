@@ -79,7 +79,7 @@ if not public_key or not agents:
 def public_key_pem(raw_base64):
     """Wrap a raw Ed25519 public key as the PEM the vault insists on.
 
-    The registry records the key as raw bytes; `token-mint` validates a
+    The registry records the key as raw bytes; `grant issue` validates a
     SubjectPublicKeyInfo PEM with openssl. The prefix below is that structure's
     fixed header for Ed25519, so the two representations are the same key.
     """
@@ -134,7 +134,8 @@ for agent in agents:
         minted = subprocess.run(
             [
                 router,
-                "token-mint",
+                "grant",
+                "issue",
                 agent,
                 "--capabilities",
                 ",".join(capabilities),
@@ -151,7 +152,7 @@ for agent in agents:
         key_file.unlink()
     if minted.returncode:
         detail = (minted.stderr.strip() or minted.stdout.strip()).replace("\n", " ")
-        raise SystemExit(f"token-mint refused {agent}: {detail}")
+        raise SystemExit(f"grant issue refused {agent}: {detail}")
     answer = json.loads(minted.stdout) if minted.stdout.strip() else {}
     print(
         f"{agent}: workload_bound={answer.get('workload_bound')} "
