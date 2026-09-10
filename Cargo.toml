@@ -13,6 +13,10 @@ name = "brama"
 path = "src/lib.rs"
 
 [[test]]
+name = "docs_site_assets"
+path = "tests/docs/site_assets.rs"
+
+[[test]]
 name = "cli_pool_contracts"
 path = "tests/cli/pool_contracts.rs"
 

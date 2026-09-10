@@ -23,3 +23,13 @@ src/providers/omp-model-metadata.json
 # released-surface.json, platform-entitlements.json and declared-breakage.json
 # by that exact path from other repositories.
 .
+# The published documentation URL space. Every file below is one page of
+# https://brama.wisent.com/docs, and vercel-ingress/vercel.json rewrites the
+# clean URL onto that exact path: moving a page into a sub-folder renames the
+# page's public address. Only the folder counts are declared here -- each page
+# is still held to the line limit, which is why the shared stylesheet lives in
+# docs/assets/site.css instead of inside every page.
+vercel-ingress/docs
+vercel-ingress/docs/cli
+vercel-ingress/docs/concepts
+vercel-ingress/docs/providers
