@@ -261,7 +261,10 @@ fn sign_in_refuses_before_it_reaches_weles() {
         );
 
         // With that credential but no worker listening, the refusal names the
-        // health endpoint before any sign-in is attempted.
+        // exact call that failed. A subscription id is passed because the
+        // vault in this fixture holds no active row for the provider, and the
+        // point here is the worker being unreachable rather than the vault
+        // being empty.
         let output = run(
             &directory,
             &vault,
@@ -269,13 +272,20 @@ fn sign_in_refuses_before_it_reaches_weles() {
                 ("BRAMA_WELES_REAUTH_TOKEN", "provider-contract-token"),
                 ("BRAMA_WELES_URL", UNREACHABLE_WORKER),
             ],
-            &arguments,
+            &[
+                "subscription",
+                "sign-in",
+                provider,
+                "--subscription-id",
+                "provider-contract-subscription",
+                "--reason",
+                "provider contract: no worker on this host",
+            ],
         );
         assert_eq!(output.status.code(), Some(1), "{provider} must exit 1");
         assert!(
-            stderr_of(&output).contains(&format!(
-                "Weles health request at {UNREACHABLE_WORKER}/healthz failed"
-            )),
+            stderr_of(&output)
+                .contains(&format!("POST {UNREACHABLE_WORKER}/reauth/resolve")),
             "{provider}: {}",
             stderr_of(&output)
         );

@@ -1,0 +1,25 @@
+# Audit exclusions for `tama find-violations`: generated output and paths
+# fixed by something outside this project.
+#
+# Retained run evidence: every file below is written by a Weles or Probierz
+# run and kept as the proof of that run. Rewriting one would falsify it.
+.evidence/
+# Written by the wisent-visuals banner bot from .github/banner.toml.
+assets/readme-banner.svg
+# Resolved by cargo from Cargo.toml and committed because this crate ships a
+# binary. A person never edits it, and `cargo build` rewrites it whole.
+Cargo.lock
+# The installed bundle's own layout, mirrored one-for-one by
+# src/release/build.sh: the launcher scripts, the release workflow and every
+# installed host address these files as libexec/<name> at exact paths.
+src/release/libexec/
+# A copy of OMP's published model metadata table, included verbatim by
+# src/providers/adapter/registry/known_limits.rs. It is replaced by copying a
+# newer table, never edited by hand.
+src/providers/omp-model-metadata.json
+# The repository root. Cargo reads Cargo.toml and Cargo.lock from here, git
+# reads .gitignore, GitHub reads README.md and LICENSE, Docker reads the two
+# Dockerfiles, and the pack's release tooling reads .wisent-release.json,
+# released-surface.json, platform-entitlements.json and declared-breakage.json
+# by that exact path from other repositories.
+.

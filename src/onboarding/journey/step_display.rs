@@ -3,7 +3,7 @@
 use serde_json::Value;
 use wisent_onboarding_client::{JourneyClient, JourneyError, Transport};
 
-pub(super) fn render_current_step<T: Transport, S: wisent_onboarding_client::Storage>(
+pub(crate) fn render_current_step<T: Transport, S: wisent_onboarding_client::Storage>(
     journey: &JourneyClient<T, S>,
 ) -> Result<(), JourneyError> {
     let bundle = journey.bundle().ok_or(JourneyError::NotStarted)?;

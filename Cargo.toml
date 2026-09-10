@@ -13,8 +13,12 @@ name = "brama"
 path = "src/lib.rs"
 
 [[test]]
-name = "cli_command_contracts"
-path = "tests/cli/command_contracts.rs"
+name = "cli_pool_contracts"
+path = "tests/cli/pool_contracts.rs"
+
+[[test]]
+name = "cli_surface_contracts"
+path = "tests/cli/surface_contracts.rs"
 
 [[test]]
 name = "admin_real"

@@ -10,10 +10,10 @@ use wisent_onboarding_client::{
     Transport,
 };
 
-use super::{FIRST_SUCCESS_FACT, JOURNEY_ID, JOURNEY_VERSION, PRODUCT_ID, STADO_CLIENT};
+use super::super::{FIRST_SUCCESS_FACT, JOURNEY_ID, JOURNEY_VERSION, PRODUCT_ID, STADO_CLIENT};
 
 #[derive(Clone)]
-pub(super) struct BramaTransport {
+pub(crate) struct BramaTransport {
     remote: Option<RemoteStado>,
 }
 
@@ -25,7 +25,7 @@ struct RemoteStado {
 }
 
 impl BramaTransport {
-    pub(super) fn from_env() -> Self {
+    pub(crate) fn from_env() -> Self {
         let remote = std::env::var("STADO_INTEGRATION_API_URL")
             .ok()
             .zip(std::env::var("BRAMA_STADO_INTEGRATION_TOKEN").ok())

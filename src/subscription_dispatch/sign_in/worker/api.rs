@@ -16,7 +16,7 @@ use serde_json::Value;
 /// Resolve Weles from Stado at the moment a sign-in needs it. Placement can
 /// change while Brama keeps serving model traffic; baking loopback into the
 /// launcher made the renewal path silently keep the old host forever.
-pub(super) async fn worker_api_base() -> Result<String, String> {
+pub(crate) async fn worker_api_base() -> Result<String, String> {
     if let Ok(configured) = std::env::var("BRAMA_WELES_URL") {
         let configured = configured.trim();
         if !configured.is_empty() {
@@ -100,7 +100,7 @@ fn env_or(key: &str, default: &str) -> String {
 /// How long one HTTP exchange with Weles may take. The reauth call holds the
 /// connection for the length of the sign-in, so this must exceed the login
 /// budget.
-pub(super) fn transport_timeout_seconds() -> u64 {
+pub(crate) fn transport_timeout_seconds() -> u64 {
     env_or("BRAMA_SIGN_IN_TRANSPORT_TIMEOUT_SECONDS", "1200")
         .parse()
         .unwrap_or(1200)
@@ -109,7 +109,7 @@ pub(super) fn transport_timeout_seconds() -> u64 {
 /// Brama's Weles admission credential. The launcher acquires this field from
 /// `brama-weles-reauth` through the entitlements router at every service start.
 /// It is deliberately distinct from Weles's general worker API token.
-pub(super) fn worker_api_token() -> Result<String, String> {
+pub(crate) fn worker_api_token() -> Result<String, String> {
     let token = std::env::var("BRAMA_WELES_REAUTH_TOKEN")
         .unwrap_or_default()
         .trim()

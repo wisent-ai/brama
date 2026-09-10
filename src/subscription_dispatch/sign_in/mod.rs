@@ -1,16 +1,15 @@
 //! Brama requests authentication for a Skarbiec subscription; Weles executes it.
-mod account;
+mod worker;
 pub mod blocked;
 mod trajectory;
 mod verdict;
-mod worker_api;
 
 use crate::subscription_dispatch::pool;
 pub use blocked::{Blocked, SignInError};
 use serde_json::{json, Value};
 use std::time::Duration;
 use verdict::{verdict, FAILED, SIGNED_IN};
-use worker_api::{transport_timeout_seconds, worker_api_base, worker_api_token};
+use worker::api::{transport_timeout_seconds, worker_api_base, worker_api_token};
 
 pub struct SignInOptions {
     pub provider: String,
@@ -37,15 +36,21 @@ pub fn observed_failure(subscription_id: &str) -> Option<Blocked> {
 pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, SignInError> {
     let result = execute(&options).await;
     if let Err(error) = &result {
-        let (code, stage, status) = match error.blocked() {
-            Some(Blocked::Operation {
-                code,
-                stage,
-                status,
-                ..
-            }) => (code.as_str(), stage.as_str(), *status),
-            Some(blocked) => (blocked.code(), "identity", None),
-            None => ("authentication_preflight_failed", "preflight", None),
+        // Only an exchange Weles actually answered is journaled. A refusal
+        // taken before the worker was reached -- an unknown provider, a
+        // missing startup credential, a worker that never answered, a vault
+        // that names no subscription -- records nothing, because a verdict
+        // here would put an attempt in the journal that was never made, and
+        // an operator reading the journal during an incident would find a
+        // sign-in that "failed" against a provider nothing was asked of.
+        let Some(Blocked::Operation {
+            code,
+            stage,
+            status: Some(status),
+            ..
+        }) = error.blocked()
+        else {
+            return result;
         };
         verdict(
             &options,
@@ -64,10 +69,31 @@ pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, SignInErr
 
 async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
     let provider = weles_provider(&options.provider).ok_or_else(|| {
+        // Naming what Weles does sign in is the whole value of this refusal:
+        // an operator who typed the wrong provider needs the three that work,
+        // not a restatement of the word they typed.
         SignInError::Dependency(format!(
-            "Weles does not support subscription authentication for {}",
+            "Weles signs in claude-code, codex and kimi; `{}` is not one of them",
             options.provider
         ))
+    })?;
+    if options.reason.trim().is_empty() {
+        return Err("--reason must say why this sign-in is being run"
+            .to_string()
+            .into());
+    }
+    // The host's own prerequisites are read before Skarbiec is asked
+    // anything. A missing startup credential or an unreachable worker is a
+    // fact about this host, and reporting it as "Skarbiec lists 0 active
+    // subscriptions" sends an operator to the wrong system.
+    let base = worker_api_base()
+        .await
+        .map_err(|detail| Blocked::WelesUnreachable { detail })?;
+    let token = worker_api_token().map_err(|detail| Blocked::Operation {
+        code: "weles_authentication_credential_unavailable".into(),
+        stage: "admission".into(),
+        detail,
+        status: None,
     })?;
     let id = match options.subscription_id.as_deref() {
         Some(id) if !id.is_empty() => id.to_owned(),
@@ -89,25 +115,11 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
             matching[0].id.clone()
         }
     };
-    if options.reason.trim().is_empty() {
-        return Err("--reason must say why this sign-in is being run"
-            .to_string()
-            .into());
-    }
-    let base = worker_api_base()
-        .await
-        .map_err(|detail| Blocked::WelesUnreachable { detail })?;
-    let token = worker_api_token().map_err(|detail| Blocked::Operation {
-        code: "weles_authentication_credential_unavailable".into(),
-        stage: "admission".into(),
-        detail,
-        status: None,
-    })?;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(transport_timeout_seconds()))
         .build()
         .map_err(|error| SignInError::Dependency(format!("Weles HTTP client: {error}")))?;
-    let resolved = account::resolve(
+    let resolved = worker::account::resolve(
         &client,
         &base,
         &token,

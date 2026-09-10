@@ -2,9 +2,9 @@
 
 use sha2::{Digest, Sha256};
 
-use super::PRODUCT_ID;
+use super::super::PRODUCT_ID;
 
-pub(super) fn stable_subject_hash(agent_id: &str) -> String {
+pub(crate) fn stable_subject_hash(agent_id: &str) -> String {
     let digest = Sha256::digest(format!("{PRODUCT_ID}:workload:{agent_id}").as_bytes());
     hex::encode(digest)
 }

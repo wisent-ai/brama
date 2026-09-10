@@ -50,8 +50,9 @@ HEAD_MARKER = "head:"
 
 
 def generator():
-    path = pathlib.Path(__file__).resolve().parent / "baseline.py"
-    spec = importlib.util.spec_from_file_location("brama_baseline", path)
+    """The release channels the baseline is measured against."""
+    path = pathlib.Path(__file__).resolve().parent / "channels.py"
+    spec = importlib.util.spec_from_file_location("brama_channels", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

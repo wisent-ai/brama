@@ -2,10 +2,7 @@
 //! concerns it leans on -- the journey service, the step it writes out, the
 //! subject it is about, and where progress is recorded -- live beside it.
 
-mod journey_service;
-mod progress_store;
-mod step_display;
-mod subject;
+mod journey;
 
 use std::collections::BTreeMap;
 
@@ -22,10 +19,10 @@ use crate::subscription_dispatch::{
 };
 use crate::{Message, ModelRequest};
 
-use journey_service::BramaTransport;
-use progress_store::state_path;
-use step_display::render_current_step;
-use subject::stable_subject_hash;
+use journey::service::BramaTransport;
+use journey::progress_store::state_path;
+use journey::step_display::render_current_step;
+use journey::subject::stable_subject_hash;
 
 const PRODUCT_ID: &str = "brama";
 const JOURNEY_ID: &str = "first-use";
@@ -37,7 +34,7 @@ const STATE_REVISION: &str = "cli:first-use:2026-09-05.1";
 
 /// The journey document compiled into this build, used as the definition the
 /// journey client starts from before the journey service states its own.
-const BUILT_IN_DEFINITION: &str = include_str!("../onboarding_first_use.json");
+const BUILT_IN_DEFINITION: &str = include_str!("first_use.json");
 
 /// Run Brama's first-use journey. `reset` discards recorded progress through the
 /// journey client -- emitting `onboarding_reset` rather than deleting the state

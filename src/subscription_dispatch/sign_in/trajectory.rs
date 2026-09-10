@@ -10,7 +10,7 @@
 
 use serde_json::Value;
 
-use super::account::LOGIN_ITEM_SELECTOR;
+use super::worker::account::LOGIN_ITEM_SELECTOR;
 
 /// Why this reauth answer is not a sign-in of the row that was asked for, or
 /// `None` when it is.

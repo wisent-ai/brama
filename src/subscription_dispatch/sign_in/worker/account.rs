@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use super::blocked::{Blocked, SignInError};
+use super::super::blocked::{Blocked, SignInError};
 
-pub(super) const LOGIN_ITEM_SELECTOR: &str = "login_item";
+pub(crate) const LOGIN_ITEM_SELECTOR: &str = "login_item";
 
 /// Only opaque vault coordinates and non-secret account provenance cross here.
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub(super) struct ResolvedAccount {
+pub(crate) struct ResolvedAccount {
     pub subscription_id: String,
     pub subscription_item: String,
     pub login_item: String,
@@ -18,7 +18,7 @@ pub(super) struct ResolvedAccount {
     pub account_revision: String,
 }
 
-pub(super) async fn resolve(
+pub(crate) async fn resolve(
     client: &reqwest::Client,
     base: &str,
     token: &str,

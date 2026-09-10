@@ -18,3 +18,6 @@ build/
 
 # Release build output: the worker and the local build both write here.
 .wisent-output/
+
+# Local gateway run output.
+router.log

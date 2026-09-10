@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-pub(super) fn state_path() -> PathBuf {
+pub(crate) fn state_path() -> PathBuf {
     if let Some(path) = std::env::var_os("XDG_STATE_HOME") {
         return PathBuf::from(path).join("brama/onboarding.json");
     }
