@@ -9,8 +9,8 @@
   },
   "inputs": {
     "skarbiec": {
-      "uri": "stado://sources/skarbiec/18f10209ff860566fa47b5830ec5952a337a3f6d347843fe7691747637e350f9/source.tar.gz",
-      "sha256": "18f10209ff860566fa47b5830ec5952a337a3f6d347843fe7691747637e350f9",
+      "uri": "stado://sources/skarbiec/37df4fd01993b62452b877d25ac26e83302065595c95e44205adcac4a7bf6aa2/source.tar.gz",
+      "sha256": "37df4fd01993b62452b877d25ac26e83302065595c95e44205adcac4a7bf6aa2",
       "mount": "skarbiec"
     },
     "echo_web": {
@@ -31,8 +31,7 @@
           "name": "brama-release-quality",
           "argv": [
             "bash",
-            "-c",
-            "#!/usr/bin/env bash\nset -euo pipefail\n\nsource_dir=${WISENT_SOURCE_DIR:?WISENT_SOURCE_DIR is required}\n: \"${WISENT_OUTPUT_DIR:?WISENT_OUTPUT_DIR is required}\"\nplatform=${WISENT_PLATFORM:?WISENT_PLATFORM is required}\nversion=${WISENT_VERSION:?WISENT_VERSION is required}\n\n# A release worker is not a login shell: on the fleet's Linux builder `cargo`\n# lives in `$HOME/.cargo/bin` and the unit's PATH does not carry it, so this gate\n# failed with `cargo: command not found` on a host that has the toolchain. The\n# same PATH-shaped gap made a diagnostic probe report the toolchain missing\n# entirely, so the fix belongs in the scripts rather than in each host's\n# environment.\nif ! command -v cargo >/dev/null; then\n  PATH=\"$HOME/.cargo/bin:$PATH\"\n  export PATH\nfi\ncommand -v cargo >/dev/null || {\n  printf 'cargo is not installed for this builder\\n' >&2\n  exit 69\n}\n\ncase \"$platform\" in\n  darwin-arm64|linux-amd64) ;;\n  *) printf 'unsupported release platform: %s\\n' \"$platform\" >&2; exit 64 ;;\nesac\n\nmanifest=\"$source_dir/Cargo.toml\"\ndeclared=$(sed -n 's/^version = \"\\([^\"]*\\)\"$/\\1/p' \"$manifest\" | sed -n '1p')\nif [[ \"$declared\" != \"$version\" ]]; then\n  printf 'WISENT_VERSION %s does not match Cargo.toml version %s\\n' \"$version\" \"$declared\" >&2\n  exit 65\nfi\n\ncargo fmt --manifest-path \"$manifest\" -- --check\nsh -n \"$source_dir/src/release/bin/start-with-skarbiec\"\nsh -n \"$source_dir/src/release/bin/provision-skarbiec-trust\"\npython3 -S \"$source_dir/tests/release/check_launcher_blocks.py\" \\\n  \"$source_dir/src/release/bin/start-with-skarbiec\"\n"
+            "src/release/quality.sh"
           ]
         }
       ],
@@ -77,8 +76,7 @@
           "name": "brama-release-quality",
           "argv": [
             "bash",
-            "-c",
-            "#!/usr/bin/env bash\nset -euo pipefail\n\nsource_dir=${WISENT_SOURCE_DIR:?WISENT_SOURCE_DIR is required}\n: \"${WISENT_OUTPUT_DIR:?WISENT_OUTPUT_DIR is required}\"\nplatform=${WISENT_PLATFORM:?WISENT_PLATFORM is required}\nversion=${WISENT_VERSION:?WISENT_VERSION is required}\n\n# A release worker is not a login shell: on the fleet's Linux builder `cargo`\n# lives in `$HOME/.cargo/bin` and the unit's PATH does not carry it, so this gate\n# failed with `cargo: command not found` on a host that has the toolchain. The\n# same PATH-shaped gap made a diagnostic probe report the toolchain missing\n# entirely, so the fix belongs in the scripts rather than in each host's\n# environment.\nif ! command -v cargo >/dev/null; then\n  PATH=\"$HOME/.cargo/bin:$PATH\"\n  export PATH\nfi\ncommand -v cargo >/dev/null || {\n  printf 'cargo is not installed for this builder\\n' >&2\n  exit 69\n}\n\ncase \"$platform\" in\n  darwin-arm64|linux-amd64) ;;\n  *) printf 'unsupported release platform: %s\\n' \"$platform\" >&2; exit 64 ;;\nesac\n\nmanifest=\"$source_dir/Cargo.toml\"\ndeclared=$(sed -n 's/^version = \"\\([^\"]*\\)\"$/\\1/p' \"$manifest\" | sed -n '1p')\nif [[ \"$declared\" != \"$version\" ]]; then\n  printf 'WISENT_VERSION %s does not match Cargo.toml version %s\\n' \"$version\" \"$declared\" >&2\n  exit 65\nfi\n\ncargo fmt --manifest-path \"$manifest\" -- --check\nsh -n \"$source_dir/src/release/bin/start-with-skarbiec\"\nsh -n \"$source_dir/src/release/bin/provision-skarbiec-trust\"\npython3 -S \"$source_dir/tests/release/check_launcher_blocks.py\" \\\n  \"$source_dir/src/release/bin/start-with-skarbiec\"\n"
+            "src/release/quality.sh"
           ]
         }
       ],
@@ -125,6 +123,7 @@
     "state_schema": 1,
     "minimum_stado_version": "0.6.1",
     "rollback_compatible_with": [
+      "0.4.1",
       "0.4.0",
       "0.3.8",
       "0.3.7",

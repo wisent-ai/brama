@@ -28,7 +28,7 @@ pub(in crate::gateway::broker) const REQUEST_SIGN_PURPOSE: &str = "brama.request
 const RUNTIME_AGENT: &str = "brama-runtime";
 const CAPABILITY_TARGET: &str = "brama";
 
-/// The `capability-issue` request, taking the broker's own limits.
+/// The `grant capability` request, taking the broker's own limits.
 ///
 /// No lifetime or use count is passed, and that is the point. Skarbiec refuses
 /// a ttl over an hour and a use count over sixteen, while the launcher asked
@@ -40,7 +40,8 @@ const CAPABILITY_TARGET: &str = "brama";
 /// in the environment of a running process cannot be refreshed at all.
 fn issue_arguments(purpose: &str, resource: &str) -> Vec<String> {
     vec![
-        "capability-issue".to_owned(),
+        "grant".to_owned(),
+        "capability".to_owned(),
         "--agent".to_owned(),
         RUNTIME_AGENT.to_owned(),
         "--purpose".to_owned(),

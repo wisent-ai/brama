@@ -25,10 +25,10 @@ use serde_json::Value;
 
 static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
 
-/// Fixture roots live inside the operator's Stado work area, never `HOME`.
+/// GnuPG needs the short product-owned root because macOS limits Unix socket paths to 104 bytes.
 fn temp_base() -> PathBuf {
     let home = std::env::var_os("HOME").expect("HOME is required");
-    PathBuf::from(home).join(".stado").join("work").join("brt")
+    PathBuf::from(home).join(".brama").join("test-runs")
 }
 
 fn fixture_name(story: &str) -> String {
@@ -55,7 +55,7 @@ pub struct TestDirectory {
 
 impl TestDirectory {
     pub fn new(story: &str) -> Self {
-        let path = temp_base().join(fixture_name(story));
+        let path = Path::new(env!("CARGO_TARGET_TMPDIR")).join(fixture_name(story));
         fs::create_dir_all(&path).expect("create Brama test directory");
         Self { path }
     }

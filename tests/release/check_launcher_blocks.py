@@ -32,6 +32,8 @@ def family(arguments):
     for path in named:
         stages = sorted((path.parent / "launcher").rglob("*.sh"))
         files.extend(stage for stage in stages if stage not in files)
+        helpers = sorted((path.parent.parent / "libexec").rglob("*.py"))
+        files.extend(helper for helper in helpers if helper not in files)
     return files
 
 
@@ -53,6 +55,26 @@ def read_text(path):
             "The launcher and binary arguments are in the wrong order"
         )
 
+def python_blocks(path):
+    """The Python units shipped directly or embedded in one launcher stage."""
+    text = read_text(path)
+    if Path(path).suffix == ".py":
+        return [text]
+    blocks = []
+    current = None
+    for line in text.splitlines():
+        if current is None:
+            if line.rstrip().endswith("<<'PY'"):
+                current = []
+        elif line == "PY":
+            blocks.append("\n".join(current))
+            current = None
+        else:
+            current.append(line)
+    if current is not None:
+        raise SystemExit(f"{path} contains an unterminated embedded Python block")
+    return blocks
+
 
 def main(arguments):
     if not arguments:
@@ -61,22 +83,7 @@ def main(arguments):
         )
     blocks = []
     for launcher_path in family(arguments):
-        lines = read_text(launcher_path).splitlines()
-        current = None
-        for line in lines:
-            if current is None:
-                if line.endswith("<<'PY'"):
-                    current = []
-                continue
-            if line == "PY":
-                blocks.append((launcher_path, "\n".join(current)))
-                current = None
-            else:
-                current.append(line)
-        if current is not None:
-            raise SystemExit(
-                f"{launcher_path} contains an unterminated embedded Python block"
-            )
+        blocks.extend((launcher_path, block) for block in python_blocks(launcher_path))
     if not blocks:
         raise SystemExit(
             "the launcher family named here contains no embedded Python block this "
