@@ -14,8 +14,7 @@ import plistlib
 import subprocess
 
 from host_layout import (
-    CAPABILITY_VERB,
-    REFUSAL,
+    CAPABILITY_COMMAND,
     REQUIRED_FILES,
     SERVICE_LABEL,
     active_record,
@@ -40,13 +39,22 @@ def router_answers(root):
     probe = dict(os.environ)
     probe["SKARBIEC_VAULT_FILE"] = str(root / "no-such-vault.json")
     answered = subprocess.run(
-        [str(router), CAPABILITY_VERB],
+        [str(router), CAPABILITY_COMMAND[0], "help"],
         capture_output=True,
         text=True,
         check=False,
         env=probe,
     )
-    return REFUSAL not in (answered.stdout + answered.stderr)
+    if answered.returncode:
+        return False
+    try:
+        commands = json.loads(answered.stdout).get("commands", [])
+    except (ValueError, AttributeError):
+        return False
+    return any(
+        isinstance(command, str) and tuple(command.split()[:len(CAPABILITY_COMMAND)]) == CAPABILITY_COMMAND
+        for command in commands
+    )
 
 
 def registry_verdict(root, config_dir):
@@ -123,7 +131,7 @@ def print_generations(resolved):
         missing = [name for name in REQUIRED_FILES if not (root / name).exists()]
         print(f"  {generation}{marker}  installed {moment(generation.stat().st_mtime)}")
         print(f"    files:    {'complete' if not missing else 'missing ' + ', '.join(missing)}")
-        print(f"    router {CAPABILITY_VERB}: {router_answers(root)}")
+        print(f"    router {' '.join(CAPABILITY_COMMAND)}: {router_answers(root)}")
         unrunnable = [
             name
             for name in ("bin/brama", "bin/skarbiec-entitlements-router", "bin/start-with-skarbiec")

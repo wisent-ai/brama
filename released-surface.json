@@ -1,6 +1,6 @@
 {
-  "version": "0.4.0",
-  "source": "stado://releases/brama/0.4.0/darwin-arm64 source_revision=ac7a65f8e9fe816b92c5651254f553a5467e6ed4 -- signed release object the Stado release plane published and hosts install from",
+  "version": "0.4.1",
+  "source": "stado://releases/brama/0.4.1/darwin-arm64 source_revision=2da63398857afa7033a42d265b029070a66db999 -- signed release object the Stado release plane published and hosts install from",
   "surface": [
     "adopt",
     "aliases",
