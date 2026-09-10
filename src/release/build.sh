@@ -56,14 +56,15 @@ fi
 export BRAMA_BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 export BRAMA_BUILD_PLATFORM="$platform"
 export BRAMA_SOURCE_REVISION="${WISENT_SOURCE_COMMIT:-$(git -C "$source_dir" rev-parse HEAD)}"
+# Bash 3 treats an empty array as unset under nounset.
 CARGO_TARGET_DIR="$build_root/brama" \
-  cargo build "${cargo_overrides[@]}" --locked --release --bin brama --manifest-path "$build_source/Cargo.toml"
+  cargo build ${cargo_overrides[@]+"${cargo_overrides[@]}"} --locked --release --bin brama --manifest-path "$build_source/Cargo.toml"
 CARGO_TARGET_DIR="$build_root/skarbiec" \
   cargo build --locked --release --bin skarbiec --manifest-path "$skarbiec_source/Cargo.toml"
 SKARBIEC_BIN="$build_root/skarbiec/release/skarbiec" \
 ENTITLEMENTS_ROUTER_BIN="$build_root/skarbiec/release/skarbiec" \
 CARGO_TARGET_DIR="$build_root/brama" \
-  cargo test "${cargo_overrides[@]}" --locked --release --manifest-path "$build_source/Cargo.toml" \
+  cargo test ${cargo_overrides[@]+"${cargo_overrides[@]}"} --locked --release --manifest-path "$build_source/Cargo.toml" \
     --test pool --test usage
 python3 -S "$source_dir/tests/release/check_router_verbs.py" \
   "$build_root/skarbiec/release/skarbiec" "$source_dir/src/release/bin/start-with-skarbiec"
