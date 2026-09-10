@@ -2,6 +2,9 @@
 set -euo pipefail
 umask 077
 
+products=${WISENT_PRODUCTS_BIN:-$(command -v wisent-products)}
+[ -x "$products" ] || { printf '%s\n' 'Wisent Products signing capability is not installed' >&2; exit 1; }
+
 export HOME=/Users/charles
 export PATH="$HOME/.stado/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
@@ -39,6 +42,10 @@ if [[ ! -x "$runner_dir/run.sh" || ! -x "$runner_dir/config.sh" ]] \
     /usr/bin/tar -xzf "$archive" -C "$incoming"
   )
   /bin/chmod -R u+rwX,go+rX "$incoming"
+  /usr/bin/codesign --verify --strict "$incoming/bin/Runner.Listener"
+  /usr/bin/codesign --verify --strict "$incoming/bin/Runner.Worker"
+  "$products" signing sign --product stado \
+    "$incoming/bin/Runner.Listener" "$incoming/bin/Runner.Worker"
   /usr/bin/codesign --verify --strict -R '=anchor apple generic' "$incoming/bin/Runner.Listener"
   /usr/bin/codesign --verify --strict -R '=anchor apple generic' "$incoming/bin/Runner.Worker"
   [[ -x "$incoming/run.sh" && -x "$incoming/config.sh" ]]
