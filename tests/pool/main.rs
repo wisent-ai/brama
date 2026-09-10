@@ -14,9 +14,9 @@
 
 #[path = "../support/gateway.rs"]
 mod gateway;
+mod membership;
 #[path = "../support/mod.rs"]
 mod support;
-mod membership;
 
 use reqwest::Method;
 use serde_json::json;
