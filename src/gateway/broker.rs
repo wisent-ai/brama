@@ -21,7 +21,7 @@ mod vault;
 
 use std::collections::HashMap;
 
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::capability::{CapabilityClient, CapabilityRef, Secret};
 use crate::core::failure::{self, POINT_CREDENTIAL_REDEEM};
@@ -107,24 +107,15 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
         return local_provider_credential(provider);
     }
     let resource = provider_resource(provider);
-    let mut prior = None;
-    if let Some(capability_id) = configured_capability(PROVIDER_CAPABILITIES_ENV, provider) {
-        match redeem_provider_resource(&capability_id, &resource).await {
-            Ok(secret) => return Some(secret),
-            Err(refused) => prior = Some(refused),
-        }
-    }
-    match issue_capability(PROVIDER_PURPOSE, &resource).await {
-        Ok(fresh) => match redeem_provider_resource(&fresh, &resource).await {
-            Ok(secret) => return Some(secret),
-            Err(refused) => prior = Some(append_failure_cause(refused, prior)),
-        },
-        Err(refused) => prior = Some(append_failure_cause(refused, prior)),
-    }
-    match credential_by_grant(&resource).await {
+    match obtain_credential(
+        &resource,
+        configured_capability(PROVIDER_CAPABILITIES_ENV, provider),
+    )
+    .await
+    {
         Ok(secret) => Some(secret),
         Err(refused) => {
-            let refused = append_failure_cause(refused, prior).with_context("provider", provider);
+            let refused = refused.with_context("provider", provider);
             warn!(
                 event = "provider_credential_unavailable",
                 provider,
@@ -135,6 +126,57 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
             None
         }
     }
+}
+
+/// The one cascade every managed credential comes through: a capability the
+/// launcher configured, else a capability issued now, else the field-scoped
+/// read grant -- each tried once, each refusal carried into the next.
+///
+/// Timed and logged here, once for both the direct and the subscription path.
+/// The issue step is a child process to the entitlements router and the
+/// redemption a broker round trip, and a request that took nine seconds used
+/// to show only `routing_decision` and `routing_complete` nine seconds apart:
+/// nothing in the log said whether the time went to this seam or to the
+/// provider. `credential_obtained` says which of the three steps answered and
+/// how long the whole cascade took, so a slow request can be attributed
+/// without instrumenting a host.
+async fn obtain_credential(resource: &str, configured: Option<String>) -> Result<Secret, Failure> {
+    let started = std::time::Instant::now();
+    let mut prior = None;
+    if let Some(capability_id) = configured {
+        match redeem_provider_resource(&capability_id, resource).await {
+            Ok(secret) => {
+                log_credential_obtained(resource, "configured", started);
+                return Ok(secret);
+            }
+            Err(refused) => prior = Some(refused),
+        }
+    }
+    match issue_capability(PROVIDER_PURPOSE, resource).await {
+        Ok(fresh) => match redeem_provider_resource(&fresh, resource).await {
+            Ok(secret) => {
+                log_credential_obtained(resource, "issued", started);
+                return Ok(secret);
+            }
+            Err(refused) => prior = Some(append_failure_cause(refused, prior)),
+        },
+        Err(refused) => prior = Some(append_failure_cause(refused, prior)),
+    }
+    let secret = credential_by_grant(resource)
+        .await
+        .map_err(|refused| append_failure_cause(refused, prior))?;
+    log_credential_obtained(resource, "read-grant", started);
+    Ok(secret)
+}
+
+fn log_credential_obtained(resource: &str, path: &str, started: std::time::Instant) {
+    info!(
+        event = "credential_obtained",
+        resource,
+        path,
+        elapsed_ms = started.elapsed().as_millis() as u64,
+        "credential obtained at final use"
+    );
 }
 
 fn credential_failure(detail: impl Into<String>, resource: &str, code: Code) -> Failure {
@@ -208,22 +250,13 @@ async fn redeem_subscription_credential(
         }
     }
 
-    let mut prior = None;
-    if let Some(capability_id) = configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id) {
-        match redeem_provider_resource(&capability_id, &resource).await {
-            Ok(secret) => return Ok(secret),
-            Err(refused) => prior = Some(refused),
-        }
-    }
-    match issue_capability(PROVIDER_PURPOSE, &resource).await {
-        Ok(fresh) => match redeem_provider_resource(&fresh, &resource).await {
-            Ok(secret) => return Ok(secret),
-            Err(refused) => prior = Some(append_failure_cause(refused, prior)),
-        },
-        Err(refused) => prior = Some(append_failure_cause(refused, prior)),
-    }
-    credential_by_grant(&resource).await.map_err(|refused| {
-        append_failure_cause(refused, prior)
+    obtain_credential(
+        &resource,
+        configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id),
+    )
+    .await
+    .map_err(|refused| {
+        refused
             .with_context("subscription", subscription_id)
             .with_context("provider", provider)
     })

@@ -61,9 +61,10 @@ pub use self::check::{
     record_probe, CheckSource, Probe,
 };
 pub use self::credential::{
-    credential_recorded_at_ms, credential_refresh_hint, needs_reauthorization,
-    record_credential_active, record_credential_disabled, record_credential_signed_in,
-    record_reauthorization_needed, Credential, CredentialState, RefreshHint,
+    awaiting_sign_in_cause, credential_recorded_at_ms, credential_refresh_hint,
+    needs_reauthorization, record_credential_active, record_credential_disabled,
+    record_credential_signed_in, record_reauthorization_needed, Credential, CredentialState,
+    RefreshHint,
 };
 pub use self::plan_window::{
     jittered_plan_usage_ttl_ms, next_reset_ms, plan_usage_due, plan_usage_retention_ms,

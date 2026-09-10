@@ -24,6 +24,24 @@ coordinate yet. Released entries live in
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-request-path-trusts-the-ledger">Unreleased: the request path leaves a disowned grant alone<a class="headerlink" href="#unreleased-request-path-trusts-the-ledger" title="Link to this section">&para;</a></h2>
+<p>A request that ranks an agent's subscriptions no longer reads a grant the
+ledger already records as <code>needs_reauthorization</code>: the sweep left
+such a grant alone until a sign-in replaced it, and the request path now does
+the same, reporting it as <code>awaiting_sign_in</code> instead of paying for a
+router child process, a broker redemption and a refused refresh on every
+call. On charless-mac-mini the codex account, a document with no refresh
+token, was refused several times a minute for days while callers waited. A
+credential the vault refuses outright is remembered for sixty seconds, the
+window a failed model discovery already had.</p>
+<p>Two events attribute the time a request spends before the provider answers:
+<code>credential_obtained</code> (<code>resource</code>, <code>path</code>,
+<code>elapsed_ms</code>) once per managed credential, and
+<code>subscription_models_discovered</code> (<code>subscriptions</code>,
+<code>read</code>, <code>awaiting_sign_in</code>, <code>failed</code>,
+<code>elapsed_ms</code>) once per ranked request. The runbook entry
+<a href="/docs/runbook/credentials-and-subscriptions#a-request-is-slow-before-the-provider-answers">A request is slow before the provider answers</a>
+reads them.</p>
 <h2 id="unreleased-one-route-per-alias">Unreleased: an alias resolves to exactly one route<a class="headerlink" href="#unreleased-one-route-per-alias" title="Link to this section">&para;</a></h2>
 <p>An alias now names one destination and nothing else. When that route refuses,
 the refusal is what the caller receives: no second route is attempted, so the

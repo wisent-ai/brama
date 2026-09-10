@@ -12,10 +12,11 @@ use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use reqwest::blocking::Client;
-use serde_json::{json, Value};
+use serde_json::json;
 
 use crate::support::{SkarbiecVault, TestDirectory};
 
@@ -39,6 +40,10 @@ pub struct Gateway {
     client: Client,
     directory: TestDirectory,
     vault: SkarbiecVault,
+    /// Everything the gateway wrote to stderr so far: its log, which is where
+    /// its events land. Read by a thread so the child never blocks on a full
+    /// pipe.
+    log: Arc<Mutex<String>>,
 }
 
 impl Gateway {
@@ -137,6 +142,20 @@ impl Gateway {
             .expect("credential stdin")
             .write_all(b"{}")
             .expect("start with an empty standalone credential store");
+        let log = Arc::new(Mutex::new(String::new()));
+        let mut stderr = child.stderr.take().expect("the gateway's stderr");
+        let captured = Arc::clone(&log);
+        std::thread::spawn(move || {
+            let mut chunk = [0u8; 4096];
+            while let Ok(read) = stderr.read(&mut chunk) {
+                if read == 0 {
+                    break;
+                }
+                if let Ok(mut buffer) = captured.lock() {
+                    buffer.push_str(&String::from_utf8_lossy(&chunk[..read]));
+                }
+            }
+        });
 
         let origin = format!("http://127.0.0.1:{port}");
         let client = Client::builder()
@@ -156,16 +175,14 @@ impl Gateway {
                     client,
                     directory,
                     vault,
+                    log,
                 };
             }
             std::thread::sleep(Duration::from_millis(50));
         }
         let _ = child.kill();
         let _ = child.wait();
-        let mut refused = String::new();
-        if let Some(mut stderr) = child.stderr.take() {
-            let _ = stderr.read_to_string(&mut refused);
-        }
+        let refused = log.lock().map(|buffer| buffer.clone()).unwrap_or_default();
         panic!("the real Brama binary did not bind: {refused}");
     }
 
@@ -174,73 +191,19 @@ impl Gateway {
         self.directory.path()
     }
 
+    /// The gateway's log so far: every event it wrote to stderr, which is the
+    /// record an operator reads to attribute a slow or refused request.
+    pub fn log(&self) -> String {
+        self.log
+            .lock()
+            .map(|buffer| buffer.clone())
+            .unwrap_or_default()
+    }
+
     /// The router is invoked on every call, so an account can stop existing
     /// mid-story exactly as it does when its item is deleted.
     pub fn vault(&self) -> &SkarbiecVault {
         &self.vault
-    }
-
-    /// One request, with exactly the headers the named audience presents.
-    pub fn request(
-        &self,
-        path: &str,
-        method: reqwest::Method,
-        bearer: Option<&str>,
-        body: Option<&Value>,
-        signed_as: Option<(&str, &str)>,
-    ) -> (u16, Value) {
-        let raw = body.map(|body| serde_json::to_vec(body).expect("request body"));
-        let mut request = self
-            .client
-            .request(method, format!("{}{path}", self.origin));
-        if let Some(bearer) = bearer {
-            request = request.bearer_auth(bearer);
-        }
-        if let Some((agent, secret)) = signed_as {
-            let timestamp = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_secs() as i64;
-            let signature = brama::crypto::hmac_auth::compute_signature(
-                agent,
-                timestamp,
-                raw.as_deref().unwrap_or_default(),
-                secret.as_bytes(),
-            )
-            .expect("sign the request as the agent would");
-            request = request
-                .header("x-agent-id", agent)
-                .header("x-agent-timestamp", timestamp.to_string())
-                .header("x-agent-signature", signature);
-        }
-        if let Some(raw) = raw {
-            request = request
-                .header(reqwest::header::CONTENT_TYPE, "application/json")
-                .body(raw);
-        }
-        let response = request.send().expect("Brama response");
-        let status = response.status().as_u16();
-        let body = response.json().expect("Brama JSON response");
-        (status, body)
-    }
-
-    pub fn console(
-        &self,
-        path: &str,
-        method: reqwest::Method,
-        body: Option<&Value>,
-    ) -> (u16, Value) {
-        self.request(path, method, Some(CONSOLE_BEARER), body, None)
-    }
-
-    pub fn agent(&self, path: &str, method: reqwest::Method, body: Option<&Value>) -> (u16, Value) {
-        self.request(
-            path,
-            method,
-            Some(AGENT_BEARER),
-            body,
-            Some((AGENT, AGENT_SIGNING_SECRET)),
-        )
     }
 }
 
@@ -251,49 +214,11 @@ impl Drop for Gateway {
     }
 }
 
-pub fn answered_ids(report: &Value) -> Vec<String> {
-    report["subscriptions"]
-        .as_array()
-        .expect("the pool answers a subscriptions array")
-        .iter()
-        .map(|row| {
-            row["id"]
-                .as_str()
-                .expect("every pool row names its subscription")
-                .to_owned()
-        })
-        .collect()
-}
+#[path = "pool_report.rs"]
+mod pool_report;
+// Every story compiles this fixture on its own, and not every story reads the pool.
+#[allow(unused_imports)]
+pub use pool_report::{answered_ids, assert_pool_answered, refusal};
 
-/// The refusal envelope, field by field, as a caller reads it.
-pub fn refusal(body: &Value) -> (String, String, String) {
-    let field = |name: &str| body["error"][name].as_str().unwrap_or_default().to_owned();
-    (field("code"), field("type"), field("message"))
-}
-
-/// The capability answered from its declaration, and told this caller nothing
-/// about an account it was not answered about: a failed inventory means the
-/// declaration was not read at all, and a refusal naming an account outside
-/// the narrowing would leak somebody else's account.
-pub fn assert_pool_answered(report: &Value) {
-    let answered = answered_ids(report);
-    for error in report["errors"]
-        .as_array()
-        .expect("the pool answers an errors array")
-    {
-        let point = error["failure_point"].as_str().unwrap_or_default();
-        assert!(
-            point != "brama.subscriptions.discovery" && point != "brama.subscriptions.ledger",
-            "the pool could not read its own declaration: {error}"
-        );
-        if let Some(subscription) = error
-            .pointer("/context/subscription")
-            .and_then(Value::as_str)
-        {
-            assert!(
-                answered.iter().any(|id| id == subscription),
-                "the pool named {subscription} to a caller it did not answer about: {report}"
-            );
-        }
-    }
-}
+#[path = "gateway_requests.rs"]
+mod requests;
