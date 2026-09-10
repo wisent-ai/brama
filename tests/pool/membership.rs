@@ -19,13 +19,24 @@ fn cli_banks_and_retires_membership_and_refuses_invalid_writes() {
         .join(".wisent-output/pool")
         .join(state.path().file_name().unwrap());
     fs::create_dir_all(&evidence).unwrap();
-    let revision = Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .unwrap();
-    assert!(revision.status.success());
-    fs::write(evidence.join("source-revision.txt"), revision.stdout).unwrap();
+    // The revision the way src/release/build.sh states it: the release worker
+    // builds an extracted source tree with no .git and names the commit in
+    // BRAMA_SOURCE_REVISION; a checkout has git and nothing else.
+    let revision = std::env::var("BRAMA_SOURCE_REVISION")
+        .or_else(|_| std::env::var("WISENT_SOURCE_COMMIT"))
+        .unwrap_or_else(|_| {
+            let output = Command::new("git")
+                .args(["rev-parse", "HEAD"])
+                .current_dir(env!("CARGO_MANIFEST_DIR"))
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "no BRAMA_SOURCE_REVISION and no git checkout"
+            );
+            String::from_utf8_lossy(&output.stdout).into_owned()
+        });
+    fs::write(evidence.join("source-revision.txt"), revision).unwrap();
     let bank = json!({"action": "bank", "agent_id": AGENT, "provider": PROVIDER,
         "api_key": "isolated-membership-test-value", "label": "CLI membership"});
     let banked = invoke(
