@@ -14,6 +14,7 @@
 
 #[path = "../support/gateway.rs"]
 mod gateway;
+mod membership;
 #[path = "../support/mod.rs"]
 mod support;
 

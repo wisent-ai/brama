@@ -32,6 +32,7 @@ pub(in crate::core::server) async fn admin_snapshot(
             "deployments": [],
         }),
     };
+    let configured = crate::gateway::broker::configured_provider_capabilities();
     let providers = crate::providers::adapter::providers()
         .iter()
         .map(|provider| {
@@ -39,7 +40,8 @@ pub(in crate::core::server) async fn admin_snapshot(
                 "id": provider.id,
                 "displayName": provider.display_name,
                 "wireProtocol": wire_protocol_name(provider.wire),
-                "configured": crate::gateway::broker::provider_capability_configured(provider.id),
+                "configured": !crate::providers::adapter::provider_requires_credential(provider.id)
+                    || configured.contains(provider.id),
             })
         })
         .collect::<Vec<_>>();

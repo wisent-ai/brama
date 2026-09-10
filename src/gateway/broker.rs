@@ -109,13 +109,13 @@ pub async fn provider_credential(provider: &str) -> Option<Secret> {
     let resource = provider_resource(provider);
     let mut prior = None;
     if let Some(capability_id) = configured_capability(PROVIDER_CAPABILITIES_ENV, provider) {
-        match redeem_provider_resource(&capability_id, &resource) {
+        match redeem_provider_resource(&capability_id, &resource).await {
             Ok(secret) => return Some(secret),
             Err(refused) => prior = Some(refused),
         }
     }
     match issue_capability(PROVIDER_PURPOSE, &resource).await {
-        Ok(fresh) => match redeem_provider_resource(&fresh, &resource) {
+        Ok(fresh) => match redeem_provider_resource(&fresh, &resource).await {
             Ok(secret) => return Some(secret),
             Err(refused) => prior = Some(append_failure_cause(refused, prior)),
         },
@@ -154,28 +154,36 @@ fn append_failure_cause(failure: Failure, cause: Option<Failure>) -> Failure {
     }
 }
 
-fn redeem_provider_resource(capability_id: &str, resource: &str) -> Result<Secret, Failure> {
-    let binding = CapabilityRef::provider(capability_id, resource).map_err(|error| {
-        credential_failure(
-            format!("capability does not bind to `{resource}`: {error}"),
-            resource,
-            Code::Config,
-        )
-    })?;
-    let broker = client().ok_or_else(|| {
-        credential_failure(
-            "no capability broker client: SKARBIEC_CAP_SOCKET, SKARBIEC_WORKLOAD_ID, or the workload signing key is missing or unreadable",
-            resource,
-            Code::Config,
-        )
-    })?;
-    broker.redeem(&binding).map_err(|error| {
-        credential_failure(
-            format!("authority refused capability redemption: {error}"),
-            resource,
-            failure::code_for("credential_unauthorized"),
-        )
+async fn redeem_provider_resource(capability_id: &str, resource: &str) -> Result<Secret, Failure> {
+    let id = capability_id.to_owned();
+    let owned_resource = resource.to_owned();
+    // Skarbiec uses blocking Unix I/O. Waiting for decryption must not occupy
+    // Tokio's HTTP workers and starve /readyz during a credential sweep.
+    tokio::task::spawn_blocking(move || {
+        let binding = CapabilityRef::provider(&id, &owned_resource).map_err(|error| {
+            credential_failure(
+                format!("capability does not bind to `{owned_resource}`: {error}"),
+                &owned_resource,
+                Code::Config,
+            )
+        })?;
+        let broker = client().ok_or_else(|| {
+            credential_failure(
+                "no capability broker client: SKARBIEC_CAP_SOCKET, SKARBIEC_WORKLOAD_ID, or the workload signing key is missing or unreadable",
+                &owned_resource,
+                Code::Config,
+            )
+        })?;
+        broker.redeem(&binding).map_err(|error| {
+            credential_failure(
+                format!("authority refused capability redemption: {error}"),
+                &owned_resource,
+                failure::code_for("credential_unauthorized"),
+            )
+        })
     })
+    .await
+    .map_err(|error| credential_failure(format!("credential redemption worker failed: {error}"), resource, Code::Unknown))?
 }
 
 async fn redeem_subscription_credential(
@@ -202,13 +210,13 @@ async fn redeem_subscription_credential(
 
     let mut prior = None;
     if let Some(capability_id) = configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id) {
-        match redeem_provider_resource(&capability_id, &resource) {
+        match redeem_provider_resource(&capability_id, &resource).await {
             Ok(secret) => return Ok(secret),
             Err(refused) => prior = Some(refused),
         }
     }
     match issue_capability(PROVIDER_PURPOSE, &resource).await {
-        Ok(fresh) => match redeem_provider_resource(&fresh, &resource) {
+        Ok(fresh) => match redeem_provider_resource(&fresh, &resource).await {
             Ok(secret) => return Ok(secret),
             Err(refused) => prior = Some(append_failure_cause(refused, prior)),
         },

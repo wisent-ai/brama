@@ -7,12 +7,10 @@
 //! separate because the limits below belong to the broker's contract rather
 //! than to any caller that redeems what comes back.
 
-use std::time::{Duration, Instant};
-
 use serde_json::Value;
 
 use super::super::credential_failure;
-use super::router::{entitlements_router_bin, router_output, ENTITLEMENTS_ROUTER_TIMEOUT};
+use super::router::router_output;
 use crate::core::failure;
 use wisent_errors::{Code, Failure};
 
@@ -117,85 +115,4 @@ pub(in crate::gateway::broker) async fn issue_capability(
     .await
     .map_err(|error| credential_failure(error, resource, Code::Unknown))?;
     issued_capability_id(&output, resource)
-}
-
-pub(in crate::gateway::broker) fn issue_capability_blocking(
-    purpose: &str,
-    resource: &str,
-) -> Result<String, Failure> {
-    use std::process::Stdio;
-
-    let mut child = std::process::Command::new(entitlements_router_bin())
-        .args(issue_arguments(purpose, resource))
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| {
-            credential_failure(
-                format!("issue capability: {error}"),
-                resource,
-                Code::Unknown,
-            )
-        })?;
-    let started = Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(_)) => {
-                let output = child.wait_with_output().map_err(|error| {
-                    credential_failure(
-                        format!("collect capability issuance output: {error}"),
-                        resource,
-                        Code::Unknown,
-                    )
-                })?;
-                return issued_capability_id(&output, resource);
-            }
-            Ok(None) if started.elapsed() < ENTITLEMENTS_ROUTER_TIMEOUT => {
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            Ok(None) => {
-                let kill_error = child.kill().err();
-                let output = child.wait_with_output().map_err(|error| {
-                    credential_failure(
-                        format!(
-                            "capability issuance timed out after {} seconds; kill result: {}; collect output: {error}",
-                            ENTITLEMENTS_ROUTER_TIMEOUT.as_secs(),
-                            kill_error
-                                .as_ref()
-                                .map(ToString::to_string)
-                                .unwrap_or_else(|| "child killed".to_owned())
-                        ),
-                        resource,
-                        Code::Unknown,
-                    )
-                })?;
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(credential_failure(
-                    format!(
-                        "capability issuance timed out after {} seconds; {}; stderr: {}",
-                        ENTITLEMENTS_ROUTER_TIMEOUT.as_secs(),
-                        kill_error
-                            .map(|error| format!("kill failed: {error}"))
-                            .unwrap_or_else(|| "the child was killed".to_owned()),
-                        if stderr.trim().is_empty() {
-                            "<empty>"
-                        } else {
-                            stderr.trim()
-                        }
-                    ),
-                    resource,
-                    Code::Unknown,
-                ));
-            }
-            Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(credential_failure(
-                    format!("poll capability issuance child: {error}"),
-                    resource,
-                    Code::Unknown,
-                ));
-            }
-        }
-    }
 }

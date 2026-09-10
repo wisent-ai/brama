@@ -8,12 +8,9 @@
 //! field-scoped read grant -- must both be described, or this hides an alias
 //! the request path can serve.
 
-use tracing::warn;
-
 use super::standalone::LOCAL_PROVIDER_CREDENTIALS;
 use super::subscription::configured_subscription_ids;
-use super::vault::{capability_route, issue_capability_blocking, PROVIDER_PURPOSE};
-use super::{capability_map, client, configured_capability, provider_resource};
+use super::{capability_map, client, provider_resource};
 use crate::capability::CapabilityRef;
 
 pub(super) const PROVIDER_CAPABILITIES_ENV: &str = "BRAMA_PROVIDER_CAPABILITY_IDS";
@@ -95,43 +92,9 @@ pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
     configured
 }
 
-/// Return whether this installation has a direct capability or read grant.
-///
-/// Startup and alias resolution must ask the same question as
-/// [`super::provider_credential`], which falls back to the exact field-scoped
-/// route when capability issuance or redemption is unavailable.
+/// Configuration inspection must not issue credentials or block the HTTP worker.
+/// Readiness and final-use redemption establish whether this declaration works.
 pub fn provider_capability_configured(provider: &str) -> bool {
-    if !crate::providers::adapter::provider_requires_credential(provider) {
-        return true;
-    }
-    if let Ok(credentials) = LOCAL_PROVIDER_CREDENTIALS.read() {
-        if let Some(credentials) = credentials.as_ref() {
-            return credentials.contains_key(provider);
-        }
-    }
-    let resource = provider_resource(provider);
-    if capability_route(&resource).is_ok() {
-        return true;
-    }
-    if let Some(capability_id) = configured_capability(PROVIDER_CAPABILITIES_ENV, provider) {
-        if client().is_some() && CapabilityRef::provider(&capability_id, &resource).is_ok() {
-            return true;
-        }
-    }
-    if client().is_none() {
-        return false;
-    }
-    match issue_capability_blocking(PROVIDER_PURPOSE, &resource) {
-        Ok(capability_id) => CapabilityRef::provider(&capability_id, &resource).is_ok(),
-        Err(refused) => {
-            warn!(
-                event = "provider_capability_check_failed",
-                provider,
-                envelope = %refused.to_json(),
-                "{}",
-                refused.render()
-            );
-            false
-        }
-    }
+    !crate::providers::adapter::provider_requires_credential(provider)
+        || configured_provider_capabilities().contains(provider)
 }

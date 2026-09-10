@@ -30,9 +30,14 @@ pub(in crate::core::server) fn wire_protocol_name(
 
 pub(in crate::core::server) async fn get_stats() -> impl IntoResponse {
     let provider_descriptors = crate::providers::adapter::providers();
+    let configured = crate::gateway::broker::configured_provider_capabilities();
+    let is_configured = |provider| {
+        !crate::providers::adapter::provider_requires_credential(provider)
+            || configured.contains(provider)
+    };
     let configured_direct_providers = provider_descriptors
         .iter()
-        .filter(|provider| crate::gateway::broker::provider_capability_configured(provider.id))
+        .filter(|provider| is_configured(provider.id))
         .count();
     let providers = provider_descriptors
         .iter()
@@ -41,7 +46,7 @@ pub(in crate::core::server) async fn get_stats() -> impl IntoResponse {
                 "id": provider.id,
                 "displayName": provider.display_name,
                 "wireProtocol": wire_protocol_name(provider.wire),
-                "configured": crate::gateway::broker::provider_capability_configured(provider.id),
+                "configured": is_configured(provider.id),
             })
         })
         .collect::<Vec<_>>();

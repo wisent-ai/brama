@@ -125,6 +125,7 @@
     "state_schema": 1,
     "minimum_stado_version": "0.6.1",
     "rollback_compatible_with": [
+      "0.4.0",
       "0.3.8",
       "0.3.7",
       "0.3.6",

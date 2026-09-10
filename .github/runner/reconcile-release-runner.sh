@@ -19,7 +19,9 @@ archive="$root/actions-runner-osx-arm64-$runner_version.tar.gz"
 incoming="$runner_dir.incoming"
 
 /bin/mkdir -p "$root"
-if [[ ! -x "$runner_dir/run.sh" || ! -x "$runner_dir/config.sh" ]]; then
+if [[ ! -x "$runner_dir/run.sh" || ! -x "$runner_dir/config.sh" ]] \
+  || ! /usr/bin/codesign --verify --strict -R '=anchor apple generic' "$runner_dir/bin/Runner.Listener" \
+  || ! /usr/bin/codesign --verify --strict -R '=anchor apple generic' "$runner_dir/bin/Runner.Worker"; then
   /bin/rm -rf "$incoming"
   /bin/mkdir -p "$incoming"
   /usr/bin/curl --fail --silent --show-error --location --max-time 120 \
@@ -37,11 +39,20 @@ if [[ ! -x "$runner_dir/run.sh" || ! -x "$runner_dir/config.sh" ]]; then
     /usr/bin/tar -xzf "$archive" -C "$incoming"
   )
   /bin/chmod -R u+rwX,go+rX "$incoming"
-  /usr/bin/codesign --remove-signature "$incoming/bin/Runner.Listener"
-  /usr/bin/codesign --remove-signature "$incoming/bin/Runner.Worker"
+  /usr/bin/codesign --verify --strict -R '=anchor apple generic' "$incoming/bin/Runner.Listener"
+  /usr/bin/codesign --verify --strict -R '=anchor apple generic' "$incoming/bin/Runner.Worker"
   [[ -x "$incoming/run.sh" && -x "$incoming/config.sh" ]]
-  /bin/rm -rf "$runner_dir"
-  /bin/mv "$incoming" "$runner_dir"
+  if [[ -d "$runner_dir" ]]; then
+    # Restore vendor-signed executables without deleting the registration,
+    # credentials, job workspaces or the rest of this exact runtime version.
+    for executable in Runner.Listener Runner.Worker; do
+      /usr/bin/install -m 0755 "$incoming/bin/$executable" "$runner_dir/bin/$executable.signed"
+      /bin/mv -f "$runner_dir/bin/$executable.signed" "$runner_dir/bin/$executable"
+    done
+    /bin/rm -rf "$incoming"
+  else
+    /bin/mv "$incoming" "$runner_dir"
+  fi
   /bin/rm -f "$archive"
 fi
 /bin/mkdir -p "$runner_dir/.tmp" "$runner_dir/.dotnet"
