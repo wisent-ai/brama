@@ -15,8 +15,8 @@ mod cli;
 
 use std::process::Command;
 
-use serde_json::Value;
 use cli::command;
+use serde_json::Value;
 use support::{SkarbiecVault, TestDirectory};
 
 /// The agent the real vault names as owner of every seeded account.

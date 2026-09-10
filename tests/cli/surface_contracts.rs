@@ -11,8 +11,8 @@ mod cli;
 use std::io::Write;
 use std::process::Stdio;
 
-use serde_json::Value;
 use cli::command;
+use serde_json::Value;
 use support::TestDirectory;
 
 #[test]
@@ -98,7 +98,6 @@ fn mcp_exposes_only_the_read_only_hardware_tool() {
 }
 
 /// The console's own read of the pool, against state nothing has written yet.
-
 
 #[test]
 fn billable_cli_commands_refuse_before_provider_access_without_cost_acknowledgement() {

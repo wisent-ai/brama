@@ -19,8 +19,8 @@ use crate::subscription_dispatch::{
 };
 use crate::{Message, ModelRequest};
 
-use journey::service::BramaTransport;
 use journey::progress_store::state_path;
+use journey::service::BramaTransport;
 use journey::step_display::render_current_step;
 use journey::subject::stable_subject_hash;
 
