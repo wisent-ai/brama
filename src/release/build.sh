@@ -53,6 +53,7 @@ if [[ -n "${WISENT_INPUTS_DIR:-}" ]]; then
   cargo_overrides=(--config "$build_source/release-inputs.toml")
 fi
 
+BRAMA_BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
 BRAMA_BUILD_PLATFORM="$platform" CARGO_TARGET_DIR="$build_root/brama" \
   cargo build "${cargo_overrides[@]}" --locked --release --bin brama --manifest-path "$build_source/Cargo.toml"
 CARGO_TARGET_DIR="$build_root/skarbiec" \
