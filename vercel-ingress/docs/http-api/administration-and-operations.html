@@ -166,11 +166,11 @@ subscriptions</a>.</p>
 (<a href="/docs/architecture">architecture</a>). Treat it as evidence the process is
 running, and nothing else.</p>
 <h2 id="get-readyz"><code>GET /readyz</code><a class="headerlink" href="#get-readyz" title="Link to this section">&para;</a></h2>
-<p>The only evidence that the product works. Per request it (1) redeems one capability per
-configured provider through the same broker call the request path makes, (2) checks that
-every active subscription contributes at least one discoverable model, (3) redeems one
-credential per active subscription, and (4) reports vault subscription accounts carrying no
-<code>brama:agent:</code> tag. Captured healthy body:</p>
+<p>The latest completed credential and routing check. A background sweep redeems
+configured provider capabilities and active subscription credentials and checks
+model discovery; this request returns its completed report without performing
+those operations again. Credential redemption waits outside the HTTP workers,
+so slow Skarbiec responses do not prevent the gateway answering this route.</p>
 <pre><code class="language-json">{&quot;build&quot;:{...},&quot;denied&quot;:[],&quot;operator_action_required&quot;:false,
  &quot;providers&quot;:[{&quot;credential&quot;:true,&quot;provider&quot;:&quot;openai&quot;}],
  &quot;ready&quot;:true,
@@ -178,10 +178,10 @@ credential per active subscription, and (4) reports vault subscription accounts 
  &quot;routing&quot;:[],&quot;subscriptions&quot;:[],&quot;unredeemable&quot;:[],&quot;unroutable&quot;:[],
  &quot;unroutable_accounts&quot;:[]}
 </code></pre>
-<p>Otherwise the status is <code>503</code> with <code>ready: false</code> and a
-<code>reason</code> naming the failing half; the five sentences and their repairs are in the
-<a href="/docs/runbook">runbook</a>. An alias whose route this gateway cannot reach appears
-under <code>routing</code>. Rows in <code>subscriptions[]</code> carry per-subscription
+<p>The status is <code>503</code> with <code>ready: false</code> until a check has
+completed or when no configured route can obtain a credential. A gateway with
+working routes and failed accounts reports <code>200</code> and <code>degraded: true</code>.
+Routing results appear under <code>routing</code>. Rows in <code>subscriptions[]</code> carry per-subscription
 <code>redeemable</code> and the refusal in the words of whatever refused it, and never a
 secret.</p>
 <h2 id="get-stats"><code>GET /stats</code><a class="headerlink" href="#get-stats" title="Link to this section">&para;</a></h2>
@@ -197,6 +197,10 @@ with per-model <code>count</code>, <code>latencyMs</code>, <code>lastLatencyMs</
 <code>total_requests</code>, <code>total_failures</code>,
 <code>total_provider_attempts</code>, <code>total_input_tokens</code>,
 <code>total_output_tokens</code> and <code>uptimeSeconds</code>.</p>
+<p><code>configured</code> reports the declared capability or field-scoped route,
+not successful authentication. Neither <code>/stats</code> nor the admin snapshot
+issues credentials; use <code>/readyz</code> for observed redemption failures and
+a real completion to verify the full inference path.</p>
 <p>Because an alias resolves to one route, <code>total_provider_attempts</code> counts one
 attempt per request that reached a provider, plus any credential rotation the gateway made
 before the first byte. Process telemetry is not durable billing evidence: it resets with the

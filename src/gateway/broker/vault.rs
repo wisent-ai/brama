@@ -17,9 +17,7 @@ mod router;
 
 // The names the rest of `broker` calls, listed one at a time so no path
 // resolves to more of this seam than its caller needs.
-pub(super) use capability::{
-    issue_capability, issue_capability_blocking, PROVIDER_PURPOSE, REQUEST_SIGN_PURPOSE,
-};
-pub(super) use grant::{capability_route, credential_by_grant};
+pub(super) use capability::{issue_capability, PROVIDER_PURPOSE, REQUEST_SIGN_PURPOSE};
+pub(super) use grant::credential_by_grant;
 pub(super) use item::{existing_item_tags, put_credential, VaultListItem};
 pub(super) use router::{bounded_output, entitlements_router_bin, router_output, router_refusal};
