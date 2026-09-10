@@ -46,3 +46,17 @@ pub use refusal::contract::{model_error_contract, ModelErrorContract};
 
 pub(crate) use administration::valid_alias;
 pub(crate) use aliases::{alias_requires_direct_capability, alias_route_shape_supported};
+
+/// Apply one pool membership document from the local vault-owning CLI.
+/// HTTP callers reach the same operation after proving their narrower scope.
+pub async fn apply_subscription_membership(
+    body: &[u8],
+) -> Result<serde_json::Value, serde_json::Value> {
+    subscriptions::apply_pool_write(
+        crate::subscription_dispatch::pool::PoolScope::Deployment,
+        body,
+    )
+    .await
+    .map(|axum::Json(value)| value)
+    .map_err(|(_, axum::Json(error))| error)
+}

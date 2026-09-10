@@ -14,6 +14,9 @@ pub(crate) struct SubscriptionsArgs {
     /// Read current free provider usage reports; never starts a sign-in or model request
     #[arg(long, default_value_t = false)]
     refresh_usage: bool,
+    /// Apply a pool membership document from stdin; uses the same bank/retire contract as HTTP
+    #[arg(long, conflicts_with = "refresh_usage")]
+    apply: bool,
 }
 
 // The operator's own console: this process holds the vault and the
@@ -22,7 +25,25 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
     let SubscriptionsArgs {
         json,
         refresh_usage,
+        apply,
     } = args;
+    if apply {
+        let body = match std::io::read_to_string(std::io::stdin()) {
+            Ok(body) => body,
+            Err(error) => {
+                eprintln!("cannot read subscription membership from stdin: {error}");
+                std::process::exit(1);
+            }
+        };
+        match brama::core::server::apply_subscription_membership(body.as_bytes()).await {
+            Ok(receipt) => crate::cli::print_json(&receipt),
+            Err(error) => {
+                crate::cli::print_json(&error);
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
     let scope = brama::subscription_dispatch::pool::PoolScope::Deployment;
     // Two capabilities, one per question, and the same document from
     // either: the pool states what this deployment has recorded, plan

@@ -133,7 +133,14 @@ pub(in crate::core::server) async fn write_subscription_pool(
     body: axum::body::Bytes,
 ) -> Result<Json<Value>, ApiError> {
     let scope = subscription_pool_scope(&client_identity, &headers, &body).await?;
-    let request: SubscriptionPoolWrite = serde_json::from_slice(&body).map_err(|error| {
+    apply_pool_write(scope, &body).await
+}
+
+pub(super) async fn apply_pool_write(
+    scope: pool::PoolScope,
+    body: &[u8],
+) -> Result<Json<Value>, ApiError> {
+    let request: SubscriptionPoolWrite = serde_json::from_slice(body).map_err(|error| {
         api_error(
             StatusCode::BAD_REQUEST,
             &format!("invalid subscription request: {error}"),
