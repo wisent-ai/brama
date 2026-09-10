@@ -58,7 +58,9 @@ fn cli_banks_and_retires_membership_and_refuses_invalid_writes() {
     let retire = json!({"action": "retire", "agent_id": AGENT, "subscription_id": SUBSCRIPTION});
     let retired = invoke(&vault, state.path(), &evidence, "retire", retire.to_string().as_bytes());
     assert!(retired.status.success(), "{}", String::from_utf8_lossy(&retired.stdout));
-    assert!(!vault.list().iter().any(|row| row["id"] == item));
+    assert_eq!(vault.list(), members, "retirement must not delete the stored credential");
+    let usage: Value = serde_json::from_slice(&fs::read(state.path().join("usage.json")).unwrap()).unwrap();
+    assert_eq!(usage["subscriptions"][SUBSCRIPTION]["credential"]["state"], "disabled");
     let journal = fs::read_to_string(state.path().join("journal.jsonl")).unwrap();
     assert!(journal.lines().any(|line| {
         let event: Value = serde_json::from_str(line).unwrap();
