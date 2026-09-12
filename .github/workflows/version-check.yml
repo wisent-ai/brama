@@ -7,8 +7,12 @@ name: version-check
 # back over MCP `initialize`, so a wrong number is externally observable.
 #
 # The rule itself lives in one place for the whole fleet and is NOT copied here:
-# https://github.com/lbartoszcze/AutoVersion. This workflow supplies only the two things
-# this repository alone knows: its surface, and the version it declares.
+# https://github.com/lbartoszcze/AutoVersion. This workflow supplies only the things
+# this repository alone knows: its surface, the version it declares, and the coordinates
+# its own history shows were consumed. `tests/versioning/contract.py` makes the comparison;
+# the shared workflow it replaced demanded the declared version equal the required one
+# exactly, and refused every commit on main after 0.4.2 and 0.4.3 were claimed by builds
+# that failed, since the Stado release plane never reuses a coordinate.
 #
 # The baseline is the committed released-surface.json and is never regenerated here; only
 # the candidate is recomputed. A check that rebuilt both sides would always agree with
@@ -40,11 +44,30 @@ jobs:
       repository_token: ${{ secrets.ECHO_WEB_REPOSITORY_TOKEN }}
 
   contract:
-    uses: wisent-ai/quality-control/.github/workflows/rust-autoversion.yml@2de57851b29b57da01fff370817a45ad121c93bc
-    with:
-      manifest: Cargo.toml
-      baseline: released-surface.json
-      surface-command: python3 tests/versioning/surface.py
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install the shared version rule into its own environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/autoversion"
+          "$RUNNER_TEMP/autoversion/bin/python" -m pip install --quiet \
+            "git+https://github.com/lbartoszcze/AutoVersion@v0.1.0"
+          test -x "$RUNNER_TEMP/autoversion/bin/autoversion"
+
+      - name: Enforce released surface and committed manifest version
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet -- Cargo.toml
+          python3 tests/versioning/contract.py \
+            --autoversion "$RUNNER_TEMP/autoversion/bin/autoversion" --self-check
 
   baseline:
     if: github.event_name != 'pull_request'

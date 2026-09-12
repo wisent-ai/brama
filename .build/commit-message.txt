@@ -1,0 +1,19 @@
+Let the version gate account for coordinates a failed build consumed
+
+The contract job on main has refused every commit since 0.4.3: the shared
+workflow it pinned - deleted from quality-control a month ago - demanded
+that Cargo.toml equal the version AutoVersion derived from the released
+baseline, 0.4.2, while 0.4.2 and 0.4.3 had been claimed by builds that
+failed on charless-mac-mini and the Stado release plane never reuses a
+coordinate. 0.4.4, which carries the manual Claude sign-in, was refused
+the same way.
+
+tests/versioning/contract.py now makes the comparison this repository
+alone can make: the shared rule still decides the change class and the
+required version, and a declared version may run ahead of it within the
+same series only when every coordinate it skips was declared by an
+earlier commit on the branch. A jump nothing accounts for is refused,
+naming the first undeclared coordinate; the self-check proves that
+refusal on every run before the verdict is trusted. The owner's
+declared-breakage.json, which the release doc promised and the adopted
+workflow had dropped, reaches the rule as --breaking again.

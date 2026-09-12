@@ -74,12 +74,20 @@ all five identities is not releasable.</p>
 </ul>
 <p><code>tests/versioning/surface.py</code> extracts the mechanically visible part of this contract: the
 command list a caller invokes by name. <code>released-surface.json</code> is the immutable
-published baseline, never a candidate regenerated from the same working tree.</p>
+published baseline, never a candidate regenerated from the same working tree.
+<code>tests/versioning/contract.py</code> asks the shared AutoVersion rule what the candidate
+surface requires and compares that with the version <code>Cargo.toml</code> declares. The
+declared version may run ahead of the required one within the same series only when every
+coordinate it skips was declared by an earlier commit on the branch: the Stado release plane
+never reuses a coordinate, so a build that failed at 0.4.2 and again at 0.4.3 made 0.4.4 the
+next honest patch, and the gate says which coordinates were consumed. A jump nothing accounts
+for is refused, naming the first coordinate that was never declared. The gate proves on every
+run that it can still refuse before it trusts its own verdict.</p>
 <p>Two entries in the list above — the release archive layout and the launcher's
 behavior — are contract that no extractor can see, so a release owner declares
 that breakage instead of hoping a command list reveals it. The declaration lives
 in <code>declared-breakage.json</code>, naming the version it belongs to and why, and
-<code>version-check</code> passes it to the shared rule as <code>--breaking</code>, which escalates the
+<code>contract.py</code> passes it to the shared rule as <code>--breaking</code>, which escalates the
 class and can never lower it. It applies only while <code>Cargo.toml</code> still declares
 that version, so it expires on its own rather than becoming a switch left on that
 makes every later release look breaking.</p>
