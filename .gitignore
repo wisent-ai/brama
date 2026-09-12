@@ -21,3 +21,6 @@ build/
 
 # Local gateway run output.
 router.log
+
+# The ignored build directory every checkout keeps its throwaway state in.
+.build/
