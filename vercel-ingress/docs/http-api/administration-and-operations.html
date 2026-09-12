@@ -145,6 +145,26 @@ console asked for it; no timer reaches any of them.</p>
   retired or mismapped account, derive the provider from the selected subscription, and
   return the native <code>signed_in</code> or <code>failed</code> verdict with its actual
   detail.</li>
+<li><strong>POST <code>/v1/admin/subscription-pool/sign-in-manual</code></strong> begins a
+  manual Claude sign-in for the selected pooled account without Weles: it takes
+  <code>{"subscription_id", "reason"}</code>, verifies the account is active and not
+  retired, draws the PKCE verifier and state, keeps them in the gateway, and answers
+  <code>{"sign_in_id", "provider", "subscription_id", "url", "expires_in_secs"}</code>. The
+  <code>url</code> is the provider's authorize page as <code>omp auth-broker login anthropic</code>
+  opens it; the operator opens it in their own browser. Refusals: <code>400</code> for a blank
+  reason or id, <code>404 subscription not found</code>, <code>409</code> for a retired account
+  or a provider without a manual flow (<code>a manual sign-in is defined for claude-code;
+  `codex` is not it</code>), <code>429</code> when eight sign-ins are already open. An open
+  sign-in expires after 900 seconds.</li>
+<li><strong>POST <code>/v1/admin/subscription-pool/sign-in-manual/:sign_in_id</code></strong>
+  completes it with <code>{"code"}</code>: the <code>code#state</code> the page showed or the
+  whole redirect URL. The gateway checks the state against the one it drew, exchanges the
+  code at the provider's token endpoint, stores the grant as the subscription's credential
+  and proves it with one refresh, answering the same <code>signed_in</code> or
+  <code>failed</code> verdict as <a href="/docs/cli/subscription/sign-in-manual">the CLI</a>.
+  The sign-in is spent by the first paste, whatever it comes to: <code>404 no manual sign-in
+  with that id is open</code> afterwards, <code>409</code> with the exact sentence for a paste
+  that is empty, unreadable or carries another sign-in's state.</li>
 <li><strong>POST <code>/v1/admin/subscription-pool/refresh</code></strong> takes
   <code>{"provider", "reason"}</code> and runs the same audited refresh as
   <code>brama subscription refresh</code>, answering the verdict with status 200 (captured:

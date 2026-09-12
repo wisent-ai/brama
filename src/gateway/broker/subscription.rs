@@ -31,8 +31,8 @@ pub use inventory::{
     list_subscriptions, list_unroutable_accounts,
 };
 pub use renewal::{
-    refresh_subscription_credential, refresh_subscription_credential_ahead, supports_oauth_refresh,
-    RefreshAhead,
+    put_subscription_credential, refresh_subscription_credential,
+    refresh_subscription_credential_ahead, supports_oauth_refresh, RefreshAhead,
 };
 pub use tags::subscription_tags_for_write;
 

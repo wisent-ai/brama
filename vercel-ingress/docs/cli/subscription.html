@@ -27,9 +27,10 @@
 <ul>
 <li><a href="/docs/cli/subscription/refresh"><code>brama subscription refresh &lt;PROVIDER&gt; --reason &lt;REASON&gt; [--json]</code></a> — refresh one provider’s grants now.</li>
 <li><a href="/docs/cli/subscription/sign-in"><code>brama subscription sign-in &lt;PROVIDER&gt; --reason &lt;REASON&gt; [--login-item &lt;LOGIN_ITEM&gt;] [--login-timeout-ms &lt;MILLISECONDS&gt;] [--json]</code></a> — drive an exact Weles account sign-in and prove it with a refresh.</li>
+<li><a href="/docs/cli/subscription/sign-in-manual"><code>brama subscription sign-in-manual &lt;PROVIDER&gt; --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--code &lt;CODE&gt;] [--json]</code></a> — sign one Claude account in through your own browser and a pasted code, without Weles, and prove it with a refresh.</li>
 </ul>
 <h2 id="output-state-and-refusals">Output, state, and refusals<a class="headerlink" href="#output-state-and-refusals" title="Link to this section">&para;</a></h2>
-<p>The group command itself produces only help or parser errors and changes no state. Omitting <code>&lt;COMMAND&gt;</code> or naming anything other than <code>refresh</code> or <code>sign-in</code> is refused by Clap before a handler runs; use <code>brama subscription --help</code> to print the accepted tree.</p>
+<p>The group command itself produces only help or parser errors and changes no state. Omitting <code>&lt;COMMAND&gt;</code> or naming anything other than <code>refresh</code>, <code>sign-in</code> or <code>sign-in-manual</code> is refused by Clap before a handler runs; use <code>brama subscription --help</code> to print the accepted tree.</p>
 <p><a href="/docs/cli">Back to the complete CLI command tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>

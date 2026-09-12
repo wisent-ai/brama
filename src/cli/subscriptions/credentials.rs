@@ -40,6 +40,24 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long, default_value_t = false)]
         json: bool,
     },
+    /// Sign one Claude account in by hand: open the printed URL in your own browser, log in, and paste the code it shows
+    #[command(name = "sign-in-manual")]
+    SignInManual {
+        /// The provider whose account should be signed in; `claude-code` is the one with a manual flow
+        provider: String,
+        /// Exact Brama subscription whose grant this sign-in replaces
+        #[arg(long)]
+        subscription_id: String,
+        /// Why this sign-in is being run; recorded in the journal beside the verdict
+        #[arg(long)]
+        reason: String,
+        /// The `code#state` or redirect URL, when it is already at hand; without it the command asks on the terminal
+        #[arg(long)]
+        code: Option<String>,
+        /// Print the verdict as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
 }
 
 pub(crate) async fn run(command: SubscriptionCommand) {
@@ -102,7 +120,71 @@ pub(crate) async fn run(command: SubscriptionCommand) {
                 std::process::exit(1);
             }
         },
+        SubscriptionCommand::SignInManual {
+            provider,
+            subscription_id,
+            reason,
+            code,
+            json,
+        } => {
+            let verdict = sign_in_manual(&provider, &subscription_id, &reason, code).await;
+            match verdict {
+                Ok(verdict) => {
+                    if json {
+                        crate::cli::print_json(
+                            &serde_json::to_value(&verdict).expect("verdict serializes"),
+                        );
+                    } else {
+                        println!("provider: {}", verdict.provider);
+                        println!("subscription: {}", verdict.subscription_id);
+                        if let Some(account) = &verdict.account {
+                            println!("account: {account}");
+                        }
+                        println!("result: {}", verdict.result);
+                        println!("detail: {}", verdict.detail);
+                    }
+                    if verdict.result != "signed_in" {
+                        std::process::exit(1);
+                    }
+                }
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(1);
+                }
+            }
+        }
     }
+}
+
+/// The manual sign-in on a terminal: the page to open, the paste, and the
+/// shared exchange-store-prove that Brama Desktop's route also ends in.
+async fn sign_in_manual(
+    provider: &str,
+    subscription_id: &str,
+    reason: &str,
+    code: Option<String>,
+) -> Result<brama::subscription_dispatch::sign_in::manual::ManualSignIn, String> {
+    use brama::subscription_dispatch::sign_in::manual;
+    if reason.trim().is_empty() {
+        return Err("--reason must say why this sign-in is being run".into());
+    }
+    let request = manual::begin(provider, subscription_id)?;
+    let pasted = match code {
+        Some(code) => code,
+        None => {
+            eprintln!("Open this page in your own browser and log in:");
+            eprintln!();
+            eprintln!("  {}", request.url);
+            eprintln!();
+            eprintln!("When it shows a code, paste it here (the `code#state` text, or the whole redirect URL):");
+            let mut line = String::new();
+            std::io::stdin()
+                .read_line(&mut line)
+                .map_err(|error| format!("reading the pasted code: {error}"))?;
+            line
+        }
+    };
+    manual::finish(request, &pasted, reason).await
 }
 
 /// What one refresh came to, as lines.

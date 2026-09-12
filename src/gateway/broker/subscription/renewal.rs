@@ -156,7 +156,11 @@ fn record_refusal(subscription_id: &str, provider: &str, refused: &Failure) {
 /// This used to pass `None` for tags, which leaves whatever the item already
 /// carried and gives a fresh item nothing at all. See
 /// [`subscription_tags_for_write`] for what that cost.
-async fn put_subscription_credential(
+///
+/// Public because a grant does not only arrive by refresh: the manual sign-in
+/// exchanges an authorization code the operator pasted and stores the result
+/// the same way, so the two paths cannot disagree about tags or shape.
+pub async fn put_subscription_credential(
     subscription_id: &str,
     provider: &str,
     credential: &[u8],

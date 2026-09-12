@@ -7,6 +7,8 @@
 //! Weles login item that disagrees with the stored one is a `409` rather than a
 //! sign-in against the wrong identity.
 
+pub(in crate::core::server) mod manual;
+
 use axum::extract::{Extension, Path};
 use axum::http::StatusCode;
 use axum::Json;

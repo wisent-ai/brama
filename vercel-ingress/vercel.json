@@ -102,6 +102,10 @@
       "destination": "/docs/cli/subscription/sign-in.html"
     },
     {
+      "source": "/docs/cli/subscription/sign-in-manual",
+      "destination": "/docs/cli/subscription/sign-in-manual.html"
+    },
+    {
       "source": "/docs/cli/collect-task-quality",
       "destination": "/docs/cli/collect-task-quality.html"
     },

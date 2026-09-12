@@ -101,12 +101,15 @@ answer by the caller's proven identity, which is where ownership already lives
 same change: their routes, their handlers, their tests, the desktop calls that reached
 them and their paragraphs on this site. A signed agent, an account holder and this
 installation's own console get one answer narrowed by who they are.</p>
-<p><strong>Credential repair (7).</strong>
+<p><strong>Credential repair (10).</strong>
 <code>brama subscription refresh</code>; <code>brama subscription sign-in</code>;
+<code>brama subscription sign-in-manual</code>;
 <code>POST /v1/account/subscription-sign-in/:subscription_id</code>;
 <code>POST /v1/admin/subscription-sign-in/:agent_id/:subscription_id</code>;
 <code>POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe</code>;
 <code>POST /v1/admin/subscription-pool/sign-in</code>;
+<code>POST /v1/admin/subscription-pool/sign-in-manual</code>;
+<code>POST /v1/admin/subscription-pool/sign-in-manual/:sign_in_id</code>;
 <code>POST /v1/admin/subscription-pool/refresh</code>. Each of these was added because
 one incident needed one repair, and each requires the operator to already know which
 repair applies. The ledger records why a credential is unusable —
@@ -191,9 +194,10 @@ before anything else could be expressed in terms of them.</li>
 <code>76b7b987b33f950db9c6540d8a001b184d93b539</code>. Second, because the usage ledger
 is what the repair capability reads to decide which repair applies; a capability that
 reads a declaration cannot land before the declaration is single-sourced.</li>
-<li><strong>Credential repair</strong> (7). Third, and only now, because it is the family
+<li><strong>Credential repair</strong> (10). Third, and only now, because it is the family
 that consumes the previous two: it selects a subscription from the pool and a verdict from
-the ledger.</li>
+the ledger. The manual sign-in joined it on 2026-09-12 as the repair for an account only a
+person can log into; it stays a separate verb until the capability can ask the person.</li>
 <li><strong>Route adoption</strong> (5). Fourth. It is independent of the subscription
 families and can be sequenced anywhere after them; it goes here because collapsing three
 entry points into one changes <code>brama onboard</code>, and changing a first-use path

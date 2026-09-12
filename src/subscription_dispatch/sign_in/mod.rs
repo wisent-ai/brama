@@ -1,5 +1,6 @@
 //! Brama requests authentication for a Skarbiec subscription; Weles executes it.
 pub mod blocked;
+pub mod manual;
 mod trajectory;
 mod verdict;
 mod worker;
