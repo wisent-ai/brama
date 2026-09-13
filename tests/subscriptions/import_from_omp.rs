@@ -271,3 +271,56 @@ fn the_console_hands_a_grant_over_and_gets_the_same_verdict() {
     let (_, _, message) = refusal(&answer);
     assert!(message.contains("--reason must say why"), "{message}");
 }
+
+/// The ledger remembers the refusal that disowned a grant and the request
+/// path leaves such a row alone until a sign-in replaces it. A grant the
+/// console hands over is that sign-in: the row reads `active` again.
+#[test]
+fn a_handed_over_grant_repairs_a_disowned_row() {
+    let gateway = Gateway::start(
+        "grant-repairs-disowned",
+        &[(AGENT, "claude-code", "pool-agent-claude")],
+    );
+    let grant = json!({
+        "subscription_id": "pool-agent-claude",
+        "reason": "story",
+        "access_token": "sk-ant-oat01-first",
+        "refresh_token": "sk-ant-ort01-first",
+        "expires_at_ms": 1_789_400_000_000_i64,
+    });
+    let (status, _) = gateway.console(
+        "/v1/admin/subscription-pool/grant",
+        Method::POST,
+        Some(&grant),
+    );
+    assert_eq!(status, 200);
+    // A refresh on a made-up refresh token is what disowns a grant.
+    let (status, refreshed) = gateway.console(
+        "/v1/admin/subscription-pool/refresh",
+        Method::POST,
+        Some(&json!({"provider": "claude-code", "reason": "story"})),
+    );
+    assert_eq!(status, 200, "{refreshed}");
+    assert_eq!(refreshed["result"], "failed", "{refreshed}");
+    let state = |report: &Value| {
+        report["subscriptions"]
+            .as_array()
+            .and_then(|rows| rows.iter().find(|row| row["id"] == "pool-agent-claude"))
+            .map(|row| row["credential"]["state"].clone())
+            .unwrap_or(Value::Null)
+    };
+    let (_, before) = gateway.console(gateway::POOL, Method::GET, None);
+    assert_eq!(state(&before), "needs_reauthorization", "{before}");
+    let (status, verdict) = gateway.console(
+        "/v1/admin/subscription-pool/grant",
+        Method::POST,
+        Some(&grant),
+    );
+    assert_eq!(status, 200, "{verdict}");
+    let (_, after) = gateway.console(gateway::POOL, Method::GET, None);
+    assert_eq!(
+        state(&after),
+        "active",
+        "the handed-over grant is the sign-in the ledger waited for: {after}"
+    );
+}

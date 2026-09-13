@@ -97,6 +97,10 @@ pub async fn adopt(
         return Err("--reason must say why this sign-in is being run".into());
     }
     store(provider, subscription_id, &grant).await?;
+    // The ledger remembers the refusal that disowned the old grant, and the
+    // request path leaves a disowned grant alone until a sign-in replaces it.
+    // This is that sign-in.
+    crate::subscription_dispatch::usage::record_credential_signed_in(subscription_id, provider);
     let source = match origin {
         Origin::PastedCode => "the code the operator pasted",
         Origin::Harness => "the operator's harness",
