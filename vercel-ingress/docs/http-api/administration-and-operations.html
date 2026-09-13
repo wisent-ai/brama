@@ -160,11 +160,26 @@ console asked for it; no timer reaches any of them.</p>
   completes it with <code>{"code"}</code>: the <code>code#state</code> the page showed or the
   whole redirect URL. The gateway checks the state against the one it drew, exchanges the
   code at the provider's token endpoint, stores the grant as the subscription's credential
-  and proves it with one refresh, answering the same <code>signed_in</code> or
+  and proves it with one minimal completion, answering the same <code>signed_in</code> or
   <code>failed</code> verdict as <a href="/docs/cli/subscription/sign-in-manual">the CLI</a>.
   The sign-in is spent by the first paste, whatever it comes to: <code>404 no manual sign-in
   with that id is open</code> afterwards, <code>409</code> with the exact sentence for a paste
   that is empty, unreadable or carries another sign-in's state.</li>
+<li><strong>POST <code>/v1/admin/subscription-pool/grant</code></strong> takes a grant the
+  console already holds — Brama Desktop reads it from <code>omp</code>'s store on the machine
+  it runs on — as <code>{"subscription_id", "reason", "access_token", "refresh_token",
+  "expires_at_ms", "account"?}</code>, stores it as the subscription's credential in the shape
+  the refresh path reads, proves it with one minimal completion rather than a refresh (a
+  refresh would rotate the token out from under the harness that still holds it), journals
+  the verdict with <code>origin: console</code>, and answers <code>{"provider",
+  "subscription_id", "account", "result", "detail"}</code> — the verdict of
+  <a href="/docs/cli/subscription/import"><code>brama subscription import</code></a>. Captured
+  for a token the provider does not know: <code>result: failed</code>, <code>the grant from the
+  console is stored, but the provider would not serve it: provider_authentication: OAuth access
+  token is invalid.</code> Refusals: <code>400</code> for a blank reason or id, <code>404
+  subscription not found</code>, <code>409</code> for a retired account, a provider without a
+  manual flow, or a grant missing either token; <code>403</code> for any caller but the
+  console.</li>
 <li><strong>POST <code>/v1/admin/subscription-pool/refresh</code></strong> takes
   <code>{"provider", "reason"}</code> and runs the same audited refresh as
   <code>brama subscription refresh</code>, answering the verdict with status 200 (captured:

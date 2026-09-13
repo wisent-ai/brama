@@ -24,12 +24,31 @@ coordinate yet. Released entries live in
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-import-from-omp">Unreleased: the grant the harness already holds is taken, not asked for again<a class="headerlink" href="#unreleased-import-from-omp" title="Link to this section">&para;</a></h2>
+<p>On 2026-09-13 the operator asked why Brama did not simply take the tokens from
+<code>omp</code>: the harness beside the gateway had been signed into the account the
+pool needed for a day. <a href="/docs/cli/subscription/import"><code>brama subscription import claude-code --from-omp --subscription-id &lt;id&gt; --reason &lt;why&gt;</code></a>
+reads the harness's credential store under <code>~/.omp/agent/agent.db</code>, read-only,
+takes the one enabled Claude grant or the account <code>--account</code> names, stores it
+as the subscription's credential in the shape the refresh path reads, proves it with
+one minimal completion, and journals the verdict with <code>origin: harness</code>.
+Brama Desktop's <strong>Take the grant from omp…</strong> reads the same store on the
+console's machine and hands the grant to the gateway through
+<code>POST /v1/admin/subscription-pool/grant</code>.</p>
+<p>Every grant that reaches Brama without a Weles sign-in - pasted code, harness,
+console - is now proved by a probe instead of a refresh. A refresh rotates the
+refresh token and revokes the one it replaced, so proving a grant the harness still
+holds would have killed the harness's copy and failed every session the operator had
+open on that account at its next refresh; the probe spends one completion on the
+access token both sides hold and rotates nothing. The sweep rotates the grant later,
+as the access token nears its end, and the harness's copy goes stale then - which the
+<a href="/docs/cli/subscription/import#after-the-import">import page</a> says plainly.</p>
 <h2 id="unreleased-manual-sign-in">Unreleased: a Claude account is signed in by hand, without Weles<a class="headerlink" href="#unreleased-manual-sign-in" title="Link to this section">&para;</a></h2>
 <p><a href="/docs/cli/subscription/sign-in-manual"><code>brama subscription sign-in-manual claude-code --subscription-id &lt;id&gt; --reason &lt;why&gt;</code></a>
 prints the provider's authorize page, waits for the code the operator pastes
 after logging in with their own browser, exchanges it at the provider's token
 endpoint, stores the grant as that subscription's credential in the shape the
-refresh path reads, and proves it with one refresh. The page carries the
+refresh path reads, and proves it with one completion. The page carries the
 client id, scopes, loopback redirect and PKCE challenge that
 <code>omp auth-broker login anthropic</code> sends, so the grant is the same kind
 the automatic renewal already keeps alive; the manual step is not repeated

@@ -15,20 +15,20 @@
 //! same scopes, same loopback callback, same `code#state` paste, same token
 //! endpoint. A grant that came from a different flow would be a different
 //! kind of credential, and the refresh path would then have to know which.
+//! And when the harness already holds the grant, [`omp`] takes it from there
+//! instead of asking the person to log in a second time.
 
-mod proof;
-
-use std::time::Duration;
+mod exchange;
+pub mod grant;
+pub mod omp;
 
 use base64::Engine;
 use serde::Serialize;
-use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
-use crate::gateway::broker;
-
-pub use proof::finish;
+pub use exchange::complete;
+pub use grant::{adopt, Grant, Origin};
 
 /// Everything the provider's authorize page needs, and the verifier the code
 /// exchange proves it with. Built once per sign-in; the verifier never leaves
@@ -49,16 +49,10 @@ impl AuthorizationRequest {
     pub fn subscription_id(&self) -> &str {
         &self.subscription_id
     }
-}
 
-#[derive(Serialize)]
-struct CodeExchange<'a> {
-    grant_type: &'static str,
-    code: &'a str,
-    state: &'a str,
-    client_id: &'static str,
-    redirect_uri: &'static str,
-    code_verifier: &'a str,
+    fn verifier(&self) -> &str {
+        &self.verifier
+    }
 }
 
 /// What one manual sign-in came to.
@@ -191,122 +185,4 @@ pub fn parse_pasted(input: &str, expected_state: &str) -> Result<(String, String
         return Err("the pasted code is empty".into());
     }
     Ok((code, state))
-}
-
-fn exchange_timeout() -> Duration {
-    Duration::from_secs("30".parse().expect("valid exchange timeout"))
-}
-
-fn max_response_bytes() -> usize {
-    "65536".parse().expect("valid response limit")
-}
-
-fn millis_per_second() -> i64 {
-    "1000".parse().expect("valid milliseconds per second")
-}
-
-/// Exchange the pasted code for a grant, store it as this subscription's
-/// credential in the shape the refresh path reads, and say what happened.
-pub async fn complete(request: AuthorizationRequest, pasted: &str) -> Result<ManualSignIn, String> {
-    let config = manual_provider(&request.provider)
-        .ok_or_else(|| format!("no manual sign-in for {}", request.provider))?;
-    let (code, state) = parse_pasted(pasted, &request.state)?;
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(exchange_timeout())
-        .build()
-        .map_err(|error| format!("token exchange client: {error}"))?;
-    let response = client
-        .post(config.token_endpoint)
-        .header(reqwest::header::ACCEPT, "application/json")
-        .json(&CodeExchange {
-            grant_type: "authorization_code",
-            code: &code,
-            state: &state,
-            client_id: config.client_id,
-            redirect_uri: config.redirect_uri,
-            code_verifier: &request.verifier,
-        })
-        .send()
-        .await
-        .map_err(|error| format!("the token exchange did not reach the provider: {error}"))?;
-    let status = response.status().as_u16();
-    if response
-        .content_length()
-        .is_some_and(|length| length > max_response_bytes() as u64)
-    {
-        return Err("the provider's answer is too large to be a grant".into());
-    }
-    let body = Zeroizing::new(
-        response
-            .bytes()
-            .await
-            .map_err(|error| format!("reading the provider's answer: {error}"))?
-            .to_vec(),
-    );
-    if !(200..300).contains(&status) {
-        let text = String::from_utf8_lossy(&body);
-        return Ok(ManualSignIn {
-            provider: request.provider,
-            subscription_id: request.subscription_id,
-            account: None,
-            result: "failed",
-            detail: format!(
-                "the provider refused the code with HTTP {status}: {}",
-                text.trim()
-            ),
-        });
-    }
-    let grant: Value = serde_json::from_slice(&body)
-        .map_err(|_| "the provider's answer is not JSON".to_owned())?;
-    let access = grant
-        .get("access_token")
-        .and_then(Value::as_str)
-        .filter(|token| !token.is_empty())
-        .ok_or("the provider's answer carries no access token")?;
-    let refresh = grant
-        .get("refresh_token")
-        .and_then(Value::as_str)
-        .filter(|token| !token.is_empty())
-        .ok_or("the provider's answer carries no refresh token; Brama cannot keep a grant it cannot renew")?;
-    let expires_in = grant
-        .get("expires_in")
-        .and_then(Value::as_u64)
-        .unwrap_or_default();
-    let now = chrono::Utc::now().timestamp();
-    let account = grant
-        .get("account")
-        .and_then(|account| account.get("email_address"))
-        .and_then(Value::as_str)
-        .map(str::to_owned);
-    // The exact shape `oauth_refresh::provider` reads for claude-code, so the
-    // sweep that keeps this grant alive sees nothing unusual about it.
-    let credential = Zeroizing::new(
-        json!({
-            "claudeAiOauth": {
-                "accessToken": access,
-                "refreshToken": refresh,
-                "expiresAt": (now + expires_in as i64) * millis_per_second(),
-                "scopes": config.scopes,
-            }
-        })
-        .to_string(),
-    );
-    broker::put_subscription_credential(
-        &request.subscription_id,
-        &request.provider,
-        credential.as_bytes(),
-    )
-    .await
-    .map_err(|detail| format!("the grant was issued but could not be stored: {detail}"))?;
-    Ok(ManualSignIn {
-        provider: request.provider,
-        subscription_id: request.subscription_id,
-        detail: format!(
-            "the operator signed {} in and its grant is stored; Brama will refresh it from now on",
-            account.as_deref().unwrap_or("the account")
-        ),
-        account,
-        result: "signed_in",
-    })
 }

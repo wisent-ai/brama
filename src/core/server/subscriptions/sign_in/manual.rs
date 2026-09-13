@@ -4,7 +4,7 @@
 //! `begin` draws the PKCE verifier and hands back the page to open; the
 //! verifier stays here, keyed by a sign-in id, for as long as a Weles login is
 //! allowed to take. `complete` takes the code the operator pasted, exchanges
-//! it, stores the grant and proves it with a refresh - the same `finish` the
+//! it, stores the grant and proves it with one completion - the same `complete` the
 //! CLI ends in. A verifier that never leaves the gateway is the whole point:
 //! the code alone, seen on a screen or in a paste, buys nothing.
 
@@ -53,21 +53,30 @@ pub(in crate::core::server) struct CompleteRequest {
     code: String,
 }
 
-/// `POST /v1/admin/subscription-pool/sign-in-manual`: the page to open.
-pub(in crate::core::server) async fn begin_admin_manual_sign_in(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-    Json(request): Json<BeginRequest>,
-) -> Result<Json<Value>, ApiError> {
-    require_brama_desktop(&client_identity)?;
-    let reason = request.reason.trim();
-    if reason.is_empty() {
+/// A grant the console already holds - taken from the operator's harness on
+/// the machine the console runs on - handed over as it is.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(in crate::core::server) struct GrantRequest {
+    subscription_id: String,
+    reason: String,
+    #[serde(flatten)]
+    grant: manual::Grant,
+}
+
+/// The active, unretired pooled account a request names, or the refusal
+/// that says why it cannot be signed in.
+async fn active_account(
+    subscription_id: &str,
+    reason: &str,
+) -> Result<crate::gateway::broker::SubscriptionEntry, ApiError> {
+    if reason.trim().is_empty() {
         return Err(api_error(
             StatusCode::BAD_REQUEST,
             "--reason must say why this sign-in is being run",
         ));
     }
-    let subscription_id = request.subscription_id.trim();
-    if subscription_id.is_empty() {
+    if subscription_id.trim().is_empty() {
         return Err(api_error(
             StatusCode::BAD_REQUEST,
             "a subscription id is required",
@@ -78,7 +87,7 @@ pub(in crate::core::server) async fn begin_admin_manual_sign_in(
         .map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?;
     let entry = entries
         .into_iter()
-        .find(|entry| entry.id == subscription_id)
+        .find(|entry| entry.id == subscription_id.trim())
         .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "subscription not found"))?;
     if entry.status != "active" || crate::journal::is_retired(&entry.id) {
         return Err(api_error(
@@ -86,6 +95,17 @@ pub(in crate::core::server) async fn begin_admin_manual_sign_in(
             "retired subscriptions cannot be signed in",
         ));
     }
+    Ok(entry)
+}
+
+/// `POST /v1/admin/subscription-pool/sign-in-manual`: the page to open.
+pub(in crate::core::server) async fn begin_admin_manual_sign_in(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Json(request): Json<BeginRequest>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    let reason = request.reason.trim();
+    let entry = active_account(&request.subscription_id, reason).await?;
     let authorization = manual::begin(&entry.provider, &entry.id)
         .map_err(|detail| api_error(StatusCode::CONFLICT, &detail))?;
     let sign_in_id = authorization.state.clone();
@@ -133,9 +153,31 @@ pub(in crate::core::server) async fn complete_admin_manual_sign_in(
             "no manual sign-in with that id is open; begin one again and paste what the new page shows",
         ));
     };
-    let verdict = manual::finish(pending.request, &request.code, &pending.reason)
+    let verdict = manual::complete(pending.request, &request.code, &pending.reason)
         .await
         .map_err(|detail| api_error(StatusCode::CONFLICT, &detail))?;
+    Ok(Json(
+        serde_json::to_value(verdict).expect("verdict serializes"),
+    ))
+}
+
+/// `POST /v1/admin/subscription-pool/grant`: a grant the console holds,
+/// stored and proved like one the provider just issued.
+pub(in crate::core::server) async fn adopt_admin_grant(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Json(request): Json<GrantRequest>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    let entry = active_account(&request.subscription_id, &request.reason).await?;
+    let verdict = manual::adopt(
+        &entry.provider,
+        &entry.id,
+        request.grant,
+        manual::Origin::Console,
+        request.reason.trim(),
+    )
+    .await
+    .map_err(|detail| api_error(StatusCode::CONFLICT, &detail))?;
     Ok(Json(
         serde_json::to_value(verdict).expect("verdict serializes"),
     ))

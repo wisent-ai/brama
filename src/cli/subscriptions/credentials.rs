@@ -58,6 +58,30 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long, default_value_t = false)]
         json: bool,
     },
+    /// Take a Claude grant the operator's harness already holds and make it this subscription's credential
+    #[command(name = "import")]
+    Import {
+        /// The provider whose grant should be taken; `claude-code` is the one the harness holds
+        provider: String,
+        /// Exact Brama subscription whose grant this import replaces
+        #[arg(long)]
+        subscription_id: String,
+        /// Why this import is being run; recorded in the journal beside the verdict
+        #[arg(long)]
+        reason: String,
+        /// Read the grant from omp's credential store on this machine
+        #[arg(long, default_value_t = false)]
+        from_omp: bool,
+        /// Which account's grant to take, when the harness holds more than one
+        #[arg(long)]
+        account: Option<String>,
+        /// The harness store to read instead of ~/.omp/agent/agent.db
+        #[arg(long)]
+        store: Option<String>,
+        /// Print the verdict as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
 }
 
 pub(crate) async fn run(command: SubscriptionCommand) {
@@ -126,34 +150,96 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             reason,
             code,
             json,
+        } => finish_manual(
+            sign_in_manual(&provider, &subscription_id, &reason, code).await,
+            json,
+        ),
+        SubscriptionCommand::Import {
+            provider,
+            subscription_id,
+            reason,
+            from_omp,
+            account,
+            store,
+            json,
         } => {
-            let verdict = sign_in_manual(&provider, &subscription_id, &reason, code).await;
-            match verdict {
-                Ok(verdict) => {
-                    if json {
-                        crate::cli::print_json(
-                            &serde_json::to_value(&verdict).expect("verdict serializes"),
-                        );
-                    } else {
-                        println!("provider: {}", verdict.provider);
-                        println!("subscription: {}", verdict.subscription_id);
-                        if let Some(account) = &verdict.account {
-                            println!("account: {account}");
-                        }
-                        println!("result: {}", verdict.result);
-                        println!("detail: {}", verdict.detail);
-                    }
-                    if verdict.result != "signed_in" {
-                        std::process::exit(1);
-                    }
-                }
-                Err(error) => {
-                    eprintln!("{error}");
-                    std::process::exit(1);
-                }
+            if !from_omp {
+                eprintln!("--from-omp names the only store this command reads; nothing else holds a grant Brama can take");
+                std::process::exit(1);
             }
+            finish_manual(
+                import_from_omp(
+                    &provider,
+                    &subscription_id,
+                    &reason,
+                    account.as_deref(),
+                    store.as_deref(),
+                )
+                .await,
+                json,
+            )
         }
     }
+}
+
+/// Print one manual verdict the way every credential command does, and exit
+/// unsuccessfully unless the account is signed in.
+fn finish_manual(
+    verdict: Result<brama::subscription_dispatch::sign_in::manual::ManualSignIn, String>,
+    json: bool,
+) {
+    match verdict {
+        Ok(verdict) => {
+            if json {
+                crate::cli::print_json(
+                    &serde_json::to_value(&verdict).expect("verdict serializes"),
+                );
+            } else {
+                println!("provider: {}", verdict.provider);
+                println!("subscription: {}", verdict.subscription_id);
+                if let Some(account) = &verdict.account {
+                    println!("account: {account}");
+                }
+                println!("result: {}", verdict.result);
+                println!("detail: {}", verdict.detail);
+            }
+            if verdict.result != "signed_in" {
+                std::process::exit(1);
+            }
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// The grant the harness holds for the named account, made this
+/// subscription's credential and proved with one completion.
+async fn import_from_omp(
+    provider: &str,
+    subscription_id: &str,
+    reason: &str,
+    account: Option<&str>,
+    store: Option<&str>,
+) -> Result<brama::subscription_dispatch::sign_in::manual::ManualSignIn, String> {
+    use brama::subscription_dispatch::sign_in::manual::{adopt, omp, Origin};
+    if reason.trim().is_empty() {
+        return Err("--reason must say why this sign-in is being run".into());
+    }
+    if subscription_id.trim().is_empty() {
+        return Err("an exact subscription id is required".into());
+    }
+    let store = store.map(str::to_owned).unwrap_or_else(omp::default_store);
+    let held = omp::account(&store, provider, account)?;
+    adopt(
+        provider,
+        subscription_id.trim(),
+        held.grant,
+        Origin::Harness,
+        reason,
+    )
+    .await
 }
 
 /// The manual sign-in on a terminal: the page to open, the paste, and the
@@ -184,7 +270,7 @@ async fn sign_in_manual(
             line
         }
     };
-    manual::finish(request, &pasted, reason).await
+    manual::complete(request, &pasted, reason).await
 }
 
 /// What one refresh came to, as lines.

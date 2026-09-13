@@ -246,6 +246,18 @@ impl SkarbiecVault {
             .collect()
     }
 
+    /// The document one item holds, read back out of the real vault: what a
+    /// credential write left behind is what the refresh path will read.
+    pub fn document_of(&self, item: &str) -> Value {
+        let shown = self.skarbiec(&["get", item]);
+        assert!(
+            shown.status.success(),
+            "the real skarbiec could not read {item}: {}",
+            String::from_utf8_lossy(&shown.stderr)
+        );
+        serde_json::from_slice(&shown.stdout).expect("the real skarbiec get is a JSON document")
+    }
+
     fn skarbiec(&self, args: &[&str]) -> Output {
         let mut command = Command::new(&self.skarbiec);
         command.args(args);
