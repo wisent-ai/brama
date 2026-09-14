@@ -2,6 +2,8 @@
 //! and each provider's own usage report when it is asked for.
 
 pub(crate) mod credentials;
+mod harness;
+mod manual;
 
 use clap::Args;
 use serde_json::Value;

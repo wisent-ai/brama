@@ -2,3 +2,5 @@
 //! product routes were excised when brama became a pure model gateway.
 pub mod broker;
 mod oauth_refresh;
+
+pub use oauth_refresh::renewable;

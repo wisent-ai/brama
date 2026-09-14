@@ -29,6 +29,14 @@ pub(super) use expiry::{access_token_expiry_ms, expires_within, needs_refresh};
 pub(super) use provider::supports_refresh;
 pub(super) use refusal::{classify_refusal, RefreshRefusal};
 
+/// Whether `document` is a grant this module could renew for `provider`: it
+/// has the provider's shape and carries a refresh token. The one check a
+/// grant taken from a harness or handed over by a console must pass before
+/// it is stored, so the sweep never finds a credential it cannot read.
+pub fn renewable(document: &Value, provider: &str) -> bool {
+    oauth_refresh_token(document, provider).is_some()
+}
+
 #[derive(Serialize)]
 struct OAuthRefreshRequest<'a> {
     grant_type: &'static str,

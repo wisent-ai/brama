@@ -17,6 +17,7 @@ use axum::http::StatusCode;
 use axum::Json;
 use serde::Deserialize;
 use serde_json::{json, Value};
+use zeroize::Zeroizing;
 
 use crate::core::server::administration::require_brama_desktop;
 use crate::core::server::admission::identity::ModelClientIdentity;
@@ -53,15 +54,20 @@ pub(in crate::core::server) struct CompleteRequest {
     code: String,
 }
 
-/// A grant the console already holds - taken from the operator's harness on
-/// the machine the console runs on - handed over as it is.
+/// A grant the console already holds - read from a harness on the machine
+/// the console runs on - handed over as the document Brama's refresh path
+/// reads for the provider.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(in crate::core::server) struct GrantRequest {
     subscription_id: String,
     reason: String,
-    #[serde(flatten)]
-    grant: manual::Grant,
+    /// The harness the console read it from, when it read it from one.
+    #[serde(default)]
+    harness: Option<String>,
+    #[serde(default)]
+    account: Option<String>,
+    document: Zeroizing<String>,
 }
 
 /// The active, unretired pooled account a request names, or the refusal
@@ -169,11 +175,23 @@ pub(in crate::core::server) async fn adopt_admin_grant(
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
     let entry = active_account(&request.subscription_id, &request.reason).await?;
+    let origin = match request.harness.as_deref().map(str::trim) {
+        Some(name) if !name.is_empty() => {
+            manual::Origin::Harness(manual::Harness::parse(name).ok_or_else(|| {
+                api_error(
+                    StatusCode::BAD_REQUEST,
+                    &format!("`{name}` is not a harness Brama reads grants from"),
+                )
+            })?)
+        }
+        _ => manual::Origin::Console,
+    };
     let verdict = manual::adopt(
         &entry.provider,
         &entry.id,
-        request.grant,
-        manual::Origin::Console,
+        request.document,
+        request.account,
+        origin,
         request.reason.trim(),
     )
     .await

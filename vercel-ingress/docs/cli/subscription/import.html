@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>brama subscription import — Brama CLI Docs</title>
-  <meta name="description" content="Take the Claude grant the operator’s harness already holds and make it a Brama subscription credential, proved with one completion.">
+  <meta name="description" content="Take a grant a harness on this machine already holds - omp, Claude Code, Codex CLI or Kimi Code - and make it a Brama subscription credential, proved with one completion.">
   <link rel="canonical" href="https://brama.wisent.com/docs/cli/subscription/import">
   <link rel="stylesheet" href="/docs/assets/site.css">
 </head>
@@ -19,44 +19,54 @@
     <main>
       <p class="source-note">Brama CLI command reference</p>
       <article class="doc"><h1 id="brama-subscription-import"><code>brama subscription import</code><a class="headerlink" href="#brama-subscription-import" title="Link to this section">&para;</a></h1>
-<p>Take the Claude grant the operator’s harness already holds and make it this subscription’s credential. <code>omp</code> keeps every account it signed in under <code>~/.omp/agent/agent.db</code>; when that harness is signed into the account the pool needs, nobody has to log in a second time. Brama reads the store, never writes it, stores the grant in the shape its refresh path reads, proves it with one minimal completion, and journals the verdict with the reason.</p>
+<p>Take a grant a harness on this machine already holds and make it this subscription’s credential. Four harnesses sign accounts in on an operator’s machine and each keeps the grant its own way — <code>omp</code> in <code>~/.omp/agent/agent.db</code>, Claude Code in <code>~/.claude/.credentials.json</code> (on macOS in the Keychain under <code>Claude Code-credentials</code>), Codex CLI in <code>~/.codex/auth.json</code>, Kimi Code in <code>~/.kimi-code/credentials/kimi-code.json</code>. When one of them is signed into the account the pool needs, nobody has to log in a second time. Brama reads each store the way it was written, never writes any of them, turns what it finds into the one document its refresh path reads for that provider, proves it with one minimal completion, and journals the verdict with the reason and the harness it came from.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama subscription import &lt;PROVIDER&gt; --from-omp --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--account &lt;EMAIL&gt;] [--store &lt;PATH&gt;] [--json]</code></pre>
+<pre><code class="language-console">brama subscription held [--provider &lt;PROVIDER&gt;] [--home &lt;DIR&gt;] [--json]
+brama subscription import &lt;PROVIDER&gt; --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--from &lt;HARNESS&gt;] [--account &lt;EMAIL&gt;] [--home &lt;DIR&gt;] [--gateway &lt;ORIGIN&gt;] [--json]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
-<tr><td><code>&lt;PROVIDER&gt;</code></td><td>required</td><td><code>claude-code</code>. The harness calls it <code>anthropic</code>; other providers are refused by name.</td></tr>
-<tr><td><code>--from-omp</code></td><td>required</td><td>Read the grant from <code>omp</code>’s credential store on this machine. It is the only store this command reads.</td></tr>
+<tr><td><code>&lt;PROVIDER&gt;</code></td><td>required</td><td><code>claude-code</code>, <code>codex</code> or <code>kimi</code> — the providers whose grants the refresh path can renew.</td></tr>
 <tr><td><code>--subscription-id &lt;ID&gt;</code></td><td>required</td><td>The exact Brama subscription whose grant this import replaces.</td></tr>
 <tr><td><code>--reason &lt;REASON&gt;</code></td><td>required</td><td>Nonempty audit reason, journaled beside the verdict.</td></tr>
-<tr><td><code>--account &lt;EMAIL&gt;</code></td><td>required when the harness holds more than one enabled grant</td><td>Which account’s grant to take. Disabled accounts are never candidates.</td></tr>
-<tr><td><code>--store &lt;PATH&gt;</code></td><td>optional; <code>~/.omp/agent/agent.db</code></td><td>Another harness store, read the same way.</td></tr>
-<tr><td><code>--json</code></td><td>optional; off</td><td>Print the verdict as JSON instead of labeled lines.</td></tr>
+<tr><td><code>--from &lt;HARNESS&gt;</code></td><td>required when more than one grant is held</td><td><code>omp</code>, <code>claude</code>, <code>codex</code> or <code>kimi</code>. <code>omp</code> holds grants for all three providers; the other three each hold their own provider’s.</td></tr>
+<tr><td><code>--account &lt;EMAIL&gt;</code></td><td>required when the harness holds more than one</td><td>Which account’s grant to take. Disabled accounts are never candidates.</td></tr>
+<tr><td><code>--home &lt;DIR&gt;</code></td><td>optional; the home directory</td><td>Read every harness store below this directory instead. The Keychain is consulted only for the real home.</td></tr>
+<tr><td><code>--gateway &lt;ORIGIN&gt;</code></td><td>optional</td><td>Hand the grant to this gateway through <code>POST /v1/admin/subscription-pool/grant</code> instead of storing it in this process. The console’s bearer is read from stdin, never from <code>argv</code>. This is how the desktop beside the harness reaches a gateway on another host.</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td>Print the verdict, or the list, as JSON instead of lines.</td></tr>
 </tbody></table>
+<h2 id="held">What is held<a class="headerlink" href="#held" title="Link to this section">&para;</a></h2>
+<p><code>brama subscription held</code> prints one line per grant — harness, provider, account, store — and never the grant itself. An account is the e-mail the harness recorded, or the one inside Codex CLI’s identity token; Kimi Code and Claude Code record none, and the line says so. Captured on the machine this was written on:</p>
+<pre><code class="language-console">omp     claude-code  lbartoszcze@wisent.ai        /Users/me/.omp/agent/agent.db
+omp     codex        lukasz.bartoszcze@gmail.com  /Users/me/.omp/agent/agent.db
+codex   codex        lukasz.bartoszcze@gmail.com  /Users/me/.codex/auth.json
+kimi    kimi         account not recorded         /Users/me/.kimi-code/credentials/kimi-code.json</code></pre>
 <h2 id="what-happens">What happens<a class="headerlink" href="#what-happens" title="Link to this section">&para;</a></h2>
 <ol>
-<li>The store is opened read-only and the enabled <code>anthropic</code> OAuth rows are read, newest first. One enabled account is taken as it is; several are refused until <code>--account</code> names one.</li>
-<li>The grant — access token, refresh token, expiry — is stored as the subscription’s credential, <code>{"claudeAiOauth":{accessToken,refreshToken,expiresAt,scopes}}</code>, the shape the refresh path reads for <code>claude-code</code>.</li>
-<li>Brama spends one minimal completion on the stored grant through its own dispatch. The proof is a probe, not a refresh, on purpose: a refresh rotates the refresh token and revokes the one it replaced, which would kill the harness’s copy the moment Brama proved its own and fail every session the operator has open on that account at its next refresh. The probe rotates nothing; the sweep rotates the grant later, as the access token nears its end.</li>
+<li>The grant is chosen: the one <code>--from</code> and <code>--account</code> name, or the only grant any harness here holds for the provider. Two or more are refused, naming each harness and account.</li>
+<li>It is rewritten into the document the refresh path reads — <code>{"claudeAiOauth":{accessToken,refreshToken,expiresAt,scopes}}</code>, <code>{"auth_mode":"chatgpt","tokens":{access_token,refresh_token,account_id},"last_refresh"}</code>, or <code>{access_token,refresh_token,expires_at}</code> — and refused before anything is stored when it carries no refresh token.</li>
+<li>It is stored as the subscription’s credential, the ledger row is marked signed in (a row the provider had disowned reads <code>active</code> again), and Brama spends one minimal completion on it through its own dispatch. The proof is a probe, not a refresh, on purpose: a refresh rotates the refresh token and revokes the one it replaced, which would kill the harness’s copy the moment Brama proved its own and fail every session the operator has open on that account. The probe rotates nothing; the sweep rotates the grant later, as the access token nears its end.</li>
 </ol>
 <h2 id="output">Output<a class="headerlink" href="#output" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">provider: claude-code
-subscription: brama-sub-wisent-app-claude-primary
+<pre><code class="language-console">provider: codex
+subscription: brama-sub-wisent-app-codex-primary
 account: someone@example.com
 result: signed_in
-detail: someone@example.com's grant from the operator's harness is stored and the provider answered a completion on it; Brama will refresh it from now on</code></pre>
-<p>Exit status is 0 only for <code>result: signed_in</code>. The verdict is journaled as a <code>subscription_sign_in</code> record with <code>origin: harness</code> and the reason.</p>
+detail: someone@example.com's grant from codex, the harness that held it is stored and the provider answered a completion on it; Brama will refresh it from now on</code></pre>
+<p>Exit status is 0 only for <code>result: signed_in</code>. The verdict is journaled as a <code>subscription_sign_in</code> record with <code>origin: harness</code>, the harness’s name and the reason.</p>
 <h2 id="after-the-import">After the import<a class="headerlink" href="#after-the-import" title="Link to this section">&para;</a></h2>
-<p>Two holders of one grant is a state that ends by itself: whichever side refreshes first — Brama’s sweep, or the harness — rotates the refresh token, and the other side’s next refresh is refused with <code>invalid_grant</code>. Brama is meant to be the one that keeps it: point the harness at Brama for inference, or sign the harness in again on its own when its copy goes stale. Nothing here disables the harness’s row.</p>
+<p>Two holders of one grant is a state that ends by itself: whichever side refreshes first — Brama’s sweep, or the harness — rotates the refresh token, and the other side’s next refresh is refused with <code>invalid_grant</code>. Brama is meant to be the one that keeps it: point the harness at Brama for inference, or sign the harness in again on its own when its copy goes stale. Nothing here writes to any harness.</p>
 <h2 id="refusals">Exact refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <ul>
-<li>Without <code>--from-omp</code>: <code>--from-omp names the only store this command reads; nothing else holds a grant Brama can take</code>.</li>
-<li>Another provider: <code>the harness holds no grants Brama can take for `&lt;provider&gt;`; claude-code is the one it can</code>.</li>
+<li>Another provider: <code>no harness holds grants Brama can take for `&lt;provider&gt;`; claude-code, codex and kimi are the ones it can</code>.</li>
+<li>An unknown harness: <code>`&lt;name&gt;` is not a harness Brama reads grants from; name one of omp, claude, codex, kimi</code>; a harness that does not sign in for the provider: <code>codex signs nothing in for `kimi`; it holds grants for codex</code>.</li>
 <li>Empty reason: <code>--reason must say why this sign-in is being run</code>.</li>
-<li>A store that is not there: <code>the harness store &lt;path&gt; cannot be opened: &lt;error&gt;</code>; one without the harness’s table: <code>the harness store &lt;path&gt; is not the store Brama knows</code>.</li>
-<li>No enabled grant: <code>the harness holds no enabled `claude-code` grant; sign it in there first, or sign in by hand</code>.</li>
-<li>Several enabled grants: <code>the harness holds N enabled `claude-code` grants; name one with --account: a@x, b@y</code>; an <code>--account</code> the harness does not hold: <code>the harness holds no enabled `claude-code` grant for &lt;email&gt;</code>.</li>
-<li>A stored grant the provider will not serve: <code>result: failed</code> with <code>the grant from the operator's harness is stored, but the provider would not serve it: &lt;the provider's sentence&gt;</code> — for a token the provider does not know, <code>provider_authentication: OAuth access token is invalid.</code></li>
+<li>Nothing held: <code>no harness under &lt;home&gt; holds an enabled `&lt;provider&gt;` grant; sign one in there first, or sign in by hand</code>; an <code>--account</code> nobody holds: <code>no harness here holds an enabled `&lt;provider&gt;` grant for &lt;email&gt;</code>.</li>
+<li>Several held: <code>N grants for `&lt;provider&gt;` are held here; name one with --from and --account: omp (a@x), codex (b@y)</code>.</li>
+<li>A store that cannot be read says which: <code>omp's store &lt;path&gt; cannot be opened: …</code>, <code>codex's store &lt;path&gt; cannot be read: …</code>, <code>kimi's store is not the JSON document kimi writes</code>; the Keychain: <code>the Keychain would not give up Claude Code's grant: …</code>. macOS may ask the person to allow the read the first time.</li>
+<li>A grant the refresh path could not renew: <code>the grant is not the `&lt;provider&gt;` document Brama's refresh path reads, or carries no refresh token; Brama cannot keep a grant it cannot renew</code>; nothing is stored.</li>
+<li>A stored grant the provider will not serve: <code>result: failed</code> with <code>the grant from &lt;harness&gt;, the harness that held it is stored, but the provider would not serve it: &lt;the provider's sentence&gt;</code> — for a token the provider does not know, <code>provider_authentication: OAuth access token is invalid.</code></li>
+<li>With <code>--gateway</code> and nothing on stdin: <code>--gateway needs the console's bearer on stdin, and stdin was empty</code>; a gateway that refuses: <code>the gateway refused the grant with HTTP &lt;status&gt;: &lt;its sentence&gt;</code>.</li>
 </ul>
-<p>Brama Desktop’s <strong>Take the grant from omp…</strong> on a <code>claude-code</code> row reads the same store on the machine the console runs on and hands the grant to the gateway through <code>POST /v1/admin/subscription-pool/grant</code> (<a href="/docs/http-api/administration-and-operations#administered-subscriptions">HTTP API</a>), which stores and proves it exactly as this command does.</p>
+<p>Brama Desktop’s <strong>Take a grant a harness holds…</strong> on a pool row runs this command from the runtime it bundles, with the desktop’s own bearer on stdin, so the desktop reads no store and knows no format; the list it offers is <code>held --json</code>.</p>
 <p>See <a href="/docs/cli/subscription/sign-in-manual">the by-hand sign-in</a>, <a href="/docs/cli/subscription">the command group</a> or <a href="/docs/cli">the CLI tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>

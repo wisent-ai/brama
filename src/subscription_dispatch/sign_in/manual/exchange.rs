@@ -7,7 +7,7 @@ use serde::Serialize;
 use serde_json::Value;
 use zeroize::Zeroizing;
 
-use super::grant::{adopt, Grant, Origin};
+use super::grant::{adopt, claude_document, Origin};
 use super::{manual_provider, parse_pasted, AuthorizationRequest, ManualSignIn};
 
 #[derive(Serialize)]
@@ -101,21 +101,21 @@ pub async fn complete(
         .get("expires_in")
         .and_then(Value::as_i64)
         .unwrap_or_default();
-    let grant = Grant {
-        access_token: token("access_token").ok_or("the provider's answer carries no access token")?,
-        refresh_token: token("refresh_token")
-            .ok_or("the provider's answer carries no refresh token; Brama cannot keep a grant it cannot renew")?,
-        expires_at_ms: (chrono::Utc::now().timestamp() + expires_in) * millis_per_second(),
-        account: issued
-            .get("account")
-            .and_then(|account| account.get("email_address"))
-            .and_then(Value::as_str)
-            .map(str::to_owned),
-    };
+    let access = token("access_token").ok_or("the provider's answer carries no access token")?;
+    let refresh = token("refresh_token").ok_or(
+        "the provider's answer carries no refresh token; Brama cannot keep a grant it cannot renew",
+    )?;
+    let expires_at_ms = (chrono::Utc::now().timestamp() + expires_in) * millis_per_second();
+    let account = issued
+        .get("account")
+        .and_then(|account| account.get("email_address"))
+        .and_then(Value::as_str)
+        .map(str::to_owned);
     adopt(
         &request.provider,
         &request.subscription_id,
-        grant,
+        claude_document(&access, &refresh, expires_at_ms),
+        account,
         Origin::PastedCode,
         reason,
     )

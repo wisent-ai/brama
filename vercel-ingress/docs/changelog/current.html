@@ -24,17 +24,24 @@ coordinate yet. Released entries live in
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
-<h2 id="unreleased-import-from-omp">Unreleased: the grant the harness already holds is taken, not asked for again<a class="headerlink" href="#unreleased-import-from-omp" title="Link to this section">&para;</a></h2>
+<h2 id="unreleased-import-from-omp">Unreleased: a grant any harness already holds is taken, not asked for again<a class="headerlink" href="#unreleased-import-from-omp" title="Link to this section">&para;</a></h2>
 <p>On 2026-09-13 the operator asked why Brama did not simply take the tokens from
-<code>omp</code>: the harness beside the gateway had been signed into the account the
-pool needed for a day. <a href="/docs/cli/subscription/import"><code>brama subscription import claude-code --from-omp --subscription-id &lt;id&gt; --reason &lt;why&gt;</code></a>
-reads the harness's credential store under <code>~/.omp/agent/agent.db</code>, read-only,
-takes the one enabled Claude grant or the account <code>--account</code> names, stores it
-as the subscription's credential in the shape the refresh path reads, proves it with
-one minimal completion, and journals the verdict with <code>origin: harness</code>.
-Brama Desktop's <strong>Take the grant from omp…</strong> reads the same store on the
-console's machine and hands the grant to the gateway through
-<code>POST /v1/admin/subscription-pool/grant</code>.</p>
+<code>omp</code>, and then why only from <code>omp</code>: the harnesses beside the gateway
+had been signed into the accounts the pool needed for a day. Four harnesses sign
+accounts in on an operator's machine - <code>omp</code>, Claude Code, Codex CLI, Kimi
+Code - and each keeps the grant its own way.
+<a href="/docs/cli/subscription/import"><code>brama subscription held</code></a> lists what
+every one of them holds, never the grants;
+<a href="/docs/cli/subscription/import"><code>brama subscription import &lt;provider&gt; --from &lt;harness&gt; --subscription-id &lt;id&gt; --reason &lt;why&gt;</code></a>
+reads that harness's own store read-only, rewrites the grant into the document the
+refresh path reads for <code>claude-code</code>, <code>codex</code> or <code>kimi</code>,
+refuses one it could not renew before storing anything, stores it as the
+subscription's credential, marks the row signed in, proves it with one minimal
+completion, and journals the verdict with the harness it came from. With
+<code>--gateway</code> and the console's bearer on stdin the same command hands the
+grant to a gateway elsewhere through <code>POST /v1/admin/subscription-pool/grant</code>;
+Brama Desktop's <strong>Take a grant a harness holds…</strong> runs it from the runtime it
+bundles, so the desktop reads no store and knows no format.</p>
 <p>Every grant that reaches Brama without a Weles sign-in - pasted code, harness,
 console - is now proved by a probe instead of a refresh. A refresh rotates the
 refresh token and revokes the one it replaced, so proving a grant the harness still

@@ -33,8 +33,8 @@ name = "subscriptions_manual_sign_in_gateway"
 path = "tests/subscriptions/manual_sign_in_gateway.rs"
 
 [[test]]
-name = "subscriptions_import_from_omp"
-path = "tests/subscriptions/import_from_omp.rs"
+name = "subscriptions_harness_grants"
+path = "tests/subscriptions/harness_grants.rs"
 
 [[test]]
 name = "admin_real"

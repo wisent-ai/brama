@@ -191,6 +191,12 @@ impl Gateway {
         self.directory.path()
     }
 
+    /// Where this gateway listens, for a story that reaches it from outside
+    /// the test's own client.
+    pub fn origin(&self) -> &str {
+        &self.origin
+    }
+
     /// The gateway's log so far: every event it wrote to stderr, which is the
     /// record an operator reads to attribute a slow or refused request.
     pub fn log(&self) -> String {

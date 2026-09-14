@@ -166,20 +166,26 @@ console asked for it; no timer reaches any of them.</p>
   with that id is open</code> afterwards, <code>409</code> with the exact sentence for a paste
   that is empty, unreadable or carries another sign-in's state.</li>
 <li><strong>POST <code>/v1/admin/subscription-pool/grant</code></strong> takes a grant the
-  console already holds — Brama Desktop reads it from <code>omp</code>'s store on the machine
-  it runs on — as <code>{"subscription_id", "reason", "access_token", "refresh_token",
-  "expires_at_ms", "account"?}</code>, stores it as the subscription's credential in the shape
-  the refresh path reads, proves it with one minimal completion rather than a refresh (a
-  refresh would rotate the token out from under the harness that still holds it), journals
-  the verdict with <code>origin: console</code>, and answers <code>{"provider",
-  "subscription_id", "account", "result", "detail"}</code> — the verdict of
+  console already holds — <code>brama subscription import --gateway</code>, run by Brama
+  Desktop from the runtime it bundles, reads it from a harness on the machine the console
+  runs on — as <code>{"subscription_id", "reason", "document", "harness"?, "account"?}</code>.
+  <code>document</code> is the credential document Brama's refresh path reads for the
+  subscription's provider (<code>claudeAiOauth</code> for <code>claude-code</code>,
+  <code>tokens</code> for <code>codex</code>, top-level tokens for <code>kimi</code>) and is
+  refused before anything is stored when it carries no refresh token; <code>harness</code> is
+  <code>omp</code>, <code>claude</code>, <code>codex</code> or <code>kimi</code> when the
+  console read it from one. The gateway stores it as the subscription's credential, marks the
+  row signed in (a row the provider had disowned reads <code>active</code> again), proves it
+  with one minimal completion rather than a refresh (a refresh would rotate the token out from
+  under the harness that still holds it), journals the verdict with the origin, and answers
+  <code>{"provider", "subscription_id", "account", "result", "detail"}</code> — the verdict of
   <a href="/docs/cli/subscription/import"><code>brama subscription import</code></a>. Captured
-  for a token the provider does not know: <code>result: failed</code>, <code>the grant from the
-  console is stored, but the provider would not serve it: provider_authentication: OAuth access
-  token is invalid.</code> Refusals: <code>400</code> for a blank reason or id, <code>404
-  subscription not found</code>, <code>409</code> for a retired account, a provider without a
-  manual flow, or a grant missing either token; <code>403</code> for any caller but the
-  console.</li>
+  for a token the provider does not know: <code>result: failed</code>, <code>the grant from
+  codex, the harness that held it is stored, but the provider would not serve it:
+  provider_authentication: OAuth access token is invalid.</code> Refusals: <code>400</code> for
+  a blank reason or id or a harness Brama does not read, <code>404 subscription not
+  found</code>, <code>409</code> for a retired account or a document the refresh path could not
+  renew; <code>403</code> for any caller but the console.</li>
 <li><strong>POST <code>/v1/admin/subscription-pool/refresh</code></strong> takes
   <code>{"provider", "reason"}</code> and runs the same audited refresh as
   <code>brama subscription refresh</code>, answering the verdict with status 200 (captured:

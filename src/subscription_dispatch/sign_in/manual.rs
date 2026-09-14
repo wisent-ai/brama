@@ -20,7 +20,8 @@
 
 mod exchange;
 pub mod grant;
-pub mod omp;
+pub mod harness;
+mod omp;
 
 use base64::Engine;
 use serde::Serialize;
@@ -28,7 +29,8 @@ use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
 pub use exchange::complete;
-pub use grant::{adopt, Grant, Origin};
+pub use grant::{adopt, Origin};
+pub use harness::{held, Harness, HeldGrant, HeldGrantView};
 
 /// Everything the provider's authorize page needs, and the verifier the code
 /// exchange proves it with. Built once per sign-in; the verifier never leaves
@@ -97,6 +99,14 @@ fn manual_provider(provider: &str) -> Option<ManualProvider> {
         }),
         _ => None,
     }
+}
+
+/// The scopes the harness's Claude client asks for, which every Claude grant
+/// document Brama writes carries.
+pub(super) fn claude_scopes() -> &'static [&'static str] {
+    manual_provider("claude-code")
+        .map(|config| config.scopes)
+        .unwrap_or_default()
 }
 
 /// Bytes the provider's PKCE verifier and state are drawn from: 32 random
