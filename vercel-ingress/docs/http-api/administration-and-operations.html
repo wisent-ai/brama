@@ -25,8 +25,17 @@ against a named subscription. Alongside them sit the three paths an operator wat
 <h2 id="who-the-admin-family-answers">Who the admin family answers<a class="headerlink" href="#who-the-admin-family-answers" title="Link to this section">&para;</a></h2>
 <p>Every <code>/v1/admin/*</code> path answers only a <code>brama-desktop</code> identity
 carrying no model allowlist; every other caller receives <code>403 forbidden</code>
-(captured). Responses carry identifiers, usage and status only: a subscription credential
-is write-only and is never part of an answer, on any path, including an error path.</p>
+(captured). That identity comes from the boot table alone: the launcher reads the
+Skarbiec item <code>brama-desktop-model-router</code>, field <code>token</code> — the same
+item Brama Desktop acquires through its workload key — and admits its value as
+<code>brama-desktop</code> with no agent and no allowlist. A bearer the authority resolves
+instead always carries the routes it was issued, so it can never reach this family. When
+the launcher cannot read that item it says <code>optional client brama-desktop skipped</code>
+on its stderr and starts anyway; the admin family then answers <code>401</code> to the
+desktop and to <code>brama subscription import --gateway</code> alike, which is what every
+deployed gateway did until 2026-09-14. Responses carry identifiers, usage and status only: a
+subscription credential is write-only and is never part of an answer, on any path,
+including an error path.</p>
 <h2 id="get-v1adminsnapshot"><code>GET /v1/admin/snapshot</code><a class="headerlink" href="#get-v1adminsnapshot" title="Link to this section">&para;</a></h2>
 <p>Routes and providers as this process currently holds them. Captured keys:
 <code>schemaVersion</code>, whose value is the number one; <code>automaticRollback</code>,

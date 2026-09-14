@@ -37,13 +37,25 @@ renewal_models = sorted(
     {model for model in all_models if model.split("/", 1)[0] in renewal_providers}
     | {"best"}
 )
+# The console. Every `/v1/admin/*` path answers only a `brama-desktop`
+# identity carrying no model allowlist, and such an identity can only come
+# from this table: the authority resolves a workload bearer with the routes
+# it was issued, never without them. Until 2026-09-14 nothing put the
+# console here, so the admin family the docs promised answered 401 to Brama
+# Desktop and to `brama subscription import --gateway` alike on every
+# deployed gateway, and worked only in the test harness. The bearer is the
+# same item Brama Desktop acquires through its workload key, so one value
+# admits the desktop and the operator's terminal. No agent, no allowlist:
+# the console dispatches nothing.
+#
 # The last field says whether the gateway refuses to start without this client.
-# Renewal is not: it repairs the pool, it does not serve traffic, and a
-# gateway that will not start serves none of it.
+# Renewal and the console are not: they repair the pool, they do not serve
+# traffic, and a gateway that will not start serves none of it.
 sources = [
     ("weles", "weles-model-router", "weles", weles_models, True),
     ("wisent-backend", "wisent-backend-model-router", "wisent-app", backend_models, True),
     ("wisent-app", "wisent-app-model-router", "wisent-app", renewal_models, False),
+    ("brama-desktop", "brama-desktop-model-router", None, None, False),
 ]
 
 def field(item, name):
@@ -82,7 +94,9 @@ def identity(source):
         # let a client be missing from the table for as long as it was.
         print(f"optional client {client_id} skipped: {refusal}", file=sys.stderr)
         return None
-    result = {"client_id": client_id, "token": token, "agent_id": agent_id}
+    result = {"client_id": client_id, "token": token}
+    if agent_id is not None:
+        result["agent_id"] = agent_id
     if allowed_models is not None:
         result["allowed_models"] = allowed_models
     return result

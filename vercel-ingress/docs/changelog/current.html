@@ -42,6 +42,17 @@ completion, and journals the verdict with the harness it came from. With
 grant to a gateway elsewhere through <code>POST /v1/admin/subscription-pool/grant</code>;
 Brama Desktop's <strong>Take a grant a harness holds…</strong> runs it from the runtime it
 bundles, so the desktop reads no store and knows no format.</p>
+<p>Running that against the deployed gateway found the admin family unreachable in
+production: every <code>/v1/admin/*</code> path answers only a <code>brama-desktop</code>
+identity with no allowlist, such an identity can only come from the boot table, and
+the launcher never put one there - the authority resolves a workload bearer with the
+routes it was issued, never without them. Brama Desktop and the terminal alike were
+answered <code>401 model_bearer_unrecognized</code>; only the test harness, which seeds
+the console into the table, ever reached the family. The launcher now projects
+<code>brama-desktop-model-router#token</code> - the item the desktop acquires - into the
+boot table as <code>brama-desktop</code>, optional like the renewal client, and says on
+its stderr when it could not read it
+(<a href="/docs/http-api/administration-and-operations#who-the-admin-family-answers">who the admin family answers</a>).</p>
 <p>Every grant that reaches Brama without a Weles sign-in - pasted code, harness,
 console - is now proved by a probe instead of a refresh. A refresh rotates the
 refresh token and revokes the one it replaced, so proving a grant the harness still
