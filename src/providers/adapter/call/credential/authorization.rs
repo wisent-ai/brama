@@ -17,10 +17,11 @@ fn authorize(
         AuthKind::XApiKey => builder
             .header("x-api-key", key)
             .header("anthropic-version", "2023-06-01"),
-        AuthKind::AnthropicBearer => builder
-            .bearer_auth(key)
-            .header("anthropic-version", "2023-06-01")
-            .header("anthropic-beta", "oauth-2025-04-20"),
+        AuthKind::AnthropicBearer => super::claude_code::headers(
+            builder
+                .bearer_auth(key)
+                .header("anthropic-version", "2023-06-01"),
+        ),
     }
 }
 

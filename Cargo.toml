@@ -1,6 +1,6 @@
 [package]
 name = "brama"
-version = "0.4.9"
+version = "0.4.10"
 edition = "2021"
 license-file = "LICENSE"
 
@@ -110,5 +110,6 @@ wisent-onboarding-client = { git = "https://github.com/wisent-ai/echo-web", rev 
 ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }
 libc = "0.2"
 zeroize = { version = "1.8", features = ["serde"] }
+xxhash-rust = { version = "0.8.18", features = ["xxh64"] }
 [dev-dependencies]
 reqwest = { version = "0.12", features = ["blocking", "json"] }

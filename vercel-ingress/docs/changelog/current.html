@@ -24,6 +24,19 @@ coordinate yet. Released entries live in
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-claude-code-shape">Unreleased: a Claude Code grant travels in Claude Code's own shape<a class="headerlink" href="#unreleased-claude-code-shape" title="Link to this section">&para;</a></h2>
+<p>With the temperature gone, the deployed gateway's first <code>best</code> request as
+<code>tama</code> was still refused: Anthropic answered <code>429</code> with the one-word
+body <code>Error</code> for <code>claude-code/claude-fable-5-1</code> and then for
+<code>claude-sonnet-4-6</code>, while <code>claude-haiku-4-5</code> had answered the import
+probe minutes earlier and <code>omp</code> was being answered on the same account for the
+same models. The grant was fine; the request was not Claude Code's. A request that
+presents a Claude Code grant now carries what Claude Code carries — its user agent and
+beta list, <code>x-app: cli</code>, and a system prompt opened by the billing attestation
+with a checksum of the body and the sentence <em>You are Claude Code, Anthropic's official
+CLI for Claude.</em> — on the buffered and streaming paths alike
+(<a href="/docs/providers/claude-code#how-a-request-presents-it">how a request presents
+it</a>).</p>
 <h2 id="unreleased-no-invented-temperature">Unreleased: an omitted temperature is not invented<a class="headerlink" href="#unreleased-no-invented-temperature" title="Link to this section">&para;</a></h2>
 <p>The first Claude completion through the deployed gateway after the pool was
 repaired was refused by the provider: <code>claude-code/claude-opus-4-7 refused

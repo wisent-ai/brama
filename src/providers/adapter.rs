@@ -18,7 +18,9 @@ use serde_json::{json, Value};
 use crate::subscription_dispatch::model_catalog;
 use crate::types::{ModelRequest, ModelResponse};
 
-use call::credential::{authorize_catalog, authorize_provider, provider_credential_key};
+use call::credential::{
+    authorize_catalog, authorize_provider, provider_body, provider_credential_key,
+};
 use call::refusal::{attempted_failure, provider_error, transport_failure};
 use call::response_body::bounded_response_text;
 use call::retry::send_once_more_if_unsent;
@@ -164,15 +166,17 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
     };
     let payload = chat_payload(descriptor, model_id.as_ref(), request);
     let started = Instant::now();
-    let response = match send_once_more_if_unsent(
+    let response = match send_once_more_if_unsent(provider_body(
         authorize_provider(
             client.post(endpoint(&base_url, descriptor.chat_path)),
             descriptor,
             &key,
             secret,
-        )
-        .json(&payload),
-    )
+        ),
+        descriptor,
+        payload,
+        request,
+    ))
     .await
     {
         Ok(response) => response,
@@ -249,15 +253,17 @@ pub async fn dispatch_stream(
         Err(error) => return Err(ModelResponse::failure(&request.model, error)),
     };
     let payload = streaming_chat_payload(descriptor, model_id.as_ref(), request);
-    let response = match send_once_more_if_unsent(
+    let response = match send_once_more_if_unsent(provider_body(
         authorize_provider(
             client.post(endpoint(&base_url, descriptor.chat_path)),
             descriptor,
             &key,
             secret,
-        )
-        .json(&payload),
-    )
+        ),
+        descriptor,
+        payload,
+        request,
+    ))
     .await
     {
         Ok(response) => response,

@@ -1,14 +1,34 @@
 //! Reducing a stored document to the string a provider will accept.
 
 mod authorization;
+mod claude_code;
 mod document;
 
+use reqwest::RequestBuilder;
 use serde_json::Value;
 
 use super::super::registry::{AuthKind, ProviderDescriptor};
+use crate::types::ModelRequest;
 use document::{credential_document, credential_shape};
 
 pub(in crate::providers::adapter) use authorization::{authorize_catalog, authorize_provider};
+
+/// Attach the request body in the shape the credential's provider honours:
+/// a Claude Code grant travels in Claude Code's own attested body, every
+/// other credential in the payload as built.
+pub(in crate::providers::adapter) fn provider_body(
+    builder: RequestBuilder,
+    descriptor: &ProviderDescriptor,
+    payload: Value,
+    request: &ModelRequest,
+) -> RequestBuilder {
+    if descriptor.auth == AuthKind::AnthropicBearer {
+        return builder
+            .header("content-type", "application/json")
+            .body(claude_code::attested_body(payload, request));
+    }
+    builder.json(&payload)
+}
 
 /// The document fields a provider credential is read from, named in the order
 /// they are tried, for a message an operator can act on.

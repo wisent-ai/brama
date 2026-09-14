@@ -65,10 +65,20 @@ makes the account unroutable, and <code>/readyz</code> reports it under
 <p>At final use the gateway redeems the vault item through the local entitlements router,
 reduces the document to the access token, and sends it as
 <code>Authorization: Bearer &lt;accessToken&gt;</code> with
-<code>anthropic-version: 2023-06-01</code> and <code>anthropic-beta: oauth-2025-04-20</code> —
-the OAuth beta header is what makes api.anthropic.com accept a subscription bearer where
-the plain <code>anthropic</code> route sends an <code>x-api-key</code>. No copy of the token
-outlives the request.</p>
+<code>anthropic-version: 2023-06-01</code>, in the shape Claude Code itself sends: the
+user agent <code>claude-cli/2.1.257 (external, cli)</code>,
+<code>anthropic-beta: claude-code-20250219,oauth-2025-04-20</code>, <code>x-app: cli</code>,
+and a system prompt that opens with Claude Code's billing attestation
+(<code>x-anthropic-billing-header: cc_version=2.1.257.&lt;fingerprint&gt;; cc_entrypoint=cli;
+cch=&lt;checksum&gt;;</code>) and the sentence <em>You are Claude Code, Anthropic's official
+CLI for Claude.</em>, followed by the caller's own system prompt. The checksum is the low
+twenty bits of xxHash64 over the body it travels in; the fingerprint salts the Claude Code
+version with three characters of the first user message. Anthropic honours a subscription
+grant for its newest models only in this shape: on 2026-09-14 the same grant was answered
+<code>429</code> with the one-word body <code>Error</code> for sonnet-4-6 and fable-5-1
+when presented with the OAuth beta header alone, while <code>omp</code> — the harness the
+grant was taken from — was being answered on the same account in the same minute. No copy
+of the token outlives the request.</p>
 <h2 id="refresh">Refresh<a class="headerlink" href="#refresh" title="Link to this section">&para;</a></h2>
 <p>Ahead of expiry the gateway posts <code>grant_type=refresh_token</code> with the stored
 <code>refreshToken</code> and the public client id
