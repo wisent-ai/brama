@@ -55,24 +55,22 @@ pub struct InboundCall {
     pub stream: bool,
 }
 
-fn default_temperature() -> f64 {
-    0.7
-}
-
 fn default_max_tokens() -> u32 {
     1024
 }
 
 /// Shared inbound bounds, identical to the chat-completions contract so the
 /// answer does not depend on which format the caller speaks.
-fn validate(model: &str, max_tokens: u32, temperature: f64) -> Result<(), String> {
+fn validate(model: &str, max_tokens: u32, temperature: Option<f64>) -> Result<(), String> {
     if model.trim().is_empty() {
         return Err("missing field `model`".to_string());
     }
     if max_tokens == u32::default() || max_tokens > 32_768 {
         return Err("max_tokens must be between one and 32768".to_string());
     }
-    if !temperature.is_finite() || !(0.0..=2.0).contains(&temperature) {
+    if temperature
+        .is_some_and(|temperature| !temperature.is_finite() || !(0.0..=2.0).contains(&temperature))
+    {
         return Err("temperature must be finite and between zero and 2".to_string());
     }
     Ok(())

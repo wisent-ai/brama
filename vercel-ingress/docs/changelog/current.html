@@ -24,6 +24,17 @@ coordinate yet. Released entries live in
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-no-invented-temperature">Unreleased: an omitted temperature is not invented<a class="headerlink" href="#unreleased-no-invented-temperature" title="Link to this section">&para;</a></h2>
+<p>The first Claude completion through the deployed gateway after the pool was
+repaired was refused by the provider: <code>claude-code/claude-opus-4-7 refused
+(provider_failure: `temperature` is deprecated for this model.)</code>, and the same for
+<code>claude-opus-4-8</code>. The caller had sent no temperature; the gateway defaulted it
+to 0.7 on every inbound format and sent that default to every provider as a real
+setting. A temperature now reaches the provider only when the request stated one, on
+the chat, Anthropic messages and Responses wires and on every provider dialect; a
+stated value is bounded as before. The gateway's own probes still pin zero, because a
+probe's answer should not vary
+(<a href="/docs/http-api/inference#shared-validation">shared validation</a>).</p>
 <h2 id="unreleased-import-from-omp">Unreleased: a grant any harness already holds is taken, not asked for again<a class="headerlink" href="#unreleased-import-from-omp" title="Link to this section">&para;</a></h2>
 <p>On 2026-09-13 the operator asked why Brama did not simply take the tokens from
 <code>omp</code>, and then why only from <code>omp</code>: the harnesses beside the gateway

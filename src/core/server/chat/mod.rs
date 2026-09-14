@@ -53,10 +53,9 @@ pub(in crate::core::server) async fn chat_completions(
         )
         .into_response();
     }
-    if !req.temperature.is_finite()
-        || req.temperature < f64::default()
-        || req.temperature > max_temperature()
-    {
+    if req.temperature.is_some_and(|temperature| {
+        !temperature.is_finite() || temperature < f64::default() || temperature > max_temperature()
+    }) {
         return api_error(
             StatusCode::BAD_REQUEST,
             &format!(

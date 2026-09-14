@@ -90,7 +90,7 @@ pub(crate) async fn test_inference(args: TestArgs) {
         }],
         model,
         max_tokens: 256,
-        temperature: 0.7,
+        temperature: None,
         system: None,
         tools: None,
         tool_choice: None,

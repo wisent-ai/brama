@@ -84,7 +84,9 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
             body.insert("model".into(), json!(model_id));
             body.insert("messages".into(), Value::Array(openai_messages(request)));
             body.insert("max_tokens".into(), json!(request.max_tokens));
-            body.insert("temperature".into(), json!(request.temperature));
+            if let Some(temperature) = request.temperature {
+                body.insert("temperature".into(), json!(temperature));
+            }
             if let Some(tools) = &request.tools {
                 body.insert("tools".into(), normalized_tools_value(tools));
             }
@@ -101,8 +103,10 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
                 "model": model_id,
                 "messages": anthropic_messages(request),
                 "max_tokens": request.max_tokens,
-                "temperature": request.temperature,
             });
+            if let Some(temperature) = request.temperature {
+                body["temperature"] = json!(temperature);
+            }
             if let Some(system) = request.system.as_deref().filter(|value| !value.is_empty()) {
                 body["system"] = json!(system);
             }

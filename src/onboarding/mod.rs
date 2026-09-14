@@ -138,7 +138,7 @@ pub async fn run_first_use(
         }],
         model,
         max_tokens: 256,
-        temperature: 0.7,
+        temperature: None,
         system: None,
         tools: None,
         tool_choice: None,

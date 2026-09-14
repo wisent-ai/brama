@@ -41,9 +41,12 @@ serve is refused before any provider is contacted, with the <code>503</code>
   (both captured).</li>
 <li><code>max_tokens</code> is 1024 when the request omits it, and a stated value outside
   1..32768 is refused with <code>max_tokens must be between one and 32768</code>.</li>
-<li><code>temperature</code> is 0.7 when the request omits it, and a stated value is
-  refused unless it is finite and no greater than two, with
-  <code>temperature must be finite and between zero and 2</code>.</li>
+<li><code>temperature</code> reaches the provider only when the request states one; an
+  omitted temperature is omitted on the wire too, so the provider applies its own default.
+  Until 2026-09-14 the gateway invented 0.7 for every request without one, and Claude's
+  newest models refused it — <code>`temperature` is deprecated for this model</code> — for
+  callers that had never asked. A stated value is refused unless it is finite and no
+  greater than two, with <code>temperature must be finite and between zero and 2</code>.</li>
 <li>An empty conversation is refused with <code>messages must not be empty</code>.</li>
 </ul>
 <h3 id="post-v1chatcompletions"><code>POST /v1/chat/completions</code><a class="headerlink" href="#post-v1chatcompletions" title="Link to this section">&para;</a></h3>

@@ -110,7 +110,7 @@ async fn check_model(opts: &TaskQualityOptions, model: &str) -> Value {
         }],
         model: model.to_string(),
         max_tokens: 96,
-        temperature: 0.0,
+        temperature: Some(0.0),
         system: None,
         tools: None,
         tool_choice: None,

@@ -80,9 +80,11 @@ pub(super) fn google_payload(request: &ModelRequest) -> Value {
         }).collect::<Vec<_>>(),
         "generationConfig": {
             "maxOutputTokens": request.max_tokens,
-            "temperature": request.temperature,
         },
     });
+    if let Some(temperature) = request.temperature {
+        body["generationConfig"]["temperature"] = json!(temperature);
+    }
     if let Some(system) = request.system.as_deref().filter(|value| !value.is_empty()) {
         body["systemInstruction"] = json!({"parts": [{"text": system}]});
     }

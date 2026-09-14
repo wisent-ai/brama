@@ -127,7 +127,12 @@ pub struct ModelRequest {
     pub messages: Vec<Message>,
     pub model: String,
     pub max_tokens: u32,
-    pub temperature: f64,
+    /// Sent to the provider only when the caller set one. A default the
+    /// gateway invented reached every provider as a real setting, and on
+    /// 2026-09-14 Claude's newest models refused it - "`temperature` is
+    /// deprecated for this model" - for callers that had never asked for it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

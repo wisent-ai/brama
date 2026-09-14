@@ -25,8 +25,8 @@ pub(super) struct ChatCompletionRequest {
     pub(super) messages: Vec<ChatMessage>,
     #[serde(default = "default_max_tokens")]
     pub(super) max_tokens: u32,
-    #[serde(default = "default_temperature")]
-    pub(super) temperature: f64,
+    #[serde(default)]
+    pub(super) temperature: Option<f64>,
     #[serde(default)]
     pub(super) tools: Option<Vec<Tool>>,
     #[serde(default)]
@@ -40,9 +40,6 @@ pub(super) struct ChatCompletionRequest {
 
 fn default_max_tokens() -> u32 {
     1024
-}
-fn default_temperature() -> f64 {
-    0.7
 }
 
 pub(super) fn is_any_subscription_selector(model: &str) -> bool {

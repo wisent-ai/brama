@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 
 use crate::types::{Message, ModelRequest, Tool, ToolFunction};
 
-use super::{default_temperature, validate, InboundCall};
+use super::{validate, InboundCall};
 
 /// Turn one Anthropic content block list into OpenAI-shaped message fields.
 ///
@@ -135,10 +135,7 @@ pub fn anthropic_request(body: &[u8]) -> Result<InboundCall, String> {
         .and_then(Value::as_u64)
         .and_then(|value| u32::try_from(value).ok())
         .unwrap_or_default();
-    let temperature = raw
-        .get("temperature")
-        .and_then(Value::as_f64)
-        .unwrap_or_else(default_temperature);
+    let temperature = raw.get("temperature").and_then(Value::as_f64);
     validate(&model, max_tokens, temperature)?;
     let system = match raw.get("system") {
         Some(Value::String(text)) => Some(text.clone()),
