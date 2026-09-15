@@ -129,6 +129,20 @@ and unrelated core operation while an integration is unavailable.</p>
 Approval states provider account owner, exact routes, credential scope, model
 and token limits, maximum attempts, maximum spend, prompt/data class, cleanup,
 and evidence retention. Production credentials and personal data are forbidden.</p>
+<h3 id="real-image-selection">Real image selection<a class="headerlink" href="#real-image-selection" title="Link to this section">&para;</a></h3>
+<p>Run <code>python3 -S tests/routing/image_selection_real.py</code> against the
+gateway being qualified. Supply its <code>BRAMA_URL</code>, the existing workload's
+<code>BRAMA_TOKEN</code>, <code>WISENT_APP_AGENT_ID</code> and
+<code>WISENT_APP_AGENT_AUTH_SECRET</code>, and the exact expected serving revision
+as <code>BRAMA_REAL_EXPECTED_REVISION</code>. The workload must be allowed to request
+<code>best</code>. No admin credential or change to grants is needed.</p>
+<p>The two real completions read a retained public-page image without DOM, in
+buffered and streaming mode, with at most 128 output tokens each. A third request
+must retain the out-of-scope route's HTTP 403 refusal. No account, route or billing
+configuration is changed. Missing access or an unavailable provider fails the run;
+it is not skipped. Reports under <code>.wisent-output/image-selection-real/</code>
+retain the client source, input digest, actual gateway build, response bodies,
+command and exit status.</p>
 <h3 id="release-qualification">Release qualification<a class="headerlink" href="#release-qualification" title="Link to this section">&para;</a></h3>
 <p>Run against one selected source revision and exact candidate bytes. Combine the
 approved layers, verify identity and digest, exercise supported upgrade and
@@ -144,12 +158,11 @@ the product outcome.</p>
 boundary. Retry evidence proves the upper bound, not only eventual success.
 Failure reports name scenario, expected contract, observed result, dependency
 involvement, evidence location, and cleanup status without secret material.</p>
-<h2 id="current-gap">Current gap<a class="headerlink" href="#current-gap" title="Link to this section">&para;</a></h2>
-<p>While aligning Brama with the Wisent product guidelines, no test was created,
-modified, or executed because explicit testing consent was not provided. The
-existing perf-registry test was not run. Release qualification remains blocked
-until a human approves the exact proposed test changes and commands and the
-resulting evidence is recorded here or in the release record.</p></article>
+<h2 id="qualification-records">Qualification records<a class="headerlink" href="#qualification-records" title="Link to this section">&para;</a></h2>
+<p>Read the exact release receipt and the retained reports for the layers that
+actually ran. A successful image request does not qualify onboarding, account
+refresh, device sign-in or the whole release. An omitted or blocked real flow
+remains unqualified.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>
   </div>

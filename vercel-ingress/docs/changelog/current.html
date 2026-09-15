@@ -24,6 +24,14 @@ coordinate remain recorded as unpublished. Earlier released entries live in
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="candidate-image-aware-best">Candidate 0.4.14: image-aware best selection<a class="headerlink" href="#candidate-image-aware-best" title="Link to this section">&para;</a></h2>
+<p>A <code>best</code> request with image content now filters the caller's active
+pool for advertised image input before applying a preferred route. Buffered and
+streaming requests use the same rule. No eligible model means a visible refusal,
+not a text-only substitution or a broader permission.</p>
+<p>The <a href="/docs/testing#real-image-selection">real image qualification</a>
+checks the visible heading through both HTTP response modes and preserves the
+out-of-scope model refusal. No credential, route, state schema or billing migration is required.</p>
 <h2 id="codex-chatgpt-import-proof">0.4.13: Codex imports and concurrent discovery<a class="headerlink" href="#codex-chatgpt-import-proof" title="Link to this section">&para;</a></h2>
 <p>Released from <code>4577501971ffcec56a3b4c16f064fe1299d5cdc7</code> through Stado run <code>c3510d34e8aef6f70c19f8c930394176</code> on 2026-09-15, for Darwin arm64 and Linux amd64. The gateway on <code>charless-mac-mini</code> reported that exact revision, <code>ready: true</code> and <code>degraded: false</code>. A completion probe against each imported Codex account returned HTTP 200 and <code>probe.ok: true</code>.</p>
 <p>Importing either existing OMP Codex account stored its grant but returned <code>failed</code> because the verification request selected <code>gpt-5.3-codex-spark</code>, which the provider refused for ChatGPT accounts. The same grants served <code>codex/gpt-6-astra</code> through Brama. The Codex probe now uses GPT-6-Astra, including the probe after a CLI or desktop import. It still proves a real completion and never refreshes the borrowed grant during import. An actual provider refusal remains a failed import, with the provider's sentence.</p>

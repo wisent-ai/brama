@@ -132,6 +132,14 @@ subscription that pays. Brama deliberately holds no direct credential for it.
 A destination naming <code>best</code> inside the routes file passes through untouched
 rather than being resolved as a local deployment
 (<code>src/core/inference_routes.rs</code>).</p>
+<p>A request containing an <code>image_url</code> content part restricts
+<code>best</code> to the caller's active models whose catalogue advertises image
+input. This happens before a configured preference is promoted, on both the
+buffered and streaming paths. A text-only preference cannot override it.</p>
+<p>If none qualifies, the request is refused with
+<code>no active vision-capable stateless provider model for signed agent</code>.
+Selection does not add a subscription, change the caller's allowlist, or use
+another identity. A workload must already be authorized to request <code>best</code>.</p>
 <h2 id="dynamic-routes-the-routes-file">Dynamic routes: the routes file<a class="headerlink" href="#dynamic-routes-the-routes-file" title="Link to this section">&para;</a></h2>
 is reloaded per request and its routes extend the launch aliases. The document
 has exactly three known top-level fields — <code>schema_version</code> (the number

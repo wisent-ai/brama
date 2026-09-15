@@ -101,7 +101,7 @@ pub async fn dispatch_best_subscription_stream_for_agent(
     request: &ModelRequest,
     preferred: Option<&str>,
 ) -> Result<RoutedStream, ModelResponse> {
-    let models = match best_subscription_models(agent_id, preferred).await {
+    let models = match best_subscription_models(agent_id, preferred, request).await {
         Ok(models) => models,
         Err(e) => return Err(ModelResponse::failure(&request.model, e)),
     };

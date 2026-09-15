@@ -58,7 +58,7 @@ pub async fn dispatch_best_subscription_for_agent(
     request: &ModelRequest,
     preferred: Option<&str>,
 ) -> ModelResponse {
-    let models = match best_subscription_models(agent_id, preferred).await {
+    let models = match best_subscription_models(agent_id, preferred, request).await {
         Ok(models) => models,
         Err(e) => return ModelResponse::failure(&request.model, e),
     };

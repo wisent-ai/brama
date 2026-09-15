@@ -1,6 +1,8 @@
 //! The candidate lists a selector walks: every route this agent can be served
 //! from, in the order the ledger ranks them.
 
+use crate::types::ModelRequest;
+
 use super::super::catalogue::subscription_models::registry_models_for_agent;
 use super::plan_order::order_models_by_plan;
 
@@ -12,11 +14,26 @@ use super::plan_order::order_models_by_plan;
 /// pointing `best` at `codex/gpt-5.3-codex-spark` is naming the model they want
 /// first, not consenting to a fleet outage every time one provider's credential
 /// chain breaks.
+///
+/// An image request first restricts that list to image-capable models. A
+/// configured preference cannot make a text-only route eligible.
 pub(in crate::subscription_dispatch::dispatch) async fn best_subscription_models(
     agent_id: &str,
     preferred: Option<&str>,
+    request: &ModelRequest,
 ) -> Result<Vec<String>, String> {
-    let mut models = active_supported_models_for_agent(agent_id).await?;
+    let needs_image = request.messages.iter().any(|message| {
+        message.content.as_array().is_some_and(|parts| {
+            parts
+                .iter()
+                .any(|part| part.get("type").and_then(|value| value.as_str()) == Some("image_url"))
+        })
+    });
+    let mut models = if needs_image {
+        active_vision_capable_models_for_agent(agent_id).await?
+    } else {
+        active_supported_models_for_agent(agent_id).await?
+    };
     if let Some(position) =
         preferred.and_then(|preferred| models.iter().position(|model| model == preferred))
     {
