@@ -9,10 +9,6 @@ assets/readme-banner.svg
 # Resolved by cargo from Cargo.toml and committed because this crate ships a
 # binary. A person never edits it, and `cargo build` rewrites it whole.
 Cargo.lock
-# The installed bundle's own layout, mirrored one-for-one by
-# src/release/build.sh: the launcher scripts, the release workflow and every
-# installed host address these files as libexec/<name> at exact paths.
-src/release/libexec/
 # A copy of OMP's published model metadata table, included verbatim by
 # src/providers/adapter/registry/known_limits.rs. It is replaced by copying a
 # newer table, never edited by hand.
