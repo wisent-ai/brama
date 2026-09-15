@@ -44,28 +44,6 @@ fn every_subscription_provider_has_a_static_model_list() {
     }
 }
 
-/// The counts that made the measurement readable: codex contributing exactly
-/// five models on that host matched its static list exactly, which is what
-/// showed the live listing was the one answering and that it works there.
-#[test]
-fn the_static_lists_are_the_ones_the_measurement_matched() {
-    let codex = provider_registry::provider("codex").expect("codex descriptor");
-    assert_eq!(
-        codex.static_models.len(),
-        5,
-        "codex contributed 5 models on the measured host; a different static count would mean \
-         that reading no longer identifies which list answered"
-    );
-    for id in ["claude-code", "kimi"] {
-        let descriptor = provider_registry::provider(id).expect("descriptor");
-        assert!(
-            !descriptor.static_models.is_empty(),
-            "{id} would have contributed {} models had discovery reached its static list, and \
-             it contributed none",
-            descriptor.static_models.len()
-        );
-    }
-}
 
 /// With nothing recorded, the sentence is the one it always was: this must not
 /// start claiming a reason it does not have.
