@@ -25,13 +25,14 @@ use serde_json::{json, Value};
 use gateway::{refusal, Gateway, AGENT, CONSOLE_BEARER};
 use support::{SkarbiecVault, TestDirectory};
 
-#[path = "grants/stores.rs"]
-mod stores;
 #[path = "grants/gateway_story.rs"]
 mod gateway_story;
+#[path = "grants/live_story.rs"]
+mod live_story;
+#[path = "grants/stores.rs"]
+mod stores;
 
 pub(crate) use stores::*;
-
 
 #[test]
 fn held_lists_every_harness_and_account_without_the_grants() {
@@ -207,4 +208,3 @@ fn two_grants_for_one_provider_are_refused_until_one_is_named() {
         "{stderr}"
     );
 }
-

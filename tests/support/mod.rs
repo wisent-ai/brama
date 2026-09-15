@@ -27,13 +27,13 @@ static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
 /// mask applied to the nanosecond stamp. Both keep the name short: GnuPG
 /// binds agent sockets below the fixture root and macOS caps `sun_path` at
 /// 104 bytes.
-const STORY_STEM: usize = 4;
-const STAMP_MASK: u128 = 0xffff_ffff;
+const STORY_STEM: usize = 1;
+const STAMP_MASK: u128 = 0xffff;
 
-/// GnuPG needs the short product-owned root because macOS limits Unix socket paths to 104 bytes.
+/// Keep every test-owned vault in this checkout's ignored build directory.
+/// Compact fixture names leave room for GnuPG's longest Unix socket suffix.
 pub(crate) fn temp_base() -> PathBuf {
-    let home = std::env::var_os("HOME").expect("HOME is required");
-    PathBuf::from(home).join(".brama").join("test-runs")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("target")
 }
 
 /// A name no two fixtures can share, even in one process at one instant:

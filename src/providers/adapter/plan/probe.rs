@@ -3,21 +3,17 @@
 
 use super::super::registry::route;
 
-/// The model each provider's plan state is cheapest to ask for, when an
-/// operator asks for it.
+/// A small completion on a model available to the provider's subscription.
 ///
-/// A provider states its plan windows in the headers of an ordinary completion,
-/// so learning them this way costs one completion. Which model that completion
-/// names changes the price and nothing else, so the smallest one the provider
-/// offers is named here; the entry is the provider's own cheapest, not a default
-/// a caller would ever be routed to. Nothing spends this on a timer: the free
-/// usage reports declared in `PLAN_USAGE_ENDPOINTS` are what keeps a row
-/// current, and this table only serves the on-demand check an operator
-/// triggers.
+/// A cheaper model is not necessarily part of the same plan. Codex Spark
+/// refused imported ChatGPT grants that successfully served GPT-6-Astra,
+/// making valid imports look like authentication failures. The probe uses
+/// the plan-compatible route instead; its output budget remains minimal.
+/// Nothing spends this on a timer: free usage reports keep rows current.
 const PLAN_PROBE_MODELS: &[(&str, &str)] = &[
     ("anthropic", "claude-haiku-4-5"),
     ("claude-code", "claude-haiku-4-5"),
-    ("codex", "gpt-5.3-codex-spark"),
+    ("codex", "gpt-6-astra"),
     ("kimi", "kimi-for-coding"),
     ("deepseek", "deepseek-chat"),
     ("openrouter", "openai/gpt-4o-mini"),

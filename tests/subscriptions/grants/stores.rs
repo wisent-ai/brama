@@ -30,7 +30,10 @@ pub(crate) fn omp_row(email: &str) -> String {
 /// writes it. `omp` holds the given enabled Claude accounts, one disabled
 /// one, and one codex account; Codex CLI, Kimi Code and Claude Code each
 /// hold one grant.
-pub(crate) fn home_with_every_harness(directory: &TestDirectory, omp_claude: &[&str]) -> std::path::PathBuf {
+pub(crate) fn home_with_every_harness(
+    directory: &TestDirectory,
+    omp_claude: &[&str],
+) -> std::path::PathBuf {
     let home = directory.path().join("home");
     std::fs::create_dir_all(home.join(".omp/agent")).expect("omp's directory");
     let store = Connection::open(home.join(".omp/agent/agent.db")).expect("create omp's store");
@@ -112,7 +115,11 @@ pub(crate) fn home_with_every_harness(directory: &TestDirectory, omp_claude: &[&
     home
 }
 
-pub(crate) fn brama(vault: &SkarbiecVault, args: &[&str], stdin: Option<&str>) -> (i32, String, String) {
+pub(crate) fn brama(
+    vault: &SkarbiecVault,
+    args: &[&str],
+    stdin: Option<&str>,
+) -> (i32, String, String) {
     let mut command = Command::new(env!("CARGO_BIN_EXE_brama"));
     command
         .args(args)
