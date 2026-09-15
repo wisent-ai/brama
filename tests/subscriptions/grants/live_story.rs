@@ -9,7 +9,19 @@ fn a_real_held_codex_grant_is_accepted_and_probed() {
         .expect("BRAMA_REAL_CODEX_ACCOUNT must name the existing OMP account to prove");
     let home = std::env::var("BRAMA_REAL_HARNESS_HOME")
         .expect("BRAMA_REAL_HARNESS_HOME must name the home whose OMP store may be read");
-    let gateway = Gateway::start("real-held-codex", &[(AGENT, "codex", "held-codex")]);
+    let identities = json!([
+        {"client_id": "brama-desktop", "token": CONSOLE_BEARER},
+        {"client_id": "brama-pool-agent-client", "token": gateway::AGENT_BEARER,
+         "agent_id": AGENT, "allowed_models": ["codex/gpt-6-astra"]},
+    ]);
+    let gateway = Gateway::start_with(
+        "real-held-codex",
+        &[(AGENT, "codex", "held-codex")],
+        &[(
+            "BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES",
+            identities.to_string(),
+        )],
+    );
     let arguments = [
         "subscription",
         "import",
@@ -105,4 +117,76 @@ fn a_real_held_codex_grant_is_accepted_and_probed() {
         "a refused selection must not probe or replace the stored grant"
     );
     assert_eq!(unchanged["credential"], row["credential"]);
+    prove_shared_cold_discovery(&gateway, &evidence);
+}
+
+fn prove_shared_cold_discovery(gateway: &Gateway, evidence: &Path) {
+    // Six signed clients reproduce the deployment's simultaneous first reads.
+    const CALLERS: usize = 6;
+    let credential_reads = |log: &str| {
+        log.lines()
+            .filter(|line| line.contains("subscription_models_discovered"))
+            .map(|line| {
+                line.split_whitespace()
+                    .find_map(|field| field.strip_prefix("read="))
+                    .expect("discovery must report its credential read count")
+                    .parse::<usize>()
+                    .expect("the reported read count must be an integer")
+            })
+            .sum::<usize>()
+    };
+    let before = credential_reads(&gateway.log());
+    let barrier = std::sync::Barrier::new(CALLERS);
+    let replies = std::thread::scope(|scope| {
+        let workers: Vec<_> = (0..CALLERS)
+            .map(|_| {
+                scope.spawn(|| {
+                    barrier.wait();
+                    gateway.agent("/v1/models", Method::GET, None)
+                })
+            })
+            .collect();
+        workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .collect::<Vec<_>>()
+    });
+    // The fixture drains stderr on another thread. Wait for the completed
+    // discovery events, not an arbitrary delay before counting their reads.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let log = loop {
+        let log = gateway.log();
+        if log
+            .lines()
+            .filter(|line| line.contains("subscription_models_discovered"))
+            .count()
+            >= CALLERS
+            || std::time::Instant::now() >= deadline
+        {
+            break log;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    };
+    std::fs::write(
+        evidence.join("concurrent-discovery.json"),
+        serde_json::to_vec_pretty(&replies).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(evidence.join("gateway.log"), &log).unwrap();
+    for (status, body) in replies {
+        assert_eq!(status, 200, "{body}");
+        assert!(
+            body["data"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|model| { model["id"] == "codex/gpt-6-astra" && model["available"] == true }),
+            "every authenticated client must see the usable subscription: {body}"
+        );
+    }
+    assert_eq!(
+        credential_reads(&log) - before,
+        1,
+        "concurrent catalogue reads must share their cold discovery: {log}"
+    );
 }

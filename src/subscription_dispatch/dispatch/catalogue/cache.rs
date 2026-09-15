@@ -2,7 +2,7 @@
 //! that answer stands, and why it refused when it did.
 
 use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::providers::adapter as provider_registry;
@@ -23,6 +23,39 @@ pub(super) const MODEL_FAILURE_CACHE_TTL: Duration = Duration::from_secs(60);
 pub(super) static REGISTRY_MODEL_FAILURE_CACHE: LazyLock<
     Mutex<HashMap<String, (Instant, String)>>,
 > = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+type DiscoveryLocks = Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>;
+static DISCOVERY_LOCKS: LazyLock<DiscoveryLocks> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+pub(super) fn cached_subscription_models(
+    key: &str,
+) -> Option<Vec<provider_registry::RegistryModel>> {
+    REGISTRY_MODEL_CACHE.lock().ok().and_then(|cache| {
+        cache
+            .get(key)
+            .filter(|item| item.fetched.elapsed() < MODEL_CACHE_TTL)
+            .map(|item| item.models.clone())
+    })
+}
+
+/// Coalesce a cold read by subscription, never across unrelated accounts.
+/// The caller checks both caches again after acquiring this guard. Only model
+/// metadata and refusals are shared; inference still redeems its own credential.
+pub(super) async fn lock_discovery(key: &str) -> tokio::sync::OwnedMutexGuard<()> {
+    let lock = {
+        let mut locks = DISCOVERY_LOCKS
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        if let Some(lock) = locks.get(key) {
+            Arc::clone(lock)
+        } else {
+            let lock = Arc::new(tokio::sync::Mutex::new(()));
+            locks.insert(key.to_owned(), Arc::clone(&lock));
+            lock
+        }
+    };
+    lock.lock_owned().await
+}
 
 /// Why model discovery last refused one subscription, when it did.
 ///

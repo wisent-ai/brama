@@ -52,6 +52,7 @@ pub(super) const PROVIDERS: &[ProviderDescriptor] = &[
         wire: WireProtocol::OpenAiResponses,
         auth: AuthKind::Bearer,
         static_models: &[
+            "gpt-6-astra",
             "gpt-5.6-sol",
             "gpt-5.6-luna",
             "gpt-5.6-terra",

@@ -11,8 +11,8 @@ use crate::subscription_dispatch::usage;
 
 use super::super::refusal::envelope::failure_detail;
 use super::cache::{
-    CachedRegistryModels, MODEL_CACHE_TTL, MODEL_FAILURE_CACHE_TTL, REGISTRY_MODEL_CACHE,
-    REGISTRY_MODEL_FAILURE_CACHE,
+    cached_subscription_models, lock_discovery, CachedRegistryModels, MODEL_FAILURE_CACHE_TTL,
+    REGISTRY_MODEL_CACHE, REGISTRY_MODEL_FAILURE_CACHE,
 };
 
 pub async fn registry_models_for_agent(
@@ -42,12 +42,13 @@ pub(super) async fn discover_subscription_models(
     for entry in entries {
         let provider = entry.provider.trim();
         let cache_key = format!("{provider}:{}", entry.id);
-        let cached = REGISTRY_MODEL_CACHE.lock().ok().and_then(|cache| {
-            cache
-                .get(&cache_key)
-                .filter(|item| item.fetched.elapsed() < MODEL_CACHE_TTL)
-                .map(|item| item.models.clone())
-        });
+        let cached = cached_subscription_models(&cache_key);
+        let _discovery = if cached.is_none() {
+            Some(lock_discovery(&cache_key).await)
+        } else {
+            None
+        };
+        let cached = cached.or_else(|| cached_subscription_models(&cache_key));
         let models = if let Some(cached) = cached {
             cached
         } else {
