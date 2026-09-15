@@ -30,10 +30,15 @@ static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
 const STORY_STEM: usize = 1;
 const STAMP_MASK: u128 = 0xffff;
 
-/// Keep every test-owned vault in this checkout's ignored build directory.
-/// Compact fixture names leave room for GnuPG's longest Unix socket suffix.
+/// GnuPG's socket path must fit macOS's 104-byte `sun_path`, even when a
+/// release worker compiles this package below a deeply nested staging root.
+/// Only these socket-owning vaults use the workshop's explicit short-root
+/// exception; `SkarbiecVault::drop` removes each fixture after stopping its agent.
+/// Ordinary test directories remain under `CARGO_TARGET_TMPDIR`.
 pub(crate) fn temp_base() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("target")
+    PathBuf::from(std::env::var_os("HOME").expect("HOME is required for the isolated GPG vault"))
+        .join(".brama")
+        .join("test-runs")
 }
 
 /// A name no two fixtures can share, even in one process at one instant:
