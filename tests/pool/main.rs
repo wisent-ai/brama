@@ -83,11 +83,12 @@ fn the_pool_answers_the_console_about_every_account_the_deployment_holds() {
     assert_pool_row_shape(&report, "the console");
 }
 
-/// The signed agent proves an agent, so the same read is narrowed to the
-/// accounts that agent owns. The other agent's account is absent, not marked
-/// unavailable: an agent is not told what it may not spend.
+/// The signed agent proves an agent and is answered about what it may spend.
+/// Since 2026-09-16 that is every account the deployment holds - the other
+/// agent's account included - because a subscription in the vault is in the
+/// rotation for every caller; only the scope in the report says who asked.
 #[test]
-fn the_pool_answers_a_signed_agent_only_about_its_own_accounts() {
+fn the_pool_answers_a_signed_agent_about_every_account_it_may_spend() {
     let gateway = Gateway::start("pool-agent", VAULT);
     let (status, report) = gateway.agent(POOL, Method::GET, None);
     assert_eq!(status, 200, "{report}");
@@ -95,7 +96,10 @@ fn the_pool_answers_a_signed_agent_only_about_its_own_accounts() {
     assert_eq!(report["scope"], AGENT);
     let mut answered = answered_ids(&report);
     answered.sort();
-    assert_eq!(answered, vec!["pool-agent-anthropic", "pool-agent-openai"]);
+    assert_eq!(
+        answered,
+        vec!["pool-agent-anthropic", "pool-agent-openai", "pool-other-openai"],
+    );
     assert_pool_row_shape(&report, "a signed agent");
 }
 

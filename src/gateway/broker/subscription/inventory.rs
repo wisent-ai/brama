@@ -8,7 +8,6 @@
 //! here too, because a listing is the only thing worth caching -- it is read
 //! per request and a failed shell must never be what a later caller sees.
 
-use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
@@ -16,24 +15,47 @@ use tracing::warn;
 
 use super::super::vault::{bounded_output, entitlements_router_bin, router_output, router_refusal};
 use super::account::{
-    configured_subscriptions, parse_live_subscriptions, parse_live_subscriptions_any_agent,
+    configured_subscriptions, parse_live_subscriptions, parse_owned_subscriptions,
     parse_unroutable_accounts, SubscriptionEntry, UnroutableAccount,
 };
 use super::donation::donated_subscriptions;
 
-/// Enumerate one agent's subscription metadata through the configured
-/// acquisition boundary and preserve whether that boundary answered.
+/// Enumerate the subscription pool through the configured acquisition
+/// boundary and preserve whether that boundary answered.
 ///
-/// Onboarding needs to distinguish an empty account from an unavailable
+/// Onboarding needs to distinguish an empty pool from an unavailable
 /// Skarbiec/entitlements route; flattening both to an empty vector would present
 /// a dependency failure as a valid zero-state import.
 ///
 /// This always performs live discovery. The trusted startup catalog belongs to
 /// internal routing only and cannot turn a failed user-facing read into success.
+/// `agent_id` names the caller for the log; the pool is the same for every one.
 pub async fn discover_subscriptions(agent_id: &str) -> Result<Vec<SubscriptionEntry>, String> {
     let broker = entitlements_router_bin();
-    let mut entries = live_subscriptions(&broker, agent_id, true).await?;
-    for donated in donated_subscriptions(agent_id)? {
+    let mut entries = live_subscriptions(&broker, true).await?;
+    for donated in donated_subscriptions(None)? {
+        match entries.iter_mut().find(|entry| entry.id == donated.id) {
+            Some(existing) => *existing = donated,
+            None => entries.push(donated),
+        }
+    }
+    let _ = agent_id;
+    Ok(entries)
+}
+
+/// The subscriptions one agent banked itself, from the vault's provenance tag
+/// and the overlay rows it wrote. This answers who may retire an account; it
+/// never narrows routing.
+pub async fn owned_subscriptions(agent_id: &str) -> Result<Vec<SubscriptionEntry>, String> {
+    let output = router_output("list owned subscriptions", |command| {
+        command.arg("list");
+    })
+    .await?;
+    if !output.status.success() {
+        return Err(router_refusal("list owned subscriptions", &output));
+    }
+    let mut entries = parse_owned_subscriptions(&output.stdout, agent_id)?;
+    for donated in donated_subscriptions(Some(agent_id))? {
         match entries.iter_mut().find(|entry| entry.id == donated.id) {
             Some(existing) => *existing = donated,
             None => entries.push(donated),
@@ -60,7 +82,7 @@ pub async fn list_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
             Vec::new()
         }
     };
-    match donated_subscriptions(agent_id) {
+    match donated_subscriptions(None) {
         Ok(donated) => {
             for entry in donated {
                 match entries.iter_mut().find(|existing| existing.id == entry.id) {
@@ -79,7 +101,9 @@ pub async fn list_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
     entries
 }
 
-/// Every active subscription this deployment holds, whichever agent owns it.
+/// Every active subscription this deployment holds. Since 2026-09-16 this is
+/// the same pool every caller routes over; it stays a separate reader because
+/// it never consults the trusted boot catalog or a donated overlay.
 pub async fn list_all_subscriptions() -> Result<Vec<SubscriptionEntry>, String> {
     let output = router_output("list all subscriptions", |command| {
         command.arg("list");
@@ -88,7 +112,7 @@ pub async fn list_all_subscriptions() -> Result<Vec<SubscriptionEntry>, String> 
     if !output.status.success() {
         return Err(router_refusal("list all subscriptions", &output));
     }
-    parse_live_subscriptions_any_agent(&output.stdout)
+    parse_live_subscriptions(&output.stdout)
 }
 
 /// Every subscription account in the vault that carries no `brama:agent:` tag.
@@ -152,45 +176,41 @@ pub async fn list_recoverable_subscriptions() -> Vec<SubscriptionEntry> {
         .collect()
 }
 
-type LiveSubscriptionsCache = Mutex<HashMap<String, (Instant, Vec<SubscriptionEntry>)>>;
+type LiveSubscriptionsCache = Mutex<Option<(Instant, Vec<SubscriptionEntry>)>>;
 
-/// Live discovery results per agent. Entries are stored only after a
-/// successful listing so a failed shell never poisons the cache.
+/// The live pool listing. Stored only after a successful listing so a failed
+/// shell never poisons the cache.
 static LIVE_SUBSCRIPTIONS_CACHE: LazyLock<LiveSubscriptionsCache> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+    LazyLock::new(|| Mutex::new(None));
 
 const LIVE_SUBSCRIPTIONS_CACHE_TTL: Duration = Duration::from_secs(60);
 
-/// Resolve one agent's subscriptions from the vault, serving a fresh cached
-/// listing unless `bypass_cache` is set (used when a lookup failed and the
-/// caller wants to re-check the vault instead of trusting a stale entry).
+/// Resolve the pool from the vault, serving a fresh cached listing unless
+/// `bypass_cache` is set (used when a lookup failed and the caller wants to
+/// re-check the vault instead of trusting a stale entry).
 async fn live_subscriptions(
     broker: &str,
-    agent_id: &str,
     bypass_cache: bool,
 ) -> Result<Vec<SubscriptionEntry>, String> {
     if !bypass_cache {
         if let Ok(cache) = LIVE_SUBSCRIPTIONS_CACHE.lock() {
-            if let Some((fetched_at, entries)) = cache.get(agent_id) {
+            if let Some((fetched_at, entries)) = cache.as_ref() {
                 if fetched_at.elapsed() < LIVE_SUBSCRIPTIONS_CACHE_TTL {
                     return Ok(entries.clone());
                 }
             }
         }
     }
-    let entries = list_subscriptions_live(broker, agent_id).await?;
+    let entries = list_subscriptions_live(broker).await?;
     if let Ok(mut cache) = LIVE_SUBSCRIPTIONS_CACHE.lock() {
-        cache.insert(agent_id.to_owned(), (Instant::now(), entries.clone()));
+        *cache = Some((Instant::now(), entries.clone()));
     }
     Ok(entries)
 }
 
 /// Shell the entitlements router's bare `list`, which returns a JSON array of
 /// every vault item (`{"id","type","tags","updated_at","deleted","versions"}`).
-async fn list_subscriptions_live(
-    broker: &str,
-    agent_id: &str,
-) -> Result<Vec<SubscriptionEntry>, String> {
+async fn list_subscriptions_live(broker: &str) -> Result<Vec<SubscriptionEntry>, String> {
     let output = bounded_output(broker, "list subscriptions", |command| {
         command.arg("list");
     })
@@ -198,14 +218,14 @@ async fn list_subscriptions_live(
     if !output.status.success() {
         return Err(router_refusal("list subscriptions", &output));
     }
-    parse_live_subscriptions(&output.stdout, agent_id)
+    parse_live_subscriptions(&output.stdout)
 }
 
 async fn list_subscriptions_result(agent_id: &str) -> Result<Vec<SubscriptionEntry>, String> {
     let broker = entitlements_router_bin();
-    match live_subscriptions(&broker, agent_id, false).await {
+    match live_subscriptions(&broker, false).await {
         Ok(mut live) => {
-            match configured_subscriptions(agent_id) {
+            match configured_subscriptions() {
                 Some(Ok(configured)) => {
                     for entry in configured {
                         if !live.iter().any(|existing| existing.id == entry.id) {
@@ -230,7 +250,7 @@ async fn list_subscriptions_result(agent_id: &str) -> Result<Vec<SubscriptionEnt
                 error = %live_error,
                 "internal routing will use the trusted catalog if one is available"
             );
-            match configured_subscriptions(agent_id) {
+            match configured_subscriptions() {
                 Some(Ok(configured)) => Ok(configured),
                 Some(Err(catalog_error)) => Err(format!(
                     "{live_error}; trusted subscription catalog is invalid: {catalog_error}"

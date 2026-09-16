@@ -26,9 +26,10 @@ if (!binaryPath || !outputDir || !isAbsolute(executablePath)) {
 // in the pool for weeks because nobody did.
 //
 // The vault already says it, on the item: `brama:subscription` marks one,
-// `brama:provider:<p>` and `brama:id:<id>` name it, and one `brama:agent:<a>` tag
-// per agent that may use it. That is the same material the gateway reads, so the
-// policy and the gateway can no longer disagree about what exists.
+// `brama:provider:<p>` and `brama:id:<id>` name it. That is the same material the
+// gateway reads, so the policy and the gateway can no longer disagree about what
+// exists. A `brama:agent:<a>` tag records who banked an account and gates nothing:
+// every subscription serves every caller.
 const vaultPath = process.env.SKARBIEC_VAULT_FILE
   || join(process.env.HOME || '/nonexistent', '.stado', 'skarbiec.vault.json');
 const MARK = 'brama:subscription';
@@ -51,15 +52,14 @@ if (
 }
 const maxTtlSeconds = 315_360_000;
 const maxUses = 10_000_000;
-const subscriptionAgentIds = ['echo', 'content-platform', 'oko', 'wisent-app', 'lem', 'probierz'];
 const requestSignAgentIds = ['wisent-app'];
 
-// Vault ownership and agent routing are deliberately separate. Any item with
-// both `brama:id:` and `brama:provider:` is Brama credential material, so the
-// service policy may reacquire and repair it. Only items carrying the complete
-// subscription marker plus an allowed `brama:agent:` tag are routed to an
-// agent. This distinction lets a release repair tags stripped by an older
-// credential write without exposing that incomplete item to a caller.
+// Vault ownership and routing are deliberately separate. Any item with both
+// `brama:id:` and `brama:provider:` is Brama credential material, so the
+// service policy may reacquire and repair it. Only items carrying the
+// subscription marker are routed. This distinction lets a release repair tags
+// stripped by an older credential write without exposing that incomplete item
+// to a caller.
 const vault = existsSync(vaultPath)
   ? JSON.parse(readFileSync(vaultPath, 'utf8'))
   : (process.stderr.write(`no vault at ${vaultPath}; the policy will grant no subscriptions\n`), {});
@@ -68,23 +68,18 @@ const credentialSubscriptions = Object.values(vault?.items ?? {})
   .map((item) => ({
     id: tagValue(item.tags, 'brama:id:'),
     provider: tagValue(item.tags, 'brama:provider:'),
-    agents: item.tags
-      .filter((tag) => tag.startsWith('brama:agent:'))
-      .map((tag) => tag.slice('brama:agent:'.length)),
     marked: item.tags.includes(MARK),
   }))
   .filter(({ id, provider }) => typeof id === 'string' && typeof provider === 'string'
     && /^[a-z0-9-]+$/.test(provider))
   .sort((left, right) => left.id.localeCompare(right.id));
-const subscriptions = credentialSubscriptions
-  .filter(({ agents, marked }) => marked
-    && agents.some((agentId) => subscriptionAgentIds.includes(agentId)));
+const subscriptions = credentialSubscriptions.filter(({ marked }) => marked);
 
 if (credentialSubscriptions.length === 0) {
   process.stderr.write(`no item in ${vaultPath} carries valid brama:id: and brama:provider: tags; the policy will grant none\n`);
 }
 if (subscriptions.length === 0 && credentialSubscriptions.length !== 0) {
-  process.stderr.write(`no Brama credential in ${vaultPath} has ${MARK} with a brama:agent:<agent> tag; incomplete items can be repaired but are not routed\n`);
+  process.stderr.write(`no Brama credential in ${vaultPath} carries ${MARK}; incomplete items can be repaired but are not routed\n`);
 }
 const controlConfigPath = controlConfigInput || process.env.BRAMA_CONTROL_CONFIG;
 let directProviderIds = ['local-openai'];

@@ -44,7 +44,7 @@ pub use standalone::{
 };
 pub use subscription::{
     discover_subscriptions, donated_add, donated_remove, donated_subscriptions_path,
-    list_all_subscriptions, list_recoverable_subscriptions, list_subscriptions,
+    list_all_subscriptions, list_recoverable_subscriptions, list_subscriptions, owned_subscriptions,
     list_unroutable_accounts, put_donated_credential, put_subscription_credential,
     refresh_subscription_credential, refresh_subscription_credential_ahead,
     subscription_tags_for_write, supports_oauth_refresh, DonationRefusal, RefreshAhead,

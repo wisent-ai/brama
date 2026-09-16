@@ -29,8 +29,8 @@ pub(super) struct ServiceFacts {
 }
 
 pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
-    // A subscription item that loses every `brama:agent:` tag disappears from
-    // normal discovery. The broker reports those explicitly without treating
+    // A subscription item that loses its `brama:subscription` mark disappears
+    // from discovery. The broker reports those explicitly without treating
     // unrelated vault entries as subscription accounts.
     let untagged: Vec<Value> = if facts.standalone {
         Vec::new()
@@ -43,8 +43,8 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
                     (Some(provider), Some(_id)) => {
                         let refusal = crate::subscription_dispatch::dispatch::no_active_credential_summary(provider);
                         (provider.clone(), format!(
-                            "the vault holds this account and its item carries no 'brama:agent:' tag, \
-                             so subscription discovery cannot see it and no agent can route to it; \
+                            "the vault holds this account and its item carries no 'brama:subscription' mark, \
+                             so subscription discovery cannot see it and no caller can route to it; \
                              every request for this provider answers '{refusal}'"
                         ))
                     }

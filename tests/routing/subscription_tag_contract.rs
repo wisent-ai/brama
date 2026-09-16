@@ -1,27 +1,21 @@
 //! A subscription credential write must not be able to mint an account that
 //! discovery cannot see.
 //!
-//! Discovery finds an account by `brama:subscription` plus
-//! `brama:agent:<agent>` (`parse_live_subscriptions`). An item missing either
-//! is not a degraded account: it does not exist for any caller, while its
-//! credential stays valid and every check that counts credentials keeps
-//! answering green. That asymmetry is why this shape is expensive.
+//! Discovery finds an account by `brama:subscription` (`parse_live_subscriptions`).
+//! An item missing the mark is not a degraded account: it does not exist for
+//! any caller, while its credential stays valid and every check that counts
+//! credentials keeps answering green. That asymmetry is why this shape is
+//! expensive.
 //!
-//! It has now happened twice in this fleet. First a subscription Brama could
-//! not route turned out to be missing `brama:agent:weles`, with four paid plans
-//! invisible for the same reason. Then, measured on charless-mac-mini on
-//! 2026-09-02, three of the four subscription accounts in that vault carried
-//! `brama:provider:` and `brama:id:` and neither `brama:subscription` nor any
-//! `brama:agent:` -- so every agent on the host could reach exactly one
-//! credential, and one recorded block on it took the documentation gate of
-//! every repository calling the shared workflow down. One of the three redeemed
-//! on the first probe after its tags were restored: a working paid credential
-//! had been invisible the whole time.
-//!
-//! The writer had no half of that contract: `put_subscription_credential`
-//! passed `None` for tags, which keeps whatever the item already had and gives
-//! a fresh item nothing. These tests are the third occurrence failing here
-//! instead of in a pipeline.
+//! Until 2026-09-16 discovery also required `brama:agent:<agent>` per caller,
+//! and that gate cost more than it protected: a subscription Brama could not
+//! route turned out to be missing `brama:agent:weles`; on charless-mac-mini on
+//! 2026-09-02 three of four accounts carried no agent tag; and on 2026-09-16
+//! two of three Claude subscriptions on the operator's laptop were tagged for
+//! nobody while the consumer `oko` was tagged on nothing, so six paid plans
+//! answered `all bounded 'codex' credentials unavailable`. The operator's
+//! word: a subscription in the vault serves every caller. The agent tag is
+//! provenance now, and these tests hold the writer and the pool to that.
 
 #[path = "../support/mod.rs"]
 mod support;
@@ -37,8 +31,8 @@ fn tags(values: &[&str]) -> Vec<String> {
     values.iter().map(|value| (*value).to_string()).collect()
 }
 
-/// The structural tags are derived from what the write is already for, so a
-/// rotation onto an item that has its agent binding completes the rest itself.
+/// The structural tags are derived from what the write is already for; an
+/// existing provenance tag survives.
 #[test]
 fn the_write_supplies_the_structural_tags_it_can_derive() {
     let stored = subscription_tags_for_write(
@@ -46,7 +40,7 @@ fn the_write_supplies_the_structural_tags_it_can_derive() {
         "codex",
         "brama-sub-wisent-app-codex-secondary",
     )
-    .expect("an item with an agent binding is routable and must be written");
+    .expect("an item is routable once marked and named, and must be written");
 
     assert!(
         stored.contains(&"brama:subscription".to_string()),
@@ -62,57 +56,54 @@ fn the_write_supplies_the_structural_tags_it_can_derive() {
     );
     assert!(
         stored.contains(&"brama:agent:probierz".to_string()),
-        "an existing agent binding must survive the write: {stored:?}"
+        "provenance must survive the write: {stored:?}"
     );
 }
 
 /// The exact state found on charless-mac-mini: provider and id present, no
-/// mark and no agent. A write must refuse rather than store it again.
+/// mark and no agent. The write completes with the mark; nothing about an
+/// agent is left for a writer to guess.
 #[test]
-fn a_write_that_would_leave_the_account_unroutable_is_refused() {
-    let refusal = subscription_tags_for_write(
-        &tags(&[
-            "brama:provider:codex",
-            "brama:id:brama-sub-wisent-app-codex-secondary",
-        ]),
-        "codex",
-        "brama-sub-wisent-app-codex-secondary",
-    )
-    .expect_err("an account no agent can route to must not be written");
-
-    assert!(
-        refusal.contains("brama:agent:"),
-        "the refusal must name the tag that is missing: {refusal}"
-    );
-    assert!(
-        refusal.contains("retag-vault-item"),
-        "the refusal must name the command that repairs it: {refusal}"
-    );
+fn a_write_with_no_agent_tag_completes_and_is_routable() {
+    for existing in [
+        tags(&["brama:provider:codex", "brama:id:brama-sub-wisent-app-codex-secondary"]),
+        tags(&[]),
+        tags(&["brama:agent:"]),
+    ] {
+        let stored = subscription_tags_for_write(
+            &existing,
+            "codex",
+            "brama-sub-wisent-app-codex-secondary",
+        )
+        .expect("no agent binding is required: every subscription serves every caller");
+        assert!(stored.contains(&"brama:subscription".to_string()), "{stored:?}");
+        assert!(stored.contains(&"brama:provider:codex".to_string()), "{stored:?}");
+        assert!(
+            stored.contains(&"brama:id:brama-sub-wisent-app-codex-secondary".to_string()),
+            "{stored:?}"
+        );
+    }
 }
 
-/// A brand new item carries nothing, which is the case that mints an invisible
-/// paid account. It is the same refusal.
+/// The pool the real product reports from an isolated vault holds an account
+/// tagged for nobody beside one tagged for an agent, both routable.
 #[test]
-fn a_brand_new_item_with_no_tags_is_refused() {
-    let refusal = subscription_tags_for_write(&[], "kimi", "brama-sub-wisent-app-kimi-primary")
-        .expect_err("a fresh item has no agent binding, so it cannot be written blind");
+fn an_account_tagged_for_no_agent_is_in_everyones_pool() {
+    let directory = TestDirectory::new("pool-without-agent-tag");
+    let vault = SkarbiecVault::create("pool-without-agent-tag");
+    vault.seed_subscription("brama-pool-test", "codex", "pool-tagged-codex");
+    vault.seed_marked_subscription("claude-code", "pool-untagged-claude");
+    let (document, _) = pool_document(&directory, &vault);
+    for id in ["pool-tagged-codex", "pool-untagged-claude"] {
+        let row = row_of(&document, id);
+        assert_eq!(row["status"], "active", "{id} must be in the pool: {row}");
+    }
     assert!(
-        refusal.contains("no 'brama:agent:<agent>' tag"),
-        "{refusal}"
+        document["unroutable"]
+            .as_array()
+            .map_or(true, |rows| rows.iter().all(|row| row["id"] != "pool-untagged-claude")),
+        "an account with the mark is never unroutable for want of an agent tag: {document}"
     );
-}
-
-/// An empty agent tag is not an agent binding. Without this, `brama:agent:`
-/// alone would satisfy the check and restore the original defect.
-#[test]
-fn an_empty_agent_tag_does_not_count_as_a_binding() {
-    let refusal = subscription_tags_for_write(
-        &tags(&["brama:agent:"]),
-        "codex",
-        "brama-sub-wisent-app-codex-secondary",
-    )
-    .expect_err("an empty agent tag names no agent");
-    assert!(refusal.contains("brama:agent:"), "{refusal}");
 }
 
 /// The write never relabels an item that already claims a different provider or

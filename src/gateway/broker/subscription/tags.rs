@@ -11,11 +11,11 @@ use super::account::normalized_provider;
 /// The tags a subscription credential write must store, given what the item
 /// already carries.
 ///
-/// Discovery finds an account by `brama:subscription` plus
-/// `brama:agent:<agent>` (see `parse_live_subscriptions`), so an item missing
-/// either is not a degraded account: it does not exist for any caller, while
-/// its credential stays perfectly valid and every check that counts
-/// credentials keeps answering green.
+/// Discovery finds an account by `brama:subscription` (see
+/// `parse_live_subscriptions`), so an item missing the mark is not a degraded
+/// account: it does not exist for any caller, while its credential stays
+/// perfectly valid and every check that counts credentials keeps answering
+/// green.
 ///
 /// This is the writer's half of that contract, and it exists because the write
 /// path had no such half. `put_subscription_credential` passed `None` for
@@ -30,16 +30,14 @@ use super::account::normalized_provider;
 /// agent on that host could reach exactly one credential, so the single block
 /// on it took the documentation gate of every repository down. One of the three
 /// redeemed on the first probe after its tags were restored: a working paid
-/// credential had been invisible the whole time. The same shape had already
-/// cost this fleet a day through a missing `brama:agent:weles` tag.
+/// credential had been invisible the whole time.
 ///
-/// The structural three are derived, never asked for: the provider and the
+/// All three tags are derived, never asked for: the provider and the
 /// subscription id are what this write is for, and the mark follows from being
-/// a subscription at all. The agent binding is the one thing that cannot be
-/// derived -- it is an entitlement decision about who may spend a paid plan --
-/// so a write that would leave an item with no agent tag is refused here
-/// rather than completed with a guess. A refusal at write time is the only
-/// place that requirement is met by whoever is doing the writing.
+/// a subscription at all. Until 2026-09-16 the write also refused an item
+/// with no `brama:agent:` tag, calling that an entitlement decision; the
+/// operator's decision is that every subscription serves every caller, so
+/// there is nothing left for a writer to be unable to derive.
 pub fn subscription_tags_for_write(
     existing: &[String],
     provider: &str,
@@ -74,19 +72,6 @@ pub fn subscription_tags_for_write(
         if declared.is_empty() {
             tags.push(format!("{prefix}{wanted}"));
         }
-    }
-    if !tags.iter().any(|tag| {
-        tag.strip_prefix("brama:agent:")
-            .is_some_and(|a| !a.is_empty())
-    }) {
-        return Err(format!(
-            "writing this credential would store subscription {subscription_id} for provider \
-             {provider} with no 'brama:agent:<agent>' tag, so discovery could not see it and no \
-             agent could route to it while its credential stayed valid. Which agents may spend a \
-             paid plan is an entitlement decision this write cannot derive: tag the item with \
-             `stado host retag-vault-item <host> provider:{provider}:{subscription_id} --tags …` \
-             and repeat the write"
-        ));
     }
     Ok(tags)
 }

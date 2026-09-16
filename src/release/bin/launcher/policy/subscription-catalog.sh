@@ -24,21 +24,21 @@ with open(available_path, encoding="utf-8") as source:
 with open(policy_path, encoding="utf-8") as source:
     policy = json.load(source)
 
-# Which agents may use a subscription is read off the item, not out of a manifest.
+# Which subscriptions exist is read off the items, not out of a manifest.
 #
-# The item carries it: `brama:subscription` marks one and one `brama:agent:<id>`
-# tag names each agent. A JSON list beside that was a second answer to the same
+# The item carries it: `brama:subscription` marks one, `brama:provider:` and
+# `brama:id:` name it. A JSON list beside that was a second answer to the same
 # question, and it disagreed -- the list on this host declared twenty-four
 # subscriptions over twenty providers while the vault held six, and a paid Claude
 # account was in the vault and missing from the list.
 #
-# These four namespaces are the whole vocabulary, and the listing already read
-# above carries them, so this file opens the vault once through the router and
-# never reads the vault file beside it.
+# Until 2026-09-16 the catalog also carried one row per `brama:agent:<id>` tag
+# and the gateway served an agent only the rows tagged for it; two paid Claude
+# accounts with no agent tag served nobody. A subscription in the vault is in
+# the rotation for every caller, so a row names no agent.
 SUBSCRIPTION_TAG = "brama:subscription"
 PROVIDER_TAG = "brama:provider:"
 SUBSCRIPTION_ID_TAG = "brama:id:"
-AGENT_TAG = "brama:agent:"
 LOGIN_TAG = "brama:login:"
 
 
@@ -68,11 +68,11 @@ catalog = []
 # model discovery spent before the first request.
 #
 # `brama:subscription` marks a subscription, `brama:provider:<provider>` names
-# its provider, `brama:id:<subscription-id>` names the subscription,
-# `brama:login:<vault-item>` names the Weles account that can renew it, and each
-# `brama:agent:<agent>` names an agent allowed to spend it. The policy still has
-# to allow the exact provider resource; the catalog only exposes metadata and
-# every use still requires a fresh capability from the authority.
+# its provider, `brama:id:<subscription-id>` names the subscription and
+# `brama:login:<vault-item>` names the Weles account that can renew it. The
+# policy still has to allow the exact provider resource; the catalog only
+# exposes metadata and every use still requires a fresh capability from the
+# authority.
 for item in available_items:
     if not isinstance(item, dict) or item.get("deleted", False):
         continue
@@ -84,14 +84,12 @@ for item in available_items:
         continue
     provider = tag_value(tags, PROVIDER_TAG)
     subscription_id = tag_value(tags, SUBSCRIPTION_ID_TAG)
-    agent_ids = tag_values(tags, AGENT_TAG)
     login_item = tag_value(tags, LOGIN_TAG)
     missing = [
         f"{prefix}<value>"
         for prefix, value in (
             (PROVIDER_TAG, provider),
             (SUBSCRIPTION_ID_TAG, subscription_id),
-            (AGENT_TAG, agent_ids),
         )
         if not value
     ]
@@ -106,14 +104,12 @@ for item in available_items:
     resource = f"provider:{provider}:{subscription_id}"
     if ("brama.provider.authenticate", resource) not in allowed:
         continue
-    for agent_id in agent_ids:
-        catalog.append({
-            "id": subscription_id,
-            "provider": provider,
-            "agent_id": agent_id,
-            "status": "active",
-            "login_item": login_item,
-        })
+    catalog.append({
+        "id": subscription_id,
+        "provider": provider,
+        "status": "active",
+        "login_item": login_item,
+    })
 
 with open(catalog_path, "w", encoding="utf-8") as target:
     json.dump({"items": catalog}, target, separators=(",", ":"))

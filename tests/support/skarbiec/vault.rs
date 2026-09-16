@@ -80,16 +80,32 @@ impl SkarbiecVault {
         format!("provider:{provider}:{subscription_id}")
     }
 
-    /// Seed one account as a real Skarbiec item carrying the four tags
-    /// discovery reads: the marker, the owning agent, the provider and the
-    /// subscription id. An item missing any of them does not exist for any
-    /// caller -- what `tests/routing/subscription_tag_contract.rs` is about.
+    /// Seed one account as a real Skarbiec item carrying the three tags
+    /// discovery reads - the marker, the provider and the subscription id -
+    /// plus the agent's provenance tag.
     pub fn seed_subscription(&self, agent: &str, provider: &str, subscription_id: &str) -> String {
+        self.seed_item(
+            provider,
+            subscription_id,
+            &format!(
+                "brama:subscription,brama:agent:{agent},brama:provider:{provider},\
+                 brama:id:{subscription_id}"
+            ),
+        )
+    }
+
+    /// Seed one account tagged for no agent at all: marked and named, which
+    /// since 2026-09-16 is everything routing needs.
+    pub fn seed_marked_subscription(&self, provider: &str, subscription_id: &str) -> String {
+        self.seed_item(
+            provider,
+            subscription_id,
+            &format!("brama:subscription,brama:provider:{provider},brama:id:{subscription_id}"),
+        )
+    }
+
+    fn seed_item(&self, provider: &str, subscription_id: &str, tags: &str) -> String {
         let item = Self::item_id(provider, subscription_id);
-        let tags = format!(
-            "brama:subscription,brama:agent:{agent},brama:provider:{provider},\
-             brama:id:{subscription_id}"
-        );
         // The document shape `skarbiec set-json` accepts, and the one Brama's
         // own credential writer sends. Without the `context` object the real
         // binary refuses: "canonical item context must be an object".
@@ -101,7 +117,7 @@ impl SkarbiecVault {
         })
         .to_string();
         let written = self.skarbiec_with_stdin(
-            &["set-json", &item, "--type", "bundle", "--tags", &tags],
+            &["set-json", &item, "--type", "bundle", "--tags", tags],
             &document,
         );
         assert!(

@@ -39,9 +39,10 @@ pub fn donated_subscriptions_path() -> PathBuf {
         })
 }
 
-/// Overlay entries for one agent. A missing file is an empty overlay; every
-/// other read or decode failure remains visible to the caller.
-pub(super) fn donated_subscriptions(agent_id: &str) -> Result<Vec<SubscriptionEntry>, String> {
+/// Overlay entries, for routing (`owner: None`) or for the agent that banked
+/// them (`owner: Some`). A missing file is an empty overlay; every other read
+/// or decode failure remains visible to the caller.
+pub(super) fn donated_subscriptions(owner: Option<&str>) -> Result<Vec<SubscriptionEntry>, String> {
     let path = donated_subscriptions_path();
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
@@ -53,7 +54,7 @@ pub(super) fn donated_subscriptions(agent_id: &str) -> Result<Vec<SubscriptionEn
             ));
         }
     };
-    parse_subscriptions(text.as_bytes(), agent_id).map_err(|error| {
+    parse_subscriptions(text.as_bytes(), owner).map_err(|error| {
         format!(
             "decode donated subscriptions file `{}`: {error}",
             path.to_string_lossy()
@@ -154,21 +155,13 @@ async fn donated_credential_tags(
         .map(|item| item.tags)
         .unwrap_or_default();
 
+    // `brama:agent:` records who banked the account; it is not an
+    // entitlement, so a renewal by another agent adds its name rather than
+    // refusing the credential.
     let agent_tag = format!("brama:agent:{agent_id}");
     if !tags.contains(&agent_tag) {
-        if tags.iter().any(|tag| {
-            tag.strip_prefix("brama:agent:")
-                .is_some_and(|agent| !agent.is_empty())
-        }) {
-            return Err(DonationRefusal::MappingConflict(format!(
-                "{item_id} is not assigned to agent {agent_id}; refusing to replace its credential"
-            )));
-        }
         tags.push(agent_tag);
     }
-    // Agent tags are additive entitlements, unlike the provider, subscription
-    // and login identity. Renewing a shared credential must preserve every
-    // existing consumer rather than reject the other authorized agents.
     let mut tags = subscription_tags_for_write(&tags, provider, subscription_id)
         .map_err(DonationRefusal::MappingConflict)?;
     if let Some(login_item) = login_item {

@@ -123,7 +123,7 @@ pub(super) async fn retire_managed_subscription(
     agent_id: String,
     subscription_id: String,
 ) -> Result<Json<Value>, ApiError> {
-    let owned = crate::gateway::broker::discover_subscriptions(&agent_id)
+    let owned = crate::gateway::broker::owned_subscriptions(&agent_id)
         .await
         .map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?
         .into_iter()

@@ -239,14 +239,16 @@ fn a_refused_redemption_is_still_an_authorization_failure() {
 /// `model stream first-event timeout`, while `brama test` on the same route
 /// had already said `no active 'codex' credential for agent`.
 ///
-/// So this one drives the built binary over a real Skarbiec vault holding one
-/// agent's account and asks for the route as a different agent. Free to run:
-/// the roster is empty before any provider is asked.
+/// So this one drives the built binary over a real Skarbiec vault and asks
+/// for a route no account in the pool can pay for. Until 2026-09-16 that was
+/// another agent's account; since every account serves every caller, it is
+/// an account for another provider. Free to run: the roster is empty before
+/// any provider is asked.
 #[test]
 fn the_dispatch_envelope_agrees_with_the_edge_about_an_absent_account() {
     let directory = TestDirectory::new("envelope-no-account");
     let vault = SkarbiecVault::create("envelope-no-account");
-    vault.seed_subscription("brama-envelope-owner", "codex", "envelope-owner-codex");
+    vault.seed_subscription("brama-envelope-owner", "claude-code", "envelope-owner-claude");
 
     let mut command = Command::new(env!("CARGO_BIN_EXE_brama"));
     for (name, value) in vault.environment() {
