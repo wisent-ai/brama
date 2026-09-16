@@ -87,11 +87,12 @@ fn plan_usage_answers_the_console_about_every_plan_the_deployment_holds() {
 }
 
 /// The signed agent proves an agent, and the same capability answers it about
-/// its own plans only. Its bearer is model-scoped, which is the shape every
-/// workload identity has, and the four routes this replaced refused that shape
-/// outright.
+/// the plans it may spend. Since 2026-09-16 that is every plan the deployment
+/// holds, the other agent's included; the scope still says who asked. Its
+/// bearer is model-scoped, which is the shape every workload identity has,
+/// and the four routes this replaced refused that shape outright.
 #[test]
-fn plan_usage_answers_a_signed_agent_only_about_its_own_plans() {
+fn plan_usage_answers_a_signed_agent_about_every_plan_it_may_spend() {
     let gateway = Gateway::start("usage-agent", VAULT);
     let (status, report) = gateway.agent(PLAN_USAGE, Method::POST, None);
     assert_eq!(status, 200, "{report}");
@@ -99,11 +100,7 @@ fn plan_usage_answers_a_signed_agent_only_about_its_own_plans() {
     assert_eq!(report["scope"], AGENT);
     let mut answered = answered_ids(&report);
     answered.sort();
-    assert_eq!(answered, vec![CLAUDE, KIMI, OPENAI]);
-    assert!(
-        !answered.contains(&OTHER.to_owned()),
-        "an agent must not be told about another agent's plan: {report}"
-    );
+    assert_eq!(answered, vec![CLAUDE, KIMI, OPENAI, OTHER]);
 }
 
 /// An account with no reading yet is reported as exactly that. A missing
