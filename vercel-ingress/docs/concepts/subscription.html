@@ -25,23 +25,32 @@ the provider's own reports. Who may spend it is the
 <a href="/docs/concepts/entitlement">entitlement</a> model; this page is the object itself —
 discovery, states, the ledger, and the credential lifecycle.</p>
 <h2 id="shape-and-discovery">Shape and discovery<a class="headerlink" href="#shape-and-discovery" title="Link to this section">&para;</a></h2>
-<p>A subscription is a vault item tagged <code>brama:subscription</code> and
-<code>brama:agent:&lt;agent&gt;</code>, carrying its provider in <code>brama:provider:&lt;provider&gt;</code>
-and its subscription id in <code>brama:id:&lt;id&gt;</code>. Brama discovers those
-tags and Desktop consumes the returned accounts and errors; it does not keep a
-second list. Vault item ids stay opaque. The credential coordinate is
+<p>A subscription is a vault item tagged <code>brama:subscription</code>, carrying its
+provider in <code>brama:provider:&lt;provider&gt;</code> and its subscription id in
+<code>brama:id:&lt;id&gt;</code>. Brama discovers those tags and Desktop consumes the
+returned accounts and errors; it does not keep a second list. Vault item ids
+stay opaque. The credential coordinate is
 <code>provider:&lt;provider&gt;:&lt;subscription&gt;</code> (<code>src/gateway/broker.rs</code>).</p>
+<p>Every subscription in the vault serves every caller. <code>best</code> walks the whole
+pool, freest plan first; a plan a caller cannot use is one whose provider
+refuses the credential, never one a tag withheld. Until 2026-09-16 an item
+also needed one <code>brama:agent:&lt;agent&gt;</code> tag per caller allowed to spend
+it, and that gate cost more than it protected: on one laptop two of three Claude
+subscriptions were tagged for nobody and the consumer <code>oko</code> was tagged on
+nothing, so six paid plans answered <code>all bounded 'codex' credentials
+unavailable</code>. The tag remains as provenance of who banked an account and
+decides who may retire it; it gates no routing.</p>
 <p>Discovery shells the local entitlements router's <code>list</code> (binary from
-<code>ENTITLEMENTS_ROUTER_BIN</code>, default <code>entitlements-router</code>); successful
-listings are cached per agent for 60 seconds. User-facing discovery preserves
-process errors, exit status and stderr, malformed output and timeouts.
-A trusted startup catalog may support routing, but never hides a failed live
-lookup in the operator's report.</p>
-<p>An item that loses its <code>brama:agent:</code> tag keeps a working credential and
-stops existing for every listing — the one failure the deployment had no way
-to see, which is why <code>/readyz</code> reports such accounts explicitly as
-<code>unroutable_accounts</code> (metadata only, recognised by tags or by the
-coordinate an untagged item lives at).</p>
+<code>ENTITLEMENTS_ROUTER_BIN</code>, default <code>entitlements-router</code>); a successful
+listing is cached for 60 seconds. User-facing discovery preserves process
+errors, exit status and stderr, malformed output and timeouts. A trusted
+startup catalog may support routing, but never hides a failed live lookup in
+the operator's report.</p>
+<p>An item that loses its <code>brama:subscription</code> mark keeps a working
+credential and stops existing for every listing — the one failure the
+deployment had no way to see, which is why <code>/readyz</code> reports such accounts
+explicitly as <code>unroutable_accounts</code> (metadata only, recognised by tags or
+by the coordinate an unmarked item lives at).</p>
 <h2 id="states">States<a class="headerlink" href="#states" title="Link to this section">&para;</a></h2>
 <p><code>brama subscriptions</code> and <code>GET /v1/subscription-pool</code> report one
 of four states per row (<code>src/subscription_dispatch/pool.rs</code>):</p>
