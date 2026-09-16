@@ -248,7 +248,11 @@ fn a_refused_redemption_is_still_an_authorization_failure() {
 fn the_dispatch_envelope_agrees_with_the_edge_about_an_absent_account() {
     let directory = TestDirectory::new("envelope-no-account");
     let vault = SkarbiecVault::create("envelope-no-account");
-    vault.seed_subscription("brama-envelope-owner", "claude-code", "envelope-owner-claude");
+    vault.seed_subscription(
+        "brama-envelope-owner",
+        "claude-code",
+        "envelope-owner-claude",
+    );
 
     let mut command = Command::new(env!("CARGO_BIN_EXE_brama"));
     for (name, value) in vault.environment() {

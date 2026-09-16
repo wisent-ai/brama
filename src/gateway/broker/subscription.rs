@@ -27,8 +27,8 @@ pub use donation::{
     DonationRefusal,
 };
 pub use inventory::{
-    discover_subscriptions, list_all_subscriptions, list_recoverable_subscriptions, owned_subscriptions,
-    list_subscriptions, list_unroutable_accounts,
+    discover_subscriptions, list_all_subscriptions, list_recoverable_subscriptions,
+    list_subscriptions, list_unroutable_accounts, owned_subscriptions,
 };
 pub use renewal::{
     put_subscription_credential, refresh_subscription_credential,

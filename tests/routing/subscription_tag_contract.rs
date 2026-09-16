@@ -66,18 +66,24 @@ fn the_write_supplies_the_structural_tags_it_can_derive() {
 #[test]
 fn a_write_with_no_agent_tag_completes_and_is_routable() {
     for existing in [
-        tags(&["brama:provider:codex", "brama:id:brama-sub-wisent-app-codex-secondary"]),
+        tags(&[
+            "brama:provider:codex",
+            "brama:id:brama-sub-wisent-app-codex-secondary",
+        ]),
         tags(&[]),
         tags(&["brama:agent:"]),
     ] {
-        let stored = subscription_tags_for_write(
-            &existing,
-            "codex",
-            "brama-sub-wisent-app-codex-secondary",
-        )
-        .expect("no agent binding is required: every subscription serves every caller");
-        assert!(stored.contains(&"brama:subscription".to_string()), "{stored:?}");
-        assert!(stored.contains(&"brama:provider:codex".to_string()), "{stored:?}");
+        let stored =
+            subscription_tags_for_write(&existing, "codex", "brama-sub-wisent-app-codex-secondary")
+                .expect("no agent binding is required: every subscription serves every caller");
+        assert!(
+            stored.contains(&"brama:subscription".to_string()),
+            "{stored:?}"
+        );
+        assert!(
+            stored.contains(&"brama:provider:codex".to_string()),
+            "{stored:?}"
+        );
         assert!(
             stored.contains(&"brama:id:brama-sub-wisent-app-codex-secondary".to_string()),
             "{stored:?}"
@@ -99,9 +105,9 @@ fn an_account_tagged_for_no_agent_is_in_everyones_pool() {
         assert_eq!(row["status"], "active", "{id} must be in the pool: {row}");
     }
     assert!(
-        document["unroutable"]
-            .as_array()
-            .map_or(true, |rows| rows.iter().all(|row| row["id"] != "pool-untagged-claude")),
+        document["unroutable"].as_array().map_or(true, |rows| rows
+            .iter()
+            .all(|row| row["id"] != "pool-untagged-claude")),
         "an account with the mark is never unroutable for want of an agent tag: {document}"
     );
 }

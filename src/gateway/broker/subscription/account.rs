@@ -106,7 +106,10 @@ pub(super) fn parse_subscriptions(
             continue;
         }
         let id = required_broker_field(entry.id, "id", index)?;
-        if entries.iter().any(|existing: &SubscriptionEntry| existing.id == id) {
+        if entries
+            .iter()
+            .any(|existing: &SubscriptionEntry| existing.id == id)
+        {
             continue;
         }
         entries.push(SubscriptionEntry {

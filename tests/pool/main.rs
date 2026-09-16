@@ -98,7 +98,11 @@ fn the_pool_answers_a_signed_agent_about_every_account_it_may_spend() {
     answered.sort();
     assert_eq!(
         answered,
-        vec!["pool-agent-anthropic", "pool-agent-openai", "pool-other-openai"],
+        vec![
+            "pool-agent-anthropic",
+            "pool-agent-openai",
+            "pool-other-openai"
+        ],
     );
     assert_pool_row_shape(&report, "a signed agent");
 }

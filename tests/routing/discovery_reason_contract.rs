@@ -44,7 +44,6 @@ fn every_subscription_provider_has_a_static_model_list() {
     }
 }
 
-
 /// With nothing recorded, the sentence is the one it always was: this must not
 /// start claiming a reason it does not have.
 #[test]
