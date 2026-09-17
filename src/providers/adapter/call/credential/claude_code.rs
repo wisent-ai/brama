@@ -3,7 +3,7 @@
 //! A grant Claude Code issued is honoured for the newest models only when the
 //! request looks like Claude Code's own: its user agent and beta list, a
 //! system prompt that opens with a billing attestation and the sentence
-//! "You are Claude Code, Anthropic's official CLI for Claude.", and in that
+//! "You are a Claude agent, built on Anthropic's Claude Agent SDK.", and in that
 //! attestation a checksum of the body it travels in. Anthropic answers any
 //! other shape `429` with the one-word body `Error`, which is what Brama was
 //! answered for sonnet-4-6 and fable-5-1 on 2026-09-14 while `omp` -- the
@@ -18,11 +18,20 @@ use xxhash_rust::xxh64::xxh64;
 
 use crate::types::ModelRequest;
 
-/// The Claude Code release whose requests this shape was read from. Its
-/// fingerprint below is derived from it, so the two change together.
-const CLAUDE_CODE_VERSION: &str = "2.1.257";
-const BETAS: &str = "claude-code-20250219,oauth-2025-04-20";
-const CLAUDE_CODE_SENTENCE: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
+/// The Claude Code release whose requests this shape was read from, and
+/// the Agent SDK release it presents as. Read from `omp` 16.5.2
+/// (`@oh-my-pi/pi-ai`), the harness whose requests Anthropic was answering
+/// on the operator's account on 2026-09-17 while Brama's, still shaped as
+/// Claude Code 2.1.257's CLI entrypoint, were answered `Third-party apps
+/// now draw from your extra usage, not your plan limits`. The fingerprint
+/// below is derived from the version, so the two change together.
+const CLAUDE_CODE_VERSION: &str = "2.1.165";
+const CLAUDE_AGENT_SDK_VERSION: &str = "0.3.165";
+const CLAUDE_CLIENT_VERSION: &str = "1.11187.4";
+/// Claude Code's agent request betas, in its own order.
+const BETAS: &str = "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,advanced-tool-use-2025-11-20,extended-cache-ttl-2025-04-11";
+const CLAUDE_CODE_SENTENCE: &str = "You are a Claude agent, built on Anthropic's Claude Agent SDK.";
+const ENTRYPOINT: &str = "local-agent";
 const BILLING_HEADER: &str = "x-anthropic-billing-header:";
 const CHECKSUM_PLACEHOLDER: &str = "cch=00000";
 const CHECKSUM_SEED: u64 = 0x4d65_9218_e32a_3268;
@@ -33,16 +42,50 @@ const FINGERPRINT_SALT: &str = "59cf53e54c78";
 const FINGERPRINT_OFFSETS: [usize; 3] = [4, 7, 20];
 const FINGERPRINT_CHARS: usize = 3;
 
-/// The headers Claude Code presents with an OAuth grant.
+/// The headers Claude Code presents with an OAuth grant: the Agent SDK
+/// user agent, the beta list, the Stainless client headers the SDK sends,
+/// and a fresh client request id.
 pub(in crate::providers::adapter) fn headers(builder: RequestBuilder) -> RequestBuilder {
     builder
         .header(
             "user-agent",
-            format!("claude-cli/{CLAUDE_CODE_VERSION} (external, cli)"),
+            format!(
+                "claude-cli/{CLAUDE_CODE_VERSION} (external, local-agent, agent-sdk/{CLAUDE_AGENT_SDK_VERSION})"
+            ),
         )
         .header("anthropic-beta", BETAS)
         .header("x-app", "cli")
         .header("anthropic-dangerous-direct-browser-access", "true")
+        .header("anthropic-client-platform", "desktop_app")
+        .header("anthropic-client-version", CLAUDE_CLIENT_VERSION)
+        .header("x-stainless-retry-count", "0")
+        .header("x-stainless-runtime-version", "v24.3.0")
+        .header("x-stainless-package-version", "0.94.0")
+        .header("x-stainless-runtime", "node")
+        .header("x-stainless-lang", "js")
+        .header("x-stainless-arch", stainless_arch())
+        .header("x-stainless-os", stainless_os())
+        .header("x-stainless-timeout", "900")
+        .header("x-client-request-id", uuid::Uuid::new_v4().to_string())
+}
+
+fn stainless_os() -> &'static str {
+    match std::env::consts::OS {
+        "macos" => "MacOS",
+        "windows" => "Windows",
+        "linux" => "Linux",
+        "freebsd" => "FreeBSD",
+        _ => "Other::unknown",
+    }
+}
+
+fn stainless_arch() -> &'static str {
+    match std::env::consts::ARCH {
+        "x86_64" => "x64",
+        "aarch64" => "arm64",
+        "x86" => "x86",
+        _ => "other::unknown",
+    }
 }
 
 /// The body Claude Code would send for this request: the caller's payload
@@ -93,9 +136,10 @@ fn first_user_text(request: &ModelRequest) -> &str {
 }
 
 /// `x-anthropic-billing-header: cc_version=<version>.<fingerprint>;
-/// cc_entrypoint=cli; cch=00000;` -- the fingerprint is the first three hex
-/// digits of a salted hash of three characters of the first user message,
-/// read the way JavaScript reads a string, and `cch` is stamped last.
+/// cc_entrypoint=local-agent; cch=00000;` -- the fingerprint is the first
+/// three hex digits of a salted hash of three characters of the first user
+/// message, read the way JavaScript reads a string, and `cch` is stamped
+/// last.
 fn billing_header(first_user_text: &str) -> String {
     let units = first_user_text.encode_utf16().collect::<Vec<_>>();
     let salt = FINGERPRINT_OFFSETS
@@ -113,7 +157,7 @@ fn billing_header(first_user_text: &str) -> String {
         .take(FINGERPRINT_CHARS)
         .collect::<String>();
     format!(
-        "{BILLING_HEADER} cc_version={CLAUDE_CODE_VERSION}.{fingerprint}; cc_entrypoint=cli; {CHECKSUM_PLACEHOLDER};"
+        "{BILLING_HEADER} cc_version={CLAUDE_CODE_VERSION}.{fingerprint}; cc_entrypoint={ENTRYPOINT}; {CHECKSUM_PLACEHOLDER};"
     )
 }
 
@@ -181,7 +225,7 @@ mod tests {
             &request(Some("Answer tersely."), "Say hello in one sentence."),
         );
         let (value, first) = attestation_of(&body);
-        assert!(first.starts_with("x-anthropic-billing-header: cc_version=2.1.257."));
+        assert!(first.starts_with("x-anthropic-billing-header: cc_version=2.1.165."));
         assert!(
             !first.contains(CHECKSUM_PLACEHOLDER),
             "the checksum is stamped"

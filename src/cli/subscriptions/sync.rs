@@ -44,10 +44,20 @@ pub(crate) fn member_id(provider: &str, account: &str) -> String {
     )
 }
 
-/// The ids the pool holds now, read where the sweep will write: through the
-/// gateway with the console's bearer, or this process's own vault.
+/// The ids the pool holds now with a grant it can still use, read where the
+/// sweep will write: through the gateway with the console's bearer, or this
+/// process's own pool report.
+///
+/// A member whose grant the pool has disowned - `burnt`: the provider
+/// refused it, or its refresh was rejected - is deliberately not here. The
+/// harness that holds the same account refreshes on its own clock, and when
+/// it rotated first the pool's copy died with `invalid_grant -- Refresh
+/// token not found or invalid` (2026-09-17, `controlyourai@gmail.com`, while
+/// `omp` went on answering on that account). The sweep takes the harness's
+/// current grant again; a live member is left alone, because there the
+/// pool's copy is the newer one and the harness's would be the dead one.
 async fn present_ids(gateway: Option<&str>, bearer: &str) -> Result<Vec<String>, String> {
-    match gateway {
+    let report = match gateway {
         Some(gateway) => {
             let client = reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(60))
@@ -76,19 +86,22 @@ async fn present_ids(gateway: Option<&str>, bearer: &str) -> Result<Vec<String>,
                     "the gateway refused the pool report with HTTP {status}: {message}"
                 ));
             }
-            Ok(body["subscriptions"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|row| row["id"].as_str().map(str::to_owned))
-                .collect())
+            body
         }
-        None => Ok(brama::gateway::broker::list_all_subscriptions()
-            .await?
-            .into_iter()
-            .map(|entry| entry.id)
-            .collect()),
-    }
+        None => {
+            brama::subscription_dispatch::pool::report(
+                &brama::subscription_dispatch::pool::PoolScope::Deployment,
+            )
+            .await
+        }
+    };
+    Ok(report["subscriptions"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|row| row["state"].as_str() != Some("burnt"))
+        .filter_map(|row| row["id"].as_str().map(str::to_owned))
+        .collect())
 }
 
 /// Sweep every held grant into the pool. The console's bearer is read from

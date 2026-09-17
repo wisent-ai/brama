@@ -68,6 +68,23 @@ the chat, Anthropic messages and Responses wires and on every provider dialect; 
 stated value is bounded as before. The gateway's own probes still pin zero, because a
 probe's answer should not vary
 (<a href="/docs/http-api/inference#shared-validation">shared validation</a>).</p>
+<h2 id="unreleased-claude-shape">Unreleased: a Claude grant rides as the Agent SDK, the way the harness Anthropic answers sends it<a class="headerlink" href="#unreleased-claude-shape" title="Link to this section">&para;</a></h2>
+<p>On 2026-09-17 Anthropic answered every Claude model through Brama
+<code>Third-party apps now draw from your extra usage, not your plan limits</code> while the
+operator was talking to Claude on the same account through <code>omp</code>, whose requests
+were answered on plan limits. The operator's words were "jakim cudem jest exhausted skoro teraz
+rozmawiamy". Brama still sent Claude Code 2.1.257's CLI shape; <code>omp</code> 16.5.2 sends
+Claude Code 2.1.165 as the Claude Agent SDK 0.3.165: user agent
+<code>claude-cli/2.1.165 (external, local-agent, agent-sdk/0.3.165)</code>, entrypoint
+<code>local-agent</code>, the sentence "You are a Claude agent, built on Anthropic's Claude Agent
+SDK.", Claude Code's agent beta list, the Stainless client headers and a fresh
+<code>x-client-request-id</code>. Brama now sends that shape, byte for byte where the provider
+can see it. The same day a member the pool held for the account <code>omp</code> also held died
+with <code>invalid_grant -- Refresh token not found or invalid</code>: the harness refreshed
+first and the pool's copy was the dead one. <code>brama subscription sync</code> now takes a
+disowned (<code>burnt</code>) member's grant from the harness again instead of reporting it
+present.</p>
+
 <h2 id="unreleased-subscription-sync">Unreleased: every account the machine holds joins the pool by itself<a class="headerlink" href="#unreleased-subscription-sync" title="Link to this section">&para;</a></h2>
 <p>The accounts below were added by hand, one <code>import</code> at a time, and the operator's
 answer was that this is the opposite of how it should work: the pool has to see every account
