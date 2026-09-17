@@ -68,6 +68,20 @@ the chat, Anthropic messages and Responses wires and on every provider dialect; 
 stated value is bounded as before. The gateway's own probes still pin zero, because a
 probe's answer should not vary
 (<a href="/docs/http-api/inference#shared-validation">shared validation</a>).</p>
+<h2 id="unreleased-import-joins-pool">Unreleased: an imported grant for an id the pool does not hold yet joins the pool<a class="headerlink" href="#unreleased-import-joins-pool" title="Link to this section">&para;</a></h2>
+<p>On 2026-09-17 every Claude call through <code>best</code> was refused with
+<code>all bounded 'claude-code' credentials unavailable for agent</code> while the operator was
+talking to Claude on the same machine: the pool held one Claude account, rate-limited, and the
+machine held two more with quota that no pool member named. The operator's words were
+"mamy limit, tylko Ty patrzysz na złe konta". <code>brama subscription import --gateway</code>
+answered <code>404 subscription not found</code> for any id but the one already there, so the
+only way to add an account was a sign-in window. An import for an id the pool does not hold
+yet now creates that member under the named provider - the CLI sends the provider with the
+grant, storing the grant creates and tags its vault item, and <code>brama subscriptions</code>
+lists it at once. <code>POST /v1/admin/subscription-pool/grant</code> takes
+<code>provider</code> for the same reason and refuses without it, or with one whose grants the
+refresh path cannot renew.</p>
+
 <h2 id="unreleased-import-from-omp">Unreleased: a grant any harness already holds is taken, not asked for again<a class="headerlink" href="#unreleased-import-from-omp" title="Link to this section">&para;</a></h2>
 <p>On 2026-09-13 the operator asked why Brama did not simply take the tokens from
 <code>omp</code>, and then why only from <code>omp</code>: the harnesses beside the gateway
