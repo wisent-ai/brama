@@ -38,8 +38,37 @@ pub(in crate::gateway::broker) async fn refresh_subscription_credential_inner(
     // concurrent caller observe the value already written to the vault.
     let _guard = OAUTH_REFRESH_LOCK.lock().await;
     let credential = redeem_subscription_credential(subscription_id, provider).await?;
-    if !force && !oauth_refresh::needs_refresh(&credential, provider) {
+    // A grant taken from a harness is the harness's to rotate. Rotating it
+    // here revokes the refresh token the harness holds: on 2026-09-17 two
+    // accounts `omp` was signed into died within the hour of Brama's first
+    // refresh of their copies, one of them under the operator's own open
+    // session. So a borrowed grant is spent as it stands - its expiry is a
+    // hint, and the provider is the one to say no - and when the provider
+    // has said no (`force`: the request path asking for a rotation after a
+    // refusal, or an operator's refresh), the member is disowned with the
+    // harness named, and the sweep brings the harness's current grant.
+    let borrowed = borrowed_from(&credential);
+    if !force && (borrowed.is_some() || !oauth_refresh::needs_refresh(&credential, provider)) {
         return Ok(credential);
+    }
+    if let Some(harness) = borrowed {
+        let refused = failure::envelope(
+            POINT_CREDENTIAL_PERSIST,
+            Code::Config,
+            IMPACT_CREDENTIAL_PERSIST,
+            format!(
+                "this grant is borrowed from {harness}, which refreshes it itself; Brama does not \
+                 rotate it, and the sweep brings {harness}'s current grant"
+            ),
+        )
+        .with_context("subscription", subscription_id)
+        .with_context("provider", provider);
+        crate::subscription_dispatch::usage::record_reauthorization_needed(
+            subscription_id,
+            provider,
+            refused.detail.as_deref().unwrap_or_default(),
+        );
+        return Err(refused);
     }
     let mut fresh = match oauth_refresh::refresh(&credential, provider).await {
         Ok(fresh) => fresh,
@@ -149,6 +178,15 @@ fn record_refusal(subscription_id: &str, provider: &str, refused: &Failure) {
             );
         }
     }
+}
+
+/// The harness a stored grant was borrowed from, when it was.
+fn borrowed_from(credential: &Secret) -> Option<String> {
+    let raw = credential.expose_utf8().ok()?;
+    let blob: serde_json::Value = serde_json::from_str(raw).ok()?;
+    blob.get(crate::subscription_dispatch::sign_in::manual::BORROWED_FROM)?
+        .as_str()
+        .map(str::to_owned)
 }
 
 /// Store a rotated subscription credential, with the tags discovery requires.

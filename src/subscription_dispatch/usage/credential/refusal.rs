@@ -95,6 +95,9 @@ pub fn record_reauthorization_needed(subscription_id: &str, provider: &str, reas
             recorded_at_ms: refusal_recorded_at_ms(previous.as_ref(), &cause, now),
             expires_at_ms,
             refreshed_at_ms,
+            borrowed_from: previous
+                .as_ref()
+                .and_then(|credential| credential.borrowed_from.clone()),
         });
         entry.block = Some(Block {
             blocked_until_ms: now.saturating_add(REAUTHORIZATION_BLOCK_MS),

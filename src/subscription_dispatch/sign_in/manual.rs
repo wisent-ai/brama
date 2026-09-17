@@ -29,7 +29,7 @@ use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
 pub use exchange::complete;
-pub use grant::{adopt, Origin};
+pub use grant::{adopt, Origin, BORROWED_FROM};
 pub use harness::{held, Harness, HeldGrant, HeldGrantView};
 
 /// Everything the provider's authorize page needs, and the verifier the code

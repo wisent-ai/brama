@@ -21,7 +21,7 @@ pub(crate) fn finish(verdict: Result<ManualSignIn, String>, json: bool) {
                 println!("result: {}", verdict.result);
                 println!("detail: {}", verdict.detail);
             }
-            if verdict.result != "signed_in" {
+            if verdict.result != "signed_in" && verdict.result != "unchanged" {
                 std::process::exit(1);
             }
         }

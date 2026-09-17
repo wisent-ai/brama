@@ -95,11 +95,20 @@ async fn present_ids(gateway: Option<&str>, bearer: &str) -> Result<Vec<String>,
             .await
         }
     };
+    // A member the pool holds with a grant of its own: left alone, Brama
+    // refreshes it. A borrowed member is handed the harness's current grant
+    // on every sweep; the gateway answers `unchanged` when the harness has
+    // not rotated it, and stores it when it has. A disowned member is taken
+    // again whichever it is.
     Ok(report["subscriptions"]
         .as_array()
         .into_iter()
         .flatten()
-        .filter(|row| row["state"].as_str() != Some("burnt"))
+        .filter(|row| {
+            row["state"].as_str() != Some("burnt")
+                && row["credential"]["state"].as_str() != Some("needs_reauthorization")
+                && row["credential"]["borrowed_from"].is_null()
+        })
         .filter_map(|row| row["id"].as_str().map(str::to_owned))
         .collect())
 }
@@ -188,6 +197,14 @@ async fn sweep_one(
             account: Some(account),
             subscription_id: Some(subscription_id),
             result: "imported",
+            detail: verdict.detail,
+        },
+        Ok(verdict) if verdict.result == "unchanged" => SyncRow {
+            harness: harness_name,
+            provider,
+            account: Some(account),
+            subscription_id: Some(subscription_id),
+            result: "present",
             detail: verdict.detail,
         },
         Ok(verdict) => SyncRow {

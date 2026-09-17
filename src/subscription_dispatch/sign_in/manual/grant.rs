@@ -63,23 +63,74 @@ pub fn claude_document(access: &str, refresh: &str, expires_at_ms: i64) -> Zeroi
     )
 }
 
+/// The field a stored grant carries when a harness on the operator's
+/// machine holds the same grant and refreshes it on its own clock.
+pub const BORROWED_FROM: &str = "brama_borrowed_from";
+
 /// Store the document as this subscription's credential, once it is a grant
-/// the refresh path could renew for the provider.
-pub async fn store(provider: &str, subscription_id: &str, document: &str) -> Result<(), String> {
-    let parsed: Value = serde_json::from_str(document)
+/// the refresh path could renew for the provider. A grant taken from a
+/// harness is marked with the harness it came from: Brama must never rotate
+/// it, because the harness still holds it and rotates it itself. On
+/// 2026-09-17 Brama refreshed two grants it had taken from `omp`; the
+/// provider revoked the refresh tokens `omp` held, `omp` recorded
+/// `invalid_grant -- Refresh token not found or invalid` on both accounts
+/// within the hour, and the operator's own session lost its account.
+pub async fn store(
+    provider: &str,
+    subscription_id: &str,
+    document: &str,
+    origin: Origin,
+) -> Result<(), String> {
+    let mut parsed: Value = serde_json::from_str(document)
         .map_err(|_| "the grant is not a JSON document".to_owned())?;
     if !crate::gateway::renewable(&parsed, provider) {
         return Err(format!(
             "the grant is not the `{provider}` document Brama's refresh path reads, or carries no refresh token; Brama cannot keep a grant it cannot renew"
         ));
     }
-    broker::put_subscription_credential(subscription_id, provider, document.as_bytes())
+    let stored = match (origin, parsed.as_object_mut()) {
+        (Origin::Harness(harness), Some(object)) => {
+            object.insert(BORROWED_FROM.into(), json!(harness.name()));
+            Zeroizing::new(parsed.to_string())
+        }
+        _ => Zeroizing::new(document.to_owned()),
+    };
+    broker::put_subscription_credential(subscription_id, provider, stored.as_bytes())
         .await
         .map_err(|detail| format!("the grant could not be stored: {detail}"))
 }
 
+/// Whether the pool already holds exactly this grant for the subscription:
+/// the sweep hands every borrowed grant over on every pass, and a grant the
+/// harness has not rotated since is nothing to store or prove again. The
+/// borrowed marker and the codex shape's `last_refresh` stamp, written at
+/// read time, are not part of the grant.
+async fn already_stored(provider: &str, subscription_id: &str, document: &str) -> bool {
+    let Ok(current) = broker::redeem_subscription_credential(subscription_id, provider).await
+    else {
+        return false;
+    };
+    let Ok(raw) = current.expose_utf8() else {
+        return false;
+    };
+    let (Ok(mut stored), Ok(mut incoming)) = (
+        serde_json::from_str::<Value>(raw),
+        serde_json::from_str::<Value>(document),
+    ) else {
+        return false;
+    };
+    for value in [&mut stored, &mut incoming] {
+        if let Some(object) = value.as_object_mut() {
+            object.remove(BORROWED_FROM);
+            object.remove("last_refresh");
+        }
+    }
+    stored == incoming
+}
+
 /// Store the grant, prove it with one minimal completion, and journal the
-/// verdict with the operator's reason beside it.
+/// verdict with the operator's reason beside it. A grant the pool already
+/// holds unchanged is answered `unchanged` and proved with nothing.
 pub async fn adopt(
     provider: &str,
     subscription_id: &str,
@@ -91,13 +142,30 @@ pub async fn adopt(
     if reason.trim().is_empty() {
         return Err("--reason must say why this sign-in is being run".into());
     }
-    store(provider, subscription_id, &document).await?;
+    let source = origin.sentence();
+    let who = account.clone().unwrap_or_else(|| "the account".to_owned());
+    if already_stored(provider, subscription_id, &document).await {
+        return Ok(ManualSignIn {
+            provider: provider.to_owned(),
+            subscription_id: subscription_id.to_owned(),
+            account,
+            result: "unchanged",
+            detail: format!("{who}'s grant from {source} is the one the pool already holds; nothing was stored or proved"),
+        });
+    }
+    store(provider, subscription_id, &document, origin).await?;
     // The ledger remembers the refusal that disowned the old grant, and the
     // request path leaves a disowned grant alone until a sign-in replaces it.
     // This is that sign-in.
-    crate::subscription_dispatch::usage::record_credential_signed_in(subscription_id, provider);
-    let source = origin.sentence();
-    let who = account.clone().unwrap_or_else(|| "the account".to_owned());
+    let borrowed_from = match origin {
+        Origin::Harness(harness) => Some(harness.name()),
+        _ => None,
+    };
+    crate::subscription_dispatch::usage::record_credential_signed_in_from(
+        subscription_id,
+        provider,
+        borrowed_from,
+    );
     let (result, detail) = match probe_once(subscription_id, provider).await {
         Ok(probe) if probe.ok => (
             "signed_in",

@@ -32,6 +32,27 @@ fn slug(value: &str) -> String {
         .collect()
 }
 
+/// `omp` refreshed this account: its store now holds new tokens, the way
+/// omp's own refresh rewrites the row.
+fn rotate_omp_claude_grant(home: &Path, email: &str) {
+    let store = Connection::open(home.join(".omp/agent/agent.db")).expect("open omp's store");
+    let rotated = json!({
+        "access": format!("sk-oat-rotated-{email}"),
+        "refresh": format!("sk-ort-rotated-{email}"),
+        "expires": 1_789_400_000_000_i64,
+        "accountId": format!("acct-{email}"),
+        "email": email,
+        "orgName": "Wisent",
+    })
+    .to_string();
+    store
+        .execute(
+            "UPDATE auth_credentials SET data = ?1 WHERE identity_key = ?2",
+            rusqlite::params![rotated, format!("email:{email}")],
+        )
+        .expect("rotate omp's row");
+}
+
 /// One sweep imports every held account the pool does not hold; the pool
 /// report then lists one member per account under a stable id; a second
 /// sweep finds every one present and imports nothing, so the grant Brama
@@ -104,17 +125,84 @@ fn every_held_account_joins_the_pool_once() {
         assert!(ids.contains(&id), "{id} is in the pool report: {pool}");
     }
 
+    // Every member is borrowed: the second sweep hands each grant over
+    // again, and the gateway answers `unchanged` for every one the harness
+    // has not rotated, storing and proving nothing. The row says which
+    // harness the grant is borrowed from.
     let (status, again, stderr) = sync(&home, &gateway, CONSOLE_BEARER);
     assert_eq!(
         status, 0,
-        "a second sweep imports nothing:\n{again}\n{stderr}"
+        "a second sweep stores nothing:\n{again}\n{stderr}"
     );
     assert_eq!(again["ok"], true, "{again}");
     for row in again["grants"].as_array().unwrap() {
         if row["result"] != "unnamed" {
             assert_eq!(row["result"], "present", "{row}");
+            assert!(
+                row["detail"]
+                    .as_str()
+                    .is_some_and(|detail| detail.contains("already holds")),
+                "{row}"
+            );
         }
     }
+    let (_, pool) = gateway.console(gateway::POOL, Method::GET, None);
+    let claude_members: Vec<&Value> = pool["subscriptions"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|row| {
+            row["id"]
+                .as_str()
+                .is_some_and(|id| id.starts_with("brama-sub-held-claude-code-"))
+        })
+        .collect();
+    assert!(!claude_members.is_empty(), "{pool}");
+    for member in &claude_members {
+        assert_eq!(member["credential"]["borrowed_from"], "omp", "{member}");
+    }
+
+    // A borrowed grant is the harness's to rotate. A refresh of the provider
+    // leaves it as it stands - nothing is rotated out from under the
+    // harness - and the member stays what it was.
+    let (status, refreshed) = gateway.console(
+        "/v1/admin/subscription-pool/refresh",
+        Method::POST,
+        Some(&json!({"provider": "claude-code", "reason": "story"})),
+    );
+    assert_eq!(status, 200, "{refreshed}");
+    let (_, pool) = gateway.console(gateway::POOL, Method::GET, None);
+    for member in pool["subscriptions"].as_array().unwrap() {
+        if member["credential"]["borrowed_from"] == "omp" {
+            assert_ne!(
+                member["credential"]["state"], "needs_reauthorization",
+                "a provider refresh does not touch a borrowed grant: {member}"
+            );
+        }
+    }
+
+    // When the harness rotates its grant, the next sweep stores the new one
+    // in the member's place and proves it, instead of leaving the pool on
+    // the copy the provider will refuse.
+    rotate_omp_claude_grant(&home, PRIMARY);
+    let (_, third, _) = sync(&home, &gateway, CONSOLE_BEARER);
+    let rotated = third["grants"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|row| row["account"] == PRIMARY && row["provider"] == "claude-code")
+        .cloned()
+        .expect("the rotated account is swept");
+    assert_ne!(
+        rotated["result"], "present",
+        "the rotated grant is stored again: {rotated}"
+    );
+    assert!(
+        rotated["detail"]
+            .as_str()
+            .is_some_and(|detail| detail.contains("is stored")),
+        "{rotated}"
+    );
 
     let (status, _, stderr) = sync(&home, &gateway, "");
     assert_eq!(status, 1);

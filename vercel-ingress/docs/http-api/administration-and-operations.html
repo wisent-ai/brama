@@ -187,7 +187,7 @@ console asked for it; no timer reaches any of them.</p>
   row signed in (a row the provider had disowned reads <code>active</code> again), proves it
   with one minimal completion rather than a refresh (a refresh would rotate the token out from
   under the harness that still holds it), journals the verdict with the origin, and answers
-  <code>{"provider", "subscription_id", "account", "result", "detail"}</code> — the verdict of
+  <code>{"provider", "subscription_id", "account", "result", "detail"}</code> — <code>result</code> is <code>signed_in</code>, <code>failed</code>, or <code>unchanged</code> when the pool already holds exactly this grant (nothing stored or proved). A grant that names a <code>harness</code> is stored as borrowed: Brama never rotates it, the pool report shows <code>credential.borrowed_from</code>, and a forced refresh disowns it with <code>this grant is borrowed from &lt;harness&gt;, which refreshes it itself</code> — the verdict of
   <a href="/docs/cli/subscription/import"><code>brama subscription import</code></a>. Captured
   for a token the provider does not know: <code>result: failed</code>, <code>the grant from
   codex, the harness that held it is stored, but the provider would not serve it:

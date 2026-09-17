@@ -79,11 +79,16 @@ Claude Code 2.1.165 as the Claude Agent SDK 0.3.165: user agent
 <code>local-agent</code>, the sentence "You are a Claude agent, built on Anthropic's Claude Agent
 SDK.", Claude Code's agent beta list, the Stainless client headers and a fresh
 <code>x-client-request-id</code>. Brama now sends that shape, byte for byte where the provider
-can see it. The same day a member the pool held for the account <code>omp</code> also held died
-with <code>invalid_grant -- Refresh token not found or invalid</code>: the harness refreshed
-first and the pool's copy was the dead one. <code>brama subscription sync</code> now takes a
-disowned (<code>burnt</code>) member's grant from the harness again instead of reporting it
-present.</p>
+can see it. The same day two members the pool held for accounts <code>omp</code> also held died
+with <code>invalid_grant -- Refresh token not found or invalid</code> — and so did <code>omp</code>'s
+own copies, under the operator's open session: Brama had refreshed the shared grants and the
+provider revoked the refresh tokens <code>omp</code> held. A grant taken from a harness is now
+<em>borrowed</em>: Brama spends it as it stands and never rotates it, the pool report names the
+harness in <code>credential.borrowed_from</code>, a forced refresh disowns the member with
+<code>this grant is borrowed from omp, which refreshes it itself</code>, and
+<code>brama subscription sync</code> hands every borrowed grant over on every pass — the gateway
+answers <code>unchanged</code> while the harness has not rotated it, and stores the new grant
+when it has, so the pool follows the harness instead of dying behind it.</p>
 
 <h2 id="unreleased-subscription-sync">Unreleased: every account the machine holds joins the pool by itself<a class="headerlink" href="#unreleased-subscription-sync" title="Link to this section">&para;</a></h2>
 <p>The accounts below were added by hand, one <code>import</code> at a time, and the operator's

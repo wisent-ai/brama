@@ -229,7 +229,7 @@ async fn redeem_provider_resource(capability_id: &str, resource: &str) -> Result
     .map_err(|error| credential_failure(format!("credential redemption worker failed: {error}"), resource, Code::Unknown))?
 }
 
-async fn redeem_subscription_credential(
+pub async fn redeem_subscription_credential(
     subscription_id: &str,
     provider: &str,
 ) -> Result<Secret, Failure> {

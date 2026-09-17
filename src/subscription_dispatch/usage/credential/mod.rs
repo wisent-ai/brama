@@ -83,6 +83,11 @@ pub struct Credential {
     /// happened, not when anything last looked.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refreshed_at_ms: Option<i64>,
+    /// The harness on the operator's machine this grant was taken from,
+    /// when it was. Such a grant is the harness's to rotate: Brama spends it
+    /// as it stands and the sweep replaces it with the harness's current one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub borrowed_from: Option<String>,
 }
 
 /// Record that this subscription's grant is in working order, and until when.
@@ -131,6 +136,9 @@ pub fn record_credential_active(
         }
         entry.provider = provider.to_string();
         entry.updated_at_ms = Some(now);
+        let borrowed_from = previous
+            .as_ref()
+            .and_then(|credential| credential.borrowed_from.clone());
         entry.credential = Some(Credential {
             state: CredentialState::Active,
             cause: None,
@@ -141,6 +149,7 @@ pub fn record_credential_active(
             } else {
                 previous.and_then(|credential| credential.refreshed_at_ms)
             },
+            borrowed_from,
         });
     });
 }
@@ -152,6 +161,16 @@ pub fn record_credential_active(
 /// rotation instants are dropped rather than kept: they describe a credential
 /// that is no longer the one in the vault.
 pub fn record_credential_signed_in(subscription_id: &str, provider: &str) {
+    record_credential_signed_in_from(subscription_id, provider, None);
+}
+
+/// The same, for a grant taken from a harness: the record names the harness
+/// so the pool report, and the sweep reading it, know whose grant it is.
+pub fn record_credential_signed_in_from(
+    subscription_id: &str,
+    provider: &str,
+    borrowed_from: Option<&str>,
+) {
     let now = now_ms();
     with_ledger(|ledger| {
         let entry = ledger
@@ -173,6 +192,7 @@ pub fn record_credential_signed_in(subscription_id: &str, provider: &str) {
             recorded_at_ms: now,
             expires_at_ms: None,
             refreshed_at_ms: None,
+            borrowed_from: borrowed_from.map(str::to_owned),
         });
     });
 }
@@ -195,12 +215,17 @@ pub fn record_credential_disabled(subscription_id: &str, provider: &str, cause: 
             .and_then(|credential| credential.refreshed_at_ms);
         entry.provider = provider.to_string();
         entry.updated_at_ms = Some(now);
+        let borrowed_from = entry
+            .credential
+            .as_ref()
+            .and_then(|credential| credential.borrowed_from.clone());
         entry.credential = Some(Credential {
             state: CredentialState::Disabled,
             cause: Some(cause.chars().take(REASON_LIMIT).collect()),
             recorded_at_ms: now,
             expires_at_ms,
             refreshed_at_ms,
+            borrowed_from,
         });
     });
 }

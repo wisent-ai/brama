@@ -83,6 +83,7 @@ fn credential_view(entry: &SubscriptionEntry, recorded: Option<&SubscriptionUsag
         "recorded_at_ms": credential.recorded_at_ms,
         "expires_at_ms": credential.expires_at_ms,
         "refreshed_at_ms": credential.refreshed_at_ms,
+        "borrowed_from": credential.borrowed_from,
     })
 }
 

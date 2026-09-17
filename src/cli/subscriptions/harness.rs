@@ -215,10 +215,10 @@ pub(crate) async fn import_through_with(
         provider: text("provider").unwrap_or_default(),
         subscription_id: text("subscription_id").unwrap_or_default(),
         account: text("account"),
-        result: if text("result").as_deref() == Some("signed_in") {
-            "signed_in"
-        } else {
-            "failed"
+        result: match text("result").as_deref() {
+            Some("signed_in") => "signed_in",
+            Some("unchanged") => "unchanged",
+            _ => "failed",
         },
         detail: text("detail").unwrap_or_default(),
     })
