@@ -67,6 +67,14 @@ pub(in crate::core::server) struct GrantRequest {
     harness: Option<String>,
     #[serde(default)]
     account: Option<String>,
+    /// The provider the grant belongs to. Required when `subscription_id`
+    /// names a pool member that does not exist yet: the grant then creates
+    /// it. On 2026-09-17 the pool routed every Claude call through one
+    /// rate-limited account while the operator's machine held two more with
+    /// quota, and the only way to add them was a sign-in window - the
+    /// operator's words were "mamy limit, tylko Ty patrzysz na złe konta".
+    #[serde(default)]
+    provider: Option<String>,
     document: Zeroizing<String>,
 }
 
@@ -168,13 +176,42 @@ pub(in crate::core::server) async fn complete_admin_manual_sign_in(
 }
 
 /// `POST /v1/admin/subscription-pool/grant`: a grant the console holds,
-/// stored and proved like one the provider just issued.
+/// stored and proved like one the provider just issued. An id the pool does
+/// not hold yet becomes a new member of the named provider; storing the
+/// grant creates and tags its vault item, so discovery sees it at once.
 pub(in crate::core::server) async fn adopt_admin_grant(
     Extension(client_identity): Extension<ModelClientIdentity>,
     Json(request): Json<GrantRequest>,
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
-    let entry = active_account(&request.subscription_id, &request.reason).await?;
+    let (provider, subscription_id) = match active_account(&request.subscription_id, &request.reason).await {
+        Ok(entry) => (entry.provider, entry.id),
+        Err(refusal) if refusal.0 == StatusCode::NOT_FOUND => {
+            let provider = request
+                .provider
+                .as_deref()
+                .map(str::trim)
+                .filter(|provider| !provider.is_empty())
+                .ok_or_else(|| {
+                    api_error(
+                        StatusCode::NOT_FOUND,
+                        "subscription not found; name its provider to add it to the pool with this grant",
+                    )
+                })?;
+            if !crate::gateway::broker::supports_oauth_refresh(provider) {
+                return Err(api_error(
+                    StatusCode::BAD_REQUEST,
+                    &format!("`{provider}` is not a provider whose grants Brama keeps"),
+                ));
+            }
+            let subscription_id = request.subscription_id.trim().to_owned();
+            if !crate::core::server::administration::valid_alias(&subscription_id) {
+                return Err(api_error(StatusCode::BAD_REQUEST, "invalid subscription id"));
+            }
+            (provider.to_owned(), subscription_id)
+        }
+        Err(refusal) => return Err(refusal),
+    };
     let origin = match request.harness.as_deref().map(str::trim) {
         Some(name) if !name.is_empty() => {
             manual::Origin::Harness(manual::Harness::parse(name).ok_or_else(|| {
@@ -187,8 +224,8 @@ pub(in crate::core::server) async fn adopt_admin_grant(
         _ => manual::Origin::Console,
     };
     let verdict = manual::adopt(
-        &entry.provider,
-        &entry.id,
+        &provider,
+        &subscription_id,
         request.document,
         request.account,
         origin,

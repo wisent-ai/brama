@@ -177,7 +177,7 @@ console asked for it; no timer reaches any of them.</p>
 <li><strong>POST <code>/v1/admin/subscription-pool/grant</code></strong> takes a grant the
   console already holds — <code>brama subscription import --gateway</code>, run by Brama
   Desktop from the runtime it bundles, reads it from a harness on the machine the console
-  runs on — as <code>{"subscription_id", "reason", "document", "harness"?, "account"?}</code>.
+  runs on — as <code>{"subscription_id", "reason", "document", "harness"?, "account"?, "provider"?}</code>. A <code>subscription_id</code> the pool does not hold yet becomes a new member of <code>provider</code>, which is then required: <code>404 subscription not found; name its provider to add it to the pool with this grant</code> without it, <code>400 `&lt;provider&gt;` is not a provider whose grants Brama keeps</code> for one whose grants the refresh path cannot renew.
   <code>document</code> is the credential document Brama's refresh path reads for the
   subscription's provider (<code>claudeAiOauth</code> for <code>claude-code</code>,
   <code>tokens</code> for <code>codex</code>, top-level tokens for <code>kimi</code>) and is

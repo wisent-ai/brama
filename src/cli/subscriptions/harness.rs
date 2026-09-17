@@ -145,9 +145,12 @@ fn post_timeout() -> Duration {
 }
 
 /// Hand the grant to a gateway elsewhere, as the console does, with the
-/// console's bearer read from stdin so it never lands in `argv`.
+/// console's bearer read from stdin so it never lands in `argv`. The
+/// provider goes with it: an id the pool does not hold yet is created
+/// under that provider rather than refused.
 pub(crate) async fn import_through(
     gateway: &str,
+    provider: &str,
     subscription_id: &str,
     reason: &str,
     grant: HeldGrant,
@@ -172,6 +175,7 @@ pub(crate) async fn import_through(
         .bearer_auth(bearer)
         .json(&json!({
             "subscription_id": subscription_id.trim(),
+            "provider": provider,
             "reason": reason,
             "harness": grant.harness.name(),
             "account": grant.account,

@@ -82,7 +82,7 @@ pub(crate) async fn import(
     let grant = super::harness::choose(provider, from, account, home)?;
     match gateway {
         Some(gateway) => {
-            super::harness::import_through(gateway, subscription_id, reason, grant).await
+            super::harness::import_through(gateway, provider, subscription_id, reason, grant).await
         }
         None => super::harness::import_here(provider, subscription_id, reason, grant).await,
     }

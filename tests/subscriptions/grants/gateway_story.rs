@@ -112,3 +112,68 @@ fn a_grant_handed_through_a_gateway_gets_the_providers_verdict_and_repairs_the_r
     assert_eq!(status, 1);
     assert!(stderr.contains("stdin was empty"), "{stderr}");
 }
+
+/// The pool routed every Claude call through one rate-limited account while
+/// the operator's machine held two more with quota; adding them needed a
+/// sign-in window. A grant handed over for an id the pool does not hold yet
+/// creates that member under the named provider, and the pool report lists
+/// it beside the others at once. A provider Brama cannot renew grants for
+/// is refused before anything is stored.
+#[test]
+fn a_grant_for_an_id_the_pool_does_not_hold_yet_joins_the_pool() {
+    let directory = TestDirectory::new("grant-joins-pool");
+    let gateway = Gateway::start("grant-joins-pool", &[(AGENT, "codex", "pool-agent")]);
+    let home = home_with_every_harness(&directory, &[PRIMARY]);
+    let (status, stdout, stderr) = brama(
+        gateway.vault(),
+        &[
+            "subscription",
+            "import",
+            "claude-code",
+            "--from",
+            "claude",
+            "--subscription-id",
+            "brama-sub-pool-agent-claude-secondary",
+            "--reason",
+            "story",
+            "--home",
+            home.to_str().unwrap(),
+            "--gateway",
+            gateway.origin(),
+            "--json",
+        ],
+        Some(CONSOLE_BEARER),
+    );
+    assert_eq!(status, 1, "a made-up grant is refused by the provider, after it is stored:\n{stdout}{stderr}");
+    let verdict: Value = serde_json::from_str(&stdout).expect("a JSON verdict");
+    assert_eq!(verdict["subscription_id"], "brama-sub-pool-agent-claude-secondary");
+    assert_eq!(verdict["provider"], "claude-code");
+    assert!(
+        verdict["detail"].as_str().is_some_and(|detail| detail.contains("is stored")),
+        "the grant was stored before the provider's verdict: {verdict}"
+    );
+    let (_, pool) = gateway.console(gateway::POOL, Method::GET, None);
+    let row = pool["subscriptions"]
+        .as_array()
+        .and_then(|rows| rows.iter().find(|row| row["id"] == "brama-sub-pool-agent-claude-secondary"))
+        .cloned();
+    assert!(row.is_some(), "the new member is in the pool report: {pool}");
+    assert_eq!(row.unwrap()["provider"], "claude-code");
+
+    let (status, answer) = gateway.console(
+        GRANT,
+        Method::POST,
+        Some(&json!({"subscription_id": "brama-sub-pool-agent-openrouter-secondary", "reason": "story",
+            "provider": "openrouter", "document": "{\"key\":\"x\"}"})),
+    );
+    assert_eq!(status, 400, "{answer}");
+    assert!(answer.to_string().contains("not a provider whose grants Brama keeps"), "{answer}");
+    let (status, answer) = gateway.console(
+        GRANT,
+        Method::POST,
+        Some(&json!({"subscription_id": "brama-sub-pool-agent-kimi-secondary", "reason": "story",
+            "document": "{\"key\":\"x\"}"})),
+    );
+    assert_eq!(status, 404, "{answer}");
+    assert!(answer.to_string().contains("name its provider"), "{answer}");
+}

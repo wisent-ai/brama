@@ -50,7 +50,29 @@ fn anthropic_content(message: &Message) -> Value {
         }
         return Value::Array(blocks);
     }
-    message.content.clone()
+    match &message.content {
+        Value::Array(parts) => Value::Array(parts.iter().map(anthropic_block).collect()),
+        content => content.clone(),
+    }
+}
+
+fn anthropic_block(part: &Value) -> Value {
+    if part.get("type").and_then(Value::as_str) != Some("image_url") {
+        return part.clone();
+    }
+    let Some(url) = part.pointer("/image_url/url").and_then(Value::as_str) else {
+        return part.clone();
+    };
+    let source = match url
+        .strip_prefix("data:")
+        .and_then(|data| data.split_once(";base64,"))
+    {
+        Some((media_type, data)) => json!({
+            "type": "base64", "media_type": media_type, "data": data,
+        }),
+        None => json!({"type": "url", "url": url}),
+    };
+    json!({"type": "image", "source": source})
 }
 
 pub(in crate::providers::adapter) fn anthropic_messages(request: &ModelRequest) -> Vec<Value> {
