@@ -31,6 +31,8 @@ mod gateway_story;
 mod live_story;
 #[path = "grants/stores.rs"]
 mod stores;
+#[path = "grants/sync_story.rs"]
+mod sync_story;
 
 pub(crate) use stores::*;
 

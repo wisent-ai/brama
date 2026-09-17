@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CLI — Brama Docs</title>
-  <meta name="description" content="CLI The brama binary is the gateway, its diagnostics, and its operator repair commands in one. Billable commands require an explicit cost acknowledgement, and commands that mutate ">
-  <link rel="canonical" href="https://brama.wisent.com/docs/cli">
+  <title>brama subscription sync — Brama CLI Docs</title>
+  <meta name="description" content="Every grant a harness on this machine holds joins the Brama subscription pool by itself: one stable member per account, members already present left to Brama’s own refresh.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/cli/subscription/sync">
   <link rel="stylesheet" href="/docs/assets/site.css">
 </head>
 <body>
@@ -18,58 +18,33 @@
     <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a class="active" aria-current="page" href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
     <main>
       <p class="source-note">Brama CLI command reference</p>
-      <article class="doc"><h1 id="cli">CLI<a class="headerlink" href="#cli" title="Link to this section">&para;</a></h1>
-<p>The <code>brama</code> binary is the gateway, its local diagnostics, and its
-operator repair surface. Billable commands require explicit cost
-acknowledgement, credential mutations require an audit reason, and no command
-prints credential material. This tree follows the public dispatcher in Brama
-0.2.41.</p>
-<h2 id="invocation">Root invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama &lt;COMMAND&gt;</code></pre>
-<p>A top-level command is required. Use <code>brama --help</code> or
-<a href="/docs/cli/help"><code>brama help [COMMAND]...</code></a> to print the same tree
-from the installed build.</p>
-<h2 id="command-tree">Complete command tree<a class="headerlink" href="#command-tree" title="Link to this section">&para;</a></h2>
+      <article class="doc"><h1 id="brama-subscription-sync"><code>brama subscription sync</code><a class="headerlink" href="#brama-subscription-sync" title="Link to this section">&para;</a></h1>
+<p>Every grant a harness on this machine holds joins the pool, without anyone naming it. On 2026-09-17 the pool refused every Claude call — <code>all bounded 'claude-code' credentials unavailable for agent</code> — while the operator was talking to Claude on the same machine, on an account no pool member named. The accounts were added by hand, one <a href="/docs/cli/subscription/import"><code>import</code></a> at a time, and the operator’s answer was that this is the opposite of how it should work: the pool has to see every account the machine holds by itself. This is that sweep.</p>
+<h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">brama subscription sync --reason &lt;REASON&gt; [--home &lt;DIR&gt;] [--gateway &lt;ORIGIN&gt;] [--json]</code></pre>
+<table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>--reason &lt;REASON&gt;</code></td><td>required</td><td>Nonempty audit reason, journaled beside every verdict the sweep produces.</td></tr>
+<tr><td><code>--home &lt;DIR&gt;</code></td><td>optional; the home directory</td><td>Read every harness store below this directory instead, as <code>held</code> and <code>import</code> do.</td></tr>
+<tr><td><code>--gateway &lt;ORIGIN&gt;</code></td><td>optional</td><td>Hand the grants to this gateway instead of storing them in this process; the console’s bearer is read from stdin once. Brama Desktop runs the sweep this way from the runtime it bundles.</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td>Print <code>{"ok", "grants": [{"harness", "provider", "account", "subscription_id", "result", "detail"}]}</code> instead of lines.</td></tr>
+</tbody></table>
+<h2 id="effects">What it does<a class="headerlink" href="#effects" title="Link to this section">&para;</a></h2>
 <ul>
-<li><a href="/docs/cli/version"><code>brama version</code></a> — print secret-free product and build identity as JSON.</li>
-<li><a href="/docs/cli/serve"><code>brama serve</code></a> — start the OpenAI-compatible HTTP server.</li>
-<li><a href="/docs/cli/onboard"><code>brama onboard</code></a> — run the first-use journey and optionally receive one real model response.</li>
-<li><a href="/docs/cli/adopt"><code>brama adopt --from &lt;FILE&gt; …</code></a> — review and atomically adopt selected aliases from an existing Brama route registry.</li>
-<li><a href="/docs/cli/test"><code>brama test</code></a> — run one acknowledged test inference through the agent subscription path.</li>
-<li><a href="/docs/cli/detect"><code>brama detect</code></a> — detect local hardware and print a model recommendation.</li>
-<li><a href="/docs/cli/mcp"><code>brama mcp</code></a> — serve the read-only stdio MCP hardware-detection surface.</li>
-<li><a href="/docs/cli/aliases"><code>brama aliases [--json] [--strict]</code></a> — report every declared model alias, the route behind it, and whether this gateway can serve it; <code>--strict</code> exits non-zero when any cannot.</li>
-<li><a href="/docs/cli/subscriptions"><code>brama subscriptions [--json] [--refresh-usage]</code></a> — report the subscription pool this gateway routes over: every subscription, its state, its usage window and its failure, optionally reading current free provider reports.</li>
-<li><a href="/docs/cli/routes/migrate"><code>brama routes &lt;COMMAND&gt;</code></a> — act on this gateway's inference-route registry.
-  <ul>
-  <li><a href="/docs/cli/routes/migrate"><code>brama routes migrate [--file &lt;FILE&gt;] [--json]</code></a> — rewrite the route registry into the current document shape: keep the known top-level fields, validate, and commit with the same atomic owner-only replacement every other registry write uses. Idempotent.</li>
-  </ul>
-</li>
-<li><a href="/docs/cli/subscription"><code>brama subscription &lt;COMMAND&gt;</code></a> — enter the credential mutation group.
-  <ul>
-  <li><a href="/docs/cli/subscription/refresh"><code>brama subscription refresh &lt;PROVIDER&gt; --reason &lt;REASON&gt; [--json]</code></a> — refresh one provider's OAuth grants now.</li>
-  <li><a href="/docs/cli/subscription/sign-in"><code>brama subscription sign-in &lt;PROVIDER&gt; --reason &lt;REASON&gt; [--subscription-id &lt;ID&gt;] [--login-item &lt;LOGIN_ITEM&gt;] [--login-timeout-ms &lt;MILLISECONDS&gt;] [--json]</code></a> — drive one exact Weles row and prove it with a refresh.</li>
-  <li><a href="/docs/cli/subscription/sign-in-manual"><code>brama subscription sign-in-manual &lt;PROVIDER&gt; --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--code &lt;CODE&gt;] [--json]</code></a> — sign one Claude account in through your own browser and a pasted code, without Weles, and prove it with one completion.</li>
-  <li><a href="/docs/cli/subscription/import"><code>brama subscription held [--provider &lt;PROVIDER&gt;] [--json]</code></a> — list the grants the harnesses on this machine hold, never the grants themselves.</li>
-  <li><a href="/docs/cli/subscription/import"><code>brama subscription import &lt;PROVIDER&gt; --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--from &lt;HARNESS&gt;] [--account &lt;EMAIL&gt;] [--gateway &lt;ORIGIN&gt;] [--json]</code></a> — take a grant omp, Claude Code, Codex CLI or Kimi Code already holds and prove it with one completion.</li>
-  <li><a href="/docs/cli/subscription/sync"><code>brama subscription sync --reason &lt;REASON&gt; [--home &lt;DIR&gt;] [--gateway &lt;ORIGIN&gt;] [--json]</code></a> — every grant a harness on this machine holds joins the pool by itself, one stable member per account; Brama Desktop runs it every half hour.</li>
-  </ul>
-</li>
-<li><a href="/docs/cli/collect-task-quality"><code>brama collect-task-quality --agent-id &lt;ID&gt; --task &lt;KEY&gt; --prompt &lt;TEXT&gt; [--expected-exact &lt;TEXT&gt;] [--expected-contains &lt;TEXT&gt;] [--persist] [--max-models &lt;N&gt;] --allow-provider-cost</code></a> — collect deterministic task-quality evidence.</li>
-<li><a href="/docs/cli/help"><code>brama help [COMMAND]...</code></a> — print root or command-specific help.</li>
+<li>Lists what every harness holds — <code>omp</code>, Claude Code, Codex CLI, Kimi Code — exactly as <code>held</code> does; disabled accounts are never candidates.</li>
+<li>Derives one stable member id per account: <code>brama-sub-held-&lt;provider&gt;-&lt;account&gt;</code>, both folded to the resource alphabet (<code>controlyourai@gmail.com</code> becomes <code>controlyourai-gmail-com</code>). The same account gives the same id on every sweep.</li>
+<li>Reads the pool where it will write — the gateway’s <code>GET /v1/subscription-pool</code>, or this process’s own vault — and reports an id already there as <code>present</code> without touching it. Brama refreshes that grant itself, and the harness’s copy is stale the moment it did; overwriting it would hand the pool a dead token.</li>
+<li>Imports every id not yet present through the same path <a href="/docs/cli/subscription/import"><code>import</code></a> takes: the grant is stored (a new id becomes a new member under its provider), proved with one minimal completion, journaled with the harness it came from, and reported as <code>imported</code>; a grant the provider would not serve is <code>failed</code> with the provider’s sentence.</li>
+<li>A grant whose harness records no account is <code>unnamed</code>: no member can stand for it. Kimi Code’s store records none.</li>
+<li>Exits unsuccessfully when any grant <code>failed</code>; <code>present</code> and <code>unnamed</code> rows do not fail the sweep.</li>
 </ul>
-<h2 id="safety-boundaries">Safety boundaries<a class="headerlink" href="#safety-boundaries" title="Link to this section">&para;</a></h2>
-<p><code>version</code>, <code>detect</code>, <code>subscriptions</code> without <code>--refresh-usage</code>, and
-<code>help</code> are read-only. <code>--refresh-usage</code> reads the plan-usage capability, which reads provider reports and persists their outcome through Brama's normal credential handling; it starts neither a sign-in nor model inference. <code>mcp</code> exposes local detection only.
-<code>adopt</code> is review-only unless <code>--apply</code> is combined with an exact
-selection; it never reads credential material or calls a provider.
-<code>routes migrate</code> reads and rewrites one registry file and contacts no
-provider.
-<code>test</code>, the provider-requesting part of <code>onboard</code>, and
-<code>collect-task-quality</code> require <code>--allow-provider-cost</code>.
-<code>subscription refresh</code> and <code>subscription sign-in</code> require
-<code>--reason</code> and journal their verdicts. Each linked command page states its
-exact inputs, output and state effect, and relevant refusal text.</p></article>
+<h2 id="refusals">Exact refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
+<ul>
+<li>Empty reason: <code>--reason must say why this sync is being run</code>.</li>
+<li>With <code>--gateway</code> and nothing on stdin: <code>--gateway needs the console's bearer on stdin, and stdin was empty</code>; a gateway that refuses the pool report: <code>the gateway refused the pool report with HTTP &lt;status&gt;: &lt;its sentence&gt;</code>; a gateway that refuses one grant: that grant’s row reads <code>failed</code> with <code>the gateway refused the grant with HTTP &lt;status&gt;: &lt;its sentence&gt;</code>.</li>
+<li>A store that cannot be read refuses the whole sweep with <code>held</code>’s own sentence, because a sweep that silently skips a harness would report a machine as swept when it was not.</li>
+</ul>
+<p>Brama Desktop runs this sweep by itself: once when its gateway is connected and every thirty minutes after, from the runtime it bundles with the desktop’s own bearer on stdin, and its Subscription pool screen says what the last sweep did — which accounts joined, which were already there, which the provider refused — with <strong>Sweep now</strong> beside it. Nothing on this machine has to be named for the pool to route over it.</p>
+<p>See <a href="/docs/cli/subscription/import"><code>held</code> and <code>import</code></a>, <a href="/docs/cli/subscription">the command group</a> or <a href="/docs/cli">the CLI tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>
   </div>

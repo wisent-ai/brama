@@ -163,6 +163,18 @@ pub(crate) async fn import_through(
     if bearer.is_empty() {
         return Err("--gateway needs the console's bearer on stdin, and stdin was empty".into());
     }
+    import_through_with(gateway, bearer, provider, subscription_id, reason, grant).await
+}
+
+/// The handover itself, with a bearer the caller already holds.
+pub(crate) async fn import_through_with(
+    gateway: &str,
+    bearer: &str,
+    provider: &str,
+    subscription_id: &str,
+    reason: &str,
+    grant: HeldGrant,
+) -> Result<ManualSignIn, String> {
     let client = reqwest::Client::builder()
         .timeout(post_timeout())
         .build()

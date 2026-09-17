@@ -4,6 +4,7 @@
 pub(crate) mod credentials;
 mod harness;
 mod manual;
+mod sync;
 
 use clap::Args;
 use serde_json::Value;

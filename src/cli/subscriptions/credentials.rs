@@ -99,6 +99,22 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long, default_value_t = false)]
         json: bool,
     },
+    /// Every grant a harness on this machine holds joins the pool: one stable member per account, ids already present are left to Brama's own refresh
+    #[command(name = "sync")]
+    Sync {
+        /// Why this sync is being run; recorded in the journal beside each verdict
+        #[arg(long)]
+        reason: String,
+        /// Read the harness stores below this directory instead of the home directory
+        #[arg(long)]
+        home: Option<String>,
+        /// Hand the grants to this gateway instead of storing them here; the console's bearer is read from stdin
+        #[arg(long)]
+        gateway: Option<String>,
+        /// Print the sweep as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
 }
 
 pub(crate) async fn run(command: SubscriptionCommand) {
@@ -196,6 +212,15 @@ pub(crate) async fn run(command: SubscriptionCommand) {
                 gateway.as_deref(),
             )
             .await,
+            json,
+        ),
+        SubscriptionCommand::Sync {
+            reason,
+            home,
+            gateway,
+            json,
+        } => super::sync::finish(
+            super::sync::sync(&reason, home.as_deref(), gateway.as_deref()).await,
             json,
         ),
     }

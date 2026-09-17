@@ -68,6 +68,18 @@ the chat, Anthropic messages and Responses wires and on every provider dialect; 
 stated value is bounded as before. The gateway's own probes still pin zero, because a
 probe's answer should not vary
 (<a href="/docs/http-api/inference#shared-validation">shared validation</a>).</p>
+<h2 id="unreleased-subscription-sync">Unreleased: every account the machine holds joins the pool by itself<a class="headerlink" href="#unreleased-subscription-sync" title="Link to this section">&para;</a></h2>
+<p>The accounts below were added by hand, one <code>import</code> at a time, and the operator's
+answer was that this is the opposite of how it should work: the pool has to see every account
+the machine holds without a person naming it.
+<a href="/docs/cli/subscription/sync"><code>brama subscription sync --reason &lt;why&gt; [--gateway &lt;origin&gt;]</code></a>
+lists what every harness holds, derives one stable member id per account
+(<code>brama-sub-held-&lt;provider&gt;-&lt;account&gt;</code>), leaves every id the pool already
+holds to Brama's own refresh, and imports the rest through the same path <code>import</code>
+takes, one verdict per grant. Brama Desktop runs the sweep from the runtime it bundles, once
+when its gateway is connected and every thirty minutes after, and its Subscription pool screen
+says what the last sweep did, with <strong>Sweep now</strong> beside it.</p>
+
 <h2 id="unreleased-import-joins-pool">Unreleased: an imported grant for an id the pool does not hold yet joins the pool<a class="headerlink" href="#unreleased-import-joins-pool" title="Link to this section">&para;</a></h2>
 <p>On 2026-09-17 every Claude call through <code>best</code> was refused with
 <code>all bounded 'claude-code' credentials unavailable for agent</code> while the operator was
