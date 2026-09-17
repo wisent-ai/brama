@@ -184,7 +184,12 @@ pub(in crate::core::server) async fn adopt_admin_grant(
     Json(request): Json<GrantRequest>,
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
-    let (provider, subscription_id) = match active_account(&request.subscription_id, &request.reason).await {
+    let (provider, subscription_id) = match active_account(
+        &request.subscription_id,
+        &request.reason,
+    )
+    .await
+    {
         Ok(entry) => (entry.provider, entry.id),
         Err(refusal) if refusal.0 == StatusCode::NOT_FOUND => {
             let provider = request
@@ -206,7 +211,10 @@ pub(in crate::core::server) async fn adopt_admin_grant(
             }
             let subscription_id = request.subscription_id.trim().to_owned();
             if !crate::core::server::administration::valid_alias(&subscription_id) {
-                return Err(api_error(StatusCode::BAD_REQUEST, "invalid subscription id"));
+                return Err(api_error(
+                    StatusCode::BAD_REQUEST,
+                    "invalid subscription id",
+                ));
             }
             (provider.to_owned(), subscription_id)
         }

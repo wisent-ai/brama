@@ -144,20 +144,34 @@ fn a_grant_for_an_id_the_pool_does_not_hold_yet_joins_the_pool() {
         ],
         Some(CONSOLE_BEARER),
     );
-    assert_eq!(status, 1, "a made-up grant is refused by the provider, after it is stored:\n{stdout}{stderr}");
+    assert_eq!(
+        status, 1,
+        "a made-up grant is refused by the provider, after it is stored:\n{stdout}{stderr}"
+    );
     let verdict: Value = serde_json::from_str(&stdout).expect("a JSON verdict");
-    assert_eq!(verdict["subscription_id"], "brama-sub-pool-agent-claude-secondary");
+    assert_eq!(
+        verdict["subscription_id"],
+        "brama-sub-pool-agent-claude-secondary"
+    );
     assert_eq!(verdict["provider"], "claude-code");
     assert!(
-        verdict["detail"].as_str().is_some_and(|detail| detail.contains("is stored")),
+        verdict["detail"]
+            .as_str()
+            .is_some_and(|detail| detail.contains("is stored")),
         "the grant was stored before the provider's verdict: {verdict}"
     );
     let (_, pool) = gateway.console(gateway::POOL, Method::GET, None);
     let row = pool["subscriptions"]
         .as_array()
-        .and_then(|rows| rows.iter().find(|row| row["id"] == "brama-sub-pool-agent-claude-secondary"))
+        .and_then(|rows| {
+            rows.iter()
+                .find(|row| row["id"] == "brama-sub-pool-agent-claude-secondary")
+        })
         .cloned();
-    assert!(row.is_some(), "the new member is in the pool report: {pool}");
+    assert!(
+        row.is_some(),
+        "the new member is in the pool report: {pool}"
+    );
     assert_eq!(row.unwrap()["provider"], "claude-code");
 
     let (status, answer) = gateway.console(
@@ -167,12 +181,19 @@ fn a_grant_for_an_id_the_pool_does_not_hold_yet_joins_the_pool() {
             "provider": "openrouter", "document": "{\"key\":\"x\"}"})),
     );
     assert_eq!(status, 400, "{answer}");
-    assert!(answer.to_string().contains("not a provider whose grants Brama keeps"), "{answer}");
+    assert!(
+        answer
+            .to_string()
+            .contains("not a provider whose grants Brama keeps"),
+        "{answer}"
+    );
     let (status, answer) = gateway.console(
         GRANT,
         Method::POST,
-        Some(&json!({"subscription_id": "brama-sub-pool-agent-kimi-secondary", "reason": "story",
-            "document": "{\"key\":\"x\"}"})),
+        Some(
+            &json!({"subscription_id": "brama-sub-pool-agent-kimi-secondary", "reason": "story",
+            "document": "{\"key\":\"x\"}"}),
+        ),
     );
     assert_eq!(status, 404, "{answer}");
     assert!(answer.to_string().contains("name its provider"), "{answer}");
