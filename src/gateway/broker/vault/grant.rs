@@ -14,73 +14,73 @@ use crate::capability::Secret;
 use crate::core::failure;
 use wisent_errors::{Code, Failure};
 
-/// The vault coordinate a resource stands for, as the operator wrote it.
+/// The vault coordinate a resource stands for, as Skarbiec resolves it.
 ///
-/// The same table the authority consults, read here so nothing in this process
-/// ever decides for itself which credential a purpose means.
-pub(in crate::gateway::broker) fn capability_route(
+/// Asked of the router binary through `route resolve`, the same answer the
+/// authority gives, so nothing in this process ever decides for itself
+/// which credential a purpose means. Until 2026-09-17 this read the
+/// operator's routes table file directly, and a subscription whose route
+/// Skarbiec declares from the item's own tags - every one an import or a
+/// sign-in creates - was answered `no capability route maps resource`
+/// here while `stado route capability brama` listed it: the second reader
+/// of one table had drifted from the first.
+pub(in crate::gateway::broker) async fn capability_route(
     resource: &str,
 ) -> Result<(String, String), Failure> {
-    let path = std::env::var_os("SKARBIEC_CAPABILITY_ROUTES_FILE").ok_or_else(|| {
-        credential_failure(
-            "SKARBIEC_CAPABILITY_ROUTES_FILE is not configured",
-            resource,
-            Code::Config,
-        )
-    })?;
-    let raw = std::fs::read_to_string(&path).map_err(|error| {
+    let output = router_output("resolve capability route", |command| {
+        command.arg("route").arg("resolve").arg(resource);
+    })
+    .await
+    .map_err(|error| credential_failure(error, resource, Code::Config))?;
+    let document: Value = serde_json::from_slice(&output.stdout).map_err(|error| {
         credential_failure(
             format!(
-                "read capability routes file `{}`: {error}",
-                path.to_string_lossy()
+                "route resolve for `{resource}` answered malformed JSON: {error}; stderr: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
             ),
             resource,
             Code::Config,
         )
     })?;
-    let document: Value = serde_json::from_str(&raw).map_err(|error| {
-        credential_failure(
-            format!(
-                "capability routes file `{}` contains malformed JSON: {error}",
-                path.to_string_lossy()
-            ),
-            resource,
-            Code::Config,
-        )
-    })?;
-    let table = document.get("routes").unwrap_or(&document);
-    let entry = table.get(resource).ok_or_else(|| {
-        credential_failure(
-            format!("no capability route maps resource `{resource}`"),
-            resource,
-            Code::Config,
-        )
-    })?;
-    let item = entry
-        .get("item")
-        .and_then(Value::as_str)
-        .filter(|value| !value.trim().is_empty())
+    let route = document
+        .get("routes")
+        .and_then(Value::as_array)
+        .and_then(|routes| {
+            routes
+                .iter()
+                .find(|route| route.get("resource").and_then(Value::as_str) == Some(resource))
+        })
         .ok_or_else(|| {
             credential_failure(
-                format!("capability route for `{resource}` is missing non-empty field `item`"),
+                format!("route resolve answered nothing for resource `{resource}`"),
                 resource,
                 Code::Config,
             )
-        })?
-        .to_owned();
-    let field = entry
-        .get("field")
-        .and_then(Value::as_str)
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| {
-            credential_failure(
-                format!("capability route for `{resource}` is missing non-empty field `field`"),
-                resource,
-                Code::Config,
-            )
-        })?
-        .to_owned();
-    Ok((item, field))
+        })?;
+    if let Some(problem) = route.get("problem").and_then(Value::as_str) {
+        return Err(credential_failure(
+            format!("no capability route maps resource `{resource}`: {problem}"),
+            resource,
+            Code::Config,
+        ));
+    }
+    let coordinate = |name: &str| {
+        route
+            .get(name)
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .map(str::to_owned)
+            .ok_or_else(|| {
+                credential_failure(
+                    format!(
+                        "capability route for `{resource}` is missing non-empty field `{name}`"
+                    ),
+                    resource,
+                    Code::Config,
+                )
+            })
+    };
+    Ok((coordinate("item")?, coordinate("field")?))
 }
 
 /// Read one provider credential through the grant the vault already carries.
@@ -91,7 +91,7 @@ pub(in crate::gateway::broker) fn capability_route(
 pub(in crate::gateway::broker) async fn credential_by_grant(
     resource: &str,
 ) -> Result<Secret, Failure> {
-    let (item, field) = capability_route(resource)?;
+    let (item, field) = capability_route(resource).await?;
     let output = router_output("read credential through grant", |command| {
         command.arg("get").arg(&item);
     })

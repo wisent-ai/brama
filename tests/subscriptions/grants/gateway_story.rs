@@ -160,6 +160,16 @@ fn a_grant_for_an_id_the_pool_does_not_hold_yet_joins_the_pool() {
             .is_some_and(|detail| detail.contains("is stored")),
         "the grant was stored before the provider's verdict: {verdict}"
     );
+    // The new item is in no routes table; Skarbiec declares its route from
+    // the item's own tags, and the gateway must read it through that
+    // answer rather than its own reading of the table.
+    assert!(
+        verdict["detail"]
+            .as_str()
+            .is_some_and(|detail| detail.contains("would not serve it")
+                && !detail.contains("no capability route maps resource")),
+        "the provider, not a missing route, refused it: {verdict}"
+    );
     let (_, pool) = gateway.console(gateway::POOL, Method::GET, None);
     let row = pool["subscriptions"]
         .as_array()
