@@ -68,6 +68,21 @@ the chat, Anthropic messages and Responses wires and on every provider dialect; 
 stated value is bounded as before. The gateway's own probes still pin zero, because a
 probe's answer should not vary
 (<a href="/docs/http-api/inference#shared-validation">shared validation</a>).</p>
+<h2 id="unreleased-blocked-rows-last">Unreleased: a live account behind burnt ones is still tried<a class="headerlink" href="#unreleased-blocked-rows-last" title="Link to this section">&para;</a></h2>
+<p>The walk takes at most two credentials per route, and took the first two rows of the
+ordered list before skipping the blocked ones among them. A burnt subscription has no plan
+reading, and no reading sorts as the freest plan, so on 2026-09-18 the pool on charless-mac-mini
+held two live Claude accounts behind three burnt ones and every <code>best</code> call for
+<code>oko</code> spent both attempts on burnt rows, walked nothing, and was refused
+<code>all bounded 'claude-code' credentials were rejected by the provider; re-authorization
+required</code> with <code>attempts: 0</code> — the live accounts were never asked, and the
+operator's question was why Brama does not rotate across the accounts it holds. A credential
+inside a recorded block is now ordered after every live row, so the attempts are spent on rows
+that can be asked; the blocked rows stay in the list, after the live ones, so a pool with nothing
+but blocks still reports the block it is inside. <code>tests/routing/blocked_rows_last_contract</code>
+drives the real gateway over a real vault: two accounts burn on the first request, a third is
+banked, and the next request has to reach it. 0.4.26.</p>
+
 <h2 id="unreleased-interim-readiness">Unreleased: a gateway that has obtained one direct credential says so before the subscription sweep ends<a class="headerlink" href="#unreleased-interim-readiness" title="Link to this section">&para;</a></h2>
 <p>The readiness sweep has two halves: one capability per direct provider, then every
 agent's subscription discovery and one redemption per active subscription. Until the whole

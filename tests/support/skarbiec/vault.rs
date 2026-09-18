@@ -84,6 +84,24 @@ impl SkarbiecVault {
     /// discovery reads - the marker, the provider and the subscription id -
     /// plus the agent's provenance tag.
     pub fn seed_subscription(&self, agent: &str, provider: &str, subscription_id: &str) -> String {
+        self.seed_subscription_with_document(
+            agent,
+            provider,
+            subscription_id,
+            &format!("seeded-{subscription_id}"),
+        )
+    }
+
+    /// Seed one account as [`Self::seed_subscription`] does, holding `document`
+    /// as its credential value: the OAuth document a story wants the request
+    /// path to read, rather than the placeholder string.
+    pub fn seed_subscription_with_document(
+        &self,
+        agent: &str,
+        provider: &str,
+        subscription_id: &str,
+        document: &str,
+    ) -> String {
         self.seed_item(
             provider,
             subscription_id,
@@ -91,6 +109,7 @@ impl SkarbiecVault {
                 "brama:subscription,brama:agent:{agent},brama:provider:{provider},\
                  brama:id:{subscription_id}"
             ),
+            document,
         )
     }
 
@@ -101,10 +120,11 @@ impl SkarbiecVault {
             provider,
             subscription_id,
             &format!("brama:subscription,brama:provider:{provider},brama:id:{subscription_id}"),
+            &format!("seeded-{subscription_id}"),
         )
     }
 
-    fn seed_item(&self, provider: &str, subscription_id: &str, tags: &str) -> String {
+    fn seed_item(&self, provider: &str, subscription_id: &str, tags: &str, value: &str) -> String {
         let item = Self::item_id(provider, subscription_id);
         // The document shape `skarbiec set-json` accepts, and the one Brama's
         // own credential writer sends. Without the `context` object the real
@@ -113,7 +133,7 @@ impl SkarbiecVault {
             "kind": "bundle",
             "schema": "skarbiec.item.v2",
             "context": {"source_kind": "donation"},
-            "fields": {"value": format!("seeded-{subscription_id}")},
+            "fields": {"value": value},
         })
         .to_string();
         let written = self.skarbiec_with_stdin(

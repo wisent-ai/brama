@@ -74,5 +74,22 @@ pub(super) async fn ordered_candidate_rows(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     apply_pin(&mut rows, agent_id, provider);
+    // A credential inside a recorded block is walked last. The walk takes the
+    // first `max_credential_attempts` rows and skips the blocked ones among
+    // them without asking a provider, so a blocked row at the front spends
+    // an attempt a live row could have used. A burnt subscription has no
+    // plan reading, and no reading sorts as the freest plan: on 2026-09-18
+    // the pool held two live Claude accounts behind three burnt ones, every
+    // `best` call for `oko` took the two burnt rows, walked nothing, and was
+    // refused `all bounded 'claude-code' credentials were rejected by the
+    // provider; re-authorization required` with `attempts: 0` while the live
+    // accounts were never tried. The blocked rows stay in the list, after
+    // the live ones, so a pool with nothing but blocks still reports the
+    // block it is inside.
+    let (live, blocked): (Vec<_>, Vec<_>) = rows
+        .into_iter()
+        .partition(|row| !usage::is_blocked(&row.id));
+    let mut rows = live;
+    rows.extend(blocked);
     Ok(rows)
 }
