@@ -49,10 +49,15 @@ pub(in crate::gateway::broker) async fn existing_item_tags(
         .unwrap_or_default())
 }
 
+/// Replace one item's credential value, keeping what the item already
+/// carries. `account` is the principal the credential belongs to, written
+/// as `context.account_ref` when given: the field Weles resolves a sign-in
+/// from, and the one every imported member lacked until 2026-09-18.
 pub(in crate::gateway::broker) async fn put_credential(
     item_id: &str,
     secret: &[u8],
     tags: Option<&[String]>,
+    account: Option<&str>,
 ) -> Result<(), String> {
     use std::process::Stdio;
     use tokio::io::AsyncWriteExt;
@@ -80,6 +85,15 @@ pub(in crate::gateway::broker) async fn put_credential(
         serde_json::json!({"kind": "bundle", "schema": "skarbiec.item.v2",
             "context": {"source_kind": "donation"}, "fields": {}})
     };
+    if let Some(account) = account.map(str::trim).filter(|account| !account.is_empty()) {
+        let context = document
+            .get_mut("context")
+            .and_then(serde_json::Value::as_object_mut)
+            .ok_or_else(|| {
+                format!("credential target {item_id} has no canonical context object")
+            })?;
+        context.insert("account_ref".into(), serde_json::json!(account));
+    }
     let fields = document
         .get_mut("fields")
         .and_then(serde_json::Value::as_object_mut)

@@ -253,7 +253,7 @@ pub async fn put_donated_credential(
         let tags =
             donated_credential_tags(&item_id, agent_id, provider, subscription_id, login_item)
                 .await?;
-        put_credential(&item_id, api_key.as_bytes(), Some(&tags))
+        put_credential(&item_id, api_key.as_bytes(), Some(&tags), None)
             .await
             .map_err(DonationRefusal::Unwritable)?;
     }

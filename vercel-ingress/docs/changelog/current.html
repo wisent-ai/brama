@@ -68,6 +68,21 @@ the chat, Anthropic messages and Responses wires and on every provider dialect; 
 stated value is bounded as before. The gateway's own probes still pin zero, because a
 probe's answer should not vary
 (<a href="/docs/http-api/inference#shared-validation">shared validation</a>).</p>
+<h2 id="unreleased-imported-account-ref">Unreleased: an imported member names its account, so Weles can sign it in when its grant dies<a class="headerlink" href="#unreleased-imported-account-ref" title="Link to this section">&para;</a></h2>
+<p>Weles resolves an automatic sign-in from the subscription item's <code>account_ref</code>
+and a Skarbiec login item for that principal. Every member the pool gained through
+<code>import</code> or <code>sync</code> carried the harness's account in its verdict and none in
+its item: on 2026-09-18 <code>/readyz</code> on charless-mac-mini reported
+<code>subscription_identity_missing</code> for <code>held-claude-code-lukasz-bartoszcze-wisent-ai</code>,
+<code>wisent-app-claude-secondary</code>, <code>wisent-app-claude-tertiary</code> and
+<code>wisent-app-kimi-primary</code>, and the loop that exists to replace a burnt grant could not
+start. A stored grant now carries the account the harness recorded as the item's
+<code>account_ref</code>, written beside the credential and preserved on every later write; a caller
+that knows no account leaves what the item carries. The next thing that blocks the sign-in is
+the one the login item lacks — on this fleet, an authenticator seed, which
+<code>stado credentials seed-freshness</code> reports as <code>seed_field_empty</code> for every Claude,
+Codex and Kimi login. 0.4.27.</p>
+
 <h2 id="unreleased-blocked-rows-last">Unreleased: a live account behind burnt ones is still tried<a class="headerlink" href="#unreleased-blocked-rows-last" title="Link to this section">&para;</a></h2>
 <p>The walk takes at most two credentials per route, and took the first two rows of the
 ordered list before skipping the blocked ones among them. A burnt subscription has no plan

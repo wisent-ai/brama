@@ -126,6 +126,15 @@ fn a_grant_from_each_harness_is_stored_in_its_providers_shape() {
         "sk-ort-lukasz@wisent.com"
     );
     assert_eq!(document["tokens"]["account_id"], "acct-lukasz@wisent.com");
+    // The account the harness recorded is written beside the grant as the
+    // item's `account_ref`: what Weles resolves a sign-in from when this
+    // grant dies. Until 2026-09-18 every imported member carried none and
+    // `/readyz` reported each as `subscription_identity_missing`.
+    assert_eq!(
+        vault.document_of(&item)["context"]["account_ref"],
+        "lukasz@wisent.com",
+        "the imported member names its account for the sign-in that replaces it"
+    );
     assert_eq!(document["auth_mode"], "chatgpt");
     let kimi = vault.seed_subscription(AGENT, "kimi", "pool-agent");
     let (_, stdout, stderr) = import(&vault, &home, "kimi", &[]);

@@ -80,6 +80,7 @@ pub async fn store(
     subscription_id: &str,
     document: &str,
     origin: Origin,
+    account: Option<&str>,
 ) -> Result<(), String> {
     let mut parsed: Value = serde_json::from_str(document)
         .map_err(|_| "the grant is not a JSON document".to_owned())?;
@@ -95,9 +96,19 @@ pub async fn store(
         }
         _ => Zeroizing::new(document.to_owned()),
     };
-    broker::put_subscription_credential(subscription_id, provider, stored.as_bytes())
-        .await
-        .map_err(|detail| format!("the grant could not be stored: {detail}"))
+    // The account the grant belongs to is written beside it as the item's
+    // `account_ref`: it is what Weles resolves a sign-in from when this
+    // grant dies, and until 2026-09-18 every imported member carried none —
+    // `/readyz` reported each as `subscription_identity_missing`, and the
+    // automatic sign-in that exists to replace a burnt grant could not start.
+    broker::put_subscription_credential_for_account(
+        subscription_id,
+        provider,
+        stored.as_bytes(),
+        account,
+    )
+    .await
+    .map_err(|detail| format!("the grant could not be stored: {detail}"))
 }
 
 /// Whether the pool already holds exactly this grant for the subscription:
@@ -153,7 +164,14 @@ pub async fn adopt(
             detail: format!("{who}'s grant from {source} is the one the pool already holds; nothing was stored or proved"),
         });
     }
-    store(provider, subscription_id, &document, origin).await?;
+    store(
+        provider,
+        subscription_id,
+        &document,
+        origin,
+        account.as_deref(),
+    )
+    .await?;
     // The ledger remembers the refusal that disowned the old grant, and the
     // request path leaves a disowned grant alone until a sign-in replaces it.
     // This is that sign-in.

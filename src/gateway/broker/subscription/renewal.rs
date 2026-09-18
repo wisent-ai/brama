@@ -203,13 +203,26 @@ pub async fn put_subscription_credential(
     provider: &str,
     credential: &[u8],
 ) -> Result<(), String> {
+    put_subscription_credential_for_account(subscription_id, provider, credential, None).await
+}
+
+/// [`put_subscription_credential`] with the account the grant belongs to,
+/// when the caller knows it: written as the item's `account_ref`, which is
+/// the identity Weles signs the account in from once this grant dies. A
+/// caller that knows no account leaves whatever the item already carries.
+pub async fn put_subscription_credential_for_account(
+    subscription_id: &str,
+    provider: &str,
+    credential: &[u8],
+    account: Option<&str>,
+) -> Result<(), String> {
     let item_id = format!("provider:{}:{}", slug(provider), slug(subscription_id));
     if local_provider_credentials_enabled() {
         return put_local_subscription_credential(&item_id, credential);
     }
     let existing = existing_item_tags(&item_id).await?;
     let tags = subscription_tags_for_write(&existing, provider, subscription_id)?;
-    put_credential(&item_id, credential, Some(&tags)).await
+    put_credential(&item_id, credential, Some(&tags), account).await
 }
 
 /// Force one OAuth refresh after the provider rejects a grant whose local
