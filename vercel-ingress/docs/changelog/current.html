@@ -68,6 +68,21 @@ the chat, Anthropic messages and Responses wires and on every provider dialect; 
 stated value is bounded as before. The gateway's own probes still pin zero, because a
 probe's answer should not vary
 (<a href="/docs/http-api/inference#shared-validation">shared validation</a>).</p>
+<h2 id="unreleased-interim-readiness">Unreleased: a gateway that has obtained one direct credential says so before the subscription sweep ends<a class="headerlink" href="#unreleased-interim-readiness" title="Link to this section">&para;</a></h2>
+<p>The readiness sweep has two halves: one capability per direct provider, then every
+agent's subscription discovery and one redemption per active subscription. Until the whole
+sweep ended <code>/readyz</code> answered <code>readiness check has not completed</code>, which is
+503, and the second half takes as long as Skarbiec and every provider take. On 2026-09-17 the
+0.4.24 candidate on charless-mac-mini was still inside it when Stado's 90-second readiness
+window closed: <code>candidate did not become ready within 90s</code>, quarantined, and the mini
+kept serving 0.4.23 — the release that still rotated borrowed grants. On 2026-09-18 that
+rotation revoked the operator's own <code>omp</code> session on lbartoszcze@wisent.ai, one
+import after the release meant to stop it had been refused a rollout by the gateway it
+replaces. The first half now publishes its own verdict the moment it is known:
+<code>ready</code> when one direct provider credential was obtained, <code>degraded</code> either
+way, reason <code>a direct provider credential was obtained; the subscription sweep is still
+running</code>; the full report replaces it when the sweep ends. 0.4.25.</p>
+
 <h2 id="unreleased-claude-shape">Unreleased: a Claude grant rides as the Agent SDK, the way the harness Anthropic answers sends it<a class="headerlink" href="#unreleased-claude-shape" title="Link to this section">&para;</a></h2>
 <p>On 2026-09-17 Anthropic answered every Claude model through Brama
 <code>Third-party apps now draw from your extra usage, not your plan limits</code> while the

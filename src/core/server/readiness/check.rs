@@ -39,7 +39,23 @@ pub fn unroutable_reason(refusals: &[String]) -> String {
     format!("{HEADLINE} — {}", refusals.join("; "))
 }
 
-pub(super) async fn calculate_readiness() -> ReadinessReport {
+/// One sweep, with an interim answer.
+///
+/// The sweep's second half — every agent's subscription discovery and one
+/// redemption per active subscription — takes as long as Skarbiec and every
+/// provider take to answer, and until it ends `/readyz` says `pending`,
+/// which is 503. On 2026-09-17 the 0.4.24 candidate on charless-mac-mini
+/// was still inside that half when Stado's 90-second readiness window
+/// closed, so the release that stops Brama rotating borrowed grants was
+/// quarantined by the gateway it was meant to replace, and the account
+/// fight it fixes revoked the operator's own session the next day. The
+/// first half — one capability per direct provider — costs one broker
+/// round trip, and a gateway that has obtained one can carry traffic, so
+/// that verdict is published the moment it is known; the full report
+/// replaces it when the sweep ends.
+pub(super) async fn calculate_readiness(
+    publish_interim: impl Fn(ReadinessReport),
+) -> ReadinessReport {
     let providers: Vec<String> = {
         let mut names: Vec<String> = crate::gateway::broker::configured_provider_capabilities()
             .into_iter()
@@ -64,6 +80,11 @@ pub(super) async fn calculate_readiness() -> ReadinessReport {
         }
         checked.push(json!({ "provider": provider, "credential": obtained }));
     }
+    publish_interim(ReadinessReport::interim(
+        provider_available,
+        checked.clone(),
+        denied.clone(),
+    ));
 
     // Obtaining a credential is only the first half. A subscription whose model
     // discovery yields nothing is active, its credential redeems, and it still

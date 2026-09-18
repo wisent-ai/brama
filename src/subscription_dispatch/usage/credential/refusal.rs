@@ -123,6 +123,7 @@ mod tests {
             cause: Some(cause.to_string()),
             recorded_at_ms,
             expires_at_ms: None,
+            borrowed_from: None,
             refreshed_at_ms: None,
         }
     }
@@ -162,6 +163,7 @@ mod tests {
             recorded_at_ms: ESTABLISHED_MS,
             expires_at_ms: None,
             refreshed_at_ms: None,
+            borrowed_from: None,
         };
         let now = ESTABLISHED_MS + 1000;
         assert_eq!(refusal_recorded_at_ms(Some(&previous), SENTENCE, now), now);

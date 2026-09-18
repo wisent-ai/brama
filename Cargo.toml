@@ -1,6 +1,6 @@
 [package]
 name = "brama"
-version = "0.4.24"
+version = "0.4.25"
 edition = "2021"
 license-file = "LICENSE"
 
@@ -71,6 +71,10 @@ path = "tests/routing/awaiting_sign_in_contract.rs"
 [[test]]
 name = "discovery_reason_contract"
 path = "tests/routing/discovery_reason_contract.rs"
+
+[[test]]
+name = "readiness_contract"
+path = "tests/routing/readiness_contract.rs"
 
 [[test]]
 name = "pool"
