@@ -7,18 +7,14 @@
 //! read, an item write and a vault listing, and a second copy of any of them
 //! would drift from this one.
 
-use std::sync::{Arc, LazyLock};
-use std::time::{Duration, Instant};
+use std::sync::{Arc, LazyLock, Mutex};
+use std::time::Duration;
+
+use futures_util::future::{BoxFuture, FutureExt, Shared};
 
 const ENTITLEMENTS_ROUTER_BIN_ENV: &str = "ENTITLEMENTS_ROUTER_BIN";
 const DEFAULT_ENTITLEMENTS_ROUTER_BIN: &str = "entitlements-router";
 pub(super) const ENTITLEMENTS_ROUTER_TIMEOUT: Duration = Duration::from_secs(15);
-
-/// How long one raw vault listing answers every caller before the router is
-/// asked again. Shorter than the per-agent subscription cache, because the
-/// writers below read the listing to learn an item's tags before they write
-/// and must see a member somebody banked a moment ago.
-const RAW_LISTING_TTL: Duration = Duration::from_secs(10);
 
 /// The router's bare `list`: the JSON row of every vault item.
 ///
@@ -30,50 +26,64 @@ const RAW_LISTING_TTL: Duration = Duration::from_secs(10);
 /// and the sign-in loop asked concurrently every 30 seconds, the router sat
 /// at 954 MiB and 58% CPU beside a gateway at 100%, and the host's own
 /// object store closed connections for want of memory while the fleet's
-/// releases wrote to it. One listing now answers every caller inside its
-/// window, and concurrent callers wait for the one in flight instead of
-/// starting their own.
-struct RawListing {
-    fetched_at: Instant,
-    stdout: Arc<Vec<u8>>,
-}
+/// releases wrote to it. Concurrent callers now share the one listing in
+/// flight instead of each starting a router.
+///
+/// Shared while in flight, never after: the vault changes under this
+/// gateway by hands it does not see — `skarbiec delete`, a vault sync, an
+/// operator's `set` — and a listing served after it returned would answer
+/// with an account the vault no longer holds. The `usage` story deletes a
+/// real item mid-run and reads it as forgotten on the very next call.
+type ListingResult = Result<Arc<Vec<u8>>, String>;
 
-static RAW_LISTING: LazyLock<tokio::sync::Mutex<Option<RawListing>>> =
-    LazyLock::new(|| tokio::sync::Mutex::new(None));
+static IN_FLIGHT: LazyLock<Mutex<Option<Shared<BoxFuture<'static, ListingResult>>>>> =
+    LazyLock::new(|| Mutex::new(None));
 
-/// The bare `list` of `binary`, from the shared window when one is fresh.
-/// A refused or failed listing is returned to its caller and never stored.
+/// The bare `list` of `binary`: the listing already in flight when one is,
+/// otherwise a new one every concurrent caller joins. A refused or failed
+/// listing is returned to every joined caller and kept by none.
 pub(in crate::gateway::broker) async fn raw_listing(
     binary: &str,
     operation: &str,
-) -> Result<Arc<Vec<u8>>, String> {
-    // The lock is held across the shell on purpose: it is what makes a second
-    // caller wait for the listing in flight rather than start another.
-    let mut cached = RAW_LISTING.lock().await;
-    if let Some(listing) = cached.as_ref() {
-        if listing.fetched_at.elapsed() < RAW_LISTING_TTL {
-            return Ok(Arc::clone(&listing.stdout));
+) -> ListingResult {
+    let listing = {
+        let mut in_flight = IN_FLIGHT
+            .lock()
+            .map_err(|_| "raw vault listing lock poisoned".to_owned())?;
+        match in_flight.as_ref() {
+            Some(shared) => shared.clone(),
+            None => {
+                let binary = binary.to_owned();
+                let operation = operation.to_owned();
+                let shared = async move {
+                    let output = bounded_output(&binary, &operation, |command| {
+                        command.arg("list");
+                    })
+                    .await?;
+                    if !output.status.success() {
+                        return Err(router_refusal(&operation, &output));
+                    }
+                    Ok(Arc::new(output.stdout))
+                }
+                .boxed()
+                .shared();
+                *in_flight = Some(shared.clone());
+                shared
+            }
+        }
+    };
+    let result = listing.clone().await;
+    if let Ok(mut in_flight) = IN_FLIGHT.lock() {
+        // Only the listing that just finished is cleared; a newer one a later
+        // caller started stays for the callers joining it.
+        if in_flight
+            .as_ref()
+            .is_some_and(|current| current.ptr_eq(&listing))
+        {
+            *in_flight = None;
         }
     }
-    let output = bounded_output(binary, operation, |command| {
-        command.arg("list");
-    })
-    .await?;
-    if !output.status.success() {
-        return Err(router_refusal(operation, &output));
-    }
-    let stdout = Arc::new(output.stdout);
-    *cached = Some(RawListing {
-        fetched_at: Instant::now(),
-        stdout: Arc::clone(&stdout),
-    });
-    Ok(stdout)
-}
-
-/// Forget the shared listing: a write just changed the vault, and the next
-/// reader must see it.
-pub(in crate::gateway::broker) async fn forget_raw_listing() {
-    *RAW_LISTING.lock().await = None;
+    result
 }
 
 pub(in crate::gateway::broker) fn entitlements_router_bin() -> String {

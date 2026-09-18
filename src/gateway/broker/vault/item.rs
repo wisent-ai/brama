@@ -9,7 +9,7 @@
 use serde::Deserialize;
 
 use super::router::{
-    entitlements_router_bin, forget_raw_listing, raw_listing, router_output, router_refusal,
+    entitlements_router_bin, raw_listing, router_output, router_refusal,
     ENTITLEMENTS_ROUTER_TIMEOUT,
 };
 
@@ -148,9 +148,6 @@ pub(in crate::gateway::broker) async fn put_credential(
                 ));
             }
         };
-    // The vault changed whatever the router answered: the next reader must
-    // list again, so a member banked a moment ago is not answered absent.
-    forget_raw_listing().await;
     if !output.status.success() {
         return Err(router_refusal("credential write", &output));
     }

@@ -76,10 +76,15 @@ parses the whole vault to answer it. On the 16 GiB control host on 2026-09-18 th
 654 items, the readiness sweep and the sign-in loop asked concurrently every 30 seconds, the
 router sat at 954 MiB and 58% CPU beside a gateway at 100%, the host's memory janitor ended
 Messages and WindowManager and reported progress, and the host's own object store closed
-connections for want of memory while the fleet's releases were writing to it. One raw listing
-now answers every caller for ten seconds and concurrent callers wait for the one in flight;
-a credential write forgets it, so a member banked a moment ago is never answered absent. The
-per-agent subscription cache above it is unchanged. 0.4.31 (0.4.29 and 0.4.30 were claimed by linux builds submitted with a builder script that refused its own work root; Stado 0.21.15 fixed the builder).</p>
+connections for want of memory while the fleet's releases were writing to it. Concurrent
+callers now share the one listing in flight instead of each starting a router; nothing is
+served after it returns, because the vault changes under this gateway by hands it does not
+see (<code>skarbiec delete</code>, a vault sync, an operator's <code>set</code>) and a listing
+served afterwards would answer with an account the vault no longer holds — the <code>usage</code>
+story deletes a real item mid-run and reads it as forgotten on the next call, and a ten-second
+window in 0.4.29 failed it. The per-agent subscription cache above it is unchanged. 0.4.32
+(0.4.29 and 0.4.30 were claimed by linux builds submitted with a builder script that refused
+its own work root, 0.4.31 by the window; Stado 0.21.15 fixed the builder).</p>
 
 <h2 id="unreleased-imported-account-ref">Unreleased: an imported member names its account, so Weles can sign it in when its grant dies<a class="headerlink" href="#unreleased-imported-account-ref" title="Link to this section">&para;</a></h2>
 <p>Weles resolves an automatic sign-in from the subscription item's <code>account_ref</code>
