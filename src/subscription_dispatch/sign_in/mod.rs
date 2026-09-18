@@ -54,7 +54,9 @@ pub fn automatic_sign_in_sentence(provider: &str) -> String {
         .collect();
     ids.sort();
     if ids.is_empty() {
-        return format!("automatic sign-in: no '{provider}' subscription is recorded in the usage ledger");
+        return format!(
+            "automatic sign-in: no '{provider}' subscription is recorded in the usage ledger"
+        );
     }
     if weles_provider(provider).is_none() {
         return format!("automatic sign-in: not available for '{provider}'; its credential is a key somebody has to replace");
@@ -71,8 +73,14 @@ pub fn automatic_sign_in_sentence(provider: &str) -> String {
             match crate::journal::latest_subscription_sign_in(id) {
                 Some(latest) => format!(
                     "{id}: last {} at {}",
-                    latest.get("result").and_then(Value::as_str).unwrap_or("ran"),
-                    latest.get("at").and_then(Value::as_str).unwrap_or("an unrecorded time")
+                    latest
+                        .get("result")
+                        .and_then(Value::as_str)
+                        .unwrap_or("ran"),
+                    latest
+                        .get("at")
+                        .and_then(Value::as_str)
+                        .unwrap_or("an unrecorded time")
                 ),
                 None => format!("{id}: never ran"),
             }
