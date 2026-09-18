@@ -135,7 +135,10 @@ impl CapabilityClient {
         workload_id: String,
         signing_key_file: &Path,
     ) -> Result<Self, CapabilityError> {
-        if !socket.is_absolute() || workload_id.is_empty() || workload_id.len() > MAX_WORKLOAD_ID_BYTES {
+        if !socket.is_absolute()
+            || workload_id.is_empty()
+            || workload_id.len() > MAX_WORKLOAD_ID_BYTES
+        {
             return Err(CapabilityError::InvalidConfiguration);
         }
         let signing_key = read_owner_key(signing_key_file)?;

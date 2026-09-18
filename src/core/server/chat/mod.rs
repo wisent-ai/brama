@@ -25,8 +25,8 @@ use crate::types::{Message, ModelRequest};
 
 use outcome::{failure_response, log_stream_commit, tally_and_log_buffered};
 use request::{
-    ChatCompletionRequest, ChatCompletionResponse, Choice, ChoiceMessage, Usage,
-    MAX_OUTPUT_TOKENS, MAX_TEMPERATURE,
+    ChatCompletionRequest, ChatCompletionResponse, Choice, ChoiceMessage, Usage, MAX_OUTPUT_TOKENS,
+    MAX_TEMPERATURE,
 };
 use routing::{route_model_call, DispatchedCall};
 

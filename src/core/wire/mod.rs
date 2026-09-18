@@ -72,7 +72,8 @@ fn validate(model: &str, max_tokens: u32, temperature: Option<f64>) -> Result<()
         ));
     }
     if temperature.is_some_and(|temperature| {
-        !temperature.is_finite() || !(0.0..=crate::core::server::MAX_TEMPERATURE).contains(&temperature)
+        !temperature.is_finite()
+            || !(0.0..=crate::core::server::MAX_TEMPERATURE).contains(&temperature)
     }) {
         return Err(format!(
             "temperature must be finite and between zero and {}",

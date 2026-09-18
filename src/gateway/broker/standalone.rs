@@ -83,7 +83,10 @@ pub fn local_provider_names() -> Result<Vec<String>, String> {
 
 pub fn put_local_provider_credential(provider: &str, credential: &str) -> Result<(), String> {
     let provider = provider.trim();
-    if provider.is_empty() || credential.is_empty() || credential.chars().count() > MAX_CREDENTIAL_CHARS {
+    if provider.is_empty()
+        || credential.is_empty()
+        || credential.chars().count() > MAX_CREDENTIAL_CHARS
+    {
         return Err("provider and credential must contain valid values".to_owned());
     }
     let mut credentials = LOCAL_PROVIDER_CREDENTIALS
