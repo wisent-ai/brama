@@ -139,6 +139,31 @@ async fn already_stored(provider: &str, subscription_id: &str, document: &str) -
     stored == incoming
 }
 
+/// Whether the item already names the account this grant belongs to. An
+/// unchanged grant on an item that names no account is still a write: the
+/// account is what Weles signs the subscription in from once the grant dies,
+/// and until 2026-09-18 the four imported members kept an unrotated grant
+/// and no account through every sweep, because the grant alone was compared.
+/// A caller that knows no account has nothing to add, and neither has one
+/// writing to a local credential store: that store keeps the grant alone,
+/// so there is no account beside it to be missing.
+async fn account_already_named(
+    provider: &str,
+    subscription_id: &str,
+    account: Option<&str>,
+) -> bool {
+    let Some(account) = account.map(str::trim).filter(|account| !account.is_empty()) else {
+        return true;
+    };
+    if broker::local_provider_credentials_enabled() {
+        return true;
+    }
+    match broker::subscription_account(subscription_id, provider).await {
+        Ok(Some(named)) => named == account,
+        Ok(None) | Err(_) => false,
+    }
+}
+
 /// Store the grant, prove it with one minimal completion, and journal the
 /// verdict with the operator's reason beside it. A grant the pool already
 /// holds unchanged is answered `unchanged` and proved with nothing.
@@ -155,13 +180,15 @@ pub async fn adopt(
     }
     let source = origin.sentence();
     let who = account.clone().unwrap_or_else(|| "the account".to_owned());
-    if already_stored(provider, subscription_id, &document).await {
+    if already_stored(provider, subscription_id, &document).await
+        && account_already_named(provider, subscription_id, account.as_deref()).await
+    {
         return Ok(ManualSignIn {
             provider: provider.to_owned(),
             subscription_id: subscription_id.to_owned(),
             account,
             result: "unchanged",
-            detail: format!("{who}'s grant from {source} is the one the pool already holds; nothing was stored or proved"),
+            detail: format!("{who}'s grant from {source} is the one the pool already holds, under {who}'s name; nothing was stored or proved"),
         });
     }
     store(

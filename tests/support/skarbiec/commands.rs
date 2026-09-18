@@ -47,6 +47,26 @@ impl SkarbiecVault {
         serde_json::from_slice(&shown.stdout).expect("the real skarbiec get is a JSON document")
     }
 
+    /// Put one item's document back the way an earlier writer left it, tags
+    /// kept: how a story reproduces an item shape the product no longer
+    /// writes, such as a grant without the account beside it.
+    pub fn replace_document(&self, item: &str, document: &Value) {
+        let tags = self.tags_of(item).join(",");
+        let kind = document["kind"]
+            .as_str()
+            .expect("every canonical document names its kind")
+            .to_owned();
+        let written = self.skarbiec_with_stdin(
+            &["set-json", item, "--type", &kind, "--tags", &tags],
+            &document.to_string(),
+        );
+        assert!(
+            written.status.success(),
+            "the real skarbiec could not replace {item}: {}",
+            String::from_utf8_lossy(&written.stderr)
+        );
+    }
+
     pub(crate) fn skarbiec(&self, args: &[&str]) -> Output {
         let mut command = Command::new(&self.skarbiec);
         command.args(args);

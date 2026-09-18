@@ -18,7 +18,7 @@ use tracing::warn;
 use super::super::standalone::{
     local_provider_credentials_enabled, put_local_subscription_credential,
 };
-use super::super::vault::{existing_item_tags, put_credential};
+use super::super::vault::{existing_item_account, existing_item_tags, put_credential};
 use super::super::{redeem_subscription_credential, slug};
 use super::tags::subscription_tags_for_write;
 use crate::capability::Secret;
@@ -223,6 +223,20 @@ pub async fn put_subscription_credential_for_account(
     let existing = existing_item_tags(&item_id).await?;
     let tags = subscription_tags_for_write(&existing, provider, subscription_id)?;
     put_credential(&item_id, credential, Some(&tags), account).await
+}
+
+/// The account one subscription's item already names as `account_ref`, or
+/// `None` when it names none - the state every imported member was in until
+/// 2026-09-18, and the one Weles refuses to sign in from.
+pub async fn subscription_account(
+    subscription_id: &str,
+    provider: &str,
+) -> Result<Option<String>, String> {
+    let item_id = format!("provider:{}:{}", slug(provider), slug(subscription_id));
+    if local_provider_credentials_enabled() {
+        return Ok(None);
+    }
+    existing_item_account(&item_id).await
 }
 
 /// Force one OAuth refresh after the provider rejects a grant whose local

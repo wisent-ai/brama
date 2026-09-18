@@ -19,5 +19,5 @@ mod router;
 // resolves to more of this seam than its caller needs.
 pub(super) use capability::{issue_capability, PROVIDER_PURPOSE, REQUEST_SIGN_PURPOSE};
 pub(super) use grant::credential_by_grant;
-pub(super) use item::{existing_item_tags, put_credential, VaultListItem};
+pub(super) use item::{existing_item_account, existing_item_tags, put_credential, VaultListItem};
 pub(super) use router::{entitlements_router_bin, raw_listing};

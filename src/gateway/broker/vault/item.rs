@@ -45,6 +45,38 @@ pub(in crate::gateway::broker) async fn existing_item_tags(
         .unwrap_or_default())
 }
 
+/// The principal one item already names as `context.account_ref`, or `None`
+/// when the item is absent or names none. A sweep that hands an unchanged
+/// grant over reads this before deciding there is nothing to write: on
+/// 2026-09-18 four members held a grant the harness had not rotated and no
+/// account, and `already_stored` answered "nothing to store" on every pass,
+/// so the account the harness knew never reached the item.
+pub(in crate::gateway::broker) async fn existing_item_account(
+    item_id: &str,
+) -> Result<Option<String>, String> {
+    let stdout = raw_listing(&entitlements_router_bin(), "inspect credential account").await?;
+    let items: Vec<VaultListItem> = serde_json::from_slice(&stdout)
+        .map_err(|error| format!("decode credential account inventory: {error}"))?;
+    if !items.iter().any(|item| item.id == item_id && !item.deleted) {
+        return Ok(None);
+    }
+    let current = router_output("read credential account", |command| {
+        command.arg("get").arg(item_id);
+    })
+    .await?;
+    if !current.status.success() {
+        return Err(router_refusal("read credential account", &current));
+    }
+    let document: serde_json::Value = serde_json::from_slice(&current.stdout)
+        .map_err(|error| format!("decode credential account {item_id}: {error}"))?;
+    Ok(document
+        .pointer("/context/account_ref")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|account| !account.is_empty())
+        .map(str::to_owned))
+}
+
 /// Replace one item's credential value, keeping what the item already
 /// carries. `account` is the principal the credential belongs to, written
 /// as `context.account_ref` when given: the field Weles resolves a sign-in

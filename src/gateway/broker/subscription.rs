@@ -32,8 +32,8 @@ pub use inventory::{
 };
 pub use renewal::{
     put_subscription_credential, put_subscription_credential_for_account,
-    refresh_subscription_credential, refresh_subscription_credential_ahead, supports_oauth_refresh,
-    RefreshAhead,
+    refresh_subscription_credential, refresh_subscription_credential_ahead, subscription_account,
+    supports_oauth_refresh, RefreshAhead,
 };
 pub use tags::subscription_tags_for_write;
 

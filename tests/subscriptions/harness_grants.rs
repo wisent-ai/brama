@@ -179,6 +179,67 @@ fn a_grant_from_each_harness_is_stored_in_its_providers_shape() {
         .is_some_and(|scopes| !scopes.is_empty()));
 }
 
+/// The state the four imported members were in on 2026-09-18: the item holds
+/// the very grant the harness still holds, and no account. The sweep hands
+/// that grant over on every pass; comparing the grant alone answered
+/// "unchanged" every time and the account never reached the item, so Weles
+/// refused every automatic sign-in with `subscription_identity_missing`.
+#[test]
+fn an_unchanged_grant_on_an_item_without_an_account_still_names_the_account() {
+    let directory = TestDirectory::new("harness-account");
+    let vault = SkarbiecVault::create("harness-account");
+    let item = vault.seed_subscription(AGENT, "claude-code", "pool-agent");
+    let home = home_with_every_harness(&directory, &[PRIMARY]);
+    let hand_over = ["--from", "omp", "--account", PRIMARY];
+    let (_, stdout, stderr) = import(&vault, &home, "claude-code", &hand_over);
+    assert!(
+        stdout.contains(&format!("account: {PRIMARY}")),
+        "{stdout}{stderr}"
+    );
+    let grant = stored(&vault, &item);
+    assert_eq!(vault.document_of(&item)["context"]["account_ref"], PRIMARY);
+
+    // The item as an earlier Brama left it: the same grant, no account.
+    let mut without_account = vault.document_of(&item);
+    without_account["context"]
+        .as_object_mut()
+        .expect("context object")
+        .remove("account_ref");
+    vault.replace_document(&item, &without_account);
+    assert!(vault.document_of(&item)["context"]["account_ref"].is_null());
+
+    // The same hand-over again: the grant is unchanged, the account is not.
+    let (_, stdout, stderr) = import(&vault, &home, "claude-code", &hand_over);
+    assert!(
+        stdout.contains("is stored, but"),
+        "an unchanged grant on an item without an account is still stored: {stdout}{stderr}"
+    );
+    // `last_refresh` is stamped at read time and is not part of the grant.
+    let mut before = grant.clone();
+    let mut after = stored(&vault, &item);
+    for document in [&mut before, &mut after] {
+        document
+            .as_object_mut()
+            .expect("grant object")
+            .remove("last_refresh");
+    }
+    assert_eq!(after, before, "the grant itself is untouched");
+    assert_eq!(
+        vault.document_of(&item)["context"]["account_ref"],
+        PRIMARY,
+        "the item now names the account Weles signs it in from"
+    );
+
+    // And once it names it, the hand-over is unchanged.
+    let (_, stdout, stderr) = import(&vault, &home, "claude-code", &hand_over);
+    assert!(
+        stdout.contains(&format!(
+            "under {PRIMARY}'s name; nothing was stored or proved"
+        )),
+        "{stdout}{stderr}"
+    );
+}
+
 #[test]
 fn two_grants_for_one_provider_are_refused_until_one_is_named() {
     let directory = TestDirectory::new("harness-two");
