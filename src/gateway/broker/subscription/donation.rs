@@ -17,7 +17,7 @@ use tracing::warn;
 use super::super::standalone::{
     local_provider_credentials_enabled, put_local_subscription_credential,
 };
-use super::super::vault::{put_credential, router_output, router_refusal, VaultListItem};
+use super::super::vault::{entitlements_router_bin, put_credential, raw_listing, VaultListItem};
 use super::account::{parse_subscriptions, SubscriptionEntry};
 use super::tags::subscription_tags_for_write;
 
@@ -135,18 +135,13 @@ async fn donated_credential_tags(
     subscription_id: &str,
     login_item: Option<&str>,
 ) -> Result<Vec<String>, DonationRefusal> {
-    let output = router_output("list vault tags for donated credential", |command| {
-        command.arg("list");
-    })
+    let stdout = raw_listing(
+        &entitlements_router_bin(),
+        "list vault tags for donated credential",
+    )
     .await
     .map_err(DonationRefusal::Unwritable)?;
-    if !output.status.success() {
-        return Err(DonationRefusal::Unwritable(router_refusal(
-            "list vault tags for donated credential",
-            &output,
-        )));
-    }
-    let items: Vec<VaultListItem> = serde_json::from_slice(&output.stdout).map_err(|error| {
+    let items: Vec<VaultListItem> = serde_json::from_slice(&stdout).map_err(|error| {
         DonationRefusal::Unwritable(format!("decode vault tags for donated credential: {error}"))
     })?;
     let mut tags = items

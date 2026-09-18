@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use tracing::warn;
 
-use super::super::vault::{bounded_output, entitlements_router_bin, router_output, router_refusal};
+use super::super::vault::{entitlements_router_bin, raw_listing};
 use super::account::{
     configured_subscriptions, parse_live_subscriptions, parse_owned_subscriptions,
     parse_unroutable_accounts, SubscriptionEntry, UnroutableAccount,
@@ -47,14 +47,8 @@ pub async fn discover_subscriptions(agent_id: &str) -> Result<Vec<SubscriptionEn
 /// and the overlay rows it wrote. This answers who may retire an account; it
 /// never narrows routing.
 pub async fn owned_subscriptions(agent_id: &str) -> Result<Vec<SubscriptionEntry>, String> {
-    let output = router_output("list owned subscriptions", |command| {
-        command.arg("list");
-    })
-    .await?;
-    if !output.status.success() {
-        return Err(router_refusal("list owned subscriptions", &output));
-    }
-    let mut entries = parse_owned_subscriptions(&output.stdout, agent_id)?;
+    let stdout = raw_listing(&entitlements_router_bin(), "list owned subscriptions").await?;
+    let mut entries = parse_owned_subscriptions(&stdout, agent_id)?;
     for donated in donated_subscriptions(Some(agent_id))? {
         match entries.iter_mut().find(|entry| entry.id == donated.id) {
             Some(existing) => *existing = donated,
@@ -105,14 +99,8 @@ pub async fn list_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
 /// the same pool every caller routes over; it stays a separate reader because
 /// it never consults the trusted boot catalog or a donated overlay.
 pub async fn list_all_subscriptions() -> Result<Vec<SubscriptionEntry>, String> {
-    let output = router_output("list all subscriptions", |command| {
-        command.arg("list");
-    })
-    .await?;
-    if !output.status.success() {
-        return Err(router_refusal("list all subscriptions", &output));
-    }
-    parse_live_subscriptions(&output.stdout)
+    let stdout = raw_listing(&entitlements_router_bin(), "list all subscriptions").await?;
+    parse_live_subscriptions(&stdout)
 }
 
 /// Every subscription account in the vault that carries no `brama:agent:` tag.
@@ -128,25 +116,19 @@ pub async fn list_all_subscriptions() -> Result<Vec<SubscriptionEntry>, String> 
 /// nothing here becomes a second reader of the vault, and metadata only: an
 /// item id, a provider and a subscription id, never a value.
 pub async fn list_unroutable_accounts() -> Vec<UnroutableAccount> {
-    let output = match router_output("list unroutable subscription accounts", |command| {
-        command.arg("list");
-    })
+    let stdout = match raw_listing(
+        &entitlements_router_bin(),
+        "list unroutable subscription accounts",
+    )
     .await
     {
-        Ok(output) => output,
+        Ok(stdout) => stdout,
         Err(error) => {
             warn!(event = "unroutable_account_listing_failed", %error);
             return Vec::new();
         }
     };
-    if !output.status.success() {
-        warn!(
-            event = "unroutable_account_listing_failed",
-            error = %router_refusal("list unroutable subscription accounts", &output)
-        );
-        return Vec::new();
-    }
-    match parse_unroutable_accounts(&output.stdout) {
+    match parse_unroutable_accounts(&stdout) {
         Ok(accounts) => accounts,
         Err(error) => {
             warn!(event = "unroutable_account_listing_failed", %error);
@@ -211,14 +193,8 @@ async fn live_subscriptions(
 /// Shell the entitlements router's bare `list`, which returns a JSON array of
 /// every vault item (`{"id","type","tags","updated_at","deleted","versions"}`).
 async fn list_subscriptions_live(broker: &str) -> Result<Vec<SubscriptionEntry>, String> {
-    let output = bounded_output(broker, "list subscriptions", |command| {
-        command.arg("list");
-    })
-    .await?;
-    if !output.status.success() {
-        return Err(router_refusal("list subscriptions", &output));
-    }
-    parse_live_subscriptions(&output.stdout)
+    let stdout = raw_listing(broker, "list subscriptions").await?;
+    parse_live_subscriptions(&stdout)
 }
 
 async fn list_subscriptions_result(agent_id: &str) -> Result<Vec<SubscriptionEntry>, String> {

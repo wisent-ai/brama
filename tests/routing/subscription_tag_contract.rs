@@ -105,9 +105,9 @@ fn an_account_tagged_for_no_agent_is_in_everyones_pool() {
         assert_eq!(row["status"], "active", "{id} must be in the pool: {row}");
     }
     assert!(
-        document["unroutable"].as_array().map_or(true, |rows| rows
-            .iter()
-            .all(|row| row["id"] != "pool-untagged-claude")),
+        document["unroutable"]
+            .as_array()
+            .is_none_or(|rows| rows.iter().all(|row| row["id"] != "pool-untagged-claude")),
         "an account with the mark is never unroutable for want of an agent tag: {document}"
     );
 }

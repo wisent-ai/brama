@@ -7,11 +7,74 @@
 //! read, an item write and a vault listing, and a second copy of any of them
 //! would drift from this one.
 
-use std::time::Duration;
+use std::sync::{Arc, LazyLock};
+use std::time::{Duration, Instant};
 
 const ENTITLEMENTS_ROUTER_BIN_ENV: &str = "ENTITLEMENTS_ROUTER_BIN";
 const DEFAULT_ENTITLEMENTS_ROUTER_BIN: &str = "entitlements-router";
 pub(super) const ENTITLEMENTS_ROUTER_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// How long one raw vault listing answers every caller before the router is
+/// asked again. Shorter than the per-agent subscription cache, because the
+/// writers below read the listing to learn an item's tags before they write
+/// and must see a member somebody banked a moment ago.
+const RAW_LISTING_TTL: Duration = Duration::from_secs(10);
+
+/// The router's bare `list`: the JSON row of every vault item.
+///
+/// Every reader of the vault's inventory — per-agent discovery, the console's
+/// pool, the readiness sweep's unroutable-account census, the sign-in loop,
+/// and each credential write's tag lookup — shells the same `list`, and the
+/// router decrypts and parses the whole vault to answer it. On the 16 GiB
+/// control host on 2026-09-18 the vault held 654 items, the readiness sweep
+/// and the sign-in loop asked concurrently every 30 seconds, the router sat
+/// at 954 MiB and 58% CPU beside a gateway at 100%, and the host's own
+/// object store closed connections for want of memory while the fleet's
+/// releases wrote to it. One listing now answers every caller inside its
+/// window, and concurrent callers wait for the one in flight instead of
+/// starting their own.
+struct RawListing {
+    fetched_at: Instant,
+    stdout: Arc<Vec<u8>>,
+}
+
+static RAW_LISTING: LazyLock<tokio::sync::Mutex<Option<RawListing>>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(None));
+
+/// The bare `list` of `binary`, from the shared window when one is fresh.
+/// A refused or failed listing is returned to its caller and never stored.
+pub(in crate::gateway::broker) async fn raw_listing(
+    binary: &str,
+    operation: &str,
+) -> Result<Arc<Vec<u8>>, String> {
+    // The lock is held across the shell on purpose: it is what makes a second
+    // caller wait for the listing in flight rather than start another.
+    let mut cached = RAW_LISTING.lock().await;
+    if let Some(listing) = cached.as_ref() {
+        if listing.fetched_at.elapsed() < RAW_LISTING_TTL {
+            return Ok(Arc::clone(&listing.stdout));
+        }
+    }
+    let output = bounded_output(binary, operation, |command| {
+        command.arg("list");
+    })
+    .await?;
+    if !output.status.success() {
+        return Err(router_refusal(operation, &output));
+    }
+    let stdout = Arc::new(output.stdout);
+    *cached = Some(RawListing {
+        fetched_at: Instant::now(),
+        stdout: Arc::clone(&stdout),
+    });
+    Ok(stdout)
+}
+
+/// Forget the shared listing: a write just changed the vault, and the next
+/// reader must see it.
+pub(in crate::gateway::broker) async fn forget_raw_listing() {
+    *RAW_LISTING.lock().await = None;
+}
 
 pub(in crate::gateway::broker) fn entitlements_router_bin() -> String {
     std::env::var(ENTITLEMENTS_ROUTER_BIN_ENV)

@@ -68,6 +68,19 @@ the chat, Anthropic messages and Responses wires and on every provider dialect; 
 stated value is bounded as before. The gateway's own probes still pin zero, because a
 probe's answer should not vary
 (<a href="/docs/http-api/inference#shared-validation">shared validation</a>).</p>
+<h2 id="unreleased-one-vault-listing">Unreleased: one vault listing answers every reader<a class="headerlink" href="#unreleased-one-vault-listing" title="Link to this section">&para;</a></h2>
+<p>Every reader of the vault's inventory — per-agent discovery, the console's pool, the
+readiness sweep's unroutable-account census, the sign-in loop and each credential write's tag
+lookup — shelled the entitlements router's bare <code>list</code>, and the router decrypts and
+parses the whole vault to answer it. On the 16 GiB control host on 2026-09-18 the vault held
+654 items, the readiness sweep and the sign-in loop asked concurrently every 30 seconds, the
+router sat at 954 MiB and 58% CPU beside a gateway at 100%, the host's memory janitor ended
+Messages and WindowManager and reported progress, and the host's own object store closed
+connections for want of memory while the fleet's releases were writing to it. One raw listing
+now answers every caller for ten seconds and concurrent callers wait for the one in flight;
+a credential write forgets it, so a member banked a moment ago is never answered absent. The
+per-agent subscription cache above it is unchanged. 0.4.29.</p>
+
 <h2 id="unreleased-imported-account-ref">Unreleased: an imported member names its account, so Weles can sign it in when its grant dies<a class="headerlink" href="#unreleased-imported-account-ref" title="Link to this section">&para;</a></h2>
 <p>Weles resolves an automatic sign-in from the subscription item's <code>account_ref</code>
 and a Skarbiec login item for that principal. Every member the pool gained through

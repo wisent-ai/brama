@@ -9,7 +9,8 @@
 use serde::Deserialize;
 
 use super::router::{
-    entitlements_router_bin, router_output, router_refusal, ENTITLEMENTS_ROUTER_TIMEOUT,
+    entitlements_router_bin, forget_raw_listing, raw_listing, router_output, router_refusal,
+    ENTITLEMENTS_ROUTER_TIMEOUT,
 };
 
 /// One vault item row from the entitlements router's bare `list` command.
@@ -30,17 +31,12 @@ pub(in crate::gateway::broker) struct VaultListItem {
 pub(in crate::gateway::broker) async fn existing_item_tags(
     item_id: &str,
 ) -> Result<Vec<String>, String> {
-    let output = router_output("list vault tags for credential write", |command| {
-        command.arg("list");
-    })
+    let stdout = raw_listing(
+        &entitlements_router_bin(),
+        "list vault tags for credential write",
+    )
     .await?;
-    if !output.status.success() {
-        return Err(router_refusal(
-            "list vault tags for credential write",
-            &output,
-        ));
-    }
-    let items: Vec<VaultListItem> = serde_json::from_slice(&output.stdout)
+    let items: Vec<VaultListItem> = serde_json::from_slice(&stdout)
         .map_err(|error| format!("decode vault tags for credential write: {error}"))?;
     Ok(items
         .into_iter()
@@ -62,14 +58,8 @@ pub(in crate::gateway::broker) async fn put_credential(
     use std::process::Stdio;
     use tokio::io::AsyncWriteExt;
 
-    let listing = router_output("inspect credential target", |command| {
-        command.arg("list");
-    })
-    .await?;
-    if !listing.status.success() {
-        return Err(router_refusal("inspect credential target", &listing));
-    }
-    let items: Vec<VaultListItem> = serde_json::from_slice(&listing.stdout)
+    let stdout = raw_listing(&entitlements_router_bin(), "inspect credential target").await?;
+    let items: Vec<VaultListItem> = serde_json::from_slice(&stdout)
         .map_err(|error| format!("decode credential target inventory: {error}"))?;
     let mut document = if items.iter().any(|item| item.id == item_id && !item.deleted) {
         let current = router_output("read credential target metadata", |command| {
@@ -158,6 +148,9 @@ pub(in crate::gateway::broker) async fn put_credential(
                 ));
             }
         };
+    // The vault changed whatever the router answered: the next reader must
+    // list again, so a member banked a moment ago is not answered absent.
+    forget_raw_listing().await;
     if !output.status.success() {
         return Err(router_refusal("credential write", &output));
     }

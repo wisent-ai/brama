@@ -170,7 +170,7 @@ async fn sweep_one(
         };
     };
     let subscription_id = member_id(&provider, &account);
-    if present.iter().any(|id| *id == subscription_id) {
+    if present.contains(&subscription_id) {
         return SyncRow {
             harness: harness_name,
             provider,

@@ -20,4 +20,4 @@ mod router;
 pub(super) use capability::{issue_capability, PROVIDER_PURPOSE, REQUEST_SIGN_PURPOSE};
 pub(super) use grant::credential_by_grant;
 pub(super) use item::{existing_item_tags, put_credential, VaultListItem};
-pub(super) use router::{bounded_output, entitlements_router_bin, router_output, router_refusal};
+pub(super) use router::{entitlements_router_bin, raw_listing};
