@@ -65,13 +65,19 @@ fn validate(model: &str, max_tokens: u32, temperature: Option<f64>) -> Result<()
     if model.trim().is_empty() {
         return Err("missing field `model`".to_string());
     }
-    if max_tokens == u32::default() || max_tokens > 32_768 {
-        return Err("max_tokens must be between one and 32768".to_string());
+    if max_tokens == u32::default() || max_tokens > crate::core::server::MAX_OUTPUT_TOKENS {
+        return Err(format!(
+            "max_tokens must be between one and {}",
+            crate::core::server::MAX_OUTPUT_TOKENS
+        ));
     }
-    if temperature
-        .is_some_and(|temperature| !temperature.is_finite() || !(0.0..=2.0).contains(&temperature))
-    {
-        return Err("temperature must be finite and between zero and 2".to_string());
+    if temperature.is_some_and(|temperature| {
+        !temperature.is_finite() || !(0.0..=crate::core::server::MAX_TEMPERATURE).contains(&temperature)
+    }) {
+        return Err(format!(
+            "temperature must be finite and between zero and {}",
+            crate::core::server::MAX_TEMPERATURE
+        ));
     }
     Ok(())
 }

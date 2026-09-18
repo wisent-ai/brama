@@ -13,6 +13,10 @@ use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
+/// A deployment lists at most 32 adapters; an identifier is at most 128 bytes.
+const MAX_ADAPTERS_PER_DEPLOYMENT: usize = 32;
+const MAX_IDENTIFIER_BYTES: usize = 128;
+
 use crate::core::server::valid_alias;
 
 use super::{
@@ -141,7 +145,7 @@ pub(super) fn validate_source(source: &SourceRegistry) -> Result<(), String> {
                 deployment.name
             ));
         }
-        if deployment.adapters.len() > 32
+        if deployment.adapters.len() > MAX_ADAPTERS_PER_DEPLOYMENT
             || deployment
                 .adapters
                 .iter()
@@ -166,7 +170,7 @@ pub(super) fn validate_source(source: &SourceRegistry) -> Result<(), String> {
 
 fn valid_identifier(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= 128
+        && value.len() <= MAX_IDENTIFIER_BYTES
         && value.trim() == value
         && value.bytes().all(|byte| {
             byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'_' | b'.')

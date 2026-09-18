@@ -120,10 +120,12 @@ fn document(
     }
 }
 
-/// omp writes its expiry in milliseconds; a value that small can only be
-/// seconds, and is read as such.
+/// omp writes its expiry in milliseconds; a value below 10^11 (the year 5138 in
+/// seconds) can only be seconds, and is read as such.
+const SECONDS_BOUNDARY: i64 = 100_000_000_000;
+
 fn milliseconds(expires: i64) -> i64 {
-    let seconds_boundary: i64 = "100000000000".parse().expect("valid boundary");
+    let seconds_boundary = SECONDS_BOUNDARY;
     if expires < seconds_boundary {
         expires * millis()
     } else {

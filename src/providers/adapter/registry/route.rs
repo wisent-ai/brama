@@ -8,6 +8,9 @@ const QWEN_DEFAULT_MODEL: &str = "qwen-max";
 const OPENAI_DEFAULT_MODEL: &str = "gpt-5.4";
 const OPENAI_EMBEDDING_MODEL: &str = "text-embedding-3-small";
 const OPENAI_MODERATION_MODEL: &str = "omni-moderation-latest";
+/// A model id is at most 512 bytes; a provider id at most 128.
+const MAX_MODEL_ID_BYTES: usize = 512;
+const MAX_PROVIDER_ID_BYTES: usize = 128;
 
 pub fn provider_id_from_route(value: &str) -> Option<&str> {
     let (provider_id, model_id) = value.split_once('/')?;
@@ -46,14 +49,14 @@ pub fn supports_moderation_route(value: &str) -> bool {
 
 pub(in crate::providers::adapter) fn valid_model_id(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= 512
+        && value.len() <= MAX_MODEL_ID_BYTES
         && value.trim() == value
         && !value.chars().any(char::is_control)
 }
 
 pub(in crate::providers::adapter) fn valid_provider_id(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= 128
+        && value.len() <= MAX_PROVIDER_ID_BYTES
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))

@@ -22,6 +22,10 @@ use brama::subscription_dispatch::sign_in::manual::{self, HeldGrant, ManualSignI
 
 use super::harness;
 
+/// Reading the pool report waits a minute; the gateway answers 2xx on success.
+const POOL_READ_TIMEOUT_SECONDS: u64 = 60;
+const HTTP_SUCCESS: std::ops::Range<u16> = 200..300;
+
 /// What the sweep did with one held grant.
 #[derive(Serialize)]
 pub(crate) struct SyncRow {
@@ -60,7 +64,7 @@ async fn present_ids(gateway: Option<&str>, bearer: &str) -> Result<Vec<String>,
     let report = match gateway {
         Some(gateway) => {
             let client = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(60))
+                .timeout(std::time::Duration::from_secs(POOL_READ_TIMEOUT_SECONDS))
                 .build()
                 .map_err(|error| format!("gateway client: {error}"))?;
             let response = client
@@ -77,7 +81,7 @@ async fn present_ids(gateway: Option<&str>, bearer: &str) -> Result<Vec<String>,
                 .json()
                 .await
                 .map_err(|error| format!("the gateway's pool report is not JSON: {error}"))?;
-            if !(200..300).contains(&status) {
+            if !HTTP_SUCCESS.contains(&status) {
                 let message = body
                     .pointer("/error/message")
                     .and_then(Value::as_str)

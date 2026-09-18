@@ -5,17 +5,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::{BillingTarget, Tool, ToolCall};
 
-pub(in crate::core::server) fn max_output_tokens() -> u32 {
-    "32768".parse().expect("valid output token limit")
-}
-
-pub(super) fn max_temperature() -> f64 {
-    "2".parse().expect("valid temperature limit")
-}
-
-pub(in crate::core::server) fn request_deadline() -> std::time::Duration {
-    std::time::Duration::from_secs("300".parse().expect("valid request deadline"))
-}
+/// One request may ask for at most 32 768 output tokens, a temperature up to 2, and is
+/// given five minutes end to end.
+pub(crate) const MAX_OUTPUT_TOKENS: u32 = 32_768;
+pub(crate) const MAX_TEMPERATURE: f64 = 2.0;
+pub(in crate::core::server) const REQUEST_DEADLINE: std::time::Duration =
+    std::time::Duration::from_secs(300);
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

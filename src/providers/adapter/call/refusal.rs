@@ -8,10 +8,11 @@ use wisent_errors::Code;
 use crate::core::failure::{self, IMPACT_MODEL_REQUEST, POINT_PROVIDER_CALL};
 use crate::types::ModelResponse;
 
+/// Characters of a provider's own error sentence a refusal may carry.
+const MAX_PROVIDER_ERROR_CHARS: usize = 2048;
+
 fn max_provider_error_chars() -> usize {
-    "2048"
-        .parse()
-        .expect("valid provider error character limit")
+    MAX_PROVIDER_ERROR_CHARS
 }
 
 /// Characters of transport cause a failure sentence may carry. Long enough for

@@ -14,6 +14,11 @@ use crate::providers::adapter::RegistryModel;
 use super::provider::{protocol_for, CatalogProvider};
 use super::CatalogSnapshot;
 
+/// A provider id is at most 128 bytes and a model id at most 512, the same bounds a
+/// `provider/model` route is held to.
+const MAX_PROVIDER_ID_BYTES: usize = 128;
+const MAX_MODEL_ID_BYTES: usize = 512;
+
 pub(super) fn parse_catalog(raw: &str) -> Result<CatalogSnapshot, String> {
     let root: Value = serde_json::from_str(raw).map_err(|error| error.to_string())?;
     let rows = root
@@ -133,7 +138,7 @@ fn cost(model: &Value, key: &str) -> f64 {
 /// route, so anything that could split or hide a route is refused here.
 fn valid_provider_id(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= 128
+        && value.len() <= MAX_PROVIDER_ID_BYTES
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
@@ -141,7 +146,7 @@ fn valid_provider_id(value: &str) -> bool {
 
 fn valid_model_id(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= 512
+        && value.len() <= MAX_MODEL_ID_BYTES
         && value.trim() == value
         && !value.chars().any(char::is_control)
 }

@@ -11,6 +11,8 @@ use super::{IdentityResolutionError, WisentIdentityAnswer, WISENT_ORGANIZATION_H
 
 const WISENT_SUPABASE_URL: &str = "https://alvaewvbyxpgwdpugnxy.supabase.co";
 const WISENT_SUPABASE_ANON_KEY: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFsdmFld3ZieXhwZ3dkcHVnbnh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzOTc5NDcsImV4cCI6MjA5Njk3Mzk0N30.xkkJ36ZTwtqyVZLFju0vc9S25grTuKbj9ILKlsXdUPA";
+/// An identity answer is read up to 64 KiB.
+const MAX_ANSWER_BYTES: usize = 64 * 1024;
 
 #[derive(Deserialize)]
 struct OrganizationAuthorization {
@@ -62,7 +64,7 @@ pub(super) async fn ask_wisent_identity(bearer: &str) -> WisentIdentityAnswer {
         return WisentIdentityAnswer::Rejected;
     }
     let bytes = match response.bytes().await {
-        Ok(bytes) if bytes.len() <= 64 * 1024 => bytes,
+        Ok(bytes) if bytes.len() <= MAX_ANSWER_BYTES => bytes,
         _ => return WisentIdentityAnswer::Unavailable,
     };
     let answer: Value = match serde_json::from_slice(&bytes) {
@@ -120,7 +122,7 @@ pub(super) async fn authorize_organization(
         .bytes()
         .await
         .map_err(|_| IdentityResolutionError::UpstreamUnavailable)?;
-    if bytes.len() > 64 * 1024 {
+    if bytes.len() > MAX_ANSWER_BYTES {
         return Err(IdentityResolutionError::UpstreamUnavailable);
     }
     let authorization: OrganizationAuthorization =

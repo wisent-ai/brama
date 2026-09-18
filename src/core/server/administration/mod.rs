@@ -28,9 +28,12 @@ pub(in crate::core::server) fn require_brama_desktop(
     }
 }
 
+/// A route alias is at most 128 bytes.
+const MAX_ALIAS_BYTES: usize = 128;
+
 pub(crate) fn valid_alias(alias: &str) -> bool {
     !alias.is_empty()
-        && alias.len() <= 128
+        && alias.len() <= MAX_ALIAS_BYTES
         && alias.trim() == alias
         && alias.bytes().all(|byte| {
             byte.is_ascii_lowercase()

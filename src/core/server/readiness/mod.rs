@@ -19,6 +19,9 @@ use axum::response::IntoResponse;
 use axum::Json;
 use serde_json::{json, Value};
 
+/// Readiness is recomputed every thirty seconds.
+const PROBE_INTERVAL: Duration = Duration::from_secs(30);
+
 pub(in crate::core::server) async fn health() -> impl IntoResponse {
     Json(json!({
         "status": "ok",
@@ -120,7 +123,7 @@ pub(in crate::core::server) fn spawn_readiness_probe() {
         loop {
             let report = check::calculate_readiness(publish).await;
             publish(report);
-            tokio::time::sleep(Duration::from_secs(30)).await;
+            tokio::time::sleep(PROBE_INTERVAL).await;
         }
     });
 }

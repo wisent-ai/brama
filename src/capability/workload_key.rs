@@ -14,6 +14,12 @@ use std::path::Path;
 use ed25519_dalek::SigningKey;
 use zeroize::Zeroizing;
 
+/// Mode bits that would let the group or others touch the key.
+const GROUP_OR_OTHER_ACCESS: u32 = 0o077;
+/// An Ed25519 seed is 32 raw bytes, or those bytes as 64 hex characters.
+const SEED_BYTES: usize = 32;
+const SEED_HEX_CHARS: usize = 64;
+
 use super::purpose::CapabilityError;
 
 const MAX_KEY_BYTES: u64 = 4096;
@@ -29,7 +35,7 @@ pub(super) fn read_owner_key(path: &Path) -> Result<SigningKey, CapabilityError>
         .map_err(|_| CapabilityError::InvalidConfiguration)?;
     if !metadata.file_type().is_file()
         || metadata.uid() != unsafe { libc::geteuid() }
-        || metadata.mode() & 0o077 != 0
+        || metadata.mode() & GROUP_OR_OTHER_ACCESS != 0
         || metadata.len() == 0
         || metadata.len() > MAX_KEY_BYTES
     {
@@ -47,10 +53,10 @@ fn parse_signing_key(encoded: &[u8]) -> Result<SigningKey, CapabilityError> {
         .unwrap_or(encoded)
         .strip_suffix(b"\r")
         .unwrap_or_else(|| encoded.strip_suffix(b"\n").unwrap_or(encoded));
-    let mut raw = Zeroizing::new([0_u8; 32]);
-    if trimmed.len() == 32 {
+    let mut raw = Zeroizing::new([0_u8; SEED_BYTES]);
+    if trimmed.len() == SEED_BYTES {
         raw.copy_from_slice(trimmed);
-    } else if trimmed.len() == 64
+    } else if trimmed.len() == SEED_HEX_CHARS
         && trimmed
             .iter()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))

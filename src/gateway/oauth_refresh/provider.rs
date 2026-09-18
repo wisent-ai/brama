@@ -77,7 +77,7 @@ pub(super) fn oauth_refresh_token(blob: &Value, provider: &str) -> Option<Zeroiz
 }
 
 fn millis_per_second() -> i64 {
-    "1000".parse().expect("valid milliseconds per second")
+    super::expiry::MILLIS_PER_SECOND
 }
 
 /// Write a fresh grant back into the stored blob, in that provider's own

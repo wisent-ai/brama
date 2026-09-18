@@ -7,7 +7,7 @@ use axum::response::IntoResponse;
 use axum::Json;
 use serde_json::json;
 
-use crate::core::server::chat::request::{max_output_tokens, request_deadline};
+use crate::core::server::chat::request::{MAX_OUTPUT_TOKENS, REQUEST_DEADLINE};
 
 use super::{
     STARTED_AT, TOTAL_FAILURES, TOTAL_INPUT_TOKENS, TOTAL_OUTPUT_TOKENS, TOTAL_PROVIDER_ATTEMPTS,
@@ -77,8 +77,8 @@ pub(in crate::core::server) async fn get_stats() -> impl IntoResponse {
         "providers": providers,
         "models": models,
         "limits": {
-            "maxOutputTokens": max_output_tokens(),
-            "requestDeadlineSeconds": request_deadline().as_secs(),
+            "maxOutputTokens": MAX_OUTPUT_TOKENS,
+            "requestDeadlineSeconds": REQUEST_DEADLINE.as_secs(),
         },
         "dependencyPolicy": {
             "catalog": "lazy",

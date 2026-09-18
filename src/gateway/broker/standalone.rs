@@ -14,6 +14,9 @@ use std::sync::{LazyLock, RwLock};
 
 use zeroize::{Zeroize, Zeroizing};
 
+/// A credential handed to a standalone desktop is at most 8000 characters.
+const MAX_CREDENTIAL_CHARS: usize = 8000;
+
 use super::subscription_resource;
 use crate::capability::Secret;
 
@@ -80,7 +83,7 @@ pub fn local_provider_names() -> Result<Vec<String>, String> {
 
 pub fn put_local_provider_credential(provider: &str, credential: &str) -> Result<(), String> {
     let provider = provider.trim();
-    if provider.is_empty() || credential.is_empty() || credential.chars().count() > 8000 {
+    if provider.is_empty() || credential.is_empty() || credential.chars().count() > MAX_CREDENTIAL_CHARS {
         return Err("provider and credential must contain valid values".to_owned());
     }
     let mut credentials = LOCAL_PROVIDER_CREDENTIALS

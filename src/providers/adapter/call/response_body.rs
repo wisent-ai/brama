@@ -6,10 +6,11 @@ use std::collections::HashMap;
 use super::super::plan::headers::plan_headers;
 use super::refusal::transport_error_message;
 
+/// A provider answer is read up to 16 MiB.
+const MAX_PROVIDER_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
+
 fn max_provider_response_bytes() -> usize {
-    "16777216"
-        .parse()
-        .expect("valid provider response byte limit")
+    MAX_PROVIDER_RESPONSE_BYTES
 }
 
 pub(in crate::providers::adapter) async fn bounded_response_text(

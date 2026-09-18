@@ -11,6 +11,9 @@ use super::claim::{
 use super::{DAYS_PER_WEEK, MINUTES_PER_DAY, MINUTES_PER_HOUR, SECONDS_PER_MINUTE};
 use crate::types::LimitReading;
 
+/// `used` and `limit - remaining` may differ by a few ulps of floating-point rounding.
+const COUNTER_TOLERANCE_ULPS: f64 = 8.0;
+
 /// Kimi states quotas as counts. Its top-level usage may explicitly be null and
 /// its limits array may be empty; every object it does publish must be complete.
 pub(super) fn kimi_usage_readings(
@@ -95,7 +98,7 @@ fn kimi_reading(
         (None, Some(remaining)) => limit - remaining,
         (Some(used), Some(remaining)) => {
             let derived = limit - remaining;
-            let tolerance = f64::EPSILON * limit.abs().max(1.0) * 8.0;
+            let tolerance = f64::EPSILON * limit.abs().max(1.0) * COUNTER_TOLERANCE_ULPS;
             if (used - derived).abs() > tolerance {
                 return Err(format!(
                     "`{counters_path}.used` and `{counters_path}.remaining` disagree with `{counters_path}.limit`"

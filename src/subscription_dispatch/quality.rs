@@ -7,8 +7,11 @@ use crate::types::{Message, ModelRequest};
 
 const SOURCE: &str = "brama-task-quality";
 
+/// A task-quality run tries at most 25 models.
+const MAX_QUALITY_MODELS: usize = 25;
+
 fn max_quality_models() -> usize {
-    "25".parse().expect("valid task-quality model limit")
+    MAX_QUALITY_MODELS
 }
 
 #[derive(Debug, Clone)]

@@ -16,22 +16,26 @@ use crate::capability::Secret;
 
 const EXPIRY_KEYS: &[&str] = &["expiresAt", "expires_at", "expires", "expiry"];
 
+/// A token is refreshed a minute before it expires. An expiry above 10^11 cannot be
+/// seconds (that is the year 5138) and is read as milliseconds.
+const EXPIRY_MARGIN_SECONDS: i64 = 60;
+const EPOCH_MILLIS_THRESHOLD: f64 = 100_000_000_000.0;
+pub(super) const MILLIS_PER_SECOND: i64 = 1000;
+
 fn expiry_margin_seconds() -> i64 {
-    "60".parse().expect("valid OAuth expiry margin")
+    EXPIRY_MARGIN_SECONDS
 }
 
 fn epoch_millis_threshold() -> f64 {
-    "100000000000"
-        .parse()
-        .expect("valid epoch millisecond threshold")
+    EPOCH_MILLIS_THRESHOLD
 }
 
 fn millis_per_second_f64() -> f64 {
-    "1000".parse().expect("valid milliseconds per second")
+    MILLIS_PER_SECOND as f64
 }
 
 pub(super) fn millis_per_second_i64() -> i64 {
-    "1000".parse().expect("valid milliseconds per second")
+    MILLIS_PER_SECOND
 }
 
 pub(super) fn now_seconds() -> i64 {

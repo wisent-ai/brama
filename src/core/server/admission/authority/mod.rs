@@ -139,8 +139,11 @@ type IdentityCache =
     std::sync::Mutex<HashMap<IdentityCacheKey, (std::time::Instant, ModelClientIdentity)>>;
 static IDENTITY_CACHE: LazyLock<IdentityCache> = LazyLock::new(Default::default);
 
+/// A resolved identity is remembered for five seconds.
+const IDENTITY_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(5);
+
 fn identity_cache_ttl() -> std::time::Duration {
-    std::time::Duration::from_secs("5".parse().expect("static number"))
+    IDENTITY_CACHE_TTL
 }
 
 fn cached_identity(key: &IdentityCacheKey) -> Option<ModelClientIdentity> {

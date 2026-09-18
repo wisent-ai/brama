@@ -12,8 +12,11 @@ use super::super::rotation::buffered::attempt_subscription;
 use super::super::rotation::streaming::attempt_subscription_stream;
 use super::super::routed_stream::RoutedStream;
 
+/// A selector walks at most three ranked models before it gives up.
+const MAX_SELECTOR_MODELS: usize = 3;
+
 fn max_selector_models() -> usize {
-    "3".parse().expect("valid selector model limit")
+    MAX_SELECTOR_MODELS
 }
 
 /// The sentence a selector that walked its whole candidate list opens with.

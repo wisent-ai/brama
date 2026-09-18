@@ -7,6 +7,12 @@ use wisent_errors::Code;
 pub const POINT: &str = "brama.subscriptions.automatic-sign-in";
 pub const IMPACT: &str = "one automatic sign-in";
 
+/// The HTTP statuses a refused sign-in is classified by.
+const HTTP_UNAUTHORIZED: u16 = 401;
+const HTTP_FORBIDDEN: u16 = 403;
+const HTTP_TOO_MANY_REQUESTS: u16 = 429;
+const HTTP_SERVER_ERRORS: std::ops::RangeInclusive<u16> = 500..=599;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Blocked {
     Operation {
@@ -37,16 +43,17 @@ impl Blocked {
         match self {
             Self::WelesUnreachable { .. } => Code::InfraDown,
             Self::Operation {
-                status: Some(401 | 403),
+                status: Some(HTTP_UNAUTHORIZED | HTTP_FORBIDDEN),
                 ..
             } => Code::Auth,
             Self::Operation {
-                status: Some(429), ..
+                status: Some(HTTP_TOO_MANY_REQUESTS),
+                ..
             } => Code::RateLimit,
             Self::Operation {
-                status: Some(500..=599),
+                status: Some(status),
                 ..
-            } => Code::InfraDown,
+            } if HTTP_SERVER_ERRORS.contains(status) => Code::InfraDown,
             _ => Code::Config,
         }
     }

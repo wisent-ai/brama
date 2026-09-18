@@ -4,6 +4,8 @@ use serde_json::{json, Value};
 use super::super::blocked::{Blocked, SignInError};
 
 pub(crate) const LOGIN_ITEM_SELECTOR: &str = "login_item";
+/// Weles answers a finished resolution or trajectory with 200 and `ok: true`.
+pub(in crate::subscription_dispatch::sign_in) const HTTP_OK: u16 = 200;
 
 /// Only opaque vault coordinates and non-secret account provenance cross here.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -45,7 +47,7 @@ pub(crate) async fn resolve(
         detail: format!("POST {base}/reauth/resolve returned invalid JSON: {error}"),
         status: Some(status),
     })?;
-    if status != 200 || answer.get("ok").and_then(Value::as_bool) != Some(true) {
+    if status != HTTP_OK || answer.get("ok").and_then(Value::as_bool) != Some(true) {
         return Err(Blocked::Operation {
             code: answer
                 .get("error")

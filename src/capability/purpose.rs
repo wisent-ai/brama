@@ -46,8 +46,11 @@ pub(super) fn valid_resource(purpose: Purpose, resource: &str) -> bool {
             .any(|ch| matches!(ch, '*' | '?' | '[' | ']'))
 }
 
+/// A SHA-256 digest is 64 lowercase hex characters.
+const SHA256_HEX_CHARS: usize = 64;
+
 pub(super) fn is_lower_hex_64(value: &str) -> bool {
-    value.len() == 64
+    value.len() == SHA256_HEX_CHARS
         && value
             .as_bytes()
             .iter()

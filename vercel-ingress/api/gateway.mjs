@@ -11,6 +11,11 @@ if (origin.protocol !== 'https:' || origin.username || origin.password
 const resolver = new URL(settings.dns_endpoint);
 if (resolver.protocol !== 'https:') throw new Error('Brama DNS configuration requires HTTPS');
 
+// Only A records (type 1) carrying an IPv4 address are used; a TTL is in seconds.
+const DNS_TYPE_A = 1;
+const IPV4 = 4;
+const MILLISECONDS_PER_SECOND = 1000;
+
 let cached;
 let resolving;
 async function publicAddresses() {
@@ -24,11 +29,11 @@ async function publicAddresses() {
     if (!response.ok) throw new Error(`DNS lookup for ${origin.hostname} answered HTTP ${response.status}`);
     const answer = await response.json();
     if (answer.Status !== 0) throw new Error(`DNS lookup for ${origin.hostname} returned status ${answer.Status}`);
-    const records = (answer.Answer ?? []).filter(record => record.type === 1 && isIP(record.data) === 4);
+    const records = (answer.Answer ?? []).filter(record => record.type === DNS_TYPE_A && isIP(record.data) === IPV4);
     if (!records.length) throw new Error(`DNS returned no public IPv4 address for ${origin.hostname}`);
-    const addresses = records.map(record => ({ address: record.data, family: 4 }));
+    const addresses = records.map(record => ({ address: record.data, family: IPV4 }));
     const ttl = Math.min(...records.map(record => Number.isFinite(record.TTL) ? Math.max(0, record.TTL) : 0));
-    cached = { addresses, expires: Date.now() + ttl * 1000 };
+    cached = { addresses, expires: Date.now() + ttl * MILLISECONDS_PER_SECOND };
     return addresses;
   })();
   try { return await resolving; }

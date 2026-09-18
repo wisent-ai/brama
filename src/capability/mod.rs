@@ -25,6 +25,9 @@ use zeroize::{Zeroize, Zeroizing};
 use purpose::{is_lower_hex_64, valid_resource};
 use workload_key::read_owner_key;
 
+/// A workload identifier is at most 128 bytes.
+const MAX_WORKLOAD_ID_BYTES: usize = 128;
+
 // The names the rest of the crate already uses, re-exported one by one so
 // every existing path keeps working and nothing else travels with them.
 pub use purpose::{CapabilityError, Purpose, TARGET};
@@ -118,7 +121,7 @@ impl CapabilityClient {
             .ok_or(CapabilityError::InvalidConfiguration)?;
         let workload_id = std::env::var("SKARBIEC_WORKLOAD_ID")
             .ok()
-            .filter(|value| !value.is_empty() && value.len() <= 128)
+            .filter(|value| !value.is_empty() && value.len() <= MAX_WORKLOAD_ID_BYTES)
             .ok_or(CapabilityError::InvalidConfiguration)?;
         let key_path = std::env::var_os("SKARBIEC_WORKLOAD_SIGNING_KEY_FILE")
             .map(PathBuf::from)
@@ -132,7 +135,7 @@ impl CapabilityClient {
         workload_id: String,
         signing_key_file: &Path,
     ) -> Result<Self, CapabilityError> {
-        if !socket.is_absolute() || workload_id.is_empty() || workload_id.len() > 128 {
+        if !socket.is_absolute() || workload_id.is_empty() || workload_id.len() > MAX_WORKLOAD_ID_BYTES {
             return Err(CapabilityError::InvalidConfiguration);
         }
         let signing_key = read_owner_key(signing_key_file)?;

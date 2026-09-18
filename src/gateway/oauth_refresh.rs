@@ -66,16 +66,22 @@ impl Drop for RefreshGrant {
     }
 }
 
+/// A refresh call waits fifteen seconds, reads at most 64 KiB, and a credential blob
+/// written back is at most 8 KiB.
+const REFRESH_TIMEOUT: Duration = Duration::from_secs(15);
+const MAX_RESPONSE_BYTES: usize = 64 * 1024;
+const MAX_CREDENTIAL_BYTES: usize = 8 * 1024;
+
 fn refresh_timeout() -> Duration {
-    Duration::from_secs("15".parse().expect("valid OAuth refresh timeout"))
+    REFRESH_TIMEOUT
 }
 
 fn max_response_bytes() -> usize {
-    "65536".parse().expect("valid OAuth response limit")
+    MAX_RESPONSE_BYTES
 }
 
 fn max_credential_bytes() -> usize {
-    "8192".parse().expect("valid credential size limit")
+    MAX_CREDENTIAL_BYTES
 }
 
 fn parse_refresh_grant(body: &Value) -> Option<RefreshGrant> {

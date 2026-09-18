@@ -7,6 +7,10 @@ use std::path::Path;
 
 use super::document::{read, Deployment, Registry};
 
+/// Tailscale hands out addresses in 100.64.0.0/10: first octet 100, second in 64..128.
+const TAILSCALE_FIRST_OCTET: u8 = 100;
+const TAILSCALE_SECOND_OCTETS: std::ops::Range<u8> = 64..128;
+
 pub(super) fn safe_inference_host(value: &str) -> bool {
     let Ok(address) = value.parse::<std::net::Ipv4Addr>() else {
         return false;
@@ -15,10 +19,7 @@ pub(super) fn safe_inference_host(value: &str) -> bool {
         return true;
     }
     let octets = address.octets();
-    let first = "100".parse::<u8>().expect("static Tailscale prefix");
-    let lower = "64".parse::<u8>().expect("static Tailscale range");
-    let upper = "128".parse::<u8>().expect("static Tailscale range");
-    octets[usize::MIN] == first && (lower..upper).contains(&octets[usize::from(true)])
+    octets[0] == TAILSCALE_FIRST_OCTET && TAILSCALE_SECOND_OCTETS.contains(&octets[1])
 }
 
 fn deployment_for_model<'a>(registry: &'a Registry, model: &str) -> Result<&'a Deployment, String> {

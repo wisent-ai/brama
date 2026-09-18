@@ -11,6 +11,8 @@ use std::time::Duration;
 
 const DEFAULT_CATALOG_URL: &str = "https://models.dev/api.json";
 const DEFAULT_CACHE_PATH: &str = "/tmp/brama-models-dev-cache.json";
+/// A catalog refresh waits thirty seconds for models.dev.
+const CATALOG_FETCH_TIMEOUT: Duration = Duration::from_secs(30);
 
 fn catalog_url() -> Result<reqwest::Url, String> {
     let raw = std::env::var("BRAMA_MODEL_CATALOG_URL")
@@ -45,7 +47,7 @@ pub(super) async fn read_live_catalog() -> Result<String, String> {
     // last one until the process runs out of descriptors.
     static CATALOG_CLIENT: LazyLock<Result<reqwest::Client, String>> = LazyLock::new(|| {
         reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
+            .timeout(CATALOG_FETCH_TIMEOUT)
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|error| error.to_string())

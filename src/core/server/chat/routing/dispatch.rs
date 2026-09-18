@@ -19,7 +19,7 @@ use crate::subscription_dispatch::{
 };
 use crate::types::{ModelRequest, ModelResponse};
 
-use super::super::request::request_deadline;
+use super::super::request::REQUEST_DEADLINE;
 use super::DispatchedCall;
 
 /// Everything the decision established about one call, so the ladder below
@@ -58,7 +58,7 @@ pub(super) async fn dispatch(plan: DispatchPlan<'_>, selected_model: &str) -> Di
     // response headers. For a stream it stops there by design: once events
     // flow, "how long may this take" is the provider's idle interval, not a
     // budget that would cut a generation mid-sentence.
-    tokio::time::timeout(request_deadline(), async {
+    tokio::time::timeout(REQUEST_DEADLINE, async {
         if stream {
             let opened = if let Some(task) = task_subscription {
                 dispatch_task_subscription_stream(headers, request, raw_body, task).await

@@ -18,6 +18,11 @@ if (!binaryPath || !outputDir || !isAbsolute(executablePath)) {
   );
 }
 
+// A designated requirement is at most 4 KiB; the emitted files are owner-only.
+const MAX_REQUIREMENT_CHARS = 4096;
+const OWNER_ONLY_DIRECTORY = 0o700;
+const OWNER_ONLY_FILE = 0o600;
+
 // Which subscriptions exist is read out of the vault, not out of a manifest.
 //
 // It used to take a hand-written JSON list and emit one policy rule per entry, so
@@ -38,8 +43,11 @@ const tagValue = (tags, prefix) => {
   return found === undefined ? null : found.slice(prefix.length);
 };
 
-const workloadUid = 10001;
-const workloadGid = 10001;
+// The Brama workload runs as uid/gid 10001 unless the deployment says otherwise.
+const DEFAULT_WORKLOAD_UID = 10001;
+const DEFAULT_WORKLOAD_GID = 10001;
+const workloadUid = DEFAULT_WORKLOAD_UID;
+const workloadGid = DEFAULT_WORKLOAD_GID;
 const configuredWorkloadUid = workloadUidInput === undefined ? workloadUid : Number(workloadUidInput);
 const configuredWorkloadGid = workloadGidInput === undefined ? workloadGid : Number(workloadGidInput);
 if (
@@ -50,8 +58,13 @@ if (
 ) {
   throw new Error('workload uid and gid must be non-negative safe integers');
 }
-const maxTtlSeconds = 315_360_000;
-const maxUses = 10_000_000;
+// A grant lives at most ten years (315 360 000 s) and may be used ten million times.
+const SECONDS_PER_DAY = 24 * 60 * 60;
+const GRANT_MAX_YEARS = 10;
+const DAYS_PER_YEAR = 365;
+const maxTtlSeconds = GRANT_MAX_YEARS * DAYS_PER_YEAR * SECONDS_PER_DAY;
+const GRANT_MAX_USES = 10_000_000;
+const maxUses = GRANT_MAX_USES;
 const requestSignAgentIds = ['wisent-app'];
 
 // Vault ownership and routing are deliberately separate. Any item with both
@@ -190,7 +203,7 @@ function macosCodeSigningRequirement(path) {
     .find((line) => line.startsWith('designated => '))
     ?.slice('designated => '.length)
     .trim();
-  if (!requirement || requirement.length > 4096 || requirement.includes('\0')) {
+  if (!requirement || requirement.length > MAX_REQUIREMENT_CHARS || requirement.includes('\0')) {
     throw new Error('Brama designated requirement is missing or invalid');
   }
   return requirement;
@@ -286,5 +299,5 @@ if (carriedKeyPath && !existsSync(carriedKeyPath)) {
 writeSigned('policy', policy, policyDomain, policyKey);
 writeSigned('registry', registry, registryDomain, registryKey);
 for (const name of ['trust.json', 'brama-proof.key', 'policy.json', 'policy.sig', 'registry.json', 'registry.sig', 'worm-receipt']) {
-  chmodSync(join(outputDir, name), name === 'worm-receipt' ? 0o700 : 0o600);
+  chmodSync(join(outputDir, name), name === 'worm-receipt' ? OWNER_ONLY_DIRECTORY : OWNER_ONLY_FILE);
 }

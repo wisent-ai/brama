@@ -46,6 +46,7 @@ pub use refusal::contract::{model_error_contract, ModelErrorContract};
 
 pub(crate) use administration::valid_alias;
 pub(crate) use aliases::{alias_requires_direct_capability, alias_route_shape_supported};
+pub(crate) use chat::request::{MAX_OUTPUT_TOKENS, MAX_TEMPERATURE};
 
 /// Apply one pool membership document from the local vault-owning CLI.
 /// HTTP callers reach the same operation after proving their narrower scope.

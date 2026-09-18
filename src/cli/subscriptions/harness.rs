@@ -16,6 +16,10 @@ use zeroize::Zeroizing;
 
 use brama::subscription_dispatch::sign_in::manual::{self, Harness, HeldGrant, ManualSignIn};
 
+/// Handing a grant to a gateway may take a while; the gateway answers 2xx on success.
+const POST_TIMEOUT_SECONDS: u64 = 180;
+const HTTP_SUCCESS: std::ops::Range<u16> = 200..300;
+
 pub(crate) fn home(override_: Option<&str>) -> PathBuf {
     override_
         .map(PathBuf::from)
@@ -141,7 +145,7 @@ pub(crate) async fn import_here(
 }
 
 fn post_timeout() -> Duration {
-    Duration::from_secs("180".parse().expect("valid post timeout"))
+    Duration::from_secs(POST_TIMEOUT_SECONDS)
 }
 
 /// Hand the grant to a gateway elsewhere, as the console does, with the
@@ -201,7 +205,7 @@ pub(crate) async fn import_through_with(
         .json()
         .await
         .map_err(|error| format!("the gateway's answer is not JSON: {error}"))?;
-    if !(200..300).contains(&status) {
+    if !HTTP_SUCCESS.contains(&status) {
         let message = body
             .pointer("/error/message")
             .and_then(Value::as_str)

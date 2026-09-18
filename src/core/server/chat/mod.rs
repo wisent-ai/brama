@@ -25,8 +25,8 @@ use crate::types::{Message, ModelRequest};
 
 use outcome::{failure_response, log_stream_commit, tally_and_log_buffered};
 use request::{
-    max_output_tokens, max_temperature, ChatCompletionRequest, ChatCompletionResponse, Choice,
-    ChoiceMessage, Usage,
+    ChatCompletionRequest, ChatCompletionResponse, Choice, ChoiceMessage, Usage,
+    MAX_OUTPUT_TOKENS, MAX_TEMPERATURE,
 };
 use routing::{route_model_call, DispatchedCall};
 
@@ -46,22 +46,19 @@ pub(in crate::core::server) async fn chat_completions(
     if req.messages.is_empty() {
         return api_error(StatusCode::BAD_REQUEST, "messages must not be empty").into_response();
     }
-    if req.max_tokens == u32::default() || req.max_tokens > max_output_tokens() {
+    if req.max_tokens == u32::default() || req.max_tokens > MAX_OUTPUT_TOKENS {
         return api_error(
             StatusCode::BAD_REQUEST,
-            &format!("max_tokens must be between one and {}", max_output_tokens()),
+            &format!("max_tokens must be between one and {MAX_OUTPUT_TOKENS}"),
         )
         .into_response();
     }
     if req.temperature.is_some_and(|temperature| {
-        !temperature.is_finite() || temperature < f64::default() || temperature > max_temperature()
+        !temperature.is_finite() || temperature < f64::default() || temperature > MAX_TEMPERATURE
     }) {
         return api_error(
             StatusCode::BAD_REQUEST,
-            &format!(
-                "temperature must be finite and between zero and {}",
-                max_temperature()
-            ),
+            &format!("temperature must be finite and between zero and {MAX_TEMPERATURE}"),
         )
         .into_response();
     }

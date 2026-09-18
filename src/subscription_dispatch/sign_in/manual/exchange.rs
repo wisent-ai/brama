@@ -20,16 +20,21 @@ struct CodeExchange<'a> {
     code_verifier: &'a str,
 }
 
+/// The token endpoint gets thirty seconds and at most 64 KiB is read; it answers 2xx.
+const EXCHANGE_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_RESPONSE_BYTES: u64 = 64 * 1024;
+const HTTP_SUCCESS: std::ops::Range<u16> = 200..300;
+
 fn exchange_timeout() -> Duration {
-    Duration::from_secs("30".parse().expect("valid exchange timeout"))
+    EXCHANGE_TIMEOUT
 }
 
 fn max_response_bytes() -> u64 {
-    "65536".parse().expect("valid response limit")
+    MAX_RESPONSE_BYTES
 }
 
 fn millis_per_second() -> i64 {
-    "1000".parse().expect("valid milliseconds per second")
+    super::harness::millis()
 }
 
 /// Exchange the pasted code for a grant, store it as this subscription's
@@ -75,7 +80,7 @@ pub async fn complete(
             .map_err(|error| format!("reading the provider's answer: {error}"))?
             .to_vec(),
     );
-    if !(200..300).contains(&status) {
+    if !HTTP_SUCCESS.contains(&status) {
         let text = String::from_utf8_lossy(&body);
         return Ok(ManualSignIn {
             provider: request.provider,

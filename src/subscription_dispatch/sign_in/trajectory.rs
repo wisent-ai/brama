@@ -10,7 +10,7 @@
 
 use serde_json::Value;
 
-use super::worker::account::LOGIN_ITEM_SELECTOR;
+use super::worker::account::{HTTP_OK, LOGIN_ITEM_SELECTOR};
 
 /// Why this reauth answer is not a sign-in of the row that was asked for, or
 /// `None` when it is.
@@ -21,7 +21,7 @@ use super::worker::account::LOGIN_ITEM_SELECTOR;
 pub(super) fn refusal(answer: &Value, status: u16, login_item: &str) -> Option<String> {
     let echoed = answer.get(LOGIN_ITEM_SELECTOR).and_then(Value::as_str);
     let attributed = echoed == Some(login_item);
-    let succeeded = status == 200 && answer.get("ok").and_then(Value::as_bool) == Some(true);
+    let succeeded = status == HTTP_OK && answer.get("ok").and_then(Value::as_bool) == Some(true);
     if attributed && succeeded {
         return None;
     }

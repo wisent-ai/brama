@@ -245,8 +245,10 @@ fn jwt_email(token: &str) -> Option<String> {
     claims.get("email")?.as_str().map(str::to_owned)
 }
 
+pub(super) const MILLIS_PER_SECOND: i64 = 1000;
+
 pub(super) fn millis() -> i64 {
-    "1000".parse().expect("valid milliseconds per second")
+    MILLIS_PER_SECOND
 }
 
 mod keychain {
