@@ -114,10 +114,16 @@ pub(in crate::subscription_dispatch::dispatch) fn bounded_unavailable_summary(
 
 /// The request path's own sentence for a pool every one of whose credentials
 /// the provider itself refused.
+///
+/// It used to end in "re-authorization required", which reads as a task for a
+/// person while re-authorization is the refresh sweep's own job. The sentence
+/// now carries what that sweep did for each of the provider's subscriptions,
+/// so the reader learns whether it never ran, failed and on what, or succeeded
+/// and the provider refused the credential anyway.
 pub(in crate::subscription_dispatch::dispatch) fn auth_rejected_summary(provider: &str) -> String {
     format!(
-        "all bounded '{provider}' credentials were rejected by the provider; \
-         re-authorization required"
+        "all bounded '{provider}' credentials were rejected by the provider; {}",
+        crate::subscription_dispatch::sign_in::automatic_sign_in_sentence(provider)
     )
 }
 

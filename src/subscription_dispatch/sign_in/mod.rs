@@ -34,6 +34,53 @@ pub fn observed_failure(subscription_id: &str) -> Option<Blocked> {
     verdict::observed_failure(subscription_id)
 }
 
+/// What the automatic sign-in did for every recorded subscription of one
+/// provider, as the sentence a refusal carries beside "the provider rejected
+/// every credential".
+///
+/// Re-authorization is this product's own job: the refresh sweep signs a
+/// refused subscription back in through Weles with the login row Skarbiec
+/// holds. A refusal that said only "re-authorization required" read as an
+/// instruction to a person, and on 2026-09-18 the operator was asked to sign
+/// in by hand for a sweep that had already run and failed. The refusal now
+/// says, per subscription, whether that sweep does not apply, never ran, last
+/// succeeded, or failed and on what.
+pub fn automatic_sign_in_sentence(provider: &str) -> String {
+    let recorded = crate::subscription_dispatch::usage::recorded_subscriptions();
+    let mut ids: Vec<&String> = recorded
+        .iter()
+        .filter(|(_, usage)| usage.provider == provider)
+        .map(|(id, _)| id)
+        .collect();
+    ids.sort();
+    if ids.is_empty() {
+        return format!("automatic sign-in: no '{provider}' subscription is recorded in the usage ledger");
+    }
+    if weles_provider(provider).is_none() {
+        return format!("automatic sign-in: not available for '{provider}'; its credential is a key somebody has to replace");
+    }
+    let states: Vec<String> = ids
+        .into_iter()
+        .map(|id| {
+            if crate::journal::is_retired(id) {
+                return format!("{id}: retired");
+            }
+            if let Some(failure) = observed_failure(id) {
+                return format!("{id}: failed ({}: {})", failure.code(), failure.detail());
+            }
+            match crate::journal::latest_subscription_sign_in(id) {
+                Some(latest) => format!(
+                    "{id}: last {} at {}",
+                    latest.get("result").and_then(Value::as_str).unwrap_or("ran"),
+                    latest.get("at").and_then(Value::as_str).unwrap_or("an unrecorded time")
+                ),
+                None => format!("{id}: never ran"),
+            }
+        })
+        .collect();
+    format!("automatic sign-in: {}", states.join("; "))
+}
+
 pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, SignInError> {
     let result = execute(&options).await;
     if let Err(error) = &result {

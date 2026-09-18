@@ -51,8 +51,8 @@ fn an_authorization_block_is_not_reported_as_capacity() {
 
     let summary = pool_empty_summary("codex", cause);
     assert!(
-        summary.contains("re-authorization required"),
-        "a blocked-for-authorization pool must say so, said: {summary}"
+        summary.contains("were rejected by the provider; automatic sign-in:"),
+        "a blocked-for-authorization pool must say what the automatic sign-in did, said: {summary}"
     );
 
     // The sentence the dispatcher produces, classified the way the HTTP edge
