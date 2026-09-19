@@ -252,5 +252,8 @@ fn the_api_serves_a_real_featherless_completion() {
 /// provider refused on 2026-09-18.
 #[test]
 fn the_api_serves_a_real_claude_code_completion_despite_a_refused_temperature() {
-    api_serves_a_real_completion("api-claude-code-temperature", "claude-code/claude-fable-5-1");
+    api_serves_a_real_completion(
+        "api-claude-code-temperature",
+        "claude-code/claude-fable-5-1",
+    );
 }

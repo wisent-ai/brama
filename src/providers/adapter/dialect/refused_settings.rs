@@ -62,15 +62,27 @@ mod tests {
         let model = "claude-test-model-that-refuses";
         let body = r#"{"type":"error","error":{"type":"invalid_request_error","message":"`temperature` is deprecated for this model. Please remove it."}}"#;
         assert!(!omits_temperature(model));
-        assert!(learn_refused_temperature(model, StatusCode::BAD_REQUEST, body));
+        assert!(learn_refused_temperature(
+            model,
+            StatusCode::BAD_REQUEST,
+            body
+        ));
         assert!(omits_temperature(model));
-        assert!(!learn_refused_temperature(model, StatusCode::BAD_REQUEST, body));
+        assert!(!learn_refused_temperature(
+            model,
+            StatusCode::BAD_REQUEST,
+            body
+        ));
     }
 
     #[test]
     fn other_refusals_teach_nothing() {
         let model = "claude-test-model-with-another-problem";
-        assert!(!learn_refused_temperature(model, StatusCode::BAD_REQUEST, "max_tokens too large"));
+        assert!(!learn_refused_temperature(
+            model,
+            StatusCode::BAD_REQUEST,
+            "max_tokens too large"
+        ));
         assert!(!learn_refused_temperature(
             model,
             StatusCode::TOO_MANY_REQUESTS,

@@ -36,7 +36,8 @@ pub(in crate::providers::adapter) fn chat_payload(
     // A model the provider has refused `temperature` for gets the same
     // request without it, on every wire.
     let stripped;
-    let request = if request.temperature.is_some() && refused_settings::omits_temperature(model_id) {
+    let request = if request.temperature.is_some() && refused_settings::omits_temperature(model_id)
+    {
         stripped = ModelRequest {
             temperature: None,
             ..request.clone()
