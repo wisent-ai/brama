@@ -88,6 +88,10 @@ path = "tests/pool/main.rs"
 name = "usage"
 path = "tests/usage/main.rs"
 
+[[test]]
+name = "release_build_cache"
+path = "tests/release/build_cache.rs"
+
 
 [dependencies]
 async-trait = "0.1"

@@ -37,10 +37,32 @@ if [[ "$locked" != "$version" ]]; then
   exit 65
 fi
 
+# Two roots, because they have opposite lifetimes. The scratch root holds what
+# belongs to this job — the rewritten source tree — and is deleted on every
+# run. The cargo root holds compiled dependencies, which belong to the
+# builder: Stado hands every build job a per-product, per-platform
+# CARGO_TARGET_DIR (stado-rs/src/cli/release_submit/builds/worker/environment.rs)
+# precisely so the next release recompiles only what its commit changed.
+#
+# This script used to point cargo at the scratch root it had just deleted, and
+# it overrode the handed variable to do it. So every brama release rebuilt the
+# whole dependency graph, twice — the run register for 0.4.41 on 2026-09-19
+# reads "compiled 263 crates (~96% of the previous run)" — and
+# ~/.stado/build-cache/brama never came into existence on any builder.
 build_root="$output_dir/.build"
+cargo_root=${CARGO_TARGET_DIR:-"$build_root"}
 stage="$output_dir/stage"
+# The defect this script carried has exactly one shape: a cargo root inside
+# the tree the job deletes. Refuse it here rather than rebuild the dependency
+# graph in silence, because the only visible symptom was a slow release.
+if [[ -n "${CARGO_TARGET_DIR:-}" && "$cargo_root" == "$output_dir"* ]]; then
+  printf 'the builder handed CARGO_TARGET_DIR %s inside this job output %s; compiled dependencies there are deleted with the job\n' \
+    "$cargo_root" "$output_dir" >&2
+  exit 65
+fi
 rm -rf "$build_root" "$stage"
-mkdir -p "$build_root/brama" "$build_root/skarbiec" "$stage/bin" "$stage/libexec" "$stage/etc/brama-skarbiec"
+mkdir -p "$build_root" "$cargo_root/brama" "$cargo_root/skarbiec" \
+  "$stage/bin" "$stage/libexec" "$stage/etc/brama-skarbiec"
 cargo_overrides=()
 build_source="$source_dir"
 if [[ -n "${WISENT_INPUTS_DIR:-}" ]]; then
@@ -57,20 +79,20 @@ export BRAMA_BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 export BRAMA_BUILD_PLATFORM="$platform"
 export BRAMA_SOURCE_REVISION="${WISENT_SOURCE_COMMIT:-$(git -C "$source_dir" rev-parse HEAD)}"
 # Bash 3 treats an empty array as unset under nounset.
-CARGO_TARGET_DIR="$build_root/brama" \
+CARGO_TARGET_DIR="$cargo_root/brama" \
   cargo build ${cargo_overrides[@]+"${cargo_overrides[@]}"} --locked --release --bin brama --manifest-path "$build_source/Cargo.toml"
-CARGO_TARGET_DIR="$build_root/skarbiec" \
+CARGO_TARGET_DIR="$cargo_root/skarbiec" \
   cargo build --locked --release --bin skarbiec --manifest-path "$skarbiec_source/Cargo.toml"
-SKARBIEC_BIN="$build_root/skarbiec/release/skarbiec" \
-ENTITLEMENTS_ROUTER_BIN="$build_root/skarbiec/release/skarbiec" \
-CARGO_TARGET_DIR="$build_root/brama" \
+SKARBIEC_BIN="$cargo_root/skarbiec/release/skarbiec" \
+ENTITLEMENTS_ROUTER_BIN="$cargo_root/skarbiec/release/skarbiec" \
+CARGO_TARGET_DIR="$cargo_root/brama" \
   cargo test ${cargo_overrides[@]+"${cargo_overrides[@]}"} --locked --release --manifest-path "$build_source/Cargo.toml" \
     --test pool --test usage
 python3 -S "$source_dir/tests/release/check_router_verbs.py" \
-  "$build_root/skarbiec/release/skarbiec" "$source_dir/src/release/bin/start-with-skarbiec"
+  "$cargo_root/skarbiec/release/skarbiec" "$source_dir/src/release/bin/start-with-skarbiec"
 
-install -m 0755 "$build_root/brama/release/brama" "$stage/bin/brama"
-install -m 0755 "$build_root/skarbiec/release/skarbiec" "$stage/bin/skarbiec-entitlements-router"
+install -m 0755 "$cargo_root/brama/release/brama" "$stage/bin/brama"
+install -m 0755 "$cargo_root/skarbiec/release/skarbiec" "$stage/bin/skarbiec-entitlements-router"
 install -m 0755 "$source_dir/src/release/bin/start-with-skarbiec" "$stage/bin/start-with-skarbiec"
 install -m 0755 "$source_dir/src/release/bin/provision-skarbiec-trust" "$stage/bin/provision-skarbiec-trust"
 launcher_root="$source_dir/src/release/bin/launcher"

@@ -188,6 +188,19 @@ it preserves package versions, registry checksums and dependency edges, and
 the build still runs with `cargo build --locked`. No source checkout is
 rewritten during this projection.
 
+Compiled dependencies belong to the builder, not to the job. Stado hands every
+build job a per-product, per-platform `CARGO_TARGET_DIR` under
+`~/.stado/build-cache/brama/<platform>/cargo-target`, and the script compiles
+there, so the next release recompiles only what its commit changed: measured on
+2026-09-19, a repeat build of 0.4.41 on the same laptop took 1m09s against the
+18m34s the 0.4.40 build job spent. Only the rewritten source tree lives in the
+job's own `.build` directory, which is deleted on every run. A builder that
+hands a `CARGO_TARGET_DIR` inside that output tree is refused with `the builder
+handed CARGO_TARGET_DIR ... inside this job output ...; compiled dependencies
+there are deleted with the job` and exit status 65, because the only symptom of
+that mistake is a slow release. `cargo test --test release_build_cache` holds
+both halves.
+
 Expected output contains these fields with host-specific values:
 
 ```text
