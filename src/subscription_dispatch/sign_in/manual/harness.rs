@@ -49,7 +49,7 @@ impl Harness {
     /// The providers this harness signs accounts in for.
     pub fn providers(self) -> &'static [&'static str] {
         match self {
-            Harness::Omp => &["claude-code", "codex", "kimi"],
+            Harness::Omp => &crate::subscription_dispatch::dispatch::SUBSCRIPTION_PROVIDERS,
             Harness::Claude => &["claude-code"],
             Harness::Codex => &["codex"],
             Harness::Kimi => &["kimi"],

@@ -39,8 +39,13 @@ fn configured_provider_grants() -> std::collections::HashSet<String> {
         .iter()
         .filter_map(|(resource, entry)| {
             let provider = resource.strip_prefix("provider:")?;
+            // A subscription provider is served by the pool, one vault item
+            // per account; a bare route for it names nothing the readiness
+            // sweep could redeem, and asking anyway made Skarbiec refuse the
+            // ambiguity on every start.
             if provider.is_empty()
                 || provider.contains(':')
+                || crate::subscription_dispatch::dispatch::is_subscription_provider(provider)
                 || entry
                     .get("item")
                     .and_then(serde_json::Value::as_str)
@@ -80,7 +85,9 @@ pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
     let subscription_ids = configured_subscription_ids();
     if let Some(map) = capability_map(PROVIDER_CAPABILITIES_ENV) {
         for (provider, capability_id) in map {
-            if subscription_ids.contains(&provider) {
+            if subscription_ids.contains(&provider)
+                || crate::subscription_dispatch::dispatch::is_subscription_provider(&provider)
+            {
                 continue;
             }
             let resource = provider_resource(&provider);

@@ -74,7 +74,7 @@ pub(crate) fn choose(
     home_override: Option<&str>,
 ) -> Result<HeldGrant, String> {
     let home = home(home_override);
-    let provider: &'static str = ["claude-code", "codex", "kimi"]
+    let provider: &'static str = brama::subscription_dispatch::dispatch::SUBSCRIPTION_PROVIDERS
         .into_iter()
         .find(|known| *known == provider)
         .ok_or_else(|| format!("no harness holds grants Brama can take for `{provider}`; claude-code, codex and kimi are the ones it can"))?;

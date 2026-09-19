@@ -31,7 +31,10 @@ pub(crate) use caller_identity::authenticate_agent;
 pub use catalogue::cache::discovery_failure;
 pub use catalogue::console::registry_models_for_console;
 pub(crate) use catalogue::route::provider_for;
-pub use catalogue::route::{is_subscription_model, provider_requires_caller_identity};
+pub use catalogue::route::{
+    is_subscription_model, is_subscription_provider, provider_requires_caller_identity,
+    SUBSCRIPTION_PROVIDERS,
+};
 pub use catalogue::subscription_models::registry_models_for_agent;
 pub use credential::readiness::probe_subscription_redemption;
 pub use credential::usage_probe::probe_subscription_usage;
