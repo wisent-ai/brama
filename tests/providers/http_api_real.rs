@@ -244,3 +244,13 @@ fn the_api_serves_a_real_openrouter_completion() {
 fn the_api_serves_a_real_featherless_completion() {
     api_serves_a_real_completion("api-featherless", FEATHERLESS_ROUTE);
 }
+
+/// The newest Claude subscription models refuse any `temperature` with HTTP
+/// 400; a caller that sends one (Oko's task judge does) must still be
+/// served, because Brama learns the refusal from the provider and sends the
+/// request once more without the setting. The route named here is one the
+/// provider refused on 2026-09-18.
+#[test]
+fn the_api_serves_a_real_claude_code_completion_despite_a_refused_temperature() {
+    api_serves_a_real_completion("api-claude-code-temperature", "claude-code/claude-fable-5-1");
+}

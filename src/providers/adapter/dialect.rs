@@ -3,6 +3,7 @@
 pub(in crate::providers::adapter) mod anthropic_messages;
 pub(in crate::providers::adapter) mod openai_chat;
 pub(in crate::providers::adapter) mod openai_responses;
+pub(in crate::providers::adapter) mod refused_settings;
 pub(in crate::providers::adapter) mod tool_schema;
 
 use serde_json::{json, Map, Value};
@@ -32,6 +33,18 @@ pub(in crate::providers::adapter) fn chat_payload(
     model_id: &str,
     request: &ModelRequest,
 ) -> Value {
+    // A model the provider has refused `temperature` for gets the same
+    // request without it, on every wire.
+    let stripped;
+    let request = if request.temperature.is_some() && refused_settings::omits_temperature(model_id) {
+        stripped = ModelRequest {
+            temperature: None,
+            ..request.clone()
+        };
+        &stripped
+    } else {
+        request
+    };
     match descriptor.wire {
         WireProtocol::OpenAiChat => {
             let mut body = Map::new();

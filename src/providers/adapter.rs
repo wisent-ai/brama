@@ -31,7 +31,7 @@ use catalog::model_row::catalog_model_from_value;
 use dialect::anthropic_messages::model_response_from_anthropic;
 use dialect::openai_chat::model_response_from_openai;
 use dialect::openai_responses::event_stream::model_response_from_responses_stream;
-use dialect::{chat_payload, streaming_chat_payload};
+use dialect::{chat_payload, refused_settings, streaming_chat_payload};
 use plan::headers::{limit_readings, plan_headers, with_limits};
 use registry::{
     apply_omp_model_metadata, endpoint, model_from_value, provider_base_url, provider_base_url_for,
@@ -188,6 +188,12 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
     };
     let limits = limit_readings(descriptor.id, &plan);
     if !status.is_success() {
+        // The provider just said this model takes no temperature: the same
+        // request goes once more without it. `learn` is true only the first
+        // time per model, so this recursion ends.
+        if refused_settings::learn_refused_temperature(model_id.as_ref(), status, &text) {
+            return Box::pin(dispatch(request, item, secret)).await;
+        }
         return with_limits(provider_error(&request.model, status, &text), limits);
     }
     let elapsed_ms = started.elapsed().as_secs_f64() * 1_000.0;
@@ -274,6 +280,11 @@ pub async fn dispatch_stream(
             Ok(result) => result,
             Err(message) => return Err(attempted_failure(&request.model, message)),
         };
+        // Nothing has reached the caller yet, so the one more send without
+        // the refused setting is still possible here.
+        if refused_settings::learn_refused_temperature(model_id.as_ref(), status, &text) {
+            return Box::pin(dispatch_stream(request, item, secret)).await;
+        }
         let limits = limit_readings(descriptor.id, &plan);
         return Err(with_limits(
             provider_error(&request.model, status, &text),
