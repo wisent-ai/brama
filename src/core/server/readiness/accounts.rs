@@ -87,6 +87,16 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
     // Keep the full account verdict in this same report as `degraded`; a single
     // broken account remains visible without taking working routes offline.
     let serving = facts.provider_available || facts.subscription_available;
+    // The same deadlock, one step further out, and the state this fleet was in
+    // on 2026-09-19: EVERY credential was dead, so no release could be ready,
+    // so the candidate carrying the sign-in fix was quarantined for losing
+    // readiness - and the sign-in that repairs the credentials is a command of
+    // the release that could not be promoted. A configured gateway with no live
+    // credential is not a broken deployment; it is a deployment waiting for a
+    // sign-in, and it must be allowed to exist in order to run one. It answers
+    // `ready: false` and `operator_action_required`, and `/readyz` answers 200
+    // so a rollout can replace the build that cannot repair itself.
+    let repairable = !facts.providers.is_empty() || facts.active_subscriptions > usize::MIN;
     // What the automatic loop can and cannot repair, which is a different
     // question from whether a credential is currently good: a deployment can
     // hold nothing but healthy grants and still be unable to replace any of
@@ -111,7 +121,7 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
         && untagged.is_empty()
         && facts.unroutable.is_empty()
         && blocked.is_empty();
-    let status = if serving {
+    let status = if serving || repairable {
         axum::http::StatusCode::OK
     } else {
         axum::http::StatusCode::SERVICE_UNAVAILABLE
@@ -122,7 +132,9 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
     {
         "no provider capability or subscription is configured"
     } else if !serving {
-        "no configured direct provider or subscription route can obtain a credential"
+        "no configured direct provider or subscription route can obtain a credential; this \
+         deployment serves no traffic and is waiting for a sign-in, which is why it is \
+         installable rather than refused"
     } else if !facts.denied.is_empty() {
         "traffic can be served, but a configured direct-provider credential could not be obtained"
     } else if !facts.unredeemable.is_empty() {
@@ -156,5 +168,71 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
             "operator_action_required": !healthy,
             "build": crate::build_info::current(),
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn facts(providers: Vec<String>, provider_available: bool) -> ServiceFacts {
+        ServiceFacts {
+            providers,
+            checked: Vec::new(),
+            denied: Vec::new(),
+            provider_available,
+            standalone: true,
+            routable: Vec::new(),
+            unroutable: Vec::new(),
+            active_subscriptions: usize::MIN,
+            subscriptions: Vec::new(),
+            unredeemable: Vec::new(),
+            sign_in_blocked: std::collections::BTreeMap::new(),
+            subscription_available: false,
+        }
+    }
+
+    /// On 2026-09-19 every subscription credential on charless-mac-mini was
+    /// dead, so `/readyz` answered 503, so Stado quarantined brama 0.4.39 for
+    /// losing readiness - and the sign-in that repairs those credentials is a
+    /// command of the release that could therefore never be promoted. A
+    /// configured gateway with no live credential serves nothing and is still
+    /// installable.
+    #[tokio::test]
+    async fn a_configured_gateway_with_no_live_credential_is_installable() {
+        let report = verdict(facts(vec!["openai".to_owned()], false)).await;
+        assert_eq!(report.status, axum::http::StatusCode::OK);
+        assert_eq!(report.body["ready"], false);
+        assert_eq!(report.body["operator_action_required"], true);
+        assert!(
+            report.body["reason"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("waiting for a sign-in"),
+            "{}",
+            report.body
+        );
+    }
+
+    /// A process with nothing configured is not a deployment waiting for a
+    /// sign-in; there is nothing to sign in, and it stays refused.
+    #[tokio::test]
+    async fn a_gateway_with_nothing_configured_is_refused() {
+        let report = verdict(facts(Vec::new(), false)).await;
+        assert_eq!(
+            report.status,
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            "{}",
+            report.body
+        );
+        assert_eq!(report.body["ready"], false);
+    }
+
+    /// A live credential still reads as serving, and as healthy.
+    #[tokio::test]
+    async fn a_gateway_holding_a_credential_serves() {
+        let report = verdict(facts(vec!["openai".to_owned()], true)).await;
+        assert_eq!(report.status, axum::http::StatusCode::OK);
+        assert_eq!(report.body["ready"], true);
     }
 }
