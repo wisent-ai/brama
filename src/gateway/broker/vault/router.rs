@@ -13,7 +13,14 @@ use std::time::Duration;
 use futures_util::future::{BoxFuture, FutureExt, Shared};
 
 const ENTITLEMENTS_ROUTER_BIN_ENV: &str = "ENTITLEMENTS_ROUTER_BIN";
+/// The vault binary's second declaration, the one Skarbiec's own fixtures and
+/// Stado's release journeys set.
+const SKARBIEC_BIN_ENV: &str = "SKARBIEC_BIN";
 const DEFAULT_ENTITLEMENTS_ROUTER_BIN: &str = "entitlements-router";
+/// The installed vault CLI, in the two names it is reached by on this fleet.
+const VAULT_PROGRAM_NAMES: [&str; 2] = [DEFAULT_ENTITLEMENTS_ROUTER_BIN, "skarbiec"];
+/// Where the fleet installs it when nothing is on `PATH`, relative to `$HOME`.
+const VAULT_HOME_RELATIVE: &str = ".stado/bin/skarbiec";
 pub(super) const ENTITLEMENTS_ROUTER_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// The router's bare `list`: the JSON row of every vault item.
@@ -86,11 +93,52 @@ pub(in crate::gateway::broker) async fn raw_listing(
     result
 }
 
+/// The vault binary this gateway shells for every credential operation.
+///
+/// Four places, in this order: the router's own declaration, the vault's
+/// declaration, an executable of either name on `PATH`, and the path the
+/// fleet installs it at. The bare word `entitlements-router` used to be the
+/// whole answer, and on a machine where the vault is installed as
+/// `~/.stado/bin/skarbiec` and nothing exports either variable, every
+/// credential write failed with `No such file or directory (os error 2)` and
+/// named no program: on 2026-09-20 that is what `brama subscription sync`
+/// answered for all three grants this machine holds, while Oko's own
+/// verification could not be judged for want of a working subscription.
 pub(in crate::gateway::broker) fn entitlements_router_bin() -> String {
-    std::env::var(ENTITLEMENTS_ROUTER_BIN_ENV)
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| DEFAULT_ENTITLEMENTS_ROUTER_BIN.to_owned())
+    for declaration in [ENTITLEMENTS_ROUTER_BIN_ENV, SKARBIEC_BIN_ENV] {
+        if let Some(value) = std::env::var(declaration)
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+        {
+            return value;
+        }
+    }
+    if let Some(found) = VAULT_PROGRAM_NAMES.into_iter().find_map(on_path) {
+        return found;
+    }
+    if let Some(home) = std::env::var_os("HOME") {
+        let installed = std::path::Path::new(&home).join(VAULT_HOME_RELATIVE);
+        if is_executable_file(&installed) {
+            return installed.display().to_string();
+        }
+    }
+    DEFAULT_ENTITLEMENTS_ROUTER_BIN.to_owned()
+}
+
+/// Is `path` a file this process could execute?
+fn is_executable_file(path: &std::path::Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path)
+        .is_ok_and(|info| info.is_file() && info.permissions().mode() & 0o111 != 0)
+}
+
+/// The first executable named `program` on `PATH`.
+fn on_path(program: &str) -> Option<String> {
+    std::env::split_paths(&std::env::var_os("PATH")?)
+        .map(|directory| directory.join(program))
+        .find(|candidate| is_executable_file(candidate))
+        .map(|candidate| candidate.display().to_string())
 }
 
 pub(in crate::gateway::broker) async fn bounded_output(
@@ -103,7 +151,14 @@ pub(in crate::gateway::broker) async fn bounded_output(
     configure(&mut command);
     match tokio::time::timeout(ENTITLEMENTS_ROUTER_TIMEOUT, command.output()).await {
         Ok(Ok(output)) => Ok(output),
-        Ok(Err(error)) => Err(format!("{operation}: {error}")),
+        // The program is part of the failure. `No such file or directory (os
+        // error 2)` on its own sent three readers of `subscription sync` to
+        // the vault, the grant and the pool before anyone asked which file
+        // was missing, and the answer was the bare word this gateway spawns.
+        Ok(Err(error)) => Err(format!(
+            "{operation}: {error} (running {binary}; declare another with \
+             {ENTITLEMENTS_ROUTER_BIN_ENV} or {SKARBIEC_BIN_ENV})"
+        )),
         Err(_) => Err(format!(
             "{operation} timed out after {} seconds; the child was killed",
             ENTITLEMENTS_ROUTER_TIMEOUT.as_secs()

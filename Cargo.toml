@@ -37,6 +37,10 @@ name = "subscriptions_harness_grants"
 path = "tests/subscriptions/harness_grants.rs"
 
 [[test]]
+name = "subscriptions_vault_binary"
+path = "tests/subscriptions/vault_binary.rs"
+
+[[test]]
 name = "admin_real"
 path = "tests/providers/admin_real.rs"
 
