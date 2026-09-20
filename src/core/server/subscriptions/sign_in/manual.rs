@@ -245,3 +245,66 @@ pub(in crate::core::server) async fn adopt_admin_grant(
         serde_json::to_value(verdict).expect("verdict serializes"),
     ))
 }
+
+/// `POST /v1/admin/subscription-pool/disown`: the console takes back a grant
+/// it adopted.
+///
+/// The agent-facing `retire` accepts only the agent that banked a member, and
+/// a grant the console adopted was banked by nobody: on 2026-09-20 the three
+/// claude-code accounts imported from a workstation could not be given back
+/// by any caller, while the provider kept revoking that workstation's own
+/// session because two machines held one pair. What the console created, the
+/// console can retire.
+pub(in crate::core::server) async fn disown_admin_grant(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Json(request): Json<DisownRequest>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    let subscription_id = request.subscription_id.trim();
+    if subscription_id.is_empty() {
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            "subscription_id is required",
+        ));
+    }
+    let provider = crate::gateway::broker::discover_subscriptions("brama-desktop")
+        .await
+        .map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?
+        .into_iter()
+        .find(|entry| entry.id == subscription_id)
+        .map(|entry| entry.provider);
+    let Some(provider) = provider else {
+        return Err(api_error(
+            StatusCode::NOT_FOUND,
+            "the pool holds no member with that id",
+        ));
+    };
+    crate::journal::retire(subscription_id);
+    crate::subscription_dispatch::usage::record_credential_disabled(
+        subscription_id,
+        &provider,
+        request
+            .reason
+            .as_deref()
+            .map(str::trim)
+            .filter(|reason| !reason.is_empty())
+            .unwrap_or("disowned by the console that adopted it"),
+    );
+    crate::gateway::broker::donated_remove(subscription_id)
+        .map_err(|detail| api_error(StatusCode::CONFLICT, &detail))?;
+    crate::gateway::broker::remove_donated_credential(&provider, subscription_id)
+        .map_err(|detail| api_error(StatusCode::CONFLICT, &detail))?;
+    Ok(Json(json!({
+        "ok": true,
+        "subscription_id": subscription_id,
+        "provider": provider,
+        "detail": "the member is retired and its stored credential removed; the machine its grant came from keeps its own session",
+    })))
+}
+
+/// What the console names when it gives a member back.
+#[derive(serde::Deserialize)]
+pub(in crate::core::server) struct DisownRequest {
+    pub subscription_id: String,
+    pub reason: Option<String>,
+}

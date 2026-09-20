@@ -71,6 +71,9 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
         gateway,
         gateway_consumer,
         bearer_item,
+        // Reading a pool report hands no grant anywhere, so the borrowing
+        // rule has nothing to refuse here.
+        allow_cross_host: true,
     };
     if destination.gateway.is_some() || destination.gateway_consumer.is_some() {
         remote_report(destination, refresh_usage, json).await;

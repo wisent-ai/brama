@@ -227,3 +227,58 @@ pub(crate) async fn import_through_with(
         detail: text("detail").unwrap_or_default(),
     })
 }
+
+/// Give one member back to the machine its grant was borrowed from.
+///
+/// Handing a harness's grant to a gateway on ANOTHER machine costs the
+/// harness its session: on 2026-09-17 two accounts `omp` was signed into died
+/// within the hour, and on 2026-09-20 the operator's own Claude session on
+/// this laptop answered `OAuth access token has been revoked` after its grant
+/// was imported into charless-mac-mini. `import` and `sync` could hand a
+/// grant over and nothing could hand it back; this is that verb. The gateway
+/// retires the member and forgets its credential. Nothing is written to the
+/// machine the grant came from — it signs itself in again, as it just did.
+pub(crate) async fn disown_through(
+    gateway: &str,
+    bearer: &str,
+    agent_id: &str,
+    subscription_id: &str,
+) -> Result<String, String> {
+    let subscription_id = subscription_id.trim();
+    if subscription_id.is_empty() {
+        return Err("name the subscription to disown".into());
+    }
+    let client = reqwest::Client::builder()
+        .timeout(post_timeout())
+        .build()
+        .map_err(|error| format!("gateway client: {error}"))?;
+    let response = client
+        .post(format!(
+            "{}/v1/admin/subscription-pool/disown",
+            gateway.trim_end_matches('/')
+        ))
+        .bearer_auth(bearer)
+        .json(&json!({
+            "subscription_id": subscription_id,
+            "reason": format!("disowned on behalf of {agent_id}: the machine it was borrowed from keeps its session"),
+        }))
+        .send()
+        .await
+        .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
+    let status = response.status().as_u16();
+    let body: Value = response.json().await.unwrap_or(Value::Null);
+    if !HTTP_SUCCESS.contains(&status) {
+        let message = body
+            .pointer("/error/message")
+            .or_else(|| body.get("error"))
+            .and_then(Value::as_str)
+            .unwrap_or("no reason given");
+        return Err(format!(
+            "the gateway refused to retire {subscription_id}: HTTP {status}: {message}"
+        ));
+    }
+    Ok(format!(
+        "{subscription_id} was retired: the gateway forgot its credential and the machine it was \
+         borrowed from keeps its own session"
+    ))
+}

@@ -95,6 +95,9 @@ pub(crate) enum SubscriptionCommand {
         /// Hand the grant to this gateway instead of storing it here; the console's bearer is read from stdin
         #[arg(long)]
         gateway: Option<String>,
+        /// Hand it to a gateway on ANOTHER machine, accepting that the provider rotates the pair and this machine loses the session it is signed into
+        #[arg(long, default_value_t = false)]
+        allow_cross_host: bool,
         /// Print the verdict as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,
@@ -120,9 +123,31 @@ pub(crate) enum SubscriptionCommand {
         /// Keep sweeping every this many seconds instead of exiting after one pass
         #[arg(long)]
         every: Option<u64>,
+        /// Sweep into a gateway on ANOTHER machine, accepting that the provider rotates each pair and this machine loses the sessions it is signed into
+        #[arg(long, default_value_t = false)]
+        allow_cross_host: bool,
         /// Print the sweep as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,
+    },
+    /// Give one pool member back: the gateway retires it and forgets its credential, and the machine its grant came from keeps its own session
+    #[command(name = "disown")]
+    Disown {
+        /// The pool member to give back
+        #[arg(long)]
+        subscription_id: String,
+        /// The agent that owns it in the pool
+        #[arg(long)]
+        agent_id: String,
+        /// The gateway holding it; the console's bearer is read from stdin
+        #[arg(long)]
+        gateway: Option<String>,
+        /// Resolve the gateway through Stado's service directory as this consumer
+        #[arg(long)]
+        gateway_consumer: Option<String>,
+        /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
+        #[arg(long)]
+        bearer_item: Option<String>,
     },
 }
 
@@ -209,6 +234,7 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             account,
             home,
             gateway,
+            allow_cross_host,
             json,
         } => super::manual::finish(
             super::manual::import(
@@ -219,6 +245,7 @@ pub(crate) async fn run(command: SubscriptionCommand) {
                 account.as_deref(),
                 home.as_deref(),
                 gateway.as_deref(),
+                allow_cross_host,
             )
             .await,
             json,
@@ -230,12 +257,14 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             gateway_consumer,
             bearer_item,
             every,
+            allow_cross_host,
             json,
         } => {
             let destination = super::sync::Destination {
                 gateway,
                 gateway_consumer,
                 bearer_item,
+                allow_cross_host,
             };
             match every {
                 Some(seconds) => {
@@ -246,6 +275,59 @@ pub(crate) async fn run(command: SubscriptionCommand) {
                     super::sync::sync(&reason, home.as_deref(), &destination).await,
                     json,
                 ),
+            }
+        }
+        SubscriptionCommand::Disown {
+            subscription_id,
+            agent_id,
+            gateway,
+            gateway_consumer,
+            bearer_item,
+        } => {
+            // Giving a member back is the one borrowing operation that is
+            // always right across machines: it takes a credential away from
+            // the gateway rather than handing one to it.
+            let destination = super::sync::Destination {
+                gateway,
+                gateway_consumer,
+                bearer_item,
+                allow_cross_host: true,
+            };
+            let mut stdin_bearer = zeroize::Zeroizing::new(String::new());
+            if destination.gateway.is_some() && destination.bearer_item.is_none() {
+                use std::io::Read as _;
+                if let Err(error) = std::io::stdin().read_to_string(&mut stdin_bearer) {
+                    eprintln!("reading the console bearer from stdin: {error}");
+                    std::process::exit(1);
+                }
+            }
+            match destination.resolve(&stdin_bearer).await {
+                Ok((Some(gateway), bearer)) => {
+                    match super::harness::disown_through(
+                        &gateway,
+                        bearer.trim(),
+                        &agent_id,
+                        &subscription_id,
+                    )
+                    .await
+                    {
+                        Ok(said) => println!("{said}"),
+                        Err(error) => {
+                            eprintln!("{error}");
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                Ok((None, _)) => {
+                    eprintln!(
+                        "name the gateway holding the member: --gateway or --gateway-consumer"
+                    );
+                    std::process::exit(1);
+                }
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(1);
+                }
             }
         }
     }

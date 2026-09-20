@@ -72,6 +72,7 @@ pub(crate) async fn import(
     account: Option<&str>,
     home: Option<&str>,
     gateway: Option<&str>,
+    allow_cross_host: bool,
 ) -> Result<ManualSignIn, String> {
     if reason.trim().is_empty() {
         return Err("--reason must say why this sign-in is being run".into());
@@ -82,6 +83,13 @@ pub(crate) async fn import(
     let grant = super::harness::choose(provider, from, account, home)?;
     match gateway {
         Some(gateway) => {
+            // One grant, one session: handing it to a gateway on another
+            // machine costs this one its sign-in. See `sync::borrowing`.
+            if let Some(refusal) =
+                super::sync::borrowing::refuse_cross_host(gateway, allow_cross_host)
+            {
+                return Err(refusal);
+            }
             super::harness::import_through(gateway, provider, subscription_id, reason, grant).await
         }
         None => super::harness::import_here(provider, subscription_id, reason, grant).await,

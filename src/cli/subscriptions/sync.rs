@@ -12,6 +12,7 @@
 //! harness's copy is stale the moment it did - and imports the rest through
 //! the same path `import` takes, one verdict per grant.
 
+pub(crate) mod borrowing;
 pub(crate) mod unattended;
 
 use std::io::Read;
@@ -145,6 +146,9 @@ pub(crate) struct Destination {
     pub gateway: Option<String>,
     pub gateway_consumer: Option<String>,
     pub bearer_item: Option<String>,
+    /// The operator saying, in as many words, that this machine may lose the
+    /// session it is signed into. Off by default; see [`borrowing`].
+    pub allow_cross_host: bool,
 }
 
 impl Destination {
@@ -167,6 +171,12 @@ impl Destination {
                 return Err("--bearer-item is for a gateway; name one".into());
             }
             return Ok((None, Zeroizing::new(String::new())));
+        }
+        if let Some(origin) = gateway.as_deref() {
+            // The rule that keeps this machine's own sign-ins alive.
+            if let Some(refusal) = borrowing::refuse_cross_host(origin, self.allow_cross_host) {
+                return Err(refusal);
+            }
         }
         let bearer = match &self.bearer_item {
             Some(coordinate) => unattended::bearer_from_vault(coordinate).await?,
