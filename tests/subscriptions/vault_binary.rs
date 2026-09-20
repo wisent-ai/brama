@@ -26,15 +26,26 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// A stub that answers any vault invocation with an empty listing and records
-/// that it was the program Brama chose.
+/// A stub vault: it records that it was the program Brama chose, answers
+/// `list` with an empty inventory and `get <item>` with a Skarbiec v2 item
+/// whose `token` field is `token`.
 fn stub(directory: &Path, name: &str) -> PathBuf {
+    stub_with_token(directory, name, "reauth-token")
+}
+
+/// The same stub, with the `token` field this test wants it to answer.
+fn stub_with_token(directory: &Path, name: &str, token: &str) -> PathBuf {
     let path = directory.join(name);
     let marker = directory.join(format!("{name}.ran"));
     std::fs::write(
         &path,
         format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> {}\nprintf '[]\\n'\n",
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> {}\n\
+             if [ \"$1\" = get ]; then\n\
+             \x20 printf '{{\"schema\":\"skarbiec.item.v2\",\"fields\":{{\"token\":\"{token}\"}}}}\\n'\n\
+             else\n\
+             \x20 printf '[]\\n'\n\
+             fi\n",
             marker.display()
         ),
     )

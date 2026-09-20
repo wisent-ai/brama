@@ -117,21 +117,67 @@ pub(crate) fn transport_timeout_seconds() -> u64 {
         .unwrap_or(1200)
 }
 
-/// Brama's Weles admission credential. The launcher acquires this field from
-/// `brama-weles-reauth` through the entitlements router at every service start.
-/// It is deliberately distinct from Weles's general worker API token.
+/// Brama's Weles admission credential. It is deliberately distinct from
+/// Weles's general worker API token.
+///
+/// The launcher exports it at every service start, read from
+/// `brama-weles-reauth` through the vault. An operator running
+/// `brama subscription sign-in` has no launcher, and until this read existed
+/// that command answered `BRAMA_WELES_REAUTH_TOKEN is unavailable` and
+/// stopped — the one repair the gateway itself names for a grant the provider
+/// will not refresh again (`invalid_grant`) could be performed only by the
+/// service, never by the person holding the refusal. The same item, read the
+/// same way, through the same vault program every other credential operation
+/// runs.
 pub(crate) fn worker_api_token() -> Result<String, String> {
-    let token = std::env::var("BRAMA_WELES_REAUTH_TOKEN")
+    let declared = std::env::var("BRAMA_WELES_REAUTH_TOKEN")
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if !declared.is_empty() {
+        return Ok(declared);
+    }
+    vault_reauth_token()
+}
+
+/// `brama-weles-reauth#token`, read from the vault this machine carries.
+///
+/// Blocking rather than the gateway's bounded async read, because this runs
+/// once per sign-in, before any HTTP exchange, and both callers are already
+/// waiting on a child process for the length of a browser login.
+fn vault_reauth_token() -> Result<String, String> {
+    const ITEM: &str = "brama-weles-reauth";
+    let program = crate::gateway::broker::entitlements_router_bin();
+    let output = std::process::Command::new(&program)
+        .args(["get", ITEM])
+        .output()
+        .map_err(|error| {
+            format!(
+                "cannot read {ITEM}/token: {error} (running {program}; declare another with \
+                 ENTITLEMENTS_ROUTER_BIN or SKARBIEC_BIN, or export BRAMA_WELES_REAUTH_TOKEN)"
+            )
+        })?;
+    if !output.status.success() {
+        return Err(format!(
+            "cannot read {ITEM}/token: {program} exited {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let payload: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .map_err(|error| format!("{ITEM} did not answer a Skarbiec item: {error}"))?;
+    if payload.get("schema").and_then(serde_json::Value::as_str) != Some("skarbiec.item.v2") {
+        return Err(format!("{ITEM} did not return a Skarbiec v2 item"));
+    }
+    let token = payload
+        .get("fields")
+        .and_then(|fields| fields.get("token"))
+        .and_then(serde_json::Value::as_str)
         .unwrap_or_default()
         .trim()
         .to_string();
     if token.is_empty() {
-        Err(
-            "BRAMA_WELES_REAUTH_TOKEN is unavailable; Brama must acquire \
-             brama-weles-reauth/token from Skarbiec at startup"
-                .into(),
-        )
-    } else {
-        Ok(token)
+        return Err(format!("{ITEM}/token is empty"));
     }
+    Ok(token)
 }

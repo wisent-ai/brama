@@ -20,4 +20,9 @@ mod router;
 pub(super) use capability::{issue_capability, PROVIDER_PURPOSE, REQUEST_SIGN_PURPOSE};
 pub(super) use grant::credential_by_grant;
 pub(super) use item::{existing_item_account, existing_item_tags, put_credential, VaultListItem};
-pub(super) use router::{entitlements_router_bin, raw_listing};
+/// The vault program itself is named crate-wide: the sign-in path reads
+/// `brama-weles-reauth` through the same program every credential operation
+/// runs, and a second answer to "which vault binary" is how one caller ends
+/// up spawning a name no machine installs.
+pub(crate) use router::entitlements_router_bin;
+pub(super) use router::raw_listing;

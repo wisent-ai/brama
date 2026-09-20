@@ -19,6 +19,10 @@ mod standalone;
 mod subscription;
 mod vault;
 
+/// Which program every credential operation runs, named once for the whole
+/// crate: the sign-in path reads `brama-weles-reauth` through it too.
+pub(crate) use vault::entitlements_router_bin;
+
 use std::collections::HashMap;
 
 use tracing::{info, warn};

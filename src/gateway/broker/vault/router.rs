@@ -104,7 +104,7 @@ pub(in crate::gateway::broker) async fn raw_listing(
 /// named no program: on 2026-09-20 that is what `brama subscription sync`
 /// answered for all three grants this machine holds, while Oko's own
 /// verification could not be judged for want of a working subscription.
-pub(in crate::gateway::broker) fn entitlements_router_bin() -> String {
+pub(crate) fn entitlements_router_bin() -> String {
     for declaration in [ENTITLEMENTS_ROUTER_BIN_ENV, SKARBIEC_BIN_ENV] {
         if let Some(value) = std::env::var(declaration)
             .ok()
