@@ -44,6 +44,25 @@ invalid-token cases against this gateway.</p>
 <p>The real held-grant journey uses the existing isolated gateway and Skarbiec fixture, with refresh and usage sweeps disabled. Run <code>cargo test --test subscriptions_harness_grants a_real_held_codex_grant_is_accepted_and_probed -- --nocapture</code> with <code>BRAMA_REAL_HARNESS_HOME</code> and <code>BRAMA_REAL_CODEX_ACCOUNT</code> selecting the existing OMP account. The operator vault and harness store are not written. Receipts, source revision and the persisted pool response remain under <code>target/real-import-evidence/</code>; an unheld account must leave the stored grant unchanged.</p>
 <p>The first release build found that a nested build path made all seven real pool journeys fail before opening their vault: GnuPG reported <code>File name too long</code> for its Unix socket. Only these socket-owning fixtures use the workshop's short-root exception, <code>~/.brama/test-runs/&lt;unique&gt;</code>, with owner-only permissions and removal when the fixture closes. Ordinary test directories and retained evidence still belong under Cargo's <code>target/</code>.</p>
 <p>GPT-6-Astra is now also advertised by the Codex catalogue, so a client allowed to use that route receives an available model instead of an empty list. Concurrent first catalogue requests share one discovery per subscription; the real held-grant journey proves six authenticated clients receive the model with one reported credential read, rather than six. The same coalescing covers the startup readiness sweep without weakening its checks or reusing inference credentials.</p>
+<h2 id="unreleased-policy-unnamed-subscription">Unreleased: a subscription the runtime policy does not name is reported, not dropped<a class="headerlink" href="#unreleased-policy-unnamed-subscription" title="Link to this section">&para;</a></h2>
+<p>The runtime policy is generated from the vault's own tags when a release is
+installed on a host. A subscription added to the vault after that install is not
+in it, and the launcher stage that builds the boot catalogue dropped such an item
+without a word: the gateway simply had no such account. On
+<code>charless-mac-mini</code> on 2026-09-20 three paid Claude accounts and two Codex
+accounts were in the vault, tagged correctly and listed by
+<code>stado route capability brama</code>, while the gateway answered
+<code>no working subscription model for signed agent</code> and
+<code>brama subscription refresh claude-code</code> reported
+<code>no capability route maps this resource to a vault item and field</code> for each —
+the first visible trace, hours after boot, of a decision made at startup.</p>
+<p>The stage now writes one line per dropped subscription naming the resource, what
+the gateway will answer later, and the remedy — install the release again on that
+host so the policy is regenerated from the vault's current tags — and ends the boot
+log with the counts: how many the policy does not name, and how many are served.
+<code>cargo test --test release_subscription_catalog</code> runs the shipped stage over a
+real vault listing and a real policy document and reads back the catalogue it writes.</p>
+
 <h2 id="unreleased-claude-code-shape">Unreleased: a Claude Code grant travels in Claude Code's own shape<a class="headerlink" href="#unreleased-claude-code-shape" title="Link to this section">&para;</a></h2>
 <p>With the temperature gone, the deployed gateway's first <code>best</code> request as
 <code>tama</code> was still refused: Anthropic answered <code>429</code> with the one-word
