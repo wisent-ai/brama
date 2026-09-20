@@ -193,3 +193,77 @@ fn a_host_with_no_vault_program_says_what_it_ran_and_what_to_declare() {
         "the refusal must name both declarations: {report}"
     );
 }
+
+/// The sign-in command, with the Weles endpoint declared so the story is
+/// about the admission token and not about resolving a host.
+fn sign_in(home: &Path, program: &Path) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_brama"));
+    command
+        .args([
+            "subscription",
+            "sign-in",
+            "claude-code",
+            "--subscription-id",
+            "brama-sub-wisent-app-claude-secondary",
+            "--reason",
+            "the vault answers the admission token",
+        ])
+        .env_clear()
+        .env("HOME", home)
+        .env("PATH", "/nonexistent")
+        .env("BRAMA_WELES_URL", "http://127.0.0.1:1")
+        .env("SKARBIEC_BIN", program);
+    command
+}
+
+/// The repair this gateway names for a grant the provider will not refresh
+/// again is `subscription sign-in`, and until the Weles admission token could
+/// be read from the vault that command answered
+/// `BRAMA_WELES_REAUTH_TOKEN is unavailable` to everyone but the service
+/// launcher, which exports it — so the person holding the refusal could never
+/// perform the repair.
+#[test]
+fn the_weles_admission_token_is_read_from_the_vault_without_the_launcher() {
+    let root = directory("vault-binary-reauth-token");
+    let home = root.join("home");
+    std::fs::create_dir_all(&home).expect("an isolated home");
+    let program = stub(&root, "vault-with-token");
+
+    let output = sign_in(&home, &program).output().expect("the sign-in runs");
+    let report = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(
+        ran(&program),
+        "the vault program must be the one asked: {report}"
+    );
+    assert!(
+        !report.contains("BRAMA_WELES_REAUTH_TOKEN"),
+        "a vault that answers the item must satisfy the admission token: {report}"
+    );
+}
+
+/// An item that answers with nothing is not a token, and the refusal says
+/// which field was empty instead of failing inside Weles.
+#[test]
+fn an_empty_admission_token_is_refused_by_name() {
+    let root = directory("vault-binary-empty-token");
+    let home = root.join("home");
+    std::fs::create_dir_all(&home).expect("an isolated home");
+    let program = stub_with_token(&root, "vault-empty-token", "");
+
+    let output = sign_in(&home, &program).output().expect("the sign-in runs");
+    let report = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(
+        report.contains("brama-weles-reauth/token is empty"),
+        "an empty field is refused by name: {report}"
+    );
+}
