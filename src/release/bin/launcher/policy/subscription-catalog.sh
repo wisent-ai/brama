@@ -60,6 +60,10 @@ normalize = lambda value: value.strip().lower().replace("_", "-")
 
 
 catalog = []
+# Subscriptions the vault holds and the runtime policy does not name. Counted
+# so the boot log ends with one line an operator can act on rather than a
+# scatter of skips.
+unnamed = []
 # Subscription metadata comes from the item's declared tags, never from its id.
 # A capability is intentionally not issued here. Skarbiec capabilities are
 # short-lived and single-use, while the gateway already obtains one immediately
@@ -103,6 +107,20 @@ for item in available_items:
     provider = normalize(provider)
     resource = f"provider:{provider}:{subscription_id}"
     if ("brama.provider.authenticate", resource) not in allowed:
+        # Until 2026-09-20 this was a bare `continue`: a paid account the vault
+        # held, tagged correctly, simply did not exist for the gateway, and the
+        # only trace was a refresh answering `no capability route maps this
+        # resource to a vault item and field` hours later. The runtime policy is
+        # generated from the vault's own tags when the release is installed, so
+        # an item added after that install is absent from it until the next one.
+        unnamed.append(resource)
+        sys.stderr.write(
+            f"skipping {item_name}: the runtime policy has no "
+            f"brama.provider.authenticate rule for {resource}, so no capability route maps "
+            "this resource to a vault item and field; the policy is generated from the "
+            "vault's tags when the release is installed, so an item added since then is "
+            "served again after the next install of this release on this host\n"
+        )
         continue
     catalog.append({
         "id": subscription_id,
@@ -113,6 +131,13 @@ for item in available_items:
 
 with open(catalog_path, "w", encoding="utf-8") as target:
     json.dump({"items": catalog}, target, separators=(",", ":"))
+if unnamed:
+    sys.stderr.write(
+        f"{len(unnamed)} subscription(s) the runtime policy does not name are not served: "
+        f"{', '.join(sorted(unnamed))}; install this release again on this host to regenerate "
+        "the policy from the vault's current tags\n"
+    )
+sys.stderr.write(f"{len(catalog)} subscription(s) served by this gateway\n")
 PY
 printf '%s\n' "built runtime catalog; capabilities issue on demand" >/dev/stderr
 export BRAMA_SUBSCRIPTION_CATALOG="$(cat "$catalog_file")"

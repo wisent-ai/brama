@@ -92,6 +92,10 @@ path = "tests/usage/main.rs"
 name = "release_build_cache"
 path = "tests/release/build_cache.rs"
 
+[[test]]
+name = "release_subscription_catalog"
+path = "tests/release/subscription_catalog.rs"
+
 
 [dependencies]
 async-trait = "0.1"
