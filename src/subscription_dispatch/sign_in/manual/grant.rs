@@ -180,7 +180,20 @@ pub async fn adopt(
     }
     let source = origin.sentence();
     let who = account.clone().unwrap_or_else(|| "the account".to_owned());
-    if already_stored(provider, subscription_id, &document).await
+    // A member the pool disowned is the one case where an identical grant is
+    // news. `renewal` refuses to rotate a borrowed grant and records
+    // `needs_reauthorization` with the harness named, expecting the sweep to
+    // bring that harness's current grant — and the sweep then answered
+    // `unchanged`, because the harness's grant is byte-for-byte the one
+    // already stored. On 2026-09-20 that pair left the gateway's whole
+    // claude-code pool disowned while `omp` on this machine went on
+    // answering on the same account, and Oko's judge got
+    // `no working subscription model` for it. The grant the harness still
+    // uses is the evidence the disowning was wrong, so it is proved again
+    // rather than skipped.
+    let disowned = crate::subscription_dispatch::usage::needs_reauthorization(subscription_id);
+    if !disowned
+        && already_stored(provider, subscription_id, &document).await
         && account_already_named(provider, subscription_id, account.as_deref()).await
     {
         return Ok(ManualSignIn {
