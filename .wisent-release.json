@@ -123,6 +123,7 @@
     "state_schema": 1,
     "minimum_stado_version": "0.6.1",
     "rollback_compatible_with": [
+      "0.4.41",
       "0.4.40",
       "0.4.39",
       "0.4.38",

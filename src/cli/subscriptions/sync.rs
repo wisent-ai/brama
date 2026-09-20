@@ -12,6 +12,8 @@
 //! harness's copy is stale the moment it did - and imports the rest through
 //! the same path `import` takes, one verdict per grant.
 
+pub(crate) mod unattended;
+
 use std::io::Read;
 
 use serde::Serialize;
@@ -117,27 +119,70 @@ async fn present_ids(gateway: Option<&str>, bearer: &str) -> Result<Vec<String>,
         .collect())
 }
 
-/// Sweep every held grant into the pool. The console's bearer is read from
-/// stdin once when a gateway is named.
+/// Where the sweep sends its grants and what it authenticates with.
+///
+/// A named gateway with the bearer on stdin is the console's arrangement. A
+/// consumer name with a vault coordinate is the service's: both are resolved
+/// through Stado at every pass, so the sweep survives a rotated token and a
+/// moved port without anybody editing its declaration.
+#[derive(Clone, Default)]
+pub(crate) struct Destination {
+    pub gateway: Option<String>,
+    pub gateway_consumer: Option<String>,
+    pub bearer_item: Option<String>,
+}
+
+impl Destination {
+    /// The gateway origin and console bearer for one pass, or nothing when
+    /// the sweep stores into this process's own pool.
+    async fn resolve(
+        &self,
+        stdin_bearer: &Zeroizing<String>,
+    ) -> Result<(Option<String>, Zeroizing<String>), String> {
+        let gateway = match (&self.gateway, &self.gateway_consumer) {
+            (Some(_), Some(_)) => {
+                return Err("name --gateway or --gateway-consumer, not both".into())
+            }
+            (Some(gateway), None) => Some(gateway.clone()),
+            (None, Some(consumer)) => Some(unattended::gateway_for_consumer(consumer).await?),
+            (None, None) => None,
+        };
+        if gateway.is_none() {
+            if self.bearer_item.is_some() {
+                return Err("--bearer-item is for a gateway; name one".into());
+            }
+            return Ok((None, Zeroizing::new(String::new())));
+        }
+        let bearer = match &self.bearer_item {
+            Some(coordinate) => unattended::bearer_from_vault(coordinate).await?,
+            None => stdin_bearer.clone(),
+        };
+        if bearer.trim().is_empty() {
+            return Err(
+                "a gateway needs the console's bearer: --bearer-item, or the token on stdin".into(),
+            );
+        }
+        Ok((gateway, bearer))
+    }
+}
+
+/// Sweep every held grant into the pool, once.
 pub(crate) async fn sync(
     reason: &str,
     home: Option<&str>,
-    gateway: Option<&str>,
+    destination: &Destination,
 ) -> Result<Vec<SyncRow>, String> {
     if reason.trim().is_empty() {
         return Err("--reason must say why this sync is being run".into());
     }
-    let mut bearer = Zeroizing::new(String::new());
-    if gateway.is_some() {
+    let mut stdin_bearer = Zeroizing::new(String::new());
+    if destination.gateway.is_some() && destination.bearer_item.is_none() {
         std::io::stdin()
-            .read_to_string(&mut bearer)
+            .read_to_string(&mut stdin_bearer)
             .map_err(|error| format!("reading the console bearer from stdin: {error}"))?;
-        if bearer.trim().is_empty() {
-            return Err(
-                "--gateway needs the console's bearer on stdin, and stdin was empty".into(),
-            );
-        }
     }
+    let (gateway, bearer) = destination.resolve(&stdin_bearer).await?;
+    let gateway = gateway.as_deref();
     let bearer = bearer.trim();
     let held = manual::held(&harness::home(home), None)?;
     let present = present_ids(gateway, bearer).await?;
@@ -234,27 +279,8 @@ async fn sweep_one(
 pub(crate) fn finish(outcome: Result<Vec<SyncRow>, String>, json: bool) {
     match outcome {
         Ok(rows) => {
-            let failed = rows.iter().filter(|row| row.result == "failed").count();
-            if json {
-                crate::cli::print_json(&json!({
-                    "ok": failed == 0,
-                    "grants": rows,
-                }));
-            } else if rows.is_empty() {
-                println!("no harness on this machine holds a grant; nothing to sync");
-            } else {
-                for row in &rows {
-                    println!(
-                        "{:<9} {:<7} {:<12} {:<40} {}",
-                        row.result,
-                        row.harness,
-                        row.provider,
-                        row.account.as_deref().unwrap_or("account not recorded"),
-                        row.detail
-                    );
-                }
-            }
-            if failed > 0 {
+            report(&rows, json);
+            if rows.iter().any(|row| row.result == "failed") {
                 std::process::exit(1);
             }
         }
@@ -262,5 +288,55 @@ pub(crate) fn finish(outcome: Result<Vec<SyncRow>, String>, json: bool) {
             eprintln!("{error}");
             std::process::exit(1);
         }
+    }
+}
+
+/// Sweep on a cadence until the service is stopped.
+///
+/// A pass that fails is reported and the next one still runs: the reasons a
+/// pass fails here — the gateway is restarting, the vault is briefly
+/// unreadable, one provider refused a grant — are all conditions the next
+/// pass can find repaired, and a sweep that exited on the first of them
+/// would leave the pool exactly as empty as having no sweep at all.
+pub(crate) async fn sync_every(
+    seconds: u64,
+    reason: &str,
+    home: Option<&str>,
+    destination: &Destination,
+    json: bool,
+) -> ! {
+    let cadence = std::time::Duration::from_secs(seconds.max(1));
+    loop {
+        match sync(reason, home, destination).await {
+            Ok(rows) => report(&rows, json),
+            Err(error) => eprintln!("[subscription sync] pass failed: {error}"),
+        }
+        tokio::time::sleep(cadence).await;
+    }
+}
+
+/// One sweep's rows, as the operator reads them.
+fn report(rows: &[SyncRow], json: bool) {
+    let failed = rows.iter().filter(|row| row.result == "failed").count();
+    if json {
+        crate::cli::print_json(&json!({
+            "ok": failed == 0,
+            "grants": rows,
+        }));
+        return;
+    }
+    if rows.is_empty() {
+        println!("no harness on this machine holds a grant; nothing to sync");
+        return;
+    }
+    for row in rows {
+        println!(
+            "{:<9} {:<7} {:<12} {:<40} {}",
+            row.result,
+            row.harness,
+            row.provider,
+            row.account.as_deref().unwrap_or("account not recorded"),
+            row.detail
+        );
     }
 }

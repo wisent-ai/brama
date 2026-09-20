@@ -111,6 +111,15 @@ pub(crate) enum SubscriptionCommand {
         /// Hand the grants to this gateway instead of storing them here; the console's bearer is read from stdin
         #[arg(long)]
         gateway: Option<String>,
+        /// Resolve the gateway through Stado's service directory as this consumer, instead of naming a URL whose port the resolver assigns
+        #[arg(long)]
+        gateway_consumer: Option<String>,
+        /// Read the console's bearer from the vault as `<item>#<field>` at every pass, instead of from stdin: a service holds no secret and picks up a rotated token
+        #[arg(long)]
+        bearer_item: Option<String>,
+        /// Keep sweeping every this many seconds instead of exiting after one pass
+        #[arg(long)]
+        every: Option<u64>,
         /// Print the sweep as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,
@@ -218,11 +227,27 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             reason,
             home,
             gateway,
+            gateway_consumer,
+            bearer_item,
+            every,
             json,
-        } => super::sync::finish(
-            super::sync::sync(&reason, home.as_deref(), gateway.as_deref()).await,
-            json,
-        ),
+        } => {
+            let destination = super::sync::Destination {
+                gateway,
+                gateway_consumer,
+                bearer_item,
+            };
+            match every {
+                Some(seconds) => {
+                    super::sync::sync_every(seconds, &reason, home.as_deref(), &destination, json)
+                        .await
+                }
+                None => super::sync::finish(
+                    super::sync::sync(&reason, home.as_deref(), &destination).await,
+                    json,
+                ),
+            }
+        }
     }
 }
 
