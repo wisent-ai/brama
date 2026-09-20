@@ -15,8 +15,8 @@ use tracing::warn;
 
 use super::super::vault::{entitlements_router_bin, raw_listing};
 use super::account::{
-    configured_subscriptions, parse_live_subscriptions, parse_owned_subscriptions,
-    parse_unroutable_accounts, SubscriptionEntry, UnroutableAccount,
+    configured_subscription_ids, configured_subscriptions, parse_live_subscriptions,
+    parse_owned_subscriptions, parse_unroutable_accounts, SubscriptionEntry, UnroutableAccount,
 };
 use super::donation::donated_subscriptions;
 
@@ -101,6 +101,39 @@ pub async fn list_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
 pub async fn list_all_subscriptions() -> Result<Vec<SubscriptionEntry>, String> {
     let stdout = raw_listing(&entitlements_router_bin(), "list all subscriptions").await?;
     parse_live_subscriptions(&stdout)
+}
+
+/// Subscriptions the vault holds, completely tagged, that this process was
+/// not started with.
+///
+/// The runtime policy is generated from the vault's tags when a release is
+/// installed on a host, and the launcher builds the boot catalogue out of the
+/// subscriptions that policy names. An account added to the vault after that
+/// install is in neither, so the gateway does not merely fail to redeem it -
+/// it has never heard of it. On 2026-09-20 three paid Claude accounts and two
+/// Codex accounts sat in `charless-mac-mini`'s vault, correctly tagged and
+/// routed, while every request answered `no working subscription model for
+/// signed agent` and nothing in the readiness answer said why.
+///
+/// Read from the same live listing the pool uses, against the boot catalogue
+/// the launcher exported. An empty catalogue means this process was started
+/// without one (a standalone or a test), where every account would look
+/// unnamed; that says nothing, so nothing is reported.
+pub async fn policy_unnamed_subscriptions() -> Vec<SubscriptionEntry> {
+    let configured = configured_subscription_ids();
+    if configured.is_empty() {
+        return Vec::new();
+    }
+    match list_all_subscriptions().await {
+        Ok(entries) => entries
+            .into_iter()
+            .filter(|entry| !configured.contains(&entry.id))
+            .collect(),
+        Err(error) => {
+            warn!(event = "policy_unnamed_subscription_census_failed", %error);
+            Vec::new()
+        }
+    }
 }
 
 /// Every subscription account in the vault that carries no `brama:agent:` tag.

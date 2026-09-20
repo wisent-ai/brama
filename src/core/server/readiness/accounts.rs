@@ -80,6 +80,29 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
             .collect()
     };
 
+    // An account the vault holds and this process was never started with: the
+    // runtime policy, generated at install, does not name it. Until
+    // 2026-09-20 the readiness answer could not say this, and a gateway that
+    // held five paid accounts reported none of them and refused every request
+    // with `no working subscription model for signed agent`.
+    let mut untagged = untagged;
+    let mut unnamed = 0usize;
+    if !facts.standalone {
+        for entry in crate::gateway::broker::policy_unnamed_subscriptions().await {
+            untagged.push(json!({
+                "id": entry.id,
+                "provider": entry.provider,
+                "routable": false,
+                "reason": "the vault holds this subscription and this process was not started \
+                    with it: the runtime policy is generated from the vault's tags when the \
+                    release is installed on this host, so an account added since that install \
+                    is in neither the policy nor the boot catalogue; install this release again \
+                    on this host to serve it",
+            }));
+            unnamed += 1;
+        }
+    }
+
     // Deployment readiness answers whether this process can carry traffic, not
     // whether every account it can see is healthy. Requiring every subscription
     // to redeem made a repaired release impossible to promote: only that release
@@ -139,6 +162,9 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
         "traffic can be served, but a configured direct-provider credential could not be obtained"
     } else if !facts.unredeemable.is_empty() {
         "traffic can be served, but an active subscription credential could not be redeemed"
+    } else if unnamed > 0 {
+        "traffic can be served, but the vault holds a subscription this process was not started \
+         with: the runtime policy does not name it"
     } else if !untagged.is_empty() {
         "traffic can be served, but the vault holds a subscription account with no agent route"
     } else if !facts.unroutable.is_empty() {

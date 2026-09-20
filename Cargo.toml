@@ -96,6 +96,10 @@ path = "tests/release/build_cache.rs"
 name = "release_subscription_catalog"
 path = "tests/release/subscription_catalog.rs"
 
+[[test]]
+name = "pool_policy_unnamed"
+path = "tests/pool/policy_unnamed.rs"
+
 
 [dependencies]
 async-trait = "0.1"

@@ -29,6 +29,7 @@ pub use donation::{
 pub use inventory::{
     discover_subscriptions, list_all_subscriptions, list_recoverable_subscriptions,
     list_subscriptions, list_unroutable_accounts, owned_subscriptions,
+    policy_unnamed_subscriptions,
 };
 pub use renewal::{
     put_subscription_credential, put_subscription_credential_for_account,
