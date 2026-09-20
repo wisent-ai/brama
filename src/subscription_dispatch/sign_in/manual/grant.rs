@@ -224,10 +224,22 @@ pub async fn adopt(
         provider,
         borrowed_from,
     );
+    // Who refreshes it from here is the whole point of the borrowed marker,
+    // so the verdict says it rather than promising the opposite. Until
+    // 2026-09-20 every imported grant was reported as "Brama will refresh it
+    // from now on" — the sentence the operator read while `renewal` was
+    // refusing to rotate exactly that grant.
+    let refresher = match origin {
+        Origin::Harness(harness) => format!(
+            "{} refreshes it from now on and Brama does not rotate it",
+            harness.name()
+        ),
+        _ => "Brama will refresh it from now on".to_owned(),
+    };
     let (result, detail) = match probe_once(subscription_id, provider).await {
         Ok(probe) if probe.ok => (
             "signed_in",
-            format!("{who}'s grant from {source} is stored and the provider answered a completion on it; Brama will refresh it from now on"),
+            format!("{who}'s grant from {source} is stored and the provider answered a completion on it; {refresher}"),
         ),
         Ok(probe) => (
             "failed",

@@ -1,5 +1,13 @@
 //! `brama subscriptions`: the subscription pool this deployment routes over,
 //! and each provider's own usage report when it is asked for.
+//!
+//! The pool an operator needs to read is usually not this process's: the
+//! grants are held by the harnesses on the operator's machine and the
+//! gateway that routes over them runs on another host. So the same report
+//! is readable from here against that gateway, resolved and authenticated
+//! exactly as `subscription sync` resolves it, and every member says who
+//! refreshes its grant — the answer that decides whether the operator's own
+//! harness login survives the night.
 
 pub(crate) mod credentials;
 mod harness;
@@ -20,6 +28,15 @@ pub(crate) struct SubscriptionsArgs {
     /// Apply a pool membership document from stdin; uses the same bank/retire contract as HTTP
     #[arg(long, conflicts_with = "refresh_usage")]
     apply: bool,
+    /// Read the pool of the gateway at this origin instead of this process's own
+    #[arg(long, conflicts_with_all = ["apply", "gateway_consumer"])]
+    gateway: Option<String>,
+    /// Read the pool of the gateway Stado's service directory gives this consumer
+    #[arg(long, conflicts_with = "apply")]
+    gateway_consumer: Option<String>,
+    /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
+    #[arg(long, conflicts_with = "apply")]
+    bearer_item: Option<String>,
 }
 
 // The operator's own console: this process holds the vault and the
@@ -29,6 +46,9 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
         json,
         refresh_usage,
         apply,
+        gateway,
+        gateway_consumer,
+        bearer_item,
     } = args;
     if apply {
         let body = match std::io::read_to_string(std::io::stdin()) {
@@ -47,6 +67,19 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
         }
         return;
     }
+    let destination = sync::Destination {
+        gateway,
+        gateway_consumer,
+        bearer_item,
+    };
+    if destination.gateway.is_some() || destination.gateway_consumer.is_some() {
+        remote_report(destination, refresh_usage, json).await;
+        return;
+    }
+    if destination.bearer_item.is_some() {
+        eprintln!("--bearer-item is for a gateway; name --gateway or --gateway-consumer");
+        std::process::exit(1);
+    }
     let scope = brama::subscription_dispatch::pool::PoolScope::Deployment;
     // Two capabilities, one per question, and the same document from
     // either: the pool states what this deployment has recorded, plan
@@ -59,6 +92,55 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
     if json {
         crate::cli::print_json(&report);
     } else {
+        print_pool(&report);
+    }
+    if report.get("ok").and_then(Value::as_bool) != Some(true) {
+        std::process::exit(1);
+    }
+}
+
+/// Read one gateway's own pool report and print it exactly as the local one
+/// is printed.
+///
+/// Usage reports are the gateway's to fetch, so `--refresh-usage` is refused
+/// here by name rather than answered with a report that did not do it.
+async fn remote_report(destination: sync::Destination, refresh_usage: bool, json: bool) {
+    if refresh_usage {
+        eprintln!(
+            "--refresh-usage reads providers from the gateway that holds the credentials; run it there, or read this gateway's recorded pool without it"
+        );
+        std::process::exit(1);
+    }
+    let mut stdin_bearer = zeroize::Zeroizing::new(String::new());
+    if destination.bearer_item.is_none() {
+        if let Err(error) = std::io::Read::read_to_string(&mut std::io::stdin(), &mut stdin_bearer)
+        {
+            eprintln!("reading the console bearer from stdin: {error}");
+            std::process::exit(1);
+        }
+    }
+    let (origin, bearer) = match destination.resolve(&stdin_bearer).await {
+        Ok(resolved) => resolved,
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+    };
+    let Some(origin) = origin else {
+        eprintln!("name --gateway or --gateway-consumer to read another gateway's pool");
+        std::process::exit(1);
+    };
+    let report = match sync::pool_report(&origin, bearer.trim()).await {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+    };
+    if json {
+        crate::cli::print_json(&report);
+    } else {
+        println!("pool of the gateway at {origin}");
         print_pool(&report);
     }
     if report.get("ok").and_then(Value::as_bool) != Some(true) {
@@ -98,6 +180,20 @@ fn print_pool(report: &Value) {
         );
         if let Some(expires_at) = text(row, "expires_at") {
             println!("    expires_at: {expires_at}");
+        }
+        // Who rotates this grant. A grant borrowed from a harness on the
+        // operator's machine is that harness's to refresh: Brama rotating it
+        // too revokes the refresh token the harness holds, and the operator
+        // is signed out of their own session within the hour. Reading the
+        // pool is the only place that answer is visible before it happens.
+        match row
+            .pointer("/credential/borrowed_from")
+            .and_then(Value::as_str)
+        {
+            Some(harness) => println!(
+                "    refreshed by: {harness}, the harness that holds it; Brama does not rotate it"
+            ),
+            None => println!("    refreshed by: brama"),
         }
         if let Some(error) = text(row, "last_redeem_error") {
             println!("    last_redeem_error: {error}");

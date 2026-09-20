@@ -204,7 +204,14 @@ fn every_held_account_joins_the_pool_once() {
         "{rotated}"
     );
 
+    // The sweep resolves where it is writing before it reads a single
+    // grant, so an empty stdin is refused by the destination rather than by
+    // the handover: one sentence, naming both ways to give it the bearer.
     let (status, _, stderr) = sync(&home, &gateway, "");
     assert_eq!(status, 1);
-    assert!(stderr.contains("stdin was empty"), "{stderr}");
+    assert!(
+        stderr
+            .contains("a gateway needs the console's bearer: --bearer-item, or the token on stdin"),
+        "{stderr}"
+    );
 }

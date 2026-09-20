@@ -25,6 +25,8 @@ use serde_json::{json, Value};
 use gateway::{refusal, Gateway, AGENT, CONSOLE_BEARER};
 use support::{SkarbiecVault, TestDirectory};
 
+#[path = "grants/borrowed_story.rs"]
+mod borrowed_story;
 #[path = "grants/gateway_story.rs"]
 mod gateway_story;
 #[path = "grants/live_story.rs"]

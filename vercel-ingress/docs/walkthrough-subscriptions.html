@@ -27,6 +27,22 @@ the product workflow; they are not captured execution results.</p>
 <code>errors</code>, and <code>providers</code>. Each account carries its identity,
 credential state, actual plan windows, observation/reset times, and latest
 <code>usage_check</code>. A live credential alone is not proof of current usage.</p>
+<h2 id="refresher">Read the pool of the gateway that serves, and who refreshes each grant</h2>
+<pre><code class="language-console">brama subscriptions --gateway-consumer oko --bearer-item brama-desktop-model-router#token</code></pre>
+<p>Run on the machine whose harnesses hold the grants, this reads the pool of the
+gateway Stado places the service on, with the console's bearer taken from the
+vault at the moment it is used. Every member states who refreshes it:
+<code>refreshed by: omp, the harness that holds it; Brama does not rotate it</code>,
+or <code>refreshed by: brama</code>. In Desktop the same fact sits beside the
+member's credential state.</p>
+<p>Read it first when a harness keeps losing its login. A provider rotates an
+OAuth refresh token on every refresh and revokes the one it replaced, so an
+account refreshed both by Brama and by a harness signs the operator out of the
+harness within the hour — <code>No API key for provider: anthropic</code> in omp
+is what that looks like from the other side. Brama never rotates a borrowed
+grant, and <a href="/docs/cli/subscription/sync"><code>brama subscription
+sync</code></a> hands a member back to the harness as soon as the harness holds
+the newer grant.</p>
 <h2 id="refresh">Refresh free usage reports</h2>
 <pre><code class="language-console">brama subscriptions --refresh-usage --json</code></pre>
 <p>In Desktop choose <strong>Refresh usage</strong> on Subscriptions or

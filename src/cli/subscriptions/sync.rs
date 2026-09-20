@@ -50,50 +50,28 @@ pub(crate) fn member_id(provider: &str, account: &str) -> String {
     )
 }
 
-/// The ids the pool holds now with a grant it can still use, read where the
-/// sweep will write: through the gateway with the console's bearer, or this
-/// process's own pool report.
+/// Each member the pool refreshes itself, with the expiry it recorded for
+/// its grant, read where the sweep will write: through the gateway with the
+/// console's bearer, or this process's own pool report.
 ///
-/// A member whose grant the pool has disowned - `burnt`: the provider
-/// refused it, or its refresh was rejected - is deliberately not here. The
-/// harness that holds the same account refreshes on its own clock, and when
-/// it rotated first the pool's copy died with `invalid_grant -- Refresh
-/// token not found or invalid` (2026-09-17, `controlyourai@gmail.com`, while
-/// `omp` went on answering on that account). The sweep takes the harness's
-/// current grant again; a live member is left alone, because there the
-/// pool's copy is the newer one and the harness's would be the dead one.
-async fn present_ids(gateway: Option<&str>, bearer: &str) -> Result<Vec<String>, String> {
+/// A borrowed member is not here: the sweep hands those the harness's
+/// current grant on every pass, and Brama never rotates them. A member the
+/// pool has disowned - `burnt`, or a refresh it rejected - is not here
+/// either, because that grant is dead and the harness's is what repairs it.
+///
+/// What is left is the dangerous kind, and the expiry is why it is read: a
+/// member Brama refreshes itself while a harness on this machine holds the
+/// same account. The provider rotates the refresh token on whichever of the
+/// two refreshes first and revokes the other. Handing the account back to
+/// the harness is what ends that, so the sweep does it as soon as the
+/// harness's grant is the newer one - which it is the moment the operator
+/// signs in again.
+async fn self_refreshed(
+    gateway: Option<&str>,
+    bearer: &str,
+) -> Result<Vec<(String, Option<i64>)>, String> {
     let report = match gateway {
-        Some(gateway) => {
-            let client = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(POOL_READ_TIMEOUT_SECONDS))
-                .build()
-                .map_err(|error| format!("gateway client: {error}"))?;
-            let response = client
-                .get(format!(
-                    "{}/v1/subscription-pool",
-                    gateway.trim_end_matches('/')
-                ))
-                .bearer_auth(bearer)
-                .send()
-                .await
-                .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
-            let status = response.status().as_u16();
-            let body: Value = response
-                .json()
-                .await
-                .map_err(|error| format!("the gateway's pool report is not JSON: {error}"))?;
-            if !HTTP_SUCCESS.contains(&status) {
-                let message = body
-                    .pointer("/error/message")
-                    .and_then(Value::as_str)
-                    .unwrap_or("no reason given");
-                return Err(format!(
-                    "the gateway refused the pool report with HTTP {status}: {message}"
-                ));
-            }
-            body
-        }
+        Some(gateway) => pool_report(gateway, bearer).await?,
         None => {
             brama::subscription_dispatch::pool::report(
                 &brama::subscription_dispatch::pool::PoolScope::Deployment,
@@ -101,11 +79,6 @@ async fn present_ids(gateway: Option<&str>, bearer: &str) -> Result<Vec<String>,
             .await
         }
     };
-    // A member the pool holds with a grant of its own: left alone, Brama
-    // refreshes it. A borrowed member is handed the harness's current grant
-    // on every sweep; the gateway answers `unchanged` when the harness has
-    // not rotated it, and stores it when it has. A disowned member is taken
-    // again whichever it is.
     Ok(report["subscriptions"]
         .as_array()
         .into_iter()
@@ -115,8 +88,50 @@ async fn present_ids(gateway: Option<&str>, bearer: &str) -> Result<Vec<String>,
                 && row["credential"]["state"].as_str() != Some("needs_reauthorization")
                 && row["credential"]["borrowed_from"].is_null()
         })
-        .filter_map(|row| row["id"].as_str().map(str::to_owned))
+        .filter_map(|row| {
+            row["id"]
+                .as_str()
+                .map(|id| (id.to_owned(), row["credential"]["expires_at_ms"].as_i64()))
+        })
         .collect())
+}
+
+/// The pool report of the gateway that actually serves, read with the
+/// console's bearer.
+///
+/// The sweep reads it to decide what to hand over; `brama subscriptions`
+/// reads the same document so an operator can see the same pool from the
+/// machine the grants come from. One reader, so the two answers cannot
+/// drift apart.
+pub(crate) async fn pool_report(gateway: &str, bearer: &str) -> Result<Value, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(POOL_READ_TIMEOUT_SECONDS))
+        .build()
+        .map_err(|error| format!("gateway client: {error}"))?;
+    let response = client
+        .get(format!(
+            "{}/v1/subscription-pool",
+            gateway.trim_end_matches('/')
+        ))
+        .bearer_auth(bearer)
+        .send()
+        .await
+        .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
+    let status = response.status().as_u16();
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|error| format!("the gateway's pool report is not JSON: {error}"))?;
+    if !HTTP_SUCCESS.contains(&status) {
+        let message = body
+            .pointer("/error/message")
+            .and_then(Value::as_str)
+            .unwrap_or("no reason given");
+        return Err(format!(
+            "the gateway refused the pool report with HTTP {status}: {message}"
+        ));
+    }
+    Ok(body)
 }
 
 /// Where the sweep sends its grants and what it authenticates with.
@@ -134,8 +149,8 @@ pub(crate) struct Destination {
 
 impl Destination {
     /// The gateway origin and console bearer for one pass, or nothing when
-    /// the sweep stores into this process's own pool.
-    async fn resolve(
+    /// the caller means this process's own pool.
+    pub(crate) async fn resolve(
         &self,
         stdin_bearer: &Zeroizing<String>,
     ) -> Result<(Option<String>, Zeroizing<String>), String> {
@@ -185,17 +200,17 @@ pub(crate) async fn sync(
     let gateway = gateway.as_deref();
     let bearer = bearer.trim();
     let held = manual::held(&harness::home(home), None)?;
-    let present = present_ids(gateway, bearer).await?;
+    let pooled = self_refreshed(gateway, bearer).await?;
     let mut rows = Vec::with_capacity(held.len());
     for grant in held {
-        rows.push(sweep_one(grant, &present, reason, gateway, bearer).await);
+        rows.push(sweep_one(grant, &pooled, reason, gateway, bearer).await);
     }
     Ok(rows)
 }
 
 async fn sweep_one(
     grant: HeldGrant,
-    present: &[String],
+    pooled: &[(String, Option<i64>)],
     reason: &str,
     gateway: Option<&str>,
     bearer: &str,
@@ -215,15 +230,34 @@ async fn sweep_one(
         };
     };
     let subscription_id = member_id(&provider, &account);
-    if present.contains(&subscription_id) {
-        return SyncRow {
-            harness: harness_name,
-            provider,
-            account: Some(account),
-            subscription_id: Some(subscription_id),
-            result: "present",
-            detail: "the pool already holds this account; Brama refreshes its grant itself".into(),
+    // A member Brama refreshes itself while this harness holds the same
+    // account is the shape that signs the operator out: the provider
+    // rotates the refresh token, Brama keeps the new one, and the copy the
+    // harness still holds is revoked within the hour. Handing the account
+    // back to the harness ends it, and the harness's grant is the one to
+    // hand over as soon as it is the newer of the two - a grant the pool
+    // rotated last is the live one, and the harness's is the dead copy
+    // until the operator signs in again.
+    if let Some((_, pooled_expiry)) = pooled.iter().find(|(id, _)| id == &subscription_id) {
+        let harness_holds_the_newer = match (grant.expires_at_ms, pooled_expiry) {
+            (Some(held), Some(pooled)) => held > *pooled,
+            _ => true,
         };
+        if !harness_holds_the_newer {
+            return SyncRow {
+                harness: harness_name.clone(),
+                provider,
+                account: Some(account),
+                subscription_id: Some(subscription_id),
+                result: "present",
+                detail: format!(
+                    "Brama holds a newer grant for this account and refreshes it itself, while \
+                     {harness_name} holds an older copy of the same account: whichever of the two \
+                     refreshes first revokes the other, and signing {harness_name} in again hands \
+                     the account back to it"
+                ),
+            };
+        }
     }
     let verdict: Result<ManualSignIn, String> = match gateway {
         Some(gateway) => {
