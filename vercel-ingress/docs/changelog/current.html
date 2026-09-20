@@ -62,6 +62,16 @@ host so the policy is regenerated from the vault's current tags — and ends the
 log with the counts: how many the policy does not name, and how many are served.
 <code>cargo test --test release_subscription_catalog</code> runs the shipped stage over a
 real vault listing and a real policy document and reads back the catalogue it writes.</p>
+<p>The gateway says the same thing about itself while it runs: readiness now
+compares the vault's fully tagged subscriptions against the catalogue this
+process was started with, lists each account the runtime policy does not name
+under <code>unroutable_accounts</code> with that remedy, and answers
+<code>traffic can be served, but the vault holds a subscription this process was
+not started with: the runtime policy does not name it</code>. A process started
+without a boot catalogue reports nothing, because there every account would look
+unnamed. <code>cargo test --test pool_policy_unnamed</code> seeds a real isolated
+Skarbiec vault with two subscriptions and reads the census through the real
+entitlements router.</p>
 
 <h2 id="unreleased-claude-code-shape">Unreleased: a Claude Code grant travels in Claude Code's own shape<a class="headerlink" href="#unreleased-claude-code-shape" title="Link to this section">&para;</a></h2>
 <p>With the temperature gone, the deployed gateway's first <code>best</code> request as
