@@ -98,6 +98,13 @@ the alias vocabulary and its four states are in
   Skarbiec identity changes; a sign-in whose outcome nobody confirmed — the
   exchange with Weles died, or its answer was unreadable — waits for the
   cooldown and then runs again.
+- `brama subscription sync`: every provider grant the harnesses on a machine
+  hold joins the pool, one stable member per account. With
+  `--gateway-consumer`, `--bearer-item` and `--every` it runs unattended as
+  the `brama-grant-sync` service Stado's catalog ships, so a gateway whose own
+  credentials all died is repaired by any machine that is still signed in —
+  the case where Weles cannot help, because the provider wants an
+  authenticator code the vault does not hold.
 - An append-only operational journal for retirement and task-quality evidence.
 - Secret-free build identity, health, statistics, hardware detection, and a
   read-only stdio MCP surface.
