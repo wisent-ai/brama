@@ -94,6 +94,10 @@ the alias vocabulary and its four states are in
 - OAuth refresh for Claude Code, Codex, and Kimi subscription credentials.
 - Automatic subscription sign-in through Weles, with account identity and
   login material read from Skarbiec rather than a second account catalogue.
+  A credential the provider looked at and refused is not sent again until the
+  Skarbiec identity changes; a sign-in whose outcome nobody confirmed — the
+  exchange with Weles died, or its answer was unreadable — waits for the
+  cooldown and then runs again.
 - An append-only operational journal for retirement and task-quality evidence.
 - Secret-free build identity, health, statistics, hardware detection, and a
   read-only stdio MCP surface.

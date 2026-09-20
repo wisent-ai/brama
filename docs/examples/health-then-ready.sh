@@ -16,6 +16,10 @@ curl -sS "${BRAMA_URL}/health"
 echo; echo
 
 echo "== GET ${BRAMA_URL}/readyz"
-# -w prints the status: 200 means at least one route can serve (inspect
-# `degraded` for partial failures); 503 means no configured route can serve.
+# -w prints the status. 200 means this deployment is installable: either a
+# route can serve — inspect `ready` and `degraded` for partial failures — or
+# it is configured and every credential is dead, in which case `ready` is
+# false, `operator_action_required` is true and the reason says it is waiting
+# for a sign-in. 503 means nothing is configured at all, so there is nothing
+# to sign in and nothing to serve.
 curl -sS -w '\nHTTP %{http_code}\n' "${BRAMA_URL}/readyz"
