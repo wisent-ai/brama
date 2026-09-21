@@ -13,16 +13,62 @@ use std::time::Duration;
 
 use serde_json::Value;
 
+/// Where Weles is, and what Stado knows about that placement.
+///
+/// The URL alone is a loopback address on this machine — Stado publishes a
+/// forward — so a sign-in that dies in transport used to read as
+/// `POST http://127.0.0.1:17690/reauth is unconfirmed`, naming a port and
+/// no service, no host and no log. The rest of Stado's own answer is kept
+/// here so a failure can say whose machine actually serves it.
+pub(crate) struct WelesEndpoint {
+    pub url: String,
+    /// The host Stado places the service on, when its answer names one.
+    pub placed_on: Option<String>,
+    /// How fresh Stado's observation of it is, in Stado's own words.
+    pub observed: Option<String>,
+}
+
+impl WelesEndpoint {
+    /// What to say about this endpoint when a call to it fails: the host
+    /// behind the forward, how stale the placement reading is, and the read
+    /// that shows that host's own log.
+    pub fn whereabouts(&self) -> String {
+        let Some(host) = self.placed_on.as_deref().filter(|host| !host.is_empty()) else {
+            return format!(
+                "{} is a local address and Stado's service directory names no host behind it; \
+                 `stado service directory connect weles-admission --consumer operator --json` \
+                 says what it does know",
+                self.url
+            );
+        };
+        let freshness = self
+            .observed
+            .as_deref()
+            .filter(|observed| !observed.is_empty())
+            .map(|observed| format!(", last observed {observed}"))
+            .unwrap_or_default();
+        format!(
+            "{} is a forward to weles-api on {host}{freshness}; read that service's own log with \
+             `stado service logs weles-api --host {host}`",
+            self.url
+        )
+    }
+}
+
 /// Resolve Weles from Stado at the moment a sign-in needs it. Placement can
 /// change while Brama keeps serving model traffic; baking loopback into the
 /// launcher made the renewal path silently keep the old host forever.
-pub(crate) async fn worker_api_base() -> Result<String, String> {
+pub(crate) async fn worker_api_base() -> Result<WelesEndpoint, String> {
     if let Ok(configured) = std::env::var("BRAMA_WELES_URL") {
         let configured = configured.trim();
         if !configured.is_empty() {
             reqwest::Url::parse(configured)
                 .map_err(|error| format!("BRAMA_WELES_URL is invalid: {error}"))?;
-            return Ok(configured.trim_end_matches('/').to_string());
+            return Ok(WelesEndpoint {
+                url: configured.trim_end_matches('/').to_string(),
+                placed_on: None,
+                observed: None,
+            });
         }
     }
     let stado = std::env::var("BRAMA_STADO_BIN")
@@ -98,7 +144,19 @@ pub(crate) async fn worker_api_base() -> Result<String, String> {
         .ok_or_else(|| "Stado weles-admission answer carries no URL".to_string())?;
     reqwest::Url::parse(url)
         .map_err(|error| format!("Stado returned an invalid weles-admission URL: {error}"))?;
-    Ok(url.trim_end_matches('/').to_string())
+    let text = |field: &str| {
+        document
+            .get(field)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned)
+    };
+    Ok(WelesEndpoint {
+        url: url.trim_end_matches('/').to_string(),
+        placed_on: text("placed_on"),
+        observed: text("observed"),
+    })
 }
 
 fn env_or(key: &str, default: &str) -> String {

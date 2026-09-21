@@ -143,9 +143,10 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
     // anything. A missing startup credential or an unreachable worker is a
     // fact about this host, and reporting it as "Skarbiec lists 0 active
     // subscriptions" sends an operator to the wrong system.
-    let base = worker_api_base()
+    let endpoint = worker_api_base()
         .await
         .map_err(|detail| Blocked::WelesUnreachable { detail })?;
+    let base = endpoint.url.clone();
     let token = worker_api_token().map_err(|detail| Blocked::Operation {
         code: "weles_authentication_credential_unavailable".into(),
         stage: "admission".into(),
@@ -212,7 +213,10 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
                 options,
                 &identity,
                 FAILED,
-                format!("The result of POST {base}/reauth is unconfirmed: {error:?}"),
+                format!(
+                    "The result of POST {base}/reauth is unconfirmed: {error:?}. {}",
+                    endpoint.whereabouts()
+                ),
                 json!({"code": "weles_execution_unconfirmed", "stage": "weles_response",
                     "browser_started": null, "retryable": false}),
                 Value::Null,

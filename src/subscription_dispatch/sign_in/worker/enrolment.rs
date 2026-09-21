@@ -54,7 +54,10 @@ pub async fn enrol_authenticator(
     login_item: Option<&str>,
     timeout_ms: u64,
 ) -> Result<Enrolment, SignInError> {
-    let base = worker_api_base().await.map_err(SignInError::Dependency)?;
+    let base = worker_api_base()
+        .await
+        .map_err(SignInError::Dependency)?
+        .url;
     let token = worker_api_token().map_err(SignInError::Dependency)?;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(transport_timeout_seconds()))
