@@ -108,9 +108,9 @@ pub(crate) async fn pool_report(gateway: &str, bearer: &str) -> Result<Value, St
 /// Give one member back: the gateway retires it and forgets its credential.
 ///
 /// This removes the members left over from the borrowing this product used to
-/// allow — the three claude-code accounts taken from `lukasz-macbook` on
-/// 2026-09-20, each of them a pair the laptop was also using, which is why
-/// the operator was signed out of Claude by hand that day.
+/// allow — the three claude-code accounts taken from a workstation on
+/// 2026-09-20, each of them a pair that workstation was also using, which is
+/// why the operator was signed out of Claude by hand that day.
 pub(crate) async fn disown(
     gateway: &str,
     bearer: &str,
@@ -145,6 +145,50 @@ pub(crate) async fn disown(
     Ok(format!(
         "{subscription_id} was retired: the gateway forgot its credential, and any machine that \
          signed that account in keeps its own session"
+    ))
+}
+
+/// Put one retired member back in the rotation, because the operator says
+/// that account is one this deployment uses.
+///
+/// A retirement was permanent, and on 2026-09-21 all five of the operator's
+/// accounts were retired: the gateway answered `no active credential for
+/// agent` for each of them, its own sign-in report said `retired`, and no
+/// command in the product could say they were his. This is that command.
+pub(crate) async fn reinstate(
+    gateway: &str,
+    bearer: &str,
+    subscription_id: &str,
+    reason: &str,
+) -> Result<String, String> {
+    let subscription_id = subscription_id.trim();
+    if subscription_id.is_empty() {
+        return Err("name the subscription to reinstate".into());
+    }
+    if reason.trim().is_empty() {
+        return Err("--reason must say why this member is used again".into());
+    }
+    let response = client()?
+        .post(format!(
+            "{}/v1/admin/subscription-pool/reinstate",
+            gateway.trim_end_matches('/')
+        ))
+        .bearer_auth(bearer)
+        .json(&json!({"subscription_id": subscription_id, "reason": reason}))
+        .send()
+        .await
+        .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
+    let status = response.status().as_u16();
+    let body: Value = response.json().await.unwrap_or(Value::Null);
+    if !HTTP_SUCCESS.contains(&status) {
+        return Err(format!(
+            "the gateway refused to reinstate {subscription_id}: HTTP {status}: {}",
+            refusal(&body)
+        ));
+    }
+    Ok(format!(
+        "{subscription_id} is in the rotation again; it holds no grant of this gateway's own \
+         until a sign-in obtains one"
     ))
 }
 

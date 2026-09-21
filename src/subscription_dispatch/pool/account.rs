@@ -34,6 +34,10 @@ pub(super) fn subscription_row(
         "label": entry.label,
         "login_item": entry.login_item,
         "account": entry.account,
+        // Said plainly, because a retired member and a member whose grant the
+        // provider refused both read `burnt`, and only one of them is
+        // repaired by putting it back in the rotation.
+        "retired": retired(&entry.id, recorded),
         "sign_in": crate::journal::latest_subscription_sign_in(&entry.id),
         "automatic_sign_in": automatic_sign_in_view(entry),
         "limits": windows.limits,

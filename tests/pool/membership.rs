@@ -117,6 +117,154 @@ fn cli_banks_and_retires_membership_and_refuses_invalid_writes() {
     eprintln!("CLI membership evidence: {}", evidence.display());
 }
 
+/// A retirement can be taken back, because an operator naming the accounts a
+/// deployment uses is the last word on membership.
+///
+/// Retirement used to be permanent: `is_retired` answered yes to any
+/// retirement record ever written. On 2026-09-21 all five accounts this
+/// deployment's operator names as its own were retired, the gateway answered
+/// `no active credential for agent` for each of them, and nothing in the
+/// product could put them back. This drives the real binary: bank a member,
+/// retire it, reinstate it, and read the pool the gateway itself would read.
+#[test]
+fn the_cli_reinstates_a_retired_member_and_refuses_one_that_is_not_retired() {
+    let vault = SkarbiecVault::create("cli-reinstate");
+    let state = TestDirectory::new("cli-reinstate-state");
+    let bank = json!({"action": "bank", "agent_id": AGENT, "provider": PROVIDER,
+        "api_key": "isolated-reinstatement-test-value", "label": "CLI reinstatement"});
+    let banked = invoke(
+        &vault,
+        state.path(),
+        state.path(),
+        "bank",
+        bank.to_string().as_bytes(),
+    );
+    assert!(
+        banked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&banked.stdout)
+    );
+
+    let not_retired = reinstate(&vault, state.path(), SUBSCRIPTION);
+    assert_eq!(not_retired.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&not_retired.stderr).contains("is not retired"),
+        "a member in the rotation cannot be reinstated: {}",
+        String::from_utf8_lossy(&not_retired.stderr)
+    );
+
+    let retire = json!({"action": "retire", "agent_id": AGENT, "subscription_id": SUBSCRIPTION});
+    let retired = invoke(
+        &vault,
+        state.path(),
+        state.path(),
+        "retire",
+        retire.to_string().as_bytes(),
+    );
+    assert!(retired.status.success());
+    assert_eq!(
+        member_credential_state(&vault, state.path()),
+        "disabled",
+        "a retirement records the member's credential as disabled"
+    );
+
+    let reinstated = reinstate(&vault, state.path(), SUBSCRIPTION);
+    assert!(
+        reinstated.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&reinstated.stdout),
+        String::from_utf8_lossy(&reinstated.stderr)
+    );
+    let journal = fs::read_to_string(state.path().join("journal.jsonl")).unwrap();
+    let decisions: Vec<Value> = journal
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter(|event| event["id"] == SUBSCRIPTION)
+        .filter(|event| event["kind"] == "retire" || event["kind"] == "reinstate")
+        .collect();
+    let newest = decisions
+        .last()
+        .expect("the journal records the membership decisions");
+    assert_eq!(newest["kind"], "reinstate", "{journal}");
+    // The member is a candidate again and still holds no grant of this
+    // gateway's own, which is what `needs_reauthorization` says: a
+    // reinstatement is membership, not a credential.
+    assert_eq!(
+        member_credential_state(&vault, state.path()),
+        "needs_reauthorization",
+        "a reinstated member is still recorded as disabled: {journal}"
+    );
+
+    let unknown = reinstate(&vault, state.path(), "brama-sub-nobody-declared-this");
+    assert_eq!(unknown.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&unknown.stderr).contains("holds no member"),
+        "{}",
+        String::from_utf8_lossy(&unknown.stderr)
+    );
+}
+
+/// What the pool records about the member's credential, read through the real
+/// CLI rather than from the ledger file.
+fn member_credential_state(vault: &SkarbiecVault, state: &Path) -> String {
+    let listed = brama(vault, state, &["subscriptions", "--json"], None);
+    let report: Value = serde_json::from_slice(&listed.stdout).expect("the pool answers JSON");
+    report["subscriptions"]
+        .as_array()
+        .and_then(|rows| {
+            rows.iter()
+                .find(|row| row["id"] == SUBSCRIPTION)
+                .and_then(|row| row["credential"]["state"].as_str())
+                .map(str::to_owned)
+        })
+        .unwrap_or_default()
+}
+
+fn reinstate(vault: &SkarbiecVault, state: &Path, subscription_id: &str) -> Output {
+    brama(
+        vault,
+        state,
+        &[
+            "subscription",
+            "reinstate",
+            "--subscription-id",
+            subscription_id,
+            "--reason",
+            "the operator names this account as one this deployment uses",
+        ],
+        None,
+    )
+}
+
+/// The real binary over this test's own vault and state, with nothing of the
+/// operator's environment reachable.
+fn brama(vault: &SkarbiecVault, state: &Path, args: &[&str], input: Option<&[u8]>) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_brama"));
+    command
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .envs(vault.environment())
+        .env("ENTITLEMENTS_ROUTER_BIN", vault.router())
+        .env("BRAMA_STATE_DIR", state)
+        .env(
+            "BRAMA_DONATED_SUBSCRIPTIONS_FILE",
+            state.join("donated.json"),
+        )
+        .env("BRAMA_SUBSCRIPTION_USAGE_FILE", state.join("usage.json"))
+        .env("BRAMA_INFERENCE_ROUTES_FILE", state.join("routes.json"))
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command.spawn().unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    if let Some(input) = input {
+        stdin.write_all(input).unwrap();
+    }
+    drop(stdin);
+    child.wait_with_output().unwrap()
+}
+
 fn invoke(
     vault: &SkarbiecVault,
     state: &Path,

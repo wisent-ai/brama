@@ -183,6 +183,51 @@ pub async fn refresh_subscription(
     }
 }
 
+/// Put one retired member back in the rotation on this host.
+///
+/// The same act the console route performs, so an operator on the machine
+/// that holds the pool and a console over HTTP cannot disagree about what a
+/// reinstatement is. It changes membership and no credential: the member is
+/// offered to dispatch again and still needs a grant of this gateway's own,
+/// which is what the sign-in commands obtain.
+///
+/// Why it exists: a retirement was permanent. On 2026-09-21 all five of the
+/// accounts this deployment's operator names as its own were retired -- the
+/// gateway answered `no active credential for agent` for each and its own
+/// sign-in report said `retired` -- and no command could put them back.
+pub async fn reinstate_member(subscription_id: &str, reason: &str) -> Result<Value, String> {
+    let subscription_id = subscription_id.trim();
+    if subscription_id.is_empty() {
+        return Err("name the subscription to reinstate".into());
+    }
+    if reason.trim().is_empty() {
+        return Err("a reason must say why this member is used again".into());
+    }
+    let provider = broker::list_all_subscriptions()
+        .await?
+        .into_iter()
+        .find(|entry| entry.id == subscription_id)
+        .map(|entry| entry.provider)
+        .ok_or_else(|| format!("this deployment's pool holds no member `{subscription_id}`"))?;
+    // Retirement wrote a journal marker and a ledger state, and the pool
+    // skips a member for either; a member whose credential the ledger calls
+    // disabled is retired whatever the journal says.
+    if !retired(subscription_id, usage::usage_for(subscription_id).as_ref()) {
+        return Err(format!(
+            "`{subscription_id}` is not retired, so there is nothing to reinstate"
+        ));
+    }
+    crate::journal::reinstate(subscription_id);
+    usage::record_credential_reinstated(subscription_id, &provider, reason);
+    Ok(json!({
+        "subscription_id": subscription_id,
+        "provider": provider,
+        "reason": reason,
+        "detail": "the member is in the rotation again; it holds no grant of this gateway's own \
+                   until a sign-in obtains one",
+    }))
+}
+
 /// One verdict, in the shape the caller prints and the audit record keeps.
 ///
 /// Both are written here so a record cannot say something the operator was never

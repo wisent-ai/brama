@@ -230,6 +230,40 @@ pub fn record_credential_disabled(subscription_id: &str, provider: &str, cause: 
     });
 }
 
+/// Record that a retirement was taken back, so the ledger stops calling this
+/// member's credential disabled.
+///
+/// The retirement wrote two things -- a journal marker and this ledger state
+/// -- and the pool treats either as reason enough to skip the member. So a
+/// reinstatement that only wrote the journal left the member skipped anyway:
+/// exactly the defect it was added to end, one record further in. The
+/// credential itself is not judged here; it is set back to needing a
+/// re-authorization, which is the truth about a member whose grant the
+/// gateway does not hold.
+pub fn record_credential_reinstated(subscription_id: &str, provider: &str, reason: &str) {
+    let now = now_ms();
+    with_ledger(|ledger| {
+        let entry = ledger
+            .subscriptions
+            .entry(subscription_id.to_string())
+            .or_default();
+        let previous = entry.credential.as_ref();
+        let expires_at_ms = previous.and_then(|credential| credential.expires_at_ms);
+        let refreshed_at_ms = previous.and_then(|credential| credential.refreshed_at_ms);
+        let borrowed_from = previous.and_then(|credential| credential.borrowed_from.clone());
+        entry.provider = provider.to_string();
+        entry.updated_at_ms = Some(now);
+        entry.credential = Some(Credential {
+            state: CredentialState::NeedsReauthorization,
+            cause: Some(reason.chars().take(REASON_LIMIT).collect()),
+            recorded_at_ms: now,
+            expires_at_ms,
+            refreshed_at_ms,
+            borrowed_from,
+        });
+    });
+}
+
 /// Whether this subscription's recorded block is an authorization block.
 ///
 /// [`record_reauthorization_needed`] writes two things: the state that says a

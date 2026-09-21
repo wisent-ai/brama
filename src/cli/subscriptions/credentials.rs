@@ -101,6 +101,25 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long, default_value_t = false)]
         json: bool,
     },
+    /// Put one retired pool member back in the rotation, because this deployment uses that account after all
+    #[command(name = "reinstate")]
+    Reinstate {
+        /// The retired pool member to use again
+        #[arg(long)]
+        subscription_id: String,
+        /// Why it is used again; recorded beside the gateway's own ledger entry
+        #[arg(long)]
+        reason: String,
+        /// The gateway holding it; the console's bearer is read from stdin
+        #[arg(long)]
+        gateway: Option<String>,
+        /// Resolve the gateway through Stado's service directory as this consumer
+        #[arg(long)]
+        gateway_consumer: Option<String>,
+        /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
+        #[arg(long)]
+        bearer_item: Option<String>,
+    },
     /// Give one pool member back: the gateway retires it and forgets its credential, and any machine that signed that account in keeps its own session
     #[command(name = "disown")]
     Disown {
@@ -230,28 +249,25 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             json,
         ),
         SubscriptionCommand::Attribute { provider, json } => {
-            match brama::subscription_dispatch::pool::record_accounts(&provider).await {
-                Ok(verdict) => {
-                    if json {
-                        crate::cli::print_json(&verdict);
-                    } else {
-                        print_attribution(&verdict);
-                    }
-                    // A member left unattributed is the finding, not a detail:
-                    // the pool cannot count an account nobody recorded.
-                    if verdict
-                        .get("unattributed")
-                        .and_then(Value::as_array)
-                        .is_some_and(|left| !left.is_empty())
-                    {
-                        std::process::exit(1);
-                    }
-                }
-                Err(error) => {
-                    eprintln!("{error}");
-                    std::process::exit(1);
-                }
-            }
+            super::membership::attribute(&provider, json).await;
+        }
+        SubscriptionCommand::Reinstate {
+            subscription_id,
+            reason,
+            gateway,
+            gateway_consumer,
+            bearer_item,
+        } => {
+            super::membership::reinstate(
+                super::remote::Destination {
+                    gateway,
+                    gateway_consumer,
+                    bearer_item,
+                },
+                &subscription_id,
+                &reason,
+            )
+            .await;
         }
         SubscriptionCommand::Disown {
             subscription_id,
@@ -260,72 +276,17 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             gateway_consumer,
             bearer_item,
         } => {
-            let destination = super::remote::Destination {
-                gateway,
-                gateway_consumer,
-                bearer_item,
-            };
-            match destination.resolve_reading_stdin().await {
-                Ok((Some(gateway), bearer)) => {
-                    match super::remote::disown(&gateway, bearer.trim(), &subscription_id, &reason)
-                        .await
-                    {
-                        Ok(said) => println!("{said}"),
-                        Err(error) => {
-                            eprintln!("{error}");
-                            std::process::exit(1);
-                        }
-                    }
-                }
-                Ok((None, _)) => {
-                    eprintln!(
-                        "name the gateway holding the member: --gateway or --gateway-consumer"
-                    );
-                    std::process::exit(1);
-                }
-                Err(error) => {
-                    eprintln!("{error}");
-                    std::process::exit(1);
-                }
-            }
+            super::membership::disown(
+                super::remote::Destination {
+                    gateway,
+                    gateway_consumer,
+                    bearer_item,
+                },
+                &subscription_id,
+                &reason,
+            )
+            .await;
         }
-    }
-}
-
-/// What the attribution recorded, and what it could not.
-///
-/// The members it could not attribute are printed with the reason, because
-/// the pool's account count is short by exactly them, and an operator
-/// comparing that count with the accounts they hold needs to see which
-/// member is missing rather than a number that disagrees.
-fn print_attribution(verdict: &Value) {
-    let rows = |field: &str| -> Vec<&Value> {
-        verdict
-            .get(field)
-            .and_then(Value::as_array)
-            .map(|rows| rows.iter().collect())
-            .unwrap_or_default()
-    };
-    let recorded = rows("recorded");
-    let unattributed = rows("unattributed");
-    println!(
-        "{} of {} member(s) name an account",
-        recorded.len(),
-        recorded.len().saturating_add(unattributed.len())
-    );
-    for row in recorded {
-        println!(
-            "  {} -> {}",
-            text(row, "member").unwrap_or_default(),
-            text(row, "account").unwrap_or_default()
-        );
-    }
-    for row in unattributed {
-        println!(
-            "  {}: {}",
-            text(row, "member").unwrap_or_default(),
-            text(row, "reason").unwrap_or_default()
-        );
     }
 }
 

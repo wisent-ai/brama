@@ -114,6 +114,10 @@
       "destination": "/docs/cli/subscription/accounts/attribute.html"
     },
     {
+      "source": "/docs/cli/subscription/reinstate",
+      "destination": "/docs/cli/subscription/accounts/reinstate.html"
+    },
+    {
       "source": "/docs/cli/subscription/disown",
       "destination": "/docs/cli/subscription/disown.html"
     },

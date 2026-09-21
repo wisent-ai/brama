@@ -65,10 +65,38 @@ pub fn retire(item_id: &str) {
     append(json!({"kind": "retire", "id": item_id, "at": now()}));
 }
 
+/// Take one retirement back, because the operator says that account is one
+/// this deployment uses.
+///
+/// Retirement used to be permanent: `is_retired` answered yes to any `retire`
+/// record ever written, so a member given back could never be used again by
+/// any command. On this deployment all five of the operator's accounts had
+/// been retired as borrowed grants, and when he named them as the accounts
+/// to use there was nothing in the product that could say so -- the pool
+/// skipped them, every request answered that the pool was empty, and the
+/// only route back was editing a journal by hand.
+///
+/// The journal stays append-only: this writes a record beside the
+/// retirement, and the newest of the two decides. A reinstatement is not a
+/// credential: the member is in the rotation again and still needs a grant
+/// of this gateway's own, which is what the sign-in commands obtain.
+pub fn reinstate(item_id: &str) {
+    append(json!({"kind": "reinstate", "id": item_id, "at": now()}));
+}
+
+/// Whether dispatch skips this member: the newest of its retirement and
+/// reinstatement records, not merely whether a retirement was ever written.
 pub fn is_retired(item_id: &str) -> bool {
     read_all()
         .iter()
-        .any(|r| field(r, "kind") == "retire" && field(r, "id") == item_id)
+        .filter(|record| field(record, "id") == item_id)
+        .filter_map(|record| match field(record, "kind") {
+            "retire" => Some(true),
+            "reinstate" => Some(false),
+            _ => None,
+        })
+        .next_back()
+        .unwrap_or_default()
 }
 
 /// Record one operator-run credential refresh, with the reason they gave.

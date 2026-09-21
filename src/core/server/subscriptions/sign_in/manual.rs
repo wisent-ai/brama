@@ -216,6 +216,48 @@ pub(in crate::core::server) async fn disown_admin_grant(
     })))
 }
 
+/// `POST /v1/admin/subscription-pool/reinstate`: the operator names a member
+/// this deployment uses after all.
+///
+/// The mirror of `disown`, and the reason it exists: a retirement was
+/// permanent, so the five accounts this deployment had retired as borrowed
+/// grants could never be put back, and every request answered that the pool
+/// held nothing while the accounts sat in the vault. Reinstating is not a
+/// credential: the member returns to the rotation and still needs a grant of
+/// this gateway's own, so the answer names the sign-in that obtains one.
+pub(in crate::core::server) async fn reinstate_admin_grant(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Json(request): Json<DisownRequest>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    let reason = request
+        .reason
+        .as_deref()
+        .map(str::trim)
+        .filter(|reason| !reason.is_empty())
+        .unwrap_or("reinstated by the console; this deployment uses that account");
+    crate::subscription_dispatch::pool::reinstate_member(&request.subscription_id, reason)
+        .await
+        .map(|verdict| {
+            Json(json!({
+                "ok": true,
+                "subscription_id": verdict["subscription_id"],
+                "provider": verdict["provider"],
+                "detail": verdict["detail"],
+            }))
+        })
+        .map_err(|detail| {
+            let status = if detail.contains("holds no member") {
+                StatusCode::NOT_FOUND
+            } else if detail.contains("is not retired") {
+                StatusCode::CONFLICT
+            } else {
+                StatusCode::BAD_REQUEST
+            };
+            api_error(status, &detail)
+        })
+}
+
 /// What the console names when it gives a member back.
 #[derive(serde::Deserialize)]
 pub(in crate::core::server) struct DisownRequest {

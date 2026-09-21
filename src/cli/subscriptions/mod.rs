@@ -9,6 +9,7 @@
 
 pub(crate) mod credentials;
 mod manual;
+mod membership;
 pub(crate) mod remote;
 pub(crate) mod unattended;
 pub(crate) mod verdicts;
