@@ -14,6 +14,7 @@ mod capability;
 mod grant;
 mod item;
 mod router;
+mod seeds;
 
 // The names the rest of `broker` calls, listed one at a time so no path
 // resolves to more of this seam than its caller needs.
@@ -26,3 +27,4 @@ pub(super) use item::{existing_item_account, existing_item_tags, put_credential,
 /// up spawning a name no machine installs.
 pub(crate) use router::entitlements_router_bin;
 pub(super) use router::raw_listing;
+pub(crate) use seeds::{login_seed_present, login_seed_states};
