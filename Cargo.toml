@@ -25,6 +25,10 @@ name = "cli_pool_contracts"
 path = "tests/cli/pool_contracts.rs"
 
 [[test]]
+name = "cli_alias_pool_report"
+path = "tests/cli/alias_pool_report.rs"
+
+[[test]]
 name = "cli_surface_contracts"
 path = "tests/cli/surface_contracts.rs"
 

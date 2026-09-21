@@ -54,7 +54,36 @@ pub(crate) enum RoutesCommand {
     },
 }
 
-pub(crate) fn report(args: AliasesArgs) {
+/// What the pool holds, for the aliases this gateway cannot check on its own.
+///
+/// `serving` for a subscription selector means the selector is declared. It
+/// says nothing about a credential, and on 2026-09-21 that gap cost an
+/// evening: `best serving best` was printed while every request for `best`
+/// was refused with `subscription_reauthorization_required`, because the pool
+/// held no live member. The pool's own count now stands beside it.
+struct PoolCount {
+    live: usize,
+    members: usize,
+}
+
+async fn pool_count() -> PoolCount {
+    let scope = brama::subscription_dispatch::pool::PoolScope::Deployment;
+    let report = brama::subscription_dispatch::pool::report(&scope).await;
+    let rows: &[Value] = report
+        .get("subscriptions")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    PoolCount {
+        live: rows
+            .iter()
+            .filter(|row| row.get("state").and_then(Value::as_str) == Some("live"))
+            .count(),
+        members: rows.len(),
+    }
+}
+
+pub(crate) async fn report(args: AliasesArgs) {
     let AliasesArgs { json, strict } = args;
     let report = match brama::core::server::alias_report() {
         Ok(report) => report,
@@ -64,11 +93,27 @@ pub(crate) fn report(args: AliasesArgs) {
         }
     };
     let unserviceable = report.unserviceable();
+    let selectors = report
+        .aliases
+        .iter()
+        .filter(|alias| alias.subscription_resolved)
+        .count();
+    let pool = if selectors > 0 {
+        Some(pool_count().await)
+    } else {
+        None
+    };
+    let pool_is_dry = pool.as_ref().is_some_and(|pool| pool.live == 0);
     if json {
         super::print_json(&serde_json::json!({
             "source": report.source,
             "aliases": report.aliases,
             "unserviceable": unserviceable,
+            "subscription_pool": pool.as_ref().map(|pool| serde_json::json!({
+                "live": pool.live,
+                "members": pool.members,
+                "selectors": selectors,
+            })),
         }));
     } else {
         match &report.source.routes_file {
@@ -99,8 +144,24 @@ pub(crate) fn report(args: AliasesArgs) {
             report.aliases.len(),
             unserviceable
         );
+        if let Some(pool) = &pool {
+            println!(
+                "subscription pool: {} of {} credential(s) are live, which is what the {} \
+                 selector alias(es) above resolve through",
+                pool.live, pool.members, selectors
+            );
+            if pool.live == 0 {
+                println!(
+                    "every request for a selector alias is refused with \
+                     subscription_reauthorization_required until one account is signed in: \
+                     `brama subscription sign-in` through Weles, or \
+                     `brama subscription sign-in-manual` in your own browser. \
+                     `brama subscriptions` says why each member is not live."
+                );
+            }
+        }
     }
-    if strict && unserviceable > 0 {
+    if strict && (unserviceable > 0 || pool_is_dry) {
         std::process::exit(1);
     }
 }

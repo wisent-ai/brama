@@ -22,6 +22,18 @@ pub struct AliasDiagnosis {
     pub state: &'static str,
     pub route: Option<String>,
     pub reason: Option<String>,
+    /// The alias is a selector the subscription pool resolves per caller, not
+    /// a route this gateway can check on its own.
+    ///
+    /// `serving` for such an alias means the selector is declared, which is
+    /// not the same as a credential existing: on 2026-09-21 `brama aliases`
+    /// reported `best serving best` while every request for it was refused
+    /// with `subscription_reauthorization_required`, because the pool held no
+    /// live member. A report that cannot be told apart from a working gateway
+    /// is what sent that diagnosis to the wrong place, so the flag is carried
+    /// here and the pool's own count is printed beside it.
+    #[serde(default)]
+    pub subscription_resolved: bool,
 }
 
 impl AliasDiagnosis {
@@ -49,6 +61,7 @@ impl ModelAliases {
                 state: ALIAS_SERVING,
                 route: Some(BEST_ALIAS.to_string()),
                 reason: None,
+                subscription_resolved: true,
             };
         }
         let declared = match self.declared_route(alias) {
@@ -61,6 +74,7 @@ impl ModelAliases {
                     reason: Some(format!(
                         "the inference route registry could not be read: {error}"
                     )),
+                    subscription_resolved: false,
                 };
             }
         };
@@ -69,6 +83,7 @@ impl ModelAliases {
                 alias: alias.to_string(),
                 state: ALIAS_NO_ROUTE,
                 route: None,
+                subscription_resolved: false,
                 reason: Some(if MODEL_ALIASES.contains(&alias) {
                     format!(
                         "alias `{alias}` is required by this gateway but no route is declared for it; declare one with `PUT /v1/admin/routes` or in the launcher's model_aliases policy"
@@ -95,6 +110,7 @@ impl ModelAliases {
                 state: ALIAS_SERVING,
                 route: Some(route),
                 reason: None,
+                subscription_resolved: false,
             };
         }
         let provider =
@@ -106,6 +122,7 @@ impl ModelAliases {
                 "alias `{alias}` routes to {route} but this gateway holds no provider credential for {provider}; issue the provider capability on this host or point the alias at a route it can reach, such as `best`"
             )),
             route: Some(route),
+            subscription_resolved: false,
         }
     }
 }

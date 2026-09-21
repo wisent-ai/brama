@@ -70,7 +70,7 @@ async fn main() {
         Commands::Mcp => cli::serving::mcp(),
         Commands::Decide(args) => cli::decisions::decide(args).await,
         Commands::Subscriptions(args) => cli::subscriptions::report(args).await,
-        Commands::Aliases(args) => cli::aliases::report(args),
+        Commands::Aliases(args) => cli::aliases::report(args).await,
         Commands::Routes { command } => cli::aliases::routes(command),
         Commands::Subscription { command } => cli::subscriptions::credentials::run(command).await,
         Commands::CollectTaskQuality(args) => cli::diagnostics::collect_task_quality(args).await,
