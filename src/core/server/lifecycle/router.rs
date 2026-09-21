@@ -22,6 +22,7 @@ use crate::core::server::catalog::list_aliases;
 use crate::core::server::catalog::models::list_models;
 use crate::core::server::chat::chat_completions;
 use crate::core::server::chat::dialects::{anthropic_messages, openai_responses};
+use crate::core::server::decisions::decisions;
 use crate::core::server::readiness::{health, readyz};
 use crate::core::server::subscriptions::probe::{
     probe_admin_subscription, refresh_admin_subscription_pool,
@@ -47,6 +48,9 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
         .route("/v1/responses", post(openai_responses))
         .route("/v1/embeddings", post(embeddings))
         .route("/v1/moderations", post(moderations))
+        // The one endpoint that answers instead of generating: typed
+        // questions in, one typed answer each out.
+        .route("/v1/decisions", post(decisions))
         .route("/v1/models", get(list_models))
         .route("/v1/aliases", get(list_aliases))
         // The subscription pool: one read and one write, reached by the

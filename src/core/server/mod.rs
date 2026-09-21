@@ -9,6 +9,7 @@
 //! - [`catalog`] — what may this caller ask for?
 //! - [`chat`] — execute one model request, in any of the three formats.
 //! - [`streaming`] — turn provider events into one caller-facing SSE body.
+//! - [`decisions`] — answer typed questions instead of generating text.
 //! - [`typed`] — the two endpoints that accept exactly one model name each.
 //! - [`refusal`] — how a failure is spelled to a caller.
 //! - [`readiness`] — is this process up, and can it carry traffic?
@@ -26,6 +27,7 @@ mod admission;
 mod aliases;
 mod catalog;
 mod chat;
+mod decisions;
 mod lifecycle;
 mod readiness;
 mod refusal;
@@ -38,14 +40,16 @@ pub use aliases::diagnosis::{
     AliasDiagnosis, ALIAS_CAPABILITY_ABSENT, ALIAS_NO_ROUTE, ALIAS_ROUTES_FILE_INVALID,
     ALIAS_SERVING,
 };
-pub use aliases::report::{alias_report, AliasReport, AliasReportSource};
-pub use aliases::BEST_ALIAS;
+pub use aliases::report::{alias_report, alias_routing, AliasReport, AliasReportSource};
+pub use aliases::{BEST_ALIAS, BEST_DECISION_ALIAS, DECISION_ALIAS};
 pub use lifecycle::start_server;
 pub use readiness::check::unroutable_reason;
 pub use refusal::contract::{model_error_contract, ModelErrorContract};
 
-pub(crate) use administration::valid_alias;
-pub(crate) use aliases::{alias_requires_direct_capability, alias_route_shape_supported};
+pub use administration::{route_shape_writable, valid_alias};
+pub(crate) use aliases::{
+    alias_requires_direct_capability, alias_route_shape_supported, DECISION_ALIASES,
+};
 pub(crate) use chat::request::{MAX_OUTPUT_TOKENS, MAX_TEMPERATURE};
 
 /// Apply one pool membership document from the local vault-owning CLI.

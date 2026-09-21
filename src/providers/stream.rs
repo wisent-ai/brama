@@ -102,6 +102,14 @@ pub(crate) fn spawn(wire: WireProtocol, response: reqwest::Response) -> mpsc::Re
                         anthropic_items(event.as_deref(), &data, &mut anthropic)
                     }
                     WireProtocol::OpenAiResponses => responses_items(event.as_deref(), &data),
+                    // A decision provider never opens a stream: `dispatch_stream`
+                    // refuses its routes before a connection is made.
+                    WireProtocol::TypeSafeSystemOne => (
+                        vec![StreamItem::Failed(
+                            "provider serves typed decisions only".to_string(),
+                        )],
+                        true,
+                    ),
                 };
                 for item in items {
                     let failed = matches!(item, StreamItem::Failed(_));

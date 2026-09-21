@@ -8,6 +8,9 @@
 //! field-scoped read grant -- must both be described, or this hides an alias
 //! the request path can serve.
 
+use std::collections::HashMap;
+use std::sync::{LazyLock, RwLock};
+
 use super::standalone::LOCAL_PROVIDER_CREDENTIALS;
 use super::subscription::configured_subscription_ids;
 use super::{capability_map, client, provider_resource};
@@ -104,4 +107,98 @@ pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
 pub fn provider_capability_configured(provider: &str) -> bool {
     !crate::providers::adapter::provider_requires_credential(provider)
         || configured_provider_capabilities().contains(provider)
+        || provider_grant_routed(provider)
 }
+
+/// Whether the vault's own routing table answers this provider, asked of the
+/// router that owns that table.
+///
+/// The environment variable above is the launcher's declaration, and a
+/// managed gateway always has it. An operator shell never does — `brama
+/// aliases` and `brama decide` are started by a person, not by the launcher —
+/// and until this existed both answered `capability_absent` for a provider
+/// whose credential the very next step would have read without trouble: the
+/// presence check parsed a file named by a variable while the credential path
+/// asked Skarbiec, so the two readers of one table disagreed exactly when no
+/// launcher had spoken. This asks the same question the credential path asks,
+/// of the same authority, and caches the answer per provider: one child
+/// process per provider per process, never one per request.
+fn provider_grant_routed(provider: &str) -> bool {
+    let resource = provider_resource(provider);
+    if let Some(known) = GRANT_ROUTED
+        .read()
+        .ok()
+        .and_then(|cache| cache.get(&resource).copied())
+    {
+        return known;
+    }
+    let routed = resolve_grant_route(&resource);
+    if let Ok(mut cache) = GRANT_ROUTED.write() {
+        cache.insert(resource, routed);
+    }
+    routed
+}
+
+static GRANT_ROUTED: LazyLock<RwLock<HashMap<String, bool>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+
+/// One `route resolve` for one resource, bounded, reading only whether the
+/// vault answers a complete coordinate for it.
+fn resolve_grant_route(resource: &str) -> bool {
+    let Ok(mut child) = std::process::Command::new(super::vault::entitlements_router_bin())
+        .arg("route")
+        .arg("resolve")
+        .arg(resource)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+    else {
+        return false;
+    };
+    let deadline = std::time::Instant::now() + GRANT_PROBE_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return false;
+            }
+            Err(_) => return false,
+        }
+    }
+    let Ok(output) = child.wait_with_output() else {
+        return false;
+    };
+    if !output.status.success() {
+        return false;
+    }
+    let Ok(document) = serde_json::from_slice::<serde_json::Value>(&output.stdout) else {
+        return false;
+    };
+    document
+        .get("routes")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|routes| {
+            routes.iter().any(|route| {
+                route.get("resource").and_then(serde_json::Value::as_str) == Some(resource)
+                    && route.get("problem").is_none()
+                    && route
+                        .get("item")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|item| !item.is_empty())
+                    && route
+                        .get("field")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|field| !field.is_empty())
+            })
+        })
+}
+
+/// The probe is a local question to a local binary; a router that has not
+/// answered by now is not going to change this answer.
+const GRANT_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);

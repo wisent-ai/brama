@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use tracing::warn;
 
 use super::{
-    alias_requires_direct_capability, alias_route_shape_supported, MODEL_ALIASES,
+    alias_requires_direct_capability, alias_route_shape_supported, DECISION_ALIASES, MODEL_ALIASES,
     MODEL_ALIASES_ENV, WISENT_EMBEDDING_ALIAS, WISENT_MODERATION_ALIAS,
 };
 
@@ -168,13 +168,42 @@ impl ModelAliases {
 
     /// The chat route for one alias, or nothing.
     ///
-    /// Only the two aliases that promise a different capability are refused
-    /// here. This was an allowlist of five chat names, which meant an
+    /// Only the aliases that promise a different capability are refused here:
+    /// the two typed OpenAI shapes and the two decision names, whose whole
+    /// promise is a typed answer `POST /v1/chat/completions` cannot produce.
+    /// This was an allowlist of five chat names, which meant an
     /// operator-defined alias passed startup validation and then served
     /// nothing: `alias_route_shape_supported` accepted it and this returned
     /// `None` for it, so the alias existed and was permanently unroutable.
     pub(in crate::core::server) fn chat_route(&self, alias: &str) -> Option<String> {
-        if matches!(alias, WISENT_EMBEDDING_ALIAS | WISENT_MODERATION_ALIAS) {
+        if matches!(alias, WISENT_EMBEDDING_ALIAS | WISENT_MODERATION_ALIAS)
+            || DECISION_ALIASES.contains(&alias)
+        {
+            return None;
+        }
+        if let Some(path) = self.routes_file.as_deref() {
+            match crate::core::inference_routes::resolve(path, alias) {
+                Ok(Some(route)) => return Self::serviceable(alias, route),
+                Ok(None) => {}
+                Err(error) => {
+                    warn!(event = "inference_routes_invalid", %error);
+                    return None;
+                }
+            }
+        }
+        self.routes
+            .get(alias)
+            .cloned()
+            .and_then(|route| Self::serviceable(alias, route))
+    }
+
+    /// The route one decision alias resolves to, or nothing.
+    ///
+    /// The mirror of [`Self::chat_route`]: only the two decision names
+    /// resolve here, so a caller cannot reach `POST /v1/decisions` through a
+    /// chat alias any more than it can reach chat through a decision alias.
+    pub(in crate::core::server) fn decision_route(&self, alias: &str) -> Option<String> {
+        if !DECISION_ALIASES.contains(&alias) {
             return None;
         }
         if let Some(path) = self.routes_file.as_deref() {

@@ -4,6 +4,7 @@ use clap::{Parser, Subcommand};
 
 use cli::adoption::AdoptArgs;
 use cli::aliases::{AliasesArgs, RoutesCommand};
+use cli::decisions::DecideArgs;
 use cli::diagnostics::{CollectTaskQualityArgs, TestArgs};
 use cli::onboarding::OnboardArgs;
 use cli::serving::ServeArgs;
@@ -33,6 +34,8 @@ enum Commands {
     Detect,
     /// Serve the read-only stdio MCP server (agent surface)
     Mcp,
+    /// Answer typed questions through a decision alias
+    Decide(DecideArgs),
     /// Report the subscription pool this gateway routes over
     Subscriptions(SubscriptionsArgs),
     /// Report every model alias this gateway declares and whether it can serve
@@ -65,6 +68,7 @@ async fn main() {
         Commands::Test(args) => cli::diagnostics::test_inference(args).await,
         Commands::Detect => cli::diagnostics::detect(),
         Commands::Mcp => cli::serving::mcp(),
+        Commands::Decide(args) => cli::decisions::decide(args).await,
         Commands::Subscriptions(args) => cli::subscriptions::report(args).await,
         Commands::Aliases(args) => cli::aliases::report(args),
         Commands::Routes { command } => cli::aliases::routes(command),

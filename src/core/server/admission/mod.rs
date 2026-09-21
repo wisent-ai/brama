@@ -126,13 +126,15 @@ pub(in crate::core::server) async fn require_model_bearer(
             // Every inference and discovery path a model-scoped bearer may
             // reach. The three chat formats are one workflow, so a client
             // allowed to complete a chat is allowed to complete the same chat
-            // in the dialect it speaks; the model allowlist itself is enforced
+            // in the dialect it speaks; a decision is the same kind of call
+            // in the other shape, and the model allowlist itself is enforced
             // per request, further in.
             "/v1/chat/completions"
                 | "/v1/messages"
                 | "/v1/responses"
                 | "/v1/embeddings"
                 | "/v1/moderations"
+                | "/v1/decisions"
                 | "/v1/models"
         )
     {

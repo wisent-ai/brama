@@ -40,6 +40,23 @@ pub(in crate::core::server) const WISENT_MODERATION_ALIAS: &str = "wisent-backen
 /// business, and `GET /v1/aliases` is where that is read.
 pub(in crate::core::server) const WELES_ALIAS: &str = "weles";
 pub const BEST_ALIAS: &str = "best";
+/// The deployment's typed-decision alias: `POST /v1/decisions` and nothing
+/// else. The name says what the caller wants — a decision — and the route
+/// table says which model makes it, which is the whole reason it is a name
+/// and not a provider id: TypeSafe AI's Jev answers the decision wire itself,
+/// and a chat model answers the same contract through Brama's own rendering,
+/// so the caller ships against one name either way.
+pub const DECISION_ALIAS: &str = "decision-model";
+/// The same decision, delegated: the route behind this one is `best`, so the
+/// caller's own signed identity selects the subscription that pays, exactly
+/// as it does for generation.
+pub const BEST_DECISION_ALIAS: &str = "best-decision-model";
+/// The two names `POST /v1/decisions` accepts. They are known to the gateway
+/// — shape-checked, diagnosed and documented — without being required of
+/// every deployment: a gateway that serves no decisions declares no route for
+/// them and answers a caller that asks with the state of the alias it asked
+/// for.
+pub(crate) const DECISION_ALIASES: &[&str] = &[DECISION_ALIAS, BEST_DECISION_ALIAS];
 pub(in crate::core::server) const WISENT_MODEL_ALIASES: &[&str] = &[
     WISENT_BACKEND_ALIAS,
     WISENT_EVALUATION_ALIAS,
@@ -60,20 +77,30 @@ pub(in crate::core::server) const MODEL_ALIASES: &[&str] = &[
 ///
 /// The five `wisent-backend/*` aliases keep exact shapes because their names
 /// are a promise to the caller: whoever asks for `embeddings` must never be
-/// handed a chat model. Every other name is the operator's to invent — `smol`,
-/// `dumb`, `best-vision` — and carries no such promise, so it is accepted on
-/// the general-purpose shape. Rejecting unknown names outright, as this did,
-/// made every new alias a Rust change and a gateway release.
+/// handed a chat model. The two decision aliases carry the same kind of
+/// promise in the other direction: a caller that asks `decision-model` for a
+/// typed answer must never be routed to something that cannot produce one, so
+/// their route must be a provider that speaks the decision wire or a chat
+/// model Brama can render the questions onto. Every other name is the
+/// operator's to invent — `smol`, `dumb`, `best-vision` — and carries no such
+/// promise, so it is accepted on the general-purpose shape. Rejecting unknown
+/// names outright, as this did, made every new alias a Rust change and a
+/// gateway release.
 ///
 /// A route naming `best` is delegation rather than a provider: the alias hands
 /// the choice to subscription dispatch, which resolves it per caller identity.
 pub(crate) fn alias_route_shape_supported(alias: &str, route: &str) -> bool {
     if route == BEST_ALIAS {
-        return alias != WISENT_EMBEDDING_ALIAS && alias != WISENT_MODERATION_ALIAS;
+        return alias != WISENT_EMBEDDING_ALIAS
+            && alias != WISENT_MODERATION_ALIAS
+            && alias != DECISION_ALIAS;
     }
     match alias {
         WISENT_EMBEDDING_ALIAS => crate::providers::adapter::supports_embedding_route(route),
         WISENT_MODERATION_ALIAS => crate::providers::adapter::supports_moderation_route(route),
+        DECISION_ALIAS | BEST_DECISION_ALIAS => {
+            crate::providers::adapter::supports_decision_route(route)
+        }
         _ => crate::providers::adapter::supports_chat_route(route),
     }
 }

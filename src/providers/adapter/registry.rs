@@ -18,8 +18,8 @@ pub(in crate::providers::adapter) use address::{
 pub(in crate::providers::adapter) use advertised_model::model_from_value;
 pub(in crate::providers::adapter) use known_limits::apply_omp_model_metadata;
 pub use route::{
-    provider_id_from_route, route, supports_chat_route, supports_embedding_route,
-    supports_moderation_route,
+    native_decision_route, provider_id_from_route, route, supports_chat_route,
+    supports_decision_route, supports_embedding_route, supports_moderation_route,
 };
 pub(in crate::providers::adapter) use route::{valid_model_id, valid_provider_id};
 
@@ -30,6 +30,10 @@ pub enum WireProtocol {
     OpenAiChat,
     AnthropicMessages,
     OpenAiResponses,
+    /// TypeSafe AI's System One wire: a state and typed questions in, typed
+    /// answers out. It carries no messages and returns no text, so nothing on
+    /// the chat path may reach it.
+    TypeSafeSystemOne,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,7 +50,10 @@ pub struct ProviderDescriptor {
     pub display_name: &'static str,
     pub base_url: &'static str,
     pub models_path: &'static str,
+    /// The generation path, empty when this provider serves no chat.
     pub chat_path: &'static str,
+    /// The typed-decision path, empty when this provider serves no decisions.
+    pub decision_path: &'static str,
     pub wire: WireProtocol,
     pub auth: AuthKind,
     pub static_models: &'static [&'static str],

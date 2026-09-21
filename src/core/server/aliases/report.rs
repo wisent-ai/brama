@@ -42,16 +42,7 @@ impl AliasReport {
 /// gateway does. The report names both, because a shell that has neither is
 /// looking at the compiled-in contract alone and must say so.
 pub fn alias_report() -> Result<AliasReport, std::io::Error> {
-    if std::env::var_os(crate::core::inference_routes::ROUTES_FILE_ENV).is_none() {
-        if let Some(home) = std::env::var_os("HOME") {
-            let default_path = PathBuf::from(home).join(".config/brama/inference-routes.json");
-            if default_path.is_file() {
-                // Set only for this process: the CLI is reading, not serving.
-                std::env::set_var(crate::core::inference_routes::ROUTES_FILE_ENV, default_path);
-            }
-        }
-    }
-    let aliases = ModelAliases::from_env(false)?;
+    let aliases = aliases_as_configured()?;
     let source = AliasReportSource {
         launcher_table_present: std::env::var_os(MODEL_ALIASES_ENV).is_some(),
         routes_file: aliases.routes_file.clone(),
@@ -65,4 +56,36 @@ pub fn alias_report() -> Result<AliasReport, std::io::Error> {
         source,
         aliases: diagnoses,
     })
+}
+
+/// The route one alias resolves to for a reader that is not the running
+/// gateway, with the diagnosis when it resolves to nothing.
+///
+/// `brama decide` needs exactly what the endpoint needs — a route it can
+/// serve, or the sentence saying why there is none — and it must read it the
+/// way the gateway does rather than parse the registry itself.
+pub fn alias_routing(alias: &str) -> Result<(Option<String>, AliasDiagnosis), std::io::Error> {
+    let aliases = aliases_as_configured()?;
+    let route = if crate::core::server::DECISION_ALIASES.contains(&alias) {
+        aliases.decision_route(alias)
+    } else {
+        aliases.chat_route(alias)
+    };
+    Ok((route, aliases.diagnose(alias)))
+}
+
+/// The alias table as this host is configured: the launcher's table when the
+/// process was started with it, and the route registry, defaulting to the
+/// launcher's path so an operator shell reads the file the gateway reads.
+fn aliases_as_configured() -> Result<ModelAliases, std::io::Error> {
+    if std::env::var_os(crate::core::inference_routes::ROUTES_FILE_ENV).is_none() {
+        if let Some(home) = std::env::var_os("HOME") {
+            let default_path = PathBuf::from(home).join(".config/brama/inference-routes.json");
+            if default_path.is_file() {
+                // Set only for this process: the CLI is reading, not serving.
+                std::env::set_var(crate::core::inference_routes::ROUTES_FILE_ENV, default_path);
+            }
+        }
+    }
+    ModelAliases::from_env(false)
 }

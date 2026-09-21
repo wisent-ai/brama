@@ -85,6 +85,10 @@ pub(in crate::providers::adapter) fn chat_payload(
             body
         }
         WireProtocol::OpenAiResponses => responses_payload(request, model_id),
+        // A decision provider takes a state and typed questions, never
+        // messages. `dispatch` refuses its routes before asking for a chat
+        // payload, so nothing is built here.
+        WireProtocol::TypeSafeSystemOne => Value::Null,
     }
 }
 
@@ -112,8 +116,9 @@ pub(in crate::providers::adapter) fn streaming_chat_payload(
             body["stream"] = json!(true);
         }
         // The Responses payload is streamed by construction already; the
-        // buffered path parses its buffered event body.
-        WireProtocol::OpenAiResponses => {}
+        // buffered path parses its buffered event body, and a decision
+        // provider streams nothing at all.
+        WireProtocol::OpenAiResponses | WireProtocol::TypeSafeSystemOne => {}
     }
     body
 }

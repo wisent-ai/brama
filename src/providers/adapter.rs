@@ -38,13 +38,13 @@ use registry::{
 };
 
 pub use call::control_client;
-pub use call::typed_capability::dispatch_openai_typed;
+pub use call::typed_capability::{dispatch_decision, dispatch_openai_typed};
 pub use plan::probe::plan_probe_route;
 pub use plan::{publishes_plan_usage, read_plan_usage, PlanUsage};
 pub use registry::{
-    provider, provider_id_from_route, providers, route, supports_chat_route,
-    supports_embedding_route, supports_moderation_route, AuthKind, ProviderDescriptor,
-    RegistryModel, WireProtocol,
+    native_decision_route, provider, provider_id_from_route, providers, route, supports_chat_route,
+    supports_decision_route, supports_embedding_route, supports_moderation_route, AuthKind,
+    ProviderDescriptor, RegistryModel, WireProtocol,
 };
 
 pub(crate) use call::credential::credential_key;
@@ -152,6 +152,18 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
     let Some((descriptor, model_id)) = route(&request.model) else {
         return dispatch_catalog(request, item, secret).await;
     };
+    // A provider that generates no text has no chat endpoint to send this to.
+    // Naming one of its routes on a chat call is the caller's mistake, and it
+    // is answered here rather than as a 404 from a URL this build invented.
+    if descriptor.chat_path.is_empty() {
+        return ModelResponse::failure(
+            &request.model,
+            format!(
+                "invalid_request: route `{}` serves typed decisions only; call POST /v1/decisions",
+                request.model
+            ),
+        );
+    }
     let key = match provider_credential_key(descriptor, item, secret) {
         Ok(key) => key,
         Err(error) => return ModelResponse::failure(&request.model, error),
@@ -220,7 +232,9 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
             WireProtocol::AnthropicMessages => {
                 model_response_from_anthropic(&request.model, body, elapsed_ms)
             }
-            WireProtocol::OpenAiResponses => unreachable!(),
+            // Both are refused before a request is built: the Responses wire
+            // returns above, and a decision-only provider has no chat path.
+            WireProtocol::OpenAiResponses | WireProtocol::TypeSafeSystemOne => unreachable!(),
         },
         limits,
     )
@@ -246,6 +260,15 @@ pub async fn dispatch_stream(
             "streaming is supported for provider routes only".to_string(),
         ));
     };
+    if descriptor.chat_path.is_empty() {
+        return Err(ModelResponse::failure(
+            &request.model,
+            format!(
+                "invalid_request: route `{}` serves typed decisions only; call POST /v1/decisions",
+                request.model
+            ),
+        ));
+    }
     let key = match provider_credential_key(descriptor, item, secret) {
         Ok(key) => key,
         Err(error) => return Err(ModelResponse::failure(&request.model, error)),

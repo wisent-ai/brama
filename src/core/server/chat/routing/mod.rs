@@ -82,6 +82,20 @@ pub(super) async fn route_model_call(
         return Err(api_error(StatusCode::FORBIDDEN, "forbidden").into_response());
     }
     let task_subscription = task_subscription_selector(requested_model);
+    // A decision alias promises a typed answer, which this endpoint cannot
+    // produce whatever is behind it. Saying so by name beats the generic
+    // "not a canonical route or selector" this fell through to, which told a
+    // caller its model name was wrong when the name was right and the
+    // endpoint was not.
+    if crate::core::server::DECISION_ALIASES.contains(&requested_model) {
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            &format!(
+                "`{requested_model}` is a decision alias: it answers typed questions on POST /v1/decisions, not chat completions"
+            ),
+        )
+        .into_response());
+    }
     let alias_source = aliases.chat_route(requested_model);
     // An alias the gateway knows but cannot serve is a configuration fault on
     // this host, not a malformed request. Answering "unknown model" made it

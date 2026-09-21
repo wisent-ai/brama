@@ -72,6 +72,34 @@ pub async fn dispatch_direct_openai_typed(
     .await
 }
 
+/// One typed decision on a provider that speaks the decision wire itself,
+/// paid by this gateway's own capability. A subscription credential is never
+/// eligible here for the same reason it is not on the other typed paths: the
+/// decision is the deployment's call, not a caller's plan quota.
+pub async fn dispatch_direct_decision(
+    route_id: &str,
+    payload: serde_json::Map<String, Value>,
+) -> Result<Value, String> {
+    let provider =
+        provider_for(route_id).ok_or_else(|| "unknown provider/model route".to_string())?;
+    if provider_requires_caller_identity(route_id) {
+        return Err("auth: caller identity is required for subscription providers".to_string());
+    }
+    let credential = broker::provider_credential(provider)
+        .await
+        .ok_or_else(|| format!("direct '{provider}' credential is unavailable"))?;
+    let credential = credential
+        .expose_utf8()
+        .map_err(|_| format!("direct '{provider}' credential is not valid UTF-8"))?;
+    provider_registry::dispatch_decision(
+        route_id,
+        payload,
+        &broker::provider_resource(provider),
+        credential,
+    )
+    .await
+}
+
 /// Open one streaming generation on a direct route: one provider attempt, no
 /// rotation, no subscription credential ever eligible.
 pub async fn dispatch_direct_stream(request: &ModelRequest) -> Result<RoutedStream, ModelResponse> {

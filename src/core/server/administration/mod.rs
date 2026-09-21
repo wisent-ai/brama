@@ -31,7 +31,7 @@ pub(in crate::core::server) fn require_brama_desktop(
 /// A route alias is at most 128 bytes.
 const MAX_ALIAS_BYTES: usize = 128;
 
-pub(crate) fn valid_alias(alias: &str) -> bool {
+pub fn valid_alias(alias: &str) -> bool {
     !alias.is_empty()
         && alias.len() <= MAX_ALIAS_BYTES
         && alias.trim() == alias
@@ -42,7 +42,11 @@ pub(crate) fn valid_alias(alias: &str) -> bool {
         })
 }
 
-fn route_supported(alias: &str, route: &str) -> bool {
+/// Whether this alias may carry this route at all: the string is a route, and
+/// the shape is one the alias promises. Whether the route can be served here
+/// today is a separate question, answered by the capability check below and
+/// reported by `brama aliases` for a registry that already names it.
+pub fn route_shape_writable(alias: &str, route: &str) -> bool {
     if route.is_empty()
         || route.trim() != route
         || route.contains('*')
@@ -51,6 +55,10 @@ fn route_supported(alias: &str, route: &str) -> bool {
         return false;
     }
     alias_route_shape_supported(alias, route)
+}
+
+fn route_supported(alias: &str, route: &str) -> bool {
+    route_shape_writable(alias, route)
         && (!alias_requires_direct_capability(alias, route)
             || crate::providers::adapter::provider_id_from_route(route)
                 .is_some_and(crate::gateway::broker::provider_capability_configured))

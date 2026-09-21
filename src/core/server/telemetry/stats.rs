@@ -25,6 +25,7 @@ pub(in crate::core::server) fn wire_protocol_name(
         WireProtocol::OpenAiChat => "openai-chat",
         WireProtocol::AnthropicMessages => "anthropic-messages",
         WireProtocol::OpenAiResponses => "openai-responses",
+        WireProtocol::TypeSafeSystemOne => "typesafe-systemone",
     }
 }
 
