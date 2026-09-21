@@ -3,3 +3,4 @@
 
 pub(super) mod account;
 pub(super) mod api;
+pub(crate) mod enrolment;

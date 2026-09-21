@@ -1,11 +1,14 @@
 //! `brama subscription`: acting on one provider's subscription credentials --
-//! renewing them now, signing the account in through Weles or by hand, or
-//! taking the grant a harness on this machine already holds.
+//! renewing them now, signing the account in through Weles or by hand,
+//! enrolling the authenticator that makes every later sign-in unattended, or
+//! giving a pool member back.
 
 use clap::Subcommand;
 use serde_json::Value;
 
 use super::text;
+use super::verdicts::enrolment::enrol_authenticator;
+use super::verdicts::{print_refresh, print_sign_in};
 
 #[derive(Subcommand)]
 pub(crate) enum SubscriptionCommand {
@@ -44,6 +47,27 @@ pub(crate) enum SubscriptionCommand {
         /// Why this sign-in is being run; recorded in the journal beside the verdict
         #[arg(long)]
         reason: String,
+        /// How long Weles may spend driving the browser, in milliseconds
+        #[arg(long, default_value_t = 900_000)]
+        login_timeout_ms: u64,
+        /// Print the verdict as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
+    /// Enrol an authenticator for the login behind one subscription, so every later sign-in answers the provider's second factor by itself
+    #[command(name = "enrol-authenticator")]
+    EnrolAuthenticator {
+        /// The provider whose account needs a seed: claude-code, codex or kimi
+        provider: String,
+        /// Exact Brama subscription whose login gains the authenticator
+        #[arg(long)]
+        subscription_id: String,
+        /// Why this enrolment is being run; recorded beside the verdict
+        #[arg(long)]
+        reason: String,
+        /// Exact Skarbiec login item, when the subscription names more than one
+        #[arg(long)]
+        login_item: Option<String>,
         /// How long Weles may spend driving the browser, in milliseconds
         #[arg(long, default_value_t = 900_000)]
         login_timeout_ms: u64,
@@ -169,6 +193,24 @@ pub(crate) async fn run(command: SubscriptionCommand) {
                 std::process::exit(1);
             }
         },
+        SubscriptionCommand::EnrolAuthenticator {
+            provider,
+            subscription_id,
+            reason,
+            login_item,
+            login_timeout_ms,
+            json,
+        } => {
+            enrol_authenticator(
+                &provider,
+                &subscription_id,
+                &reason,
+                login_item.as_deref(),
+                login_timeout_ms,
+                json,
+            )
+            .await
+        }
         SubscriptionCommand::SignInManual {
             provider,
             subscription_id,
@@ -229,37 +271,4 @@ async fn refresh_on_gateway(
         String::from("name --gateway or --gateway-consumer to refresh another gateway's pool")
     })?;
     super::remote::refresh(&origin, bearer.trim(), provider, reason).await
-}
-/// What one refresh came to, as lines.
-fn print_refresh(verdict: &Value) {
-    println!(
-        "provider: {}",
-        text(verdict, "provider").unwrap_or_default()
-    );
-    println!(
-        "attempted: {}",
-        verdict
-            .get("attempted")
-            .and_then(Value::as_u64)
-            .unwrap_or_default()
-    );
-    println!("result: {}", text(verdict, "result").unwrap_or_default());
-    println!("detail: {}", text(verdict, "detail").unwrap_or_default());
-}
-
-/// What one sign-in came to, as lines.
-fn print_sign_in(verdict: &Value) {
-    println!(
-        "provider: {}",
-        text(verdict, "provider").unwrap_or_default()
-    );
-    println!(
-        "login_item: {}",
-        text(verdict, "login_item").unwrap_or_default()
-    );
-    if let Some(account) = text(verdict, "account").filter(|account| !account.is_empty()) {
-        println!("account: {account}");
-    }
-    println!("result: {}", text(verdict, "result").unwrap_or_default());
-    println!("detail: {}", text(verdict, "detail").unwrap_or_default());
 }

@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>brama subscription — Brama CLI Docs</title>
-  <meta name="description" content="Browse Brama subscription credential mutation subcommands.">
-  <link rel="canonical" href="https://brama.wisent.com/docs/cli/subscription">
+  <title>brama subscription enrol-authenticator — Brama CLI Docs</title>
+  <meta name="description" content="Enrol an authenticator for the login behind one subscription and confirm the seed landed, so every later sign-in is unattended.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/cli/subscription/enrol-authenticator">
   <link rel="stylesheet" href="/docs/assets/site.css">
 </head>
 <body>
@@ -18,22 +18,36 @@
     <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a class="active" aria-current="page" href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/decision">Decision</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
     <main>
       <p class="source-note">Brama CLI command reference</p>
-      <article class="doc"><h1 id="brama-subscription"><code>brama subscription</code><a class="headerlink" href="#brama-subscription" title="Link to this section">&para;</a></h1>
-<p>Enter the command group that acts on one provider’s subscription credentials.</p>
+      <article class="doc"><h1 id="brama-subscription-enrol-authenticator"><code>brama subscription enrol-authenticator</code><a class="headerlink" href="#brama-subscription-enrol-authenticator" title="Link to this section">&para;</a></h1>
+<p>Ask Weles to enrol an authenticator for the Skarbiec login behind one subscription, and confirm with Skarbiec that the seed landed. It is the repair for the one refusal a sign-in cannot repair itself.</p>
+<h2 id="why-it-exists">Why it exists<a class="headerlink" href="#why-it-exists" title="Link to this section">&para;</a></h2>
+<p>An automatic sign-in stops at <code>google_2fa_material_missing</code> when the login carries no authenticator seed, and no sign-in can produce one: the provider shows a setup key only inside a signed-in session. The enrolment trajectory signs in with the stored password, waits once for the operator's phone approval, opens the account's authenticator setup, reads the key behind <em>Can't scan it?</em>, confirms the first code and writes the key to the login item. After it, every later sign-in for that account answers the second factor by itself — which is the difference between this and pasting a one-time code, a repair that renews one grant and leaves the next sign-in stopping in the same place.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama subscription &lt;COMMAND&gt;</code></pre>
-<p>A subcommand is required. This group has no options and performs no mutation by itself.</p>
-<h2 id="commands">Commands<a class="headerlink" href="#commands" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">brama subscription enrol-authenticator &lt;PROVIDER&gt; --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--login-item &lt;LOGIN_ITEM&gt;] [--login-timeout-ms &lt;MILLISECONDS&gt;] [--json]</code></pre>
+<table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>&lt;PROVIDER&gt;</code></td><td>required</td><td>One of <code>codex</code>, <code>claude-code</code>, or <code>kimi</code>.</td></tr>
+<tr><td><code>--subscription-id &lt;ID&gt;</code></td><td>required</td><td>The Brama subscription whose login gains the authenticator. Weles resolves which vault row that is, exactly as it does for a sign-in.</td></tr>
+<tr><td><code>--reason &lt;REASON&gt;</code></td><td>required</td><td>Why this enrolment is being run; recorded beside the verdict.</td></tr>
+<tr><td><code>--login-item &lt;LOGIN_ITEM&gt;</code></td><td>optional</td><td>An exact Skarbiec login reference, for a subscription whose identity names more than one.</td></tr>
+<tr><td><code>--login-timeout-ms &lt;MILLISECONDS&gt;</code></td><td>optional; <code>900000</code></td><td>Maximum time Weles may spend driving the browser, including the wait for the phone approval.</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td>Print the verdict as JSON instead of labeled lines.</td></tr>
+</tbody></table>
+<h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
+<p>Brama resolves the account through Weles's <code>POST /reauth/resolve</code>, then orders the enrolment with <code>POST /reauth/enrol-authenticator</code> — admitted by the same <code>brama-weles-reauth</code> bearer the sign-in uses, never by Weles's general worker token. Afterwards it asks Skarbiec whether that login now holds a usable seed, through <code>totp-seed-state</code>, which reports the state of the field and never its value. The verdict is <code>enrolled</code> only when the vault agrees; a run that answers <code>ok</code> while the seed is absent is reported as <code>not_enrolled</code> and exits 1, because the next sign-in would stop in the same place.</p>
+<pre><code class="language-console">provider: codex
+subscription_id: brama-sub-wisent-app-codex-primary
+login_item: codex-wisent-google-sso
+result: enrolled
+detail: Weles enrolled an authenticator for codex-wisent-google-sso and Skarbiec now holds its seed; every later sign-in for codex answers Google itself</code></pre>
+<h2 id="refusals">Exact refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <ul>
-<li><a href="/docs/cli/subscription/refresh"><code>brama subscription refresh &lt;PROVIDER&gt; --reason &lt;REASON&gt; [--json]</code></a> — refresh one provider’s grants now.</li>
-<li><a href="/docs/cli/subscription/sign-in"><code>brama subscription sign-in &lt;PROVIDER&gt; --reason &lt;REASON&gt; [--login-item &lt;LOGIN_ITEM&gt;] [--login-timeout-ms &lt;MILLISECONDS&gt;] [--json]</code></a> — drive an exact Weles account sign-in and prove it with a refresh.</li>
-<li><a href="/docs/cli/subscription/sign-in-manual"><code>brama subscription sign-in-manual &lt;PROVIDER&gt; --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--code &lt;CODE&gt;] [--json]</code></a> — sign one Claude account in through your own browser and a pasted code, without Weles, and prove it with one completion.</li>
-<li><a href="/docs/cli/subscription/enrol-authenticator"><code>brama subscription enrol-authenticator &lt;PROVIDER&gt; --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--login-item &lt;LOGIN_ITEM&gt;] [--login-timeout-ms &lt;MILLISECONDS&gt;] [--json]</code></a> — enrol an authenticator for the login behind one subscription and confirm the seed landed, so no later sign-in needs a person.</li>
-<li><a href="/docs/cli/subscription/disown"><code>brama subscription disown --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--gateway &lt;ORIGIN&gt; | --gateway-consumer &lt;NAME&gt;] [--bearer-item &lt;ITEM&gt;#&lt;FIELD&gt;]</code></a> — give one pool member back: the gateway retires it and forgets its credential, and any machine that signed that account in keeps its own session.</li>
+<li>A provider with no Weles sign-in: <code>provider `&lt;provider&gt;` has no Weles sign-in, so it has no authenticator to enrol</code>.</li>
+<li>A login that signs in with a password: <code>authenticator_enrolment_unsupported_login_method</code>, naming the login and its method — there is no authenticator on it to enrol.</li>
+<li>Missing admission credential: <code>BRAMA_WELES_REAUTH_TOKEN is unavailable; Brama must acquire brama-weles-reauth/token from Skarbiec at startup</code>.</li>
+<li>A worker that does not serve the route answers <code>HTTP 404</code>, which is what a deployment older than this release reports.</li>
+<li>Every stop inside the trajectory keeps its own name — <code>google_push_not_approved</code>, <code>setup_key_not_shown</code>, <code>setup_code_rejected</code>, <code>seed_persist_unconfirmed</code> — and the key is redacted from any page preview.</li>
 </ul>
-<h2 id="output-state-and-refusals">Output, state, and refusals<a class="headerlink" href="#output-state-and-refusals" title="Link to this section">&para;</a></h2>
-<p>The group command itself produces only help or parser errors and changes no state. Omitting <code>&lt;COMMAND&gt;</code> or naming anything other than <code>refresh</code>, <code>sign-in</code>, <code>sign-in-manual</code> or <code>disown</code> is refused by Clap before a handler runs; use <code>brama subscription --help</code> to print the accepted tree. Taking a grant a coding harness already holds was removed: one OAuth pair has one holder, and a second one costs the first its session.</p>
-<p><a href="/docs/cli">Back to the complete CLI command tree</a>.</p></article>
+<p>See <a href="/docs/cli/subscription/sign-in"><code>subscription sign-in</code></a>, <a href="/docs/cli/subscription">the command group</a>, or <a href="/docs/cli">the CLI tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>
   </div>

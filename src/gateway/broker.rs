@@ -98,6 +98,39 @@ fn client() -> Option<CapabilityClient> {
     CapabilityClient::from_env().ok()
 }
 
+/// Whether Skarbiec holds a usable authenticator seed on one login item.
+///
+/// Asked of the vault, never read from it: `totp-seed-state` reports the
+/// state of the field and never its value, which is exactly what a caller
+/// confirming an enrolment needs. A trajectory that answers `ok` is a claim;
+/// this is the world it is checked against.
+pub fn login_seed_present(login_item: &str) -> bool {
+    const SEED_PRESENT: &str = "present";
+    let program = vault::entitlements_router_bin();
+    let Ok(output) = std::process::Command::new(&program)
+        .arg("totp-seed-state")
+        .output()
+    else {
+        return false;
+    };
+    if !output.status.success() {
+        return false;
+    }
+    let Ok(document) = serde_json::from_slice::<serde_json::Value>(&output.stdout) else {
+        return false;
+    };
+    document
+        .get("rows")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|rows| {
+            rows.iter().any(|row| {
+                row.get("item").and_then(serde_json::Value::as_str) == Some(login_item)
+                    && row.get("seed_state").and_then(serde_json::Value::as_str)
+                        == Some(SEED_PRESENT)
+            })
+        })
+}
+
 /// Redeem a direct provider API credential immediately before the HTTP call.
 ///
 /// Managed launches issue at final use because a short-lived, single-use id

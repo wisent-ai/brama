@@ -3,7 +3,7 @@ pub mod blocked;
 pub mod manual;
 mod trajectory;
 mod verdict;
-mod worker;
+pub mod worker;
 
 use crate::subscription_dispatch::pool;
 pub use blocked::{Blocked, SignInError};
@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 use std::time::Duration;
 use verdict::{verdict, FAILED, SIGNED_IN};
 use worker::api::{transport_timeout_seconds, worker_api_base, worker_api_token};
+pub use worker::enrolment::{enrol_authenticator, Enrolment};
 
 pub struct SignInOptions {
     pub provider: String,

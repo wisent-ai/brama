@@ -11,6 +11,7 @@ pub(crate) mod credentials;
 mod manual;
 pub(crate) mod remote;
 pub(crate) mod unattended;
+pub(crate) mod verdicts;
 
 use clap::Args;
 use serde_json::Value;
