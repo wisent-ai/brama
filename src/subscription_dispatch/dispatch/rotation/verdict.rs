@@ -7,8 +7,8 @@ use wisent_errors::Failure;
 
 use super::super::refusal::envelope::{failure_detail, refuse, refuse_as};
 use super::super::refusal::pool_empty::{
-    bounded_unavailable_summary, pool_empty_summary, pool_is_capacity, rotation_failure_kind,
-    PoolEmptyCause,
+    bounded_unavailable_summary, capacity_is_mixed, mixed_unavailable_summary, pool_empty_summary,
+    pool_is_capacity, rotation_failure_kind, PoolEmptyCause,
 };
 
 /// What one walk of a provider's bounded pool actually saw, as opposed to what
@@ -47,17 +47,17 @@ pub(super) fn emptied_pool_refusal(
         reauthorization_block: observed.reauthorization_block,
         unredeemable_credential: observed.unredeemable_credential,
     };
-    // Capacity only when nothing authorization-shaped was seen; the rule lives
-    // in `pool_empty::pool_is_capacity`, beside the sentences it chooses
-    // between, because this arm used to come first and answered capacity for a
-    // pool whose every credential the ledger said needed a sign-in.
-    if pool_is_capacity(cause, observed.rate_limit_block) {
-        let mut failure = refuse(
-            request,
-            POINT_BOUNDED_ROTATION,
-            bounded_unavailable_summary(provider),
-            None,
-        );
+    // Capacity when one member is blocked by quota alone: the walk reads the
+    // ledger per credential, so such a block means a member that is otherwise
+    // usable and a wait that reaches it. The sentence says whether other
+    // members also need a sign-in.
+    if pool_is_capacity(observed.rate_limit_block) {
+        let summary = if capacity_is_mixed(cause) {
+            mixed_unavailable_summary(provider)
+        } else {
+            bounded_unavailable_summary(provider)
+        };
+        let mut failure = refuse(request, POINT_BOUNDED_ROTATION, summary, None);
         failure.attempts = provider_attempts;
         return failure;
     }

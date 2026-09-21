@@ -29,7 +29,7 @@ use std::process::Command;
 use axum::http::StatusCode;
 use brama::core::server::model_error_contract;
 use brama::subscription_dispatch::dispatch::{
-    pool_empty_summary, pool_is_capacity, PoolEmptyCause,
+    capacity_is_mixed, pool_empty_summary, pool_is_capacity, PoolEmptyCause,
 };
 use support::{SkarbiecVault, TestDirectory};
 
@@ -91,41 +91,41 @@ fn the_aggregate_refusal_keeps_the_authorization_classification() {
     );
 }
 
-/// The fourth time, and the one production answered on 2026-09-09 after the
-/// gateway started recording sign-in-needed for accounts whose stored document
-/// is not a credential: `429 all bounded 'codex' credentials unavailable for
-/// agent`, retryable, while the ledger said every one of those credentials
-/// needed a sign-in. Both branches were right on their own; the capacity one
-/// was simply checked first.
+/// Both directions of this rule have cost a diagnosis, so both are pinned.
+///
+/// On 2026-09-09 production answered `429 all bounded 'codex' credentials
+/// unavailable for agent`, retryable, while the ledger said every one of those
+/// credentials needed a sign-in. That case records no rate-limit block at all,
+/// because the walk reads the ledger per credential, so it is authorization.
+///
+/// On 2026-09-21 the opposite: the pool held one live credential at 100% of
+/// its seven-day quota, resetting in fourteen hours, beside members burnt by
+/// the borrowing this product removed. The answer was
+/// `503 subscription_reauthorization_required` — a task for a person, while
+/// the repair was a wait that the quota-blocked member would have served.
 #[test]
-fn a_mixed_pool_is_authorization_not_capacity() {
+fn a_quota_blocked_member_is_capacity_even_beside_members_needing_a_sign_in() {
     let mixed = PoolEmptyCause {
         reauthorization_block: true,
         ..NOTHING_OBSERVED
     };
     assert!(
-        !pool_is_capacity(mixed, true),
-        "a pool holding one rate-limited credential and one that needs a sign-in is not \
-         capacity: no wait reaches the second"
+        pool_is_capacity(true),
+        "a credential blocked by quota alone is usable after the wait, whatever the other \
+         members need"
     );
     assert!(
-        !pool_is_capacity(
-            PoolEmptyCause {
-                unredeemable_credential: true,
-                ..NOTHING_OBSERVED
-            },
-            true
-        ),
-        "a vault that produced no credential is not capacity either"
+        capacity_is_mixed(mixed),
+        "the sentence must say that other members need a sign-in"
     );
     assert!(
-        pool_is_capacity(NOTHING_OBSERVED, true),
-        "a pool whose every credential is inside a rate-limit block is capacity, and a \
-         caller that waits for it gets served"
+        !capacity_is_mixed(NOTHING_OBSERVED),
+        "a pool whose every credential is merely out of quota has nothing to sign in"
     );
     assert!(
-        !pool_is_capacity(NOTHING_OBSERVED, false),
-        "nothing observed at all is not capacity: there is no block to wait out"
+        !pool_is_capacity(false),
+        "nothing blocked by quota is not capacity: there is no block to wait out, and a pool \
+         whose every credential needs a sign-in records no quota block"
     );
 }
 

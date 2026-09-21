@@ -50,17 +50,31 @@ impl PoolEmptyCause {
 
 /// Whether an emptied pool is capacity, given everything one walk saw.
 ///
-/// Authorization outranks capacity, and the order is the whole rule: a pool
-/// holding one credential inside a rate-limit block and another inside a
-/// reauthorization block is not a busy provider, because no wait reaches the
-/// second one. Production answered `429 all bounded 'codex' credentials
+/// `rate_limit_block` is set per credential, and only for a credential whose
+/// recorded block is a rate limit and not an authorization block — the walk
+/// reads the ledger for each one. So its presence means one member of this
+/// pool is otherwise usable and merely out of quota, and a caller who waits
+/// is served by that member whatever the other members need.
+///
+/// The order used to be the reverse, and both directions have cost a
+/// diagnosis. Production answered `429 all bounded 'codex' credentials
 /// unavailable for agent`, retryable, while its own ledger recorded that every
-/// one of those credentials needed a sign-in -- the two branches were checked
-/// in the wrong order in `emptied_pool_refusal`, which is why the decision is
-/// stated here beside the sentences instead of inside the walk that produced
-/// the observations.
-pub fn pool_is_capacity(cause: PoolEmptyCause, rate_limit_block: bool) -> bool {
-    rate_limit_block && !cause.needs_authorization()
+/// one of those credentials needed a sign-in: that case sets no
+/// `rate_limit_block` at all, so it is authorization here and stays so. On
+/// 2026-09-21 the opposite happened — the pool held one live credential at
+/// 100% of its seven-day quota, resetting in fourteen hours, beside members
+/// burnt by the borrowing this product removed — and the answer was
+/// `503 subscription_reauthorization_required`, which reads as a task for a
+/// person while the repair was a wait.
+pub fn pool_is_capacity(rate_limit_block: bool) -> bool {
+    rate_limit_block
+}
+
+/// Whether a capacity refusal also has members that need a sign-in, so the
+/// sentence can say both: the wait serves this request, and the pool is one
+/// account wide until somebody signs the others in.
+pub fn capacity_is_mixed(cause: PoolEmptyCause) -> bool {
+    cause.needs_authorization()
 }
 
 /// The sentence one emptied pool is reported with.
@@ -110,6 +124,19 @@ pub(in crate::subscription_dispatch::dispatch) fn bounded_unavailable_summary(
     provider: &str,
 ) -> String {
     format!("all bounded '{provider}' credentials unavailable for agent")
+}
+
+/// The capacity sentence for a pool whose usable member is out of quota while
+/// other members need a sign-in. Both facts travel, because the wait serves
+/// this request and the pool is still one account wide.
+pub(in crate::subscription_dispatch::dispatch) fn mixed_unavailable_summary(
+    provider: &str,
+) -> String {
+    format!(
+        "all bounded '{provider}' credentials unavailable for agent: the usable one is inside a \
+         quota block that lifts on its own, and the rest need a sign-in (`brama subscriptions` \
+         says which, and when the quota resets)"
+    )
 }
 
 /// The request path's own sentence for a pool every one of whose credentials

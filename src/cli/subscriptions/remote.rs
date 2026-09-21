@@ -148,6 +148,52 @@ pub(crate) async fn disown(
     ))
 }
 
+/// Ask the gateway that holds the credentials to refresh one provider's
+/// grants, and return its verdict.
+///
+/// A refresh run in an operator shell refreshes that shell's own view. The
+/// block that empties a pool lives in the gateway's journal, so a local
+/// refresh cannot clear it: on 2026-09-21 the pool on charless-mac-mini held
+/// one live codex credential while every request answered
+/// `503 subscription_reauthorization_required` with `attempts: 0` — every
+/// candidate skipped unasked inside a recorded block — and the only refresh
+/// the CLI could run was the laptop's. The gateway has exposed
+/// `POST /v1/admin/subscription-pool/refresh` all along; this is the verb
+/// that reaches it.
+pub(crate) async fn refresh(
+    gateway: &str,
+    bearer: &str,
+    provider: &str,
+    reason: &str,
+) -> Result<Value, String> {
+    let provider = provider.trim();
+    if provider.is_empty() {
+        return Err("name the provider whose grants should be refreshed".into());
+    }
+    if reason.trim().is_empty() {
+        return Err("--reason must say why this refresh is being run".into());
+    }
+    let response = client()?
+        .post(format!(
+            "{}/v1/admin/subscription-pool/refresh",
+            gateway.trim_end_matches('/')
+        ))
+        .bearer_auth(bearer)
+        .json(&json!({"provider": provider, "reason": reason}))
+        .send()
+        .await
+        .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
+    let status = response.status().as_u16();
+    let body: Value = response.json().await.unwrap_or(Value::Null);
+    if !HTTP_SUCCESS.contains(&status) {
+        return Err(format!(
+            "the gateway refused to refresh {provider}: HTTP {status}: {}",
+            refusal(&body)
+        ));
+    }
+    Ok(body)
+}
+
 /// What a refused answer says, wherever the gateway put it.
 fn refusal(body: &Value) -> String {
     body.pointer("/error/message")

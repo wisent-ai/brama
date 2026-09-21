@@ -9,13 +9,23 @@ use super::text;
 
 #[derive(Subcommand)]
 pub(crate) enum SubscriptionCommand {
-    /// Refresh this provider's subscription credentials now
+    /// Refresh this provider's subscription credentials now, here or on the
+    /// gateway that holds them
     Refresh {
         /// The provider whose grants should be refreshed (`codex`, `claude-code`, `kimi`)
         provider: String,
         /// Why this refresh is being run; recorded in the journal beside the verdict
         #[arg(long)]
         reason: String,
+        /// The gateway to refresh; the console's bearer is read from stdin
+        #[arg(long)]
+        gateway: Option<String>,
+        /// Resolve the gateway through Stado's service directory as this consumer
+        #[arg(long)]
+        gateway_consumer: Option<String>,
+        /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
+        #[arg(long)]
+        bearer_item: Option<String>,
         /// Print the verdict as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,
@@ -85,24 +95,43 @@ pub(crate) async fn run(command: SubscriptionCommand) {
         SubscriptionCommand::Refresh {
             provider,
             reason,
+            gateway,
+            gateway_consumer,
+            bearer_item,
             json,
-        } => match brama::subscription_dispatch::pool::refresh_provider(&provider, &reason).await {
-            Ok(verdict) => {
-                if json {
-                    crate::cli::print_json(&verdict);
-                } else {
-                    print_refresh(&verdict);
+        } => {
+            // A block that empties a pool lives in the gateway's journal, so a
+            // refresh run in a shell cannot clear it. Naming a gateway sends
+            // the refresh where the credentials and the journal are.
+            let destination = super::remote::Destination {
+                gateway,
+                gateway_consumer,
+                bearer_item,
+            };
+            let verdict = if destination.gateway.is_some() || destination.gateway_consumer.is_some()
+            {
+                refresh_on_gateway(destination, &provider, &reason).await
+            } else {
+                brama::subscription_dispatch::pool::refresh_provider(&provider, &reason).await
+            };
+            match verdict {
+                Ok(verdict) => {
+                    if json {
+                        crate::cli::print_json(&verdict);
+                    } else {
+                        print_refresh(&verdict);
+                    }
+                    // Partial renewal is a failure, even if some grants now work.
+                    if text(&verdict, "result") != Some("refreshed") {
+                        std::process::exit(1);
+                    }
                 }
-                // Partial renewal is a failure, even if some grants now work.
-                if text(&verdict, "result") != Some("refreshed") {
+                Err(error) => {
+                    eprintln!("{error}");
                     std::process::exit(1);
                 }
             }
-            Err(error) => {
-                eprintln!("{error}");
-                std::process::exit(1);
-            }
-        },
+        }
         SubscriptionCommand::SignIn {
             provider,
             login_item,
@@ -189,6 +218,18 @@ pub(crate) async fn run(command: SubscriptionCommand) {
     }
 }
 
+/// Run one provider's refresh on the gateway that holds its credentials.
+async fn refresh_on_gateway(
+    destination: super::remote::Destination,
+    provider: &str,
+    reason: &str,
+) -> Result<Value, String> {
+    let (origin, bearer) = destination.resolve_reading_stdin().await?;
+    let origin = origin.ok_or_else(|| {
+        String::from("name --gateway or --gateway-consumer to refresh another gateway's pool")
+    })?;
+    super::remote::refresh(&origin, bearer.trim(), provider, reason).await
+}
 /// What one refresh came to, as lines.
 fn print_refresh(verdict: &Value) {
     println!(
