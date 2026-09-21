@@ -36,6 +36,67 @@ fn identity(row: &Value) -> Option<&str> {
         .filter(|account| !account.is_empty())
 }
 
+/// Which accounts need a second factor to be signed in, and which of them
+/// hold the secret that answers one.
+///
+/// Asked how many of its accounts need two-factor authentication, this
+/// product had no answer: the vault records whether a seed is stored, the
+/// provider's requirement is learned only by trying to sign in, and neither
+/// was reported beside the other. An account with no seed and no attempt is
+/// not an account without a second factor, so this states `unknown` for it
+/// rather than counting it either way.
+///
+/// One vault pass answers the seed for every login, and the requirement
+/// comes from the sign-ins this gateway already ran, so nothing is asked of
+/// a provider and no browser starts.
+pub async fn second_factor_report(provider: Option<&str>) -> Result<Value, String> {
+    let provider = provider.map(str::trim).filter(|named| !named.is_empty());
+    let seeds = crate::gateway::broker::login_seed_states();
+    let mut accounts: BTreeMap<String, Value> = BTreeMap::new();
+    for entry in crate::gateway::broker::list_all_subscriptions().await? {
+        if provider.is_some_and(|named| entry.provider != named) || entry.status != "active" {
+            continue;
+        }
+        let row = super::account::subscription_view(&entry);
+        let account = identity(&row)
+            .map(str::to_owned)
+            .unwrap_or_else(|| entry.id.clone());
+        let login = row
+            .pointer("/second_factor/login_item")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let seed = login
+            .as_deref()
+            .and_then(|login| seeds.get(login).cloned())
+            .unwrap_or_else(|| "no_login_declared".to_owned());
+        accounts.insert(
+            format!("{}\u{1f}{account}", entry.provider),
+            json!({
+                "provider": entry.provider,
+                "account": account,
+                "member": entry.id,
+                "login_item": login,
+                "required": row.pointer("/second_factor/required").cloned(),
+                "evidence": row.pointer("/second_factor/evidence").cloned(),
+                "seed": seed,
+            }),
+        );
+    }
+    let counted = |wanted: Option<bool>| {
+        accounts
+            .values()
+            .filter(|row| row.get("required").and_then(Value::as_bool) == wanted)
+            .count()
+    };
+    Ok(json!({
+        "provider": provider,
+        "required": counted(Some(true)),
+        "not_required": counted(Some(false)),
+        "unknown": counted(None),
+        "accounts": accounts.into_values().collect::<Vec<_>>(),
+    }))
+}
+
 /// Record the account every member of one provider belongs to, from what
 /// each member's own grant states.
 ///

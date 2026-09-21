@@ -41,6 +41,56 @@ pub(super) async fn attribute(provider: &str, json: bool) {
     }
 }
 
+/// Report which accounts need a second factor, and which hold the secret
+/// that answers one.
+pub(super) async fn second_factor(provider: Option<&str>, json: bool) {
+    match brama::subscription_dispatch::pool::second_factor_report(provider).await {
+        Ok(report) => {
+            if json {
+                crate::cli::print_json(&report);
+                return;
+            }
+            let count = |field: &str| {
+                report
+                    .get(field)
+                    .and_then(Value::as_u64)
+                    .unwrap_or_default()
+            };
+            println!(
+                "{} account(s) need a second factor, {} do not, {} unobserved",
+                count("required"),
+                count("not_required"),
+                count("unknown")
+            );
+            for row in report
+                .get("accounts")
+                .and_then(Value::as_array)
+                .map(Vec::as_slice)
+                .unwrap_or_default()
+            {
+                let needs = match row.get("required").and_then(Value::as_bool) {
+                    Some(true) => "needs a second factor",
+                    Some(false) => "needs none",
+                    None => "unobserved",
+                };
+                println!(
+                    "  {} {} -> {needs}; seed {}",
+                    text(row, "provider").unwrap_or_default(),
+                    text(row, "account").unwrap_or_default(),
+                    text(row, "seed").unwrap_or_default()
+                );
+                if let Some(evidence) = text(row, "evidence") {
+                    println!("    {evidence}");
+                }
+            }
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+    }
+}
+
 /// Put one retired member back in the rotation.
 ///
 /// Named a gateway, this asks that gateway; named none, it acts on this

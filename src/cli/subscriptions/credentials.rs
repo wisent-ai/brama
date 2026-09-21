@@ -101,6 +101,16 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long, default_value_t = false)]
         json: bool,
     },
+    /// Report which accounts need a second factor to be signed in, and which of them hold the secret that answers one
+    #[command(name = "second-factor")]
+    SecondFactor {
+        /// Narrow the report to one provider; without it every provider is reported
+        #[arg(long)]
+        provider: Option<String>,
+        /// Print the report as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
     /// Put one retired pool member back in the rotation, because this deployment uses that account after all
     #[command(name = "reinstate")]
     Reinstate {
@@ -250,6 +260,9 @@ pub(crate) async fn run(command: SubscriptionCommand) {
         ),
         SubscriptionCommand::Attribute { provider, json } => {
             super::membership::attribute(&provider, json).await;
+        }
+        SubscriptionCommand::SecondFactor { provider, json } => {
+            super::membership::second_factor(provider.as_deref(), json).await;
         }
         SubscriptionCommand::Reinstate {
             subscription_id,

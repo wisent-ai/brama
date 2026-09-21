@@ -40,7 +40,7 @@ use account::{expires_at, last_redeem_error, named, now_ms, retired, state, subs
 use attribution::accounts;
 
 pub use account::subscription_view;
-pub use attribution::record_accounts;
+pub use attribution::{record_accounts, second_factor_report};
 pub use refresh::{refresh_provider, refresh_subscription, reinstate_member};
 pub use scope::PoolScope;
 

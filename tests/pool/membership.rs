@@ -203,6 +203,64 @@ fn the_cli_reinstates_a_retired_member_and_refuses_one_that_is_not_retired() {
     );
 }
 
+/// Asked how many of its accounts need a second factor, the product answers
+/// from what it observed, and says so where it observed nothing.
+///
+/// The vault records whether a seed is stored; the provider's requirement is
+/// learned only by trying to sign in. Neither was reported beside the other,
+/// so the question had no answer at all. An account with no seed and no
+/// attempt is not an account without a second factor, and this case holds
+/// the report to saying that rather than counting it either way.
+#[test]
+fn the_cli_reports_the_second_factor_of_every_account_and_admits_what_it_has_not_seen() {
+    let vault = SkarbiecVault::create("cli-second-factor");
+    let state = TestDirectory::new("cli-second-factor-state");
+    let bank = json!({"action": "bank", "agent_id": AGENT, "provider": PROVIDER,
+        "api_key": "isolated-second-factor-test-value", "label": "CLI second factor"});
+    let banked = invoke(
+        &vault,
+        state.path(),
+        state.path(),
+        "bank",
+        bank.to_string().as_bytes(),
+    );
+    assert!(banked.status.success());
+
+    let reported = brama(
+        &vault,
+        state.path(),
+        &["subscription", "second-factor", "--json"],
+        None,
+    );
+    assert!(
+        reported.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&reported.stdout),
+        String::from_utf8_lossy(&reported.stderr)
+    );
+    let report: Value = serde_json::from_slice(&reported.stdout).expect("the report is JSON");
+    assert_eq!(report["required"], 0, "{report}");
+    assert_eq!(report["not_required"], 0, "{report}");
+    assert_eq!(report["unknown"], 1, "{report}");
+    let account = report["accounts"]
+        .as_array()
+        .and_then(|rows| rows.first())
+        .expect("the banked member is reported");
+    assert_eq!(account["member"], SUBSCRIPTION, "{report}");
+    assert!(
+        account["required"].is_null(),
+        "a member nobody signed in states no requirement: {report}"
+    );
+    assert!(
+        account["evidence"].is_null(),
+        "no observation, no evidence: {report}"
+    );
+    assert_eq!(
+        account["seed"], "no_login_declared",
+        "a member that names no login has no seed row to read: {report}"
+    );
+}
+
 /// What the pool records about the member's credential, read through the real
 /// CLI rather than from the ledger file.
 fn member_credential_state(vault: &SkarbiecVault, state: &Path) -> String {

@@ -15,6 +15,11 @@ use crate::subscription_dispatch::usage::{CredentialState, SubscriptionUsage};
 /// never keyed on an empty string.
 const UNATTRIBUTED: &str = "unattributed";
 
+/// How much of a refusal is quoted as evidence on one line. The refusal's
+/// own first sentence says what the provider asked for; everything after it
+/// is the browser trajectory, which the sign-in report already carries.
+const EVIDENCE_CHARACTERS: usize = 200;
+
 /// One account projection shared by the HTTP list, pool, CLI and refresh.
 pub fn subscription_view(entry: &SubscriptionEntry) -> Value {
     let recorded = usage::usage_for(&entry.id);
@@ -47,6 +52,7 @@ pub(super) fn subscription_row(
         "probe": recorded.and_then(|usage| usage.probe.as_ref()),
         "usage_check": usage::plan_usage_check(recorded),
         "credential": credential_view(entry, recorded),
+        "second_factor": second_factor_view(entry),
         "usage_source": windows.source.map(|source| source.as_str()),
         "stale": windows.stale,
     })
@@ -70,6 +76,69 @@ fn automatic_sign_in_view(entry: &SubscriptionEntry) -> Value {
         "blocked_by": failure.as_ref().map(|failure| failure.code()),
         "detail": failure.as_ref().map(|failure| failure.detail()),
         "last_attempt": latest,
+    })
+}
+
+/// Whether this member's provider asks for a second factor, and whether the
+/// login it signs in through holds the secret that answers one.
+///
+/// Asked of an account, "does it need two-factor authentication" had no
+/// answer anywhere: the vault records whether a seed is stored and the
+/// provider's requirement is learned only by trying to sign in, so a pool
+/// could hold accounts nobody could classify. This states both halves and
+/// says `unknown` where nothing was observed, rather than guessing from the
+/// absence of a seed -- an account with no seed and no attempt is not an
+/// account without a second factor.
+///
+/// The requirement is read from the sign-in this gateway already ran: a run
+/// stopped for missing second-factor material proves the provider asked for
+/// one, and a run that completed without it proves it did not.
+fn second_factor_view(entry: &SubscriptionEntry) -> Value {
+    let failure = crate::subscription_dispatch::sign_in::observed_failure(&entry.id);
+    let code = failure.as_ref().map(|failure| failure.code().to_owned());
+    let asked_for_material = code
+        .as_deref()
+        .is_some_and(|code| code.contains("2fa") || code.contains("second_factor"));
+    let signed_in = crate::journal::latest_subscription_sign_in(&entry.id).is_some();
+    let required = if asked_for_material {
+        Some(true)
+    } else if signed_in && failure.is_none() {
+        Some(false)
+    } else {
+        None
+    };
+    // A refusal carries the whole browser trajectory behind it, which is
+    // evidence for reading a failed run and noise in a one-line answer.
+    let sentence = |detail: String| -> String {
+        detail
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .chars()
+            .take(EVIDENCE_CHARACTERS)
+            .collect()
+    };
+    // The login a sign-in resolved is the one that would answer the
+    // challenge; an item that declares none still signs in through whatever
+    // Weles resolved for it, and the seed lives on that row.
+    let login = entry.login_item.clone().or_else(|| {
+        crate::journal::latest_subscription_sign_in(&entry.id)
+            .as_ref()
+            .and_then(|attempt| attempt.get("login_item"))
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+    });
+    json!({
+        "required": required,
+        "evidence": match required {
+            Some(true) => failure.as_ref().map(|failure| sentence(failure.detail())),
+            Some(false) => Some(
+                "a sign-in through Weles completed without asking for second-factor material"
+                    .to_owned(),
+            ),
+            None => None,
+        },
+        "login_item": login,
     })
 }
 
