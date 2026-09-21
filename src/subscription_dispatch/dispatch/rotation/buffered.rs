@@ -63,6 +63,9 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
     // whole half hour reports as capacity.
     let mut saw_reauthorization_block = false;
     let mut saw_rate_limit_block = false;
+    // The soonest instant at which a skipped rate-limit block lifts, which is
+    // when the wait this refusal asks for actually ends.
+    let mut earliest_block_lifts: Option<i64> = None;
     let mut rate_limit_failure = None;
     for (index, entry) in rows.iter().take(max_credential_attempts()).enumerate() {
         let credential_id = &entry.id;
@@ -74,6 +77,14 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
             let reauthorization = usage::needs_reauthorization(credential_id);
             saw_reauthorization_block = saw_reauthorization_block || reauthorization;
             saw_rate_limit_block |= !reauthorization;
+            // The hour the wait ends is in the ledger; a refusal that omits
+            // it is a wait nobody can plan around.
+            if !reauthorization {
+                if let Some(until) = usage::blocked_until_ms(credential_id) {
+                    earliest_block_lifts =
+                        Some(earliest_block_lifts.map_or(until, |held: i64| held.min(until)));
+                }
+            }
             warn!(
                 event = "credential_blocked",
                 provider,
@@ -256,6 +267,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
             reauthorization_block: saw_reauthorization_block,
             unredeemable_credential: saw_unredeemable_credential,
             rate_limit_block: saw_rate_limit_block,
+            block_lifts_at_ms: earliest_block_lifts,
         },
         rate_limit_failure,
     ))

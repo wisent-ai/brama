@@ -70,7 +70,9 @@ pub use self::plan_window::{
     jittered_plan_usage_ttl_ms, next_reset_ms, plan_usage_due, plan_usage_retention_ms,
     plan_usage_ttl_ms, plan_windows, used_fraction, PlanWindows, UsageSource,
 };
-pub use self::spend::{is_blocked, record_block, record_call, record_call_from, Block, Measured};
+pub use self::spend::{
+    blocked_until_ms, is_blocked, record_block, record_call, record_call_from, Block, Measured,
+};
 
 // The stored reason is a sentence for an operator, not a payload.
 const REASON_LIMIT: usize = 200;

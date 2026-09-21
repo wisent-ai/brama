@@ -134,9 +134,34 @@ pub(in crate::subscription_dispatch::dispatch) fn mixed_unavailable_summary(
 ) -> String {
     format!(
         "all bounded '{provider}' credentials unavailable for agent: the usable one is inside a \
-         quota block that lifts on its own, and the rest need a sign-in (`brama subscriptions` \
-         says which, and when the quota resets)"
+         quota block, and the rest need a sign-in (`brama subscriptions` says which)"
     )
+}
+
+/// The whole capacity sentence: which members are unavailable, whether the
+/// rest need a sign-in, and the hour the wait ends when the ledger knows it.
+///
+/// It used to end at "lifts on its own", pointing the reader at `brama
+/// subscriptions`, which prints a block's reason and not its end. On
+/// 2026-09-21 a judge's route was refused all day and no read anywhere named
+/// an hour, while `blocked_until_ms` had been in the ledger the whole time.
+pub fn capacity_summary(provider: &str, mixed: bool, block_lifts_at_ms: Option<i64>) -> String {
+    let summary = if mixed {
+        mixed_unavailable_summary(provider)
+    } else {
+        bounded_unavailable_summary(provider)
+    };
+    match block_lifts_at_ms {
+        Some(until) => format!("{summary}; the block lifts at {}", block_instant(until)),
+        None => summary,
+    }
+}
+
+/// One ledger instant as a reader can act on it: UTC, to the second.
+fn block_instant(milliseconds: i64) -> String {
+    chrono::DateTime::from_timestamp_millis(milliseconds)
+        .map(|at| at.format("%Y-%m-%dT%H:%M:%SZ").to_string())
+        .unwrap_or_else(|| format!("{milliseconds}ms"))
 }
 
 /// The request path's own sentence for a pool every one of whose credentials

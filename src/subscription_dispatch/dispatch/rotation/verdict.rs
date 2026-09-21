@@ -7,8 +7,8 @@ use wisent_errors::Failure;
 
 use super::super::refusal::envelope::{failure_detail, refuse, refuse_as};
 use super::super::refusal::pool_empty::{
-    bounded_unavailable_summary, capacity_is_mixed, mixed_unavailable_summary, pool_empty_summary,
-    pool_is_capacity, rotation_failure_kind, PoolEmptyCause,
+    capacity_is_mixed, capacity_summary, pool_empty_summary, pool_is_capacity,
+    rotation_failure_kind, PoolEmptyCause,
 };
 
 /// What one walk of a provider's bounded pool actually saw, as opposed to what
@@ -24,6 +24,8 @@ pub(super) struct PoolObservations {
     pub(super) unredeemable_credential: bool,
     /// A credential was skipped because its recorded block is a rate limit.
     pub(super) rate_limit_block: bool,
+    /// When the soonest of those blocks lifts, when the ledger recorded it.
+    pub(super) block_lifts_at_ms: Option<i64>,
 }
 
 /// Refuse the request the way an emptied pool is refused, with the attempt
@@ -52,11 +54,11 @@ pub(super) fn emptied_pool_refusal(
     // usable and a wait that reaches it. The sentence says whether other
     // members also need a sign-in.
     if pool_is_capacity(observed.rate_limit_block) {
-        let summary = if capacity_is_mixed(cause) {
-            mixed_unavailable_summary(provider)
-        } else {
-            bounded_unavailable_summary(provider)
-        };
+        let summary = capacity_summary(
+            provider,
+            capacity_is_mixed(cause),
+            observed.block_lifts_at_ms,
+        );
         let mut failure = refuse(request, POINT_BOUNDED_ROTATION, summary, None);
         failure.attempts = provider_attempts;
         return failure;

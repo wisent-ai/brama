@@ -29,7 +29,7 @@ use std::process::Command;
 use axum::http::StatusCode;
 use brama::core::server::model_error_contract;
 use brama::subscription_dispatch::dispatch::{
-    capacity_is_mixed, pool_empty_summary, pool_is_capacity, PoolEmptyCause,
+    capacity_is_mixed, capacity_summary, pool_empty_summary, pool_is_capacity, PoolEmptyCause,
 };
 use support::{SkarbiecVault, TestDirectory};
 
@@ -300,4 +300,39 @@ fn the_dispatch_envelope_agrees_with_the_edge_about_an_absent_account() {
         !said.contains(r#""error_code":"rate_limit""#),
         "the retry advice is back, and a caller will spend its attempts on it:\n{said}"
     );
+}
+
+/// A wait has to name the hour it ends.
+///
+/// The capacity sentence told the caller the quota "lifts on its own" and
+/// sent them to `brama subscriptions`, which prints a block's reason and not
+/// its end. On 2026-09-21 that left Oko's judge refused all day with no
+/// instant anybody could name, while the ledger had held `blocked_until_ms`
+/// since the block was recorded.
+#[test]
+fn a_capacity_refusal_names_the_instant_the_block_lifts() {
+    let lifts_at = 1_790_000_000_000_i64; // 2026-09-21T14:13:20Z
+    let named = capacity_summary("codex", true, Some(lifts_at));
+    assert!(
+        named.contains("the block lifts at 2026-09-21T14:13:20Z"),
+        "the wait must name its end: {named}"
+    );
+    assert!(
+        named.contains("need a sign-in"),
+        "and still say what the other members need: {named}"
+    );
+
+    let unknown = capacity_summary("codex", false, None);
+    assert!(
+        !unknown.contains("the block lifts at"),
+        "an instant the ledger does not hold is not invented: {unknown}"
+    );
+
+    // The classification the HTTP edge gives it must not change because the
+    // sentence grew: a wait stays a retryable capacity answer.
+    let contract = model_error_contract(&format!(
+        "no working subscription model for signed agent; codex refused ({named})"
+    ));
+    assert_eq!(contract.status, StatusCode::TOO_MANY_REQUESTS, "{named}");
+    assert!(contract.retryable, "{named}");
 }

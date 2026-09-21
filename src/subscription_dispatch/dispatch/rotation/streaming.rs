@@ -42,6 +42,10 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
     // buffered caller and `429` to a streaming one.
     let mut saw_reauthorization_block = false;
     let mut saw_rate_limit_block = false;
+    // The two paths reach the same refusal and must carry the same facts;
+    // one of them omitting the hour is how two callers of one broken pool
+    // get two different answers.
+    let mut earliest_block_lifts: Option<i64> = None;
     let mut rate_limit_failure = None;
     for (index, entry) in rows.iter().take(max_credential_attempts()).enumerate() {
         let credential_id = &entry.id;
@@ -49,6 +53,12 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
             let reauthorization = usage::needs_reauthorization(credential_id);
             saw_reauthorization_block = saw_reauthorization_block || reauthorization;
             saw_rate_limit_block |= !reauthorization;
+            if !reauthorization {
+                if let Some(until) = usage::blocked_until_ms(credential_id) {
+                    earliest_block_lifts =
+                        Some(earliest_block_lifts.map_or(until, |held: i64| held.min(until)));
+                }
+            }
             warn!(
                 event = "credential_blocked",
                 provider,
@@ -237,6 +247,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
             reauthorization_block: saw_reauthorization_block,
             unredeemable_credential: saw_unredeemable_credential,
             rate_limit_block: saw_rate_limit_block,
+            block_lifts_at_ms: earliest_block_lifts,
         },
         rate_limit_failure,
     ))

@@ -48,7 +48,7 @@ pub use ranking::candidates::{
 };
 pub(crate) use refusal::pool_empty::no_active_credential_summary;
 pub use refusal::pool_empty::{
-    capacity_is_mixed, pool_empty_summary, pool_is_capacity, PoolEmptyCause,
+    capacity_is_mixed, capacity_summary, pool_empty_summary, pool_is_capacity, PoolEmptyCause,
 };
 pub use routed_stream::RoutedStream;
 pub use selection::buffered::{
