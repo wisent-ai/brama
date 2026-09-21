@@ -34,7 +34,7 @@ fn max_response_bytes() -> u64 {
 }
 
 fn millis_per_second() -> i64 {
-    super::harness::millis()
+    super::MILLIS_PER_SECOND
 }
 
 /// Exchange the pasted code for a grant, store it as this subscription's

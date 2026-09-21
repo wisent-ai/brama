@@ -1,27 +1,22 @@
-//! Signing a Claude account in by hand: the operator's own browser, one
-//! pasted code, and a grant stored exactly where a Weles sign-in would put it.
+//! Signing a Claude account in: the provider's own OAuth flow, run by Brama
+//! itself, ending in a grant that belongs to this gateway and nobody else.
 //!
-//! Weles drives a browser on a dedicated host and needs that host, its worker
-//! credential and a login row in Skarbiec. On 2026-09-12 none of those helped:
-//! every Claude subscription in the pool held no credential, and the only
-//! account that worked was signed into `omp` on the operator's laptop, where
-//! `omp auth-broker login anthropic` had done what this does - open
-//! `claude.ai/oauth/authorize` with PKCE, let the person log in, and take the
-//! code back from a `localhost` redirect or a paste. Brama could not, so the
-//! gateway every product is told to use had nothing to answer with while the
-//! harness beside it did.
+//! The flow is the one every coding harness runs, parameter for parameter:
+//! same client id, same scopes, same loopback callback, same `code#state`
+//! paste, same token endpoint. Run here it mints a NEW pair, which is the
+//! whole point. Brama used to be able to take the pair a harness on the
+//! machine already held, and that was removed on 2026-09-20: a provider
+//! issues one pair per sign-in and revokes it when a second holder refreshes,
+//! so the borrowed copy cost the operator the session they were working in,
+//! twice, and it made a gateway depend on a workstation staying in the fleet
+//! and on that workstation running omp at all. A gateway signs itself in.
 //!
-//! The flow is the harness's flow, parameter for parameter: same client id,
-//! same scopes, same loopback callback, same `code#state` paste, same token
-//! endpoint. A grant that came from a different flow would be a different
-//! kind of credential, and the refresh path would then have to know which.
-//! And when the harness already holds the grant, [`omp`] takes it from there
-//! instead of asking the person to log in a second time.
+//! Weles drives this same flow headlessly on the gateway's own host
+//! (`subscription sign-in`); this module is the path a person can run from a
+//! terminal, and the one Weles's exchange ends in.
 
 mod exchange;
 pub mod grant;
-pub mod harness;
-mod omp;
 
 use base64::Engine;
 use serde::Serialize;
@@ -29,8 +24,10 @@ use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
 pub use exchange::complete;
-pub use grant::{adopt, Origin, BORROWED_FROM};
-pub use harness::{held, Harness, HeldGrant, HeldGrantView};
+pub use grant::{adopt, Origin};
+
+/// Milliseconds in one second, for the expiry arithmetic the exchange does.
+pub(super) const MILLIS_PER_SECOND: i64 = 1000;
 
 /// Everything the provider's authorize page needs, and the verifier the code
 /// exchange proves it with. Built once per sign-in; the verifier never leaves

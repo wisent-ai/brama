@@ -20,19 +20,16 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use zeroize::Zeroizing;
 
-use super::harness::Harness;
 use super::ManualSignIn;
 use crate::gateway::broker;
 use crate::subscription_dispatch::probe::probe_once;
 
 /// Where a grant came from, for the verdict's sentence and the journal.
 #[derive(Clone, Copy, Serialize)]
-#[serde(rename_all = "snake_case", tag = "origin", content = "harness")]
+#[serde(rename_all = "snake_case", tag = "origin")]
 pub enum Origin {
     /// The provider issued it for a code the operator pasted.
     PastedCode,
-    /// A harness on the machine held it already.
-    Harness(Harness),
     /// A console handed it over as it was.
     Console,
 }
@@ -41,7 +38,6 @@ impl Origin {
     fn sentence(self) -> String {
         match self {
             Origin::PastedCode => "the code the operator pasted".to_owned(),
-            Origin::Harness(harness) => format!("{}, the harness that held it", harness.name()),
             Origin::Console => "the console".to_owned(),
         }
     }
@@ -63,18 +59,18 @@ pub fn claude_document(access: &str, refresh: &str, expires_at_ms: i64) -> Zeroi
     )
 }
 
-/// The field a stored grant carries when a harness on the operator's
-/// machine holds the same grant and refreshes it on its own clock.
+/// The marker a grant carried while Brama could take one from a harness on
+/// the machine. Borrowing was removed on 2026-09-20 — a provider issues one
+/// OAuth pair per sign-in and revokes it when a second holder refreshes, so
+/// the copy cost the operator the session they were working in — and the key
+/// stays named here because grants stored before then still carry it and are
+/// stripped of it on read.
 pub const BORROWED_FROM: &str = "brama_borrowed_from";
 
 /// Store the document as this subscription's credential, once it is a grant
-/// the refresh path could renew for the provider. A grant taken from a
-/// harness is marked with the harness it came from: Brama must never rotate
-/// it, because the harness still holds it and rotates it itself. On
-/// 2026-09-17 Brama refreshed two grants it had taken from `omp`; the
-/// provider revoked the refresh tokens `omp` held, `omp` recorded
-/// `invalid_grant -- Refresh token not found or invalid` on both accounts
-/// within the hour, and the operator's own session lost its account.
+/// the refresh path could renew for the provider. What is stored is a grant
+/// this gateway signed in for itself; nothing else is accepted, because a
+/// second holder of one pair is how both holders lose it.
 pub async fn store(
     provider: &str,
     subscription_id: &str,
@@ -82,6 +78,7 @@ pub async fn store(
     origin: Origin,
     account: Option<&str>,
 ) -> Result<(), String> {
+    let _ = origin;
     let mut parsed: Value = serde_json::from_str(document)
         .map_err(|_| "the grant is not a JSON document".to_owned())?;
     if !crate::gateway::renewable(&parsed, provider) {
@@ -89,13 +86,13 @@ pub async fn store(
             "the grant is not the `{provider}` document Brama's refresh path reads, or carries no refresh token; Brama cannot keep a grant it cannot renew"
         ));
     }
-    let stored = match (origin, parsed.as_object_mut()) {
-        (Origin::Harness(harness), Some(object)) => {
-            object.insert(BORROWED_FROM.into(), json!(harness.name()));
-            Zeroizing::new(parsed.to_string())
-        }
-        _ => Zeroizing::new(document.to_owned()),
-    };
+    // A grant stored today is this gateway's own, so any inherited borrowed
+    // marker goes: keeping it would tell `renewal` never to rotate a pair
+    // nobody else holds, and the account would expire unrenewable.
+    if let Some(object) = parsed.as_object_mut() {
+        object.remove(BORROWED_FROM);
+    }
+    let stored = Zeroizing::new(parsed.to_string());
     // The account the grant belongs to is written beside it as the item's
     // `account_ref`: it is what Weles resolves a sign-in from when this
     // grant dies, and until 2026-09-18 every imported member carried none —
@@ -215,27 +212,16 @@ pub async fn adopt(
     // The ledger remembers the refusal that disowned the old grant, and the
     // request path leaves a disowned grant alone until a sign-in replaces it.
     // This is that sign-in.
-    let borrowed_from = match origin {
-        Origin::Harness(harness) => Some(harness.name()),
-        _ => None,
-    };
     crate::subscription_dispatch::usage::record_credential_signed_in_from(
         subscription_id,
         provider,
-        borrowed_from,
+        None,
     );
-    // Who refreshes it from here is the whole point of the borrowed marker,
-    // so the verdict says it rather than promising the opposite. Until
-    // 2026-09-20 every imported grant was reported as "Brama will refresh it
-    // from now on" — the sentence the operator read while `renewal` was
-    // refusing to rotate exactly that grant.
-    let refresher = match origin {
-        Origin::Harness(harness) => format!(
-            "{} refreshes it from now on and Brama does not rotate it",
-            harness.name()
-        ),
-        _ => "Brama will refresh it from now on".to_owned(),
-    };
+    // Every grant stored here is this gateway's own, so this is now always
+    // true. It was not while grants could be borrowed: until 2026-09-20 an
+    // imported grant was reported as "Brama will refresh it from now on"
+    // while `renewal` refused to rotate exactly that grant.
+    let refresher = "Brama will refresh it from now on";
     let (result, detail) = match probe_once(subscription_id, provider).await {
         Ok(probe) if probe.ok => (
             "signed_in",

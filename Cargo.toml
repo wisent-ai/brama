@@ -33,10 +33,6 @@ name = "subscriptions_manual_sign_in_gateway"
 path = "tests/subscriptions/manual_sign_in_gateway.rs"
 
 [[test]]
-name = "subscriptions_harness_grants"
-path = "tests/subscriptions/harness_grants.rs"
-
-[[test]]
 name = "subscriptions_vault_binary"
 path = "tests/subscriptions/vault_binary.rs"
 

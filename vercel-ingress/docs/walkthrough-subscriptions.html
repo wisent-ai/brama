@@ -37,12 +37,12 @@ or <code>refreshed by: brama</code>. In Desktop the same fact sits beside the
 member's credential state.</p>
 <p>Read it first when a harness keeps losing its login. A provider rotates an
 OAuth refresh token on every refresh and revokes the one it replaced, so an
-account refreshed both by Brama and by a harness signs the operator out of the
+account held by both a gateway and a harness signs the operator out of the
 harness within the hour — <code>No API key for provider: anthropic</code> in omp
-is what that looks like from the other side. Brama never rotates a borrowed
-grant, and <a href="/docs/cli/subscription/sync"><code>brama subscription
-sync</code></a> hands a member back to the harness as soon as the harness holds
-the newer grant.</p>
+is what that looks like from the other side. Brama no longer takes a grant from
+a harness at all; a member left from when it could is given back with
+<a href="/docs/cli/subscription/disown"><code>brama subscription disown</code></a>,
+and a grant written before then is still never rotated.</p>
 <h2 id="refresh">Refresh free usage reports</h2>
 <pre><code class="language-console">brama subscriptions --refresh-usage --json</code></pre>
 <p>In Desktop choose <strong>Refresh usage</strong> on Subscriptions or

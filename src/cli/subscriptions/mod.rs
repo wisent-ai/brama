@@ -2,17 +2,15 @@
 //! and each provider's own usage report when it is asked for.
 //!
 //! The pool an operator needs to read is usually not this process's: the
-//! grants are held by the harnesses on the operator's machine and the
-//! gateway that routes over them runs on another host. So the same report
-//! is readable from here against that gateway, resolved and authenticated
-//! exactly as `subscription sync` resolves it, and every member says who
-//! refreshes its grant — the answer that decides whether the operator's own
-//! harness login survives the night.
+//! gateway runs on the fleet's host and the operator is at a workstation. So
+//! the same report is readable from here against that gateway, resolved and
+//! authenticated through Stado, and every member says who refreshes its
+//! grant.
 
 pub(crate) mod credentials;
-mod harness;
 mod manual;
-mod sync;
+pub(crate) mod remote;
+pub(crate) mod unattended;
 
 use clap::Args;
 use serde_json::Value;
@@ -67,13 +65,10 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
         }
         return;
     }
-    let destination = sync::Destination {
+    let destination = remote::Destination {
         gateway,
         gateway_consumer,
         bearer_item,
-        // Reading a pool report hands no grant anywhere, so the borrowing
-        // rule has nothing to refuse here.
-        allow_cross_host: true,
     };
     if destination.gateway.is_some() || destination.gateway_consumer.is_some() {
         remote_report(destination, refresh_usage, json).await;
@@ -107,7 +102,7 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
 ///
 /// Usage reports are the gateway's to fetch, so `--refresh-usage` is refused
 /// here by name rather than answered with a report that did not do it.
-async fn remote_report(destination: sync::Destination, refresh_usage: bool, json: bool) {
+async fn remote_report(destination: remote::Destination, refresh_usage: bool, json: bool) {
     if refresh_usage {
         eprintln!(
             "--refresh-usage reads providers from the gateway that holds the credentials; run it there, or read this gateway's recorded pool without it"
@@ -133,7 +128,7 @@ async fn remote_report(destination: sync::Destination, refresh_usage: bool, json
         eprintln!("name --gateway or --gateway-consumer to read another gateway's pool");
         std::process::exit(1);
     };
-    let report = match sync::pool_report(&origin, bearer.trim()).await {
+    let report = match remote::pool_report(&origin, bearer.trim()).await {
         Ok(report) => report,
         Err(error) => {
             eprintln!("{error}");

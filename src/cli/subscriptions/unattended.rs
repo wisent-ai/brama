@@ -1,18 +1,15 @@
-//! What `brama subscription sync` needs to run as a service rather than as a
-//! command somebody remembers to type.
+//! How a command here reaches the gateway it is asked about: the origin from
+//! Stado's service directory, and the console bearer from the vault.
 //!
-//! On 2026-09-20 every subscription credential the gateway held was dead, the
-//! automatic sign-in could not repair any of them (Google wanted an
-//! authenticator code the vault does not hold), and the fleet served nothing
-//! for a day — while a live `claude-code` grant sat in omp's store on
-//! `lukasz-macbook`, one `brama subscription sync` away. The sweep existed;
-//! nothing ran it. A capability only an operator can trigger is not a repair.
+//! Both answers are resolved per call rather than typed: a rotated console
+//! token and a moved resolver port are picked up without anybody editing a
+//! command line, and no secret is written to disk.
 //!
-//! Two things stood between the sweep and a launchd job: the console bearer
-//! arrived on stdin, and the gateway origin had to be typed as a URL whose
-//! port the resolver assigns. Both are answered here by asking Stado, at every
-//! pass, so a rotated token and a moved port are picked up without editing a
-//! service declaration, and no secret is written to disk.
+//! These helpers were written for a sweep that handed this machine's grants
+//! to a gateway elsewhere. That sweep is gone — a provider issues one OAuth
+//! pair per sign-in and revokes it when a second holder refreshes, so the
+//! arrangement cost the operator the session they were working in. What is
+//! left is reading and administering a remote pool, which hands nothing over.
 
 use std::time::Duration;
 

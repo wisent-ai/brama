@@ -59,86 +59,15 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long, default_value_t = false)]
         json: bool,
     },
-    /// List the grants the harnesses on this machine hold - omp, Claude Code, Codex CLI, Kimi Code - without the grants themselves
-    #[command(name = "held")]
-    Held {
-        /// Only grants for this provider: claude-code, codex or kimi
-        #[arg(long)]
-        provider: Option<String>,
-        /// Read the harness stores below this directory instead of the home directory
-        #[arg(long)]
-        home: Option<String>,
-        /// Print the list as JSON instead of lines
-        #[arg(long, default_value_t = false)]
-        json: bool,
-    },
-    /// Take a grant a harness on this machine already holds and make it this subscription's credential
-    #[command(name = "import")]
-    Import {
-        /// The provider whose grant should be taken: claude-code, codex or kimi
-        provider: String,
-        /// Exact Brama subscription whose grant this import replaces
-        #[arg(long)]
-        subscription_id: String,
-        /// Why this import is being run; recorded in the journal beside the verdict
-        #[arg(long)]
-        reason: String,
-        /// The harness to take it from: omp, claude, codex or kimi; without it, the only grant held here for the provider
-        #[arg(long)]
-        from: Option<String>,
-        /// Which account's grant to take, when more than one is held
-        #[arg(long)]
-        account: Option<String>,
-        /// Read the harness stores below this directory instead of the home directory
-        #[arg(long)]
-        home: Option<String>,
-        /// Hand the grant to this gateway instead of storing it here; the console's bearer is read from stdin
-        #[arg(long)]
-        gateway: Option<String>,
-        /// Hand it to a gateway on ANOTHER machine, accepting that the provider rotates the pair and this machine loses the session it is signed into
-        #[arg(long, default_value_t = false)]
-        allow_cross_host: bool,
-        /// Print the verdict as JSON instead of lines
-        #[arg(long, default_value_t = false)]
-        json: bool,
-    },
-    /// Every grant a harness on this machine holds joins the pool: one stable member per account, ids already present are left to Brama's own refresh
-    #[command(name = "sync")]
-    Sync {
-        /// Why this sync is being run; recorded in the journal beside each verdict
-        #[arg(long)]
-        reason: String,
-        /// Read the harness stores below this directory instead of the home directory
-        #[arg(long)]
-        home: Option<String>,
-        /// Hand the grants to this gateway instead of storing them here; the console's bearer is read from stdin
-        #[arg(long)]
-        gateway: Option<String>,
-        /// Resolve the gateway through Stado's service directory as this consumer, instead of naming a URL whose port the resolver assigns
-        #[arg(long)]
-        gateway_consumer: Option<String>,
-        /// Read the console's bearer from the vault as `<item>#<field>` at every pass, instead of from stdin: a service holds no secret and picks up a rotated token
-        #[arg(long)]
-        bearer_item: Option<String>,
-        /// Keep sweeping every this many seconds instead of exiting after one pass
-        #[arg(long)]
-        every: Option<u64>,
-        /// Sweep into a gateway on ANOTHER machine, accepting that the provider rotates each pair and this machine loses the sessions it is signed into
-        #[arg(long, default_value_t = false)]
-        allow_cross_host: bool,
-        /// Print the sweep as JSON instead of lines
-        #[arg(long, default_value_t = false)]
-        json: bool,
-    },
-    /// Give one pool member back: the gateway retires it and forgets its credential, and the machine its grant came from keeps its own session
+    /// Give one pool member back: the gateway retires it and forgets its credential, and any machine that signed that account in keeps its own session
     #[command(name = "disown")]
     Disown {
         /// The pool member to give back
         #[arg(long)]
         subscription_id: String,
-        /// The agent that owns it in the pool
+        /// Why it is given back; recorded beside the gateway's own ledger entry
         #[arg(long)]
-        agent_id: String,
+        reason: String,
         /// The gateway holding it; the console's bearer is read from stdin
         #[arg(long)]
         gateway: Option<String>,
@@ -221,95 +150,22 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             super::manual::sign_in(&provider, &subscription_id, &reason, code).await,
             json,
         ),
-        SubscriptionCommand::Held {
-            provider,
-            home,
-            json,
-        } => super::harness::held(provider.as_deref(), home.as_deref(), json),
-        SubscriptionCommand::Import {
-            provider,
-            subscription_id,
-            reason,
-            from,
-            account,
-            home,
-            gateway,
-            allow_cross_host,
-            json,
-        } => super::manual::finish(
-            super::manual::import(
-                &provider,
-                &subscription_id,
-                &reason,
-                from.as_deref(),
-                account.as_deref(),
-                home.as_deref(),
-                gateway.as_deref(),
-                allow_cross_host,
-            )
-            .await,
-            json,
-        ),
-        SubscriptionCommand::Sync {
-            reason,
-            home,
-            gateway,
-            gateway_consumer,
-            bearer_item,
-            every,
-            allow_cross_host,
-            json,
-        } => {
-            let destination = super::sync::Destination {
-                gateway,
-                gateway_consumer,
-                bearer_item,
-                allow_cross_host,
-            };
-            match every {
-                Some(seconds) => {
-                    super::sync::sync_every(seconds, &reason, home.as_deref(), &destination, json)
-                        .await
-                }
-                None => super::sync::finish(
-                    super::sync::sync(&reason, home.as_deref(), &destination).await,
-                    json,
-                ),
-            }
-        }
         SubscriptionCommand::Disown {
             subscription_id,
-            agent_id,
+            reason,
             gateway,
             gateway_consumer,
             bearer_item,
         } => {
-            // Giving a member back is the one borrowing operation that is
-            // always right across machines: it takes a credential away from
-            // the gateway rather than handing one to it.
-            let destination = super::sync::Destination {
+            let destination = super::remote::Destination {
                 gateway,
                 gateway_consumer,
                 bearer_item,
-                allow_cross_host: true,
             };
-            let mut stdin_bearer = zeroize::Zeroizing::new(String::new());
-            if destination.gateway.is_some() && destination.bearer_item.is_none() {
-                use std::io::Read as _;
-                if let Err(error) = std::io::stdin().read_to_string(&mut stdin_bearer) {
-                    eprintln!("reading the console bearer from stdin: {error}");
-                    std::process::exit(1);
-                }
-            }
-            match destination.resolve(&stdin_bearer).await {
+            match destination.resolve_reading_stdin().await {
                 Ok((Some(gateway), bearer)) => {
-                    match super::harness::disown_through(
-                        &gateway,
-                        bearer.trim(),
-                        &agent_id,
-                        &subscription_id,
-                    )
-                    .await
+                    match super::remote::disown(&gateway, bearer.trim(), &subscription_id, &reason)
+                        .await
                     {
                         Ok(said) => println!("{said}"),
                         Err(error) => {

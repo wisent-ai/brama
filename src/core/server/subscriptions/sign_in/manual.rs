@@ -17,7 +17,6 @@ use axum::http::StatusCode;
 use axum::Json;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use zeroize::Zeroizing;
 
 use crate::core::server::administration::require_brama_desktop;
 use crate::core::server::admission::identity::ModelClientIdentity;
@@ -52,30 +51,6 @@ pub(in crate::core::server) struct BeginRequest {
 #[serde(deny_unknown_fields)]
 pub(in crate::core::server) struct CompleteRequest {
     code: String,
-}
-
-/// A grant the console already holds - read from a harness on the machine
-/// the console runs on - handed over as the document Brama's refresh path
-/// reads for the provider.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(in crate::core::server) struct GrantRequest {
-    subscription_id: String,
-    reason: String,
-    /// The harness the console read it from, when it read it from one.
-    #[serde(default)]
-    harness: Option<String>,
-    #[serde(default)]
-    account: Option<String>,
-    /// The provider the grant belongs to. Required when `subscription_id`
-    /// names a pool member that does not exist yet: the grant then creates
-    /// it. On 2026-09-17 the pool routed every Claude call through one
-    /// rate-limited account while the operator's machine held two more with
-    /// quota, and the only way to add them was a sign-in window - the
-    /// operator's words were "mamy limit, tylko Ty patrzysz na złe konta".
-    #[serde(default)]
-    provider: Option<String>,
-    document: Zeroizing<String>,
 }
 
 /// The active, unretired pooled account a request names, or the refusal
@@ -175,76 +150,15 @@ pub(in crate::core::server) async fn complete_admin_manual_sign_in(
     ))
 }
 
-/// `POST /v1/admin/subscription-pool/grant`: a grant the console holds,
-/// stored and proved like one the provider just issued. An id the pool does
-/// not hold yet becomes a new member of the named provider; storing the
-/// grant creates and tags its vault item, so discovery sees it at once.
-pub(in crate::core::server) async fn adopt_admin_grant(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-    Json(request): Json<GrantRequest>,
-) -> Result<Json<Value>, ApiError> {
-    require_brama_desktop(&client_identity)?;
-    let (provider, subscription_id) = match active_account(
-        &request.subscription_id,
-        &request.reason,
-    )
-    .await
-    {
-        Ok(entry) => (entry.provider, entry.id),
-        Err(refusal) if refusal.0 == StatusCode::NOT_FOUND => {
-            let provider = request
-                .provider
-                .as_deref()
-                .map(str::trim)
-                .filter(|provider| !provider.is_empty())
-                .ok_or_else(|| {
-                    api_error(
-                        StatusCode::NOT_FOUND,
-                        "subscription not found; name its provider to add it to the pool with this grant",
-                    )
-                })?;
-            if !crate::gateway::broker::supports_oauth_refresh(provider) {
-                return Err(api_error(
-                    StatusCode::BAD_REQUEST,
-                    &format!("`{provider}` is not a provider whose grants Brama keeps"),
-                ));
-            }
-            let subscription_id = request.subscription_id.trim().to_owned();
-            if !crate::core::server::administration::valid_alias(&subscription_id) {
-                return Err(api_error(
-                    StatusCode::BAD_REQUEST,
-                    "invalid subscription id",
-                ));
-            }
-            (provider.to_owned(), subscription_id)
-        }
-        Err(refusal) => return Err(refusal),
-    };
-    let origin = match request.harness.as_deref().map(str::trim) {
-        Some(name) if !name.is_empty() => {
-            manual::Origin::Harness(manual::Harness::parse(name).ok_or_else(|| {
-                api_error(
-                    StatusCode::BAD_REQUEST,
-                    &format!("`{name}` is not a harness Brama reads grants from"),
-                )
-            })?)
-        }
-        _ => manual::Origin::Console,
-    };
-    let verdict = manual::adopt(
-        &provider,
-        &subscription_id,
-        request.document,
-        request.account,
-        origin,
-        request.reason.trim(),
-    )
-    .await
-    .map_err(|detail| api_error(StatusCode::CONFLICT, &detail))?;
-    Ok(Json(
-        serde_json::to_value(verdict).expect("verdict serializes"),
-    ))
-}
+// `POST /v1/admin/subscription-pool/grant` stood here until 2026-09-20: the
+// console handed Brama a grant it already had, usually one a coding harness
+// on some machine was signed into. It is gone. A provider issues one OAuth
+// pair per sign-in and revokes it when a second holder refreshes, so every
+// adopted grant was a session somebody else lost — twice on this fleet, the
+// second time the operator's own, mid-session. A gateway signs itself in:
+// `subscription sign-in` through Weles on its own host, or
+// `subscription sign-in-manual`, which runs the provider's OAuth flow here
+// and mints a pair that belongs to this gateway.
 
 /// `POST /v1/admin/subscription-pool/disown`: the console takes back a grant
 /// it adopted.

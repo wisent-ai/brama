@@ -61,37 +61,3 @@ pub(crate) async fn sign_in(
     };
     manual::complete(request, &pasted, reason).await
 }
-
-/// The grant a harness holds, chosen, then taken here or through a gateway.
-#[allow(clippy::too_many_arguments)]
-pub(crate) async fn import(
-    provider: &str,
-    subscription_id: &str,
-    reason: &str,
-    from: Option<&str>,
-    account: Option<&str>,
-    home: Option<&str>,
-    gateway: Option<&str>,
-    allow_cross_host: bool,
-) -> Result<ManualSignIn, String> {
-    if reason.trim().is_empty() {
-        return Err("--reason must say why this sign-in is being run".into());
-    }
-    if subscription_id.trim().is_empty() {
-        return Err("an exact subscription id is required".into());
-    }
-    let grant = super::harness::choose(provider, from, account, home)?;
-    match gateway {
-        Some(gateway) => {
-            // One grant, one session: handing it to a gateway on another
-            // machine costs this one its sign-in. See `sync::borrowing`.
-            if let Some(refusal) =
-                super::sync::borrowing::refuse_cross_host(gateway, allow_cross_host)
-            {
-                return Err(refusal);
-            }
-            super::harness::import_through(gateway, provider, subscription_id, reason, grant).await
-        }
-        None => super::harness::import_here(provider, subscription_id, reason, grant).await,
-    }
-}

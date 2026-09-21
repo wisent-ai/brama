@@ -32,7 +32,7 @@ item Brama Desktop acquires through its workload key — and admits its value as
 instead always carries the routes it was issued, so it can never reach this family. When
 the launcher cannot read that item it says <code>optional client brama-desktop skipped</code>
 on its stderr and starts anyway; the admin family then answers <code>401</code> to the
-desktop and to <code>brama subscription import --gateway</code> alike, which is what every
+desktop and to the console's own admin calls alike, which is what every
 deployed gateway did until 2026-09-14. Responses carry identifiers, usage and status only: a
 subscription credential is write-only and is never part of an answer, on any path,
 including an error path.</p>
@@ -174,27 +174,18 @@ console asked for it; no timer reaches any of them.</p>
   The sign-in is spent by the first paste, whatever it comes to: <code>404 no manual sign-in
   with that id is open</code> afterwards, <code>409</code> with the exact sentence for a paste
   that is empty, unreadable or carries another sign-in's state.</li>
-<li><strong>POST <code>/v1/admin/subscription-pool/grant</code></strong> takes a grant the
-  console already holds — <code>brama subscription import --gateway</code>, run by Brama
-  Desktop from the runtime it bundles, reads it from a harness on the machine the console
-  runs on — as <code>{"subscription_id", "reason", "document", "harness"?, "account"?, "provider"?}</code>. A <code>subscription_id</code> the pool does not hold yet becomes a new member of <code>provider</code>, which is then required: <code>404 subscription not found; name its provider to add it to the pool with this grant</code> without it, <code>400 `&lt;provider&gt;` is not a provider whose grants Brama keeps</code> for one whose grants the refresh path cannot renew.
-  <code>document</code> is the credential document Brama's refresh path reads for the
-  subscription's provider (<code>claudeAiOauth</code> for <code>claude-code</code>,
-  <code>tokens</code> for <code>codex</code>, top-level tokens for <code>kimi</code>) and is
-  refused before anything is stored when it carries no refresh token; <code>harness</code> is
-  <code>omp</code>, <code>claude</code>, <code>codex</code> or <code>kimi</code> when the
-  console read it from one. The gateway stores it as the subscription's credential, marks the
-  row signed in (a row the provider had disowned reads <code>active</code> again), proves it
-  with one minimal completion rather than a refresh (a refresh would rotate the token out from
-  under the harness that still holds it), journals the verdict with the origin, and answers
-  <code>{"provider", "subscription_id", "account", "result", "detail"}</code> — <code>result</code> is <code>signed_in</code>, <code>failed</code>, or <code>unchanged</code> when the pool already holds exactly this grant (nothing stored or proved). A grant that names a <code>harness</code> is stored as borrowed: Brama never rotates it, the pool report shows <code>credential.borrowed_from</code>, and a forced refresh disowns it with <code>this grant is borrowed from &lt;harness&gt;, which refreshes it itself</code> — the verdict of
-  <a href="/docs/cli/subscription/import"><code>brama subscription import</code></a>. Captured
-  for a token the provider does not know: <code>result: failed</code>, <code>the grant from
-  codex, the harness that held it is stored, but the provider would not serve it:
-  provider_authentication: OAuth access token is invalid.</code> Refusals: <code>400</code> for
-  a blank reason or id or a harness Brama does not read, <code>404 subscription not
-  found</code>, <code>409</code> for a retired account or a document the refresh path could not
-  renew; <code>403</code> for any caller but the console.</li>
+<li><strong>POST <code>/v1/admin/subscription-pool/disown</code></strong> gives one member
+  back: <code>{"subscription_id", "reason"?}</code>. The gateway retires the member,
+  records the reason in its credential ledger, removes the stored credential and stops
+  routing to it; any machine that signed that account in keeps its own session. This is
+  <a href="/docs/cli/subscription/disown"><code>brama subscription disown</code></a>.
+  Answers <code>{"ok", "subscription_id", "provider", "detail"}</code>. Refusals:
+  <code>400 subscription_id is required</code>, <code>404 the pool holds no member with
+  that id</code>, <code>403</code> for any caller but the console.
+  <code>POST /v1/admin/subscription-pool/grant</code> stood beside it until 2026-09-20 and
+  is gone: it took a grant a coding harness on the console's machine already held, and a
+  provider issues one OAuth pair per sign-in and revokes it when a second holder refreshes,
+  so each adopted grant signed that machine out. A gateway signs itself in instead.</li>
 <li><strong>POST <code>/v1/admin/subscription-pool/refresh</code></strong> takes
   <code>{"provider", "reason"}</code> and runs the same audited refresh as
   <code>brama subscription refresh</code>, answering the verdict with status 200 (captured:

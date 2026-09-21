@@ -180,11 +180,14 @@ fn record_refusal(subscription_id: &str, provider: &str, refused: &Failure) {
     }
 }
 
-/// The harness a stored grant was borrowed from, when it was.
+/// The harness a stored grant was borrowed from, for grants written before
+/// borrowing was removed on 2026-09-20. Nothing writes this marker now; a
+/// grant that still carries it is one Brama must not rotate, because the
+/// machine it was taken from still holds the same pair.
 fn borrowed_from(credential: &Secret) -> Option<String> {
     let raw = credential.expose_utf8().ok()?;
     let blob: serde_json::Value = serde_json::from_str(raw).ok()?;
-    blob.get(crate::subscription_dispatch::sign_in::manual::BORROWED_FROM)?
+    blob.get(crate::subscription_dispatch::sign_in::manual::grant::BORROWED_FROM)?
         .as_str()
         .map(str::to_owned)
 }
