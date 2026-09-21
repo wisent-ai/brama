@@ -124,6 +124,26 @@ impl SkarbiecVault {
         )
     }
 
+    /// Seed one member that names the account behind it, the way a vault item
+    /// declares one: `brama:login:<item>`. Two members naming one account are
+    /// one account, which is what the pool's count has to say.
+    pub fn seed_account_subscription(
+        &self,
+        provider: &str,
+        subscription_id: &str,
+        login_item: &str,
+    ) -> String {
+        self.seed_item(
+            provider,
+            subscription_id,
+            &format!(
+                "brama:subscription,brama:provider:{provider},brama:id:{subscription_id},\
+                 brama:login:{login_item}"
+            ),
+            &format!("seeded-{subscription_id}"),
+        )
+    }
+
     fn seed_item(&self, provider: &str, subscription_id: &str, tags: &str, value: &str) -> String {
         let item = Self::item_id(provider, subscription_id);
         // The document shape `skarbiec set-json` accepts, and the one Brama's

@@ -87,7 +87,15 @@ together with <code>/v1/models</code> those are the only paths outside inference
 reach at all.</p>
 <h3 id="reading-the-pool">Reading the pool<a class="headerlink" href="#reading-the-pool" title="Link to this section">&para;</a></h3>
 <p><strong>GET</strong> answers one document for every audience:
-<code>{"ok", "observed_at_ms", "scope", "errors", "subscriptions"}</code>.
+<code>{"ok", "observed_at_ms", "scope", "errors", "accounts", "subscriptions"}</code>.
+<code>accounts</code> counts provider accounts rather than members, because the two are
+different numbers and reading one as the other is how a deployment holding five
+accounts reads as fifteen: it carries <code>total</code>, <code>per_provider</code> —
+one list of account coordinates per provider — plus
+<code>members_without_account</code>, the members whose vault item declares no
+<code>brama:login:</code> account, and <code>ledger_only_members</code>, the ids the vault
+no longer lists and only the usage ledger remembers. Two members naming one
+account are one account.</p>
 <code>scope</code> is <code>deployment</code> or the agent id the answer was narrowed to, so
 a caller reads the narrowing instead of inferring it from the row count. Every row carries
 the same fields whoever asked: <code>id</code>, <code>provider</code>,

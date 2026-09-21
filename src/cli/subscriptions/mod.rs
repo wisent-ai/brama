@@ -147,6 +147,52 @@ async fn remote_report(destination: remote::Destination, refresh_usage: bool, js
     }
 }
 
+/// How many accounts the pool holds, which is not how many members it has.
+///
+/// A member names an account through its vault item's `brama:login:`
+/// declaration; several members can name one account, and a member that
+/// declares none is not an account at all. Printing only the member count
+/// answered "fifteen" for a deployment whose operator holds five accounts.
+fn print_accounts(accounts: Option<&Value>) {
+    let Some(accounts) = accounts else { return };
+    let per_provider = accounts
+        .get("per_provider")
+        .and_then(Value::as_object)
+        .map(|providers| {
+            providers
+                .iter()
+                .map(|(provider, held)| {
+                    format!("{provider} {}", held.as_array().map_or(0, Vec::len))
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .unwrap_or_default();
+    let total = accounts
+        .get("total")
+        .and_then(Value::as_u64)
+        .unwrap_or_default();
+    println!(
+        "{total} account(s){}",
+        if per_provider.is_empty() {
+            String::new()
+        } else {
+            format!(": {per_provider}")
+        }
+    );
+    let count = |field: &str| {
+        accounts
+            .get(field)
+            .and_then(Value::as_array)
+            .map_or(0, Vec::len)
+    };
+    println!(
+        "{} member(s) declare no account, {} remembered only by the usage ledger",
+        count("members_without_account"),
+        count("ledger_only_members")
+    );
+}
+
 /// The same subscription report as the desktop, including partial failures.
 fn print_pool(report: &Value) {
     let rows: &[Value] = report
@@ -159,6 +205,7 @@ fn print_pool(report: &Value) {
         .filter(|row| text(row, "state") == Some("live"))
         .count();
     println!("{live} of {} subscription credentials are live", rows.len());
+    print_accounts(report.get("accounts"));
     println!(
         "usage report: {}",
         if report.get("ok").and_then(Value::as_bool) == Some(true) {
@@ -167,6 +214,7 @@ fn print_pool(report: &Value) {
             "incomplete"
         }
     );
+
     for row in rows {
         println!(
             "{:<8} {:<14} {}{}",

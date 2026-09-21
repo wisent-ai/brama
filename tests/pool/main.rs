@@ -297,3 +297,49 @@ fn the_pool_refuses_an_unknown_subscription_and_an_unknown_action() {
         "a refused write must not create the donated-subscription overlay"
     );
 }
+
+/// How many accounts the pool holds is not how many members it has, and the
+/// document says which is which.
+///
+/// A deployment holding five provider accounts read as fifteen because every
+/// member counted as one: the slots left behind by earlier imports, and the
+/// ids the usage ledger still remembers after the vault stopped listing them,
+/// are indistinguishable from an account in a bare row count. Two members
+/// naming one account are one account; a member naming none is not an
+/// account at all.
+#[test]
+fn the_pool_counts_accounts_and_names_what_it_cannot_attribute_to_one() {
+    let gateway = Gateway::start("pool-accounts", &[]);
+    gateway
+        .vault()
+        .seed_account_subscription("openai", "pool-primary", "pool-account-login");
+    gateway
+        .vault()
+        .seed_account_subscription("openai", "pool-secondary", "pool-account-login");
+    gateway
+        .vault()
+        .seed_marked_subscription("openai", "pool-slot");
+
+    let (status, report) = gateway.console(POOL, Method::GET, None);
+    assert_eq!(status, 200, "{report}");
+    let accounts = &report["accounts"];
+    assert_eq!(accounts["total"], 1, "{report}");
+    assert_eq!(
+        accounts["per_provider"]["openai"].as_array().map(Vec::len),
+        Some(1),
+        "two members naming one account are one account: {report}"
+    );
+    assert_eq!(
+        accounts["members_without_account"]
+            .as_array()
+            .and_then(|members| members.first())
+            .and_then(serde_json::Value::as_str),
+        Some("pool-slot"),
+        "a member that declares no account is named, not counted: {report}"
+    );
+    assert_eq!(
+        report["subscriptions"].as_array().map(Vec::len),
+        Some(3),
+        "the members are still all answered: {report}"
+    );
+}
