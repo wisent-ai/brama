@@ -164,6 +164,30 @@ answered cannot be used.</p>
 route belonging to a decision-only provider is refused there too —
 <code>route `typesafe/jev-latest` serves typed decisions only; call POST
 /v1/decisions</code>.</p>
+<h2 id="media-endpoints">The three media endpoints<a class="headerlink" href="#media-endpoints" title="Link to this section">&para;</a></h2>
+<p><code>POST /v1/images/generations</code> takes <code>{"model", "prompt"}</code> with the
+optional <code>n</code>, <code>size</code>, <code>quality</code>, <code>background</code>,
+<code>output_format</code>, <code>response_format</code> and <code>user</code>, and answers the
+provider's image document with <code>model</code> rewritten to the route the caller
+named. <code>POST /v1/videos</code> takes <code>{"model", "prompt"}</code> with
+<code>size</code> and <code>seconds</code>, and answers a job — an <code>id</code> and a
+<code>status</code> — which <code>GET /v1/videos/{id}?model=…</code> reads back from the
+provider that issued it. <code>POST /v1/audio/speech</code> takes
+<code>{"model", "input", "voice"}</code> with <code>response_format</code> and
+<code>speed</code>, and answers the encoded audio itself, with the provider's own
+<code>Content-Type</code>: it is the one endpoint here whose body is not JSON.</p>
+<p>Each accepts the deployment's media alias — <code>image-model</code>,
+<code>video-model</code>, <code>voice-model</code> — or a canonical route whose provider
+serves that shape and which the catalogue lists as that kind. A chat model is
+refused before any credential is redeemed
+(<code>`openai/gpt-4o-mini` is a text model: name `image-model` or a
+provider/model route the catalogue lists as image</code>), an unrouted media
+alias is <code>503</code> naming the command that declares it, and a status read
+with no model is <code>400 a video status read names the model that started the
+job: GET /v1/videos/{id}?model=…</code>. Media is paid by the deployment's own
+capability: no subscription carries an image, video or voice quota, so
+<code>best</code> cannot stand behind a media alias
+(<a href="/docs/concepts/media">media</a>).</p>
 <p>Which aliases the presenting bearer may name, and which of them can serve right now, is
 <a href="/docs/http-api/discovery-and-subscriptions#get-v1aliases"><code>GET /v1/aliases</code></a>.
 Which concrete models the caller can execute is

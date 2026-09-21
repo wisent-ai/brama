@@ -1,6 +1,7 @@
 //! The shared HTTP clients one provider call is made through.
 
 pub(in crate::providers::adapter) mod credential;
+pub(in crate::providers::adapter) mod media;
 pub(in crate::providers::adapter) mod refusal;
 pub(in crate::providers::adapter) mod response_body;
 pub(in crate::providers::adapter) mod retry;

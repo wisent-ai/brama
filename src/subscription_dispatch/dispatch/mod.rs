@@ -39,7 +39,9 @@ pub use catalogue::subscription_models::registry_models_for_agent;
 pub use credential::readiness::probe_subscription_redemption;
 pub use credential::usage_probe::probe_subscription_usage;
 pub use direct_route::{
-    dispatch_direct, dispatch_direct_decision, dispatch_direct_openai_typed, dispatch_direct_stream,
+    dispatch_direct, dispatch_direct_decision, dispatch_direct_image, dispatch_direct_openai_typed,
+    dispatch_direct_speech, dispatch_direct_stream, dispatch_direct_video,
+    dispatch_direct_video_status,
 };
 pub use ranking::candidates::{
     active_supported_models_for_agent, active_vision_capable_models_for_agent,

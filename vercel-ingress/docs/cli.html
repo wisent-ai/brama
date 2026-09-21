@@ -40,6 +40,11 @@ from the installed build.</p>
 <li><a href="/docs/cli/detect"><code>brama detect</code></a> — detect local hardware and print a model recommendation.</li>
 <li><a href="/docs/cli/mcp"><code>brama mcp</code></a> — serve the read-only stdio MCP hardware-detection surface.</li>
 <li><a href="/docs/cli/aliases"><code>brama aliases [--json] [--strict]</code></a> — report every declared model alias, the route behind it, and whether this gateway can serve it; <code>--strict</code> exits non-zero when any cannot.</li>
+<li><a href="/docs/cli/models"><code>brama models [--kind &lt;KIND&gt;] [--weights &lt;WEIGHTS&gt;] [--category &lt;NAME&gt;] [--provider &lt;ID&gt;] [--search &lt;TEXT&gt;] [--limit &lt;N&gt;] [--json]</code></a> — list every model this gateway can name with what it produces, whether its weights are published, and which <a href="/docs/concepts/category">declared categories</a> it carries.</li>
+<li><a href="/docs/cli/categories"><code>brama categories ls|set|rm</code></a> — read, declare and retire the model categories this deployment groups its catalogue by, such as <code>uncensored</code>.</li>
+<li><a href="/docs/cli/image"><code>brama image --prompt &lt;TEXT&gt; [--model &lt;ALIAS|ROUTE&gt;] [--size &lt;SIZE&gt;] [--n &lt;COUNT&gt;] [--output &lt;FILE&gt;] --allow-provider-cost</code></a> — render one acknowledged <a href="/docs/concepts/media">image</a> and write the bytes it returns.</li>
+<li><a href="/docs/cli/video"><code>brama video start|status</code></a> — start one acknowledged video job and read it back from the provider that issued it.</li>
+<li><a href="/docs/cli/speak"><code>brama speak --input &lt;TEXT&gt; --voice &lt;VOICE&gt; --output &lt;FILE&gt; --allow-provider-cost</code></a> — speak one acknowledged text through a voice route and write the audio the provider encoded.</li>
 <li><a href="/docs/cli/subscriptions"><code>brama subscriptions [--json] [--refresh-usage]</code></a> — report the subscription pool this gateway routes over: every subscription, its state, its usage window and its failure, optionally reading current free provider reports.</li>
 <li><a href="/docs/cli/routes/migrate"><code>brama routes &lt;COMMAND&gt;</code></a> — act on this gateway's inference-route registry.
   <ul>

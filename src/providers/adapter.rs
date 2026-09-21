@@ -38,13 +38,17 @@ use registry::{
 };
 
 pub use call::control_client;
+pub use call::media::{
+    dispatch_image, dispatch_speech, dispatch_video, dispatch_video_status, SpokenAudio,
+};
 pub use call::typed_capability::{dispatch_decision, dispatch_openai_typed};
 pub use plan::probe::plan_probe_route;
 pub use plan::{publishes_plan_usage, read_plan_usage, PlanUsage};
 pub use registry::{
-    native_decision_route, provider, provider_endpoint, provider_id_from_route, providers, route,
-    supports_chat_route, supports_decision_route, supports_embedding_route,
-    supports_moderation_route, AuthKind, ProviderDescriptor, RegistryModel, WireProtocol,
+    kind_from_output, native_decision_route, provider, provider_endpoint, provider_id_from_route,
+    providers, route, supports_chat_route, supports_decision_route, supports_embedding_route,
+    supports_image_route, supports_moderation_route, supports_speech_route, supports_video_route,
+    valid_provider_id, AuthKind, ModelKind, ProviderDescriptor, RegistryModel, WireProtocol,
 };
 
 pub(crate) use call::credential::credential_key;

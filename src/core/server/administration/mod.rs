@@ -7,6 +7,7 @@
 //! credential store ([`credentials`]), or nothing at all ([`snapshot`]).
 
 pub(in crate::core::server) mod adoption;
+pub(in crate::core::server) mod categories;
 pub(in crate::core::server) mod credentials;
 pub(in crate::core::server) mod routes;
 pub(in crate::core::server) mod snapshot;
@@ -62,6 +63,27 @@ fn route_supported(alias: &str, route: &str) -> bool {
         && (!alias_requires_direct_capability(alias, route)
             || crate::providers::adapter::provider_id_from_route(route)
                 .is_some_and(crate::gateway::broker::provider_capability_configured))
+}
+
+/// One model category and the membership rule it carries. The three lists are
+/// the whole rule: models of these providers, these exact routes, and models
+/// whose published name contains one of these terms.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(in crate::core::server) struct AdminCategoryUpdate {
+    pub(super) category: String,
+    #[serde(default)]
+    pub(super) providers: Vec<String>,
+    #[serde(default)]
+    pub(super) routes: Vec<String>,
+    #[serde(default)]
+    pub(super) terms: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(in crate::core::server) struct AdminCategoryDelete {
+    pub(super) category: String,
 }
 
 /// One alias and the one route it points at. `deny_unknown_fields` is what

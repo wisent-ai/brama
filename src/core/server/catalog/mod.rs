@@ -8,12 +8,13 @@
 //! only place an unroutable alias used to show up was a warning in the server
 //! log and a `not in the catalog` sentence in some other product.
 
+mod filters;
 pub(in crate::core::server) mod models;
 mod views;
 
 use axum::extract::Extension;
 use axum::Json;
-use serde_json::json;
+use serde_json::{json, Value};
 
 use crate::core::server::admission::identity::ModelClientIdentity;
 use crate::core::server::aliases::diagnosis::ALIAS_SERVING;
@@ -49,5 +50,44 @@ pub(in crate::core::server) async fn list_aliases(
         "object": "list",
         "aliases": report,
         "unserviceable": unserviceable,
+    })))
+}
+
+/// Every model category the operator declared, the rule each one carries, and
+/// how many catalogue models it currently holds.
+///
+/// The count is the check on the declaration: a category whose terms match
+/// nothing reads `0` here instead of looking like a working facet in two
+/// consoles. It is computed from the same catalogue snapshot the model list
+/// is rendered from, so the two cannot disagree.
+pub(in crate::core::server) async fn list_categories() -> Result<Json<serde_json::Value>, ApiError>
+{
+    let declared = crate::core::inference_routes::categories::declared();
+    let snapshot = crate::subscription_dispatch::model_catalog::snapshot().await;
+    let report = declared
+        .iter()
+        .map(|(name, category)| {
+            let models = snapshot.as_ref().map_or(Value::Null, |catalog| {
+                json!(catalog
+                    .models
+                    .iter()
+                    .filter(|model| category.contains(model))
+                    .count())
+            });
+            json!({
+                "category": name,
+                "providers": category.providers,
+                "routes": category.routes,
+                "terms": category.terms,
+                "models": models,
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(Json(json!({
+        "object": "list",
+        "categories": report,
+        "registry": crate::core::inference_routes::configured_path()
+            .map(|path| path.display().to_string()),
+        "degraded": snapshot.is_err(),
     })))
 }

@@ -18,6 +18,11 @@ pub(super) struct CatalogView {
     pub(super) available: HashSet<String>,
     pub(super) registry_metadata: HashMap<String, RegistryModel>,
     pub(super) unavailable_reasons: HashMap<String, String>,
+    /// Which declared categories each listed id carries. Computed once per
+    /// request from the operator's registry, because the same id is rendered
+    /// twice — once per view — and a facet that disagreed between them would
+    /// be worse than one that was missing.
+    pub(super) categories: HashMap<String, Vec<String>>,
     /// The caller proved an identity, so "can this be served for you" and the
     /// latency history are answerable. Both are answers about the caller, so
     /// neither is given to an unknown one.
@@ -30,6 +35,7 @@ pub(super) fn jeden(view: CatalogView, catalog_revision: String, degraded: bool)
         available,
         registry_metadata,
         unavailable_reasons,
+        categories,
         caller_known,
     } = view;
     let models = model_ids
@@ -38,6 +44,14 @@ pub(super) fn jeden(view: CatalogView, catalog_revision: String, degraded: bool)
             let registry = registry_metadata.get(&id);
             let input_modalities = registry
                 .map(|model| model.input_modalities.clone())
+                .filter(|modalities| !modalities.is_empty())
+                .unwrap_or_else(|| vec!["text".to_string()]);
+            // What the model emits, from the catalogue rather than from a
+            // constant. This field read `["text"]` for every id, including
+            // the image and video models the catalogue has always carried, so
+            // a console could not tell a renderer from a chat model.
+            let output_modalities = registry
+                .map(|model| model.output_modalities.clone())
                 .filter(|modalities| !modalities.is_empty())
                 .unwrap_or_else(|| vec!["text".to_string()]);
             let context_window = registry.map_or(200_000, |model| model.context_window);
@@ -58,7 +72,15 @@ pub(super) fn jeden(view: CatalogView, catalog_revision: String, degraded: bool)
                 "contextWindow": context_window,
                 "maxOutputTokens": max_output_tokens,
                 "inputModalities": input_modalities,
-                "outputModalities": ["text"],
+                "outputModalities": output_modalities,
+                // Which endpoint shape answers this id: `text` on the chat
+                // endpoints, `image` on POST /v1/images/generations, `video`
+                // on POST /v1/videos.
+                "kind": crate::providers::adapter::kind_from_output(&output_modalities).as_str(),
+                // Whether the weights are published. `null` is the catalogue
+                // saying nothing, which is a different answer from `false`.
+                "openWeights": registry.and_then(|model| model.open_weights),
+                "categories": categories.get(&id).cloned().unwrap_or_default(),
                 "tools": tools,
                 "reasoning": reasoning,
                 "price": {
@@ -108,13 +130,14 @@ pub(super) fn openai(view: CatalogView) -> Value {
         available,
         registry_metadata,
         unavailable_reasons,
+        categories,
         caller_known,
     } = view;
     let models = model_ids
         .into_iter()
         .map(|id| {
-            let owner = registry_metadata
-                .get(&id)
+            let registry = registry_metadata.get(&id);
+            let owner = registry
                 .map(|model| model.provider_id.as_str())
                 .unwrap_or("brama");
             let mut entry = json!({
@@ -122,6 +145,20 @@ pub(super) fn openai(view: CatalogView) -> Value {
                 "object": "model",
                 "owned_by": owner,
             });
+            // The three facets an SDK caller needs before it posts anywhere:
+            // which endpoint shape answers this id, whether its weights are
+            // published, and which of the operator's categories it carries.
+            // Every one of them is in the Jeden view too, rendered from the
+            // same assembled facts.
+            if let Some(model) = registry {
+                entry["kind"] = json!(model.kind().as_str());
+                entry["output_modalities"] = json!(model.output_modalities);
+                entry["open_weights"] = json!(model.open_weights);
+            }
+            let names = categories.get(&id).cloned().unwrap_or_default();
+            if !names.is_empty() {
+                entry["categories"] = json!(names);
+            }
             // Whether this gateway can serve the id, for a caller whose
             // identity makes the answer knowable. `data` is the public
             // models.dev catalogue, several thousand ids wide, and almost none

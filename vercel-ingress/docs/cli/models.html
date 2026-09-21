@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>brama models — Brama CLI Docs</title>
+  <meta name="description" content="List the models this gateway can name, with what each one produces, whether its weights are published, and which declared categories it carries.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/cli/models">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>brama models</h2><a class="active" aria-current="page" href="/docs/cli/models">models</a><a href="/docs/cli/categories">categories</a><a href="/docs/cli/aliases">aliases</a><a href="/docs/cli">CLI tree</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/concepts/category">Category</a><a href="/docs/concepts/media">Media</a><a href="/docs/http-api/discovery-and-subscriptions">Discovery</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama CLI command reference</p>
+      <article class="doc"><h1 id="brama-models"><code>brama models</code><a class="headerlink" href="#brama-models" title="Link to this section">&para;</a></h1>
+<p>Every model this gateway can name, with the three facets <a href="/docs/concepts/category">category</a> defines: what it produces, whether its weights are published, and which declared categories it carries. It reads the public catalogue and the operator's route registry directly, so it answers before a gateway is running and needs no bearer.</p>
+
+<h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">brama models [--kind &lt;KIND&gt;] [--weights &lt;WEIGHTS&gt;] [--category &lt;NAME&gt;] [--provider &lt;ID&gt;] [--search &lt;TEXT&gt;] [--limit &lt;N&gt;] [--json]</code></pre>
+<table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>--kind &lt;KIND&gt;</code></td><td>optional</td><td><code>text</code>, <code>image</code>, <code>video</code> or <code>audio</code>.</td></tr>
+<tr><td><code>--weights &lt;WEIGHTS&gt;</code></td><td>optional</td><td><code>open</code> or <code>closed</code>. A model whose source stated neither matches neither.</td></tr>
+<tr><td><code>--category &lt;NAME&gt;</code></td><td>optional</td><td>A category the operator declared, such as <code>uncensored</code>.</td></tr>
+<tr><td><code>--provider &lt;ID&gt;</code></td><td>optional</td><td>One provider identifier.</td></tr>
+<tr><td><code>--search &lt;TEXT&gt;</code></td><td>optional</td><td>Text contained in the route id or the published name.</td></tr>
+<tr><td><code>--limit &lt;N&gt;</code></td><td>optional; fifty</td><td>How many matches to print. Zero prints every one.</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td>Print the listing as a document instead of a table.</td></tr>
+</tbody></table>
+
+<h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
+<p>Real runs against the live catalogue:</p>
+<pre><code class="language-console">$ brama models --kind image --limit 3
+ROUTE                                                KIND   WEIGHTS  CATEGORIES       PROVIDER
+302ai/gemini-3.1-flash-image-preview                 image  closed   -                302ai
+abacus/gemini-2.5-flash-image                        image  closed   -                abacus
+abacus/gemini-3-pro-image                            image  closed   -                abacus
+3 of 188 matching models, catalogue models-dev-2026-09-21-222-7922
+
+$ brama models --category uncensored --limit 3
+ROUTE                                                KIND   WEIGHTS  CATEGORIES       PROVIDER
+abliteration-ai/abliterated-model                    text   open     uncensored       abliteration-ai
+abliteration-ai/abliterated-model-large              text   closed   uncensored       abliteration-ai
+nano-gpt/TEE/gemma-4-26b-a4b-uncensored              text   open     uncensored       nano-gpt
+3 of 24 matching models, catalogue models-dev-2026-09-21-222-7922</code></pre>
+<p>The <code>WEIGHTS</code> column reads <code>unknown</code> where the catalogue stated nothing, which is a different answer from <code>closed</code>. With <code>--json</code> each row carries <code>route</code>, <code>name</code>, <code>provider</code>, <code>kind</code>, <code>openWeights</code>, <code>inputModalities</code>, <code>outputModalities</code> and <code>categories</code>, beside the catalogue revision and how many models matched. The command writes nothing.</p>
+
+<h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
+<table><thead><tr><th>Sentence</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>kind must be text, image, video or audio</code></td><td>The same sentence <code>GET /v1/models?kind=</code> answers. A filter the gateway cannot read never answers the whole catalogue.</td></tr>
+<tr><td><code>weights must be open or closed</code></td><td>As above, for the weights facet.</td></tr>
+<tr><td><code>the model catalogue could not be read: &lt;reason&gt;</code></td><td>Neither models.dev nor the on-disk copy answered.</td></tr>
+</tbody></table>
+<p>Every refusal exits 1 and prints on standard error.</p>
+<p>See <a href="/docs/concepts/category">category</a>, <a href="/docs/cli/categories"><code>brama categories</code></a>, or <a href="/docs/cli">the CLI tree</a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

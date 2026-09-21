@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Media — Brama Docs</title>
+  <meta name="description" content="Image, video and voice: the three generation shapes that are not text, the aliases that reach them, who pays for them, and what each endpoint answers.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/concepts/media">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Media</h2><a class="active" aria-current="page" href="/docs/concepts/media">Media</a><a href="/docs/concepts/category">Category</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/http-api/inference">HTTP inference</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/concepts/provider">Provider</a><a href="/docs/cli/image">brama image</a><a href="/docs/cli/video">brama video</a><a href="/docs/cli/speak">brama speak</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Documentation topic: docs/concepts/media.md</p>
+      <article class="doc"><h1 id="media">Media<a class="headerlink" href="#media" title="Link to this section">&para;</a></h1>
+<p>Brama routes three generation shapes that are not text: an image, a video and a voice. They are reached the way every model here is reached — through an alias or a canonical <code>provider/model</code> route, over the same client identity, the same bounded attempt and the same refusal envelope as a chat completion.</p>
+
+<h2 id="the-three-shapes">The three shapes<a class="headerlink" href="#the-three-shapes" title="Link to this section">&para;</a></h2>
+<table><thead><tr><th>Endpoint</th><th>Alias</th><th>Answer</th></tr></thead><tbody>
+<tr><td><code>POST /v1/images/generations</code></td><td><code>image-model</code></td><td>The provider's image document: <code>data[]</code> carrying <code>b64_json</code> or <code>url</code>, with <code>model</code> rewritten to the route the caller named.</td></tr>
+<tr><td><code>POST /v1/videos</code></td><td><code>video-model</code></td><td>A job, not a render: an <code>id</code> and a <code>status</code>. The clip finishes minutes later.</td></tr>
+<tr><td><code>GET /v1/videos/{id}?model=…</code></td><td><code>video-model</code></td><td>That job as the provider reports it now.</td></tr>
+<tr><td><code>POST /v1/audio/speech</code></td><td><code>voice-model</code></td><td>Encoded audio bytes, with the provider's own <code>Content-Type</code>. This is the one endpoint that answers no JSON.</td></tr>
+</tbody></table>
+
+<h2 id="why-the-status-read-names-a-model">Why a status read names a model<a class="headerlink" href="#why-the-status-read-names-a-model" title="Link to this section">&para;</a></h2>
+<p>Brama holds no job state. A video identifier belongs to the provider that issued it, so the caller keeps the identifier and names the same model it started the job with; a gateway that guessed the vendor would eventually ask the wrong one, and a gateway that stored the job would become a second source of truth about somebody else's queue. A status read with no model is refused:</p>
+<pre><code class="language-text">400 {"error":{"code":"invalid_request",
+     "message":"a video status read names the model that started the job: GET /v1/videos/{id}?model=…"}}</code></pre>
+
+<h2 id="who-pays">Who pays<a class="headerlink" href="#who-pays" title="Link to this section">&para;</a></h2>
+<p>The deployment does, through its own provider <a href="/docs/concepts/capability">capability</a>. No subscription in the pool carries an image, video or voice quota, so there is nothing for <code>best</code> to delegate to: a media alias whose route is <code>best</code> fails the shape check at startup and at <code>PUT /v1/admin/routes</code>. Media is the deployment's spend and appears on the deployment's bill.</p>
+
+<h2 id="which-providers">Which providers<a class="headerlink" href="#which-providers" title="Link to this section">&para;</a></h2>
+<p>A provider serves a media shape only where its vendor documents that exact OpenAI-shaped endpoint. Everything else is declared with an empty path and refused by name, rather than sent a request its server has no route for.</p>
+<table><thead><tr><th>Provider</th><th>Image</th><th>Video</th><th>Voice</th></tr></thead><tbody>
+<tr><td><code>openai</code></td><td><code>/v1/images/generations</code></td><td><code>/v1/videos</code> and <code>/v1/videos/{id}</code></td><td><code>/v1/audio/speech</code></td></tr>
+<tr><td><code>xai</code></td><td><code>/v1/images/generations</code></td><td>—</td><td>—</td></tr>
+<tr><td><code>together</code></td><td><code>/v1/images/generations</code></td><td>—</td><td>—</td></tr>
+<tr><td><code>venice</code></td><td><code>/v1/images/generations</code></td><td>—</td><td><code>/v1/audio/speech</code></td></tr>
+<tr><td><code>groq</code></td><td>—</td><td>—</td><td><code>/v1/audio/speech</code></td></tr>
+</tbody></table>
+<p>The table in the source is <code>src/providers/adapter/registry/roster/media.rs</code>, and it is what these pages follow.</p>
+
+<h2 id="naming-a-model">Naming a model<a class="headerlink" href="#naming-a-model" title="Link to this section">&para;</a></h2>
+<p>Either the deployment's media alias or a canonical route. Two checks stand between a name and a bill:</p>
+<ul>
+<li><strong>The provider must serve the shape.</strong> <code>anthropic/claude-sonnet-4-6</code> on the image endpoint is refused with <code>`anthropic/claude-sonnet-4-6` cannot generate images: name `image-model` or a provider/model route whose provider does</code>.</li>
+<li><strong>The model must be that kind.</strong> OpenAI declares an image path, so <code>openai/gpt-4o-mini</code> passes the first check and fails the second: <code>`openai/gpt-4o-mini` is a text model: name `image-model` or a provider/model route the catalogue lists as image</code>. The <a href="/docs/concepts/category">catalogue</a> already says what each model produces, so the kind decides before a credential is redeemed. A route no public catalogue carries is allowed through — a provider serves models no list knows, and refusing those would make the catalogue's blind spots into Brama's.</li>
+</ul>
+<p>A media alias named on a chat endpoint is refused by name, exactly as a decision alias is: <code>`image-model` is a media alias: it generates on POST /v1/images/generations or POST /v1/videos, not chat completions</code>.</p>
+
+<h2 id="declaring-the-aliases">Declaring the aliases<a class="headerlink" href="#declaring-the-aliases" title="Link to this section">&para;</a></h2>
+<p>The three media aliases are known by name and required of nobody: a deployment that generates no media declares no route for them and changes no policy to take the release. Unrouted, each reports <code>no_route</code> with the command that repairs it, and a request naming one answers <code>503</code> with that same sentence.</p>
+<pre><code class="language-console">$ brama routes set image-model openai/gpt-image-1
+$ brama routes set video-model openai/sora-2
+$ brama routes set voice-model openai/gpt-4o-mini-tts</code></pre>
+
+<h2 id="bounds">Bounds<a class="headerlink" href="#bounds" title="Link to this section">&para;</a></h2>
+<table><thead><tr><th>Bound</th><th>Value</th><th>Refusal</th></tr></thead><tbody>
+<tr><td>Prompt</td><td>32,000 bytes</td><td><code>prompt is longer than this gateway accepts</code></td></tr>
+<tr><td>Images per request</td><td>1–10</td><td><code>n must be between 1 and 10</code></td></tr>
+<tr><td>Clip length</td><td>1–60 seconds</td><td><code>seconds must be between 1 and 60</code></td></tr>
+<tr><td>Spoken input</td><td>4,096 bytes</td><td><code>input is longer than this gateway speaks in one request</code></td></tr>
+<tr><td>Playback speed</td><td>0.25–4.0</td><td><code>speed must be between 0.25 and 4.0</code></td></tr>
+<tr><td>Spoken audio</td><td>24 MiB</td><td><code>provider_failure: spoken audio exceeds the accepted size</code></td></tr>
+</tbody></table>
+<p>Every one of these is decided before a provider is contacted, because a render is billed whether or not the caller meant it.</p>
+
+<h2 id="not-to-be-confused-with">Not to be confused with<a class="headerlink" href="#not-to-be-confused-with" title="Link to this section">&para;</a></h2>
+<ul>
+<li><strong>A vision model.</strong> A chat model that <em>reads</em> an image answers on <code>POST /v1/chat/completions</code> and is selected by the <code>any-vision-capable</code> selector. Media is about what a model <em>produces</em>.</li>
+<li><strong>Image Video Router.</strong> That internal service executes caller-built ComfyUI workflows for Content Platform. Brama routes the vendor-hosted media models behind one authenticated gateway, with client identity, catalogue and refusal contract; it builds no workflow graphs.</li>
+</ul>
+<p>See <a href="/docs/concepts/category">category</a> for how the catalogue says what a model produces, <a href="/docs/cli/image"><code>brama image</code></a>, <a href="/docs/cli/video"><code>brama video</code></a> and <a href="/docs/cli/speak"><code>brama speak</code></a> for the shell surface.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

@@ -121,20 +121,27 @@ pub(in crate::core::server) async fn require_model_bearer(
     };
     if identity.allowed_models.is_some()
         && !is_subscription_capability_path(request.uri().path())
+        // Reading back a video job this bearer started is part of the same
+        // workflow as starting it: the job identifier is in the path, and the
+        // model allowlist is enforced per request further in.
+        && !request.uri().path().starts_with("/v1/videos/")
         && !matches!(
             request.uri().path(),
             // Every inference and discovery path a model-scoped bearer may
             // reach. The three chat formats are one workflow, so a client
             // allowed to complete a chat is allowed to complete the same chat
             // in the dialect it speaks; a decision is the same kind of call
-            // in the other shape, and the model allowlist itself is enforced
-            // per request, further in.
+            // in the other shape, and the two media shapes are generation
+            // like the rest.
             "/v1/chat/completions"
                 | "/v1/messages"
                 | "/v1/responses"
                 | "/v1/embeddings"
                 | "/v1/moderations"
                 | "/v1/decisions"
+                | "/v1/images/generations"
+                | "/v1/audio/speech"
+                | "/v1/videos"
                 | "/v1/models"
         )
     {

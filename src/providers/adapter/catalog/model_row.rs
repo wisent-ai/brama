@@ -2,6 +2,7 @@
 
 use serde_json::Value;
 
+use super::super::registry::facets::listed_output_modalities;
 use super::super::registry::{valid_model_id, RegistryModel};
 
 pub(in crate::providers::adapter) fn catalog_model_from_value(
@@ -26,6 +27,12 @@ pub(in crate::providers::adapter) fn catalog_model_from_value(
         route_id: format!("{provider_id}/{id}"),
         provider_id: provider_id.to_string(),
         model_id: id.to_string(),
+        display_name: row
+            .get("displayName")
+            .or_else(|| row.get("name"))
+            .and_then(Value::as_str)
+            .unwrap_or(id)
+            .to_string(),
         context_window: row
             .get("inputTokenLimit")
             .or_else(|| row.get("context_window"))
@@ -39,6 +46,8 @@ pub(in crate::providers::adapter) fn catalog_model_from_value(
             .and_then(Value::as_u64)
             .unwrap_or(16_384),
         input_modalities: vec!["text".into()],
+        output_modalities: listed_output_modalities(row),
+        open_weights: None,
         tools: true,
         reasoning: false,
         input_price: 0.0,

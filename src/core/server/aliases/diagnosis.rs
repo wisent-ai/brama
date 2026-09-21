@@ -4,7 +4,9 @@
 use serde::Serialize;
 
 use super::table::ModelAliases;
-use super::{alias_requires_direct_capability, BEST_ALIAS, DECISION_ALIASES, MODEL_ALIASES};
+use super::{
+    alias_requires_direct_capability, BEST_ALIAS, DECISION_ALIASES, MEDIA_ALIASES, MODEL_ALIASES,
+};
 
 /// The alias resolves to a route this gateway can authenticate to.
 pub const ALIAS_SERVING: &str = "serving";
@@ -95,6 +97,14 @@ impl ModelAliases {
                     // than that its model name was wrong.
                     format!(
                         "alias `{alias}` is a decision alias this gateway knows but no route is declared for it; declare one with `brama routes set {alias} <provider/model>` or `PUT /v1/admin/routes`"
+                    )
+                } else if MEDIA_ALIASES.contains(&alias) {
+                    // The same contract as the decision names, in the media
+                    // shapes: known here, required of nobody, and named in
+                    // the refusal so an operator reads which alias to declare
+                    // rather than that the caller's model name was wrong.
+                    format!(
+                        "alias `{alias}` is a media alias this gateway knows but no route is declared for it; declare one with `brama routes set {alias} <provider/model>` or `PUT /v1/admin/routes`"
                     )
                 } else {
                     format!("alias `{alias}` is not declared on this gateway")

@@ -2,6 +2,7 @@
 
 use serde_json::Value;
 
+use super::facets::listed_output_modalities;
 use super::{valid_model_id, ProviderDescriptor, RegistryModel};
 
 pub(in crate::providers::adapter) fn model_from_value(
@@ -28,9 +29,18 @@ pub(in crate::providers::adapter) fn model_from_value(
         route_id: format!("{}/{}", descriptor.id, id),
         provider_id: descriptor.id.to_string(),
         model_id: id.to_string(),
+        display_name: row
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or(id)
+            .to_string(),
         context_window,
         max_output_tokens,
         input_modalities: vec!["text".into()],
+        output_modalities: listed_output_modalities(row),
+        // A provider's own listing states what it serves, not how the weights
+        // were published. Nothing here knows, so nothing here claims.
+        open_weights: None,
         tools: true,
         reasoning: lower.contains("reason")
             || lower.contains("thinking")

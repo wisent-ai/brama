@@ -8,8 +8,9 @@ use std::path::PathBuf;
 use tracing::warn;
 
 use super::{
-    alias_requires_direct_capability, alias_route_shape_supported, DECISION_ALIASES, MODEL_ALIASES,
-    MODEL_ALIASES_ENV, WISENT_EMBEDDING_ALIAS, WISENT_MODERATION_ALIAS,
+    alias_requires_direct_capability, alias_route_shape_supported, DECISION_ALIASES, IMAGE_ALIAS,
+    MEDIA_ALIASES, MODEL_ALIASES, MODEL_ALIASES_ENV, VIDEO_ALIAS, VOICE_ALIAS,
+    WISENT_EMBEDDING_ALIAS, WISENT_MODERATION_ALIAS,
 };
 
 #[derive(Clone, Debug)]
@@ -178,6 +179,7 @@ impl ModelAliases {
     pub(in crate::core::server) fn chat_route(&self, alias: &str) -> Option<String> {
         if matches!(alias, WISENT_EMBEDDING_ALIAS | WISENT_MODERATION_ALIAS)
             || DECISION_ALIASES.contains(&alias)
+            || MEDIA_ALIASES.contains(&alias)
         {
             return None;
         }
@@ -206,6 +208,51 @@ impl ModelAliases {
         if !DECISION_ALIASES.contains(&alias) {
             return None;
         }
+        if let Some(path) = self.routes_file.as_deref() {
+            match crate::core::inference_routes::resolve(path, alias) {
+                Ok(Some(route)) => return Self::serviceable(alias, route),
+                Ok(None) => {}
+                Err(error) => {
+                    warn!(event = "inference_routes_invalid", %error);
+                    return None;
+                }
+            }
+        }
+        self.routes
+            .get(alias)
+            .cloned()
+            .and_then(|route| Self::serviceable(alias, route))
+    }
+
+    /// The route one media alias resolves to, or nothing.
+    ///
+    /// The same mirror as the decision route, in the three media shapes:
+    /// `image-model` resolves here and on `POST /v1/images/generations`
+    /// alone, `video-model` on `POST /v1/videos`, `voice-model` on
+    /// `POST /v1/audio/speech`, and none of them on chat. Asking for the
+    /// wrong one is a refusal rather than a render nobody can pay for.
+    pub(in crate::core::server) fn image_route(&self, alias: &str) -> Option<String> {
+        if alias != IMAGE_ALIAS {
+            return None;
+        }
+        self.media_route(alias)
+    }
+
+    pub(in crate::core::server) fn video_route(&self, alias: &str) -> Option<String> {
+        if alias != VIDEO_ALIAS {
+            return None;
+        }
+        self.media_route(alias)
+    }
+
+    pub(in crate::core::server) fn voice_route(&self, alias: &str) -> Option<String> {
+        if alias != VOICE_ALIAS {
+            return None;
+        }
+        self.media_route(alias)
+    }
+
+    fn media_route(&self, alias: &str) -> Option<String> {
         if let Some(path) = self.routes_file.as_deref() {
             match crate::core::inference_routes::resolve(path, alias) {
                 Ok(Some(route)) => return Self::serviceable(alias, route),

@@ -57,6 +57,23 @@ pub const BEST_DECISION_ALIAS: &str = "best-decision-model";
 /// them and answers a caller that asks with the state of the alias it asked
 /// for.
 pub(crate) const DECISION_ALIASES: &[&str] = &[DECISION_ALIAS, BEST_DECISION_ALIAS];
+/// The deployment's image alias: `POST /v1/images/generations` and nothing
+/// else. Like the decision names it is known by name and required of nobody,
+/// so a gateway that generates no images changes no policy to take the
+/// release; unrouted, it reports `no_route` with the command that declares
+/// it.
+pub const IMAGE_ALIAS: &str = "image-model";
+/// The deployment's video alias: `POST /v1/videos`, where the answer is a job
+/// rather than a render.
+pub const VIDEO_ALIAS: &str = "video-model";
+/// The deployment's voice alias: `POST /v1/audio/speech`, whose answer is
+/// encoded audio rather than JSON.
+pub const VOICE_ALIAS: &str = "voice-model";
+/// The three names the media endpoints accept as aliases. A caller may also
+/// name a canonical route directly, exactly as it may on chat: there are
+/// thousands of image, video and voice models and one alias cannot stand for
+/// the one a caller wants today.
+pub(crate) const MEDIA_ALIASES: &[&str] = &[IMAGE_ALIAS, VIDEO_ALIAS, VOICE_ALIAS];
 pub(in crate::core::server) const WISENT_MODEL_ALIASES: &[&str] = &[
     WISENT_BACKEND_ALIAS,
     WISENT_EVALUATION_ALIAS,
@@ -93,7 +110,8 @@ pub(crate) fn alias_route_shape_supported(alias: &str, route: &str) -> bool {
     if route == BEST_ALIAS {
         return alias != WISENT_EMBEDDING_ALIAS
             && alias != WISENT_MODERATION_ALIAS
-            && alias != DECISION_ALIAS;
+            && alias != DECISION_ALIAS
+            && !MEDIA_ALIASES.contains(&alias);
     }
     match alias {
         WISENT_EMBEDDING_ALIAS => crate::providers::adapter::supports_embedding_route(route),
@@ -101,6 +119,13 @@ pub(crate) fn alias_route_shape_supported(alias: &str, route: &str) -> bool {
         DECISION_ALIAS | BEST_DECISION_ALIAS => {
             crate::providers::adapter::supports_decision_route(route)
         }
+        // Media delegation does not exist: `best` picks the subscription that
+        // pays, and no subscription here carries an image or video quota. The
+        // two media aliases therefore name a provider route this deployment
+        // holds a key for, or they do not serve.
+        IMAGE_ALIAS => crate::providers::adapter::supports_image_route(route),
+        VIDEO_ALIAS => crate::providers::adapter::supports_video_route(route),
+        VOICE_ALIAS => crate::providers::adapter::supports_speech_route(route),
         _ => crate::providers::adapter::supports_chat_route(route),
     }
 }

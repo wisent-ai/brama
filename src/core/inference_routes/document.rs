@@ -43,6 +43,12 @@ pub(super) struct Registry {
     pub(super) deployments: Vec<Deployment>,
     #[serde(default)]
     pub(super) routes: HashMap<String, String>,
+    /// The operator's own grouping of the catalogue. Declared here rather
+    /// than in a second file because one document with one owner, one set of
+    /// permission checks and one atomic write is the whole reason this file
+    /// is safe to read per request.
+    #[serde(default)]
+    pub(super) categories: super::categories::Categories,
 }
 
 /// The only registry schema version Brama reads; a document that never wrote
@@ -85,6 +91,7 @@ pub fn snapshot(path: &Path) -> Result<Value, String> {
     for destination in registry.routes.values() {
         resolved_destination(&registry, destination)?;
     }
+    super::categories::validate_categories(&registry.categories)?;
     Ok(value)
 }
 
@@ -111,6 +118,7 @@ pub fn validate_document(value: &Value) -> Result<(), String> {
     for destination in registry.routes.values() {
         resolved_destination(&registry, destination)?;
     }
+    super::categories::validate_categories(&registry.categories)?;
     Ok(())
 }
 
@@ -163,6 +171,10 @@ pub(super) fn write_registry(path: &Path, value: &Value) -> Result<(), String> {
         file.sync_all()
             .map_err(|error| format!("cannot sync route staging file: {error}"))?;
         validate(&staging)?;
+        // The staged bytes are re-read rather than trusted: this is the one
+        // place every writer passes through, so a category the caller
+        // assembled by hand is refused here or nowhere.
+        super::categories::validate_categories(&read(&staging)?.categories)?;
         std::fs::rename(&staging, path)
             .map_err(|error| format!("cannot commit inference routes: {error}"))?;
         Ok(())

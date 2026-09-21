@@ -95,6 +95,41 @@ the schema the caller declared or it is refused. `brama decide` asks one from
 a shell. The vocabulary, the two engines and every refusal are in
 [`/docs/concepts/decision`](https://brama.wisent.com/docs/concepts/decision).
 
+## What a media alias promises
+
+Three names generate something that is not text: `image-model` on
+`POST /v1/images/generations`, `video-model` on `POST /v1/videos` with
+`GET /v1/videos/{id}` reading the job back, and `voice-model` on
+`POST /v1/audio/speech`, whose answer is the provider's encoded audio rather
+than JSON. Each accepts its own alias or a canonical route whose provider
+serves that shape and which the catalogue lists as that kind, so a chat model
+named on the image endpoint is refused before a credential is redeemed.
+
+Media is paid by the deployment's own capability. No subscription in the pool
+carries an image, video or voice quota, so `best` cannot stand behind a media
+alias and the registry refuses one that tries. Brama keeps no job state: a
+video identifier belongs to the provider that issued it, so a status read
+names the same model that started it. `brama image`, `brama video` and
+`brama speak` drive all three from a shell. The shapes, the providers that
+serve them and every bound are in
+[`/docs/concepts/media`](https://brama.wisent.com/docs/concepts/media).
+
+## What the catalogue says about a model
+
+Every model carries what it produces — `kind` is `text`, `image`, `video` or
+`audio`, decided from the output modalities its source declares — and whether
+its weights are published: `openWeights` is the catalogue's own flag, and
+`null` where the source said nothing, which is not the same claim as `false`.
+
+Categories are the operator's own grouping, declared in the route registry by
+provider, by exact route, or by a term the publisher put in the model's name.
+`uncensored` is the first one anybody asked for. Brama infers none, because a
+gateway that guessed would be publishing an opinion as metadata.
+`GET /v1/models` narrows on `kind`, `weights`, `category` and `provider`,
+`GET /v1/categories` reports each declaration with how many models it holds,
+and `brama models` and `brama categories` are the same surface from a shell.
+See [`/docs/concepts/category`](https://brama.wisent.com/docs/concepts/category).
+
 ## Product boundaries
 
 ### Included
@@ -103,6 +138,14 @@ a shell. The vocabulary, the two engines and every refusal are in
 - Typed decisions on `POST /v1/decisions`, through the `decision-model` and
   `best-decision-model` aliases, served natively by a decision provider or by
   rendering the questions onto a chat model.
+- Image, video and voice generation on `POST /v1/images/generations`,
+  `POST /v1/videos` with `GET /v1/videos/{id}`, and `POST /v1/audio/speech`,
+  through the `image-model`, `video-model` and `voice-model` aliases or a
+  canonical route the catalogue lists as that kind.
+- A model catalogue that states what each model produces and whether its
+  weights are published, and operator-declared categories such as
+  `uncensored`, filterable on `GET /v1/models` and reported by
+  `GET /v1/categories`.
 - Native Anthropic Messages and OpenAI Responses ingress on the same routing
   decision, so a caller that speaks one of those two first-party formats needs
   no shim in front of Brama.

@@ -9,24 +9,29 @@
 
 use std::collections::{HashMap, HashSet};
 
-use axum::extract::Extension;
+use axum::extract::{Extension, Query};
 use axum::Json;
 use tracing::warn;
 
+use crate::core::inference_routes::categories::{categories_for, declared, Categories};
 use crate::core::server::admission::identity::{ModelClientIdentity, BRAMA_DESKTOP_CLIENT_ID};
 use crate::core::server::admission::{authorize_caller, has_caller_auth_headers};
 use crate::core::server::aliases::table::ModelAliases;
 use crate::core::server::refusal::ApiError;
 use crate::core::server::subscriptions::account::account_agent_id;
+use crate::providers::adapter::RegistryModel;
 use crate::subscription_dispatch::registry_models_for_agent;
 
+use super::filters::CatalogFilters;
 use super::views::{self, CatalogView};
 
 pub(in crate::core::server) async fn list_models(
     Extension(client_identity): Extension<ModelClientIdentity>,
     Extension(aliases): Extension<ModelAliases>,
+    Query(query): Query<HashMap<String, String>>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    let filters = CatalogFilters::from_query(query)?.validated()?;
     let account_agent = account_agent_id(&client_identity).ok();
     let signed_catalog_agent = if account_agent.is_none() && has_caller_auth_headers(&headers) {
         Some(authorize_caller(&client_identity, &headers, &[], None).await?)
@@ -145,15 +150,74 @@ pub(in crate::core::server) async fn list_models(
         model_ids.retain(|model| client_identity.authorizes_model(model));
     }
 
+    // Categories are the operator's declaration, so they are read from the
+    // registry once per request and applied to whatever the caller is allowed
+    // to see. An alias carries the categories of the route it points at:
+    // asking for the uncensored models and being shown the alias that reaches
+    // one is the answer the caller wanted.
+    let declared_categories = declared();
+    let categories = model_categories(
+        &declared_categories,
+        &model_ids,
+        &registry_metadata,
+        &aliases,
+    );
+    if filters.any() {
+        model_ids.retain(|id| {
+            filters.matches(
+                registry_metadata.get(id).or_else(|| {
+                    alias_route(&aliases, id).and_then(|route| registry_metadata.get(&route))
+                }),
+                categories.get(id).map(Vec::as_slice).unwrap_or_default(),
+            )
+        });
+    }
+
     let view = CatalogView {
         model_ids,
         available,
         registry_metadata,
         unavailable_reasons,
+        categories,
         caller_known,
     };
     if headers.contains_key("x-jeden-schema-min") {
         return Ok(Json(views::jeden(view, catalog_revision, degraded)));
     }
     Ok(Json(views::openai(view)))
+}
+
+/// The route one declared alias points at, when it points at a catalogue
+/// route rather than at delegation.
+fn alias_route(aliases: &ModelAliases, alias: &str) -> Option<String> {
+    aliases
+        .declared_route(alias)
+        .ok()
+        .flatten()
+        .filter(|route| crate::providers::adapter::provider_id_from_route(route).is_some())
+}
+
+fn model_categories(
+    declared_categories: &Categories,
+    model_ids: &[String],
+    registry_metadata: &HashMap<String, RegistryModel>,
+    aliases: &ModelAliases,
+) -> HashMap<String, Vec<String>> {
+    if declared_categories.is_empty() {
+        return HashMap::new();
+    }
+    let mut carried = HashMap::new();
+    for id in model_ids {
+        let model = registry_metadata
+            .get(id)
+            .or_else(|| alias_route(aliases, id).and_then(|route| registry_metadata.get(&route)));
+        let Some(model) = model else {
+            continue;
+        };
+        let names = categories_for(declared_categories, model);
+        if !names.is_empty() {
+            carried.insert(id.clone(), names);
+        }
+    }
+    carried
 }

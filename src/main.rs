@@ -4,8 +4,10 @@ use clap::{Parser, Subcommand};
 
 use cli::adoption::AdoptArgs;
 use cli::aliases::{AliasesArgs, RoutesCommand};
+use cli::catalogue::{CatalogueCommand, ModelsArgs};
 use cli::decisions::DecideArgs;
 use cli::diagnostics::{CollectTaskQualityArgs, TestArgs};
+use cli::media::{ImageArgs, SpeakArgs, VideoCommand};
 use cli::onboarding::OnboardArgs;
 use cli::serving::ServeArgs;
 use cli::subscriptions::credentials::SubscriptionCommand;
@@ -40,6 +42,22 @@ enum Commands {
     Subscriptions(SubscriptionsArgs),
     /// Report every model alias this gateway declares and whether it can serve
     Aliases(AliasesArgs),
+    /// List the models this gateway can name, with kind, weights and categories
+    Models(ModelsArgs),
+    /// Act on the model categories this gateway declares
+    Categories {
+        #[command(subcommand)]
+        command: CatalogueCommand,
+    },
+    /// Generate one image through an image route
+    Image(ImageArgs),
+    /// Start or read back one video job
+    Video {
+        #[command(subcommand)]
+        command: VideoCommand,
+    },
+    /// Speak one text through a voice route
+    Speak(SpeakArgs),
     /// Act on this gateway's inference-route registry
     Routes {
         #[command(subcommand)]
@@ -71,6 +89,11 @@ async fn main() {
         Commands::Decide(args) => cli::decisions::decide(args).await,
         Commands::Subscriptions(args) => cli::subscriptions::report(args).await,
         Commands::Aliases(args) => cli::aliases::report(args).await,
+        Commands::Models(args) => cli::catalogue::models(args).await,
+        Commands::Categories { command } => cli::catalogue::run_categories(command).await,
+        Commands::Image(args) => cli::media::image(args).await,
+        Commands::Video { command } => cli::media::video(command).await,
+        Commands::Speak(args) => cli::media::speak(args).await,
         Commands::Routes { command } => cli::aliases::routes(command),
         Commands::Subscription { command } => cli::subscriptions::credentials::run(command).await,
         Commands::CollectTaskQuality(args) => cli::diagnostics::collect_task_quality(args).await,

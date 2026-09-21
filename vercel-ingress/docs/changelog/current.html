@@ -24,6 +24,42 @@ coordinate remain recorded as unpublished. Earlier released entries live in
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="candidate-media-and-categories">Image, video and voice, and a catalogue that says what a model is<a class="headerlink" href="#candidate-media-and-categories" title="Link to this section">&para;</a></h2>
+<p>Brama routed text. It now routes the three generation shapes that are not
+text: <code>POST /v1/images/generations</code>, <code>POST /v1/videos</code> with
+<code>GET /v1/videos/{id}</code> reading the job back, and
+<code>POST /v1/audio/speech</code>, whose answer is the provider's encoded audio
+rather than JSON. Three aliases reach them — <code>image-model</code>,
+<code>video-model</code>, <code>voice-model</code> — known by name and required of
+nobody, so a deployment that generates no media changes no policy to take this
+release. Media is paid by the deployment's own capability: no subscription in
+the pool carries an image, video or voice quota, so <code>best</code> cannot stand
+behind a media alias, and the registry refuses one that tries.</p>
+<p>Which providers serve which shape is declared from their vendor
+documentation and nowhere else: <code>openai</code> for all three,
+<code>xai</code> and <code>together</code> for images, <code>venice</code> for images and
+voice, <code>groq</code> for voice. A provider that generates media behind a
+different contract is declared with empty media paths and refused by name.</p>
+<p>The catalogue now says what a model is. Every model carries <code>kind</code>
+— <code>text</code>, <code>image</code>, <code>video</code> or <code>audio</code>, decided
+from the output modalities its source declares — and <code>openWeights</code>,
+which is the catalogue's own flag and is <code>null</code> where the source said
+nothing, a different answer from <code>false</code>. Until now
+<code>outputModalities</code> read <code>["text"]</code> for every id including the
+image and video models the catalogue had always carried, so no console could
+tell a renderer from a chat model.</p>
+<p>Categories are the operator's, not the gateway's.
+<a href="/docs/concepts/category">A category</a> is declared in the route registry
+— by provider, by exact route, or by a term the publisher put in the model's
+name — and <code>uncensored</code> is the first one anybody asked for. Brama infers
+none: a gateway that guessed would be publishing an opinion as metadata.
+<code>GET /v1/models</code> narrows on <code>kind</code>, <code>weights</code>,
+<code>category</code> and <code>provider</code> and refuses any other query member by
+name; <code>GET /v1/categories</code> reports each declaration with how many models
+it currently holds, which is the check on the declaration. The shell surface is
+<code>brama models</code>, <code>brama categories</code>, <code>brama image</code>,
+<code>brama video</code> and <code>brama speak</code>; the console carries the same
+facets, the same declarations and the same three generation shapes.</p>
 <h2 id="candidate-typed-decisions">Typed decisions: <code>decision-model</code> and <code>best-decision-model</code><a class="headerlink" href="#candidate-typed-decisions" title="Link to this section">&para;</a></h2>
 <p>Brama served one shape until now: generation. A caller that needed a routing
 decision, a gate or a grade asked a chat model for prose and parsed it, and

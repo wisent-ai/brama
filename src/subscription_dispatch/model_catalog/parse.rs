@@ -71,22 +71,17 @@ pub(super) fn parse_catalog(raw: &str) -> Result<CatalogSnapshot, String> {
                     latest_update = updated.to_string();
                 }
             }
-            let input_modalities = model
-                .pointer("/modalities/input")
-                .and_then(Value::as_array)
-                .map(|values| {
-                    values
-                        .iter()
-                        .filter_map(Value::as_str)
-                        .map(str::to_string)
-                        .collect::<Vec<_>>()
-                })
-                .filter(|values| !values.is_empty())
-                .unwrap_or_else(|| vec!["text".to_string()]);
+            let input_modalities = modalities(model, "input", &["text".to_string()]);
+            let output_modalities = modalities(model, "output", &["text".to_string()]);
             models.push(RegistryModel {
                 route_id: format!("{id}/{model_id}"),
                 provider_id: id.to_string(),
                 model_id: model_id.to_string(),
+                display_name: model
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or(model_id)
+                    .to_string(),
                 context_window: model
                     .pointer("/limit/context")
                     .and_then(Value::as_u64)
@@ -96,6 +91,12 @@ pub(super) fn parse_catalog(raw: &str) -> Result<CatalogSnapshot, String> {
                     .and_then(Value::as_u64)
                     .unwrap_or(16_384),
                 input_modalities,
+                output_modalities,
+                // models.dev states this per model and states it for every
+                // model it carries. A row that omits it says nothing, and
+                // `None` is that answer rather than a claim of proprietary
+                // weights.
+                open_weights: model.get("open_weights").and_then(Value::as_bool),
                 tools: model
                     .get("tool_call")
                     .and_then(Value::as_bool)
@@ -124,6 +125,25 @@ pub(super) fn parse_catalog(raw: &str) -> Result<CatalogSnapshot, String> {
         models,
         revision,
     })
+}
+
+/// One side of a row's `modalities` block, or the fallback when the row says
+/// nothing. Both sides are read the same way, so an image model that states
+/// its output cannot end up described by whatever the input side happened to
+/// carry.
+fn modalities(model: &Value, side: &str, fallback: &[String]) -> Vec<String> {
+    model
+        .pointer(&format!("/modalities/{side}"))
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .filter(|values| !values.is_empty())
+        .unwrap_or_else(|| fallback.to_vec())
 }
 
 fn cost(model: &Value, key: &str) -> f64 {

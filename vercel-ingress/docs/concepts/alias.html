@@ -25,13 +25,16 @@ Callers ship against aliases so routes, providers, and subscription-backed
 selection can change without a client release; an alias never unlocks a
 credential its caller does not own.</p>
 <h2 id="the-model-name-vocabulary">The model-name vocabulary<a class="headerlink" href="#the-model-name-vocabulary" title="Link to this section">&para;</a></h2>
-<p>A request's <code>model</code> field must be one of exactly five things:</p>
+<p>A request's <code>model</code> field must be one of exactly six things:</p>
 <ol>
 <li>an alias the deployment declares (<code>wisent-backend</code>, <code>smol</code>, …);</li>
 <li>the delegation alias <code>best</code>;</li>
 <li>a decision alias — <code>decision-model</code> or <code>best-decision-model</code>, on
    <code>POST /v1/decisions</code> and nowhere else, see
    <a href="/docs/concepts/decision">decision</a>;</li>
+<li>a media alias — <code>image-model</code>, <code>video-model</code> or
+   <code>voice-model</code>, each on its own endpoint and nowhere else, see
+   <a href="/docs/concepts/media">media</a>;</li>
 <li>a canonical <code>provider/model</code> route (<code>openai/gpt-4o-mini</code>);</li>
 <li>a selector (<code>any</code>, <code>any-vision-capable</code>, <code>task:&lt;task-name&gt;</code>) — signed
    agents only, see <a href="/docs/concepts/entitlement">entitlement</a>.</li>

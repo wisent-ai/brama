@@ -45,33 +45,34 @@ Tailscale IPv4 endpoints are accepted (<a href="/docs/concepts/alias">alias</a>)
 <a href="/docs/concepts/decision">typed decisions</a> and nothing else, so a chat
 completion naming one of its routes is refused rather than sent anywhere. Every other
 provider here serves chat.</p>
-<table><thead><tr><th>id</th><th>Display name</th><th>Wire protocol</th><th>Credentials</th><th>Plan usage</th></tr></thead><tbody>
-<tr><td><a href="/docs/providers/anthropic"><code>anthropic</code></a></td><td>Anthropic</td><td><code>anthropic-messages</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/claude-code"><code>claude-code</code></a></td><td>Claude Code (subscription)</td><td><code>anthropic-messages</code></td><td>subscription (OAuth) + refresh</td><td>yes</td></tr>
-<tr><td><a href="/docs/providers/kimi"><code>kimi</code></a></td><td>Kimi (subscription)</td><td><code>openai-chat</code></td><td>subscription (OAuth) + refresh</td><td>yes</td></tr>
-<tr><td><a href="/docs/providers/openai"><code>openai</code></a></td><td>OpenAI</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/codex"><code>codex</code></a></td><td>Codex (ChatGPT subscription)</td><td><code>openai-responses</code></td><td>subscription (OAuth) + refresh</td><td>yes</td></tr>
-<tr><td><a href="/docs/providers/openrouter"><code>openrouter</code></a></td><td>OpenRouter</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/groq"><code>groq</code></a></td><td>Groq</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/mistral"><code>mistral</code></a></td><td>Mistral</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/xai"><code>xai</code></a></td><td>xAI</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/deepseek"><code>deepseek</code></a></td><td>DeepSeek</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/cerebras"><code>cerebras</code></a></td><td>Cerebras</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/fireworks"><code>fireworks</code></a></td><td>Fireworks</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/together"><code>together</code></a></td><td>Together</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/nvidia"><code>nvidia</code></a></td><td>NVIDIA NIM</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/moonshot"><code>moonshot</code></a></td><td>Moonshot</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/zai"><code>zai</code></a></td><td>Z.AI</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/qwen"><code>qwen</code></a></td><td>Qwen</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/huggingface"><code>huggingface</code></a></td><td>Hugging Face Inference</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/featherless"><code>featherless</code></a></td><td>Featherless</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/venice"><code>venice</code></a></td><td>Venice</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/novita"><code>novita</code></a></td><td>Novita</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/synthetic"><code>synthetic</code></a></td><td>Synthetic</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/typesafe"><code>typesafe</code></a></td><td>TypeSafe AI</td><td><code>typesafe-systemone</code></td><td>capability (API key), decisions only</td><td>—</td></tr>
-<tr><td><a href="/docs/providers/local-openai"><code>local-openai</code></a></td><td>Local OpenAI</td><td><code>openai-chat</code></td><td>routes file</td><td>—</td></tr>
+<table><thead><tr><th>id</th><th>Display name</th><th>Wire protocol</th><th>Credentials</th><th>Plan usage</th><th>Media</th></tr></thead><tbody>
+<tr><td><a href="/docs/providers/anthropic"><code>anthropic</code></a></td><td>Anthropic</td><td><code>anthropic-messages</code></td><td>capability (API key)</td><td>—</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/claude-code"><code>claude-code</code></a></td><td>Claude Code (subscription)</td><td><code>anthropic-messages</code></td><td>subscription (OAuth) + refresh</td><td>yes</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/kimi"><code>kimi</code></a></td><td>Kimi (subscription)</td><td><code>openai-chat</code></td><td>subscription (OAuth) + refresh</td><td>yes</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/openai"><code>openai</code></a></td><td>OpenAI</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>image, video, voice</td></tr>
+<tr><td><a href="/docs/providers/codex"><code>codex</code></a></td><td>Codex (ChatGPT subscription)</td><td><code>openai-responses</code></td><td>subscription (OAuth) + refresh</td><td>yes</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/openrouter"><code>openrouter</code></a></td><td>OpenRouter</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/groq"><code>groq</code></a></td><td>Groq</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>voice</td></tr>
+<tr><td><a href="/docs/providers/mistral"><code>mistral</code></a></td><td>Mistral</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/xai"><code>xai</code></a></td><td>xAI</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>image</td></tr>
+<tr><td><a href="/docs/providers/deepseek"><code>deepseek</code></a></td><td>DeepSeek</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/cerebras"><code>cerebras</code></a></td><td>Cerebras</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/fireworks"><code>fireworks</code></a></td><td>Fireworks</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/together"><code>together</code></a></td><td>Together</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>image</td></tr>
+<tr><td><a href="/docs/providers/nvidia"><code>nvidia</code></a></td><td>NVIDIA NIM</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/moonshot"><code>moonshot</code></a></td><td>Moonshot</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/zai"><code>zai</code></a></td><td>Z.AI</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/qwen"><code>qwen</code></a></td><td>Qwen</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/huggingface"><code>huggingface</code></a></td><td>Hugging Face Inference</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/featherless"><code>featherless</code></a></td><td>Featherless</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/venice"><code>venice</code></a></td><td>Venice</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>image, voice</td></tr>
+<tr><td><a href="/docs/providers/novita"><code>novita</code></a></td><td>Novita</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/synthetic"><code>synthetic</code></a></td><td>Synthetic</td><td><code>openai-chat</code></td><td>capability (API key)</td><td>—</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/typesafe"><code>typesafe</code></a></td><td>TypeSafe AI</td><td><code>typesafe-systemone</code></td><td>capability (API key), decisions only</td><td>—</td><td>—</td></tr>
+<tr><td><a href="/docs/providers/local-openai"><code>local-openai</code></a></td><td>Local OpenAI</td><td><code>openai-chat</code></td><td>routes file</td><td>—</td><td>—</td></tr>
 </tbody></table>
 <p>Exactly three providers publish a free plan-usage report; the absence everywhere else is recorded as the provider&#x27;s own answer (<a href="/docs/concepts/subscription#the-usage-ledger">subscription</a>).</p>
+<p>The <strong>Media</strong> column is what a provider generates besides text, and it is written only where the vendor documents that exact OpenAI-shaped endpoint: <code>/v1/images/generations</code> for an image, <code>/v1/videos</code> with <code>/v1/videos/{id}</code> for a video job, <code>/v1/audio/speech</code> for a voice. A provider with a dash there is refused by name on the media endpoints rather than sent a request its server has no route for (<a href="/docs/concepts/media">media</a>).</p>
 </main>
   </div>
 </body>

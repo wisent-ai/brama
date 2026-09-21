@@ -95,6 +95,13 @@ pub fn migrate(path: &Path) -> Result<Value, String> {
             .cloned()
             .unwrap_or_else(|| Value::Object(Default::default())),
     );
+    // A member the current document defines is carried across, never dropped:
+    // the migration exists to move a file onto this shape, and a declared
+    // category is part of it. Losing one here would silently empty a
+    // catalogue facet two consoles filter on.
+    if let Some(categories) = document.get("categories") {
+        migrated.insert("categories".to_string(), categories.clone());
+    }
     let migrated = Value::Object(migrated);
     validate_document(&migrated)?;
     write_registry(path, &migrated)?;

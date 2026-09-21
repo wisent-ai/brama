@@ -88,6 +88,27 @@ the new document or it is the old one. Nothing partial is left on disk, and a re
 leaves the file exactly as it was.</p>
 <p>What the resulting states look like from the client side is
 <a href="/docs/http-api/discovery-and-subscriptions#get-v1aliases"><code>GET /v1/aliases</code></a>.</p>
+<h2 id="model-categories">Model categories<a class="headerlink" href="#model-categories" title="Link to this section">&para;</a></h2>
+<p><strong>PUT <code>/v1/admin/categories</code></strong> takes exactly
+<code>{"category", "providers", "routes", "terms"}</code> — the name and the whole
+membership rule — and replaces that category in the same document the routes live
+in. The three lists are optional and each defaults to empty, but a category
+declaring none of them is refused: a rule that matches nothing means nothing. Other
+refusals name the member that was wrong —
+<code>400 model category 'Uncensored' must be lowercase letters, digits and hyphens,
+at most 32 bytes</code>,
+<code>400 model category 'x' names 'not-a-route', which is not a provider/model
+route</code> — and <code>409 runtime route registry is not configured</code> when no
+registry file is in effect.</p>
+<p><strong>DELETE <code>/v1/admin/categories</code></strong> takes exactly
+<code>{"category"}</code> and answers <code>404 no model category 'x' is
+declared</code> for a name nobody declared, so the caller is never told a document
+changed when it did not.</p>
+<p>Both answer <code>{"ok": true, "routes": &lt;document&gt;}</code> and take the same
+staged, validated, owner-only replacement the route writes take. What the declarations
+then look like from the client side is
+<a href="/docs/http-api/discovery-and-subscriptions#get-v1categories"><code>GET /v1/categories</code></a>,
+and what they do to the catalogue is <a href="/docs/concepts/category">category</a>.</p>
 <h2 id="configuration-adoption">Configuration adoption<a class="headerlink" href="#configuration-adoption" title="Link to this section">&para;</a></h2>
 <p>Two paths take a whole configuration document and merge the aliases an operator picks
 out of it. Both work on the registry shape above, so an alias adopted from a source

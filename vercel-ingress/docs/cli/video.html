@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>brama video — Brama CLI Docs</title>
+  <meta name="description" content="Start one video job and read it back from the provider that issued it, over the same routes POST /v1/videos serves.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/cli/video">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>brama video</h2><a class="active" aria-current="page" href="/docs/cli/video">video</a><a href="/docs/cli/image">image</a><a href="/docs/cli/speak">speak</a><a href="/docs/cli">CLI tree</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/concepts/media">Media</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/http-api/inference">HTTP inference</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama CLI command reference</p>
+      <article class="doc"><h1 id="brama-video"><code>brama video</code><a class="headerlink" href="#brama-video" title="Link to this section">&para;</a></h1>
+<p>A video is a job, not an answer: the start call returns an identifier and a status, and the render finishes minutes later. This command drives both halves over the same routes and refusals <code>POST /v1/videos</code> and <code>GET /v1/videos/{id}</code> serve.</p>
+
+<h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">brama video start --prompt &lt;TEXT&gt; [--model &lt;ALIAS|ROUTE&gt;] [--size &lt;SIZE&gt;] [--seconds &lt;N&gt;] [--json] --allow-provider-cost
+brama video status &lt;JOB_ID&gt; [--model &lt;ALIAS|ROUTE&gt;] [--json]</code></pre>
+<table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>--prompt &lt;TEXT&gt;</code></td><td>required for <code>start</code></td><td>What to render.</td></tr>
+<tr><td><code>&lt;JOB_ID&gt;</code></td><td>required for <code>status</code></td><td>The provider's own job identifier, as <code>start</code> printed it.</td></tr>
+<tr><td><code>--model &lt;ALIAS|ROUTE&gt;</code></td><td>optional; <code>video-model</code></td><td>The media alias, or a canonical route the catalogue lists as a video model. <code>status</code> needs the same model the job was started with.</td></tr>
+<tr><td><code>--size &lt;SIZE&gt;</code></td><td>optional</td><td>The provider's own size string.</td></tr>
+<tr><td><code>--seconds &lt;N&gt;</code></td><td>optional</td><td>Clip length. The endpoint accepts between one and sixty seconds.</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td>Print the provider's job document instead of lines.</td></tr>
+<tr><td><code>--allow-provider-cost</code></td><td>required by <code>start</code></td><td>Acknowledge that starting a job performs a billable provider request.</td></tr>
+</tbody></table>
+<p><code>status</code> takes no acknowledgement: reading a job back costs nothing.</p>
+
+<h2 id="why-status-names-a-model">Why status names a model<a class="headerlink" href="#why-status-names-a-model" title="Link to this section">&para;</a></h2>
+<p>Brama keeps no job state. The identifier belongs to the provider that issued it, so the caller names the same model it started with; a gateway that guessed would eventually ask the wrong vendor, and one that stored the job would become a second source of truth about somebody else's queue.</p>
+
+<h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
+<p>Both subcommands print the alias, the route it resolved to, the job identifier and the status the provider reports, plus its progress and error fields when it sends them. With <code>--json</code> the provider's document is printed whole under <code>job</code>.</p>
+<p>A refused start prints the provider's own sentence and exits non-zero. This is a real one, against <code>video-model</code> routed to <code>openai/sora-2</code> on a deployment whose OpenAI account has no credit:</p>
+<pre><code class="language-console">$ brama video start --prompt "a red square" --seconds 4 --allow-provider-cost
+provider_rate_limited: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.</code></pre>
+<p>The command reads the route registry and writes nothing.</p>
+
+<h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
+<table><thead><tr><th>Sentence</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>refusing a billable video job without explicit --allow-provider-cost</code></td><td>Nothing was sent.</td></tr>
+<tr><td><code>alias `video-model` is a media alias this gateway knows but no route is declared for it; declare one with `brama routes set video-model &lt;provider/model&gt;` or `PUT /v1/admin/routes`</code></td><td>The alias has no route here.</td></tr>
+<tr><td><code>invalid_request: route `venice/venice-uncensored` does not generate video</code></td><td>The named route's provider serves no video endpoint.</td></tr>
+<tr><td><code>invalid_request: video id is not a provider job identifier</code></td><td>The identifier carried something an identifier cannot: a separator, a space, a control byte.</td></tr>
+<tr><td><code>provider_rate_limited: &lt;the provider's own sentence&gt;</code></td><td>The route was reached and refused.</td></tr>
+</tbody></table>
+<p>Every refusal exits 1 and prints on standard error.</p>
+<p>See <a href="/docs/concepts/media">media</a>, <a href="/docs/cli/image"><code>brama image</code></a>, <a href="/docs/cli/speak"><code>brama speak</code></a>, or <a href="/docs/cli">the CLI tree</a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

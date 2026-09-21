@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>brama image — Brama CLI Docs</title>
+  <meta name="description" content="Generate one image from an operator shell, over the same route, credential and refusals POST /v1/images/generations serves.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/cli/image">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>brama image</h2><a class="active" aria-current="page" href="/docs/cli/image">image</a><a href="/docs/cli/video">video</a><a href="/docs/cli/speak">speak</a><a href="/docs/cli">CLI tree</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/concepts/media">Media</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/http-api/inference">HTTP inference</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama CLI command reference</p>
+      <article class="doc"><h1 id="brama-image"><code>brama image</code><a class="headerlink" href="#brama-image" title="Link to this section">&para;</a></h1>
+<p>Render one image from a shell through the same route, the same Skarbiec credential redemption and the same refusals <code>POST /v1/images/generations</code> uses. It exists for the two moments the HTTP surface cannot cover: establishing that a <a href="/docs/concepts/media">media</a> route answers at all before a gateway runs, and diagnosing one that stopped.</p>
+
+<h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">brama image --prompt &lt;TEXT&gt; [--model &lt;ALIAS|ROUTE&gt;] [--size &lt;SIZE&gt;] [--n &lt;COUNT&gt;] [--quality &lt;QUALITY&gt;] [--output &lt;FILE&gt;] [--json] --allow-provider-cost</code></pre>
+<table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>--prompt &lt;TEXT&gt;</code></td><td>required</td><td>What to render.</td></tr>
+<tr><td><code>--model &lt;ALIAS|ROUTE&gt;</code></td><td>optional; <code>image-model</code></td><td>The media alias, or a canonical <code>provider/model</code> route the catalogue lists as an image model.</td></tr>
+<tr><td><code>--size &lt;SIZE&gt;</code></td><td>optional</td><td>The provider's own size string, such as <code>1024x1024</code>.</td></tr>
+<tr><td><code>--n &lt;COUNT&gt;</code></td><td>optional</td><td>How many images. The endpoint accepts between one and ten.</td></tr>
+<tr><td><code>--quality &lt;QUALITY&gt;</code></td><td>optional</td><td>The provider's own quality string.</td></tr>
+<tr><td><code>--output &lt;FILE&gt;</code></td><td>optional</td><td>Decode the returned bytes and write them there. Several images are numbered beside that name.</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td>Print the provider's document instead of lines.</td></tr>
+<tr><td><code>--allow-provider-cost</code></td><td>required to send anything</td><td>Acknowledge that this performs a billable provider request.</td></tr>
+</tbody></table>
+
+<h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
+<p>A successful run prints the alias, the route it resolved to, how many images came back, and for each one either the URL the provider returned or the path and byte count this command wrote. Without <code>--output</code> the encoded length is reported rather than dumped into a terminal.</p>
+<p>A refused run prints the provider's own sentence and exits non-zero. This is a real one, against <code>image-model</code> routed to <code>openai/gpt-image-1</code> on a deployment whose OpenAI account has no credit:</p>
+<pre><code class="language-console">$ brama image --prompt "a plain red square on a white background" --size 1024x1024 --output square.png --allow-provider-cost
+credential obtained at final use event="credential_obtained" resource="provider:openai" path="read-grant"
+provider_rate_limited: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.</code></pre>
+<p>The command reads the route registry and writes only the file it was asked for.</p>
+
+<h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
+<table><thead><tr><th>Sentence</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>refusing a billable image generation without explicit --allow-provider-cost</code></td><td>Nothing was sent. Nothing is spent by running this command by accident.</td></tr>
+<tr><td><code>alias `image-model` is a media alias this gateway knows but no route is declared for it; declare one with `brama routes set image-model &lt;provider/model&gt;` or `PUT /v1/admin/routes`</code></td><td>The alias has no route here.</td></tr>
+<tr><td><code>invalid_request: route `anthropic/claude-sonnet-4-6` does not generate images</code></td><td>The named route's provider serves no image endpoint.</td></tr>
+<tr><td><code>provider_rate_limited: &lt;the provider's own sentence&gt;</code></td><td>The route was reached and refused — no credits, a rate limit, a rejected key.</td></tr>
+<tr><td><code>the provider's image is not base64: &lt;reason&gt;</code></td><td>The answer arrived but its bytes could not be decoded, so no file was written.</td></tr>
+</tbody></table>
+<p>Every refusal exits 1 and prints on standard error.</p>
+<p>See <a href="/docs/concepts/media">media</a>, <a href="/docs/cli/video"><code>brama video</code></a>, <a href="/docs/cli/speak"><code>brama speak</code></a>, or <a href="/docs/cli">the CLI tree</a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

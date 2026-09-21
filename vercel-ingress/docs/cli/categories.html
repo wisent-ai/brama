@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>brama categories — Brama CLI Docs</title>
+  <meta name="description" content="Read, declare and retire the model categories this gateway groups its catalogue by, including the uncensored category.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/cli/categories">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>brama categories</h2><a class="active" aria-current="page" href="/docs/cli/categories">categories</a><a href="/docs/cli/models">models</a><a href="/docs/cli/routes/set">routes set</a><a href="/docs/cli">CLI tree</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/concepts/category">Category</a><a href="/docs/configuration/route-registry">Route registry</a><a href="/docs/http-api/administration-and-operations">Administration</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama CLI command reference</p>
+      <article class="doc"><h1 id="brama-categories"><code>brama categories</code><a class="headerlink" href="#brama-categories" title="Link to this section">&para;</a></h1>
+<p>The operator's own grouping of the catalogue: read it, declare one, retire one. A <a href="/docs/concepts/category">category</a> is data in the route registry, so adding <code>uncensored</code> — or any other name this deployment wants to filter on — is a registry write and never a gateway release.</p>
+
+<h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">brama categories ls [--json]
+brama categories set &lt;NAME&gt; [--provider &lt;ID&gt;]... [--route &lt;PROVIDER/MODEL&gt;]... [--term &lt;TEXT&gt;]...
+brama categories rm &lt;NAME&gt;</code></pre>
+<table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>&lt;NAME&gt;</code></td><td>required</td><td>Lowercase letters, digits and hyphens.</td></tr>
+<tr><td><code>--provider &lt;ID&gt;</code></td><td>repeatable</td><td>Every model of that provider is in the category.</td></tr>
+<tr><td><code>--route &lt;PROVIDER/MODEL&gt;</code></td><td>repeatable</td><td>That exact route is in the category.</td></tr>
+<tr><td><code>--term &lt;TEXT&gt;</code></td><td>repeatable</td><td>A model whose route id or published name contains this text is in the category.</td></tr>
+<tr><td><code>--json</code></td><td><code>ls</code> only; off</td><td>Print the declarations as a document.</td></tr>
+</tbody></table>
+<p><code>set</code> replaces the named category whole, so the three lists are always exactly what the operator last stated.</p>
+
+<h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">$ brama categories set uncensored --term uncensored --term abliterated --provider abliteration-ai
+declared model category uncensored
+$ brama categories ls
+uncensored (24 models)
+  providers: abliteration-ai
+  routes:    -
+  terms:     uncensored, abliterated
+$ brama categories rm uncensored
+retired model category uncensored</code></pre>
+<p>The count beside the name is how many catalogue models the rule currently holds, computed from the same snapshot <code>brama models</code> lists; a rule that matches nothing reads zero rather than looking like a working facet. The write lands in the route registry named by <code>BRAMA_INFERENCE_ROUTES_FILE</code>, else <code>~/.config/brama/inference-routes.json</code>, through the same staged, validated, owner-only rename every route edit takes.</p>
+
+<h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
+<table><thead><tr><th>Sentence</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>no inference route registry is configured; set BRAMA_INFERENCE_ROUTES_FILE</code></td><td>There is no document to write into.</td></tr>
+<tr><td><code>model category 'Uncensored' must be lowercase letters, digits and hyphens, at most 32 bytes</code></td><td>The name cannot be held by the registry or named in a query.</td></tr>
+<tr><td><code>model category 'empty' declares no providers, routes or terms</code></td><td>A category with no rule would match nothing and mean nothing.</td></tr>
+<tr><td><code>model category 'x' names 'not-a-route', which is not a provider/model route</code></td><td>A route member has to be a route.</td></tr>
+<tr><td><code>no model category 'x' is declared</code></td><td><code>rm</code> was asked to retire a name nobody declared; the document is unchanged.</td></tr>
+</tbody></table>
+<p>Every refusal exits 1, prints on standard error, and leaves the registry exactly as it was.</p>
+<p>See <a href="/docs/concepts/category">category</a>, <a href="/docs/cli/models"><code>brama models</code></a>, or <a href="/docs/cli">the CLI tree</a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

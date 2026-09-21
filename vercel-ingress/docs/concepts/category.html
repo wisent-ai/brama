@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Category — Brama Docs</title>
+  <meta name="description" content="What a model produces, whether its weights are published, and the operator's own grouping of the catalogue — including the uncensored category.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/concepts/category">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Category</h2><a class="active" aria-current="page" href="/docs/concepts/category">Category</a><a href="/docs/concepts/media">Media</a><a href="/docs/cli/models">brama models</a><a href="/docs/cli/categories">brama categories</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/http-api/discovery-and-subscriptions">Discovery</a><a href="/docs/configuration/route-registry">Route registry</a></section></nav></aside>
+    <main>
+      <p class="source-note">Documentation topic: docs/concepts/category.md</p>
+      <article class="doc"><h1 id="category">Category<a class="headerlink" href="#category" title="Link to this section">&para;</a></h1>
+<p>Three facets a caller needs before it picks a model name: what the model produces, whether its weights are published, and which of the operator's groupings it belongs to. The first two are read from the public catalogue. The third is the operator's declaration, because no public catalogue carries it.</p>
+
+<h2 id="kind">Kind: what the model produces<a class="headerlink" href="#kind" title="Link to this section">&para;</a></h2>
+<p>Every catalogue model carries <code>kind</code>, decided from the output modalities its source declares and from nothing else: <code>text</code>, <code>image</code>, <code>video</code> or <code>audio</code>. A model that emits video is a video model even when it also emits text — the heaviest artifact decides, because that is the endpoint shape the caller has to post to. A text-to-video model whose vendor description reads "Image model for prompt-driven generation" is a video model here, because <code>modalities.output</code> says so.</p>
+<p>The catalogue's <code>outputModalities</code> answered <code>["text"]</code> for every id until this facet existed, including the image and video models it had always carried, so no console could tell a renderer from a chat model.</p>
+
+<h2 id="weights">Weights: open or closed<a class="headerlink" href="#weights" title="Link to this section">&para;</a></h2>
+<p><code>openWeights</code> (<code>open_weights</code> in the OpenAI-shaped view) is the catalogue's own <code>open_weights</code> flag: <code>true</code> where the weights are published, <code>false</code> where they are withheld, and <code>null</code> where the source said nothing. <code>null</code> is a third answer, not a hedge — a model whose source never stated it matches neither <code>weights=open</code> nor <code>weights=closed</code>, and no filter treats absence as a claim.</p>
+
+<h2 id="declared-categories">Declared categories<a class="headerlink" href="#declared-categories" title="Link to this section">&para;</a></h2>
+<p>A category is a name the operator declares and the membership rule that decides which models carry it. Brama infers none: a gateway that guessed would be publishing an opinion as metadata, and a caller could not tell the two apart.</p>
+<p>The declaration lives in the <a href="/docs/configuration/route-registry">route registry</a>, beside the routes and the registry's own schema member, under <code>categories</code>:</p>
+<pre><code class="language-json">{
+  "routes": {"image-model": "openai/gpt-image-1"},
+  "categories": {
+    "uncensored": {
+      "providers": ["abliteration-ai"],
+      "routes": ["venice/venice-uncensored"],
+      "terms": ["uncensored", "abliterated"]
+    }
+  }
+}</code></pre>
+<p>A model is in the category when any of the three matches:</p>
+<table><thead><tr><th>Member</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>providers</code></td><td>Every model of that provider, for a provider whose whole catalogue is the category.</td></tr>
+<tr><td><code>routes</code></td><td>One exact <code>provider/model</code> route.</td></tr>
+<tr><td><code>terms</code></td><td>A string the publisher put in the model's route id or display name.</td></tr>
+</tbody></table>
+<p>The match is on what the publisher named the model, never on its description. A description is prose about a model and mentions its neighbours: the catalogue's cybersecurity variants read "based on the uncensored model, with provider moderation for illegal activities", which is the opposite claim in a sentence containing the word.</p>
+<p>The terms live in the operator's document rather than in the gateway binary, so adding one is an edit to a file and never a release. A category name is lowercase letters, digits and hyphens, at most thirty-two bytes; a document declares at most thirty-two categories, and each carries at most five hundred and twelve members.</p>
+
+<h2 id="the-uncensored-category">The uncensored category<a class="headerlink" href="#the-uncensored-category" title="Link to this section">&para;</a></h2>
+<p><code>uncensored</code> is the first category anybody asked for, and it is a declaration like any other. Declaring it takes one command:</p>
+<pre><code class="language-console">$ brama categories set uncensored --term uncensored --term abliterated --provider abliteration-ai
+declared model category uncensored
+$ brama categories ls
+uncensored (24 models)
+  providers: abliteration-ai
+  routes:    -
+  terms:     uncensored, abliterated</code></pre>
+<p>The model count beside the name is the check on the declaration: a rule that matches nothing reads zero here instead of looking like a working facet in two consoles. What a provider filters at serving time is the provider's business and no catalogue states it; this category says only that the publisher named the model that way.</p>
+
+<h2 id="reading-the-facets">Reading the facets<a class="headerlink" href="#reading-the-facets" title="Link to this section">&para;</a></h2>
+<p><code>GET /v1/models</code> narrows on all four members, and a value the gateway has no meaning for is refused by name rather than answering the whole catalogue:</p>
+<table><thead><tr><th>Query</th><th>Accepts</th><th>Refusal</th></tr></thead><tbody>
+<tr><td><code>kind</code></td><td><code>text</code>, <code>image</code>, <code>video</code>, <code>audio</code></td><td><code>kind must be text, image, video or audio</code></td></tr>
+<tr><td><code>weights</code></td><td><code>open</code>, <code>closed</code></td><td><code>weights must be open or closed</code></td></tr>
+<tr><td><code>category</code></td><td>a declared name</td><td><code>category must be lowercase letters, digits and hyphens</code></td></tr>
+<tr><td><code>provider</code></td><td>a provider id</td><td><code>provider must be a provider identifier</code></td></tr>
+</tbody></table>
+<p>Any other query member is refused as <code>`limit` is not a model filter; narrow by kind, weights, category or provider</code>. <a href="/docs/http-api/discovery-and-subscriptions"><code>GET /v1/categories</code></a> reports every declaration with its rule and its live model count, and <a href="/docs/cli/models"><code>brama models</code></a> prints the same facets from a shell.</p>
+<p>An alias carries the categories of the route it points at: asking for the uncensored models and being shown the alias that reaches one is the answer the caller wanted.</p>
+
+<h2 id="writing-a-category">Writing a category<a class="headerlink" href="#writing-a-category" title="Link to this section">&para;</a></h2>
+<p>Two surfaces, one validated, staged, owner-only write: <a href="/docs/cli/categories"><code>brama categories set</code></a> from a shell and <code>PUT /v1/admin/categories</code> from the console. A document that would not load is refused before it replaces the one that does, and the refusal names the category, the member and what was wrong with it.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

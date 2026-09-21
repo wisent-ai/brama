@@ -10,6 +10,9 @@ use axum::routing::{get, post, put};
 use axum::{Extension, Router};
 
 use crate::core::server::administration::adoption::{apply_admin_adoption, preview_admin_adoption};
+use crate::core::server::administration::categories::{
+    delete_admin_category, update_admin_category,
+};
 use crate::core::server::administration::credentials::{
     delete_admin_credential, list_admin_credentials, put_admin_credential,
 };
@@ -18,17 +21,21 @@ use crate::core::server::administration::snapshot::admin_snapshot;
 use crate::core::server::admission::ingress::ModelIngressAuth;
 use crate::core::server::admission::{require_model_bearer, transport::require_secure_transport};
 use crate::core::server::aliases::table::ModelAliases;
-use crate::core::server::catalog::list_aliases;
 use crate::core::server::catalog::models::list_models;
+use crate::core::server::catalog::{list_aliases, list_categories};
 use crate::core::server::chat::chat_completions;
 use crate::core::server::chat::dialects::{anthropic_messages, openai_responses};
 use crate::core::server::decisions::decisions;
+use crate::core::server::media::{
+    audio_speech, image_generations, video_generations, video_status,
+};
 use crate::core::server::readiness::{health, readyz};
 use crate::core::server::subscriptions::probe::{
     probe_admin_subscription, refresh_admin_subscription_pool,
 };
 use crate::core::server::subscriptions::sign_in::manual::{
     begin_admin_manual_sign_in, complete_admin_manual_sign_in, disown_admin_grant,
+    reinstate_admin_grant,
 };
 use crate::core::server::subscriptions::sign_in::{
     sign_in_account_subscription, sign_in_admin_pool_subscription, sign_in_admin_subscription,
@@ -48,11 +55,19 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
         .route("/v1/responses", post(openai_responses))
         .route("/v1/embeddings", post(embeddings))
         .route("/v1/moderations", post(moderations))
+        // The two generation shapes that are not text. An image is one
+        // answer; a video is a job, read back from the third route with the
+        // same model name that started it.
+        .route("/v1/images/generations", post(image_generations))
+        .route("/v1/videos", post(video_generations))
+        .route("/v1/audio/speech", post(audio_speech))
+        .route("/v1/videos/:video_id", get(video_status))
         // The one endpoint that answers instead of generating: typed
         // questions in, one typed answer each out.
         .route("/v1/decisions", post(decisions))
         .route("/v1/models", get(list_models))
         .route("/v1/aliases", get(list_aliases))
+        .route("/v1/categories", get(list_categories))
         // The subscription pool: one read and one write, reached by the
         // console, an account holder and a signed agent alike. Which accounts
         // an answer carries follows from the identity the caller proved, so
@@ -71,6 +86,10 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
         )
         .route("/stats", get(get_stats))
         .route("/v1/admin/snapshot", get(admin_snapshot))
+        .route(
+            "/v1/admin/categories",
+            put(update_admin_category).delete(delete_admin_category),
+        )
         .route(
             "/v1/admin/routes",
             put(update_admin_route).delete(delete_admin_route),
@@ -112,6 +131,10 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
         .route(
             "/v1/admin/subscription-pool/disown",
             post(disown_admin_grant),
+        )
+        .route(
+            "/v1/admin/subscription-pool/reinstate",
+            post(reinstate_admin_grant),
         )
         .route(
             "/v1/admin/subscription-pool/refresh",

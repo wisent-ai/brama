@@ -62,6 +62,28 @@ pub fn supports_moderation_route(value: &str) -> bool {
     value == "openai/moderation" && route(value).is_some()
 }
 
+/// Whether this route reaches a provider that generates images, which is the
+/// only thing `POST /v1/images/generations` can send anywhere.
+pub fn supports_image_route(value: &str) -> bool {
+    route(value).is_some_and(|(descriptor, _)| !descriptor.image_path.is_empty())
+}
+
+/// Whether this route reaches a provider that generates video. A video
+/// provider also declares where the job it started is read back from, so one
+/// check answers both halves of the shape.
+pub fn supports_video_route(value: &str) -> bool {
+    route(value).is_some_and(|(descriptor, _)| {
+        !descriptor.video_path.is_empty() && !descriptor.video_status_path.is_empty()
+    })
+}
+
+/// Whether this route reaches a provider that speaks: `POST /v1/audio/speech`
+/// answers audio bytes, and a provider with no voice has nowhere to send the
+/// request.
+pub fn supports_speech_route(value: &str) -> bool {
+    route(value).is_some_and(|(descriptor, _)| !descriptor.speech_path.is_empty())
+}
+
 pub(in crate::providers::adapter) fn valid_model_id(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= MAX_MODEL_ID_BYTES
@@ -69,7 +91,7 @@ pub(in crate::providers::adapter) fn valid_model_id(value: &str) -> bool {
         && !value.chars().any(char::is_control)
 }
 
-pub(in crate::providers::adapter) fn valid_provider_id(value: &str) -> bool {
+pub fn valid_provider_id(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= MAX_PROVIDER_ID_BYTES
         && value

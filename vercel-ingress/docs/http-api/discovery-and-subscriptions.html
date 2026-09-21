@@ -33,6 +33,31 @@ includes agent-owned subscriptions. Captured shape:</p>
 the answer. The reason is a fact about this gateway's configuration, so it is shown to
 every caller. See
 <a href="/docs/concepts/alias">an alias that cannot serve says so</a>.</p>
+<p>Each model also carries what it produces and how its weights were published:
+<code>kind</code> (<code>text</code>, <code>image</code>, <code>video</code> or
+<code>audio</code>), <code>output_modalities</code>, <code>open_weights</code>
+(<code>null</code> where the catalogue said nothing) and the
+<a href="/docs/concepts/category">categories</a> the operator declared. The
+listing narrows on all four — <code>?kind=</code>, <code>?weights=open|closed</code>,
+<code>?category=</code>, <code>?provider=</code> — and any other query member is
+refused by name: <code>`limit` is not a model filter; narrow by kind, weights,
+category or provider</code>. An unreadable value is refused in the same way, so a
+filter never silently widens to the whole catalogue.</p>
+<h2 id="get-v1categories"><code>GET /v1/categories</code><a class="headerlink" href="#get-v1categories" title="Link to this section">&para;</a></h2>
+<p>Every model category the operator declared, the rule each one carries, and how
+many catalogue models it currently holds. The count is the check on the
+declaration: a rule that matches nothing reads <code>0</code> rather than looking
+like a working facet. Captured shape:</p>
+<pre><code class="language-json">{&quot;object&quot;:&quot;list&quot;,
+ &quot;categories&quot;:[
+  {&quot;category&quot;:&quot;uncensored&quot;,&quot;providers&quot;:[&quot;abliteration-ai&quot;],&quot;routes&quot;:[],
+   &quot;terms&quot;:[&quot;uncensored&quot;,&quot;abliterated&quot;],&quot;models&quot;:24}],
+ &quot;registry&quot;:&quot;/Users/&lt;operator&gt;/.config/brama/inference-routes.json&quot;,
+ &quot;degraded&quot;:false}
+</code></pre>
+<p>A deployment whose operator declared nothing answers an empty list, and
+<code>degraded</code> is <code>true</code> when the public catalogue could not be read,
+which is when the counts are unknown rather than zero.</p>
 <h2 id="get-v1aliases"><code>GET /v1/aliases</code><a class="headerlink" href="#get-v1aliases" title="Link to this section">&para;</a></h2>
 <p>Every alias this gateway declares — the compiled-in contract plus every operator route —
 with the state the gateway would put it in right now and the one route it resolves to.

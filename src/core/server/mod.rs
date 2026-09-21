@@ -29,6 +29,7 @@ mod catalog;
 mod chat;
 mod decisions;
 mod lifecycle;
+mod media;
 mod readiness;
 mod refusal;
 mod streaming;
@@ -41,14 +42,16 @@ pub use aliases::diagnosis::{
     ALIAS_SERVING,
 };
 pub use aliases::report::{alias_report, alias_routing, AliasReport, AliasReportSource};
-pub use aliases::{BEST_ALIAS, BEST_DECISION_ALIAS, DECISION_ALIAS};
+pub use aliases::{
+    BEST_ALIAS, BEST_DECISION_ALIAS, DECISION_ALIAS, IMAGE_ALIAS, VIDEO_ALIAS, VOICE_ALIAS,
+};
 pub use lifecycle::start_server;
 pub use readiness::check::unroutable_reason;
 pub use refusal::contract::{model_error_contract, ModelErrorContract};
 
 pub use administration::{route_shape_writable, valid_alias};
 pub(crate) use aliases::{
-    alias_requires_direct_capability, alias_route_shape_supported, DECISION_ALIASES,
+    alias_requires_direct_capability, alias_route_shape_supported, DECISION_ALIASES, MEDIA_ALIASES,
 };
 pub(crate) use chat::request::{MAX_OUTPUT_TOKENS, MAX_TEMPERATURE};
 

@@ -96,6 +96,17 @@ pub(super) async fn route_model_call(
         )
         .into_response());
     }
+    // A media alias promises a rendered artifact, which the chat endpoints
+    // cannot return whatever is behind it.
+    if crate::core::server::MEDIA_ALIASES.contains(&requested_model) {
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            &format!(
+                "`{requested_model}` is a media alias: it generates on POST /v1/images/generations or POST /v1/videos, not chat completions"
+            ),
+        )
+        .into_response());
+    }
     let alias_source = aliases.chat_route(requested_model);
     // An alias the gateway knows but cannot serve is a configuration fault on
     // this host, not a malformed request. Answering "unknown model" made it

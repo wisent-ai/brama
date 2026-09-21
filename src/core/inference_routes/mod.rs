@@ -13,6 +13,7 @@
 //! including the migration onto the current document shape; [`importing`] owns
 //! merging a reviewed configuration into the file.
 
+pub mod categories;
 mod document;
 mod editing;
 mod importing;
@@ -20,6 +21,7 @@ mod resolution;
 
 use std::path::PathBuf;
 
+pub use categories::{Categories, Category};
 pub use document::{snapshot, validate_document};
 pub use editing::{delete_route, migrate, update_route};
 pub use importing::{import_routes, RouteImport, RouteImportDisposition, RouteImportResult};

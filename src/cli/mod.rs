@@ -2,8 +2,10 @@
 
 pub(crate) mod adoption;
 pub(crate) mod aliases;
+pub(crate) mod catalogue;
 pub(crate) mod decisions;
 pub(crate) mod diagnostics;
+pub(crate) mod media;
 pub(crate) mod onboarding;
 pub(crate) mod serving;
 pub(crate) mod subscriptions;

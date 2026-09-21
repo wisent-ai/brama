@@ -61,13 +61,22 @@ pub fn alias_report() -> Result<AliasReport, std::io::Error> {
 /// The route one alias resolves to for a reader that is not the running
 /// gateway, with the diagnosis when it resolves to nothing.
 ///
-/// `brama decide` needs exactly what the endpoint needs — a route it can
-/// serve, or the sentence saying why there is none — and it must read it the
-/// way the gateway does rather than parse the registry itself.
+/// `brama decide`, `brama image`, `brama video` and `brama speak` need
+/// exactly what their endpoints need — a route the gateway can serve, or the
+/// sentence saying why there is none — and they must read it the way the
+/// gateway does rather than parse the registry themselves. Each shape
+/// resolves through its own accessor, so an operator shell cannot reach a
+/// shape over an alias the HTTP surface would refuse.
 pub fn alias_routing(alias: &str) -> Result<(Option<String>, AliasDiagnosis), std::io::Error> {
     let aliases = aliases_as_configured()?;
     let route = if crate::core::server::DECISION_ALIASES.contains(&alias) {
         aliases.decision_route(alias)
+    } else if alias == crate::core::server::IMAGE_ALIAS {
+        aliases.image_route(alias)
+    } else if alias == crate::core::server::VIDEO_ALIAS {
+        aliases.video_route(alias)
+    } else if alias == crate::core::server::VOICE_ALIAS {
+        aliases.voice_route(alias)
     } else {
         aliases.chat_route(alias)
     };

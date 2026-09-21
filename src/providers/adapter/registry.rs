@@ -7,6 +7,7 @@
 
 mod address;
 mod advertised_model;
+pub mod facets;
 mod known_limits;
 mod roster;
 mod route;
@@ -16,12 +17,14 @@ pub(in crate::providers::adapter) use address::{
     validated_provider_base_url,
 };
 pub(in crate::providers::adapter) use advertised_model::model_from_value;
+pub use facets::{kind_from_output, ModelKind};
 pub(in crate::providers::adapter) use known_limits::apply_omp_model_metadata;
+pub(in crate::providers::adapter) use route::valid_model_id;
 pub use route::{
     native_decision_route, provider_id_from_route, route, supports_chat_route,
-    supports_decision_route, supports_embedding_route, supports_moderation_route,
+    supports_decision_route, supports_embedding_route, supports_image_route,
+    supports_moderation_route, supports_speech_route, supports_video_route, valid_provider_id,
 };
-pub(in crate::providers::adapter) use route::{valid_model_id, valid_provider_id};
 
 use roster::PROVIDERS;
 
@@ -54,6 +57,21 @@ pub struct ProviderDescriptor {
     pub chat_path: &'static str,
     /// The typed-decision path, empty when this provider serves no decisions.
     pub decision_path: &'static str,
+    /// The image-generation path, empty when this provider generates no
+    /// images. Only a path the vendor documents is written here: a guessed
+    /// one turns a refusal the caller could act on into somebody else's 404.
+    pub image_path: &'static str,
+    /// The video-generation path, empty when this provider generates no
+    /// video.
+    pub video_path: &'static str,
+    /// Where a started video job is read back from, with `{id}` standing for
+    /// the provider's own job identifier. The gateway keeps no job state, so
+    /// this is the only way a caller learns that a render finished.
+    pub video_status_path: &'static str,
+    /// The speech-generation path, empty when this provider has no voice.
+    /// The answer is audio bytes rather than JSON, which is why it is a path
+    /// of its own and not another media shape sharing the same reader.
+    pub speech_path: &'static str,
     pub wire: WireProtocol,
     pub auth: AuthKind,
     pub static_models: &'static [&'static str],
@@ -64,15 +82,34 @@ pub struct RegistryModel {
     pub route_id: String,
     pub provider_id: String,
     pub model_id: String,
+    /// What the source calls this model. The console groups and searches on
+    /// it, and a declared category may name a model by it.
+    pub display_name: String,
     pub context_window: u64,
     pub max_output_tokens: u64,
     pub input_modalities: Vec<String>,
+    /// What the model emits. A source that states nothing leaves this empty
+    /// and every reader treats the model as text, which is what an
+    /// unannotated chat listing is.
+    pub output_modalities: Vec<String>,
+    /// Whether the model's weights are published. `None` is the honest answer
+    /// for a source that does not say; it is not the same claim as `false`,
+    /// and no filter treats it as one.
+    pub open_weights: Option<bool>,
     pub tools: bool,
     pub reasoning: bool,
     pub input_price: f64,
     pub output_price: f64,
     pub cache_read_price: f64,
     pub cache_write_price: f64,
+}
+
+impl RegistryModel {
+    /// Which endpoint shape this model answers: text on the chat endpoints,
+    /// image on `POST /v1/images/generations`, video on `POST /v1/videos`.
+    pub fn kind(&self) -> ModelKind {
+        kind_from_output(&self.output_modalities)
+    }
 }
 
 pub fn providers() -> &'static [ProviderDescriptor] {

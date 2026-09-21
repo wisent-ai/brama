@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>brama speak — Brama CLI Docs</title>
+  <meta name="description" content="Speak one text through a voice route from an operator shell, over the same credential and refusals POST /v1/audio/speech serves.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/cli/speak">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>brama speak</h2><a class="active" aria-current="page" href="/docs/cli/speak">speak</a><a href="/docs/cli/image">image</a><a href="/docs/cli/video">video</a><a href="/docs/cli">CLI tree</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/concepts/media">Media</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/http-api/inference">HTTP inference</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama CLI command reference</p>
+      <article class="doc"><h1 id="brama-speak"><code>brama speak</code><a class="headerlink" href="#brama-speak" title="Link to this section">&para;</a></h1>
+<p>Speak one text through a <a href="/docs/concepts/media">voice route</a>, over the same credential redemption and refusals <code>POST /v1/audio/speech</code> uses. The provider answers encoded audio rather than JSON, so this command writes a file and says how many bytes went where; printing audio into a terminal is not an outcome anybody wanted, which is why <code>--output</code> is required rather than optional.</p>
+
+<h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">brama speak --input &lt;TEXT&gt; --voice &lt;VOICE&gt; --output &lt;FILE&gt; [--model &lt;ALIAS|ROUTE&gt;] [--response-format &lt;FORMAT&gt;] [--speed &lt;SPEED&gt;] --allow-provider-cost</code></pre>
+<table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>--input &lt;TEXT&gt;</code></td><td>required</td><td>What to say. The endpoint accepts up to four thousand and ninety-six bytes in one request.</td></tr>
+<tr><td><code>--voice &lt;VOICE&gt;</code></td><td>required</td><td>The provider's own voice name, such as <code>alloy</code>. Every declared voice provider requires one.</td></tr>
+<tr><td><code>--output &lt;FILE&gt;</code></td><td>required</td><td>Where the audio is written.</td></tr>
+<tr><td><code>--model &lt;ALIAS|ROUTE&gt;</code></td><td>optional; <code>voice-model</code></td><td>The media alias, or a canonical route the catalogue lists as an audio model.</td></tr>
+<tr><td><code>--response-format &lt;FORMAT&gt;</code></td><td>optional</td><td>The container the provider should encode, such as <code>mp3</code> or <code>wav</code>.</td></tr>
+<tr><td><code>--speed &lt;SPEED&gt;</code></td><td>optional</td><td>Playback speed between a quarter and four.</td></tr>
+<tr><td><code>--allow-provider-cost</code></td><td>required to send anything</td><td>Acknowledge that this performs a billable provider request.</td></tr>
+</tbody></table>
+
+<h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
+<p>A successful run prints the alias, the route it resolved to, the content type the provider stated, and how many bytes were written where. Brama re-encodes nothing: what lands on disk is exactly what the provider sent.</p>
+<p>A refused run prints the provider's own sentence and exits non-zero. This is a real one, against <code>voice-model</code> routed to <code>openai/gpt-4o-mini-tts</code> on a deployment whose OpenAI account has no credit:</p>
+<pre><code class="language-console">$ brama speak --input "Brama speaks." --voice alloy --output spoken.mp3 --allow-provider-cost
+provider_rate_limited: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.</code></pre>
+
+<h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
+<table><thead><tr><th>Sentence</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>refusing a billable speech request without explicit --allow-provider-cost</code></td><td>Nothing was sent.</td></tr>
+<tr><td><code>alias `voice-model` is a media alias this gateway knows but no route is declared for it; declare one with `brama routes set voice-model &lt;provider/model&gt;` or `PUT /v1/admin/routes`</code></td><td>The alias has no route here.</td></tr>
+<tr><td><code>invalid_request: route `together/…` does not generate speech</code></td><td>The named route's provider serves no speech endpoint.</td></tr>
+<tr><td><code>provider_failure: provider returned no audio</code></td><td>The provider answered success with an empty body; no file was written.</td></tr>
+<tr><td><code>provider_rate_limited: &lt;the provider's own sentence&gt;</code></td><td>The route was reached and refused.</td></tr>
+<tr><td><code>cannot write &lt;path&gt;: &lt;reason&gt;</code></td><td>The audio arrived and the destination could not be written.</td></tr>
+</tbody></table>
+<p>Every refusal exits 1 and prints on standard error.</p>
+<p>See <a href="/docs/concepts/media">media</a>, <a href="/docs/cli/image"><code>brama image</code></a>, <a href="/docs/cli/video"><code>brama video</code></a>, or <a href="/docs/cli">the CLI tree</a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>
