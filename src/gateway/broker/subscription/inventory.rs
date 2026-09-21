@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use tracing::warn;
 
-use super::super::vault::{entitlements_router_bin, raw_listing};
+use super::super::vault::{entitlements_router_bin, existing_item_account, raw_listing};
 use super::account::{
     configured_subscription_ids, configured_subscriptions, parse_live_subscriptions,
     parse_owned_subscriptions, parse_unroutable_accounts, SubscriptionEntry, UnroutableAccount,
@@ -100,7 +100,7 @@ pub async fn list_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
 /// it never consults the trusted boot catalog or a donated overlay.
 pub async fn list_all_subscriptions() -> Result<Vec<SubscriptionEntry>, String> {
     let stdout = raw_listing(&entitlements_router_bin(), "list all subscriptions").await?;
-    parse_live_subscriptions(&stdout)
+    Ok(with_recorded_accounts(parse_live_subscriptions(&stdout)?).await)
 }
 
 /// Subscriptions the vault holds, completely tagged, that this process was
@@ -186,6 +186,7 @@ pub async fn list_recoverable_subscriptions() -> Vec<SubscriptionEntry> {
                 status: "active".to_owned(),
                 label: None,
                 login_item: account.login_item,
+                account: account.account,
             })
         })
         .collect()
@@ -223,11 +224,42 @@ async fn live_subscriptions(
     Ok(entries)
 }
 
+/// Complete each member's account from its own vault item where its tags do
+/// not carry one.
+///
+/// The tag is the cheap answer and the item's own `account_ref` is the
+/// authoritative one; a vault older than the `brama:account:` namespace can
+/// only hold the latter, and a member whose account was recorded before the
+/// namespace existed carries it there alone. It costs one item read per
+/// member that has no account tag, and nothing of the credential is kept:
+/// only the address, which is what the pool counts accounts by.
+///
+/// Every audience goes through this, because an operator asking how many
+/// accounts this deployment holds must not get a different answer from the
+/// console, the pool document and the router.
+async fn with_recorded_accounts(mut entries: Vec<SubscriptionEntry>) -> Vec<SubscriptionEntry> {
+    for entry in &mut entries {
+        if entry.account.is_some() {
+            continue;
+        }
+        let item = format!(
+            "provider:{}:{}",
+            super::super::slug(&entry.provider),
+            super::super::slug(&entry.id)
+        );
+        if let Ok(recorded) = existing_item_account(&item).await {
+            entry.account = recorded;
+        }
+    }
+    entries
+}
+
 /// Shell the entitlements router's bare `list`, which returns a JSON array of
-/// every vault item (`{"id","type","tags","updated_at","deleted","versions"}`).
+/// every vault item (`{"id","type","tags","updated_at","deleted","versions"}`),
+/// with each member's recorded account completed.
 async fn list_subscriptions_live(broker: &str) -> Result<Vec<SubscriptionEntry>, String> {
     let stdout = raw_listing(broker, "list subscriptions").await?;
-    parse_live_subscriptions(&stdout)
+    Ok(with_recorded_accounts(parse_live_subscriptions(&stdout)?).await)
 }
 
 async fn list_subscriptions_result(agent_id: &str) -> Result<Vec<SubscriptionEntry>, String> {

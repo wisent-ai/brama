@@ -13,12 +13,20 @@ name = "brama"
 path = "src/lib.rs"
 
 [[test]]
+name = "catalogue_real"
+path = "tests/catalogue/main.rs"
+
+[[test]]
 name = "decision_real"
 path = "tests/decisions/main.rs"
 
 [[test]]
 name = "docs_site_assets"
 path = "tests/docs/site_assets.rs"
+
+[[test]]
+name = "docs_published_identity"
+path = "tests/docs/published_identity.rs"
 
 [[test]]
 name = "cli_pool_contracts"

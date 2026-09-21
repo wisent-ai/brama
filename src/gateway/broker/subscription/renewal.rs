@@ -211,8 +211,15 @@ pub async fn put_subscription_credential(
 
 /// [`put_subscription_credential`] with the account the grant belongs to,
 /// when the caller knows it: written as the item's `account_ref`, which is
-/// the identity Weles signs the account in from once this grant dies. A
-/// caller that knows no account leaves whatever the item already carries.
+/// the identity Weles signs the account in from once this grant dies, and as
+/// its `brama:account:` tag, which is the only thing that says which of the
+/// operator's accounts this member is without reading a name.
+///
+/// A caller that knows no account does not leave the item unattributed: the
+/// account the item already records is read and written back, so the tag
+/// appears on every member whose `account_ref` was recorded before the tag
+/// existed, on the first credential write after this release, and nobody has
+/// to stamp anything by hand.
 pub async fn put_subscription_credential_for_account(
     subscription_id: &str,
     provider: &str,
@@ -223,9 +230,14 @@ pub async fn put_subscription_credential_for_account(
     if local_provider_credentials_enabled() {
         return put_local_subscription_credential(&item_id, credential);
     }
+    let recorded = match account {
+        Some(account) => Some(account.to_owned()),
+        None => existing_item_account(&item_id).await?,
+    };
     let existing = existing_item_tags(&item_id).await?;
-    let tags = subscription_tags_for_write(&existing, provider, subscription_id)?;
-    put_credential(&item_id, credential, Some(&tags), account).await
+    let tags =
+        subscription_tags_for_write(&existing, provider, subscription_id, recorded.as_deref())?;
+    put_credential(&item_id, credential, Some(&tags), recorded.as_deref()).await
 }
 
 /// The account one subscription's item already names as `account_ref`, or
@@ -313,6 +325,15 @@ pub async fn refresh_subscription_credential_ahead(
         Ok(credential) => credential,
         Err(refused) => return RefreshAhead::Unavailable(refused),
     };
+    // The account this grant belongs to, recorded while it is open, when the
+    // item records none. Every member imported before the account was
+    // recorded beside its grant carries no account at all, so the pool could
+    // attribute only the members this gateway had itself signed in - three of
+    // the five accounts on this deployment - and the rest were reported as
+    // unattributed however exactly their own ids named them. This is the
+    // reusable repair: the sweep opens every member's credential on every
+    // pass anyway, and the provider's own claim about it is what gets written.
+    let _ = super::tags::record_stated_account(subscription_id, provider, &credential).await;
     let expires_at_ms = oauth_refresh::access_token_expiry_ms(&credential, provider);
     // Ask what the document is before asking when it dies. A document that is
     // not a credential has no expiry either, and "no expiry" read as "nothing

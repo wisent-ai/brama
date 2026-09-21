@@ -3,7 +3,7 @@ appId: brama
 productId: brama
 owner: Brama maintainers
 repositories:
-  - root: /Users/charles/.stado/actions-runner-work/brama/brama
+  - root: ~/.stado/actions-runner-work/brama/brama
     mappings:
       - paths:
           - src/**

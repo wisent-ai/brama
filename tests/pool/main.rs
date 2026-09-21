@@ -305,17 +305,28 @@ fn the_pool_refuses_an_unknown_subscription_and_an_unknown_action() {
 /// member counted as one: the slots left behind by earlier imports, and the
 /// ids the usage ledger still remembers after the vault stopped listing them,
 /// are indistinguishable from an account in a bare row count. Two members
-/// naming one account are one account; a member naming none is not an
-/// account at all.
+/// recording one account are one account; a member recording none is not an
+/// account at all, however exactly its id or its login row names one -- one
+/// login row signs both the Claude Code and the Codex account of one person
+/// in, so a login row cannot stand for an account.
 #[test]
 fn the_pool_counts_accounts_and_names_what_it_cannot_attribute_to_one() {
     let gateway = Gateway::start("pool-accounts", &[]);
+    gateway.vault().seed_account_subscription(
+        "openai",
+        "pool-primary",
+        "pool-account@example.invalid",
+        "pool-account-login",
+    );
+    gateway.vault().seed_account_subscription(
+        "openai",
+        "pool-secondary",
+        "pool-account@example.invalid",
+        "pool-account-login",
+    );
     gateway
         .vault()
-        .seed_account_subscription("openai", "pool-primary", "pool-account-login");
-    gateway
-        .vault()
-        .seed_account_subscription("openai", "pool-secondary", "pool-account-login");
+        .seed_login_only_subscription("openai", "pool-login-only", "pool-account-login");
     gateway
         .vault()
         .seed_marked_subscription("openai", "pool-slot");
@@ -325,21 +336,28 @@ fn the_pool_counts_accounts_and_names_what_it_cannot_attribute_to_one() {
     let accounts = &report["accounts"];
     assert_eq!(accounts["total"], 1, "{report}");
     assert_eq!(
-        accounts["per_provider"]["openai"].as_array().map(Vec::len),
-        Some(1),
-        "two members naming one account are one account: {report}"
+        accounts["per_provider"]["openai"]
+            .as_array()
+            .map(Vec::as_slice),
+        Some([serde_json::json!("pool-account@example.invalid")].as_slice()),
+        "two members recording one account are one account, named: {report}"
     );
     assert_eq!(
         accounts["members_without_account"]
             .as_array()
-            .and_then(|members| members.first())
-            .and_then(serde_json::Value::as_str),
-        Some("pool-slot"),
-        "a member that declares no account is named, not counted: {report}"
+            .map(|members| {
+                members
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .collect::<Vec<_>>()
+            }),
+        Some(vec!["pool-login-only", "pool-slot"]),
+        "a member that records no account is named and not counted, and a login row is not an \
+         account: {report}"
     );
     assert_eq!(
         report["subscriptions"].as_array().map(Vec::len),
-        Some(3),
+        Some(4),
         "the members are still all answered: {report}"
     );
 }

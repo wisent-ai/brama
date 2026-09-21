@@ -36,7 +36,7 @@ pub use renewal::{
     refresh_subscription_credential, refresh_subscription_credential_ahead, subscription_account,
     supports_oauth_refresh, RefreshAhead,
 };
-pub use tags::subscription_tags_for_write;
+pub use tags::{record_subscription_account, subscription_tags_for_write};
 
 // What the rest of `broker` reaches in here: the deployment's declared
 // subscription ids, and the rotation the redemption path forces.

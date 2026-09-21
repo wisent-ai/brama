@@ -30,7 +30,7 @@
 <p>A name the gateway knows does not stop existing when its route goes: the six required aliases and the two <a href="/docs/concepts/decision">decision aliases</a> keep being reported by <a href="/docs/cli/aliases"><code>brama aliases</code></a>, in state <code>no_route</code>, with the sentence that says how to declare one again. A name nobody declared simply disappears from the listing.</p>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
 <pre><code class="language-console">$ brama routes rm decision-model
-registry: /Users/operator/.config/brama/inference-routes.json
+registry: ~/.config/brama/inference-routes.json
 change: decision-model removed
 best-decision-model              best</code></pre>
 <p>The report names the registry, the change it committed, how many routes remain, and one line per alias left in the document. With <code>--json</code> the answer is <code>{&quot;registry&quot;, &quot;change&quot;, &quot;document&quot;}</code>. Exit code is 0 on success.</p>

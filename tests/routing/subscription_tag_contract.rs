@@ -39,8 +39,14 @@ fn the_write_supplies_the_structural_tags_it_can_derive() {
         &tags(&["brama:agent:probierz"]),
         "codex",
         "brama-sub-wisent-app-codex-secondary",
+        Some("owner@example.com"),
     )
     .expect("an item is routable once marked and named, and must be written");
+
+    assert!(
+        stored.contains(&"brama:account:owner@example.com".to_string()),
+        "the account the grant belongs to is what the pool counts by: {stored:?}"
+    );
 
     assert!(
         stored.contains(&"brama:subscription".to_string()),
@@ -73,9 +79,13 @@ fn a_write_with_no_agent_tag_completes_and_is_routable() {
         tags(&[]),
         tags(&["brama:agent:"]),
     ] {
-        let stored =
-            subscription_tags_for_write(&existing, "codex", "brama-sub-wisent-app-codex-secondary")
-                .expect("no agent binding is required: every subscription serves every caller");
+        let stored = subscription_tags_for_write(
+            &existing,
+            "codex",
+            "brama-sub-wisent-app-codex-secondary",
+            None,
+        )
+        .expect("no agent binding is required: every subscription serves every caller");
         assert!(
             stored.contains(&"brama:subscription".to_string()),
             "{stored:?}"
@@ -120,6 +130,7 @@ fn a_write_refuses_to_relabel_an_item_that_claims_something_else() {
         &tags(&["brama:agent:probierz", "brama:provider:claude-code"]),
         "codex",
         "brama-sub-wisent-app-codex-secondary",
+        None,
     )
     .expect_err("a provider disagreement must be refused, not overwritten");
     assert!(refusal.contains("claude-code"), "{refusal}");
@@ -128,6 +139,7 @@ fn a_write_refuses_to_relabel_an_item_that_claims_something_else() {
         &tags(&["brama:agent:probierz", "brama:id:some-other-subscription"]),
         "codex",
         "brama-sub-wisent-app-codex-secondary",
+        None,
     )
     .expect_err("a subscription id disagreement must be refused, not overwritten");
     assert!(refusal.contains("some-other-subscription"), "{refusal}");
@@ -147,6 +159,7 @@ fn every_existing_agent_binding_survives_the_write() {
         ]),
         "codex",
         "brama-sub-wisent-app-codex-primary",
+        None,
     )
     .expect("a fully bound item must be written");
 

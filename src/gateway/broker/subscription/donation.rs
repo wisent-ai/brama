@@ -157,8 +157,15 @@ async fn donated_credential_tags(
     if !tags.contains(&agent_tag) {
         tags.push(agent_tag);
     }
-    let mut tags = subscription_tags_for_write(&tags, provider, subscription_id)
-        .map_err(DonationRefusal::MappingConflict)?;
+    // A donated credential arrives with the login row it was minted through
+    // and nothing that states the account; the account is whatever the item
+    // already records, which this write preserves rather than replaces.
+    let recorded = super::super::vault::existing_item_account(item_id)
+        .await
+        .map_err(DonationRefusal::Unwritable)?;
+    let mut tags =
+        subscription_tags_for_write(&tags, provider, subscription_id, recorded.as_deref())
+            .map_err(DonationRefusal::MappingConflict)?;
     if let Some(login_item) = login_item {
         let declared = tags
             .iter()

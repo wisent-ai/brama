@@ -18,9 +18,11 @@
 //! material: this reads the ledger, which has never held any.
 //!
 //! `scope` holds how much of the pool one proven identity may be told about,
-//! and `account` holds the one row shape every audience reads.
+//! `account` holds the one row shape every audience reads, and `attribution`
+//! holds which provider account each row belongs to.
 
 mod account;
+mod attribution;
 mod refresh;
 mod scope;
 
@@ -35,8 +37,10 @@ use crate::subscription_dispatch::usage;
 use crate::subscription_dispatch::usage::{CredentialState, SubscriptionUsage};
 
 use account::{expires_at, last_redeem_error, named, now_ms, retired, state, subscription_row};
+use attribution::accounts;
 
 pub use account::subscription_view;
+pub use attribution::record_accounts;
 pub use refresh::{refresh_provider, refresh_subscription};
 pub use scope::PoolScope;
 
@@ -134,54 +138,6 @@ pub(crate) fn document(
     })
 }
 
-/// How many provider accounts this pool holds, as against how many rows it
-/// has.
-///
-/// The two are not the same number and reading one as the other is how a
-/// deployment holding five accounts reads as fifteen: a row is a
-/// subscription member, and several members can name one account while
-/// others name none at all. The operator's count is of accounts, so the
-/// document states accounts, and states separately what it cannot attribute
-/// to one: a member whose vault item declares no `brama:login:` account, and
-/// a member the vault no longer lists at all, which only the usage ledger
-/// remembers.
-fn accounts(rows: &[Value]) -> Value {
-    let mut per_provider: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    let mut unattributed: Vec<String> = Vec::new();
-    let mut ledger_only: Vec<String> = Vec::new();
-    for row in rows {
-        let id = row.get("id").and_then(Value::as_str).unwrap_or_default();
-        let provider = row
-            .get("provider")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        if row.get("status").and_then(Value::as_str) != Some("active") {
-            ledger_only.push(id.to_string());
-            continue;
-        }
-        match row
-            .get("login_item")
-            .and_then(Value::as_str)
-            .filter(|account| !account.trim().is_empty())
-        {
-            Some(account) => {
-                let holders = per_provider.entry(provider.to_string()).or_default();
-                if !holders.iter().any(|held| held == account) {
-                    holders.push(account.to_string());
-                }
-            }
-            None => unattributed.push(id.to_string()),
-        }
-    }
-    let total: usize = per_provider.values().map(Vec::len).sum();
-    json!({
-        "total": total,
-        "per_provider": per_provider,
-        "members_without_account": unattributed,
-        "ledger_only_members": ledger_only,
-    })
-}
-
 fn failure_json(failure: &Failure) -> Value {
     serde_json::from_str(&failure.to_json()).expect("Wisent failure serialization is JSON")
 }
@@ -228,6 +184,7 @@ pub(crate) async fn inventory(scope: &PoolScope) -> (Vec<SubscriptionEntry>, Vec
                     provider: named(&recorded.provider),
                     label: None,
                     login_item: None,
+                    account: None,
                 });
         }
     }

@@ -23,6 +23,18 @@ pub struct SubscriptionEntry {
     pub label: Option<String>,
     #[serde(default)]
     pub login_item: Option<String>,
+    /// The provider account this credential belongs to, as the vault item
+    /// itself declares it in `brama:account:`.
+    ///
+    /// An account is a person's subscription with a provider, and the only
+    /// thing that says which one a member is, is what was recorded when its
+    /// credential was written. Everything else on a member is a name: its
+    /// own id, its label, and the login row it signs in through — and one
+    /// Google login row backs both the Claude Code and the Codex account of
+    /// one person, so counting login rows counted that person's two accounts
+    /// as one and then as three.
+    #[serde(default)]
+    pub account: Option<String>,
 }
 
 /// One Brama credential whose metadata is not complete enough to route.
@@ -39,6 +51,8 @@ pub struct UnroutableAccount {
     pub provider: Option<String>,
     /// The Weles vault row from `brama:login:`, when an earlier write kept it.
     pub login_item: Option<String>,
+    /// The provider account from `brama:account:`, when the item declares it.
+    pub account: Option<String>,
     /// The vault item id it lives in, so diagnostics have an address.
     pub item: String,
 }
@@ -59,6 +73,8 @@ struct BrokerSubscriptionEntry {
     label: Option<String>,
     #[serde(default)]
     login_item: Option<String>,
+    #[serde(default)]
+    account: Option<String>,
 }
 
 pub(in crate::gateway::broker) fn configured_subscription_ids() -> std::collections::HashSet<String>
@@ -118,6 +134,7 @@ pub(super) fn parse_subscriptions(
             status: required_broker_field(entry.status, "status", index)?,
             label: complete_field(entry.label),
             login_item: complete_field(entry.login_item),
+            account: complete_field(entry.account),
         });
     }
     Ok(entries)
@@ -188,6 +205,7 @@ fn live_subscription_entry(item: &VaultListItem) -> Result<SubscriptionEntry, St
         status: "active".to_owned(),
         label: None,
         login_item: subscription_tag_value(&item.tags, "brama:login:").map(str::to_owned),
+        account: subscription_tag_value(&item.tags, "brama:account:").map(str::to_owned),
     })
 }
 
@@ -230,10 +248,12 @@ pub(super) fn parse_unroutable_accounts(output: &[u8]) -> Result<Vec<UnroutableA
             let provider =
                 subscription_tag_value(&item.tags, "brama:provider:").map(normalized_provider);
             let login_item = subscription_tag_value(&item.tags, "brama:login:").map(str::to_owned);
+            let account = subscription_tag_value(&item.tags, "brama:account:").map(str::to_owned);
             UnroutableAccount {
                 id,
                 provider,
                 login_item,
+                account,
                 item: item.id,
             }
         })

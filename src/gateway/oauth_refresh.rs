@@ -8,6 +8,7 @@
 //! whether a refused refresh means the grant is dead or the network blinked.
 
 mod expiry;
+mod principal;
 mod provider;
 mod refusal;
 
@@ -251,4 +252,20 @@ pub(super) async fn refresh(
     .await;
     zeroize_json_strings(&mut blob);
     result
+}
+
+/// The account a stored grant states, according to the provider that issued
+/// it, leaving no parsed copy of the credential behind.
+///
+/// The one source of a member's account that is not a name: an id, a label
+/// and a login row are names, and one Google login row backs both the Claude
+/// Code and the Codex subscription of one person. A credential that is not
+/// UTF-8, not JSON, or states no address yields nothing, and its member stays
+/// unattributed.
+pub(super) fn stated_account(secret: &Secret, provider: &str) -> Option<String> {
+    let raw = secret.expose_utf8().ok()?;
+    let mut blob: Value = serde_json::from_str(raw).ok()?;
+    let stated = principal::credential_account(&blob, provider);
+    zeroize_json_strings(&mut blob);
+    stated
 }

@@ -93,6 +93,14 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long, default_value_t = false)]
         json: bool,
     },
+    /// Record which account each pool member of one provider belongs to, read from the member's own grant
+    Attribute {
+        /// The provider whose members should be attributed (`codex`, `claude-code`, `kimi`)
+        provider: String,
+        /// Print the verdict as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
     /// Give one pool member back: the gateway retires it and forgets its credential, and any machine that signed that account in keeps its own session
     #[command(name = "disown")]
     Disown {
@@ -221,6 +229,30 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             super::manual::sign_in(&provider, &subscription_id, &reason, code).await,
             json,
         ),
+        SubscriptionCommand::Attribute { provider, json } => {
+            match brama::subscription_dispatch::pool::record_accounts(&provider).await {
+                Ok(verdict) => {
+                    if json {
+                        crate::cli::print_json(&verdict);
+                    } else {
+                        print_attribution(&verdict);
+                    }
+                    // A member left unattributed is the finding, not a detail:
+                    // the pool cannot count an account nobody recorded.
+                    if verdict
+                        .get("unattributed")
+                        .and_then(Value::as_array)
+                        .is_some_and(|left| !left.is_empty())
+                    {
+                        std::process::exit(1);
+                    }
+                }
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(1);
+                }
+            }
+        }
         SubscriptionCommand::Disown {
             subscription_id,
             reason,
@@ -257,6 +289,43 @@ pub(crate) async fn run(command: SubscriptionCommand) {
                 }
             }
         }
+    }
+}
+
+/// What the attribution recorded, and what it could not.
+///
+/// The members it could not attribute are printed with the reason, because
+/// the pool's account count is short by exactly them, and an operator
+/// comparing that count with the accounts they hold needs to see which
+/// member is missing rather than a number that disagrees.
+fn print_attribution(verdict: &Value) {
+    let rows = |field: &str| -> Vec<&Value> {
+        verdict
+            .get(field)
+            .and_then(Value::as_array)
+            .map(|rows| rows.iter().collect())
+            .unwrap_or_default()
+    };
+    let recorded = rows("recorded");
+    let unattributed = rows("unattributed");
+    println!(
+        "{} of {} member(s) name an account",
+        recorded.len(),
+        recorded.len().saturating_add(unattributed.len())
+    );
+    for row in recorded {
+        println!(
+            "  {} -> {}",
+            text(row, "member").unwrap_or_default(),
+            text(row, "account").unwrap_or_default()
+        );
+    }
+    for row in unattributed {
+        println!(
+            "  {}: {}",
+            text(row, "member").unwrap_or_default(),
+            text(row, "reason").unwrap_or_default()
+        );
     }
 }
 

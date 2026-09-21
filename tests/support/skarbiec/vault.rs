@@ -124,10 +124,34 @@ impl SkarbiecVault {
         )
     }
 
-    /// Seed one member that names the account behind it, the way a vault item
-    /// declares one: `brama:login:<item>`. Two members naming one account are
-    /// one account, which is what the pool's count has to say.
+    /// Seed one member that records the account it belongs to, the way every
+    /// credential write records it: `brama:account:<address>` beside the
+    /// login row it signs in through. Two members recording one account are
+    /// one account, and the login row is not consulted -- one login row
+    /// signs two accounts of one person in.
     pub fn seed_account_subscription(
+        &self,
+        provider: &str,
+        subscription_id: &str,
+        account: &str,
+        login_item: &str,
+    ) -> String {
+        self.seed_item_for_account(
+            provider,
+            subscription_id,
+            &format!(
+                "brama:subscription,brama:provider:{provider},brama:id:{subscription_id},\
+                 brama:login:{login_item}"
+            ),
+            &format!("seeded-{subscription_id}"),
+            Some(account),
+        )
+    }
+
+    /// Seed one member that records no account and only names the login row
+    /// it would sign in through: an account nobody recorded, which the pool
+    /// reports instead of counting.
+    pub fn seed_login_only_subscription(
         &self,
         provider: &str,
         subscription_id: &str,
@@ -145,14 +169,35 @@ impl SkarbiecVault {
     }
 
     fn seed_item(&self, provider: &str, subscription_id: &str, tags: &str, value: &str) -> String {
+        self.seed_item_for_account(provider, subscription_id, tags, value, None)
+    }
+
+    /// `account` is written where the product writes it: the item's own
+    /// `context.account_ref`, which is what a credential write records and
+    /// what the pool reads a member's account from. The `brama:account:` tag
+    /// is the index over the same fact, and a vault older than that
+    /// namespace refuses it, so the fixture records the fact and not the
+    /// index.
+    fn seed_item_for_account(
+        &self,
+        provider: &str,
+        subscription_id: &str,
+        tags: &str,
+        value: &str,
+        account: Option<&str>,
+    ) -> String {
         let item = Self::item_id(provider, subscription_id);
         // The document shape `skarbiec set-json` accepts, and the one Brama's
         // own credential writer sends. Without the `context` object the real
         // binary refuses: "canonical item context must be an object".
+        let mut context = serde_json::json!({"source_kind": "donation"});
+        if let (Some(account), Some(fields)) = (account, context.as_object_mut()) {
+            fields.insert("account_ref".into(), serde_json::json!(account));
+        }
         let document = serde_json::json!({
             "kind": "bundle",
             "schema": "skarbiec.item.v2",
-            "context": {"source_kind": "donation"},
+            "context": context,
             "fields": {"value": value},
         })
         .to_string();

@@ -72,6 +72,89 @@ pub async fn dispatch_direct_openai_typed(
     .await
 }
 
+/// One image generation on a route this deployment pays for.
+///
+/// Media is never funded by a subscription: a Claude Code or ChatGPT plan
+/// carries no image or video quota, and charging a caller's plan for a render
+/// it cannot see on its own bill is the one thing the entitlement contract
+/// exists to prevent.
+pub async fn dispatch_direct_image(
+    route_id: &str,
+    payload: serde_json::Map<String, Value>,
+) -> Result<Value, String> {
+    let (provider, credential) = direct_credential(route_id).await?;
+    provider_registry::dispatch_image(
+        route_id,
+        payload,
+        &broker::provider_resource(&provider),
+        &credential,
+    )
+    .await
+}
+
+/// Start one video job on a route this deployment pays for.
+pub async fn dispatch_direct_video(
+    route_id: &str,
+    payload: serde_json::Map<String, Value>,
+) -> Result<Value, String> {
+    let (provider, credential) = direct_credential(route_id).await?;
+    provider_registry::dispatch_video(
+        route_id,
+        payload,
+        &broker::provider_resource(&provider),
+        &credential,
+    )
+    .await
+}
+
+/// Read one started video job back from the provider that started it.
+pub async fn dispatch_direct_video_status(route_id: &str, job_id: &str) -> Result<Value, String> {
+    let (provider, credential) = direct_credential(route_id).await?;
+    provider_registry::dispatch_video_status(
+        route_id,
+        job_id,
+        &broker::provider_resource(&provider),
+        &credential,
+    )
+    .await
+}
+
+/// Speak one text on a route this deployment pays for. The answer is audio
+/// as the provider encoded it, not JSON.
+pub async fn dispatch_direct_speech(
+    route_id: &str,
+    payload: serde_json::Map<String, Value>,
+) -> Result<provider_registry::SpokenAudio, String> {
+    let (provider, credential) = direct_credential(route_id).await?;
+    provider_registry::dispatch_speech(
+        route_id,
+        payload,
+        &broker::provider_resource(&provider),
+        &credential,
+    )
+    .await
+}
+
+/// The deployment's own credential for one canonical route, with the two
+/// refusals every direct path shares: a route no provider here serves, and a
+/// route whose provider is only reachable with a caller's own subscription.
+async fn direct_credential(route_id: &str) -> Result<(String, String), String> {
+    let provider = provider_for(route_id)
+        .ok_or_else(|| "unknown provider/model route".to_string())?
+        .to_owned();
+    if provider_requires_caller_identity(route_id) {
+        return Err("auth: caller identity is required for subscription providers".to_string());
+    }
+    let credential = broker::provider_credential(&provider)
+        .await
+        .ok_or_else(|| format!("direct '{provider}' credential is unavailable"))?;
+    let credential = credential
+        .expose_utf8()
+        .map_err(|_| format!("direct '{provider}' credential is not valid UTF-8"))?
+        .to_string();
+    Ok((provider, credential))
+}
+
 /// One typed decision on a provider that speaks the decision wire itself,
 /// paid by this gateway's own capability. A subscription credential is never
 /// eligible here for the same reason it is not on the other typed paths: the

@@ -34,7 +34,7 @@
 <p>What it does not check is whether this host holds the provider credential. An operator shell holds none, and refusing the write for a credential this process cannot see would make the registry unwritable from the one place a gateway that is not running can be repaired. Whether the route can be served is what <a href="/docs/cli/aliases"><code>brama aliases</code></a> reports afterwards.</p>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
 <pre><code class="language-console">$ brama routes set decision-model openrouter/openai/gpt-4o-mini
-registry: /Users/operator/.config/brama/inference-routes.json
+registry: ~/.config/brama/inference-routes.json
 change: decision-model -&gt; openrouter/openai/gpt-4o-mini
 best-decision-model              best
 decision-model                   openrouter/openai/gpt-4o-mini</code></pre>

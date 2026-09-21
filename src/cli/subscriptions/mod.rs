@@ -147,12 +147,16 @@ async fn remote_report(destination: remote::Destination, refresh_usage: bool, js
     }
 }
 
-/// How many accounts the pool holds, which is not how many members it has.
+/// How many accounts the pool holds, which is not how many members it has,
+/// and which accounts those are.
 ///
-/// A member names an account through its vault item's `brama:login:`
-/// declaration; several members can name one account, and a member that
-/// declares none is not an account at all. Printing only the member count
-/// answered "fifteen" for a deployment whose operator holds five accounts.
+/// A member belongs to an account through the address its own sign-in named,
+/// or failing that the Weles login item it signs in through; several members
+/// can belong to one account, and a member that names neither is not an
+/// account at all. Printing only the member count answered "fifteen" for a
+/// deployment whose operator holds five accounts, and printing only the
+/// number answered "three" without saying which three, which is not
+/// checkable against the accounts the operator knows they hold.
 fn print_accounts(accounts: Option<&Value>) {
     let Some(accounts) = accounts else { return };
     let per_provider = accounts
@@ -162,10 +166,22 @@ fn print_accounts(accounts: Option<&Value>) {
             providers
                 .iter()
                 .map(|(provider, held)| {
-                    format!("{provider} {}", held.as_array().map_or(0, Vec::len))
+                    let named = held
+                        .as_array()
+                        .map(|held| {
+                            held.iter()
+                                .filter_map(Value::as_str)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        })
+                        .unwrap_or_default();
+                    format!(
+                        "{provider} {}: {named}",
+                        held.as_array().map_or(0, Vec::len)
+                    )
                 })
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join("; ")
         })
         .unwrap_or_default();
     let total = accounts

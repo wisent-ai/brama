@@ -185,7 +185,7 @@ its own work root, 0.4.31 by the window; Stado 0.21.15 fixed the builder).</p>
 and a Skarbiec login item for that principal. Every member the pool gained through
 <code>import</code> or <code>sync</code> carried the harness's account in its verdict and none in
 its item: on 2026-09-18 <code>/readyz</code> on charless-mac-mini reported
-<code>subscription_identity_missing</code> for <code>held-claude-code-lukasz-bartoszcze-wisent-ai</code>,
+<code>subscription_identity_missing</code> for <code>held-claude-code-&lt;account slug&gt;</code>,
 <code>wisent-app-claude-secondary</code>, <code>wisent-app-claude-tertiary</code> and
 <code>wisent-app-kimi-primary</code>, and the loop that exists to replace a burnt grant could not
 start. A stored grant now carries the account the harness recorded as the item's
@@ -218,7 +218,7 @@ sweep ended <code>/readyz</code> answered <code>readiness check has not complete
 0.4.24 candidate on charless-mac-mini was still inside it when Stado's 90-second readiness
 window closed: <code>candidate did not become ready within 90s</code>, quarantined, and the mini
 kept serving 0.4.23 — the release that still rotated borrowed grants. On 2026-09-18 that
-rotation revoked the operator's own <code>omp</code> session on lbartoszcze@wisent.ai, one
+rotation revoked the operator's own <code>omp</code> session on one of those accounts, one
 import after the release meant to stop it had been refused a rollout by the gateway it
 replaces. The first half now publishes its own verdict the moment it is known:
 <code>ready</code> when one direct provider credential was obtained, <code>degraded</code> either
