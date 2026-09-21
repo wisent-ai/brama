@@ -8,7 +8,6 @@
 //! would drift from this one.
 
 use std::sync::{Arc, LazyLock, Mutex};
-use std::time::Duration;
 
 use futures_util::future::{BoxFuture, FutureExt, Shared};
 
@@ -21,7 +20,7 @@ const DEFAULT_ENTITLEMENTS_ROUTER_BIN: &str = "entitlements-router";
 const VAULT_PROGRAM_NAMES: [&str; 2] = [DEFAULT_ENTITLEMENTS_ROUTER_BIN, "skarbiec"];
 /// Where the fleet installs it when nothing is on `PATH`, relative to `$HOME`.
 const VAULT_HOME_RELATIVE: &str = ".stado/bin/skarbiec";
-pub(super) const ENTITLEMENTS_ROUTER_TIMEOUT: Duration = Duration::from_secs(15);
+
 
 /// The router's bare `list`: the JSON row of every vault item.
 ///
@@ -63,7 +62,7 @@ pub(in crate::gateway::broker) async fn raw_listing(
                 let binary = binary.to_owned();
                 let operation = operation.to_owned();
                 let shared = async move {
-                    let output = bounded_output(&binary, &operation, |command| {
+                    let output = child_output(&binary, &operation, |command| {
                         command.arg("list");
                     })
                     .await?;
@@ -141,7 +140,13 @@ fn on_path(program: &str) -> Option<String> {
         .map(|candidate| candidate.display().to_string())
 }
 
-pub(in crate::gateway::broker) async fn bounded_output(
+/// Run one entitlements-router command and read its output.
+///
+/// The child's own exit is the answer. A vault read on a cold keychain and a
+/// vault read that will never return look the same to a clock, and killing
+/// the first one turns a credential that exists into a credential this
+/// gateway reports as missing.
+pub(in crate::gateway::broker) async fn child_output(
     binary: &str,
     operation: &str,
     configure: impl FnOnce(&mut tokio::process::Command),
@@ -149,19 +154,15 @@ pub(in crate::gateway::broker) async fn bounded_output(
     let mut command = tokio::process::Command::new(binary);
     command.kill_on_drop(true);
     configure(&mut command);
-    match tokio::time::timeout(ENTITLEMENTS_ROUTER_TIMEOUT, command.output()).await {
-        Ok(Ok(output)) => Ok(output),
+    match command.output().await {
+        Ok(output) => Ok(output),
         // The program is part of the failure. `No such file or directory (os
         // error 2)` on its own sent three readers of `subscription sync` to
         // the vault, the grant and the pool before anyone asked which file
         // was missing, and the answer was the bare word this gateway spawns.
-        Ok(Err(error)) => Err(format!(
+        Err(error) => Err(format!(
             "{operation}: {error} (running {binary}; declare another with \
              {ENTITLEMENTS_ROUTER_BIN_ENV} or {SKARBIEC_BIN_ENV})"
-        )),
-        Err(_) => Err(format!(
-            "{operation} timed out after {} seconds; the child was killed",
-            ENTITLEMENTS_ROUTER_TIMEOUT.as_secs()
         )),
     }
 }
@@ -170,7 +171,7 @@ pub(in crate::gateway::broker) async fn router_output(
     operation: &str,
     configure: impl FnOnce(&mut tokio::process::Command),
 ) -> Result<std::process::Output, String> {
-    bounded_output(&entitlements_router_bin(), operation, configure).await
+    child_output(&entitlements_router_bin(), operation, configure).await
 }
 
 pub(in crate::gateway::broker) fn router_refusal(

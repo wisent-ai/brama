@@ -10,7 +10,6 @@ use serde::Deserialize;
 
 use super::router::{
     entitlements_router_bin, raw_listing, router_output, router_refusal,
-    ENTITLEMENTS_ROUTER_TIMEOUT,
 };
 
 /// One vault item row from the entitlements router's bare `list` command.
@@ -149,37 +148,15 @@ pub(in crate::gateway::broker) async fn put_credential(
         .stdin
         .take()
         .ok_or_else(|| "credential write child stdin is unavailable".to_owned())?;
-    match tokio::time::timeout(
-        ENTITLEMENTS_ROUTER_TIMEOUT,
-        stdin.write_all(document.as_bytes()),
-    )
-    .await
-    {
-        Ok(Ok(())) => {}
-        Ok(Err(error)) => {
-            let _ = child.kill().await;
-            return Err(format!("write credential document to child stdin: {error}"));
-        }
-        Err(_) => {
-            let _ = child.kill().await;
-            return Err(format!(
-                "write credential document timed out after {} seconds; the child was killed",
-                ENTITLEMENTS_ROUTER_TIMEOUT.as_secs()
-            ));
-        }
+    if let Err(error) = stdin.write_all(document.as_bytes()).await {
+        let _ = child.kill().await;
+        return Err(format!("write credential document to child stdin: {error}"));
     }
     drop(stdin);
-    let output =
-        match tokio::time::timeout(ENTITLEMENTS_ROUTER_TIMEOUT, child.wait_with_output()).await {
-            Ok(Ok(output)) => output,
-            Ok(Err(error)) => return Err(format!("wait for credential write child: {error}")),
-            Err(_) => {
-                return Err(format!(
-                    "credential write timed out after {} seconds; the child was killed",
-                    ENTITLEMENTS_ROUTER_TIMEOUT.as_secs()
-                ));
-            }
-        };
+    let output = child
+        .wait_with_output()
+        .await
+        .map_err(|error| format!("wait for credential write child: {error}"))?;
     if !output.status.success() {
         return Err(router_refusal("credential write", &output));
     }

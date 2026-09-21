@@ -11,12 +11,10 @@
 //! arrangement cost the operator the session they were working in. What is
 //! left is reading and administering a remote pool, which hands nothing over.
 
-use std::time::Duration;
 
 use zeroize::Zeroizing;
 
-/// A lookup that has not answered in this long is not going to.
-const LOOKUP_TIMEOUT: Duration = Duration::from_secs(30);
+
 
 /// The Stado binary that answers both lookups, resolved exactly as the
 /// readiness path resolves it.
@@ -36,23 +34,12 @@ fn stado_binary() -> std::path::PathBuf {
 
 async fn stado(arguments: &[&str]) -> Result<Zeroizing<String>, String> {
     let binary = stado_binary();
-    let output = tokio::time::timeout(
-        LOOKUP_TIMEOUT,
-        tokio::process::Command::new(&binary)
-            .kill_on_drop(true)
-            .args(arguments)
-            .output(),
-    )
-    .await
-    .map_err(|_| {
-        format!(
-            "`{} {}` did not answer within {}s",
-            binary.display(),
-            arguments.join(" "),
-            LOOKUP_TIMEOUT.as_secs()
-        )
-    })?
-    .map_err(|error| format!("`{}` could not be run: {error}", binary.display()))?;
+    let output = tokio::process::Command::new(&binary)
+        .kill_on_drop(true)
+        .args(arguments)
+        .output()
+        .await
+        .map_err(|error| format!("`{}` could not be run: {error}", binary.display()))?;
     if !output.status.success() {
         let said: String = String::from_utf8_lossy(&output.stderr)
             .trim()

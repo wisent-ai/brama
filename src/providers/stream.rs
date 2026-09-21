@@ -41,22 +41,13 @@ use openai_responses::responses_items;
 
 pub use event::{ProviderStream, StreamDelta, StreamItem};
 
-/// How long the pump waits for the next provider byte before calling the
-/// stream stalled.
-///
-/// This is the per-attempt limit the buffered contract already states, applied
-/// between reads rather than across the whole body, because a generation is
-/// legitimately silent for minutes while it thinks and a total budget cannot
-/// tell that from a dead socket.
-const STREAM_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(255);
-
 /// Read one committed provider SSE body to its end and deliver neutral items.
 ///
 /// The task owns the response, so dropping the receiver -- the caller hung up
 /// -- fails the next send, exits the task, and drops the in-flight provider
-/// future with it. A provider that goes silent longer than
-/// [`STREAM_IDLE_TIMEOUT`] between bytes is a stalled stream, reported as
-/// `Failed` like any other mid-stream cut.
+/// future with it. A generation that is silent for minutes while it thinks is
+/// still a live generation: the stream ends when the provider ends it or the
+/// connection fails, and nothing here decides that silence was long enough.
 pub(crate) fn spawn(wire: WireProtocol, response: reqwest::Response) -> mpsc::Receiver<StreamItem> {
     let (tx, rx) = mpsc::channel(64);
     tokio::spawn(async move {
@@ -67,10 +58,9 @@ pub(crate) fn spawn(wire: WireProtocol, response: reqwest::Response) -> mpsc::Re
         let mut terminal = false;
         let mut bytes = std::pin::pin!(response.bytes_stream());
         loop {
-            let next = tokio::time::timeout(STREAM_IDLE_TIMEOUT, bytes.next()).await;
-            let chunk = match next {
-                Ok(Some(Ok(chunk))) => chunk,
-                Ok(Some(Err(error))) => {
+            let chunk = match bytes.next().await {
+                Some(Ok(chunk)) => chunk,
+                Some(Err(error)) => {
                     let _ = tx
                         .send(StreamItem::Failed(format!(
                             "provider stream read failed: {error}"
@@ -78,15 +68,7 @@ pub(crate) fn spawn(wire: WireProtocol, response: reqwest::Response) -> mpsc::Re
                         .await;
                     return;
                 }
-                Ok(None) => break,
-                Err(_) => {
-                    let _ = tx
-                        .send(StreamItem::Failed(
-                            "provider stream stalled between events".to_string(),
-                        ))
-                        .await;
-                    return;
-                }
+                None => break,
             };
             let events = match framer.feed(&chunk) {
                 Ok(events) => events,

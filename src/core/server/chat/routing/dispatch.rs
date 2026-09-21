@@ -1,4 +1,4 @@
-//! The one attempt the routing decision names, inside the request deadline.
+//! The one attempt the routing decision names.
 //!
 //! Which of the dispatch entry points is called follows entirely from the plan
 //! the decision produced, so this file holds no policy: it is the same ladder
@@ -17,9 +17,9 @@ use crate::subscription_dispatch::{
     dispatch_subscription_stream_for_agent, dispatch_task_subscription,
     dispatch_task_subscription_stream,
 };
-use crate::types::{ModelRequest, ModelResponse};
+use crate::types::ModelRequest;
 
-use super::super::request::REQUEST_DEADLINE;
+
 use super::DispatchedCall;
 
 /// Everything the decision established about one call, so the ladder below
@@ -39,7 +39,9 @@ pub(super) struct DispatchPlan<'a> {
     pub(super) stream: bool,
 }
 
+
 pub(super) async fn dispatch(plan: DispatchPlan<'_>, selected_model: &str) -> DispatchedCall {
+    let _ = selected_model;
     let DispatchPlan {
         client_identity,
         headers,
@@ -54,11 +56,11 @@ pub(super) async fn dispatch(plan: DispatchPlan<'_>, selected_model: &str) -> Di
         caller_scoped_request,
         stream,
     } = plan;
-    // The deadline bounds route selection, rotation, and the provider's
-    // response headers. For a stream it stops there by design: once events
-    // flow, "how long may this take" is the provider's idle interval, not a
-    // budget that would cut a generation mid-sentence.
-    tokio::time::timeout(REQUEST_DEADLINE, async {
+    // Route selection, rotation and the provider's own answer take as long as
+    // they take. A model that is still generating and a gateway that has gone
+    // away are different things, and only the second one ends a call here:
+    // the provider's connection closing is the event, not a budget.
+    {
         if stream {
             let opened = if let Some(task) = task_subscription {
                 dispatch_task_subscription_stream(headers, request, raw_body, task).await
@@ -108,12 +110,5 @@ pub(super) async fn dispatch(plan: DispatchPlan<'_>, selected_model: &str) -> Di
         } else {
             DispatchedCall::Buffered(dispatch_direct(request).await)
         }
-    })
-    .await
-    .unwrap_or_else(|_| {
-        DispatchedCall::Buffered(ModelResponse::failure(
-            selected_model,
-            "whole request deadline exceeded".into(),
-        ))
-    })
+    }
 }

@@ -14,15 +14,11 @@
 //! a restart, not between two readiness reads.
 
 use std::sync::LazyLock;
-use std::time::Duration;
 
 use serde_json::{json, Value};
 
 use crate::subscription_dispatch::sign_in::Blocked;
 
-/// How long Stado may take to answer. Placement is one small read; a slow
-/// answer is reported as unknown rather than holding a readiness reply open.
-const LOOKUP_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// What the registry says about where this gateway belongs.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,24 +79,21 @@ fn stado_binary() -> std::path::PathBuf {
 
 async fn read_placement() -> Placement {
     let stado = stado_binary();
-    let output = tokio::time::timeout(
-        LOOKUP_TIMEOUT,
-        tokio::process::Command::new(&stado)
-            .kill_on_drop(true)
-            .args([
-                "service",
-                "directory",
-                "connect",
-                "brama",
-                "--no-verify",
-                "--json",
-            ])
-            .output(),
-    )
-    .await;
+    let output = tokio::process::Command::new(&stado)
+        .kill_on_drop(true)
+        .args([
+            "service",
+            "directory",
+            "connect",
+            "brama",
+            "--no-verify",
+            "--json",
+        ])
+        .output()
+        .await;
     let output = match output {
-        Ok(Ok(output)) if output.status.success() => output,
-        Ok(Ok(output)) => {
+        Ok(output) if output.status.success() => output,
+        Ok(output) => {
             let said: String = String::from_utf8_lossy(&output.stderr)
                 .trim()
                 .chars()
@@ -115,24 +108,13 @@ async fn read_placement() -> Placement {
                 )),
             };
         }
-        Ok(Err(error)) => {
+        Err(error) => {
             return Placement {
                 placed_on: None,
                 this_host: None,
                 detail: Some(format!(
                     "the Stado CLI at {} could not be run to read brama's placement: {error}",
                     stado.display()
-                )),
-            }
-        }
-        Err(_) => {
-            return Placement {
-                placed_on: None,
-                this_host: None,
-                detail: Some(format!(
-                    "reading brama's placement through {} did not answer within {} seconds",
-                    stado.display(),
-                    LOOKUP_TIMEOUT.as_secs()
                 )),
             }
         }
