@@ -82,3 +82,52 @@ fn the_decision_alias_answers_typed_questions_over_a_real_provider() {
         "a real decision states real token usage: {body}"
     );
 }
+
+/// The declaration behind the native engine, checked against the world it
+/// claims: a decision provider that cannot resolve its own endpoint could
+/// never serve, and nothing else would notice until a caller was refused.
+/// The second half is wider than decisions on purpose — the trusted-host
+/// policy is a separate table from the provider roster, and the decision
+/// provider is the first entry added since it was written.
+#[test]
+fn every_declared_provider_resolves_an_endpoint_and_a_decision_provider_serves_no_chat() {
+    use brama::providers::adapter;
+
+    for descriptor in adapter::providers() {
+        let route = format!("{}/probe-model", descriptor.id);
+        assert!(
+            adapter::route(&route).is_some(),
+            "provider `{}` declares no resolvable route",
+            descriptor.id
+        );
+        assert!(
+            adapter::provider_endpoint(descriptor.id).is_ok(),
+            "provider `{}` resolves no endpoint: {:?}",
+            descriptor.id,
+            adapter::provider_endpoint(descriptor.id)
+        );
+        assert!(
+            !descriptor.chat_path.is_empty() || !descriptor.decision_path.is_empty(),
+            "provider `{}` serves neither chat nor decisions",
+            descriptor.id
+        );
+        let serves_chat = adapter::supports_chat_route(&route);
+        assert_eq!(
+            serves_chat,
+            !descriptor.chat_path.is_empty(),
+            "provider `{}` disagrees with itself about serving chat",
+            descriptor.id
+        );
+        assert_eq!(
+            adapter::native_decision_route(&route),
+            !descriptor.decision_path.is_empty(),
+            "provider `{}` disagrees with itself about serving decisions",
+            descriptor.id
+        );
+        assert!(
+            adapter::supports_decision_route(&route),
+            "provider `{}` can answer no decision at all",
+            descriptor.id
+        );
+    }
+}

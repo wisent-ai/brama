@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Decision — Brama Docs</title>
+  <meta name="description" content="Decision A typed answer instead of generated text. A caller sends a state and typed questions to a decision alias and receives one typed answer per question: a probability, one of">
+  <link rel="canonical" href="https://brama.wisent.com/docs/concepts/decision">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <details class="mobile-nav"><summary>Browse documentation</summary><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a class="active" aria-current="page" href="/docs/concepts/decision">Decision</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></details>
+  <div class="layout">
+    <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a class="active" aria-current="page" href="/docs/concepts/decision">Decision</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
+    <main>
+      <p class="source-note">Documentation topic: docs/concepts/decision.md</p>
+      <article class="doc"><h1 id="decision">Decision<a class="headerlink" href="#decision" title="Link to this section">&para;</a></h1>
+<p>A typed answer instead of generated text. A caller sends a state and a set
+of typed questions to a decision alias and receives one typed answer per
+question — a probability, one of the options it declared, or a level of the
+rubric it gave — with the distribution that answer was taken from. Code acts
+on the answer directly; nothing parses prose.</p>
+<h2 id="the-endpoint">The endpoint<a class="headerlink" href="#the-endpoint" title="Link to this section">&para;</a></h2>
+<p><code>POST /v1/decisions</code> carries exactly three fields. An unknown field is
+refused by name, as everywhere else in this gateway.</p>
+<pre><code class="language-json">{
+  "model": "decision-model",
+  "state": "Help! My payouts have been failing for 3 days.",
+  "questions": {
+    "is_urgent": {"type": "noul", "instructions": "Does this convey urgency?"},
+    "department": {
+      "type": "choice",
+      "instructions": "Which team should handle this?",
+      "criteria": {
+        "billing": "Payments, invoicing, refunds",
+        "technical": "Bugs, outages, integrations",
+        "sales": "Pricing, upgrades, new accounts"
+      }
+    },
+    "severity": {
+      "type": "score",
+      "instructions": "How severe is this for the customer?",
+      "criteria": ["cosmetic", "annoying", "blocking", "outage"]
+    }
+  }
+}</code></pre>
+<p><code>state</code> is a string or any other JSON value; an object travels to the model
+as its pretty-printed JSON. Every question is answered against that one
+state, in one provider call.</p>
+<h2 id="the-three-primitives">The three primitives<a class="headerlink" href="#the-three-primitives" title="Link to this section">&para;</a></h2>
+<table><thead><tr><th>Type</th><th>Declares</th><th>Answers</th></tr></thead><tbody>
+<tr><td><code>noul</code></td><td><code>instructions</code>, and no <code>criteria</code></td><td><code>noul</code>, the probability the question is true, and <code>confidence</code></td></tr>
+<tr><td><code>choice</code></td><td><code>criteria</code> as an object of option labels, each described by a string or <code>null</code></td><td><code>choice</code>, one of those labels, with <code>probabilities</code> over all of them and <code>confidence</code></td></tr>
+<tr><td><code>score</code></td><td><code>criteria</code> as an ordered array of levels, lowest first</td><td><code>score</code>, the probability-weighted level index, with <code>probabilities</code>, <code>confidence</code> and the <code>legend</code> it was graded against</td></tr>
+</tbody></table>
+<p>The limits are what one call can carry honestly: at most thirty-two
+questions, each choice or score declaring between two and thirty-two labels,
+instructions and rubric lines at most four kilobytes, a question key at most
+one hundred and twenty-eight bytes, and a state at most one hundred and
+twenty-eight kilobytes of JSON. Every one of them is checked before any
+provider is contacted, and the refusal names the question it is about.</p>
+<h2 id="the-answer">The answer<a class="headerlink" href="#the-answer" title="Link to this section">&para;</a></h2>
+<p>One real answer, served through <code>openrouter/openai/gpt-4o-mini</code>:</p>
+<pre><code class="language-json">{
+  "model": "decision-model",
+  "route": "openrouter/openai/gpt-4o-mini",
+  "engine": "chat-distribution",
+  "answers": {
+    "is_urgent": {"noul": 1.0, "confidence": 1.0},
+    "department": {
+      "choice": "billing",
+      "probabilities": {"billing": 0.7, "sales": 0.1, "technical": 0.2},
+      "confidence": 0.7
+    },
+    "severity": {
+      "score": 2.1,
+      "probabilities": {"0": 0.0, "1": 0.2, "2": 0.5, "3": 0.3},
+      "confidence": 0.5,
+      "legend": ["cosmetic", "annoying", "blocking", "outage"]
+    }
+  },
+  "usage": {"input_tokens": 247, "output_tokens": 106, "latency_ms": 2514.29}
+}</code></pre>
+<p><code>model</code> is the alias the caller named, <code>route</code> the destination that
+answered it, and <code>engine</code> which of the two below did the answering. The
+answer document has the same shape either way: a caller cannot tell the
+engines apart from the answers themselves.</p>
+<h2 id="two-engines">Two engines<a class="headerlink" href="#two-engines" title="Link to this section">&para;</a></h2>
+<p><strong><code>typesafe-systemone</code></strong> — the provider speaks the decision wire itself.
+TypeSafe AI's System One model, Jev, takes a state and typed questions in
+this vocabulary and returns typed answers, and Brama passes them through
+after checking that every question was answered and that no answer names an
+option its question never declared. That provider generates no text at all,
+so it carries no chat path: a chat completion naming <code>typesafe/jev-latest</code>
+is refused rather than sent to an endpoint that does not exist.</p>
+<p><strong><code>chat-distribution</code></strong> — any chat route. Brama asks the model for the one
+thing a decision is made of, the probability mass over the labels each
+question declares, and computes the typed answer from that itself:</p>
+<ul>
+<li>a <code>noul</code> is the mass on <code>true</code>, and its confidence the larger of the two
+sides;</li>
+<li>a <code>choice</code> is the label with the most mass, its distribution normalized to
+sum to one, and its confidence that mass;</li>
+<li>a <code>score</code> is the probability-weighted level index, over the same
+normalized distribution, with the rubric as its legend.</li>
+</ul>
+<p>The model is never asked to assert the choice or the score, only the
+numbers, so it cannot contradict its own distribution. An answer naming a
+label the question did not declare, omitting one, or carrying no
+probability mass at all is refused <code>decision_contract_violated</code> rather than
+repaired.</p>
+<h2 id="the-two-aliases">The two aliases<a class="headerlink" href="#the-two-aliases" title="Link to this section">&para;</a></h2>
+<p><code>model</code> accepts exactly two names, for the same reason the embeddings
+endpoint accepts exactly one: the name is the caller's promise of a typed
+answer, and which model keeps it is the deployment's business.</p>
+<table><thead><tr><th>Alias</th><th>Destination</th></tr></thead><tbody>
+<tr><td><code>decision-model</code></td><td>one canonical <code>provider/model</code> route this deployment pays for, native or chat. <code>best</code> is refused here: delegation is what the other name is for.</td></tr>
+<tr><td><code>best-decision-model</code></td><td>a route, or <code>best</code> — which hands the choice to subscription dispatch, where the caller's own signed identity selects the subscription that pays.</td></tr>
+</tbody></table>
+<p>Both are known to the gateway by name and required of no deployment. A
+gateway that serves no decisions declares no route for them, and a caller
+that asks anyway is told exactly that, with the repair in the sentence:</p>
+<pre><code class="language-text">503 {"error":{"code":"alias_unserviceable",
+     "message":"alias `decision-model` is a decision alias this gateway knows but
+      no route is declared for it; declare one with `brama routes set decision-model
+      &lt;provider/model&gt;` or `PUT /v1/admin/routes`",
+     "details":{"state":"no_route","route":null}}}</code></pre>
+<p>Declare one with <a href="/docs/cli/routes/set"><code>brama routes set</code></a> or
+<code>PUT /v1/admin/routes</code>, read the state back with
+<a href="/docs/cli/aliases"><code>brama aliases</code></a>, and ask one from a shell with
+<a href="/docs/cli/decide"><code>brama decide</code></a>.</p>
+<h2 id="not-to-be-confused-with">Not to be confused with<a class="headerlink" href="#not-to-be-confused-with" title="Link to this section">&para;</a></h2>
+<ul>
+<li><strong>A chat completion.</strong> A decision alias is refused on
+<code>POST /v1/chat/completions</code> by name, because the typed answer is the whole
+promise and that endpoint cannot make it.</li>
+<li><strong>A selector.</strong> <code>any</code>, <code>any-vision-capable</code> and <code>task:&lt;name&gt;</code> rank
+subscription models per caller; a decision alias names one destination like
+every other <a href="/docs/concepts/alias">alias</a>.</li>
+</ul>
+<p>See <a href="/docs/concepts/alias">aliases</a>, <a href="/docs/configuration/route-registry">the route registry</a>, <a href="/docs/http-api">the HTTP API</a>, or <a href="/docs/errors">errors</a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

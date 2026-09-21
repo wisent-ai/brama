@@ -42,9 +42,9 @@ pub use call::typed_capability::{dispatch_decision, dispatch_openai_typed};
 pub use plan::probe::plan_probe_route;
 pub use plan::{publishes_plan_usage, read_plan_usage, PlanUsage};
 pub use registry::{
-    native_decision_route, provider, provider_id_from_route, providers, route, supports_chat_route,
-    supports_decision_route, supports_embedding_route, supports_moderation_route, AuthKind,
-    ProviderDescriptor, RegistryModel, WireProtocol,
+    native_decision_route, provider, provider_endpoint, provider_id_from_route, providers, route,
+    supports_chat_route, supports_decision_route, supports_embedding_route,
+    supports_moderation_route, AuthKind, ProviderDescriptor, RegistryModel, WireProtocol,
 };
 
 pub(crate) use call::credential::credential_key;

@@ -1,9 +1,9 @@
 //! One story per provider-facing command, across every provider in the
 //! descriptor table.
 //!
-//! The table in `src/providers/adapter.rs` splits the 23 providers into three
-//! credential families -- three OAuth subscription providers, nineteen
-//! API-key providers, and the routes-file `local-openai` -- and each command
+//! The table in `src/providers/adapter.rs` splits the providers into three
+//! credential families -- three OAuth subscription providers, the API-key
+//! providers, and the routes-file `local-openai` -- and each command
 //! answers differently per family. Every sentence asserted here was copied
 //! from a live answer of the built binary, never guessed.
 //!
@@ -24,14 +24,16 @@ use std::process::{Command, Output};
 use serde_json::Value;
 use support::{SkarbiecVault, TestDirectory};
 
-/// Every provider id in the descriptor table, in declaration order.
-#[rustfmt::skip]
-const ALL_PROVIDERS: &[&str] = &[
-    "anthropic", "claude-code", "kimi", "openai", "codex", "openrouter",
-    "groq", "mistral", "xai", "deepseek", "cerebras", "fireworks", "together",
-    "nvidia", "moonshot", "zai", "qwen", "huggingface", "featherless",
-    "venice", "novita", "synthetic", "local-openai",
-];
+/// Every provider id in the descriptor table, in declaration order, read
+/// from the table itself: a hand-kept copy of it here drifted from the
+/// roster the moment a provider was added, and these stories are about every
+/// provider rather than about the ones a list remembered.
+fn all_providers() -> Vec<&'static str> {
+    brama::providers::adapter::providers()
+        .iter()
+        .map(|descriptor| descriptor.id)
+        .collect()
+}
 
 /// The providers whose subscription credentials are OAuth grants Brama can
 /// refresh and Weles can sign in.
@@ -127,7 +129,7 @@ fn refresh_names_the_empty_pool_for_every_provider() {
     let directory = TestDirectory::new("providers-refresh-empty");
     let vault = SkarbiecVault::create("prov-refresh-empty");
     let reason = "provider contract: empty pool";
-    for provider in ALL_PROVIDERS {
+    for provider in all_providers() {
         let output = run(
             &directory,
             &vault,
@@ -151,8 +153,8 @@ fn refresh_names_the_empty_pool_for_every_provider() {
         );
     }
     let records = journal_records(&directory);
-    assert_eq!(records.len(), ALL_PROVIDERS.len());
-    for (record, provider) in records.iter().zip(ALL_PROVIDERS) {
+    assert_eq!(records.len(), all_providers().len());
+    for (record, provider) in records.iter().zip(all_providers()) {
         assert_eq!(record["kind"], "subscription_refresh");
         assert_eq!(record["provider"], *provider);
         assert_eq!(record["reason"], reason);
@@ -169,7 +171,7 @@ fn refresh_answers_each_credential_family_in_its_own_words() {
     let directory = TestDirectory::new("providers-refresh-family");
     let vault = SkarbiecVault::create("prov-refresh-family");
     let reason = "provider contract: credential family";
-    for provider in ALL_PROVIDERS {
+    for provider in all_providers() {
         seed_ledger(&directory, &vault, &[provider]);
         let output = run(
             &directory,
@@ -211,7 +213,10 @@ fn refresh_answers_each_credential_family_in_its_own_words() {
 fn sign_in_refuses_before_it_reaches_weles() {
     let directory = TestDirectory::new("providers-sign-in");
     let vault = SkarbiecVault::create("prov-signin");
-    for provider in ALL_PROVIDERS.iter().filter(|provider| !is_oauth(provider)) {
+    for provider in all_providers()
+        .into_iter()
+        .filter(|provider| !is_oauth(provider))
+    {
         let output = run(
             &directory,
             &vault,

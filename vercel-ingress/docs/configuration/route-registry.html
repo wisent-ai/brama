@@ -99,6 +99,16 @@
         <code>{&quot;alias&quot;}</code>. Both answer
         <code>{&quot;ok&quot;:true,&quot;routes&quot;:&lt;document&gt;}</code>, the
         whole committed document as it now stands on disk.</p>
+        <p><a href="/docs/cli/routes/set"><code>brama routes set</code></a> and
+        <a href="/docs/cli/routes/rm"><code>brama routes rm</code></a> perform the same two
+        operations from an operator shell, through the same validation and the same
+        atomic owner-only replacement, for a host whose gateway is not running or has
+        no console bearer.</p>
+        <p>Both writers check the shape the alias promises: an embedding alias takes an
+        embedding route, a moderation alias a moderation route, a
+        <a href="/docs/concepts/decision">decision alias</a> a route that can answer typed
+        questions — and <code>decision-model</code> refuses <code>best</code>, because delegation
+        is what <code>best-decision-model</code> is for.</p>
         <p>Every registry write follows the same sequence: the new document is built
         in memory, validated whole, serialized into a staging file created 0600 in the
         destination directory, flushed, and then renamed over the destination. A

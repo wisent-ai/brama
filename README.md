@@ -72,11 +72,37 @@ are in
 the alias vocabulary and its four states are in
 [`/docs/concepts/alias`](https://brama.wisent.com/docs/concepts/alias).
 
+`brama routes set <alias> <destination>` declares an alias and
+`brama routes rm <alias>` retires one, through the same validated atomic
+owner-only write `PUT /v1/admin/routes` performs, for a host whose gateway is
+not running.
+
+## What a decision alias promises
+
+Two names answer typed questions instead of generating text:
+`decision-model`, on a route this deployment pays for, and
+`best-decision-model`, whose route may be `best`, so the caller's own signed
+identity selects the subscription that pays. `POST /v1/decisions` takes a
+state and a map of typed questions — a yes/no `noul`, a `choice` over the
+options the caller declared, a `score` over the rubric it gave — and answers
+one typed answer each, with the distribution it came from.
+
+TypeSafe AI's System One model answers that wire natively and generates no
+text at all, so it serves no chat; every other route is served by asking a
+chat model for the probability mass over each question's declared labels,
+from which Brama computes the answer itself. Either way the answer is inside
+the schema the caller declared or it is refused. `brama decide` asks one from
+a shell. The vocabulary, the two engines and every refusal are in
+[`/docs/concepts/decision`](https://brama.wisent.com/docs/concepts/decision).
+
 ## Product boundaries
 
 ### Included
 
 - OpenAI-compatible chat completions, embeddings, moderations, and model catalog.
+- Typed decisions on `POST /v1/decisions`, through the `decision-model` and
+  `best-decision-model` aliases, served natively by a decision provider or by
+  rendering the questions onto a chat model.
 - Native Anthropic Messages and OpenAI Responses ingress on the same routing
   decision, so a caller that speaks one of those two first-party formats needs
   no shim in front of Brama.
@@ -236,6 +262,7 @@ indexed in [examples](https://brama.wisent.com/docs/examples).
 | What Brama is, in one read | [`/docs/what-is-brama`](https://brama.wisent.com/docs/what-is-brama) |
 | Every HTTP path, method, body and refusal | [`/docs/http-api`](https://brama.wisent.com/docs/http-api) |
 | Alias vocabulary, states and diagnosis | [`/docs/concepts/alias`](https://brama.wisent.com/docs/concepts/alias) |
+| Typed decisions, their primitives and engines | [`/docs/concepts/decision`](https://brama.wisent.com/docs/concepts/decision) |
 | Which account pays for a request | [`/docs/concepts/entitlement`](https://brama.wisent.com/docs/concepts/entitlement) |
 | The route registry document and its guards | [`/docs/configuration/route-registry`](https://brama.wisent.com/docs/configuration/route-registry) |
 | Every environment variable the gateway reads | [`/docs/configuration`](https://brama.wisent.com/docs/configuration) |

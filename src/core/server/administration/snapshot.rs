@@ -36,10 +36,18 @@ pub(in crate::core::server) async fn admin_snapshot(
     let providers = crate::providers::adapter::providers()
         .iter()
         .map(|provider| {
+            // Where this provider's traffic would go, or why it could go
+            // nowhere: a declared provider whose origin fails the
+            // trusted-host policy can never serve, and the console is where
+            // an operator should see that before a caller does.
+            let endpoint = crate::providers::adapter::provider_endpoint(provider.id);
             json!({
                 "id": provider.id,
                 "displayName": provider.display_name,
                 "wireProtocol": wire_protocol_name(provider.wire),
+                "endpoint": endpoint.clone().ok().flatten(),
+                "endpointProblem": endpoint.as_ref().err(),
+                "serves": if provider.decision_path.is_empty() { "chat" } else { "decisions" },
                 "configured": !crate::providers::adapter::provider_requires_credential(provider.id)
                     || configured.contains(provider.id),
             })

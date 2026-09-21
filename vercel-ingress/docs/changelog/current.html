@@ -24,6 +24,43 @@ coordinate remain recorded as unpublished. Earlier released entries live in
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="candidate-typed-decisions">Typed decisions: <code>decision-model</code> and <code>best-decision-model</code><a class="headerlink" href="#candidate-typed-decisions" title="Link to this section">&para;</a></h2>
+<p>Brama served one shape until now: generation. A caller that needed a routing
+decision, a gate or a grade asked a chat model for prose and parsed it, and
+every caller parsed it differently.
+<a href="/docs/concepts/decision"><code>POST /v1/decisions</code></a> takes a state and a
+map of typed questions — a noul, a choice over the options the caller declared,
+a score over the rubric it gave — and answers one typed answer each. Two aliases
+reach it and no other name does: <code>decision-model</code> for a route this
+deployment pays for, and <code>best-decision-model</code>, whose route may be
+<code>best</code>, so the caller's own signed identity selects the subscription that
+pays.</p>
+<p>Two engines answer and the response says which. TypeSafe AI's System One model
+is declared as the <a href="/docs/providers/typesafe"><code>typesafe</code></a> provider and
+answers the decision wire natively; because it generates no text it carries no
+chat path at all, and a chat call naming one of its routes is refused rather
+than sent to a URL this build invented. Every other route is served by asking a
+chat model for the probability mass over each question's declared labels, and
+Brama computes the choice, the score and the confidence from that distribution
+itself — so the model cannot contradict its own numbers, and an answer outside
+the declared schema is refused <code>decision_contract_violated</code> rather than
+passed on.</p>
+<p>The two aliases are known by name and required of nobody: unrouted, they report
+<code>no_route</code> with the command that repairs them, so no managed deployment has
+to change its policy to take this release.
+<a href="/docs/cli/decide"><code>brama decide</code></a> answers one from an operator shell,
+and <a href="/docs/cli/routes/set"><code>brama routes set</code></a> and
+<a href="/docs/cli/routes/rm"><code>brama routes rm</code></a> declare and retire an alias
+through the same validated, atomic, owner-only registry write the admin route
+performs.</p>
+<p>Two things found on the way and fixed with it. A model-scoped bearer could not
+reach <code>/v1/decisions</code> at all, because the path allowlist enumerates the
+inference paths. And <code>brama aliases</code> in an operator shell answered
+<code>capability_absent</code> for every provider whose credential the very next step
+would have read: the presence check parsed a file named by a variable only the
+launcher sets, while the credential path asks Skarbiec. It asks Skarbiec too
+now, once per provider. <code>/v1/admin/snapshot</code> additionally reports the
+endpoint each provider resolves, or why it resolves none.</p>
 <h2 id="candidate-no-borrowed-grants">0.4.46: a gateway signs itself in, and borrowed grants are gone<a class="headerlink" href="#candidate-no-borrowed-grants" title="Link to this section">&para;</a></h2>
 <p>Brama could take the OAuth grant a coding harness on the same machine already
 held: <code>subscription held</code>, <code>subscription import</code> and

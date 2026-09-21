@@ -123,6 +123,47 @@ an existing registry document is brought to the current shape by
 <p>A typed, alias-only endpoint on <code>wisent-backend/moderation</code>. It requires
 <code>model</code> and <code>input</code>, and answers <code>invalid moderation input</code>
 on a shape error. Success is the OpenAI moderations shape.</p>
+<h2 id="post-v1decisions"><code>POST /v1/decisions</code><a class="headerlink" href="#post-v1decisions" title="Link to this section">&para;</a></h2>
+<p>The endpoint that answers instead of generating. It accepts exactly
+<code>model</code>, <code>state</code> and <code>questions</code>, and exactly two model names:
+<code>decision-model</code>, on a route this deployment pays for, and
+<code>best-decision-model</code>, whose route may be <code>best</code> — in which case the
+caller's own signed identity selects the subscription that pays, exactly as
+it does for a chat completion. Everything the shape means is in
+<a href="/docs/concepts/decision">decision</a>.</p>
+<pre><code class="language-json">{
+  "model": "decision-model",
+  "state": "Help! My payouts have been failing for 3 days.",
+  "questions": {
+    "is_urgent": {"type": "noul", "instructions": "Does this convey urgency?"},
+    "department": {
+      "type": "choice",
+      "instructions": "Which team should handle this?",
+      "criteria": {"billing": "Payments, invoicing, refunds", "technical": "Bugs, outages, integrations"}
+    }
+  }
+}</code></pre>
+<p>Success is one answer per question, beside the route and engine that
+answered and the tokens it cost:
+<code>{"model", "route", "engine", "answers", "usage"}</code>. A <code>noul</code> answers a
+probability and a confidence; a <code>choice</code> answers one of the labels the
+question declared, its distribution and a confidence; a <code>score</code> answers the
+probability-weighted level index, its distribution, a confidence and the
+legend it was graded against.</p>
+<p>The refusals are its own. A malformed question is <code>400 invalid_request</code>
+naming the question — <code>question `mood` declares unsupported type `vibe`: a
+question is a noul, a choice or a score</code> — and nothing is sent to a
+provider. A model name that is not one of the two is
+<code>400 model must be `decision-model` or `best-decision-model`</code>. An alias with
+no serviceable route is <code>503 alias_unserviceable</code> carrying
+<code>details.state</code> and <code>details.route</code>. An answer outside the schema the
+caller declared is <code>502 decision_contract_violated</code>, carrying
+<code>details.alias</code> and <code>details.route</code>: the provider answered, and what it
+answered cannot be used.</p>
+<p>A decision alias is refused on the chat endpoints by name, and a canonical
+route belonging to a decision-only provider is refused there too —
+<code>route `typesafe/jev-latest` serves typed decisions only; call POST
+/v1/decisions</code>.</p>
 <p>Which aliases the presenting bearer may name, and which of them can serve right now, is
 <a href="/docs/http-api/discovery-and-subscriptions#get-v1aliases"><code>GET /v1/aliases</code></a>.
 Which concrete models the caller can execute is

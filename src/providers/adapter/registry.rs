@@ -83,6 +83,33 @@ pub fn provider(id: &str) -> Option<&'static ProviderDescriptor> {
     PROVIDERS.iter().find(|provider| provider.id == id)
 }
 
+/// Where this provider's traffic is allowed to go, as the request path will
+/// resolve it: the deployment's override when it set one, else the declared
+/// origin, both checked against the trusted-host policy.
+///
+/// `Ok(None)` is the third answer and it belongs to one provider: the local
+/// model server's endpoint is declared per deployment in the route registry,
+/// one per model, so there is no single origin to state here.
+///
+/// A declaration nothing confronts with that policy is a provider that
+/// cannot serve and says nothing about it until a caller is refused, which
+/// is why the console reads this and a test asserts every declared provider
+/// answers it.
+pub fn provider_endpoint(provider_id: &str) -> Result<Option<String>, String> {
+    let descriptor =
+        provider(provider_id).ok_or_else(|| format!("provider `{provider_id}` is not declared"))?;
+    if address::provider_base_url_override(descriptor.id).is_none()
+        && descriptor.id == LOCAL_MODEL_SERVER
+    {
+        return Ok(None);
+    }
+    address::provider_base_url(descriptor).map(Some)
+}
+
+/// The one provider whose endpoint each deployment declares for itself, in
+/// the route registry beside the deployment name a route points at.
+const LOCAL_MODEL_SERVER: &str = "local-openai";
+
 pub(crate) fn provider_requires_credential(provider_id: &str) -> bool {
     provider(provider_id).is_none_or(|descriptor| descriptor.auth != AuthKind::None)
 }

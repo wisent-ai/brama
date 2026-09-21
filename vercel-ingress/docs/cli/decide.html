@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>brama decide — Brama CLI Docs</title>
+  <meta name="description" content="Answer typed questions through a decision alias from an operator shell, over the same routes and engines POST /v1/decisions serves.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/cli/decide">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>brama decide</h2><a class="active" aria-current="page" href="/docs/cli/decide">decide</a><a href="/docs/cli/routes/set">routes set</a><a href="/docs/cli/aliases">aliases</a><a href="/docs/cli">CLI tree</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/concepts/decision">Decision</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/http-api">HTTP API</a><a href="/docs/configuration/route-registry">Route registry</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama CLI command reference</p>
+      <article class="doc"><h1 id="brama-decide"><code>brama decide</code><a class="headerlink" href="#brama-decide" title="Link to this section">&para;</a></h1>
+<p>Ask one <a href="/docs/concepts/decision">typed decision</a> from a shell: a state and a set of typed questions in, one typed answer each out. It resolves the alias through the same route registry the gateway reads and dispatches through the same engines <code>POST /v1/decisions</code> uses, so what it prints is what a caller would have received.</p>
+<h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">brama decide --state &lt;STATE&gt; --questions &lt;QUESTIONS&gt; [--model &lt;ALIAS&gt;] [--agent-id &lt;ID&gt;] [--json] --allow-provider-cost</code></pre>
+<table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>--state &lt;STATE&gt;</code></td><td>required</td><td>The state to decide on. A literal string, <code>@FILE</code> to read a file, or <code>-</code> to read standard input.</td></tr>
+<tr><td><code>--questions &lt;QUESTIONS&gt;</code></td><td>required</td><td>The questions object, exactly as the endpoint takes it. A literal JSON string, <code>@FILE</code>, or <code>-</code>.</td></tr>
+<tr><td><code>--model &lt;ALIAS&gt;</code></td><td>optional; <code>decision-model</code></td><td>Which decision alias answers. Only <code>decision-model</code> and <code>best-decision-model</code> are accepted.</td></tr>
+<tr><td><code>--agent-id &lt;ID&gt;</code></td><td>optional; <code>wisent-app</code></td><td>Whose subscription pays when the alias resolves to <code>best</code>. Ignored for a canonical route, which this deployment's own capability pays for.</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td>Print the answer document instead of human-readable lines.</td></tr>
+<tr><td><code>--allow-provider-cost</code></td><td>required to send anything</td><td>Acknowledge that this performs a billable provider request.</td></tr>
+</tbody></table>
+<h2 id="why-it-exists">Why it exists<a class="headerlink" href="#why-it-exists" title="Link to this section">&para;</a></h2>
+<p>Two moments the HTTP surface cannot cover. Before a gateway runs, an operator has to know whether the route behind a decision alias answers at all; and while diagnosing one that stopped, the question is which of the alias, the route or the model broke. This command answers both against the real route, and its refusals are the endpoint's own sentences.</p>
+<h2 id="what-it-reads-and-writes">What it reads and writes<a class="headerlink" href="#what-it-reads-and-writes" title="Link to this section">&para;</a></h2>
+<p>It reads the route registry — <code>BRAMA_INFERENCE_ROUTES_FILE</code>, else <code>~/.config/brama/inference-routes.json</code> — and the launcher's alias table when the shell carries one, exactly as <a href="/docs/cli/aliases"><code>brama aliases</code></a> does. It writes nothing. The provider credential is redeemed at final use through Skarbiec, the same cascade the gateway uses.</p>
+<h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
+<p>One real run, against <code>decision-model</code> routed to <code>openrouter/openai/gpt-4o-mini</code>:</p>
+<pre><code class="language-console">$ brama decide --model decision-model --allow-provider-cost \
+    --state "Help! My payouts have been failing for 3 days." \
+    --questions @questions.json
+Model: decision-model
+Route: openrouter/openai/gpt-4o-mini (chat-distribution)
+department               choice billing  confidence 0.70  [billing=0.70 sales=0.10 technical=0.20]
+is_urgent                noul 1.0000  confidence 1.00
+severity                 score 2.1000  confidence 0.50  [0=0.00 1=0.20 2=0.50 3=0.30]
+Tokens: 247 in / 106 out
+Latency: 2514ms</code></pre>
+<p>With <code>--json</code> the answer is the endpoint's own document: <code>model</code>, <code>route</code>, <code>engine</code>, <code>answers</code> and <code>usage</code>. Exit code is 0 when every question was answered inside the schema the caller declared.</p>
+<h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
+<table><thead><tr><th>Sentence</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>refusing a billable decision without explicit --allow-provider-cost</code></td><td>Nothing was sent. Nothing is spent by running this command by accident.</td></tr>
+<tr><td><code>--model must be `decision-model` or `best-decision-model`</code></td><td>Only the two decision aliases reach this shape.</td></tr>
+<tr><td><code>--questions is not JSON: &lt;reason&gt;</code></td><td>The questions argument, file or standard input did not parse.</td></tr>
+<tr><td>the question's own refusal, such as <code>question `mood` declares unsupported type `vibe`: a question is a noul, a choice or a score</code></td><td>The same validation the endpoint performs, before any provider is contacted.</td></tr>
+<tr><td><code>alias `decision-model` is a decision alias this gateway knows but no route is declared for it; declare one with `brama routes set decision-model &lt;provider/model&gt;` or `PUT /v1/admin/routes`</code></td><td>The alias has no route here.</td></tr>
+<tr><td><code>provider refused: &lt;the provider's own sentence&gt;</code></td><td>The route was reached and refused — no credits, a rate limit, an unavailable credential.</td></tr>
+<tr><td><code>decision_contract_violated: &lt;what was wrong&gt;</code></td><td>The model answered outside the declared schema. The repair is the route, not the request.</td></tr>
+</tbody></table>
+<p>Every refusal exits 1 and prints on standard error.</p>
+<p>See <a href="/docs/concepts/decision">decisions</a>, <a href="/docs/cli/routes/set"><code>brama routes set</code></a>, or <a href="/docs/cli">the CLI tree</a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

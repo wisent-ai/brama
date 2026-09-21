@@ -33,6 +33,7 @@ fn trusted_provider_hosts(provider_id: &str) -> Option<&'static [&'static str]> 
         "venice" => Some(&["api.venice.ai"]),
         "novita" => Some(&["api.novita.ai"]),
         "synthetic" => Some(&["api.synthetic.new"]),
+        "typesafe" => Some(&["api.typesafe.ai"]),
         "perplexity" => Some(&["api.perplexity.ai"]),
         "deepinfra" => Some(&["api.deepinfra.com"]),
         "google" => Some(&["generativelanguage.googleapis.com"]),
