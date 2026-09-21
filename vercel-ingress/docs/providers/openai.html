@@ -51,7 +51,12 @@ pinned concrete models: <code>openai/default</code> → <code>gpt-5.4</code>,
 absence as the provider&#x27;s own answer, never as a zero
 (<a href="/docs/concepts/subscription#the-usage-ledger">subscription</a>).</p>
 <h2 id="endpoints">Endpoints<a class="headerlink" href="#endpoints" title="Link to this section">&para;</a></h2>
-<table><thead><tr><th></th><th></th></tr></thead><tbody><tr><td>Chat</td><td><code>https://api.openai.com/v1/chat/completions</code></td></tr><tr><td>Model discovery</td><td><code>https://api.openai.com/v1/models</code></td></tr><tr><td>Auth header</td><td><code>Authorization: Bearer &lt;key&gt;</code></td></tr><tr><td>Trusted host</td><td><code>api.openai.com</code></td></tr><tr><td>Base URL override</td><td><code>BRAMA_PROVIDER_OPENAI_BASE_URL</code>, validated with the refusals in <a href="/docs/concepts/provider#endpoint-trust-and-overrides">provider</a></td></tr></tbody></table>
+<table><thead><tr><th></th><th></th></tr></thead><tbody><tr><td>Chat</td><td><code>https://api.openai.com/v1/chat/completions</code></td></tr><tr><td>Image</td><td><code>https://api.openai.com/v1/images/generations</code></td></tr><tr><td>Video</td><td><code>https://api.openai.com/v1/videos</code>, read back from <code>/v1/videos/{id}</code></td></tr><tr><td>Voice</td><td><code>https://api.openai.com/v1/audio/speech</code></td></tr><tr><td>Model discovery</td><td><code>https://api.openai.com/v1/models</code></td></tr><tr><td>Auth header</td><td><code>Authorization: Bearer &lt;key&gt;</code></td></tr><tr><td>Trusted host</td><td><code>api.openai.com</code></td></tr><tr><td>Base URL override</td><td><code>BRAMA_PROVIDER_OPENAI_BASE_URL</code>, validated with the refusals in <a href="/docs/concepts/provider#endpoint-trust-and-overrides">provider</a></td></tr></tbody></table>
+<p>This is the one provider here that generates in every shape. The media paths
+are reached through the <code>image-model</code>, <code>video-model</code> and
+<code>voice-model</code> aliases or a canonical route the catalogue lists as that
+kind, and they are paid by this deployment's own key rather than by any
+subscription (<a href="/docs/concepts/media">media</a>).</p>
 </main>
   </div>
 </body>

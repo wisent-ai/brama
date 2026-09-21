@@ -27,7 +27,8 @@
 <h2 id="plan-usage">Plan usage<a class="headerlink" href="#plan-usage" title="Link to this section">&para;</a></h2>
 <p>xAI publishes no free plan-usage report for API keys. The ledger records that absence as the provider&#x27;s own answer, never as a zero (<a href="/docs/concepts/subscription#the-usage-ledger">subscription</a>).</p>
 <h2 id="endpoints">Endpoints<a class="headerlink" href="#endpoints" title="Link to this section">&para;</a></h2>
-<table><thead><tr><th></th><th></th></tr></thead><tbody><tr><td>Chat</td><td><code>https://api.x.ai/v1/chat/completions</code></td></tr><tr><td>Model discovery</td><td><code>https://api.x.ai/v1/models</code></td></tr><tr><td>Auth header</td><td><code>Authorization: Bearer &lt;key&gt;</code></td></tr><tr><td>Trusted host</td><td><code>api.x.ai</code></td></tr><tr><td>Base URL override</td><td><code>BRAMA_PROVIDER_XAI_BASE_URL</code>, validated with the refusals in <a href="/docs/concepts/provider#endpoint-trust-and-overrides">provider</a></td></tr></tbody></table>
+<table><thead><tr><th></th><th></th></tr></thead><tbody><tr><td>Chat</td><td><code>https://api.x.ai/v1/chat/completions</code></td></tr><tr><td>Image</td><td><code>https://api.x.ai/v1/images/generations</code></td></tr><tr><td>Model discovery</td><td><code>https://api.x.ai/v1/models</code></td></tr><tr><td>Auth header</td><td><code>Authorization: Bearer &lt;key&gt;</code></td></tr><tr><td>Trusted host</td><td><code>api.x.ai</code></td></tr><tr><td>Base URL override</td><td><code>BRAMA_PROVIDER_XAI_BASE_URL</code>, validated with the refusals in <a href="/docs/concepts/provider#endpoint-trust-and-overrides">provider</a></td></tr></tbody></table>
+<p>Besides chat this provider generates media, reached through the media alias for that shape or a canonical route the catalogue lists as that kind, and paid by this deployment’s own key (<a href="/docs/concepts/media">media</a>).</p>
 </main>
   </div>
 </body>
