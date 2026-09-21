@@ -151,13 +151,11 @@ async fn remote_report(destination: remote::Destination, refresh_usage: bool, js
 /// How many accounts the pool holds, which is not how many members it has,
 /// and which accounts those are.
 ///
-/// A member belongs to an account through the address its own sign-in named,
-/// or failing that the Weles login item it signs in through; several members
-/// can belong to one account, and a member that names neither is not an
-/// account at all. Printing only the member count answered "fifteen" for a
-/// deployment whose operator holds five accounts, and printing only the
-/// number answered "three" without saying which three, which is not
-/// checkable against the accounts the operator knows they hold.
+/// A member belongs to an account through the address recorded against it;
+/// several members can belong to one account, and a member that records
+/// none is not an account at all. Printing only the member count answers
+/// with the number of rows, which is a different number, and printing only
+/// a total answers a count nobody can check against the accounts they hold.
 fn print_accounts(accounts: Option<&Value>) {
     let Some(accounts) = accounts else { return };
     let per_provider = accounts

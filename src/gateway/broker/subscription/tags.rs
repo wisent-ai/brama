@@ -28,32 +28,27 @@ use crate::gateway::oauth_refresh;
 /// and a fresh item is created with nothing -- so the rotation path could mint
 /// a subscription that no agent could ever route to, and did.
 ///
-/// Measured on charless-mac-mini on 2026-09-02: three of the four subscription
-/// accounts in that vault -- `brama-sub-wisent-app-codex-secondary`,
-/// `...-claude-primary`, `...-kimi-primary` -- carried `brama:provider:` and
-/// `brama:id:` and neither `brama:subscription` nor any `brama:agent:`. Every
-/// agent on that host could reach exactly one credential, so the single block
-/// on it took the documentation gate of every repository down. One of the three
-/// redeemed on the first probe after its tags were restored: a working paid
-/// credential had been invisible the whole time.
+/// An item that lost the mark this way keeps a perfectly valid credential
+/// while no agent can reach it, and a pool narrowed to one reachable
+/// credential is one block away from serving nothing at all. Restoring the
+/// tags makes such a credential redeemable again on the first probe, which
+/// is the shape of the defect: nothing was wrong with the grant.
 ///
 /// All four tags are derived, never asked for: the provider and the
 /// subscription id are what this write is for, the mark follows from being a
 /// subscription at all, and the account is the principal whose grant is
-/// being stored. Until 2026-09-16 the write also refused an item with no
-/// `brama:agent:` tag, calling that an entitlement decision; the operator's
-/// decision is that every subscription serves every caller, so there is
-/// nothing left for a writer to be unable to derive.
+/// being stored. The write derives all of them; an entitlement decision is
+/// not among them, because every subscription serves every caller.
 ///
-/// `brama:account:` is the one fact that says which of the operator's
-/// accounts a member is. Before it existed, every reader had to fall back on
-/// a name -- the member's own id, its label, or the login row it signs in
-/// through -- and a name is not an account: one Google login row backs both
-/// the Claude Code and the Codex subscription of one person, so counting
-/// login rows reported that person's two accounts as one, and reported one
-/// login row as an account of the wrong provider. The tag is written from
-/// what the caller already resolved, and a write that disagrees with what
-/// the item carries is refused rather than silently repointed.
+/// `brama:account:` is the one fact that says which provider account a
+/// member is. Before it existed, every reader had to fall back on a name --
+/// the member's own id, its label, or the login row it signs in through --
+/// and a name is not an account: one Google login row can back both a
+/// Claude Code and a Codex subscription of one person, so counting login
+/// rows reports two accounts as one and a login of one provider as an
+/// account of another. The tag is written from what the caller already
+/// resolved, and a write that disagrees with what the item carries is
+/// refused rather than silently repointed.
 pub fn subscription_tags_for_write(
     existing: &[String],
     provider: &str,
@@ -107,12 +102,11 @@ pub fn subscription_tags_for_write(
 /// later reader looks: `context.account_ref`, which Weles resolves a sign-in
 /// from, and `brama:account:`, which the pool counts accounts by.
 ///
-/// Why the sweep and not a one-off repair: every member imported before this
-/// existed carries no account, a deployment holding five accounts therefore
-/// counted three, and the two that were missing were exactly the ones nobody
-/// had signed in through this gateway. Recording it where the grant is
-/// already open means the next member imported the same way is attributed
-/// without anybody stamping anything.
+/// Why the sweep and not a one-off repair: a member imported before this
+/// existed carries no account, so the pool can attribute only the members
+/// this gateway has itself signed in and reports the rest as unattributed.
+/// Recording it where the grant is already open means the next member
+/// imported the same way is attributed without anybody stamping anything.
 ///
 /// Best effort by contract: an account that cannot be read or cannot be
 /// written leaves the member unattributed, which the pool reports, and never

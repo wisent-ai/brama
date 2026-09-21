@@ -65,16 +65,13 @@ pub fn retire(item_id: &str) {
     append(json!({"kind": "retire", "id": item_id, "at": now()}));
 }
 
-/// Take one retirement back, because the operator says that account is one
-/// this deployment uses.
+/// Take one retirement back, because this deployment uses that account
+/// after all.
 ///
-/// Retirement used to be permanent: `is_retired` answered yes to any `retire`
-/// record ever written, so a member given back could never be used again by
-/// any command. On this deployment all five of the operator's accounts had
-/// been retired as borrowed grants, and when he named them as the accounts
-/// to use there was nothing in the product that could say so -- the pool
-/// skipped them, every request answered that the pool was empty, and the
-/// only route back was editing a journal by hand.
+/// Retirement used to be permanent: `is_retired` answered yes to any
+/// `retire` record ever written, so a member given back could never be used
+/// again by any command. A pool could then hold accounts it skipped on
+/// every request, and the only route back was editing a journal by hand.
 ///
 /// The journal stays append-only: this writes a record beside the
 /// retirement, and the newest of the two decides. A reinstatement is not a

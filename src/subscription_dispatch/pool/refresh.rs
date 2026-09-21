@@ -191,10 +191,9 @@ pub async fn refresh_subscription(
 /// offered to dispatch again and still needs a grant of this gateway's own,
 /// which is what the sign-in commands obtain.
 ///
-/// Why it exists: a retirement was permanent. On 2026-09-21 all five of the
-/// accounts this deployment's operator names as its own were retired -- the
-/// gateway answered `no active credential for agent` for each and its own
-/// sign-in report said `retired` -- and no command could put them back.
+/// Why it exists: a retirement was permanent. A member given back was
+/// skipped by every later command, whatever the accounts in the vault were
+/// worth, and no command could say it is used again.
 pub async fn reinstate_member(subscription_id: &str, reason: &str) -> Result<Value, String> {
     let subscription_id = subscription_id.trim();
     if subscription_id.is_empty() {

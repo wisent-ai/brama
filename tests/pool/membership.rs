@@ -117,15 +117,14 @@ fn cli_banks_and_retires_membership_and_refuses_invalid_writes() {
     eprintln!("CLI membership evidence: {}", evidence.display());
 }
 
-/// A retirement can be taken back, because an operator naming the accounts a
-/// deployment uses is the last word on membership.
+/// A retirement can be taken back, because naming the accounts a deployment
+/// uses is the last word on membership.
 ///
 /// Retirement used to be permanent: `is_retired` answered yes to any
-/// retirement record ever written. On 2026-09-21 all five accounts this
-/// deployment's operator names as its own were retired, the gateway answered
-/// `no active credential for agent` for each of them, and nothing in the
-/// product could put them back. This drives the real binary: bank a member,
-/// retire it, reinstate it, and read the pool the gateway itself would read.
+/// retirement record ever written, so a member given back was answered `no
+/// active credential for agent` forever and nothing could put it back. This
+/// drives the real binary: bank a member, retire it, reinstate it, and read
+/// the pool the gateway itself would read.
 #[test]
 fn the_cli_reinstates_a_retired_member_and_refuses_one_that_is_not_retired() {
     let vault = SkarbiecVault::create("cli-reinstate");

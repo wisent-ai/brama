@@ -209,8 +209,8 @@ console asked for it; no timer reaches any of them.</p>
   so each adopted grant signed that machine out. A gateway signs itself in instead.</li>
 <li><strong>POST <code>/v1/admin/subscription-pool/reinstate</code></strong> takes one
   member back: <code>{"subscription_id", "reason"?}</code>. A retirement used to be
-  permanent, so five accounts a deployment&rsquo;s operator named as his own could not be
-  put back from anywhere; the member returns to the rotation and still holds no grant of
+  permanent, so a member this pool gave back could not be put back from anywhere;
+  reinstating returns it to the rotation, and it still holds no grant of
   this gateway&rsquo;s own, which its recorded state then says
   (<code>needs_reauthorization</code>). This is
   <a href="/docs/cli/subscription/reinstate"><code>brama subscription reinstate</code></a>.

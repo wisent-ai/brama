@@ -1,161 +1,230 @@
-//! Nothing published from this repository carries a person's identity.
+//! Nothing this repository publishes may describe a particular deployment.
 //!
-//! This repository is public. On 2026-09-21 a real account count was copied
-//! out of a live deployment into the CLI reference, the attribute page and
-//! three test fixtures, so the operator's subscription addresses and a home
-//! directory path were pushed to a public remote; the changelog and the
-//! aliases page had been carrying the same shapes since 2026-09-18.
+//! This repository is public, and prose written while repairing one
+//! installation carries that installation with it: account identifiers,
+//! machine names, how many accounts somebody holds, what a provider
+//! measured for them on a given evening. Every such sentence is somebody's
+//! private operational record, published for good, and scrubbing one after
+//! the fact protects nothing -- the next change writes another.
 //!
-//! The rule is positive rather than a list of the addresses that leaked: an
-//! address published here must sit in a domain that carries the `example`
-//! label the standards reserve for documentation -- `example.com` and
-//! `example.invalid` both do, a real mailbox does not -- and a filesystem
-//! example must not name a home directory. A list of the addresses that
-//! escaped would only ever refuse those; this refuses the next one.
+//! So the rule is enforced on what a change introduces, and it is enforced
+//! by a judge: the text a change adds to a published path is answered by
+//! Brama's own decision alias, which is the product's way of deciding
+//! something no list of forbidden words can decide. A pattern catches an
+//! address; it cannot catch the same disclosure written as a story.
 //!
-//! Scope is everything a reader of the repository can see: the published
-//! site, the source, the tests and the repository's own documents. A file
-//! that is not readable as text is skipped, which is how the site's images
-//! and any archived evidence stay out of it.
+//! The judge is asked one question per added line, about that line alone,
+//! and anything it classifies as deployment-specific fails this test with
+//! the line quoted. A judge that cannot be reached fails it too: a gate that
+//! skips itself when the product is unavailable is not a gate.
 
-use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
-/// The label the standards reserve for documentation. A domain carrying it
-/// belongs to nobody, which is the whole property this rule needs.
-const RESERVED_LABEL: &str = "example";
+use serde_json::{json, Value};
 
-/// Where a published address or path can appear: the site, the code, the
-/// tests and the repository's own documents.
+/// Where published text lives: the site, the code, the tests and the
+/// repository's own documents.
 const PUBLISHED: [&str; 5] = ["vercel-ingress/docs", "src", "tests", "README.md", "docs"];
 
-/// The home-directory prefixes an example must not name. `~` is the way to
-/// write one.
-const HOME_PREFIXES: [&str; 2] = ["/Users/", "/home/"];
+/// The alias this judgement is answered through. It is the product's own
+/// decision capability, so the gate cannot drift from what Brama serves.
+const JUDGE_ALIAS: &str = "decision-model";
+
+/// A line longer than this is judged by its beginning; a disclosure is at the
+/// start of a sentence, and an entire minified page is not a sentence.
+const LINE_CHARACTERS: usize = 400;
+
+/// A line shorter than this carries no statement about anything.
+const SHORTEST_JUDGED_LINE: usize = 24;
 
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).to_path_buf()
 }
 
-/// This file states the rule, so it necessarily writes down the shapes the
-/// rule refuses. It is the one file the scan skips, by its own path.
-fn states_the_rule(file: &Path) -> bool {
-    file == Path::new(file!()) || file.ends_with(file!())
-}
-
-fn published_files(root: &Path, found: &mut Vec<PathBuf>) {
-    if root.is_file() {
-        found.push(root.to_path_buf());
-        return;
-    }
-    let Ok(entries) = fs::read_dir(root) else {
-        return;
-    };
-    let mut paths: Vec<_> = entries
-        .map(|entry| entry.expect("published directory entry").path())
-        .collect();
-    paths.sort();
-    for path in paths {
-        if path.is_dir() {
-            published_files(&path, found);
-        } else {
-            found.push(path);
+/// The revision this change is measured against: the published history, or
+/// the revision a caller names in `BRAMA_PUBLISHED_BASELINE` when a whole
+/// stretch of history has to be judged at once -- what a release qualifies,
+/// or a cleanup pass over text that was published before this gate existed.
+fn baseline() -> String {
+    if let Ok(named) = std::env::var("BRAMA_PUBLISHED_BASELINE") {
+        if !named.trim().is_empty() {
+            return named.trim().to_owned();
         }
     }
+    for reference in ["origin/main", "main"] {
+        let found = Command::new("git")
+            .args(["rev-parse", "--verify", "--quiet", reference])
+            .current_dir(repository())
+            .output();
+        if let Ok(found) = found {
+            if found.status.success() {
+                return String::from_utf8_lossy(&found.stdout).trim().to_owned();
+            }
+        }
+    }
+    panic!("this repository has no published history to measure a change against");
 }
 
-/// The addresses one published file carries: every `local@domain` run, taken
-/// from the characters an address is made of rather than from a parser
-/// nobody here needs.
-fn addresses(text: &str) -> Vec<String> {
-    let addressable = |character: char| {
-        character.is_ascii_alphanumeric() || ".-_+".contains(character) || character == '@'
-    };
-    text.split(|character: char| !addressable(character))
-        .filter(|run| run.matches('@').count() == 1)
-        .filter(|run| {
-            let (local, domain) = run.split_once('@').unwrap_or_default();
-            !local.is_empty() && domain.contains('.') && !domain.ends_with('.')
-        })
-        .map(str::to_owned)
+/// Every line this working tree and its commits add to a published path,
+/// against the published history. Only what a change introduces is judged:
+/// text that is already published is a cleanup, not a new disclosure, and
+/// judging it again on every unrelated change would spend a provider request
+/// per line of the repository.
+fn added_lines() -> Vec<String> {
+    let mut arguments = vec![
+        "diff".to_owned(),
+        "--unified=0".to_owned(),
+        "--no-color".to_owned(),
+        baseline(),
+        "--".to_owned(),
+    ];
+    arguments.extend(PUBLISHED.iter().map(|path| (*path).to_owned()));
+    let diff = Command::new("git")
+        .args(&arguments)
+        .current_dir(repository())
+        .output()
+        .expect("git diff runs in this checkout");
+    assert!(
+        diff.status.success(),
+        "git diff refused: {}",
+        String::from_utf8_lossy(&diff.stderr)
+    );
+    String::from_utf8_lossy(&diff.stdout)
+        .lines()
+        .filter(|line| line.starts_with('+') && !line.starts_with("+++"))
+        .map(|line| line[1..].trim().to_owned())
+        .filter(|line| line.chars().count() >= SHORTEST_JUDGED_LINE)
+        .map(|line| line.chars().take(LINE_CHARACTERS).collect())
         .collect()
 }
 
-/// Whether one address sits in a domain reserved for documentation.
-fn reserved(address: &str) -> bool {
-    address
-        .split_once('@')
-        .map(|(_, domain)| domain.to_ascii_lowercase())
+/// The one question every line is judged by.
+///
+/// A choice rather than a yes/no, and with worked examples of both labels:
+/// asked abstractly, a judge calls every line of a source file specific to
+/// wherever it was written, and the gate then refuses everything. The
+/// examples are of the product's own prose, so what they teach is the
+/// distinction rather than a vocabulary.
+fn question() -> Value {
+    json!({
+        "line": {
+            "type": "choice",
+            "instructions": "One line from a public source repository is in the state. \
+                Decide what the line itself says. Examples of product: 'the command refuses \
+                an empty id', 'a member belongs to an account through the address recorded \
+                against it', 'writes the tag brama:account:<address>'. Examples of \
+                deployment: 'on that host three paid accounts sat in the vault', 'the five \
+                accounts this deployment retired', 'measured on a machine named in the \
+                line', 'the operator was signed out that day'.",
+            "criteria": {
+                "product": "the line states a rule, a behaviour, a refusal, a field, a \
+                    command or a placeholder",
+                "deployment": "the line states a fact about one installation: a machine, a \
+                    person, an address, an identifier built from an address, a count of \
+                    somebody's accounts, or something measured or that happened there",
+            },
+        }
+    })
+}
+
+/// Where the gateway that judges is, and the bearer to present to it.
+///
+/// Both are the deployment's own: the origin is resolved through Stado's
+/// service directory as a named consumer, and the bearer is read from the
+/// vault item that consumer is entitled to. Neither is written into this
+/// repository, which is the same rule this gate enforces.
+fn gateway() -> (String, String) {
+    let consumer = std::env::var("BRAMA_JUDGE_CONSUMER").unwrap_or_else(|_| "operator".into());
+    let resolved = Command::new("stado")
+        .args(["service", "directory", "connect", "brama", "--consumer"])
+        .arg(&consumer)
+        .output()
+        .expect("stado resolves where this machine reaches Brama");
+    let origin = String::from_utf8_lossy(&resolved.stdout)
+        .split_whitespace()
+        .next()
         .unwrap_or_default()
-        .split('.')
-        .any(|label| label == RESERVED_LABEL)
-}
-
-fn published() -> Vec<PathBuf> {
-    let repository = repository();
-    let mut files = Vec::new();
-    for area in PUBLISHED {
-        published_files(&repository.join(area), &mut files);
-    }
-    files.retain(|file| !states_the_rule(file));
-    files
-}
-
-fn named_in(file: &Path) -> String {
-    file.strip_prefix(repository())
-        .unwrap_or(file)
-        .display()
-        .to_string()
-}
-
-#[test]
-fn every_published_address_is_in_a_reserved_domain() {
-    let files = published();
+        .to_owned();
     assert!(
-        files.len() > 100,
-        "expected the published repository, found {} files",
-        files.len()
+        origin.starts_with("http"),
+        "no Brama is reachable for consumer `{consumer}`, so this change is unjudged: {}{}",
+        String::from_utf8_lossy(&resolved.stdout),
+        String::from_utf8_lossy(&resolved.stderr)
     );
-    let mut found: Vec<String> = Vec::new();
-    for file in &files {
-        let Ok(text) = fs::read_to_string(file) else {
-            continue;
-        };
-        for address in addresses(&text) {
-            if !reserved(&address) {
-                found.push(format!("{}: {address}", named_in(file)));
-            }
-        }
+    let item = std::env::var("BRAMA_JUDGE_BEARER_ITEM")
+        .expect("BRAMA_JUDGE_BEARER_ITEM names the vault item#field holding this gateway's bearer");
+    let (item, field) = item
+        .split_once('#')
+        .expect("BRAMA_JUDGE_BEARER_ITEM is `<item>#<field>`");
+    let read = Command::new("skarbiec")
+        .args(["get", item, "--field", field])
+        .output()
+        .expect("the vault answers this machine's own read");
+    assert!(
+        read.status.success(),
+        "the judge's bearer could not be read, so this change is unjudged: {}",
+        String::from_utf8_lossy(&read.stderr)
+    );
+    (
+        origin,
+        String::from_utf8_lossy(&read.stdout).trim().to_owned(),
+    )
+}
+
+/// Ask the product about one line. The alias, the route behind it and the
+/// provider are the deployment's own, so this gate judges with whatever
+/// Brama is configured to decide with.
+///
+/// One line per request on purpose: asked about twenty lines at once, a
+/// judge answers about the whole state and every line inherits the verdict
+/// of the worst one.
+fn judged_as_deployment(origin: &str, bearer: &str, line: &str) -> bool {
+    let answered = reqwest::blocking::Client::new()
+        .post(format!("{}/v1/decisions", origin.trim_end_matches('/')))
+        .bearer_auth(bearer)
+        .json(&json!({
+            "model": JUDGE_ALIAS,
+            "state": line,
+            "questions": question(),
+        }))
+        .send()
+        .expect("the gateway answers the decision request");
+    let status = answered.status();
+    let answer: Value = answered.json().unwrap_or(Value::Null);
+    assert!(
+        status.is_success(),
+        "the published-text judge refused through `{JUDGE_ALIAS}`, so this change is \
+         unjudged: HTTP {status}: {answer}"
+    );
+    answer
+        .pointer("/answers/line/choice")
+        .and_then(Value::as_str)
+        == Some("deployment")
+}
+
+/// Every line this change adds to a published path is about the product, not
+/// about the installation it was written on.
+#[test]
+fn nothing_this_change_publishes_describes_one_deployment() {
+    let lines = added_lines();
+    if lines.is_empty() {
+        return;
     }
+    let (origin, bearer) = gateway();
+    let found: Vec<&String> = lines
+        .iter()
+        .filter(|line| judged_as_deployment(&origin, &bearer, line))
+        .collect();
     assert!(
         found.is_empty(),
-        "a published address must sit in a domain carrying the reserved `{RESERVED_LABEL}` \
-         label; found:\n{}",
-        found.join("\n")
-    );
-}
-
-#[test]
-fn no_published_example_names_a_home_directory() {
-    let mut found: Vec<String> = Vec::new();
-    for file in &published() {
-        let Ok(text) = fs::read_to_string(file) else {
-            continue;
-        };
-        for (number, line) in text.lines().enumerate() {
-            if HOME_PREFIXES.iter().any(|prefix| line.contains(prefix)) {
-                found.push(format!(
-                    "{}:{}: {}",
-                    named_in(file),
-                    number.saturating_add(1),
-                    line.trim()
-                ));
-            }
-        }
-    }
-    assert!(
-        found.is_empty(),
-        "a published example names a home directory; write `~` instead:\n{}",
-        found.join("\n")
+        "these lines describe one deployment rather than the product, and this repository is \
+         public; write them about what the product does, with placeholders where an identifier \
+         is needed:\n{}",
+        found
+            .iter()
+            .map(|line| line.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
 }

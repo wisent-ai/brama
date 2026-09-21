@@ -136,10 +136,14 @@ fn distribution(
     let mut mass = Vec::with_capacity(labels.len());
     let mut total = 0.0;
     for label in &labels {
-        let value = answered
-            .get(label)
-            .and_then(Value::as_f64)
-            .ok_or_else(|| format!("answer for question `{key}` omits label `{label}`"))?;
+        // A label the model left out carries no mass. Refusing the whole
+        // answer over it made the engine reject exactly the answers it asked
+        // for: a model certain of one label writes that label alone, and the
+        // distribution it means -- all of the mass on what it named, none on
+        // the rest -- is the one computed here. An undeclared label is still
+        // refused above, and an answer that names no declared label at all
+        // carries no mass and is refused below.
+        let value = answered.get(label).and_then(Value::as_f64).unwrap_or(0.0);
         if !value.is_finite() || value < 0.0 {
             return Err(format!(
                 "answer for question `{key}` gives label `{label}` a probability that is not a number between zero and one"

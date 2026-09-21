@@ -107,10 +107,9 @@ pub(crate) async fn pool_report(gateway: &str, bearer: &str) -> Result<Value, St
 
 /// Give one member back: the gateway retires it and forgets its credential.
 ///
-/// This removes the members left over from the borrowing this product used to
-/// allow — the three claude-code accounts taken from a workstation on
-/// 2026-09-20, each of them a pair that workstation was also using, which is
-/// why the operator was signed out of Claude by hand that day.
+/// This removes the members left over from the borrowing this product used
+/// to allow: a grant taken from a machine that was also using it, which is
+/// how a provider comes to revoke the session that machine was in.
 pub(crate) async fn disown(
     gateway: &str,
     bearer: &str,
@@ -148,13 +147,13 @@ pub(crate) async fn disown(
     ))
 }
 
-/// Put one retired member back in the rotation, because the operator says
-/// that account is one this deployment uses.
+/// Put one retired member back in the rotation, because this deployment
+/// uses that account after all.
 ///
-/// A retirement was permanent, and on 2026-09-21 all five of the operator's
-/// accounts were retired: the gateway answered `no active credential for
-/// agent` for each of them, its own sign-in report said `retired`, and no
-/// command in the product could say they were his. This is that command.
+/// A retirement was permanent: the gateway answered `no active credential
+/// for agent` for a member it had given back, its own sign-in report said
+/// `retired`, and no command in the product could take that back. This is
+/// that command.
 pub(crate) async fn reinstate(
     gateway: &str,
     bearer: &str,

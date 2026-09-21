@@ -3,10 +3,10 @@
 //!
 //! These three act on membership rather than on a credential, which is why
 //! they are not beside the sign-ins: none of them obtains, rotates or reads a
-//! grant. They travel together because they are the operator's answer to one
-//! question -- which accounts does this deployment use -- and because a
-//! retirement that nothing could take back is what left five declared
-//! accounts unusable while the pool reported itself empty.
+//! grant. They travel together because they answer one question -- which
+//! accounts does this deployment use -- and because a retirement that
+//! nothing could take back leaves declared accounts unusable while the pool
+//! reports itself empty.
 
 use std::future::Future;
 

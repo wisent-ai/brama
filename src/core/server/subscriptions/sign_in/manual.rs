@@ -216,14 +216,14 @@ pub(in crate::core::server) async fn disown_admin_grant(
     })))
 }
 
-/// `POST /v1/admin/subscription-pool/reinstate`: the operator names a member
-/// this deployment uses after all.
+/// `POST /v1/admin/subscription-pool/reinstate`: a member this deployment
+/// uses after all.
 ///
 /// The mirror of `disown`, and the reason it exists: a retirement was
-/// permanent, so the five accounts this deployment had retired as borrowed
-/// grants could never be put back, and every request answered that the pool
-/// held nothing while the accounts sat in the vault. Reinstating is not a
-/// credential: the member returns to the rotation and still needs a grant of
+/// permanent, so a member given back could never be used again by any
+/// command, and a pool could report itself empty while the accounts sat in
+/// the vault. Reinstating is not a credential: the member returns to the
+/// rotation and still needs a grant of
 /// this gateway's own, so the answer names the sign-in that obtains one.
 pub(in crate::core::server) async fn reinstate_admin_grant(
     Extension(client_identity): Extension<ModelClientIdentity>,

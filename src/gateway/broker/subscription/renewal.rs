@@ -326,13 +326,13 @@ pub async fn refresh_subscription_credential_ahead(
         Err(refused) => return RefreshAhead::Unavailable(refused),
     };
     // The account this grant belongs to, recorded while it is open, when the
-    // item records none. Every member imported before the account was
-    // recorded beside its grant carries no account at all, so the pool could
-    // attribute only the members this gateway had itself signed in - three of
-    // the five accounts on this deployment - and the rest were reported as
-    // unattributed however exactly their own ids named them. This is the
-    // reusable repair: the sweep opens every member's credential on every
-    // pass anyway, and the provider's own claim about it is what gets written.
+    // item records none. A member imported before the account was recorded
+    // beside its grant carries no account at all, so the pool can attribute
+    // only the members this gateway has itself signed in and reports the
+    // rest as unattributed, however exactly their own ids name an account.
+    // This is the reusable repair: the sweep opens every member's credential
+    // on every pass anyway, and the provider's own claim about it is what
+    // gets written.
     let _ = super::tags::record_stated_account(subscription_id, provider, &credential).await;
     let expires_at_ms = oauth_refresh::access_token_expiry_ms(&credential, provider);
     // Ask what the document is before asking when it dies. A document that is

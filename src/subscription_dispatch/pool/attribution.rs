@@ -4,24 +4,21 @@
 //! A row is a member, not an account. Several members can carry one account
 //! -- a grant taken from a harness and the same account signed in by the
 //! gateway are two rows of one subscription -- and a member the vault no
-//! longer lists is no account at all. Reading rows as accounts is how a
-//! deployment whose operator holds five accounts answered fifteen.
+//! longer lists is no account at all, so a row count answers a different
+//! question from the one an operator asked.
 //!
 //! Nothing here is read from a name. A member's id, its label and the login
 //! row it signs in through are names, and a name is not an account: one
-//! Google login row backs both the Claude Code and the Codex subscription of
-//! one person, so the first version of this file -- which fell back on the
-//! login row -- reported that person's two accounts as one, reported a
-//! Claude login as a Codex account, and answered three Claude Code accounts
-//! as two.
+//! Google login row can back both a Claude Code and a Codex subscription of
+//! one person, so a count that falls back on the login row reports two
+//! accounts as one and a login of one provider as an account of another.
 //!
 //! An account is the one thing the member itself records: the address on its
 //! vault item, written from what the provider signed into its grant, read
 //! from the item's `brama:account:` tag or the item's own `account_ref`.
 //! Nothing else counts. A sign-in journal entry was tried here and removed:
-//! it records the address one sign-in was *attempted* for, so a Codex
-//! account that had been attempted under a third address counted as a sixth
-//! account on a deployment holding five. An attempt is not an account.
+//! it records the address one sign-in was *attempted* for, and an attempt
+//! under a third address then counts as an account nobody holds.
 //!
 //! A member that records no account is reported as unattributed rather than
 //! counted, and `brama subscription attribute <provider>` records it from
@@ -43,11 +40,11 @@ fn identity(row: &Value) -> Option<&str> {
 /// each member's own grant states.
 ///
 /// The pool can only count accounts that were recorded, and a member
-/// imported before the account was recorded beside its grant records none:
-/// this deployment held five accounts and could attribute three, because
-/// only three had been signed in through this gateway. This is the command
-/// that closes that gap, and the sweep runs the same code on its own pass,
-/// so it closes by itself for every member imported later.
+/// imported before the account was recorded beside its grant records none,
+/// so such members are reported as unattributed however exactly their own
+/// ids happen to name an account. This is the command that closes that gap,
+/// and the sweep runs the same code on its own pass, so it closes by itself
+/// for every member imported later.
 ///
 /// Nothing is rotated and nothing is asked of a provider: each grant is
 /// opened, read for the address its issuer signed into it, and written back
