@@ -13,8 +13,7 @@ use zeroize::Zeroizing;
 
 use super::unattended;
 
-/// A gateway answers a pool read inside a minute, or it is not answering.
-const POOL_READ_DEADLINE_SECONDS: u64 = 60;
+
 const HTTP_SUCCESS: std::ops::Range<u16> = 200..300;
 
 /// Which gateway a command speaks to, and what it authenticates with.
@@ -75,7 +74,6 @@ impl Destination {
 
 fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(POOL_READ_DEADLINE_SECONDS))
         .build()
         .map_err(|error| format!("gateway client: {error}"))
 }

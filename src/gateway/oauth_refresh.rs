@@ -12,7 +12,6 @@ mod principal;
 mod provider;
 mod refusal;
 
-use std::time::Duration;
 
 use serde::Serialize;
 use serde_json::Value;
@@ -67,15 +66,11 @@ impl Drop for RefreshGrant {
     }
 }
 
-/// A refresh call waits fifteen seconds, reads at most 64 KiB, and a credential blob
-/// written back is at most 8 KiB.
-const REFRESH_TIMEOUT: Duration = Duration::from_secs(15);
+/// A refresh call reads at most 64 KiB, and a credential blob written back is
+/// at most 8 KiB. How long the provider takes to answer is the provider's
+/// business: a refresh that is still in flight has not failed.
 const MAX_RESPONSE_BYTES: usize = 64 * 1024;
 const MAX_CREDENTIAL_BYTES: usize = 8 * 1024;
-
-fn refresh_timeout() -> Duration {
-    REFRESH_TIMEOUT
-}
 
 fn max_response_bytes() -> usize {
     MAX_RESPONSE_BYTES
@@ -132,7 +127,6 @@ async fn request_refresh_grant(
         std::sync::LazyLock::new(|| {
             reqwest::Client::builder()
                 .redirect(reqwest::redirect::Policy::none())
-                .timeout(refresh_timeout())
                 .build()
                 .map_err(|_| "OAuth refresh client configuration failed".to_owned())
         });
@@ -153,14 +147,7 @@ async fn request_refresh_grant(
     }
     .send()
     .await
-    .map_err(|error| {
-        let code = if error.is_timeout() {
-            Code::Timeout
-        } else {
-            Code::InfraDown
-        };
-        refresh_failure(code, "OAuth refresh transport failure")
-    })?;
+    .map_err(|_| refresh_failure(Code::InfraDown, "OAuth refresh transport failure"))?;
     // The status alone was all this returned, and the status alone is what a
     // day went into supplementing by hand. The body says which of
     // `invalid_grant`, a revoked client or a throttle it was, so it travels
