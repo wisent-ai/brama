@@ -7,7 +7,7 @@
 //! any provider is contacted: a question this file rejects costs nothing and
 //! names exactly what is wrong with it.
 
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 /// The most questions one call may carry. Every question is answered against
 /// the same state in the same request, so this bounds one provider call.

@@ -8,15 +8,12 @@
 //! here too, because a listing is the only thing worth caching -- it is read
 //! per request and a failed shell must never be what a later caller sees.
 
-use std::sync::{LazyLock, Mutex};
-use std::time::{Duration, Instant};
-
 use tracing::warn;
 
-use super::super::vault::{entitlements_router_bin, existing_item_account, raw_listing};
+use super::super::vault::{entitlements_router_bin, raw_listing};
 use super::account::{
-    configured_subscription_ids, configured_subscriptions, parse_live_subscriptions,
-    parse_owned_subscriptions, parse_unroutable_accounts, SubscriptionEntry, UnroutableAccount,
+    configured_subscription_ids, parse_live_subscriptions, parse_owned_subscriptions,
+    parse_unroutable_accounts, SubscriptionEntry, UnroutableAccount,
 };
 use super::donation::donated_subscriptions;
 

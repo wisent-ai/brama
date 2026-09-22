@@ -13,29 +13,22 @@ mod registry;
 
 use std::time::Instant;
 
-use serde_json::{json, Value};
+use serde_json::Value;
 
-use crate::subscription_dispatch::model_catalog;
 use crate::types::{ModelRequest, ModelResponse};
 
-use call::credential::{
-    authorize_catalog, authorize_provider, provider_body, provider_credential_key,
-};
+use call::credential::{authorize_provider, provider_body, provider_credential_key};
 use call::outcome::refusal::{attempted_failure, provider_error, transport_failure};
 use call::outcome::response_body::bounded_response_text;
 use call::outcome::retry::send_once_more_if_unsent;
 use call::{dispatch_client, stream_client};
 use catalog::dispatch_catalog;
-use catalog::endpoint::{catalog_endpoint, catalog_provider_base_url};
-use catalog::model_row::catalog_model_from_value;
 use dialect::anthropic_messages::model_response_from_anthropic;
 use dialect::openai_chat::model_response_from_openai;
 use dialect::openai_responses::event_stream::model_response_from_responses_stream;
 use dialect::{chat_payload, refused_settings, streaming_chat_payload};
 use plan::headers::{limit_readings, plan_headers, with_limits};
-use registry::{
-    apply_omp_model_metadata, endpoint, model_from_value, provider_base_url, provider_base_url_for,
-};
+use registry::{endpoint, provider_base_url_for};
 
 pub use call::control_client;
 pub use call::media::{

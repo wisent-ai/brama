@@ -15,12 +15,7 @@ use std::time::Duration;
 
 use tracing::warn;
 
-use super::super::standalone::{
-    local_provider_credentials_enabled, put_local_subscription_credential,
-};
-use super::super::vault::{existing_item_account, existing_item_tags, put_credential};
-use super::super::{redeem_subscription_credential, slug};
-use super::tags::subscription_tags_for_write;
+use super::super::redeem_subscription_credential;
 use crate::capability::Secret;
 use crate::core::failure::{self, IMPACT_CREDENTIAL_PERSIST, POINT_CREDENTIAL_PERSIST};
 use crate::gateway::oauth_refresh;

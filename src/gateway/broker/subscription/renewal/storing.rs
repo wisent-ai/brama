@@ -2,13 +2,11 @@
 //! and the manual sign-in go through, the account it is written against, and
 //! the reading that says a stored document is no longer usable.
 
-use tracing::warn;
-
+use super::super::super::slug;
 use super::super::super::standalone::{
     local_provider_credentials_enabled, put_local_subscription_credential,
 };
 use super::super::super::vault::{existing_item_account, existing_item_tags, put_credential};
-use super::super::super::{redeem_subscription_credential, slug};
 use super::super::tags::subscription_tags_for_write;
 use crate::capability::Secret;
 

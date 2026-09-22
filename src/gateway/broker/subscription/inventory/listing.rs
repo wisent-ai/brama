@@ -7,11 +7,11 @@ use std::time::{Duration, Instant};
 
 use tracing::warn;
 
+use super::super::super::slug;
 use super::super::super::vault::{entitlements_router_bin, existing_item_account, raw_listing};
 use super::super::account::{
-    parse_live_subscriptions, parse_owned_subscriptions, SubscriptionEntry,
+    configured_subscriptions, parse_live_subscriptions, SubscriptionEntry,
 };
-use super::super::donation::donated_subscriptions;
 
 type LiveSubscriptionsCache = Mutex<Option<(Instant, Vec<SubscriptionEntry>)>>;
 
@@ -65,11 +65,7 @@ pub(super) async fn with_recorded_accounts(
         if entry.account.is_some() {
             continue;
         }
-        let item = format!(
-            "provider:{}:{}",
-            super::super::slug(&entry.provider),
-            super::super::slug(&entry.id)
-        );
+        let item = format!("provider:{}:{}", slug(&entry.provider), slug(&entry.id));
         if let Ok(recorded) = existing_item_account(&item).await {
             entry.account = recorded;
         }

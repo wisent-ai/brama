@@ -5,6 +5,8 @@
 //! alias that resolves to the wrong shape is a render or an answer nobody can
 //! pay for rather than an error a caller can read.
 
+use tracing::warn;
+
 use super::super::{
     DECISION_ALIASES, IMAGE_ALIAS, MEDIA_ALIASES, VIDEO_ALIAS, VOICE_ALIAS, WISENT_EMBEDDING_ALIAS,
     WISENT_MODERATION_ALIAS,

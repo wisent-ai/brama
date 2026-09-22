@@ -8,9 +8,7 @@ use std::path::PathBuf;
 use tracing::warn;
 
 use super::{
-    alias_requires_direct_capability, alias_route_shape_supported, DECISION_ALIASES, IMAGE_ALIAS,
-    MEDIA_ALIASES, MODEL_ALIASES, MODEL_ALIASES_ENV, VIDEO_ALIAS, VOICE_ALIAS,
-    WISENT_EMBEDDING_ALIAS, WISENT_MODERATION_ALIAS,
+    alias_requires_direct_capability, alias_route_shape_supported, MODEL_ALIASES, MODEL_ALIASES_ENV,
 };
 
 #[derive(Clone, Debug)]
