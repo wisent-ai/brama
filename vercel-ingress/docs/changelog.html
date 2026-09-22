@@ -14,20 +14,20 @@
     <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
   </header>
   <div class="layout">
-    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Changelog</h2><a class="active" aria-current="page" href="/docs/changelog">Overview</a><a href="/docs/changelog/current">Unreleased</a><a href="/docs/changelog/released-0-2-7x">Released 0.2.77 to 0.2.42</a><a href="/docs/changelog/released-0-2-early">Released 0.2.5 to 0.2.2</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Changelog</h2><a class="active" aria-current="page" href="/docs/changelog">Overview</a><a href="/docs/changelog/current">Unreleased</a><a href="/docs/changelog/current-subscriptions">Unreleased: subscriptions</a><a href="/docs/changelog/released-0-4-4x">Released 0.4.46 to 0.4.13</a><a href="/docs/changelog/released-0-2-7x">Released 0.2.77 to 0.2.42</a><a href="/docs/changelog/released-0-2-early">Released 0.2.5 to 0.2.2</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
     <main>
       <p class="source-note">Brama changelog</p>
       <article class="doc"><h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Link to this section">&para;</a></h1>
 <p>All notable Brama changes are documented here: what each release changed, why it changed, and what an operator has to do
 about it. Brama follows Semantic Versioning and the pre-one compatibility policy in
-<a href="/docs/release"><code>RELEASE.md</code></a>. This page is the index; the entries themselves are on the three pages
+<a href="/docs/release"><code>RELEASE.md</code></a>. This page is the index; the entries themselves are on the five pages
 below, newest first.</p>
 <p>Older entries describe the contract as it stood at the time. Where a later change replaced it &mdash; most recently the
 route contract, under which an alias resolves to exactly one route &mdash; the entry says so and links the change that
 replaced it.</p>
 <h2 id="unreleased">Unreleased<a class="headerlink" href="#unreleased" title="Link to this section">&para;</a></h2>
-<p><a href="/docs/changelog/current">Unreleased changes</a> holds the nine entries that are committed but carry no published
-release coordinate yet:</p>
+<p><a href="/docs/changelog/current">Unreleased changes</a> holds the entries that are committed but carry no published
+release coordinate yet and do not concern the subscription pool:</p>
 <ul>
 <li>a Claude Code grant travels in Claude Code's own shape - user agent, beta list, billing attestation and sentence - which is the only shape Anthropic honours it in for the newest models;</li>
 <li>an omitted <code>temperature</code> is omitted on the wire too, instead of an invented 0.7 the newest Claude models refuse;</li>
@@ -43,7 +43,14 @@ release coordinate yet:</p>
 <li>the backend alias is the client's name, <code>wisent-backend</code>;</li>
 <li>subscription usage and failure reporting across the CLI and Brama Desktop.</li>
 </ul>
+<p><a href="/docs/changelog/current-subscriptions">Unreleased: subscriptions and credentials</a> holds the rest of the
+unpublished entries: the pool that sees every account the machine holds, the imports and sign-ins that fill it, the one
+vault listing every reader shares, the grant shapes Anthropic and Codex honour, and the readiness the gateway reports
+before its subscription sweep ends.</p>
 <h2 id="published-releases">Published releases<a class="headerlink" href="#published-releases" title="Link to this section">&para;</a></h2>
+<p><a href="/docs/changelog/released-0-4-4x">Released 0.4.46 to 0.4.13</a> covers 0.4.46 (a gateway that signs itself in,
+with borrowed grants gone), 0.4.14 (image-aware <code>best</code> selection) and 0.4.13 (the Codex imports proved by a
+completion probe, and the concurrent catalogue discovery behind them).</p>
 <p><a href="/docs/changelog/released-0-2-7x">Released 0.2.77 to 0.2.42</a> covers 0.2.77 (the managed backend identity
 derived from the required backend aliases), 0.2.76 (the managed launcher's aliases, and reviewing and adopting existing
 route configuration) and 0.2.42 of 2026-08-27, the large re-cut of 0.2.41 that carried streaming, the Anthropic Messages

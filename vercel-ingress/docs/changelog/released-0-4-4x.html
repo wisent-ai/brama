@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Released 0.4.46 to 0.4.13 — Brama Docs</title>
+  <meta name="description" content="Published Brama releases 0.4.46, 0.4.14 and 0.4.13: the gateway that signs itself in, image-aware selection, and the Codex imports.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/changelog/released-0-4-4x">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Changelog</h2><a href="/docs/changelog">Overview</a><a href="/docs/changelog/current">Unreleased</a><a href="/docs/changelog/current-subscriptions">Unreleased: subscriptions</a><a class="active" aria-current="page" href="/docs/changelog/released-0-4-4x">Released 0.4.46 to 0.4.13</a><a href="/docs/changelog/released-0-2-7x">Released 0.2.77 to 0.2.42</a><a href="/docs/changelog/released-0-2-early">Released 0.2.5 to 0.2.2</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/configuration">Configuration</a><a href="/docs/runbook">Runbook</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama changelog: released 0.4.46 to 0.4.13</p>
+      <article class="doc"><h1 id="released-0446-to-0413">Released 0.4.46 to 0.4.13<a class="headerlink" href="#released-0446-to-0413" title="Link to this section">&para;</a></h1>
+<p>Published releases 0.4.46, 0.4.14 and 0.4.13. Each entry describes the contract as it stood when that release was cut. Changes that carry no release coordinate are on
+<a href="/docs/changelog/current">current changes</a> and <a href="/docs/changelog/current-subscriptions">unreleased subscription changes</a>; earlier releases are on
+<a href="/docs/changelog/released-0-2-7x">0.2.77 to 0.2.42</a> and <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>.</p>
+<h2 id="candidate-no-borrowed-grants">0.4.46: a gateway signs itself in, and borrowed grants are gone<a class="headerlink" href="#candidate-no-borrowed-grants" title="Link to this section">&para;</a></h2>
+<p>Brama could take the OAuth grant a coding harness on the same machine already
+held: <code>subscription held</code>, <code>subscription import</code> and
+<code>subscription sync</code>, plus the console route
+<code>POST /v1/admin/subscription-pool/grant</code>. All four are removed, with
+the harness readers behind them. A provider issues one OAuth pair per sign-in and
+revokes it when a second holder refreshes, so every borrowed member cost the
+machine it came from its own session: two accounts on 2026-09-17, and on
+2026-09-20 the operator's own Claude session, which had to be signed in again by
+hand. It also made a gateway depend on a workstation staying in the fleet and on
+that workstation running a particular harness at all.</p>
+<p>What replaces it is what already existed: a gateway signs itself in.
+<a href="/docs/cli/subscription/sign-in"><code>subscription sign-in</code></a>
+drives the provider's own login through Weles on the gateway's host, and
+<a href="/docs/cli/subscription/sign-in-manual"><code>subscription sign-in-manual</code></a>
+runs the same OAuth flow a harness runs — same client id, same scopes, same
+loopback callback, same token endpoint — and mints a pair that belongs to this
+gateway alone.</p>
+<p>Members left over from borrowing are given back with the new
+<a href="/docs/cli/subscription/disown"><code>subscription disown</code></a> and its
+console route <code>POST /v1/admin/subscription-pool/disown</code>: the gateway
+retires the member and forgets its credential, and the machine that signed the
+account in keeps its session. A grant written before this release still carries
+the old borrowed marker and is still never rotated; a grant stored now has the
+marker stripped, because this gateway owns it.</p>
+<p>No configuration, state schema or billing migration is required. A deployment
+that relied on a sweep importing grants has to sign its accounts in instead.</p>
+
+<h2 id="candidate-image-aware-best">0.4.14: image-aware best selection<a class="headerlink" href="#candidate-image-aware-best" title="Link to this section">&para;</a></h2>
+<p>A <code>best</code> request with image content now filters the caller's active
+pool for advertised image input before applying a preferred route. Buffered and
+streaming requests use the same rule. No eligible model means a visible refusal,
+not a text-only substitution or a broader permission.</p>
+<p>The <a href="/docs/testing#real-image-selection">real image qualification</a>
+checks the visible heading through both HTTP response modes and preserves the
+out-of-scope model refusal. No credential, route, state schema or billing migration is required.</p>
+<p>Published to the candidate channel from <code>cbd297df3ed1efd961078b4aa45e7fca8f323b0f</code>
+through Stado run <code>4394248ac72d40c7a9e1adc0e88d3d0c</code> on 2026-09-15 for Darwin arm64
+and Linux amd64. The deployed gateway reported that exact revision. All three real image
+qualification cases passed: buffered reading, streamed reading and the unchanged HTTP 403
+refusal of an unauthorized route. Weles 0.7.3 separately passed its real text, image and
+invalid-token cases against this gateway.</p>
+<h2 id="codex-chatgpt-import-proof">0.4.13: Codex imports and concurrent discovery<a class="headerlink" href="#codex-chatgpt-import-proof" title="Link to this section">&para;</a></h2>
+<p>Released from <code>4577501971ffcec56a3b4c16f064fe1299d5cdc7</code> through Stado run <code>c3510d34e8aef6f70c19f8c930394176</code> on 2026-09-15, for Darwin arm64 and Linux amd64. The gateway on <code>charless-mac-mini</code> reported that exact revision, <code>ready: true</code> and <code>degraded: false</code>. A completion probe against each imported Codex account returned HTTP 200 and <code>probe.ok: true</code>.</p>
+<p>Importing either existing OMP Codex account stored its grant but returned <code>failed</code> because the verification request selected <code>gpt-5.3-codex-spark</code>, which the provider refused for ChatGPT accounts. The same grants served <code>codex/gpt-6-astra</code> through Brama. The Codex probe now uses GPT-6-Astra, including the probe after a CLI or desktop import. It still proves a real completion and never refreshes the borrowed grant during import. An actual provider refusal remains a failed import, with the provider's sentence.</p>
+<p>The real held-grant journey uses the existing isolated gateway and Skarbiec fixture, with refresh and usage sweeps disabled. Run <code>cargo test --test subscriptions_harness_grants a_real_held_codex_grant_is_accepted_and_probed -- --nocapture</code> with <code>BRAMA_REAL_HARNESS_HOME</code> and <code>BRAMA_REAL_CODEX_ACCOUNT</code> selecting the existing OMP account. The operator vault and harness store are not written. Receipts, source revision and the persisted pool response remain under <code>target/real-import-evidence/</code>; an unheld account must leave the stored grant unchanged.</p>
+<p>The first release build found that a nested build path made all seven real pool journeys fail before opening their vault: GnuPG reported <code>File name too long</code> for its Unix socket. Only these socket-owning fixtures use the workshop's short-root exception, <code>~/.brama/test-runs/&lt;unique&gt;</code>, with owner-only permissions and removal when the fixture closes. Ordinary test directories and retained evidence still belong under Cargo's <code>target/</code>.</p>
+<p>GPT-6-Astra is now also advertised by the Codex catalogue, so a client allowed to use that route receives an available model instead of an empty list. Concurrent first catalogue requests share one discovery per subscription; the real held-grant journey proves six authenticated clients receive the model with one reported credential read, rather than six. The same coalescing covers the startup readiness sweep without weakening its checks or reusing inference credentials.</p>
+</article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>
