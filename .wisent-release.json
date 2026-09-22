@@ -9,8 +9,8 @@
   },
   "inputs": {
     "skarbiec": {
-      "uri": "stado://sources/skarbiec/37df4fd01993b62452b877d25ac26e83302065595c95e44205adcac4a7bf6aa2/source.tar.gz",
-      "sha256": "37df4fd01993b62452b877d25ac26e83302065595c95e44205adcac4a7bf6aa2",
+      "uri": "stado://sources/skarbiec/5555d82221ef1a52f4c123bb60066af07b2f5880bb8e58950b477c44e17c6864/source.tar.gz",
+      "sha256": "5555d82221ef1a52f4c123bb60066af07b2f5880bb8e58950b477c44e17c6864",
       "mount": "skarbiec"
     },
     "echo_web": {
@@ -28,50 +28,9 @@
     "darwin-arm64": {
       "quality": [
         {
-          "name": "brama-release-quality",
-          "argv": [
-            "bash",
-            "src/release/quality.sh"
-          ]
-        }
-      ],
-      "build": {
-        "argv": [
-          "bash",
-          "src/release/build.sh"
-        ]
-      },
-      "stage": {
-        "stage/bin/brama": "bin/brama",
-        "stage/bin/skarbiec-entitlements-router": "bin/skarbiec-entitlements-router",
-        "stage/bin/start-with-skarbiec": "bin/start-with-skarbiec",
-        "stage/bin/provision-skarbiec-trust": "bin/provision-skarbiec-trust",
-        "stage/bin/launcher/bundle-coordinates.sh": "bin/launcher/bundle-coordinates.sh",
-        "stage/bin/launcher/service-identity.sh": "bin/launcher/service-identity.sh",
-        "stage/bin/launcher/workload-trust.sh": "bin/launcher/workload-trust.sh",
-        "stage/bin/launcher/capability-broker-socket.sh": "bin/launcher/capability-broker-socket.sh",
-        "stage/bin/launcher/gateway-launch.sh": "bin/launcher/gateway-launch.sh",
-        "stage/bin/launcher/policy/control-policy.sh": "bin/launcher/policy/control-policy.sh",
-        "stage/bin/launcher/policy/router-identities.sh": "bin/launcher/policy/router-identities.sh",
-        "stage/bin/launcher/policy/subscription-catalog.sh": "bin/launcher/policy/subscription-catalog.sh",
-        "stage/libexec/generate-skarbiec-config.mjs": "libexec/generate-skarbiec-config.mjs",
-        "stage/libexec/brama-diagnose.py": "libexec/brama-diagnose.py",
-        "stage/libexec/diagnose/host_layout.py": "libexec/diagnose/host_layout.py",
-        "stage/libexec/diagnose/installation_report.py": "libexec/diagnose/installation_report.py",
-        "stage/libexec/diagnose/capability_report.py": "libexec/diagnose/capability_report.py",
-        "stage/libexec/diagnose/reachability_report.py": "libexec/diagnose/reachability_report.py",
-        "stage/libexec/probes/brama-subscription-report.py": "libexec/brama-subscription-report.py",
-        "stage/libexec/brama-register-workload.py": "libexec/brama-register-workload.py",
-        "stage/libexec/probes/brama-route-probe.py": "libexec/brama-route-probe.py",
-        "stage/libexec/brama-clear-stale-broker.py": "libexec/brama-clear-stale-broker.py",
-        "stage/libexec/brama-repair-inference-routes.py": "libexec/brama-repair-inference-routes.py",
-        "stage/etc/brama-skarbiec/recipient-public-keys.asc": "etc/brama-skarbiec/recipient-public-keys.asc",
-        "stage/LICENSE": "LICENSE"
-      },
-      "runner_platform": "darwin-arm64"
-    },
-    "linux-amd64": {
-      "quality": [
+          "name": "fmt",
+          "argv": ["cargo", "fmt", "--", "--check"]
+        },
         {
           "name": "brama-release-quality",
           "argv": [
@@ -108,7 +67,54 @@
         "stage/libexec/probes/brama-subscription-report.py": "libexec/brama-subscription-report.py",
         "stage/libexec/brama-register-workload.py": "libexec/brama-register-workload.py",
         "stage/libexec/probes/brama-route-probe.py": "libexec/brama-route-probe.py",
-        "stage/libexec/brama-clear-stale-broker.py": "libexec/brama-clear-stale-broker.py",
+        "stage/libexec/brama-repair-inference-routes.py": "libexec/brama-repair-inference-routes.py",
+        "stage/etc/brama-skarbiec/recipient-public-keys.asc": "etc/brama-skarbiec/recipient-public-keys.asc",
+        "stage/LICENSE": "LICENSE"
+      },
+      "runner_platform": "darwin-arm64"
+    },
+    "linux-amd64": {
+      "quality": [
+        {
+          "name": "fmt",
+          "argv": ["cargo", "fmt", "--", "--check"]
+        },
+        {
+          "name": "brama-release-quality",
+          "argv": [
+            "bash",
+            "src/release/quality.sh"
+          ]
+        }
+      ],
+      "build": {
+        "argv": [
+          "bash",
+          "src/release/build.sh"
+        ]
+      },
+      "stage": {
+        "stage/bin/brama": "bin/brama",
+        "stage/bin/skarbiec-entitlements-router": "bin/skarbiec-entitlements-router",
+        "stage/bin/start-with-skarbiec": "bin/start-with-skarbiec",
+        "stage/bin/provision-skarbiec-trust": "bin/provision-skarbiec-trust",
+        "stage/bin/launcher/bundle-coordinates.sh": "bin/launcher/bundle-coordinates.sh",
+        "stage/bin/launcher/service-identity.sh": "bin/launcher/service-identity.sh",
+        "stage/bin/launcher/workload-trust.sh": "bin/launcher/workload-trust.sh",
+        "stage/bin/launcher/capability-broker-socket.sh": "bin/launcher/capability-broker-socket.sh",
+        "stage/bin/launcher/gateway-launch.sh": "bin/launcher/gateway-launch.sh",
+        "stage/bin/launcher/policy/control-policy.sh": "bin/launcher/policy/control-policy.sh",
+        "stage/bin/launcher/policy/router-identities.sh": "bin/launcher/policy/router-identities.sh",
+        "stage/bin/launcher/policy/subscription-catalog.sh": "bin/launcher/policy/subscription-catalog.sh",
+        "stage/libexec/generate-skarbiec-config.mjs": "libexec/generate-skarbiec-config.mjs",
+        "stage/libexec/brama-diagnose.py": "libexec/brama-diagnose.py",
+        "stage/libexec/diagnose/host_layout.py": "libexec/diagnose/host_layout.py",
+        "stage/libexec/diagnose/installation_report.py": "libexec/diagnose/installation_report.py",
+        "stage/libexec/diagnose/capability_report.py": "libexec/diagnose/capability_report.py",
+        "stage/libexec/diagnose/reachability_report.py": "libexec/diagnose/reachability_report.py",
+        "stage/libexec/probes/brama-subscription-report.py": "libexec/brama-subscription-report.py",
+        "stage/libexec/brama-register-workload.py": "libexec/brama-register-workload.py",
+        "stage/libexec/probes/brama-route-probe.py": "libexec/brama-route-probe.py",
         "stage/libexec/brama-repair-inference-routes.py": "libexec/brama-repair-inference-routes.py",
         "stage/etc/brama-skarbiec/recipient-public-keys.asc": "etc/brama-skarbiec/recipient-public-keys.asc",
         "stage/LICENSE": "LICENSE"

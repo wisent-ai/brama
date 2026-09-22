@@ -1,46 +1,20 @@
+# The host's Skarbiec process owns redemption. Prove that this client and that
+# listener agree on the vault, capability state and routes before Brama starts.
+# Never replace its socket or give a gateway generation its own broker.
+"$ENTITLEMENTS_ROUTER_BIN" capability-status --socket "$SKARBIEC_CAP_SOCKET" >&2
 
-
-"$ENTITLEMENTS_ROUTER_BIN" capability-serve &
-broker_pid=$!
-owner_pid=$$
-(
-  while kill -0 "$owner_pid" 2>/dev/null; do
-    sleep 1
-  done
-  kill "$broker_pid" 2>/dev/null || true
-) &
-broker_reaper_pid=$!
-trap 'kill "$broker_pid" "$broker_reaper_pid" 2>/dev/null || true' EXIT INT TERM
-attempt=0
-while [ ! -S "$SKARBIEC_CAP_SOCKET" ]; do
-  attempt=$((attempt + 1))
-  if [ "$attempt" -ge 100 ]; then
-    echo 'Skarbiec capability broker did not create its socket' >&2
-    exit 1
-  fi
-  sleep 0.05
-done
-
-# The same trust, routes and short-lived capabilities serve administrative CLI
-# journeys and real product tests. Keeping that setup here prevents `brama
-# onboard` from silently falling back to an unconfigured in-process router while
-# the service itself is healthy. `--exec` runs a named program inside the exact
-# launcher environment while trust remains pinned to BRAMA_BIN_OVERRIDE; this is
-# how Cargo's real-binary journeys run without teaching the service launcher
-# about Cargo. A command exits through the trap above, so its temporary broker is
-# removed; the long-running service path below still uses `exec`.
+# Administrative journeys use the same shared authority and workload identity.
+# Exec preserves the process the caller supervises without a shell or reaper.
 if [ "${1:-}" = "--exec" ]; then
   shift
   [ "$#" -gt 0 ] || {
     printf '%s\n' 'start-with-skarbiec.sh --exec requires a command' >/dev/stderr
     exit 2
   }
-  "$@"
-  exit $?
+  exec "$@"
 fi
 if [ "$#" -gt 0 ]; then
-  "$BRAMA_BIN" "$@"
-  exit $?
+  exec "$BRAMA_BIN" "$@"
 fi
 
 
@@ -74,7 +48,5 @@ if [ -x /usr/sbin/lsof ]; then
   done
 fi
 
-# `exec` keeps the gateway at the PID the supervisor owns. The broker reaper
-# above watches that same PID across exec and ends the generation's broker when
-# the gateway exits, so rollback cannot leave a candidate authority behind.
+# The supervisor owns Brama's actual PID; Skarbiec has its own service owner.
 exec "$BRAMA_BIN" serve --port "$brama_port"

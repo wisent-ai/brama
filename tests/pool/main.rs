@@ -14,6 +14,7 @@
 
 #[path = "../support/gateway.rs"]
 mod gateway;
+mod launcher;
 mod membership;
 #[path = "../support/mod.rs"]
 mod support;
@@ -166,10 +167,8 @@ fn banking_and_retiring_through_the_pool_records_the_proven_owner() {
     );
 }
 
-
 #[path = "http/refusals.rs"]
 mod refusals;
-
 
 /// How many accounts the pool holds is not how many members it has, and the
 /// document says which is which.

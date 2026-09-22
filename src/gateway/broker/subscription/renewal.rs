@@ -180,13 +180,12 @@ fn record_refusal(subscription_id: &str, provider: &str, refused: &Failure) {
     }
 }
 
-
 mod storing;
 
+use storing::{borrowed_from, unusable_document};
 pub use storing::{
     put_subscription_credential, put_subscription_credential_for_account, subscription_account,
 };
-use storing::{borrowed_from, unusable_document};
 
 /// Force one OAuth refresh after the provider rejects a grant whose local
 /// expiry still claims it is valid. The rejected grant is not returned when
@@ -223,8 +222,14 @@ pub enum RefreshAhead {
     Unavailable(Failure),
 }
 
-/// Why this stored document could not be presented to a provider, or nothing
-/// when it can be.
+/// Replace one subscription's access token before it expires, when it expires
+/// inside `skew`.
+///
+/// The credential is read twice on the path that does refresh, and that is not
+/// an oversight: the expiry has to be read before deciding, and the refresh
+/// below deliberately re-reads under the rotation lock so a caller that waited
+/// for a concurrent refresh observes what that refresh wrote instead of
+/// rotating a grant the provider has already invalidated. Only a credential
 /// that is genuinely due pays for the second read.
 pub async fn refresh_subscription_credential_ahead(
     subscription_id: &str,

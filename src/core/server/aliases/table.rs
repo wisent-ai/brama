@@ -166,13 +166,11 @@ impl ModelAliases {
             .cloned()
             .and_then(|route| Self::serviceable(alias, route))
     }
-
 }
 
 mod routes;
 
 impl ModelAliases {
-
     /// Every alias this gateway knows by name: the named contract plus every
     /// alias an operator declared in the launcher table or the route registry.
     pub(in crate::core::server) fn declared(&self) -> Vec<String> {

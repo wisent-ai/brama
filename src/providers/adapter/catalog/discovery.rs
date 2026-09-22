@@ -8,13 +8,12 @@ use super::super::call::dispatch_client;
 use super::super::call::outcome::refusal::{attempted_failure, provider_error, transport_failure};
 use super::super::call::outcome::response_body::bounded_response_text;
 use super::super::call::outcome::retry::send_once_more_if_unsent;
-use super::endpoint::{catalog_endpoint, catalog_provider_base_url};
-use super::model_row::catalog_model_from_value;
 use super::super::registry::{
     apply_omp_model_metadata, endpoint, model_from_value, provider_base_url,
 };
 use super::super::RegistryModel;
-
+use super::endpoint::{catalog_endpoint, catalog_provider_base_url};
+use super::model_row::catalog_model_from_value;
 
 pub async fn discover_models(
     provider_id: &str,

@@ -94,7 +94,7 @@ impl SkarbiecVault {
     }
 
     /// Point one command at this vault and at nothing of the operator's.
-    fn apply_environment(&self, command: &mut Command) {
+    pub(crate) fn apply_environment(&self, command: &mut Command) {
         for (key, _) in std::env::vars_os() {
             if key.to_string_lossy().starts_with("SKARBIEC_") {
                 command.env_remove(&key);

@@ -6,8 +6,6 @@ use serde_json::{Map, Value};
 
 use super::{Question, MAX_INSTRUCTIONS_BYTES, MAX_KEY_BYTES, MAX_OPTIONS};
 
-
-
 pub(super) fn validate_key(key: &str) -> Result<(), String> {
     if key.is_empty() || key.len() > MAX_KEY_BYTES || key.trim() != key {
         return Err(format!(

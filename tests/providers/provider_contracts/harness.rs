@@ -6,6 +6,7 @@ use std::process::{Command, Output};
 
 use serde_json::Value;
 
+use super::AGENT;
 use crate::support::{SkarbiecVault, TestDirectory};
 
 /// One command against one real vault and one test-owned state area. The
@@ -79,6 +80,3 @@ pub(crate) fn journal_records(directory: &TestDirectory) -> Vec<Value> {
         .map(|line| serde_json::from_str(line).expect("journal line is JSON"))
         .collect()
 }
-
-/// `subscription refresh` against a vault that answers and holds nothing, and
-/// journals every attempt with its reason verbatim -- including the ones that

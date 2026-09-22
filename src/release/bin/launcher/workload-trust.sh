@@ -193,17 +193,10 @@ export SKARBIEC_CAP_POLICY="$config_dir/policy.json"
 export SKARBIEC_CAP_POLICY_SIG="$config_dir/policy.sig"
 export SKARBIEC_WORKLOAD_REGISTRY="$config_dir/registry.json"
 export SKARBIEC_WORKLOAD_REGISTRY_SIG="$config_dir/registry.sig"
-export SKARBIEC_CAP_STATE="$runtime_dir/capability.sqlite"
-# A blue-green generation owns its broker socket with its capability state and
-# workload registry. Capabilities are issued immediately before redemption, so
-# no durable id needs a machine-wide socket; sharing one instead lets a candidate
-# replace the active release's broker before traffic has cut over.
-SKARBIEC_CAP_SOCKET=${BRAMA_CAP_SOCKET:-"$socket_dir/capability.sock"}
+# The host's Skarbiec service owns one socket across Brama generations.
+# A candidate must not replace an active release's authority.
+SKARBIEC_CAP_SOCKET=${BRAMA_CAP_SOCKET:-${SKARBIEC_CAP_SOCKET:-"${HOME:-/nonexistent}/.stado/skarbiec.vault.sock"}}
 export SKARBIEC_CAP_SOCKET
-mkdir -p "$(dirname -- "$SKARBIEC_CAP_SOCKET")"
-chmod u=rwx,g=rx,o= "$(dirname -- "$SKARBIEC_CAP_SOCKET")"
-SKARBIEC_CAP_SOCKET_GID=$(id -g)
-export SKARBIEC_CAP_SOCKET_GID
 export SKARBIEC_WORM_RECEIPT_DIR="$worm_dir"
 export SKARBIEC_WORM_RECEIPT_COMMAND="$config_dir/worm-receipt"
 export SKARBIEC_WORM_CHECKPOINT="$runtime_dir/checkpoint.json"

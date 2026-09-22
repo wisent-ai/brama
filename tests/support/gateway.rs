@@ -20,6 +20,10 @@ use serde_json::json;
 
 use crate::support::{SkarbiecVault, TestDirectory};
 
+#[path = "broker.rs"]
+mod broker;
+use broker::SharedBroker;
+
 /// `brama-desktop` with no allowlist is what `require_brama_desktop` accepts.
 pub const CONSOLE_BEARER: &str = "brama-pool-console-bearer";
 /// A model-scoped bearer, the shape every workload identity has.
@@ -36,6 +40,7 @@ pub const PLAN_USAGE: &str = "/v1/plan-usage";
 
 pub struct Gateway {
     child: Child,
+    _broker: SharedBroker,
     origin: String,
     client: Client,
     directory: TestDirectory,
@@ -63,6 +68,7 @@ impl Gateway {
         for (agent, provider, subscription) in accounts {
             vault.seed_subscription(agent, provider, subscription);
         }
+        let broker = SharedBroker::start(&vault);
         let root = directory.path().to_owned();
         // An empty route registry -- every field is `serde(default)` and this
         // deployment declares no local route -- written 0600 because the
@@ -92,7 +98,12 @@ impl Gateway {
             .local_addr()
             .expect("reserved port")
             .port();
-        let mut command = Command::new(env!("CARGO_BIN_EXE_brama"));
+        let mut command = Command::new("sh");
+        command.arg("-eu");
+        command.arg(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src/release/bin/launcher/gateway-launch.sh"),
+        );
         command.args([
             "serve",
             "--port",
@@ -102,9 +113,9 @@ impl Gateway {
         // The vault's environment carries HOME, GNUPGHOME and the vault path,
         // and Brama hands its whole environment to the real router child,
         // which is what keeps that child off the operator's vault.
-        for (name, value) in vault.environment() {
-            command.env(name, value);
-        }
+        vault.apply_environment(&mut command);
+        command.env("BRAMA_BIN", env!("CARGO_BIN_EXE_brama"));
+        command.env("SKARBIEC_CAP_SOCKET", broker.socket());
         let mut child = command
             .env(
                 "BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES",
@@ -171,6 +182,7 @@ impl Gateway {
             {
                 return Self {
                     child,
+                    _broker: broker,
                     origin,
                     client,
                     directory,
@@ -210,6 +222,14 @@ impl Gateway {
     /// mid-story exactly as it does when its item is deleted.
     pub fn vault(&self) -> &SkarbiecVault {
         &self.vault
+    }
+
+    pub fn pid(&self) -> u32 {
+        self.child.id()
+    }
+
+    pub fn capability_socket(&self) -> &Path {
+        self._broker.socket()
     }
 }
 

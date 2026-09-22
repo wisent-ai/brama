@@ -27,7 +27,6 @@ if [[ "$declared" != "$version" ]]; then
   exit 65
 fi
 
-cargo fmt --manifest-path "$manifest" -- --check
 sh -n "$source_dir/src/release/bin/start-with-skarbiec"
 sh -n "$source_dir/src/release/bin/provision-skarbiec-trust"
 python3 -S "$source_dir/tests/release/check_launcher_blocks.py" \

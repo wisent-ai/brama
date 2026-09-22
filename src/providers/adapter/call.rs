@@ -4,7 +4,6 @@ pub(in crate::providers::adapter) mod credential;
 pub(in crate::providers::adapter) mod media;
 pub(in crate::providers::adapter) mod outcome;
 
-
 pub(in crate::providers::adapter) mod typed_capability;
 
 use reqwest::Client;

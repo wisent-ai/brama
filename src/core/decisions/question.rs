@@ -153,7 +153,6 @@ impl DecisionRequest {
     }
 }
 
-
 mod parsing;
 
 use parsing::{parse_question, validate_key};

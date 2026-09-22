@@ -51,9 +51,8 @@
         <table><thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
           <tr><td><code>BRAMA_SKARBIEC_CONFIG_DIR</code></td><td>per installation</td><td>this installation's Skarbiec configuration directory</td></tr>
           <tr><td><code>BRAMA_PROOF_KEY_FILE</code></td><td><code>~/.stado/brama-proof.key</code></td><td>the installation proof key, provisioned or verified at startup</td></tr>
-          <tr><td><code>BRAMA_CAP_SOCKET</code></td><td><code>~/.stado/run/brama-capability.sock</code></td><td>owner-bound capability socket the launcher starts before the gateway</td></tr>
-          <tr><td><code>BRAMA_RUNTIME_DIR</code></td><td><code>/tmp/brama-skarbiec-&lt;installation&gt;</code></td><td>holds the per-installation socket, GnuPG, and receipt directories</td></tr>
-          <tr><td><code>BRAMA_RENEWAL_ENABLED</code></td><td>on</td><td>whether the credential renewal loop is started</td></tr>
+          <tr><td><code>BRAMA_CAP_SOCKET</code></td><td><code>SKARBIEC_CAP_SOCKET</code>, then <code>~/.stado/skarbiec.vault.sock</code></td><td>the shared host Skarbiec service's owner-only socket; Brama connects to it and never replaces it</td></tr>
+          <tr><td><code>BRAMA_RUNTIME_DIR</code></td><td><code>~/.stado/run/brama-skarbiec-&lt;installation&gt;</code></td><td>holds generation-specific GnuPG and receipt material, not a separate broker socket</td></tr>
         </tbody></table>
         <p>The launcher also seeds the route registry file when it is absent, creating
         it owner-only and empty rather than guessing routes. Its path and shape are on
@@ -62,6 +61,20 @@
         <a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a>, which
         keeps only the known top-level fields, validates the result, commits it with
         the same atomic owner-only replacement, and prints it.</p>
+
+        <h2 id="shared-broker">Shared capability broker<a class="headerlink" href="#shared-broker" title="Link to this section">&para;</a></h2>
+        <p>The Skarbiec service must already expose its capability listener through
+        <code>skarbiec serve --socket &lt;path&gt;</code> or its service's
+        <code>SKARBIEC_CAP_SOCKET</code>. The launcher runs
+        <code>skarbiec capability-status --socket &lt;path&gt;</code> before handing
+        over to Brama. That command exchanges a real request with the listener and
+        checks that the vault, capability state and route table match this client's
+        absolute paths. A missing listener, an unsupported broker, or different state
+        paths stops startup with the failed operation and observed paths.</p>
+        <p><code>listening</code> proves that exchange, not credential decryption or
+        provider availability. Grants, workload proofs and one-use limits are still
+        enforced at redemption. Brama does not kill a socket owner, delete the
+        shared socket, or start a private broker when inspection fails.</p>
 
         <h2 id="capability-material">Capability material is issued, not configured<a class="headerlink" href="#capability-material" title="Link to this section">&para;</a></h2>
         <p>Runtime capability IDs are freshly issued from vault bindings at final use.

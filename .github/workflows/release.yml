@@ -156,7 +156,7 @@ jobs:
           # bin/provision-skarbiec-trust once per installation instead, so the
           # generator ships as data rather than being executed now.
           cp src/release/libexec/generate-skarbiec-config.mjs "$stage/libexec/generate-skarbiec-config.mjs"
-          # The diagnostic and the two repairs ship beside the generator for the
+          # The diagnostic and route repair ship beside the generator for the
           # same reason the generator ships at all: the questions they answer —
           # which pinned field this host disagrees with, which capability was
           # never issued, where the gateway is actually reachable — can only be
@@ -176,7 +176,6 @@ jobs:
           # bundle that cannot register cannot redeem.
           cp src/release/libexec/brama-register-workload.py "$stage/libexec/brama-register-workload.py"
           cp src/release/libexec/probes/brama-route-probe.py "$stage/libexec/brama-route-probe.py"
-          cp src/release/libexec/brama-clear-stale-broker.py "$stage/libexec/brama-clear-stale-broker.py"
           cp src/release/libexec/brama-repair-inference-routes.py "$stage/libexec/brama-repair-inference-routes.py"
           chmod 0755 \
             "$stage/bin/brama" \

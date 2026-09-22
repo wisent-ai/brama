@@ -49,11 +49,12 @@ fn is_oauth(provider: &str) -> bool {
     OAUTH_PROVIDERS.contains(&provider)
 }
 
-
 #[path = "provider_contracts/harness.rs"]
 mod harness;
 
 use harness::{journal_records, run, seed_ledger, stderr_of, stdout_of};
+/// `subscription refresh` against a vault that answers and holds nothing, and
+/// journals every attempt with its reason verbatim -- including the ones that
 /// found nothing to do.
 #[test]
 fn refresh_names_the_empty_pool_for_every_provider() {

@@ -1,17 +1,10 @@
-# One runtime directory per installation, not one for the machine. The broker
-# socket lives here, and the broker answers with the trust material of the
-# bundle that started it. A single shared path meant a gateway from a new
-# bundle redeemed against a broker left running by an older one, whose registry
-# describes a different workload -- so the authority issued the capability and
-# the broker then denied redeeming it, which is a hard failure to read because
-# both halves are working exactly as told.
+# Generation-specific proof and diagnostic material stays with the installation.
+# The capability socket belongs to the shared Skarbiec service, not this tree.
 runtime_dir=${BRAMA_RUNTIME_DIR:-"${HOME:-/nonexistent}/.stado/run/brama-skarbiec-$installation"}
-socket_dir="$runtime_dir/socket"
 gnupg_dir="$runtime_dir/gnupg"
 worm_dir="$runtime_dir/worm"
-mkdir -p "$runtime_dir" "$socket_dir" "$gnupg_dir" "$worm_dir"
+mkdir -p "$runtime_dir" "$gnupg_dir" "$worm_dir"
 chmod u=rwx,go= "$runtime_dir" "$gnupg_dir" "$worm_dir"
-chmod u=rwx,g=rx,o= "$socket_dir"
 
 : "${BRAMA_GNUPG_HOME:?BRAMA_GNUPG_HOME is required}"
 [ -d "$BRAMA_GNUPG_HOME" ] || {

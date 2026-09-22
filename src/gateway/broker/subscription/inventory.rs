@@ -192,7 +192,6 @@ pub async fn list_recoverable_subscriptions() -> Vec<SubscriptionEntry> {
         .collect()
 }
 
-
 mod listing;
 
 use listing::{list_subscriptions_result, live_subscriptions, with_recorded_accounts};

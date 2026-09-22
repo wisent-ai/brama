@@ -86,13 +86,19 @@ pub async fn subscription_account(
     existing_item_account(&item_id).await
 }
 
+/// Why this stored document could not be presented to a provider, or nothing
+/// when it can be.
 ///
 /// The vault holding bytes for a subscription is not the same statement as the
 /// subscription having a credential. A sign-in descriptor, an account record
 /// and an empty envelope are all bytes; none of them is a grant, and none of
 /// them becomes one by waiting, so the answer here decides whether the account
 /// goes to Weles.
-pub(super) fn unusable_document(subscription_id: &str, provider: &str, credential: &Secret) -> Option<String> {
+pub(super) fn unusable_document(
+    subscription_id: &str,
+    provider: &str,
+    credential: &Secret,
+) -> Option<String> {
     let item = format!("provider:{}:{}", slug(provider), slug(subscription_id));
     match credential.expose_utf8() {
         Ok(secret) => crate::providers::adapter::credential_key(&item, secret).err(),
@@ -101,12 +107,3 @@ pub(super) fn unusable_document(subscription_id: &str, provider: &str, credentia
         )),
     }
 }
-
-/// Replace one subscription's access token before it expires, when it expires
-/// inside `skew`.
-///
-/// The credential is read twice on the path that does refresh, and that is not
-/// an oversight: the expiry has to be read before deciding, and the refresh
-/// below deliberately re-reads under the rotation lock so a caller that waited
-/// for a concurrent refresh observes what that refresh wrote instead of
-/// rotating a grant the provider has already invalidated. Only a credential

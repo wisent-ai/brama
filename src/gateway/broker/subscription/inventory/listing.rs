@@ -8,7 +8,9 @@ use std::time::{Duration, Instant};
 use tracing::warn;
 
 use super::super::super::vault::{entitlements_router_bin, existing_item_account, raw_listing};
-use super::super::account::{parse_live_subscriptions, parse_owned_subscriptions, SubscriptionEntry};
+use super::super::account::{
+    parse_live_subscriptions, parse_owned_subscriptions, SubscriptionEntry,
+};
 use super::super::donation::donated_subscriptions;
 
 type LiveSubscriptionsCache = Mutex<Option<(Instant, Vec<SubscriptionEntry>)>>;
@@ -56,7 +58,9 @@ pub(super) async fn live_subscriptions(
 /// Every audience goes through this, because an operator asking how many
 /// accounts this deployment holds must not get a different answer from the
 /// console, the pool document and the router.
-pub(super) async fn with_recorded_accounts(mut entries: Vec<SubscriptionEntry>) -> Vec<SubscriptionEntry> {
+pub(super) async fn with_recorded_accounts(
+    mut entries: Vec<SubscriptionEntry>,
+) -> Vec<SubscriptionEntry> {
     for entry in &mut entries {
         if entry.account.is_some() {
             continue;
@@ -76,12 +80,16 @@ pub(super) async fn with_recorded_accounts(mut entries: Vec<SubscriptionEntry>) 
 /// Shell the entitlements router's bare `list`, which returns a JSON array of
 /// every vault item (`{"id","type","tags","updated_at","deleted","versions"}`),
 /// with each member's recorded account completed.
-pub(super) async fn list_subscriptions_live(broker: &str) -> Result<Vec<SubscriptionEntry>, String> {
+pub(super) async fn list_subscriptions_live(
+    broker: &str,
+) -> Result<Vec<SubscriptionEntry>, String> {
     let stdout = raw_listing(broker, "list subscriptions").await?;
     Ok(with_recorded_accounts(parse_live_subscriptions(&stdout)?).await)
 }
 
-pub(super) async fn list_subscriptions_result(agent_id: &str) -> Result<Vec<SubscriptionEntry>, String> {
+pub(super) async fn list_subscriptions_result(
+    agent_id: &str,
+) -> Result<Vec<SubscriptionEntry>, String> {
     let broker = entitlements_router_bin();
     match live_subscriptions(&broker, false).await {
         Ok(mut live) => {

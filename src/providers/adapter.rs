@@ -54,8 +54,6 @@ pub use registry::{
 pub(crate) use call::credential::credential_key;
 pub(crate) use registry::provider_requires_credential;
 
-
-
 pub use catalog::discovery::discover_models;
 
 pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> ModelResponse {

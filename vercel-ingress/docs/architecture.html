@@ -23,6 +23,10 @@ to turn an authenticated, alias-shaped model request into one provider HTTP
 call, paying with a credential it held for exactly that call. An alias
 resolves to exactly one route; when that route refuses the call, the refusal
 is what the caller receives.</p>
+<p>The managed launcher uses the host's shared Skarbiec service for capability
+redemption. It does not start a private broker or a broker reaper. Startup reports
+the responding broker's PID and checks its state paths, then replaces the launcher with
+the gateway through <code>exec</code>. Stopping Brama does not stop Skarbiec.</p>
 <p>The architecture material is split across two pages, both linked below: one
 for the ownership split and the trust boundaries, one for the runtime path a
 request takes and the state the process keeps.</p>
