@@ -2,6 +2,8 @@ import { spawnSync } from 'node:child_process';
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
+import { ed25519, proofIdentity, writeSigned } from './skarbiec-config/keys.mjs';
+import { macosCodeSigningRequirement } from './skarbiec-config/requirement.mjs';
 
 const [
   ,,
@@ -121,93 +123,6 @@ const wormPath = join(outputDir, 'worm-receipt');
 writeFileSync(wormPath, '#!/bin/sh\ncat >/dev/null\nprintf receipt\n', { mode: 0o700 });
 const wormDigest = createHash('sha256').update(readFileSync(wormPath)).digest('hex');
 
-function ed25519() {
-  const pair = generateKeyPairSync('ed25519');
-  const publicJwk = pair.publicKey.export({ format: 'jwk' });
-  const privateJwk = pair.privateKey.export({ format: 'jwk' });
-  if (!publicJwk.x || !privateJwk.d) throw new Error('Ed25519 JWK export is incomplete');
-  return {
-    privateKey: pair.privateKey,
-    publicRaw: Buffer.from(publicJwk.x, 'base64url'),
-    privateSeed: Buffer.from(privateJwk.d, 'base64url'),
-  };
-}
-
-// The broker verifies a redemption against the public key the VAULT holds for
-// this workload, so the private half is an identity, not a build artifact.
-// Minting a fresh one on every run meant an update -- which lands the bundle
-// under a new digest directory and provisions it there -- silently replaced
-// the identity the vault knows. The authority kept issuing capabilities and
-// the broker kept refusing to redeem them, which surfaces only as a credential
-// that is "unavailable".
-//
-// So a key that already exists is kept. BRAMA_PROOF_KEY_FILE names one to
-// carry forward from the installation being replaced; otherwise a key already
-// sitting in the output directory is reused. Only a first provision mints.
-function ed25519FromSeed(seedHex) {
-  const seed = Buffer.from(seedHex.trim(), 'hex');
-  const prefix = Buffer.from('302e020100300506032b657004220420', 'hex');
-  const privateKey = createPrivateKey({
-    key: Buffer.concat([prefix, seed]),
-    format: 'der',
-    type: 'pkcs8',
-  });
-  const publicJwk = createPublicKey(privateKey).export({ format: 'jwk' });
-  if (!publicJwk.x) throw new Error('Ed25519 JWK export is incomplete');
-  return {
-    privateKey,
-    publicRaw: Buffer.from(publicJwk.x, 'base64url'),
-    privateSeed: seed,
-  };
-}
-
-function proofIdentity(outputDir) {
-  const carried = process.env.BRAMA_PROOF_KEY_FILE;
-  const existing = join(outputDir, 'brama-proof.key');
-  for (const candidate of [carried, existing]) {
-    if (candidate && existsSync(candidate)) {
-      return ed25519FromSeed(readFileSync(candidate, 'utf8'));
-    }
-  }
-  return ed25519();
-}
-function writeSigned(name, document, domain, key) {
-  const bytes = Buffer.from(JSON.stringify(document), 'utf8');
-  writeFileSync(join(outputDir, `${name}.json`), bytes, { mode: 0o600 });
-  const signature = sign(null, Buffer.concat([domain, bytes]), key.privateKey);
-  writeFileSync(join(outputDir, `${name}.sig`), `${signature.toString('base64')}\n`, { mode: 0o600 });
-}
-
-function macosCodeSigningRequirement(path) {
-  if (process.platform !== 'darwin') return undefined;
-  const verified = spawnSync(
-    '/usr/bin/codesign',
-    ['--verify', '--strict', '--all-architectures', path],
-    { encoding: 'utf8' },
-  );
-  if (verified.error || verified.status !== 0) {
-    throw new Error(`Brama binary does not have a valid macOS code signature: ${verified.stderr || verified.error}`);
-  }
-  const displayed = spawnSync(
-    '/usr/bin/codesign',
-    ['--display', '--requirements', '-', path],
-    { encoding: 'utf8' },
-  );
-  if (displayed.error || displayed.status !== 0) {
-    throw new Error(`cannot read Brama designated requirement: ${displayed.stderr || displayed.error}`);
-  }
-  const output = `${displayed.stdout}\n${displayed.stderr}`;
-  const requirement = output
-    .split(/\r?\n/u)
-    .map((line) => line.startsWith('# ') ? line.slice(2) : line)
-    .find((line) => line.startsWith('designated => '))
-    ?.slice('designated => '.length)
-    .trim();
-  if (!requirement || requirement.length > MAX_REQUIREMENT_CHARS || requirement.includes('\0')) {
-    throw new Error('Brama designated requirement is missing or invalid');
-  }
-  return requirement;
-}
 
 const subscriptionRules = credentialSubscriptions.map(({ id, provider }) => ({
   purpose: 'brama.provider.authenticate',
@@ -296,8 +211,8 @@ if (carriedKeyPath && !existsSync(carriedKeyPath)) {
   writeFileSync(carriedKeyPath, `${proofKey.privateSeed.toString('hex')}\n`);
   chmodSync(carriedKeyPath, statSync(join(outputDir, 'brama-proof.key')).mode);
 }
-writeSigned('policy', policy, policyDomain, policyKey);
-writeSigned('registry', registry, registryDomain, registryKey);
+writeSigned(outputDir, 'policy', policy, policyDomain, policyKey);
+writeSigned(outputDir, 'registry', registry, registryDomain, registryKey);
 for (const name of ['trust.json', 'brama-proof.key', 'policy.json', 'policy.sig', 'registry.json', 'registry.sig', 'worm-receipt']) {
   chmodSync(join(outputDir, name), name === 'worm-receipt' ? OWNER_ONLY_DIRECTORY : OWNER_ONLY_FILE);
 }
