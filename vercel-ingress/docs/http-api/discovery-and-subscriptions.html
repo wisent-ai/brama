@@ -117,10 +117,18 @@ reach at all.</p>
 different numbers and reading one as the other is how a deployment holding five
 accounts reads as fifteen: it carries <code>total</code>, <code>per_provider</code> —
 one list of account coordinates per provider — plus
-<code>members_without_account</code>, the members whose vault item declares no
-<code>brama:login:</code> account, and <code>ledger_only_members</code>, the ids the vault
+<code>members_without_account</code>, the members whose own record states no account,
+and <code>ledger_only_members</code>, the ids the vault
 no longer lists and only the usage ledger remembers. Two members naming one
-account are one account.</p>
+account are one account. An account is read from the member itself — the
+<code>brama:account:</code> tag on its vault item, or that item's
+<code>account_ref</code> — and from nothing else. A member's id, its label and the
+login row it signs in through are names, not accounts: one Google login can
+back both a Claude Code and a Codex subscription of one person, so counting by
+login reports two accounts as one. A member that records no account is listed
+here rather than counted, and
+<a href="/docs/cli/subscription/attribute"><code>brama subscription attribute
+&lt;provider&gt;</code></a> records it from that member's own grant.</p>
 <code>scope</code> is <code>deployment</code> or the agent id the answer was narrowed to, so
 a caller reads the narrowing instead of inferring it from the row count. Every row carries
 the same fields whoever asked: <code>id</code>, <code>provider</code>,
