@@ -19,7 +19,6 @@ use serde_json::{json, Value};
 
 use crate::subscription_dispatch::sign_in::Blocked;
 
-
 /// What the registry says about where this gateway belongs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Placement {

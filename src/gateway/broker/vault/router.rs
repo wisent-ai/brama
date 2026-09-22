@@ -21,7 +21,6 @@ const VAULT_PROGRAM_NAMES: [&str; 2] = [DEFAULT_ENTITLEMENTS_ROUTER_BIN, "skarbi
 /// Where the fleet installs it when nothing is on `PATH`, relative to `$HOME`.
 const VAULT_HOME_RELATIVE: &str = ".stado/bin/skarbiec";
 
-
 /// The router's bare `list`: the JSON row of every vault item.
 ///
 /// Every reader of the vault's inventory — per-agent discovery, the console's

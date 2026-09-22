@@ -11,10 +11,7 @@
 //! arrangement cost the operator the session they were working in. What is
 //! left is reading and administering a remote pool, which hands nothing over.
 
-
 use zeroize::Zeroizing;
-
-
 
 /// The Stado binary that answers both lookups, resolved exactly as the
 /// readiness path resolves it.

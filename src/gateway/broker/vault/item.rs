@@ -8,9 +8,7 @@
 
 use serde::Deserialize;
 
-use super::router::{
-    entitlements_router_bin, raw_listing, router_output, router_refusal,
-};
+use super::router::{entitlements_router_bin, raw_listing, router_output, router_refusal};
 
 /// One vault item row from the entitlements router's bare `list` command.
 #[derive(Debug, Deserialize)]

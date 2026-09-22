@@ -13,7 +13,6 @@ use zeroize::Zeroizing;
 
 use super::unattended;
 
-
 const HTTP_SUCCESS: std::ops::Range<u16> = 200..300;
 
 /// Which gateway a command speaks to, and what it authenticates with.

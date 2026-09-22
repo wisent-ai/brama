@@ -19,7 +19,6 @@ use crate::subscription_dispatch::{
 };
 use crate::types::ModelRequest;
 
-
 use super::DispatchedCall;
 
 /// Everything the decision established about one call, so the ladder below
@@ -38,7 +37,6 @@ pub(super) struct DispatchPlan<'a> {
     pub(super) caller_scoped_request: bool,
     pub(super) stream: bool,
 }
-
 
 pub(super) async fn dispatch(plan: DispatchPlan<'_>, selected_model: &str) -> DispatchedCall {
     let _ = selected_model;

@@ -12,7 +12,6 @@ mod principal;
 mod provider;
 mod refusal;
 
-
 use serde::Serialize;
 use serde_json::Value;
 use zeroize::{Zeroize, Zeroizing};
