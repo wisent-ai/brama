@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 
-use crate::providers::adapter::call::refusal::attempted_failure;
+use crate::providers::adapter::call::outcome::refusal::attempted_failure;
 use crate::types::{ModelResponse, ToolCall};
 
 /// Parse a buffered `text/event-stream` body from the OpenAI Responses API

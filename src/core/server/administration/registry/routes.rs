@@ -15,7 +15,7 @@ use crate::core::server::aliases::table::ModelAliases;
 use crate::core::server::aliases::MODEL_ALIASES;
 use crate::core::server::refusal::{api_error, ApiError};
 
-use super::{
+use super::super::{
     require_brama_desktop, route_supported, valid_alias, AdminRouteDelete, AdminRouteUpdate,
 };
 

@@ -8,8 +8,8 @@ use super::super::registry::{
 };
 use super::credential::{authorize_provider, provider_credential_key};
 use super::dispatch_client;
-use super::refusal::{provider_error, transport_error_message};
-use super::response_body::bounded_response_text;
+use super::outcome::refusal::{provider_error, transport_error_message};
+use super::outcome::response_body::bounded_response_text;
 
 pub async fn dispatch_openai_typed(
     route_id: &str,

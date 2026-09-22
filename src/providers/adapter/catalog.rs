@@ -11,9 +11,9 @@ use serde_json::{json, Map, Value};
 
 use super::call::credential::{authorize_catalog, credential_key};
 use super::call::dispatch_client;
-use super::call::refusal::{attempted_failure, provider_error, transport_failure};
-use super::call::response_body::bounded_response_text;
-use super::call::retry::send_once_more_if_unsent;
+use super::call::outcome::refusal::{attempted_failure, provider_error, transport_failure};
+use super::call::outcome::response_body::bounded_response_text;
+use super::call::outcome::retry::send_once_more_if_unsent;
 use super::dialect::anthropic_messages::{
     anthropic_messages, anthropic_tool_choice, anthropic_tools, model_response_from_anthropic,
 };

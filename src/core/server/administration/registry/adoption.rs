@@ -11,7 +11,7 @@ use crate::core::server::admission::identity::ModelClientIdentity;
 use crate::core::server::aliases::table::ModelAliases;
 use crate::core::server::refusal::{api_error, ApiError};
 
-use super::{require_brama_desktop, AdminAdoptionApply, AdminAdoptionPreview};
+use super::super::{require_brama_desktop, AdminAdoptionApply, AdminAdoptionPreview};
 
 pub(in crate::core::server) async fn preview_admin_adoption(
     Extension(client_identity): Extension<ModelClientIdentity>,

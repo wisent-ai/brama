@@ -9,14 +9,16 @@ use axum::middleware;
 use axum::routing::{get, post, put};
 use axum::{Extension, Router};
 
-use crate::core::server::administration::adoption::{apply_admin_adoption, preview_admin_adoption};
-use crate::core::server::administration::categories::{
+use crate::core::server::administration::registry::adoption::{
+    apply_admin_adoption, preview_admin_adoption,
+};
+use crate::core::server::administration::registry::categories::{
     delete_admin_category, update_admin_category,
 };
 use crate::core::server::administration::credentials::{
     delete_admin_credential, list_admin_credentials, put_admin_credential,
 };
-use crate::core::server::administration::routes::{delete_admin_route, update_admin_route};
+use crate::core::server::administration::registry::routes::{delete_admin_route, update_admin_route};
 use crate::core::server::administration::snapshot::admin_snapshot;
 use crate::core::server::admission::ingress::ModelIngressAuth;
 use crate::core::server::admission::{require_model_bearer, transport::require_secure_transport};

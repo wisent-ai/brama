@@ -17,7 +17,7 @@ use crate::core::server::admission::identity::ModelClientIdentity;
 use crate::core::server::aliases::table::ModelAliases;
 use crate::core::server::refusal::{api_error, ApiError};
 
-use super::{require_brama_desktop, AdminCategoryDelete, AdminCategoryUpdate};
+use super::super::{require_brama_desktop, AdminCategoryDelete, AdminCategoryUpdate};
 
 pub(in crate::core::server) async fn update_admin_category(
     Extension(client_identity): Extension<ModelClientIdentity>,

@@ -12,8 +12,8 @@ use tracing::warn;
 
 use super::call::control_client;
 use super::call::credential::{authorize_provider, credential_key};
-use super::call::refusal::{provider_refusal, transport_error_message};
-use super::call::response_body::bounded_response_text;
+use super::call::outcome::refusal::{provider_refusal, transport_error_message};
+use super::call::outcome::response_body::bounded_response_text;
 use super::registry::{provider, provider_base_url, ProviderDescriptor};
 use crate::types::LimitReading;
 use endpoint::{plan_usage_endpoint, PlanUsageEndpoint};

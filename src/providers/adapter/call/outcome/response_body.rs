@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use super::super::plan::headers::plan_headers;
+use super::super::super::plan::headers::plan_headers;
 use super::refusal::transport_error_message;
 
 /// A provider answer is read up to 16 MiB.

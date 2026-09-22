@@ -15,16 +15,16 @@
 
 pub mod categories;
 mod document;
-mod editing;
-mod importing;
+mod writing;
+
 mod resolution;
 
 use std::path::PathBuf;
 
 pub use categories::{Categories, Category};
 pub use document::{snapshot, validate_document};
-pub use editing::{delete_route, migrate, update_route};
-pub use importing::{import_routes, RouteImport, RouteImportDisposition, RouteImportResult};
+pub use writing::editing::{delete_route, migrate, update_route};
+pub use writing::importing::{import_routes, RouteImport, RouteImportDisposition, RouteImportResult};
 pub use resolution::{base_url, resolve, resolved, validate};
 
 pub const ROUTES_FILE_ENV: &str = "BRAMA_INFERENCE_ROUTES_FILE";

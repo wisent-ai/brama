@@ -10,7 +10,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::document::{
+use super::super::document::{
     read_body, snapshot, validate_document, write_registry, ROUTE_WRITE_LOCK, SCHEMA_VERSION,
 };
 

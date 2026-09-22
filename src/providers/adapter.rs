@@ -21,9 +21,9 @@ use crate::types::{ModelRequest, ModelResponse};
 use call::credential::{
     authorize_catalog, authorize_provider, provider_body, provider_credential_key,
 };
-use call::refusal::{attempted_failure, provider_error, transport_failure};
-use call::response_body::bounded_response_text;
-use call::retry::send_once_more_if_unsent;
+use call::outcome::refusal::{attempted_failure, provider_error, transport_failure};
+use call::outcome::response_body::bounded_response_text;
+use call::outcome::retry::send_once_more_if_unsent;
 use call::{dispatch_client, stream_client};
 use catalog::dispatch_catalog;
 use catalog::endpoint::{catalog_endpoint, catalog_provider_base_url};

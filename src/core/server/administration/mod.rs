@@ -6,10 +6,10 @@
 //! one thing: the route registry ([`routes`], [`adoption`]), the standalone
 //! credential store ([`credentials`]), or nothing at all ([`snapshot`]).
 
-pub(in crate::core::server) mod adoption;
-pub(in crate::core::server) mod categories;
+pub(in crate::core::server) mod registry;
+
 pub(in crate::core::server) mod credentials;
-pub(in crate::core::server) mod routes;
+
 pub(in crate::core::server) mod snapshot;
 
 use axum::http::StatusCode;

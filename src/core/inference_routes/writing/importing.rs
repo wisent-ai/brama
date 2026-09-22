@@ -7,7 +7,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::document::{
+use super::super::document::{
     ensure_parent, route_file_exists, snapshot, validate_document, write_registry,
     ROUTE_WRITE_LOCK, SCHEMA_VERSION,
 };
