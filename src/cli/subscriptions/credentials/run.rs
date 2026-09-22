@@ -7,6 +7,7 @@ use serde_json::Value;
 use super::super::text;
 use super::super::verdicts::enrolment::enrol_authenticator;
 use super::super::verdicts::{print_refresh, print_sign_in};
+use super::super::{manual, membership, remote};
 use super::SubscriptionCommand;
 
 pub(crate) async fn run(command: SubscriptionCommand) {
@@ -22,7 +23,7 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             // A block that empties a pool lives in the gateway's journal, so a
             // refresh run in a shell cannot clear it. Naming a gateway sends
             // the refresh where the credentials and the journal are.
-            let destination = super::remote::Destination {
+            let destination = remote::Destination {
                 gateway,
                 gateway_consumer,
                 bearer_item,
@@ -112,15 +113,15 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             reason,
             code,
             json,
-        } => super::manual::finish(
-            super::manual::sign_in(&provider, &subscription_id, &reason, code).await,
+        } => manual::finish(
+            manual::sign_in(&provider, &subscription_id, &reason, code).await,
             json,
         ),
         SubscriptionCommand::Attribute { provider, json } => {
-            super::membership::attribute(&provider, json).await;
+            membership::attribute(&provider, json).await;
         }
         SubscriptionCommand::SecondFactor { provider, json } => {
-            super::membership::second_factor(provider.as_deref(), json).await;
+            membership::second_factor(provider.as_deref(), json).await;
         }
         SubscriptionCommand::Reinstate {
             subscription_id,
@@ -129,8 +130,8 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             gateway_consumer,
             bearer_item,
         } => {
-            super::membership::reinstate(
-                super::remote::Destination {
+            membership::reinstate(
+                remote::Destination {
                     gateway,
                     gateway_consumer,
                     bearer_item,
@@ -147,8 +148,8 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             gateway_consumer,
             bearer_item,
         } => {
-            super::membership::disown(
-                super::remote::Destination {
+            membership::disown(
+                remote::Destination {
                     gateway,
                     gateway_consumer,
                     bearer_item,
@@ -163,7 +164,7 @@ pub(crate) async fn run(command: SubscriptionCommand) {
 
 /// Run one provider's refresh on the gateway that holds its credentials.
 async fn refresh_on_gateway(
-    destination: super::remote::Destination,
+    destination: remote::Destination,
     provider: &str,
     reason: &str,
 ) -> Result<Value, String> {
@@ -171,5 +172,5 @@ async fn refresh_on_gateway(
     let origin = origin.ok_or_else(|| {
         String::from("name --gateway or --gateway-consumer to refresh another gateway's pool")
     })?;
-    super::remote::refresh(&origin, bearer.trim(), provider, reason).await
+    remote::refresh(&origin, bearer.trim(), provider, reason).await
 }

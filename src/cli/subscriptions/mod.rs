@@ -150,4 +150,4 @@ async fn remote_report(destination: remote::Destination, refresh_usage: bool, js
 
 mod report;
 
-use report::{print_accounts, print_pool, text};
+use report::{print_pool, text};
