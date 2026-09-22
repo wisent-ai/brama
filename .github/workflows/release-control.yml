@@ -193,7 +193,12 @@ jobs:
             archive="brama-v${{ inputs.version }}-$platform.tar.gz"
             artifact_sha256="$(openssl dgst -sha256 "$archive")"
             artifact_sha256="${artifact_sha256##* }"
-            artifact_bytes="$(wc -c < "$archive" | tr -d '[:space:]')"
+            # /usr/bin/wc by path: the release runner's PATH carries a Wisent
+            # `wc` that takes subcommands, so a bare `wc -c` answered
+            # "unexpected argument '-c'", the byte count came out empty, and
+            # `jq --argjson` refused the manifest. Run 35676943268 died there
+            # with nothing published.
+            artifact_bytes="$(/usr/bin/wc -c < "$archive" | tr -d '[:space:]')"
             qualification="$RECEIPT_DIR/qualification-$platform.json"
             jq -n \
               --arg product brama \
