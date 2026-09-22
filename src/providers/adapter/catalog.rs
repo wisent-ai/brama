@@ -1,6 +1,7 @@
 //! Sending a request to a provider this build knows only from the model
 //! catalog.
 
+pub(in crate::providers::adapter) mod discovery;
 pub(in crate::providers::adapter) mod endpoint;
 pub(in crate::providers::adapter) mod google_generate;
 pub(in crate::providers::adapter) mod model_row;
