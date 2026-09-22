@@ -304,10 +304,6 @@
     {
       "source": "/docs/changelog/:slug",
       "destination": "/docs/changelog/:slug.html"
-    },
-    {
-      "source": "/:path*",
-      "destination": "/api/gateway?__brama_path=/:path*"
     }
   ]
 }
