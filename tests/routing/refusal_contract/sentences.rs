@@ -5,7 +5,6 @@
 use axum::http::StatusCode;
 use brama::core::server::model_error_contract;
 
-
 /// An agent with no eligible row at all -- the answer a subscription whose
 /// vault item lost its `brama:agent:` tag produces, and the answer a retired
 /// subscription produces. A missing tag is not capacity: no wait restores it.

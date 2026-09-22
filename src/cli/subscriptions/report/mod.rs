@@ -6,7 +6,6 @@
 
 use serde_json::Value;
 
-
 /// How many accounts the pool holds, which is not how many members it has,
 /// and which accounts those are.
 ///

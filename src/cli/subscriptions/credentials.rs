@@ -3,7 +3,6 @@
 //! enrolling the authenticator that makes every later sign-in unattended, or
 //! giving a pool member back.
 
-
 mod run;
 
 use clap::Subcommand;

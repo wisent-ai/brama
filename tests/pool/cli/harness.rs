@@ -43,7 +43,12 @@ pub(crate) fn reinstate(vault: &SkarbiecVault, state: &Path, subscription_id: &s
 
 /// The real binary over this test's own vault and state, with nothing of the
 /// operator's environment reachable.
-pub(crate) fn brama(vault: &SkarbiecVault, state: &Path, args: &[&str], input: Option<&[u8]>) -> Output {
+pub(crate) fn brama(
+    vault: &SkarbiecVault,
+    state: &Path,
+    args: &[&str],
+    input: Option<&[u8]>,
+) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_brama"));
     command
         .env_clear()
