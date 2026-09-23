@@ -50,6 +50,10 @@ Subscription Pool. Both use the same Brama function, which obtains credentials
 from Skarbiec and reads the provider's own report without sending a model
 request. Expired OAuth grants are renewed when possible; sign-in is never
 opened as a side effect.</p>
+<p>Each successful report replaces that account's previous limit windows.
+An explicitly empty provider report means no windows were published, not
+zero percent used. Failed reads retain the last successful windows with
+their original observation times and a visible stale/error state.</p>
 <h2 id="failure">Read failures without losing successful accounts</h2>
 <p>An incomplete report has <code>ok: false</code> and the CLI exits 1.
 <code>errors</code> preserves the failed operation, actual cause, account and
