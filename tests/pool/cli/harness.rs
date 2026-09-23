@@ -2,10 +2,14 @@
 //! member state read back through the CLI rather than out of the ledger file,
 //! and putting one retired member back in the rotation.
 
-use std::path::Path;
+use std::fs;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use serde_json::Value;
+use serde_json::{json, Value};
+
+use super::SUBSCRIPTION;
 
 use crate::support::SkarbiecVault;
 

@@ -5,7 +5,9 @@
 use reqwest::Method;
 use serde_json::json;
 
-use crate::gateway::{refusal, Gateway, AGENT, OTHER_AGENT, POOL};
+use crate::gateway::{
+    refusal, Gateway, AGENT_BEARER, AGENT_SIGNING_SECRET, OTHER_AGENT, POOL, STRANGER_BEARER,
+};
 use crate::VAULT;
 
 /// A caller that proved nothing is told nothing, and the sentence it is told
@@ -82,7 +84,7 @@ fn the_pool_refuses_a_caller_that_names_an_owner_it_did_not_prove() {
     let (status, body) = gateway.request(
         POOL,
         Method::GET,
-        Some(gateway::AGENT_BEARER),
+        Some(AGENT_BEARER),
         None,
         Some((OTHER_AGENT, AGENT_SIGNING_SECRET)),
     );

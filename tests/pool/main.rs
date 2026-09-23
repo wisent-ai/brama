@@ -22,10 +22,7 @@ mod support;
 use reqwest::Method;
 use serde_json::json;
 
-use gateway::{
-    answered_ids, assert_pool_answered, refusal, Gateway, AGENT, AGENT_SIGNING_SECRET, OTHER_AGENT,
-    POOL, STRANGER_BEARER,
-};
+use gateway::{answered_ids, assert_pool_answered, Gateway, AGENT, OTHER_AGENT, POOL};
 
 /// The accounts the vault holds: two for the agent, one for another agent it
 /// must never be told about.

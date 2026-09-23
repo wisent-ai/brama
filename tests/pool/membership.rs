@@ -1,8 +1,7 @@
 //! CLI pool membership is a real vault write, not an HTTP-only capability.
 use std::fs;
-use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::path::Path;
+use std::process::Command;
 
 use crate::support::{SkarbiecVault, TestDirectory};
 use serde_json::{json, Value};
