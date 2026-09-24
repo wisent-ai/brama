@@ -40,8 +40,9 @@ pub(in crate::gateway::broker) async fn refresh_subscription_credential_inner(
     // session. So a borrowed grant is spent as it stands - its expiry is a
     // hint, and the provider is the one to say no - and when the provider
     // has said no (`force`: the request path asking for a rotation after a
-    // refusal, or an operator's refresh), the member is disowned with the
-    // harness named, and the sweep brings the harness's current grant.
+    // refusal, or an operator's refresh), the member needs a sign-in. Nothing
+    // copies a harness grant in any more (borrowing ended on 2026-09-20), so
+    // the refusal names the sign-in routes that do exist.
     let borrowed = borrowed_from(&credential);
     if !force && (borrowed.is_some() || !oauth_refresh::needs_refresh(&credential, provider)) {
         return Ok(credential);
@@ -52,8 +53,11 @@ pub(in crate::gateway::broker) async fn refresh_subscription_credential_inner(
             Code::Config,
             IMPACT_CREDENTIAL_PERSIST,
             format!(
-                "this grant is borrowed from {harness}, which refreshes it itself; Brama does not \
-                 rotate it, and the sweep brings {harness}'s current grant"
+                "this grant was borrowed from {harness}, which refreshes its own copy; Brama does \
+                 not rotate it, and nothing brings {harness}'s grant over any more. Sign the \
+                 account in: `brama subscription sign-in {provider} --subscription-id \
+                 {subscription_id}` through Weles, or `brama subscription sign-in-manual \
+                 {provider} --subscription-id {subscription_id}` by hand"
             ),
         )
         .with_context("subscription", subscription_id)
