@@ -45,6 +45,11 @@
           "src/release/build.sh"
         ]
       },
+      "tests": [
+        {"name": "cli-contracts", "argv": ["cargo", "test", "--locked", "--release", "--test", "cli_surface_contracts", "--test", "cli_pool_contracts", "--test", "cli_alias_pool_report"]},
+        {"name": "routing-contracts", "argv": ["cargo", "test", "--locked", "--release", "--test", "refusal_contract", "--test", "readiness_contract", "--test", "awaiting_sign_in_contract", "--test", "subscription_tag_contract"]},
+        {"name": "release-artifacts", "argv": ["cargo", "test", "--locked", "--release", "--test", "release_build_cache", "--test", "release_subscription_catalog"]}
+      ],
       "stage": {
         "stage/bin/brama": "bin/brama",
         "stage/bin/skarbiec-entitlements-router": "bin/skarbiec-entitlements-router",
@@ -93,6 +98,11 @@
           "src/release/build.sh"
         ]
       },
+      "tests": [
+        {"name": "cli-contracts", "argv": ["cargo", "test", "--locked", "--release", "--test", "cli_surface_contracts", "--test", "cli_pool_contracts", "--test", "cli_alias_pool_report"]},
+        {"name": "routing-contracts", "argv": ["cargo", "test", "--locked", "--release", "--test", "refusal_contract", "--test", "readiness_contract", "--test", "awaiting_sign_in_contract", "--test", "subscription_tag_contract"]},
+        {"name": "release-artifacts", "argv": ["cargo", "test", "--locked", "--release", "--test", "release_build_cache", "--test", "release_subscription_catalog"]}
+      ],
       "stage": {
         "stage/bin/brama": "bin/brama",
         "stage/bin/skarbiec-entitlements-router": "bin/skarbiec-entitlements-router",
@@ -144,6 +154,9 @@
           "vercel-ingress/docs"
         ]
       },
+      "tests": [
+        {"name": "docs-site", "argv": ["cargo", "test", "--locked", "--release", "--test", "docs_site_assets", "--test", "docs_published_identity"]}
+      ],
       "stage": {
         "dist/brama-web.tar.gz": "brama-web.tar.gz",
         "dist/brama-web.tar.gz.sha256": "brama-web.tar.gz.sha256",
