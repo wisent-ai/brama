@@ -78,6 +78,9 @@ pub(super) fn schedule_sign_in(subscription_id: String, provider: String) -> boo
                     result = verdict.get("result").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
                     detail = verdict.get("detail").and_then(serde_json::Value::as_str).unwrap_or_default()
                 );
+                if verdict.to_string().contains(MISSING_SEED) {
+                    enrol_missing_seed(&subscription_id, &provider).await;
+                }
             }
             // A blocked reason is a declaration this deployment is missing: it
             // will read the same next minute, so it is logged with its own
@@ -101,6 +104,14 @@ pub(super) fn schedule_sign_in(subscription_id: String, provider: String) -> boo
                         .unwrap_or_default(),
                     detail = %error
                 );
+                // The gateway log on charless-mac-mini shows the missing seed
+                // arriving here, as `credential_sign_in_blocked` with
+                // `google_2fa_material_missing`.
+                if error.to_string().contains(MISSING_SEED)
+                    || blocked.is_some_and(|blocked| blocked.code() == MISSING_SEED)
+                {
+                    enrol_missing_seed(&subscription_id, &provider).await;
+                }
             }
             // A failed join likewise proves no completed Weles verdict. Keeping
             // it out of the journal prevents a transient process fault from
@@ -117,4 +128,62 @@ pub(super) fn schedule_sign_in(subscription_id: String, provider: String) -> boo
         }
     });
     true
+}
+
+/// Weles's word for a Google login whose Skarbiec item holds no
+/// authenticator seed, so its sign-in stops at the second-factor screen.
+const MISSING_SEED: &str = "google_2fa_material_missing";
+/// How long one subscription waits before its enrolment is ordered again.
+/// Each enrolment pages the operator for one approval on the phone.
+const ENROL_COOLDOWN: Duration = Duration::from_secs(6 * 60 * 60);
+/// The same bound the sign-in gives the operator to approve Google's push.
+const ENROL_TIMEOUT_MS: u64 = 15 * 60 * 1000;
+
+static ENROLLED_AT: LazyLock<std::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>> =
+    LazyLock::new(Default::default);
+
+/// Order the authenticator enrolment the sign-in's own refusal names.
+///
+/// Only `brama subscription enrol-authenticator` used to order it, so every
+/// automatic sign-in of a Google login without a seed stopped at
+/// `google_2fa_material_missing` and waited for somebody to type that
+/// command: on this fleet 0 of 15 subscriptions were live for a week and no
+/// enrolment ever asked the operator for the one approval it needs. The sweep
+/// now orders it itself, still holding the serial lock so only one browser
+/// owns Weles, at most once per subscription every six hours.
+async fn enrol_missing_seed(subscription_id: &str, provider: &str) {
+    {
+        let mut enrolled = ENROLLED_AT
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if enrolled
+            .get(subscription_id)
+            .is_some_and(|at| at.elapsed() < ENROL_COOLDOWN)
+        {
+            return;
+        }
+        enrolled.insert(subscription_id.to_owned(), std::time::Instant::now());
+    }
+    let Some(weles) = sign_in::weles_provider(provider) else {
+        return;
+    };
+    match sign_in::enrol_authenticator(provider, weles, subscription_id, None, ENROL_TIMEOUT_MS)
+        .await
+    {
+        Ok(enrolment) => info!(
+            event = "credential_authenticator_enrolment",
+            subscription = %subscription_id,
+            provider = %provider,
+            login_item = %enrolment.login_item,
+            run = %enrolment.run_id,
+            seed_present = enrolment.seed_present,
+            detail = %enrolment.detail
+        ),
+        Err(error) => warn!(
+            event = "credential_authenticator_enrolment_failed",
+            subscription = %subscription_id,
+            provider = %provider,
+            detail = %error
+        ),
+    }
 }
