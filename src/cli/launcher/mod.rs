@@ -3,6 +3,7 @@
 //! interpreter the host may not have.
 
 mod catalog;
+mod policy;
 
 use std::path::PathBuf;
 
@@ -21,11 +22,34 @@ pub(crate) enum LauncherCommand {
         #[arg(long)]
         output: PathBuf,
     },
+    /// Validate `services.brama` of the control document and write the
+    /// allowed models, the alias routes and the backend aliases, each to a
+    /// new owner-only file
+    Policy {
+        #[arg(long)]
+        config: PathBuf,
+        #[arg(long)]
+        allowed: PathBuf,
+        #[arg(long)]
+        aliases: PathBuf,
+        #[arg(long)]
+        backend: PathBuf,
+    },
+    /// Create the first inference-route registry at PATH from
+    /// BRAMA_MODEL_ALIASES
+    SeedRoutes { path: PathBuf },
 }
 
 pub(crate) fn run(command: LauncherCommand) {
     let result = match command {
         LauncherCommand::Catalog { available, policy, output } => catalog::build(&available, &policy, &output),
+        LauncherCommand::Policy { config, allowed, aliases, backend } => policy::check(
+            &config,
+            &policy::Outputs { allowed: &allowed, aliases: &aliases, backend: &backend },
+        ),
+        LauncherCommand::SeedRoutes { path } => std::env::var("BRAMA_MODEL_ALIASES")
+            .map_err(|_| "BRAMA_MODEL_ALIASES is required".to_string())
+            .and_then(|aliases| policy::seed_routes(&path, &aliases)),
     };
     if let Err(detail) = result {
         eprintln!("{detail}");
