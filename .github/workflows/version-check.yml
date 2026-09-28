@@ -6,24 +6,18 @@ name: version-check
 # other machines invoke by command name -- and `brama mcp` reports the declared version
 # back over MCP `initialize`, so a wrong number is externally observable.
 #
-# The rule itself lives in one place for the whole fleet and is NOT copied here:
-# https://github.com/lbartoszcze/AutoVersion. This workflow supplies only the things
-# this repository alone knows: its surface, the version it declares, and the coordinates
-# its own history shows were consumed. `tests/versioning/contract.py` makes the comparison;
-# the shared workflow it replaced demanded the declared version equal the required one
-# exactly, and refused every commit on main after 0.4.2 and 0.4.3 were claimed by builds
-# that failed, since the Stado release plane never reuses a coordinate.
+# The rule is AutoVersion's (https://github.com/lbartoszcze/AutoVersion, SPEC v0.1.0),
+# kept as one small port per consumer and held identical by the shared fixtures. Brama's
+# port is `brama version-gate`, carried by the candidate binary: this workflow first runs
+# AutoVersion's FIXTURES.md against it (`conformance`), then `contract` compares the
+# surface this binary advertises with the committed released-surface.json. A declared
+# version may run ahead of the required one only over coordinates earlier commits on
+# this branch declared, since the Stado release plane never reuses a coordinate.
 #
 # The baseline is the committed released-surface.json and is never regenerated here; only
 # the candidate is recomputed. A check that rebuilt both sides would always agree with
-# itself and would gate nothing.
-#
-# `tests/versioning/check_baseline.py` checks that file against the channel that published it.
-# Brama's releases are published by the Stado release plane, which is what every host
-# installs; GitHub Releases are a second, secondary channel and stalled at v0.2.53 when
-# the tag job below stopped running. Asserting the baseline had to be the newest GitHub
-# release therefore refused every commit for twenty-two versions, and this job's failure
-# is what kept the tag job from running at all.
+# itself and would gate nothing. `brama version-gate baseline` checks that file against
+# the channel that published it, which for Brama is the Stado release plane.
 #
 # A successful push to main tags the version already declared in Cargo.toml.
 # The existing v* release workflow remains the sole artifact publisher.
@@ -43,7 +37,7 @@ jobs:
     secrets:
       repository_token: ${{ secrets.ECHO_WEB_REPOSITORY_TOKEN }}
 
-  contract:
+  version-gate:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -52,42 +46,47 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install the shared version rule into its own environment
+      - name: Authorize pinned private source dependency
+        env:
+          ECHO_WEB_REPOSITORY_TOKEN: ${{ secrets.ECHO_WEB_REPOSITORY_TOKEN }}
+        run: |
+          git config --global \
+            url."https://x-access-token:${ECHO_WEB_REPOSITORY_TOKEN}@github.com/".insteadOf \
+            https://github.com/
+          printf '%s\n' 'CARGO_NET_GIT_FETCH_WITH_CLI=true' >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build the candidate binary
+        run: cargo build --locked --release --bin brama
+
+      - name: Prove this binary's versioning rule against the shared fixtures
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m venv "$RUNNER_TEMP/autoversion"
-          "$RUNNER_TEMP/autoversion/bin/python" -m pip install --quiet \
-            "git+https://github.com/lbartoszcze/AutoVersion@v0.1.0"
-          test -x "$RUNNER_TEMP/autoversion/bin/autoversion"
+          curl --fail --silent --show-error --location \
+            --output "$RUNNER_TEMP/autoversion-fixtures.md" \
+            https://raw.githubusercontent.com/lbartoszcze/AutoVersion/v0.1.0/FIXTURES.md
+          target/release/brama version-gate conformance \
+            --fixtures "$RUNNER_TEMP/autoversion-fixtures.md"
 
       - name: Enforce released surface and committed manifest version
         shell: bash
         run: |
           set -euo pipefail
           git diff --quiet -- Cargo.toml
-          python3 tests/versioning/contract.py \
-            --autoversion "$RUNNER_TEMP/autoversion/bin/autoversion" --self-check
-
-  baseline:
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+          target/release/brama version-gate contract --self-check
 
       - name: Assert the baseline agrees with the channel that published it
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
-        run: python3 tests/versioning/check_baseline.py
+        run: target/release/brama version-gate baseline
 
   tag:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [rust-gates, contract, baseline]
+    needs: [rust-gates, version-gate]
     permissions:
       contents: write
       actions: write

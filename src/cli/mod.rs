@@ -13,6 +13,7 @@ pub(crate) mod probe;
 pub(crate) mod serving;
 pub(crate) mod stub;
 pub(crate) mod subscriptions;
+pub(crate) mod version_gate;
 pub(crate) mod workload;
 
 use serde_json::Value;

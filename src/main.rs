@@ -15,6 +15,7 @@ use cli::serving::ServeArgs;
 use cli::stub::StubArgs;
 use cli::subscriptions::credentials::SubscriptionCommand;
 use cli::subscriptions::SubscriptionsArgs;
+use cli::version_gate::VersionGateCommand;
 use cli::workload::WorkloadCommand;
 
 #[derive(Parser)]
@@ -96,6 +97,13 @@ enum Commands {
     /// installed generations, trust registry, service env, grants, alias
     /// routes, reachability and the current boot attempt. Read-only.
     Diagnose,
+    /// The pull-request version gate: surface, contract, baseline and the
+    /// rule's shared-fixture conformance
+    #[command(hide = true)]
+    VersionGate {
+        #[command(subcommand)]
+        command: VersionGateCommand,
+    },
 }
 
 #[tokio::main]
@@ -128,5 +136,8 @@ async fn main() {
         Commands::StubProvider(args) => cli::stub::serve(args).await,
         Commands::Probe(args) => cli::probe::run(args).await,
         Commands::Diagnose => cli::diagnose::run().await,
+        Commands::VersionGate { command } => {
+            cli::version_gate::run(command, <Cli as clap::CommandFactory>::command())
+        }
     }
 }
