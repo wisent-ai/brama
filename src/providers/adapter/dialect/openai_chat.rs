@@ -67,5 +67,6 @@ pub(in crate::providers::adapter) fn model_response_from_openai(
         error: None,
         tool_calls,
         limits: Vec::new(),
+        failure_kind: None,
     }
 }

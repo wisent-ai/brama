@@ -6,7 +6,7 @@ use tracing::warn;
 use wisent_errors::Code;
 
 use crate::core::failure::{self, IMPACT_MODEL_REQUEST, POINT_PROVIDER_CALL};
-use crate::types::ModelResponse;
+use crate::types::{ModelResponse, ProviderRefusal};
 
 /// Characters of a provider's own error sentence a refusal may carry.
 const MAX_PROVIDER_ERROR_CHARS: usize = 2048;
@@ -95,22 +95,25 @@ pub(in crate::providers::adapter) fn provider_refusal(
         .chars()
         .take(max_provider_error_chars())
         .collect::<String>();
-    // The kind is what clients read, so it is exactly what it has always been,
-    // 404, 407, 408 and 410 attributed to nothing and 504 called an unreachable
-    // dependency included.
-    let kind = if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-        "provider_rate_limited"
+    (refusal_class(status).contract_kind(), detail)
+}
+
+/// The class of a refused answer, from its status. The kind clients read is
+/// exactly what it has always been, 404, 407, 408 and 410 attributed to nothing
+/// and 504 called an unreachable dependency included.
+pub(in crate::providers::adapter) fn refusal_class(status: reqwest::StatusCode) -> ProviderRefusal {
+    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        ProviderRefusal::RateLimited
     } else if matches!(
         status,
         reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN
     ) {
-        "provider_authentication"
+        ProviderRefusal::Authentication
     } else if status.is_server_error() {
-        "dependency_unavailable"
+        ProviderRefusal::DependencyUnavailable
     } else {
-        "provider_failure"
-    };
-    (kind, detail)
+        ProviderRefusal::ProviderFailure
+    }
 }
 
 pub(in crate::providers::adapter) fn provider_error(
@@ -140,5 +143,7 @@ pub(in crate::providers::adapter) fn provider_error(
         "{}",
         refused.render()
     );
-    attempted_failure(route_id, format!("{kind}: {detail}"))
+    let mut failure = attempted_failure(route_id, format!("{kind}: {detail}"));
+    failure.failure_kind = Some(refusal_class(status));
+    failure
 }

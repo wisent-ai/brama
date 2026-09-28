@@ -11,7 +11,7 @@ use crate::types::{ModelRequest, ModelResponse};
 use wisent_errors::Failure;
 
 use super::super::credential::auth_failure::{
-    is_auth_failure, is_permanent_auth_failure, mark_credential_revoked,
+    exhausted_credential, mark_credential_revoked, refused_credential,
 };
 use super::super::ranking::pin::pin_credential;
 use super::super::refusal::envelope::remember_failure;
@@ -140,12 +140,11 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
         result.attempts = provider_attempts;
         usage::record_call(credential_id, provider, &result);
 
-        // Whether the provider refused a token it had just handed us. The
-        // string matcher below cannot see that: the message is the same
-        // "invalid authentication" either way, and only the sequence says the
-        // credential is dead rather than stale.
+        // Whether the provider refused a token it had just handed us. One
+        // refusal cannot say that: the class is the same either way, and only
+        // the sequence says the credential is dead rather than stale.
         let mut rejected_with_fresh_token = false;
-        if !result.success && result.error.as_deref().is_some_and(is_auth_failure) {
+        if !result.success && refused_credential(&result) {
             match broker::refresh_subscription_credential(credential_id, provider).await {
                 Ok(fresh) => match fresh.expose_utf8() {
                     Ok(fresh_token) => {
@@ -163,8 +162,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
                             pin_credential(agent_id, provider, credential_id);
                             return RouteAttempt::served(result);
                         }
-                        rejected_with_fresh_token =
-                            result.error.as_deref().is_some_and(is_auth_failure);
+                        rejected_with_fresh_token = refused_credential(&result);
                     }
                     Err(error) => {
                         let refused = failure::envelope(
@@ -194,20 +192,6 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
             return RouteAttempt::served(result);
         }
         let error = result.error.clone().unwrap_or_default();
-        if is_permanent_auth_failure(&error) {
-            warn!(
-                event = "credential_retired",
-                provider,
-                credential_index = index,
-                "provider permanently rejected bounded credential"
-            );
-            mark_credential_revoked(
-                credential_id,
-                provider,
-                "the provider permanently rejected this credential",
-            )
-            .await;
-        }
         if rejected_with_fresh_token {
             // Retried forever otherwise: the refusal reads as an ordinary auth
             // failure, so the next request refreshes and is refused again. One
@@ -227,7 +211,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
             )
             .await;
         }
-        if is_auth_failure(&error) {
+        if refused_credential(&result) {
             saw_auth_rejection = true;
             warn!(
                 event = "credential_auth_rejected",
@@ -237,11 +221,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
             );
             continue;
         }
-        let exhausted = error.contains("hit your limit")
-            || error.contains("usage limit")
-            || error.contains("rate_limit")
-            || error.contains("429");
-        if !exhausted {
+        if !exhausted_credential(&result) {
             // The provider answered and refused this request in particular --
             // a malformed body, a model it does not serve. Its other
             // credentials would answer identically, and its other models might

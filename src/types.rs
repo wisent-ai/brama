@@ -191,6 +191,38 @@ pub struct ModelResponse {
     /// matters most.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub limits: Vec<LimitReading>,
+    /// The class of a provider's refusal, read from its HTTP status where the
+    /// answer arrived. Rotation decides auth refresh and quota exhaustion from
+    /// this, never from the provider's sentence, which is data and changes
+    /// wording without notice. Absent for failures no provider answered.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_kind: Option<ProviderRefusal>,
+}
+
+/// How a provider refused one call, from the status it answered with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderRefusal {
+    /// 429: the credential's quota or rate window is spent.
+    RateLimited,
+    /// 401 or 403: the provider does not accept this credential.
+    Authentication,
+    /// 5xx: the provider could not answer.
+    DependencyUnavailable,
+    /// Any other status: this request was refused, not the credential.
+    ProviderFailure,
+}
+
+impl ProviderRefusal {
+    /// The contract kind clients read in the refusal sentence.
+    pub fn contract_kind(self) -> &'static str {
+        match self {
+            Self::RateLimited => "provider_rate_limited",
+            Self::Authentication => "provider_authentication",
+            Self::DependencyUnavailable => "dependency_unavailable",
+            Self::ProviderFailure => "provider_failure",
+        }
+    }
 }
 
 impl ModelResponse {
@@ -207,6 +239,7 @@ impl ModelResponse {
             error: Some(error),
             tool_calls: None,
             limits: Vec::new(),
+            failure_kind: None,
         }
     }
 }

@@ -3,7 +3,21 @@
 use serde_json::Value;
 
 use crate::providers::adapter::call::outcome::refusal::attempted_failure;
-use crate::types::{ModelResponse, ToolCall};
+use crate::types::{ModelResponse, ProviderRefusal, ToolCall};
+
+/// The class of a failure the backend reported inside a 200 stream, from the
+/// error object's `code` (the Responses API's documented error codes), since no
+/// HTTP status is left to read once the stream has started.
+fn stream_failure_class(error: Option<&Value>) -> ProviderRefusal {
+    match error
+        .and_then(|error| error.get("code"))
+        .and_then(Value::as_str)
+    {
+        Some("rate_limit_exceeded") => ProviderRefusal::RateLimited,
+        Some("server_error") => ProviderRefusal::DependencyUnavailable,
+        _ => ProviderRefusal::ProviderFailure,
+    }
+}
 
 /// Parse a buffered `text/event-stream` body from the OpenAI Responses API
 /// into the shared response shape. Deltas accumulate content, but a
@@ -81,24 +95,28 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
                 completed = event.get("response").cloned().unwrap_or(Value::Null);
             }
             Some("response.failed") => {
-                let message = event
-                    .pointer("/response/error/message")
+                let error = event.pointer("/response/error");
+                let message = error
+                    .and_then(|error| error.get("message"))
                     .and_then(Value::as_str)
                     .unwrap_or("codex response failed");
-                failure = Some(message.to_string());
+                failure = Some((message.to_string(), stream_failure_class(error)));
             }
             Some("error") => {
                 let message = event
                     .get("message")
                     .and_then(Value::as_str)
                     .unwrap_or("codex stream error");
-                failure = Some(message.to_string());
+                failure = Some((message.to_string(), stream_failure_class(Some(&event))));
             }
             _ => {}
         }
     }
-    if let Some(message) = failure {
-        return attempted_failure(route_id, format!("provider_failure: {message}"));
+    if let Some((message, class)) = failure {
+        let mut refused =
+            attempted_failure(route_id, format!("{}: {message}", class.contract_kind()));
+        refused.failure_kind = Some(class);
+        return refused;
     }
     let mut tool_calls = Vec::new();
     if let Some(output) = completed.get("output").and_then(Value::as_array) {
@@ -172,5 +190,6 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
         error: None,
         tool_calls: (!tool_calls.is_empty()).then_some(tool_calls),
         limits: Vec::new(),
+        failure_kind: None,
     }
 }

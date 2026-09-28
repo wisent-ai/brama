@@ -1,24 +1,28 @@
-//! Reading a provider's refusal for what it says about the credential: a
-//! token that is merely stale, or a grant that is gone.
+//! Reading a provider's refusal for what it says about the credential, from
+//! the class the adapter took off the answer's status. The provider's sentence
+//! is data and never decides: a request error that happens to mention OAuth or
+//! a limit is not an account problem, and a reworded quota answer still is one.
+//!
+//! Whether a refused credential is merely stale or gone for good is not read
+//! here either: the forced refresh answers that. A refresh the provider refuses
+//! definitively is recorded as needing a sign-in by the broker's renewal, and a
+//! token refused right after the provider issued it is retired by the rotation.
 
 use crate::subscription_dispatch::usage;
+use crate::types::{ModelResponse, ProviderRefusal};
 
-pub(in crate::subscription_dispatch::dispatch) fn is_permanent_auth_failure(error: &str) -> bool {
-    let error = error.to_ascii_lowercase();
-    error.contains("refresh token was revoked")
-        || error.contains("access token could not be refreshed")
-        || error.contains("invalid_grant")
+/// The provider refused the credential itself (401 or 403).
+pub(in crate::subscription_dispatch::dispatch) fn refused_credential(
+    response: &ModelResponse,
+) -> bool {
+    response.failure_kind == Some(ProviderRefusal::Authentication)
 }
 
-pub(in crate::subscription_dispatch::dispatch) fn is_auth_failure(error: &str) -> bool {
-    let error = error.to_ascii_lowercase();
-    error.contains("invalid authentication")
-        || error.contains("authentication_error")
-        || error.contains("failed to authenticate")
-        || error.contains("401")
-        || error.contains("provider_authentication")
-        || error.contains("oauth")
-        || is_permanent_auth_failure(&error)
+/// The provider refused because the credential's quota or rate window is spent.
+pub(in crate::subscription_dispatch::dispatch) fn exhausted_credential(
+    response: &ModelResponse,
+) -> bool {
+    response.failure_kind == Some(ProviderRefusal::RateLimited)
 }
 
 /// Retire one credential the provider has permanently refused, and say so in the

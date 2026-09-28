@@ -93,6 +93,16 @@ window in 0.4.29 failed it. The per-agent subscription cache above it is unchang
 (0.4.29 and 0.4.30 were claimed by linux builds submitted with a builder script that refused
 its own work root, 0.4.31 by the window; Stado 0.21.15 fixed the builder).</p>
 
+<h2 id="unreleased-refusal-class">Unreleased: rotation reads the refusal's class, not the provider's words<a class="headerlink" href="#unreleased-refusal-class" title="Link to this section">&para;</a></h2>
+<p>A refused provider answer now carries <code>failure_kind</code> (<code>rate_limited</code>,
+<code>authentication</code>, <code>dependency_unavailable</code>, <code>provider_failure</code>),
+taken from the HTTP status, or from the error object's <code>code</code> when a Responses stream
+fails after its 200. Subscription rotation refreshes and rotates on <code>authentication</code>,
+and moves to the next account on <code>rate_limited</code>; any other refusal condemns the route
+only. The provider's sentence no longer decides either, so a request error that mentions OAuth
+or a limit leaves the account alone. A credential refused again right after a forced refresh is
+still retired, and a refresh the provider disowns is still recorded as needing a sign-in.</p>
+
 <h2 id="unreleased-automatic-enrolment">Unreleased: a sign-in stopped by a missing authenticator seed orders the enrolment itself<a class="headerlink" href="#unreleased-automatic-enrolment" title="Link to this section">&para;</a></h2>
 <p>An automatic sign-in of a Google login whose Skarbiec item holds no <code>totp_secret</code>
 stops at <code>google_2fa_material_missing</code>, and only <code>brama subscription enrol-authenticator</code>

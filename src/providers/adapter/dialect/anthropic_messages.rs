@@ -164,5 +164,6 @@ pub(in crate::providers::adapter) fn model_response_from_anthropic(
         error: None,
         tool_calls: (!tool_calls.is_empty()).then_some(tool_calls),
         limits: Vec::new(),
+        failure_kind: None,
     }
 }

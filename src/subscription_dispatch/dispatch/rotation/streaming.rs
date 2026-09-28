@@ -13,7 +13,7 @@ use crate::types::ModelRequest;
 use wisent_errors::Failure;
 
 use super::super::credential::auth_failure::{
-    is_auth_failure, is_permanent_auth_failure, mark_credential_revoked,
+    exhausted_credential, mark_credential_revoked, refused_credential,
 };
 use super::super::ranking::pin::pin_credential;
 use super::super::refusal::envelope::remember_failure;
@@ -116,23 +116,15 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
         // refresh the buffered path allows, and the retry is just as safe:
         // the caller has seen nothing either way.
         let mut rejected_with_fresh_token = false;
-        if result
-            .as_ref()
-            .err()
-            .and_then(|failure| failure.error.as_deref())
-            .is_some_and(is_auth_failure)
-        {
+        if result.as_ref().err().is_some_and(refused_credential) {
             match broker::refresh_subscription_credential(credential_id, provider).await {
                 Ok(fresh) => match fresh.expose_utf8() {
                     Ok(fresh_token) => {
                         provider_attempts = provider_attempts.saturating_add(u32::from(true));
                         result =
                             provider_registry::dispatch_stream(request, &item, fresh_token).await;
-                        rejected_with_fresh_token = result
-                            .as_ref()
-                            .err()
-                            .and_then(|failure| failure.error.as_deref())
-                            .is_some_and(is_auth_failure);
+                        rejected_with_fresh_token =
+                            result.as_ref().err().is_some_and(refused_credential);
                     }
                     Err(error) => {
                         let refused = failure::envelope(
@@ -177,20 +169,6 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
         };
         usage::record_call(credential_id, provider, &failure);
         let error = failure.error.clone().unwrap_or_default();
-        if is_permanent_auth_failure(&error) {
-            warn!(
-                event = "credential_retired",
-                provider,
-                credential_index = index,
-                "provider permanently rejected bounded credential"
-            );
-            mark_credential_revoked(
-                credential_id,
-                provider,
-                "the provider permanently rejected this credential",
-            )
-            .await;
-        }
         if rejected_with_fresh_token {
             // Same loop guard as the buffered path: a refusal of a token the
             // provider had just issued reads as an ordinary auth failure and
@@ -209,7 +187,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
             )
             .await;
         }
-        if is_auth_failure(&error) {
+        if refused_credential(&failure) {
             saw_auth_rejection = true;
             warn!(
                 event = "credential_auth_rejected",
@@ -219,11 +197,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
             );
             continue;
         }
-        let exhausted = error.contains("hit your limit")
-            || error.contains("usage limit")
-            || error.contains("rate_limit")
-            || error.contains("429");
-        if !exhausted {
+        if !exhausted_credential(&failure) {
             // As in the buffered path: the provider answered and refused this
             // one route, which says nothing about its other models.
             return RouteAttempt::refused(failure);
