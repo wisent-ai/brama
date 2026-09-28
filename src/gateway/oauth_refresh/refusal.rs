@@ -17,18 +17,15 @@ pub(super) fn refresh_failure(code: Code, detail: impl Into<String>) -> Failure 
     failure::envelope(POINT_OAUTH_REFRESH, code, IMPACT_CREDENTIAL_REFRESH, detail)
 }
 
-/// The words a provider uses when a refresh token is gone for good.
-///
-/// Matched as text rather than by status alone because OAuth 2.0 states the
-/// definitive answer in the body of an HTTP 400: a classifier that reads only
-/// the status calls `invalid_grant` a mystery and keeps presenting a dead grant
-/// every minute for as long as nobody reads the log.
-const DEFINITIVE_REFUSALS: &[&str] = &[
+/// The OAuth error codes that disown the grant or the client (RFC 6749 §5.2,
+/// RFC 6750 §3.1). They are protocol values of the body's `error` field, read
+/// as that field: a provider states the definitive answer there, in the body of
+/// an HTTP 400, so the status alone would call `invalid_grant` a mystery and
+/// keep presenting a dead grant every sweep.
+const DEFINITIVE_OAUTH_ERRORS: &[&str] = &[
     "invalid_grant",
     "invalid_token",
-    "revoked",
-    // The OAuth code for a client that may not use this refresh token, which is
-    // the same repair as a refusal of the token itself: sign in again.
+    "invalid_client",
     "unauthorized_client",
 ];
 
@@ -65,30 +62,20 @@ pub(in crate::gateway) fn classify_refusal(failure: &Failure) -> RefreshRefusal 
     if matches!(failure.code, Code::Timeout | Code::InfraDown) {
         return RefreshRefusal::Transient;
     }
-    let detail = failure
-        .detail
-        .as_deref()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if DEFINITIVE_REFUSALS
-        .iter()
-        .any(|refusal| detail.contains(refusal))
-    {
-        return RefreshRefusal::Definitive;
-    }
     // Brama's own reading of the stored document. A document with no refresh
     // token cannot be refreshed by anybody, so this is a sign-in case even
-    // though no provider said anything.
-    if STORED_DOCUMENT_REFUSALS
-        .iter()
-        .any(|refusal| detail.contains(&refusal.to_ascii_lowercase()))
+    // though no provider said anything. Compared whole: these are sentences
+    // this module wrote, not provider text.
+    if failure
+        .detail
+        .as_deref()
+        .is_some_and(|detail| STORED_DOCUMENT_REFUSALS.contains(&detail))
     {
         return RefreshRefusal::Definitive;
     }
-    // A 401 or 403 that got here answered without naming a reason, and an
-    // endpoint refusing the refresh token it was given is the reason. The
-    // transport arm above already took the network blips that never got a
-    // status at all.
+    // A provider that disowned the grant was classified as Auth when its answer
+    // was read (`rejection_failure`), whatever status carried it; a 401 or 403
+    // that named no reason is the endpoint refusing the token it was given.
     if matches!(failure.code, Code::Auth) {
         return RefreshRefusal::Definitive;
     }
@@ -97,6 +84,17 @@ pub(in crate::gateway) fn classify_refusal(failure: &Failure) -> RefreshRefusal 
     // grant is dead, and a subscription that stores a plain API key reaches
     // exactly here, so none of them may demand a sign-in.
     RefreshRefusal::Transient
+}
+
+/// The OAuth `error` code of a refusal body, when it has one.
+fn oauth_error_code(body: &str) -> Option<String> {
+    serde_json::from_str::<Value>(body)
+        .ok()?
+        .get("error")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|code| !code.is_empty())
+        .map(str::to_owned)
 }
 
 /// The provider's own words for a refused refresh.
@@ -116,7 +114,7 @@ fn provider_rejection_text(body: &str) -> Option<String> {
             .filter(|text| !text.is_empty())
             .map(str::to_owned)
     };
-    let code = field("error");
+    let code = oauth_error_code(body);
     let description = field("error_description")
         .or_else(|| {
             parsed
@@ -146,5 +144,12 @@ pub(super) fn rejection_failure(status: u16, body: &str) -> Failure {
     } else {
         format!("OAuth refresh rejected with HTTP {status}: {stated}")
     };
-    refresh_failure(Code::from_upstream_status(status), detail)
+    let disowned =
+        oauth_error_code(body).is_some_and(|code| DEFINITIVE_OAUTH_ERRORS.contains(&code.as_str()));
+    let code = if disowned {
+        Code::Auth
+    } else {
+        Code::from_upstream_status(status)
+    };
+    refresh_failure(code, detail)
 }
