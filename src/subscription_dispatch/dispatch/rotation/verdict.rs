@@ -2,10 +2,10 @@
 //! emptied it.
 
 use crate::core::failure::POINT_BOUNDED_ROTATION;
-use crate::types::{ModelRequest, ModelResponse};
+use crate::types::{GatewayRefusal, ModelRequest, ModelResponse};
 use wisent_errors::Failure;
 
-use super::super::refusal::envelope::{failure_detail, refuse, refuse_as};
+use super::super::refusal::envelope::{failure_detail, refuse_as, refuse_classed};
 use super::super::refusal::pool_empty::{
     capacity_is_mixed, capacity_summary, pool_empty_summary, pool_is_capacity,
     rotation_failure_kind, PoolEmptyCause,
@@ -59,26 +59,51 @@ pub(super) fn emptied_pool_refusal(
             capacity_is_mixed(cause),
             observed.block_lifts_at_ms,
         );
-        let mut failure = refuse(request, POINT_BOUNDED_ROTATION, summary, None);
+        let mut failure = refuse_classed(
+            request,
+            POINT_BOUNDED_ROTATION,
+            "subscription_unavailable",
+            GatewayRefusal::SubscriptionUnavailable,
+            summary,
+            None,
+        );
         failure.attempts = provider_attempts;
         return failure;
     }
-    let message = credential_refusal
-        .as_ref()
-        .map(|refused| {
+    // A lower layer's refusal is carried in its own words, and its class is not
+    // known here yet; every other emptied pool states its class.
+    let mut failure = match credential_refusal {
+        Some(refused) => refuse_as(
+            request,
+            POINT_BOUNDED_ROTATION,
+            rotation_failure_kind(cause),
             format!(
                 "'{provider}' subscription credential failed: {}",
-                failure_detail(refused)
-            )
-        })
-        .unwrap_or_else(|| pool_empty_summary(provider, cause));
-    let mut failure = refuse_as(
-        request,
-        POINT_BOUNDED_ROTATION,
-        rotation_failure_kind(cause),
-        message,
-        credential_refusal,
-    );
+                failure_detail(&refused)
+            ),
+            Some(refused),
+        ),
+        None => refuse_classed(
+            request,
+            POINT_BOUNDED_ROTATION,
+            rotation_failure_kind(cause),
+            pool_empty_class(cause),
+            pool_empty_summary(provider, cause),
+            None,
+        ),
+    };
     failure.attempts = provider_attempts;
     failure
+}
+
+/// The class an emptied pool is answered with, from the same cause its
+/// sentence is chosen from.
+fn pool_empty_class(cause: PoolEmptyCause) -> GatewayRefusal {
+    if cause.auth_rejection || cause.reauthorization_block {
+        GatewayRefusal::SubscriptionReauthorizationRequired
+    } else if cause.unredeemable_credential {
+        GatewayRefusal::CredentialUnauthorized
+    } else {
+        GatewayRefusal::SubscriptionUnavailable
+    }
 }

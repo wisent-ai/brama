@@ -74,6 +74,26 @@ pub fn provider_refusal_contract(kind: ProviderRefusal) -> ModelErrorContract {
             code: "invalid_request",
             retryable: false,
         },
+        ProviderRefusal::Gateway(GatewayRefusal::CredentialUnauthorized) => ModelErrorContract {
+            status: StatusCode::SERVICE_UNAVAILABLE,
+            error_type: "authorization_error",
+            code: "credential_unauthorized",
+            retryable: false,
+        },
+        ProviderRefusal::Gateway(GatewayRefusal::SubscriptionReauthorizationRequired) => {
+            ModelErrorContract {
+                status: StatusCode::SERVICE_UNAVAILABLE,
+                error_type: "authorization_error",
+                code: "subscription_reauthorization_required",
+                retryable: false,
+            }
+        }
+        ProviderRefusal::Gateway(GatewayRefusal::SubscriptionUnavailable) => ModelErrorContract {
+            status: StatusCode::TOO_MANY_REQUESTS,
+            error_type: "capacity_error",
+            code: "subscription_unavailable",
+            retryable: true,
+        },
     }
 }
 

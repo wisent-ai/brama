@@ -4,11 +4,11 @@
 use crate::core::failure::POINT_CREDENTIAL_SELECTION;
 use crate::gateway::broker;
 use crate::subscription_dispatch::usage;
-use crate::types::{ModelRequest, ModelResponse};
+use crate::types::{GatewayRefusal, ModelRequest, ModelResponse};
 
 use super::super::credential::eligibility::eligible_subscription_entries;
 use super::super::ranking::pin::apply_pin;
-use super::super::refusal::envelope::refuse_as;
+use super::super::refusal::envelope::refuse_classed;
 use super::super::refusal::pool_empty::no_active_credential_summary;
 
 pub(super) fn max_credential_attempts() -> usize {
@@ -46,10 +46,11 @@ pub(super) async fn ordered_candidate_rows(
         // call. `pool_empty.rs` records this same defect twice, one layer
         // further out each time; this is the layer where the pool is empty
         // before any provider is asked.
-        return Err(refuse_as(
+        return Err(refuse_classed(
             request,
             POINT_CREDENTIAL_SELECTION,
             "credential_unauthorized",
+            GatewayRefusal::CredentialUnauthorized,
             request.billing_target.as_ref().map_or_else(
                 || no_active_credential_summary(provider),
                 |target| {

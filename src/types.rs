@@ -231,6 +231,13 @@ pub enum GatewayRefusal {
     DependencyUnavailable,
     /// The route cannot be served, for a reason the caller cannot repair.
     ProviderFailure,
+    /// No credential could be produced for the agent: a capability, grant or
+    /// active account is missing, and only an operator repairs it.
+    CredentialUnauthorized,
+    /// The provider refused every credential of the pool; a sign-in repairs it.
+    SubscriptionReauthorizationRequired,
+    /// Every usable credential is inside a quota block; waiting repairs it.
+    SubscriptionUnavailable,
 }
 
 impl ProviderRefusal {
@@ -248,6 +255,11 @@ impl ProviderRefusal {
             }
             Self::Gateway(GatewayRefusal::Unauthenticated) => "unauthenticated",
             Self::Gateway(GatewayRefusal::InvalidRequest) => "invalid_request",
+            Self::Gateway(GatewayRefusal::CredentialUnauthorized) => "credential_unauthorized",
+            Self::Gateway(GatewayRefusal::SubscriptionReauthorizationRequired) => {
+                "subscription_reauthorization_required"
+            }
+            Self::Gateway(GatewayRefusal::SubscriptionUnavailable) => "subscription_unavailable",
         }
     }
 }

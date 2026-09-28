@@ -4,7 +4,7 @@
 use tracing::warn;
 
 use crate::core::failure::{self, IMPACT_MODEL_REQUEST};
-use crate::types::{ModelRequest, ModelResponse};
+use crate::types::{GatewayRefusal, ModelRequest, ModelResponse, ProviderRefusal};
 use wisent_errors::Failure;
 
 /// The envelope for one refused model request: where it broke, what the caller
@@ -65,6 +65,21 @@ pub(in crate::subscription_dispatch::dispatch) fn refuse_as(
         refusal.render()
     );
     ModelResponse::failure(&request.model, message)
+}
+
+/// The same refusal with the class the HTTP edge answers with stated, so the
+/// answer never depends on the sentence. `kind` stays the log envelope's kind.
+pub(in crate::subscription_dispatch::dispatch) fn refuse_classed(
+    request: &ModelRequest,
+    point: &str,
+    kind: &str,
+    class: GatewayRefusal,
+    message: String,
+    cause: Option<Failure>,
+) -> ModelResponse {
+    let mut response = refuse_as(request, point, kind, message, cause);
+    response.failure_kind = Some(ProviderRefusal::Gateway(class));
+    response
 }
 
 pub(in crate::subscription_dispatch::dispatch) fn failure_detail(failure: &Failure) -> String {
