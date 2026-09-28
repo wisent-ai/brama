@@ -151,10 +151,7 @@ pub(in crate::gateway::broker) async fn put_credential(
         return Err(format!("write credential document to child stdin: {error}"));
     }
     drop(stdin);
-    let output = child
-        .wait_with_output()
-        .await
-        .map_err(|error| format!("wait for credential write child: {error}"))?;
+    let output = super::router::wait_within_footprint(child, "credential write").await?;
     if !output.status.success() {
         return Err(router_refusal("credential write", &output));
     }

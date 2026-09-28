@@ -144,17 +144,22 @@ fn on_path(program: &str) -> Option<String> {
 /// The child's own exit is the answer. A vault read on a cold keychain and a
 /// vault read that will never return look the same to a clock, and killing
 /// the first one turns a credential that exists into a credential this
-/// gateway reports as missing.
+/// gateway reports as missing. Memory does tell them apart: see
+/// [`wait_within_footprint`].
 pub(in crate::gateway::broker) async fn child_output(
     binary: &str,
     operation: &str,
     configure: impl FnOnce(&mut tokio::process::Command),
 ) -> Result<std::process::Output, String> {
     let mut command = tokio::process::Command::new(binary);
-    command.kill_on_drop(true);
+    command
+        .kill_on_drop(true)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
     configure(&mut command);
-    match command.output().await {
-        Ok(output) => Ok(output),
+    match command.spawn() {
+        Ok(child) => wait_within_footprint(child, operation).await,
         // The program is part of the failure. `No such file or directory (os
         // error 2)` on its own sent three readers of `subscription sync` to
         // the vault, the grant and the pool before anyone asked which file
@@ -163,6 +168,51 @@ pub(in crate::gateway::broker) async fn child_output(
             "{operation}: {error} (running {binary}; declare another with \
              {ENTITLEMENTS_ROUTER_BIN_ENV} or {SKARBIEC_BIN_ENV})"
         )),
+    }
+}
+
+/// The resident memory past which a vault child is not reading a vault.
+/// Decrypting and printing the whole fleet vault peaks just under 1 GiB; a
+/// router child that had run for over a day under this gateway held 3 GiB
+/// while the control host refused all work for memory pressure.
+const CHILD_RESIDENT_CEILING_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
+/// How often a running vault child's footprint is read.
+const FOOTPRINT_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Wait for `child` to exit and collect its output, ending it once its
+/// resident memory passes [`CHILD_RESIDENT_CEILING_BYTES`]. The refusal
+/// names the operation, the pid and the measured footprint, so the stalled
+/// command is on record instead of a host that runs out of memory.
+pub(in crate::gateway::broker) async fn wait_within_footprint(
+    child: tokio::process::Child,
+    operation: &str,
+) -> Result<std::process::Output, String> {
+    let pid = child.id();
+    let output = child.wait_with_output();
+    tokio::pin!(output);
+    let mut system = sysinfo::System::new();
+    let mut checks = tokio::time::interval(FOOTPRINT_CHECK_INTERVAL);
+    loop {
+        tokio::select! {
+            finished = &mut output => {
+                return finished.map_err(|error| format!("{operation}: wait for the vault child: {error}"));
+            }
+            _ = checks.tick() => {
+                let Some(pid) = pid.map(sysinfo::Pid::from_u32) else { continue };
+                if !system.refresh_process(pid) {
+                    continue;
+                }
+                let resident = system.process(pid).map_or(0, sysinfo::Process::memory);
+                if resident > CHILD_RESIDENT_CEILING_BYTES {
+                    // Dropping the pinned wait kills the child (kill_on_drop).
+                    return Err(format!(
+                        "{operation}: vault child pid {pid} held {resident} bytes resident, over the \
+                         {CHILD_RESIDENT_CEILING_BYTES}-byte ceiling for one vault command; ended it"
+                    ));
+                }
+            }
+        }
     }
 }
 
