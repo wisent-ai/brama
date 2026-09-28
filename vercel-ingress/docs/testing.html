@@ -130,7 +130,7 @@ Approval states provider account owner, exact routes, credential scope, model
 and token limits, maximum attempts, maximum spend, prompt/data class, cleanup,
 and evidence retention. Production credentials and personal data are forbidden.</p>
 <h3 id="real-image-selection">Real image selection<a class="headerlink" href="#real-image-selection" title="Link to this section">&para;</a></h3>
-<p>Run <code>python3 -S tests/routing/image_selection_real.py</code> against the
+<p>Run <code>cargo test --test image_selection_real -- --ignored --nocapture</code> against the
 gateway being qualified. Supply its <code>BRAMA_URL</code>, the existing workload's
 <code>BRAMA_TOKEN</code>, <code>WISENT_APP_AGENT_ID</code> and
 <code>WISENT_APP_AGENT_AUTH_SECRET</code>, and the exact expected serving revision

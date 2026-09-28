@@ -97,6 +97,10 @@ name = "blocked_rows_last_contract"
 path = "tests/routing/blocked_rows_last_contract.rs"
 
 [[test]]
+name = "image_selection_real"
+path = "tests/routing/image_selection/main.rs"
+
+[[test]]
 name = "pool"
 path = "tests/pool/main.rs"
 
