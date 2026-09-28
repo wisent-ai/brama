@@ -6,6 +6,7 @@
 //! into that shape; [`envelope`] additionally records the fleet's reading of the
 //! same failure in the log, where a new key is not a wire change.
 
+pub(in crate::core::server) mod classed;
 pub(in crate::core::server) mod contract;
 pub(in crate::core::server) mod envelope;
 

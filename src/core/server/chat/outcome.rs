@@ -8,7 +8,8 @@ use axum::response::{IntoResponse, Response};
 use tracing::info;
 
 use crate::core::server::admission::identity::ModelClientIdentity;
-use crate::core::server::refusal::contract::{model_error_contract, response_contract};
+use crate::core::server::refusal::classed::response_contract;
+use crate::core::server::refusal::contract::model_error_contract;
 use crate::core::server::refusal::envelope::model_error_envelope;
 use crate::core::server::refusal::error_response;
 use crate::core::server::telemetry::{
