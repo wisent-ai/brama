@@ -22,11 +22,15 @@ pub(super) fn refresh_failure(code: Code, detail: impl Into<String>) -> Failure 
 /// the body's `error` field, read as that field: a provider states the answer
 /// there, in the body of an HTTP 400, so the status alone would call
 /// `invalid_grant` a mystery and keep presenting a dead grant every sweep.
-/// `invalid_client` and `unauthorized_client` are refusals of this gateway's
-/// OAuth client or its grant type, not of the account's grant: a sign-in with
-/// the same client is refused the same way, so they are left to the status and
-/// never send a healthy account through re-authorization.
 const DEFINITIVE_OAUTH_ERRORS: &[&str] = &["invalid_grant", "invalid_token"];
+
+/// The OAuth error codes that refuse this gateway's OAuth client or its grant
+/// type (RFC 6749 §5.2 `invalid_client`, `unauthorized_client`), not the
+/// account's grant. A sign-in with the same client is refused the same way, so
+/// they are configuration, whatever status carries them: §5.2 allows a 401 for
+/// `invalid_client`, and a 401 read by status alone would block a healthy
+/// account for re-authorization.
+const CLIENT_OAUTH_ERRORS: &[&str] = &["invalid_client", "unauthorized_client"];
 
 /// What this module itself says when the *stored* document, not the provider,
 /// is why a refresh cannot happen.
@@ -143,10 +147,16 @@ pub(super) fn rejection_failure(status: u16, body: &str) -> Failure {
     } else {
         format!("OAuth refresh rejected with HTTP {status}: {stated}")
     };
-    let disowned =
-        oauth_error_code(body).is_some_and(|code| DEFINITIVE_OAUTH_ERRORS.contains(&code.as_str()));
-    let code = if disowned {
+    let stated_code = oauth_error_code(body);
+    let is = |codes: &[&str]| {
+        stated_code
+            .as_deref()
+            .is_some_and(|code| codes.contains(&code))
+    };
+    let code = if is(DEFINITIVE_OAUTH_ERRORS) {
         Code::Auth
+    } else if is(CLIENT_OAUTH_ERRORS) {
+        Code::Config
     } else {
         Code::from_upstream_status(status)
     };
