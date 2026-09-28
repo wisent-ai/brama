@@ -92,6 +92,10 @@ enum Commands {
     /// Ask the running gateway on this host to serve one real request per
     /// alias and report the answer or refusal
     Probe(ProbeArgs),
+    /// Explain, on this host, why the gateway is or is not serving: units,
+    /// installed generations, trust registry, service env, grants, alias
+    /// routes, reachability and the current boot attempt. Read-only.
+    Diagnose,
 }
 
 #[tokio::main]
@@ -123,5 +127,6 @@ async fn main() {
         Commands::Launcher { command } => cli::launcher::run(command),
         Commands::StubProvider(args) => cli::stub::serve(args).await,
         Commands::Probe(args) => cli::probe::run(args).await,
+        Commands::Diagnose => cli::diagnose::run().await,
     }
 }

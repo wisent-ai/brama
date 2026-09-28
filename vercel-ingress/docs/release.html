@@ -165,7 +165,7 @@ service is the account the registry must name. Copying an installation to a new
 directory, which is what the fleet does every time it materialises an artifact
 under a digest-named path, therefore heals on the next start instead of
 producing a gateway that answers <code>/health</code> and serves nothing.</p>
-<p><code>src/release/libexec/brama-diagnose.py</code> prints that comparison for every installed
+<p><code>brama diagnose</code> prints that comparison for every installed
 generation, beside the units that start Brama, the capabilities actually issued
 against the providers the policy grants, each alias route against those
 capabilities, where the gateway is reachable and by which scheme, and the

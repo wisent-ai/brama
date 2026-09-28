@@ -64,11 +64,6 @@
         "stage/bin/launcher/policy/router-identities.sh": "bin/launcher/policy/router-identities.sh",
         "stage/bin/launcher/policy/subscription-catalog.sh": "bin/launcher/policy/subscription-catalog.sh",
         "stage/libexec/generate-skarbiec-config.mjs": "libexec/generate-skarbiec-config.mjs",
-        "stage/libexec/brama-diagnose.py": "libexec/brama-diagnose.py",
-        "stage/libexec/diagnose/host_layout.py": "libexec/diagnose/host_layout.py",
-        "stage/libexec/diagnose/installation_report.py": "libexec/diagnose/installation_report.py",
-        "stage/libexec/diagnose/capability_report.py": "libexec/diagnose/capability_report.py",
-        "stage/libexec/diagnose/reachability_report.py": "libexec/diagnose/reachability_report.py",
         "stage/etc/brama-skarbiec/recipient-public-keys.asc": "etc/brama-skarbiec/recipient-public-keys.asc",
         "stage/LICENSE": "LICENSE"
       },
@@ -113,11 +108,6 @@
         "stage/bin/launcher/policy/router-identities.sh": "bin/launcher/policy/router-identities.sh",
         "stage/bin/launcher/policy/subscription-catalog.sh": "bin/launcher/policy/subscription-catalog.sh",
         "stage/libexec/generate-skarbiec-config.mjs": "libexec/generate-skarbiec-config.mjs",
-        "stage/libexec/brama-diagnose.py": "libexec/brama-diagnose.py",
-        "stage/libexec/diagnose/host_layout.py": "libexec/diagnose/host_layout.py",
-        "stage/libexec/diagnose/installation_report.py": "libexec/diagnose/installation_report.py",
-        "stage/libexec/diagnose/capability_report.py": "libexec/diagnose/capability_report.py",
-        "stage/libexec/diagnose/reachability_report.py": "libexec/diagnose/reachability_report.py",
         "stage/etc/brama-skarbiec/recipient-public-keys.asc": "etc/brama-skarbiec/recipient-public-keys.asc",
         "stage/LICENSE": "LICENSE"
       },
