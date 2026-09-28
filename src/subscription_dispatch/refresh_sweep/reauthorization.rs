@@ -139,8 +139,9 @@ const ENROL_COOLDOWN: Duration = Duration::from_secs(6 * 60 * 60);
 /// The same bound the sign-in gives the operator to approve Google's push.
 const ENROL_TIMEOUT_MS: u64 = 15 * 60 * 1000;
 
-static ENROLLED_AT: LazyLock<std::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>> =
-    LazyLock::new(Default::default);
+static ENROLLED_AT: LazyLock<
+    std::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>,
+> = LazyLock::new(Default::default);
 
 /// Order the authenticator enrolment the sign-in's own refusal names.
 ///
