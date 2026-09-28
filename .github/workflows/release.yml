@@ -161,7 +161,6 @@ jobs:
           cp src/release/libexec/probes/brama-subscription-report.py "$stage/libexec/brama-subscription-report.py"
           # Workload registration is `brama workload register`, in the binary.
           cp src/release/libexec/probes/brama-route-probe.py "$stage/libexec/brama-route-probe.py"
-          cp src/release/libexec/brama-repair-inference-routes.py "$stage/libexec/brama-repair-inference-routes.py"
           chmod 0755 \
             "$stage/bin/brama" \
             "$stage/bin/skarbiec-entitlements-router" \

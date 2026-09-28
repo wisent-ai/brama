@@ -71,7 +71,6 @@
         "stage/libexec/diagnose/reachability_report.py": "libexec/diagnose/reachability_report.py",
         "stage/libexec/probes/brama-subscription-report.py": "libexec/brama-subscription-report.py",
         "stage/libexec/probes/brama-route-probe.py": "libexec/brama-route-probe.py",
-        "stage/libexec/brama-repair-inference-routes.py": "libexec/brama-repair-inference-routes.py",
         "stage/etc/brama-skarbiec/recipient-public-keys.asc": "etc/brama-skarbiec/recipient-public-keys.asc",
         "stage/LICENSE": "LICENSE"
       },
@@ -123,7 +122,6 @@
         "stage/libexec/diagnose/reachability_report.py": "libexec/diagnose/reachability_report.py",
         "stage/libexec/probes/brama-subscription-report.py": "libexec/brama-subscription-report.py",
         "stage/libexec/probes/brama-route-probe.py": "libexec/brama-route-probe.py",
-        "stage/libexec/brama-repair-inference-routes.py": "libexec/brama-repair-inference-routes.py",
         "stage/etc/brama-skarbiec/recipient-public-keys.asc": "etc/brama-skarbiec/recipient-public-keys.asc",
         "stage/LICENSE": "LICENSE"
       },
