@@ -9,6 +9,7 @@ use cli::decisions::DecideArgs;
 use cli::diagnostics::{CollectTaskQualityArgs, TestArgs};
 use cli::media::{ImageArgs, SpeakArgs, VideoCommand};
 use cli::onboarding::OnboardArgs;
+use cli::launcher::LauncherCommand;
 use cli::serving::ServeArgs;
 use cli::subscriptions::credentials::SubscriptionCommand;
 use cli::subscriptions::SubscriptionsArgs;
@@ -76,6 +77,12 @@ enum Commands {
         #[command(subcommand)]
         command: WorkloadCommand,
     },
+    /// Steps of `start-with-skarbiec` before the gateway starts
+    #[command(hide = true)]
+    Launcher {
+        #[command(subcommand)]
+        command: LauncherCommand,
+    },
 }
 
 #[tokio::main]
@@ -104,5 +111,6 @@ async fn main() {
         Commands::Subscription { command } => cli::subscriptions::credentials::run(command).await,
         Commands::CollectTaskQuality(args) => cli::diagnostics::collect_task_quality(args).await,
         Commands::Workload { command } => cli::workload::run(command),
+        Commands::Launcher { command } => cli::launcher::run(command),
     }
 }
