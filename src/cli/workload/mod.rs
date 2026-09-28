@@ -86,12 +86,12 @@ const PEM_LINE: usize = 76;
 /// Owner read and write only.
 const OWNER_ONLY: u32 = 0o600;
 
-fn home() -> PathBuf {
+pub(crate) fn home() -> PathBuf {
     PathBuf::from(std::env::var("HOME").unwrap_or_default())
 }
 
 /// `~/.config/brama/service.env` as `NAME=value` settings, quotes removed.
-fn service_settings(home: &Path) -> Result<BTreeMap<String, String>, String> {
+pub(crate) fn service_settings(home: &Path) -> Result<BTreeMap<String, String>, String> {
     let path = home.join(".config/brama/service.env");
     let text = std::fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))?;
     Ok(text

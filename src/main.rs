@@ -9,6 +9,7 @@ use cli::decisions::DecideArgs;
 use cli::diagnostics::{CollectTaskQualityArgs, TestArgs};
 use cli::media::{ImageArgs, SpeakArgs, VideoCommand};
 use cli::onboarding::OnboardArgs;
+use cli::probe::ProbeArgs;
 use cli::launcher::LauncherCommand;
 use cli::serving::ServeArgs;
 use cli::stub::StubArgs;
@@ -88,6 +89,9 @@ enum Commands {
     /// walk-through (models stub-ok, stub-401, stub-429)
     #[command(hide = true)]
     StubProvider(StubArgs),
+    /// Ask the running gateway on this host to serve one real request per
+    /// alias and report the answer or refusal
+    Probe(ProbeArgs),
 }
 
 #[tokio::main]
@@ -118,5 +122,6 @@ async fn main() {
         Commands::Workload { command } => cli::workload::run(command),
         Commands::Launcher { command } => cli::launcher::run(command),
         Commands::StubProvider(args) => cli::stub::serve(args).await,
+        Commands::Probe(args) => cli::probe::run(args).await,
     }
 }
