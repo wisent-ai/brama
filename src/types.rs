@@ -205,6 +205,9 @@ pub struct ModelResponse {
 pub enum ProviderRefusal {
     /// 429: the credential's quota or rate window is spent.
     RateLimited,
+    /// 429 whose error object says `insufficient_quota`: the account's paid
+    /// balance is spent. Another account may serve; waiting does not.
+    QuotaExhausted,
     /// 401 or 403: the provider does not accept this credential.
     Authentication,
     /// 5xx: the provider could not answer.
@@ -218,6 +221,7 @@ impl ProviderRefusal {
     pub fn contract_kind(self) -> &'static str {
         match self {
             Self::RateLimited => "provider_rate_limited",
+            Self::QuotaExhausted => "provider_quota_exhausted",
             Self::Authentication => "provider_authentication",
             Self::DependencyUnavailable => "dependency_unavailable",
             Self::ProviderFailure => "provider_failure",

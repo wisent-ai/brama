@@ -17,17 +17,16 @@ pub(super) fn refresh_failure(code: Code, detail: impl Into<String>) -> Failure 
     failure::envelope(POINT_OAUTH_REFRESH, code, IMPACT_CREDENTIAL_REFRESH, detail)
 }
 
-/// The OAuth error codes that disown the grant or the client (RFC 6749 §5.2,
-/// RFC 6750 §3.1). They are protocol values of the body's `error` field, read
-/// as that field: a provider states the definitive answer there, in the body of
-/// an HTTP 400, so the status alone would call `invalid_grant` a mystery and
-/// keep presenting a dead grant every sweep.
-const DEFINITIVE_OAUTH_ERRORS: &[&str] = &[
-    "invalid_grant",
-    "invalid_token",
-    "invalid_client",
-    "unauthorized_client",
-];
+/// The OAuth error codes that disown the grant itself (RFC 6749 §5.2
+/// `invalid_grant`, RFC 6750 §3.1 `invalid_token`). They are protocol values of
+/// the body's `error` field, read as that field: a provider states the answer
+/// there, in the body of an HTTP 400, so the status alone would call
+/// `invalid_grant` a mystery and keep presenting a dead grant every sweep.
+/// `invalid_client` and `unauthorized_client` are refusals of this gateway's
+/// OAuth client or its grant type, not of the account's grant: a sign-in with
+/// the same client is refused the same way, so they are left to the status and
+/// never send a healthy account through re-authorization.
+const DEFINITIVE_OAUTH_ERRORS: &[&str] = &["invalid_grant", "invalid_token"];
 
 /// What this module itself says when the *stored* document, not the provider,
 /// is why a refresh cannot happen.

@@ -8,7 +8,7 @@ use axum::response::{IntoResponse, Response};
 use tracing::info;
 
 use crate::core::server::admission::identity::ModelClientIdentity;
-use crate::core::server::refusal::contract::model_error_contract;
+use crate::core::server::refusal::contract::{model_error_contract, response_contract};
 use crate::core::server::refusal::envelope::model_error_envelope;
 use crate::core::server::refusal::error_response;
 use crate::core::server::telemetry::{
@@ -37,7 +37,7 @@ pub(super) fn tally_and_log_buffered(
     if !resp.success {
         TOTAL_FAILURES.fetch_add(u64::from(true), Ordering::Relaxed);
     }
-    let failure_contract = resp.error.as_deref().map(model_error_contract);
+    let failure_contract = response_contract(resp);
     // `error_code` below is Brama's own contract code, unchanged, because log
     // pipelines read it. `envelope` is the fleet's reading of the same failure.
     let failure_envelope = resp
@@ -72,8 +72,10 @@ pub(super) fn tally_and_log_buffered(
 /// Every format shares it: a caller that cannot get its generation needs the
 /// contract code and retryability, and those are Brama's, not the wire's.
 pub(super) fn failure_response(resp: &mut ModelResponse) -> Response {
+    // A failure with neither a class nor a sentence gets the contract of an
+    // empty sentence: an unattributed provider failure, as it always has.
+    let contract = response_contract(resp).unwrap_or_else(|| model_error_contract(""));
     let message = resp.error.take().unwrap_or_default();
-    let contract = model_error_contract(&message);
     error_response(
         contract.status,
         contract.error_type,

@@ -5,6 +5,8 @@
 
 use axum::http::StatusCode;
 
+use crate::types::{ModelResponse, ProviderRefusal};
+
 /// What Brama answers a client with for one refusal sentence.
 ///
 /// Public because it is a contract, not an implementation detail: the status,
@@ -18,6 +20,46 @@ pub struct ModelErrorContract {
     pub error_type: &'static str,
     pub code: &'static str,
     pub retryable: bool,
+}
+
+/// The contract for one failed answer: from the refusal class when a provider
+/// answered, and only for Brama's own refusals from their sentence.
+pub fn response_contract(response: &ModelResponse) -> Option<ModelErrorContract> {
+    match response.failure_kind {
+        Some(kind) => Some(provider_refusal_contract(kind)),
+        None => response.error.as_deref().map(model_error_contract),
+    }
+}
+
+/// The contract for a provider's refusal, from its class. The same answers the
+/// sentence arms below give the same refusals, without reading the sentence.
+pub fn provider_refusal_contract(kind: ProviderRefusal) -> ModelErrorContract {
+    match kind {
+        ProviderRefusal::RateLimited => ModelErrorContract {
+            status: StatusCode::TOO_MANY_REQUESTS,
+            error_type: "capacity_error",
+            code: "provider_rate_limited",
+            retryable: true,
+        },
+        ProviderRefusal::QuotaExhausted => ModelErrorContract {
+            status: StatusCode::BAD_GATEWAY,
+            error_type: "provider_error",
+            code: "provider_quota_exhausted",
+            retryable: false,
+        },
+        ProviderRefusal::DependencyUnavailable => ModelErrorContract {
+            status: StatusCode::SERVICE_UNAVAILABLE,
+            error_type: "dependency_error",
+            code: "dependency_unavailable",
+            retryable: true,
+        },
+        ProviderRefusal::Authentication | ProviderRefusal::ProviderFailure => ModelErrorContract {
+            status: StatusCode::BAD_GATEWAY,
+            error_type: "provider_error",
+            code: "provider_failure",
+            retryable: false,
+        },
+    }
 }
 
 /// Classify one refusal sentence into the contract a client is answered with.

@@ -18,11 +18,15 @@ pub(in crate::subscription_dispatch::dispatch) fn refused_credential(
     response.failure_kind == Some(ProviderRefusal::Authentication)
 }
 
-/// The provider refused because the credential's quota or rate window is spent.
+/// The provider refused because the credential's rate window or paid balance
+/// is spent; another account may serve.
 pub(in crate::subscription_dispatch::dispatch) fn exhausted_credential(
     response: &ModelResponse,
 ) -> bool {
-    response.failure_kind == Some(ProviderRefusal::RateLimited)
+    matches!(
+        response.failure_kind,
+        Some(ProviderRefusal::RateLimited | ProviderRefusal::QuotaExhausted)
+    )
 }
 
 /// Retire one credential the provider has permanently refused, and say so in the

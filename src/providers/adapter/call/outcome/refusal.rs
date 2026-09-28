@@ -95,15 +95,36 @@ pub(in crate::providers::adapter) fn provider_refusal(
         .chars()
         .take(max_provider_error_chars())
         .collect::<String>();
-    (refusal_class(status).contract_kind(), detail)
+    (refusal_class(status, body).contract_kind(), detail)
 }
 
-/// The class of a refused answer, from its status. The kind clients read is
-/// exactly what it has always been, 404, 407, 408 and 410 attributed to nothing
-/// and 504 called an unreachable dependency included.
-pub(in crate::providers::adapter) fn refusal_class(status: reqwest::StatusCode) -> ProviderRefusal {
+/// The OpenAI-shape error code for a spent paid balance, read from the error
+/// object's `code` or `type` field.
+const INSUFFICIENT_QUOTA: &str = "insufficient_quota";
+
+/// The class of a refused answer, from its status, and for a 429 from the error
+/// object's code, which is the only thing that tells a spent balance from a
+/// rate window. The kind clients read is exactly what it has always been, 404,
+/// 407, 408 and 410 attributed to nothing and 504 called an unreachable
+/// dependency included.
+pub(in crate::providers::adapter) fn refusal_class(
+    status: reqwest::StatusCode,
+    body: &str,
+) -> ProviderRefusal {
     if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-        ProviderRefusal::RateLimited
+        let error = serde_json::from_str::<Value>(body)
+            .ok()
+            .and_then(|value| value.get("error").cloned());
+        let spent = error.as_ref().is_some_and(|error| {
+            ["code", "type"]
+                .iter()
+                .any(|field| error.get(field).and_then(Value::as_str) == Some(INSUFFICIENT_QUOTA))
+        });
+        if spent {
+            ProviderRefusal::QuotaExhausted
+        } else {
+            ProviderRefusal::RateLimited
+        }
     } else if matches!(
         status,
         reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN
@@ -144,6 +165,6 @@ pub(in crate::providers::adapter) fn provider_error(
         refused.render()
     );
     let mut failure = attempted_failure(route_id, format!("{kind}: {detail}"));
-    failure.failure_kind = Some(refusal_class(status));
+    failure.failure_kind = Some(refusal_class(status, body));
     failure
 }
