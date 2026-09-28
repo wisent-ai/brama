@@ -23,7 +23,7 @@ use super::dialect::tool_schema::normalized_tools_value;
 use super::plan::headers::{limit_readings, with_limits};
 use super::registry::{valid_model_id, valid_provider_id};
 use crate::subscription_dispatch::model_catalog::{self, CatalogProtocol};
-use crate::types::{ModelRequest, ModelResponse};
+use crate::types::{GatewayRefusal, ModelRequest, ModelResponse};
 use endpoint::{catalog_endpoint, catalog_provider_base_url};
 use google_generate::{google_payload, model_response_from_google};
 
@@ -33,24 +33,34 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
     secret: &str,
 ) -> ModelResponse {
     let Some((provider_id, model_id)) = request.model.split_once('/') else {
-        return ModelResponse::failure(&request.model, "invalid provider/model route".into());
+        return ModelResponse::refused(
+            &request.model,
+            GatewayRefusal::InvalidRequest,
+            "invalid provider/model route".into(),
+        );
     };
     if !valid_provider_id(provider_id) || !valid_model_id(model_id) {
-        return ModelResponse::failure(&request.model, "invalid provider/model route".into());
+        return ModelResponse::refused(
+            &request.model,
+            GatewayRefusal::InvalidRequest,
+            "invalid provider/model route".into(),
+        );
     }
     let catalog = match model_catalog::snapshot().await {
         Ok(catalog) => catalog,
         Err(error) => return ModelResponse::failure(&request.model, error),
     };
     let Some(descriptor) = catalog.providers.get(provider_id) else {
-        return ModelResponse::failure(
+        return ModelResponse::refused(
             &request.model,
+            GatewayRefusal::DependencyUnavailable,
             format!("provider `{provider_id}` is not in the Wisent catalog"),
         );
     };
     if !descriptor.executable() {
-        return ModelResponse::failure(
+        return ModelResponse::refused(
             &request.model,
+            GatewayRefusal::ProviderFailure,
             format!("provider `{provider_id}` uses an unsupported protocol"),
         );
     }
@@ -59,8 +69,9 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
         .iter()
         .any(|model| model.route_id == request.model)
     {
-        return ModelResponse::failure(
+        return ModelResponse::refused(
             &request.model,
+            GatewayRefusal::ProviderFailure,
             format!(
                 "model `{}` is not advertised by provider `{provider_id}`",
                 model_id
@@ -131,8 +142,9 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
                     segments.push(&format!("{model_id}:generateContent"));
                 }
                 Err(()) => {
-                    return ModelResponse::failure(
+                    return ModelResponse::refused(
                         &request.model,
+                        GatewayRefusal::ProviderFailure,
                         "provider API endpoint cannot be a base URL".into(),
                     )
                 }

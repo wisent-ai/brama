@@ -214,6 +214,23 @@ pub enum ProviderRefusal {
     DependencyUnavailable,
     /// Any other status: this request was refused, not the credential.
     ProviderFailure,
+    /// Brama refused the request itself before or instead of asking a provider.
+    Gateway(GatewayRefusal),
+}
+
+/// Why Brama refused a request on its own account, stated where the refusal is
+/// built so the HTTP edge answers from the class and never from the sentence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GatewayRefusal {
+    /// The caller did not prove who it is.
+    Unauthenticated,
+    /// The route, selector or shape asked for does not exist here.
+    InvalidRequest,
+    /// Something Brama depends on (catalog, credential source) did not answer.
+    DependencyUnavailable,
+    /// The route cannot be served, for a reason the caller cannot repair.
+    ProviderFailure,
 }
 
 impl ProviderRefusal {
@@ -223,8 +240,14 @@ impl ProviderRefusal {
             Self::RateLimited => "provider_rate_limited",
             Self::QuotaExhausted => "provider_quota_exhausted",
             Self::Authentication => "provider_authentication",
-            Self::DependencyUnavailable => "dependency_unavailable",
-            Self::ProviderFailure => "provider_failure",
+            Self::DependencyUnavailable | Self::Gateway(GatewayRefusal::DependencyUnavailable) => {
+                "dependency_unavailable"
+            }
+            Self::ProviderFailure | Self::Gateway(GatewayRefusal::ProviderFailure) => {
+                "provider_failure"
+            }
+            Self::Gateway(GatewayRefusal::Unauthenticated) => "unauthenticated",
+            Self::Gateway(GatewayRefusal::InvalidRequest) => "invalid_request",
         }
     }
 }
@@ -245,5 +268,12 @@ impl ModelResponse {
             limits: Vec::new(),
             failure_kind: None,
         }
+    }
+
+    /// A refusal Brama builds itself, with its class stated.
+    pub fn refused(model: &str, class: GatewayRefusal, error: String) -> Self {
+        let mut response = Self::failure(model, error);
+        response.failure_kind = Some(ProviderRefusal::Gateway(class));
+        response
     }
 }

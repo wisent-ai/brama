@@ -3,7 +3,7 @@
 
 use axum::http::HeaderMap;
 
-use crate::types::{ModelRequest, ModelResponse};
+use crate::types::{GatewayRefusal, ModelRequest, ModelResponse};
 
 use super::super::caller_identity::authenticate_agent;
 use super::super::catalogue::route::provider_for;
@@ -119,7 +119,11 @@ pub async fn dispatch_subscription(
     let provider = match provider_for(&request.model) {
         Some(provider) => provider,
         None => {
-            return ModelResponse::failure(&request.model, "unknown provider/model route".into())
+            return ModelResponse::refused(
+                &request.model,
+                GatewayRefusal::InvalidRequest,
+                "unknown provider/model route".into(),
+            )
         }
     };
     let agent_id = match authenticate_agent(headers, raw_body).await {
@@ -136,7 +140,11 @@ pub async fn dispatch_subscription_for_agent(
     let provider = match provider_for(&request.model) {
         Some(provider) => provider,
         None => {
-            return ModelResponse::failure(&request.model, "unknown provider/model route".into())
+            return ModelResponse::refused(
+                &request.model,
+                GatewayRefusal::InvalidRequest,
+                "unknown provider/model route".into(),
+            )
         }
     };
     dispatch_subscription_attempt(provider, agent_id, request).await

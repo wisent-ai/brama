@@ -15,7 +15,7 @@ use std::time::Instant;
 
 use serde_json::Value;
 
-use crate::types::{ModelRequest, ModelResponse};
+use crate::types::{GatewayRefusal, ModelRequest, ModelResponse};
 
 use call::credential::{authorize_provider, provider_body, provider_credential_key};
 use call::outcome::refusal::{attempted_failure, provider_error, transport_failure};
@@ -57,8 +57,9 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
     // Naming one of its routes on a chat call is the caller's mistake, and it
     // is answered here rather than as a 404 from a URL this build invented.
     if descriptor.chat_path.is_empty() {
-        return ModelResponse::failure(
+        return ModelResponse::refused(
             &request.model,
+            GatewayRefusal::InvalidRequest,
             format!(
                 "invalid_request: route `{}` serves typed decisions only; call POST /v1/decisions",
                 request.model
@@ -156,14 +157,16 @@ pub async fn dispatch_stream(
     secret: &str,
 ) -> Result<crate::providers::stream::ProviderStream, ModelResponse> {
     let Some((descriptor, model_id)) = route(&request.model) else {
-        return Err(ModelResponse::failure(
+        return Err(ModelResponse::refused(
             &request.model,
+            GatewayRefusal::InvalidRequest,
             "streaming is supported for provider routes only".to_string(),
         ));
     };
     if descriptor.chat_path.is_empty() {
-        return Err(ModelResponse::failure(
+        return Err(ModelResponse::refused(
             &request.model,
+            GatewayRefusal::InvalidRequest,
             format!(
                 "invalid_request: route `{}` serves typed decisions only; call POST /v1/decisions",
                 request.model

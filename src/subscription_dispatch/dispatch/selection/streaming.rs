@@ -3,7 +3,7 @@
 
 use axum::http::HeaderMap;
 
-use crate::types::{ModelRequest, ModelResponse};
+use crate::types::{GatewayRefusal, ModelRequest, ModelResponse};
 
 use super::super::caller_identity::authenticate_agent;
 use super::super::catalogue::route::provider_for;
@@ -30,8 +30,9 @@ pub async fn dispatch_subscription_stream(
     let provider = match provider_for(&request.model) {
         Some(provider) => provider,
         None => {
-            return Err(ModelResponse::failure(
+            return Err(ModelResponse::refused(
                 &request.model,
+                GatewayRefusal::InvalidRequest,
                 "unknown provider/model route".into(),
             ))
         }
@@ -52,8 +53,9 @@ pub async fn dispatch_subscription_stream_for_agent(
     let provider = match provider_for(&request.model) {
         Some(provider) => provider,
         None => {
-            return Err(ModelResponse::failure(
+            return Err(ModelResponse::refused(
                 &request.model,
+                GatewayRefusal::InvalidRequest,
                 "unknown provider/model route".into(),
             ))
         }

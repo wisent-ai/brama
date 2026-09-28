@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use crate::gateway::broker;
 use crate::providers::adapter as provider_registry;
-use crate::types::{ModelRequest, ModelResponse};
+use crate::types::{GatewayRefusal, ModelRequest, ModelResponse};
 
 use super::catalogue::route::{provider_for, provider_requires_caller_identity};
 use super::routed_stream::RoutedStream;
@@ -16,20 +16,26 @@ pub async fn dispatch_direct(request: &ModelRequest) -> ModelResponse {
     let provider = match provider_for(&request.model) {
         Some(provider) => provider,
         None => {
-            return ModelResponse::failure(&request.model, "unknown provider/model route".into())
+            return ModelResponse::refused(
+                &request.model,
+                GatewayRefusal::InvalidRequest,
+                "unknown provider/model route".into(),
+            )
         }
     };
     if provider_requires_caller_identity(&request.model) {
-        return ModelResponse::failure(
+        return ModelResponse::refused(
             &request.model,
+            GatewayRefusal::Unauthenticated,
             "auth: caller identity is required for subscription providers".into(),
         );
     }
     let credential = match broker::provider_credential(provider).await {
         Some(credential) => credential,
         None => {
-            return ModelResponse::failure(
+            return ModelResponse::refused(
                 &request.model,
+                GatewayRefusal::DependencyUnavailable,
                 format!("direct '{provider}' credential is unavailable"),
             )
         }
@@ -37,8 +43,9 @@ pub async fn dispatch_direct(request: &ModelRequest) -> ModelResponse {
     let credential = match credential.expose_utf8() {
         Ok(credential) => credential,
         Err(_) => {
-            return ModelResponse::failure(
+            return ModelResponse::refused(
                 &request.model,
+                GatewayRefusal::ProviderFailure,
                 format!("direct '{provider}' credential is not valid UTF-8"),
             )
         }
@@ -189,23 +196,26 @@ pub async fn dispatch_direct_stream(request: &ModelRequest) -> Result<RoutedStre
     let provider = match provider_for(&request.model) {
         Some(provider) => provider,
         None => {
-            return Err(ModelResponse::failure(
+            return Err(ModelResponse::refused(
                 &request.model,
+                GatewayRefusal::InvalidRequest,
                 "unknown provider/model route".into(),
             ))
         }
     };
     if provider_requires_caller_identity(&request.model) {
-        return Err(ModelResponse::failure(
+        return Err(ModelResponse::refused(
             &request.model,
+            GatewayRefusal::Unauthenticated,
             "auth: caller identity is required for subscription providers".into(),
         ));
     }
     let credential = match broker::provider_credential(provider).await {
         Some(credential) => credential,
         None => {
-            return Err(ModelResponse::failure(
+            return Err(ModelResponse::refused(
                 &request.model,
+                GatewayRefusal::DependencyUnavailable,
                 format!("direct '{provider}' credential is unavailable"),
             ))
         }
@@ -213,8 +223,9 @@ pub async fn dispatch_direct_stream(request: &ModelRequest) -> Result<RoutedStre
     let credential = match credential.expose_utf8() {
         Ok(credential) => credential,
         Err(_) => {
-            return Err(ModelResponse::failure(
+            return Err(ModelResponse::refused(
                 &request.model,
+                GatewayRefusal::ProviderFailure,
                 format!("direct '{provider}' credential is not valid UTF-8"),
             ))
         }

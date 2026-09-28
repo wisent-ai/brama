@@ -5,7 +5,7 @@
 
 use axum::http::StatusCode;
 
-use crate::types::{ModelResponse, ProviderRefusal};
+use crate::types::{GatewayRefusal, ModelResponse, ProviderRefusal};
 
 /// What Brama answers a client with for one refusal sentence.
 ///
@@ -47,16 +47,31 @@ pub fn provider_refusal_contract(kind: ProviderRefusal) -> ModelErrorContract {
             code: "provider_quota_exhausted",
             retryable: false,
         },
-        ProviderRefusal::DependencyUnavailable => ModelErrorContract {
+        ProviderRefusal::DependencyUnavailable
+        | ProviderRefusal::Gateway(GatewayRefusal::DependencyUnavailable) => ModelErrorContract {
             status: StatusCode::SERVICE_UNAVAILABLE,
             error_type: "dependency_error",
             code: "dependency_unavailable",
             retryable: true,
         },
-        ProviderRefusal::Authentication | ProviderRefusal::ProviderFailure => ModelErrorContract {
+        ProviderRefusal::Authentication
+        | ProviderRefusal::ProviderFailure
+        | ProviderRefusal::Gateway(GatewayRefusal::ProviderFailure) => ModelErrorContract {
             status: StatusCode::BAD_GATEWAY,
             error_type: "provider_error",
             code: "provider_failure",
+            retryable: false,
+        },
+        ProviderRefusal::Gateway(GatewayRefusal::Unauthenticated) => ModelErrorContract {
+            status: StatusCode::UNAUTHORIZED,
+            error_type: "authentication_error",
+            code: "unauthenticated",
+            retryable: false,
+        },
+        ProviderRefusal::Gateway(GatewayRefusal::InvalidRequest) => ModelErrorContract {
+            status: StatusCode::BAD_REQUEST,
+            error_type: "request_error",
+            code: "invalid_request",
             retryable: false,
         },
     }
