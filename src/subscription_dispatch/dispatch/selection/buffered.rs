@@ -24,7 +24,7 @@ pub async fn dispatch_any_subscription(
 ) -> ModelResponse {
     let agent_id = match authenticate_agent(headers, raw_body).await {
         Ok(agent_id) => agent_id,
-        Err(e) => return ModelResponse::failure(&request.model, e),
+        Err(e) => return unauthenticated(request, e),
     };
     let models = match active_supported_models_for_agent(&agent_id).await {
         Ok(models) => models,
@@ -48,7 +48,7 @@ pub async fn dispatch_best_subscription(
 ) -> ModelResponse {
     let agent_id = match authenticate_agent(headers, raw_body).await {
         Ok(agent_id) => agent_id,
-        Err(e) => return ModelResponse::failure(&request.model, e),
+        Err(e) => return unauthenticated(request, e),
     };
     dispatch_best_subscription_for_agent(&agent_id, request, preferred).await
 }
@@ -74,7 +74,7 @@ pub async fn dispatch_any_vision_capable_subscription(
 ) -> ModelResponse {
     let agent_id = match authenticate_agent(headers, raw_body).await {
         Ok(agent_id) => agent_id,
-        Err(e) => return ModelResponse::failure(&request.model, e),
+        Err(e) => return unauthenticated(request, e),
     };
     let models = match active_vision_capable_models_for_agent(&agent_id).await {
         Ok(models) => models,
@@ -94,7 +94,7 @@ pub async fn dispatch_task_subscription(
 ) -> ModelResponse {
     let agent_id = match authenticate_agent(headers, raw_body).await {
         Ok(id) => id,
-        Err(e) => return ModelResponse::failure(&request.model, e),
+        Err(e) => return unauthenticated(request, e),
     };
     let models = match task_quality_models(&agent_id, task).await {
         Ok(models) => models,
@@ -128,7 +128,7 @@ pub async fn dispatch_subscription(
     };
     let agent_id = match authenticate_agent(headers, raw_body).await {
         Ok(agent_id) => agent_id,
-        Err(error) => return ModelResponse::failure(&request.model, error),
+        Err(error) => return unauthenticated(request, error),
     };
     dispatch_subscription_attempt(provider, &agent_id, request).await
 }
@@ -148,4 +148,10 @@ pub async fn dispatch_subscription_for_agent(
         }
     };
     dispatch_subscription_attempt(provider, agent_id, request).await
+}
+
+/// A caller whose signature could not be checked: every `authenticate_agent`
+/// refusal is an unauthenticated caller, whatever its sentence says.
+pub(super) fn unauthenticated(request: &ModelRequest, error: String) -> ModelResponse {
+    ModelResponse::refused(&request.model, GatewayRefusal::Unauthenticated, error)
 }

@@ -14,6 +14,7 @@ use super::super::ranking::candidates::{
 use super::super::ranking::task_quality::task_quality_models;
 use super::super::rotation::streaming::attempt_subscription_stream;
 use super::super::routed_stream::RoutedStream;
+use super::buffered::unauthenticated;
 use super::ranked_walk::{
     dispatch_ranked_models_stream, ANY_SUBSCRIPTION_CONTEXT, ANY_VISION_CONTEXT,
 };
@@ -39,7 +40,7 @@ pub async fn dispatch_subscription_stream(
     };
     let agent_id = match authenticate_agent(headers, raw_body).await {
         Ok(agent_id) => agent_id,
-        Err(error) => return Err(ModelResponse::failure(&request.model, error)),
+        Err(error) => return Err(unauthenticated(request, error)),
     };
     attempt_subscription_stream(provider, &agent_id, request)
         .await
@@ -72,7 +73,7 @@ pub async fn dispatch_any_subscription_stream(
 ) -> Result<RoutedStream, ModelResponse> {
     let agent_id = match authenticate_agent(headers, raw_body).await {
         Ok(agent_id) => agent_id,
-        Err(e) => return Err(ModelResponse::failure(&request.model, e)),
+        Err(e) => return Err(unauthenticated(request, e)),
     };
     let models = match active_supported_models_for_agent(&agent_id).await {
         Ok(models) => models,
@@ -93,7 +94,7 @@ pub async fn dispatch_best_subscription_stream(
 ) -> Result<RoutedStream, ModelResponse> {
     let agent_id = match authenticate_agent(headers, raw_body).await {
         Ok(agent_id) => agent_id,
-        Err(e) => return Err(ModelResponse::failure(&request.model, e)),
+        Err(e) => return Err(unauthenticated(request, e)),
     };
     dispatch_best_subscription_stream_for_agent(&agent_id, request, preferred).await
 }
@@ -117,7 +118,7 @@ pub async fn dispatch_any_vision_capable_subscription_stream(
 ) -> Result<RoutedStream, ModelResponse> {
     let agent_id = match authenticate_agent(headers, raw_body).await {
         Ok(agent_id) => agent_id,
-        Err(e) => return Err(ModelResponse::failure(&request.model, e)),
+        Err(e) => return Err(unauthenticated(request, e)),
     };
     let models = match active_vision_capable_models_for_agent(&agent_id).await {
         Ok(models) => models,
@@ -134,7 +135,7 @@ pub async fn dispatch_task_subscription_stream(
 ) -> Result<RoutedStream, ModelResponse> {
     let agent_id = match authenticate_agent(headers, raw_body).await {
         Ok(id) => id,
-        Err(e) => return Err(ModelResponse::failure(&request.model, e)),
+        Err(e) => return Err(unauthenticated(request, e)),
     };
     let models = match task_quality_models(&agent_id, task).await {
         Ok(models) => models,
