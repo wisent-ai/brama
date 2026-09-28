@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>brama review — Brama CLI Docs</title>
+  <meta name="description" content="Review a change through a Brama gateway with read and search tools confined to one directory; the typed verdict is the exit status.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/cli/review">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>brama review</h2><a class="active" aria-current="page" href="/docs/cli/review">review</a><a href="/docs/cli/decide">decide</a><a href="/docs/cli">CLI tree</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/http-api">HTTP API</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama CLI command reference</p>
+      <article class="doc"><h1 id="brama-review"><code>brama review</code><a class="headerlink" href="#brama-review" title="Link to this section">&para;</a></h1>
+<p>Ask a Brama gateway to review one change. The model gets the caller's instructions and request, may read and search the files of one directory, and ends by submitting a typed verdict: <code>approve</code> or <code>request_changes</code> with the review text. The verdict is the exit status, so a pull-request gate is the command itself.</p>
+<h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">brama review --gateway &lt;URL&gt; --model &lt;ALIAS&gt; --instructions &lt;FILE&gt; --request &lt;FILE&gt; --root &lt;DIR&gt; --max-turns &lt;N&gt; [--token-env &lt;NAME&gt;] [--output &lt;FILE&gt;] [--json]</code></pre>
+<table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>--gateway &lt;URL&gt;</code></td><td>required</td><td>Base URL of the gateway, for example <code>https://brama.wisent.com</code>. The review is asked of its <code>POST /v1/chat/completions</code>.</td></tr>
+<tr><td><code>--model &lt;ALIAS&gt;</code></td><td>required</td><td>The alias the review is asked of; it must be a route that accepts tools.</td></tr>
+<tr><td><code>--instructions &lt;FILE&gt;</code></td><td>required</td><td>The reviewer's instructions, sent as the system message. The repository owns them.</td></tr>
+<tr><td><code>--request &lt;FILE&gt;</code></td><td>required</td><td>What is reviewed: the change's description, the files it touches, its diff.</td></tr>
+<tr><td><code>--root &lt;DIR&gt;</code></td><td>required</td><td>The only directory the model can read or search. Every path is resolved, symlinks included, and refused when it lands outside.</td></tr>
+<tr><td><code>--max-turns &lt;N&gt;</code></td><td>required</td><td>Most model turns before the review fails as unfinished.</td></tr>
+<tr><td><code>--token-env &lt;NAME&gt;</code></td><td>optional; <code>BRAMA_TOKEN</code></td><td>The environment variable holding the gateway bearer.</td></tr>
+<tr><td><code>--output &lt;FILE&gt;</code></td><td>optional</td><td>Also write the review text to this file, for posting it (for example <code>gh pr review --comment --body-file</code>).</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td>Print <code>{"verdict", "review", "turns"}</code> instead of the review text.</td></tr>
+</tbody></table>
+<h2 id="tools">The model's tools<a class="headerlink" href="#tools" title="Link to this section">&para;</a></h2>
+<table><thead><tr><th>Tool</th><th>What it answers</th></tr></thead><tbody>
+<tr><td><code>read_file {path, start_line?, end_line?}</code></td><td>Numbered lines of one file under the root; the whole file without a range.</td></tr>
+<tr><td><code>search {query, case_sensitive?}</code></td><td><code>path:line:text</code> for every line of every file under the root (<code>.git</code> skipped, symlinks not followed) holding the literal string.</td></tr>
+<tr><td><code>submit_verdict {verdict, review}</code></td><td>Ends the review. <code>verdict</code> is <code>approve</code> or <code>request_changes</code>; the review text must be non-empty.</td></tr>
+</tbody></table>
+<p>A tool call that breaks its contract gets <code>tool refused: &lt;reason&gt;</code> back and the model may correct it. A turn with no tool call is answered with a request to submit the verdict. The verdict is never read out of prose.</p>
+<h2 id="exit-status">Exit status<a class="headerlink" href="#exit-status" title="Link to this section">&para;</a></h2>
+<table><thead><tr><th>Status</th><th>Meaning</th></tr></thead><tbody>
+<tr><td>0</td><td>The model approved.</td></tr>
+<tr><td>3</td><td>The model requested changes. The review text was printed (and written to <code>--output</code>).</td></tr>
+<tr><td>1</td><td>No review: see the refusals below. Nothing was approved.</td></tr>
+</tbody></table>
+<h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
+<p>Each prints <code>review failed: &lt;reason&gt;</code> on standard error and exits 1.</p>
+<table><thead><tr><th>Reason</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>BRAMA_TOKEN is not set</code></td><td>The variable named by <code>--token-env</code> is missing or blank.</td></tr>
+<tr><td><code>&lt;FILE&gt; is empty</code> or <code>&lt;FILE&gt;: &lt;io error&gt;</code></td><td>The instructions or request could not be read, or hold nothing.</td></tr>
+<tr><td><code>review root &lt;DIR&gt;: &lt;io error&gt;</code></td><td>The root does not exist or is not a directory.</td></tr>
+<tr><td><code>&lt;URL&gt; answered &lt;status&gt;: &lt;body&gt;</code></td><td>The gateway refused the completion; its own status and body follow.</td></tr>
+<tr><td><code>&lt;URL&gt; could not be reached: &lt;error&gt;</code></td><td>No connection to the gateway.</td></tr>
+<tr><td><code>submit_verdict carries no valid verdict</code> / <code>no review text</code></td><td>The model submitted outside the schema; it is not read as either verdict.</td></tr>
+<tr><td><code>the model did not submit a verdict within N turns</code></td><td><code>--max-turns</code> ran out.</td></tr>
+</tbody></table>
+<h2 id="example">Example: a Supabase schema gate<a class="headerlink" href="#example" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">$ gh pr view "$PR_NUMBER" --json body --jq .body &gt; review/request.md
+$ git diff --unified=40 "$BASE_SHA...$HEAD_SHA" -- supabase/migrations &gt;&gt; review/request.md
+$ brama review --gateway https://brama.wisent.com --model wisent-backend/evaluation \
+    --instructions release/schema-review.md --request review/request.md \
+    --root supabase/migrations --max-turns 10 --output review/review.md
+$ gh pr review "$PR_NUMBER" --comment --body-file review/review.md</code></pre>
+<p>See <a href="/docs/cli/decide"><code>brama decide</code></a> or <a href="/docs/cli">the CLI tree</a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

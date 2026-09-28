@@ -274,6 +274,10 @@
       "destination": "/docs/cli/decide.html"
     },
     {
+      "source": "/docs/cli/review",
+      "destination": "/docs/cli/review.html"
+    },
+    {
       "source": "/docs/http-api/:slug",
       "destination": "/docs/http-api/:slug.html"
     },

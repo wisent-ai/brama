@@ -7,10 +7,11 @@ use cli::aliases::{AliasesArgs, RoutesCommand};
 use cli::catalogue::{CatalogueCommand, ModelsArgs};
 use cli::decisions::DecideArgs;
 use cli::diagnostics::{CollectTaskQualityArgs, TestArgs};
+use cli::launcher::LauncherCommand;
 use cli::media::{ImageArgs, SpeakArgs, VideoCommand};
 use cli::onboarding::OnboardArgs;
 use cli::probe::ProbeArgs;
-use cli::launcher::LauncherCommand;
+use cli::review::ReviewArgs;
 use cli::serving::ServeArgs;
 use cli::stub::StubArgs;
 use cli::subscriptions::credentials::SubscriptionCommand;
@@ -43,6 +44,9 @@ enum Commands {
     Mcp,
     /// Answer typed questions through a decision alias
     Decide(DecideArgs),
+    /// Review a change through a gateway with read and search tools confined
+    /// to one directory; exits 0 on approve, 3 on request changes, 1 on failure
+    Review(ReviewArgs),
     /// Report the subscription pool this gateway routes over
     Subscriptions(SubscriptionsArgs),
     /// Report every model alias this gateway declares and whether it can serve
@@ -121,6 +125,7 @@ async fn main() {
         Commands::Detect => cli::diagnostics::detect(),
         Commands::Mcp => cli::serving::mcp(),
         Commands::Decide(args) => cli::decisions::decide(args).await,
+        Commands::Review(args) => cli::review::run(args).await,
         Commands::Subscriptions(args) => cli::subscriptions::report(args).await,
         Commands::Aliases(args) => cli::aliases::report(args).await,
         Commands::Models(args) => cli::catalogue::models(args).await,

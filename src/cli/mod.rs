@@ -3,13 +3,14 @@
 pub(crate) mod adoption;
 pub(crate) mod aliases;
 pub(crate) mod catalogue;
-pub(crate) mod diagnose;
 pub(crate) mod decisions;
+pub(crate) mod diagnose;
 pub(crate) mod diagnostics;
 pub(crate) mod launcher;
 pub(crate) mod media;
 pub(crate) mod onboarding;
 pub(crate) mod probe;
+pub(crate) mod review;
 pub(crate) mod serving;
 pub(crate) mod stub;
 pub(crate) mod subscriptions;

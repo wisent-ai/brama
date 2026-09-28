@@ -24,6 +24,19 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-review">Unreleased: <code>brama review</code>, a pull-request gate in the product<a class="headerlink" href="#unreleased-review" title="Link to this section">&para;</a></h2>
+<p>A repository that gated its pull requests on a model review carried its own
+copy of the loop: wisent-supabase-wisent-app's Python script sent the diff to
+the gateway, served the model two file tools, and read the verdict out of a
+<code>Verdict:</code> line in the prose. <a href="/docs/cli/review"><code>brama review</code></a>
+is that loop once. The repository supplies its instructions, the request and
+the one directory the model may read; the model reads and searches files there
+(every path resolved and refused outside it) and ends by calling
+<code>submit_verdict</code> with <code>approve</code> or <code>request_changes</code>, which
+becomes the exit status 0 or 3. A missing token, an unreadable file, a gateway
+refusal, a verdict outside the schema or a review that runs out of
+<code>--max-turns</code> exits 1 and names the cause, so nothing that was not
+reviewed passes.</p>
 <h2 id="candidate-media-and-categories">Image, video and voice, and a catalogue that says what a model is<a class="headerlink" href="#candidate-media-and-categories" title="Link to this section">&para;</a></h2>
 <p>Brama routed text. It now routes the three generation shapes that are not
 text: <code>POST /v1/images/generations</code>, <code>POST /v1/videos</code> with
