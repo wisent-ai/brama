@@ -78,8 +78,3 @@ if [ -n "${BRAMA_BIN_OVERRIDE:-}" ]; then
     config_dir="$BRAMA_SKARBIEC_CONFIG_DIR"
   fi
 fi
-PYTHON_BIN=${PYTHON_BIN:-python3}
-command -v "$PYTHON_BIN" >/dev/null 2>&1 || {
-  printf '%s\n' "PYTHON_BIN is not executable: $PYTHON_BIN" >/dev/stderr
-  false
-}

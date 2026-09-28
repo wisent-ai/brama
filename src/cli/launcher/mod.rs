@@ -3,6 +3,7 @@
 //! interpreter the host may not have.
 
 mod catalog;
+mod identities;
 mod policy;
 
 use std::path::PathBuf;
@@ -38,6 +39,30 @@ pub(crate) enum LauncherCommand {
     /// Create the first inference-route registry at PATH from
     /// BRAMA_MODEL_ALIASES
     SeedRoutes { path: PathBuf },
+    /// The preloaded model-router client table (JSON) for BRAMA_ALLOWED_MODELS
+    ModelRouterIdentities {
+        #[arg(long)]
+        router: PathBuf,
+        /// JSON list of the backend client's exact aliases
+        #[arg(long)]
+        backend_models: String,
+    },
+    /// Every product's request-sign identity (JSON object)
+    RequestSignIdentities {
+        #[arg(long)]
+        router: PathBuf,
+    },
+    /// One non-empty field of one vault item, printed bare
+    ItemField {
+        #[arg(long)]
+        router: PathBuf,
+        item: String,
+        field: String,
+    },
+}
+
+fn printed(result: Result<String, String>) -> Result<(), String> {
+    result.map(|text| print!("{text}"))
 }
 
 pub(crate) fn run(command: LauncherCommand) {
@@ -50,6 +75,11 @@ pub(crate) fn run(command: LauncherCommand) {
         LauncherCommand::SeedRoutes { path } => std::env::var("BRAMA_MODEL_ALIASES")
             .map_err(|_| "BRAMA_MODEL_ALIASES is required".to_string())
             .and_then(|aliases| policy::seed_routes(&path, &aliases)),
+        LauncherCommand::ModelRouterIdentities { router, backend_models } => std::env::var("BRAMA_ALLOWED_MODELS")
+            .map_err(|_| "BRAMA_ALLOWED_MODELS is required".to_string())
+            .and_then(|allowed| printed(identities::model_router(&router, &allowed, &backend_models))),
+        LauncherCommand::RequestSignIdentities { router } => printed(identities::request_sign(&router)),
+        LauncherCommand::ItemField { router, item, field } => printed(identities::item_field(&router, &item, &field)),
     };
     if let Err(detail) = result {
         eprintln!("{detail}");
