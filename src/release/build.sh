@@ -69,7 +69,7 @@ if [[ -n "${WISENT_INPUTS_DIR:-}" ]]; then
   echo_web_source=${WISENT_INPUT_ECHO_WEB_DIR:?release manifest must supply echo_web}
   wisent_errors_source=${WISENT_INPUT_WISENT_ERRORS_DIR:?release manifest must supply wisent_errors}
   build_source="$build_root/source"
-  python3 -S "$source_dir/src/release/prepare_inputs.py" "$source_dir" "$build_source" \
+  "$source_dir/src/release/prepare_inputs.sh" "$source_dir" "$build_source" \
     "wisent-onboarding-client=$echo_web_source/crates/onboarding-client" \
     "wisent-errors=$wisent_errors_source/rust"
   cargo_overrides=(--config "$build_source/release-inputs.toml")
