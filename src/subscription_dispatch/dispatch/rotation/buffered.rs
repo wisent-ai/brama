@@ -63,6 +63,9 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
     // whole half hour reports as capacity.
     let mut saw_reauthorization_block = false;
     let mut saw_rate_limit_block = false;
+    // Set when a credential was skipped because the provider said its paid
+    // balance is spent: not a wait, so it must not read as capacity.
+    let mut saw_quota_exhausted_block = false;
     // The soonest instant at which a skipped rate-limit block lifts, which is
     // when the wait this refusal asks for actually ends.
     let mut earliest_block_lifts: Option<i64> = None;
@@ -75,11 +78,13 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
         // the last 429 already said.
         if usage::is_blocked(credential_id) {
             let reauthorization = usage::needs_reauthorization(credential_id);
+            let spent = !reauthorization && usage::is_quota_exhausted(credential_id);
             saw_reauthorization_block = saw_reauthorization_block || reauthorization;
-            saw_rate_limit_block |= !reauthorization;
+            saw_quota_exhausted_block |= spent;
+            saw_rate_limit_block |= !reauthorization && !spent;
             // The hour the wait ends is in the ledger; a refusal that omits
             // it is a wait nobody can plan around.
-            if !reauthorization {
+            if !reauthorization && !spent {
                 if let Some(until) = usage::blocked_until_ms(credential_id) {
                     earliest_block_lifts =
                         Some(earliest_block_lifts.map_or(until, |held: i64| held.min(until)));
@@ -247,6 +252,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
             reauthorization_block: saw_reauthorization_block,
             unredeemable_credential: saw_unredeemable_credential,
             rate_limit_block: saw_rate_limit_block,
+            quota_exhausted_block: saw_quota_exhausted_block,
             block_lifts_at_ms: earliest_block_lifts,
         },
         rate_limit_failure,

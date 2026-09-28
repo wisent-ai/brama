@@ -71,7 +71,8 @@ pub use self::plan_window::{
     plan_usage_ttl_ms, plan_windows, used_fraction, PlanWindows, UsageSource,
 };
 pub use self::spend::{
-    blocked_until_ms, is_blocked, record_block, record_call, record_call_from, Block, Measured,
+    blocked_until_ms, is_blocked, is_quota_exhausted, record_block, record_call, record_call_from,
+    Block, Measured,
 };
 
 // The stored reason is a sentence for an operator, not a payload.

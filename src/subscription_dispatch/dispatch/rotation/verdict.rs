@@ -2,7 +2,7 @@
 //! emptied it.
 
 use crate::core::failure::POINT_BOUNDED_ROTATION;
-use crate::types::{GatewayRefusal, ModelRequest, ModelResponse};
+use crate::types::{GatewayRefusal, ModelRequest, ModelResponse, ProviderRefusal};
 use wisent_errors::Failure;
 
 use super::super::refusal::envelope::{failure_detail, refuse_as, refuse_classed};
@@ -24,6 +24,9 @@ pub(super) struct PoolObservations {
     pub(super) unredeemable_credential: bool,
     /// A credential was skipped because its recorded block is a rate limit.
     pub(super) rate_limit_block: bool,
+    /// A credential was skipped because its recorded block is a spent paid
+    /// balance, which no wait lifts.
+    pub(super) quota_exhausted_block: bool,
     /// When the soonest of those blocks lifts, when the ledger recorded it.
     pub(super) block_lifts_at_ms: Option<i64>,
 }
@@ -67,6 +70,25 @@ pub(super) fn emptied_pool_refusal(
             summary,
             None,
         );
+        failure.attempts = provider_attempts;
+        return failure;
+    }
+    // Every member the walk met is out of paid balance and none needs a
+    // sign-in: that is the answer the first request gave from the provider's
+    // own refusal, and the ledger now says it again instead of calling it a
+    // wait.
+    if observed.quota_exhausted_block
+        && credential_refusal.is_none()
+        && !cause.needs_authorization()
+    {
+        let mut failure = refuse_as(
+            request,
+            POINT_BOUNDED_ROTATION,
+            ProviderRefusal::QuotaExhausted.contract_kind(),
+            format!("every usable '{provider}' credential has spent its paid balance"),
+            None,
+        );
+        failure.failure_kind = Some(ProviderRefusal::QuotaExhausted);
         failure.attempts = provider_attempts;
         return failure;
     }

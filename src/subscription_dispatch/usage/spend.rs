@@ -17,7 +17,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::core::failure::{self, IMPACT_CREDENTIAL_BLOCK, POINT_CREDENTIAL_BLOCK};
-use crate::types::ModelResponse;
+use crate::types::{ModelResponse, ProviderRefusal};
 
 use super::{now_ms, read_ledger, with_ledger, CredentialState, UsageSource, REASON_LIMIT};
 
@@ -50,6 +50,12 @@ pub struct Block {
     /// this file, and a reader that does not know this one ignores it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub envelope: Option<String>,
+    /// The provider said the account's paid balance is spent, not that a rate
+    /// window is full. Such a block is no wait the caller can plan around, so a
+    /// rotation that meets it answers quota exhaustion, not capacity. Absent in
+    /// blocks written before this field existed, which were all rate windows.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub quota_exhausted: bool,
 }
 
 /// Record one provider call against the subscription that paid for it.
@@ -141,12 +147,17 @@ pub fn record_block(subscription_id: &str, provider: &str, reason: &str, respons
     let until = from_provider
         .unwrap_or(now.saturating_add(DEFAULT_BLOCK_MS))
         .min(now.saturating_add(MAX_BLOCK_MS));
-    // A block is a rate limit the provider stated. The sentence it stated is
-    // kept in `reason` for the tooling that already reads it and in the
-    // envelope for the operator who needs to know it is transient.
+    // The block carries the class the provider's refusal was read as: a spent
+    // paid balance and a full rate window are both recorded here, and the
+    // next request must answer each the way this one did. The sentence stays
+    // in `reason` for the tooling that already reads it.
+    let quota_exhausted = response.failure_kind == Some(ProviderRefusal::QuotaExhausted);
+    let kind = response
+        .failure_kind
+        .map_or("provider_rate_limited", ProviderRefusal::contract_kind);
     let blocked = failure::envelope(
         POINT_CREDENTIAL_BLOCK,
-        failure::code_for("provider_rate_limited"),
+        failure::code_for(kind),
         IMPACT_CREDENTIAL_BLOCK,
         reason,
     )
@@ -164,6 +175,7 @@ pub fn record_block(subscription_id: &str, provider: &str, reason: &str, respons
             reason: reason.chars().take(REASON_LIMIT).collect(),
             recorded_at_ms: now,
             envelope: Some(blocked.to_json()),
+            quota_exhausted,
         });
     });
 }
@@ -196,5 +208,18 @@ pub fn blocked_until_ms(subscription_id: &str) -> Option<i64> {
             .and_then(|entry| entry.block.as_ref())
             .map(|block| block.blocked_until_ms)
             .filter(|until| *until > now)
+    })
+}
+
+/// Whether this subscription is inside a block whose cause is a spent paid
+/// balance rather than a full rate window.
+pub fn is_quota_exhausted(subscription_id: &str) -> bool {
+    let now = now_ms();
+    read_ledger(|ledger| {
+        ledger
+            .subscriptions
+            .get(subscription_id)
+            .and_then(|entry| entry.block.as_ref())
+            .is_some_and(|block| block.blocked_until_ms > now && block.quota_exhausted)
     })
 }

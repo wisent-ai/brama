@@ -6,14 +6,16 @@ use crate::providers::adapter::call::outcome::refusal::attempted_failure;
 use crate::types::{ModelResponse, ProviderRefusal, ToolCall};
 
 /// The class of a failure the backend reported inside a 200 stream, from the
-/// error object's `code` (the Responses API's documented error codes), since no
-/// HTTP status is left to read once the stream has started.
+/// error object's `code` (the Responses API's documented error codes, read the
+/// way OpenAI's own Codex client reads them), since no HTTP status is left to
+/// read once the stream has started.
 fn stream_failure_class(error: Option<&Value>) -> ProviderRefusal {
     match error
         .and_then(|error| error.get("code"))
         .and_then(Value::as_str)
     {
-        Some("rate_limit_exceeded") => ProviderRefusal::RateLimited,
+        Some("rate_limit_exceeded" | "slow_down") => ProviderRefusal::RateLimited,
+        Some("insufficient_quota") => ProviderRefusal::QuotaExhausted,
         Some("server_error") => ProviderRefusal::DependencyUnavailable,
         _ => ProviderRefusal::ProviderFailure,
     }

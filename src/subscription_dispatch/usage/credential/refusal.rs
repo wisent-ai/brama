@@ -104,6 +104,7 @@ pub fn record_reauthorization_needed(subscription_id: &str, provider: &str, reas
             reason: cause,
             recorded_at_ms: now,
             envelope: Some(recorded.to_json()),
+            quota_exhausted: false,
         });
     });
 }
