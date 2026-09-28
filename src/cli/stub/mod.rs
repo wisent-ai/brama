@@ -45,7 +45,10 @@ fn now() -> u64 {
 }
 
 async fn models() -> Response {
-    json_response(StatusCode::OK, &json!({ "data": [{ "id": "stub-ok" }, { "id": "stub-401" }, { "id": "stub-429" }] }))
+    json_response(
+        StatusCode::OK,
+        &json!({ "data": [{ "id": "stub-ok" }, { "id": "stub-401" }, { "id": "stub-429" }] }),
+    )
 }
 
 fn chunk(model: &str, created: u64, delta: Value, finish: Value) -> Value {
@@ -59,7 +62,11 @@ fn chunk(model: &str, created: u64, delta: Value, finish: Value) -> Value {
 }
 
 async fn completion(Json(request): Json<Value>) -> Response {
-    let model = request.get("model").and_then(Value::as_str).unwrap_or("").to_string();
+    let model = request
+        .get("model")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
     if model == "stub-401" {
         return json_response(
             StatusCode::UNAUTHORIZED,
@@ -71,13 +78,20 @@ async fn completion(Json(request): Json<Value>) -> Response {
             StatusCode::TOO_MANY_REQUESTS,
             &json!({ "error": { "message": "Rate limit reached for stub-429.", "type": "tokens", "code": "rate_limit_exceeded" } }),
         );
-        response.headers_mut().insert(header::RETRY_AFTER, RETRY_AFTER_SECONDS.parse().expect("static header"));
+        response.headers_mut().insert(
+            header::RETRY_AFTER,
+            RETRY_AFTER_SECONDS.parse().expect("static header"),
+        );
         return response;
     }
     let created = now();
     let (prompt, completion_tokens) = USAGE;
     let usage = json!({ "prompt_tokens": prompt, "completion_tokens": completion_tokens, "total_tokens": prompt + completion_tokens });
-    if request.get("stream").and_then(Value::as_bool).unwrap_or(false) {
+    if request
+        .get("stream")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
         let mut body = String::new();
         for piece in ["Hello ", "from ", "the stub."] {
             let part = chunk(&model, created, json!({ "content": piece }), Value::Null);
@@ -113,7 +127,10 @@ pub(crate) async fn serve(args: StubArgs) {
     let listener = match tokio::net::TcpListener::bind(("127.0.0.1", args.port)).await {
         Ok(listener) => listener,
         Err(error) => {
-            eprintln!("stub provider cannot listen on 127.0.0.1:{}: {error}", args.port);
+            eprintln!(
+                "stub provider cannot listen on 127.0.0.1:{}: {error}",
+                args.port
+            );
             std::process::exit(1);
         }
     };

@@ -58,19 +58,30 @@ fn inventory(router: &Path, args: &[&str], vault: &Path) -> Result<Value, String
     let document: Value = serde_json::from_slice(&output.stdout)
         .map_err(|error| format!("broker inventory {} is not JSON: {error}", args.join(" ")))?;
     if !document.get("commands").is_some_and(Value::is_array) {
-        return Err(format!("broker inventory {} has no commands", args.join(" ")));
+        return Err(format!(
+            "broker inventory {} has no commands",
+            args.join(" ")
+        ));
     }
     Ok(document)
 }
 
 fn strings(value: Option<&Value>) -> Vec<String> {
-    value.and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect()
+    value
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::to_string)
+        .collect()
 }
 
 /// The launcher and every stage file beside it that `sh` sources.
 fn family(launcher: &Path) -> Vec<PathBuf> {
     fn walk(directory: &Path, into: &mut Vec<PathBuf>) {
-        let Ok(entries) = std::fs::read_dir(directory) else { return };
+        let Ok(entries) = std::fs::read_dir(directory) else {
+            return;
+        };
         let mut paths: Vec<PathBuf> = entries.flatten().map(|entry| entry.path()).collect();
         paths.sort();
         for path in paths {
@@ -82,24 +93,48 @@ fn family(launcher: &Path) -> Vec<PathBuf> {
         }
     }
     let mut files = vec![launcher.to_path_buf()];
-    walk(&launcher.parent().unwrap_or(Path::new(".")).join("launcher"), &mut files);
+    walk(
+        &launcher.parent().unwrap_or(Path::new(".")).join("launcher"),
+        &mut files,
+    );
     files
 }
 
 pub(super) fn check(router: &Path, launcher: &Path) -> Result<(), String> {
-    let vault = router.parent().unwrap_or(Path::new(".")).join("no-such-vault.json");
+    let vault = router
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join("no-such-vault.json");
     let root = inventory(router, &["help"], &vault)?;
     let groups = strings(root.get("groups"));
     if root.get("groups").and_then(Value::as_array).is_none() {
-        return Err("the pinned broker does not declare CLI groups; use Skarbiec 0.3.2 or newer".into());
+        return Err(
+            "the pinned broker does not declare CLI groups; use Skarbiec 0.3.2 or newer".into(),
+        );
     }
-    let first = |command: &str, words: usize| command.split_whitespace().take(words).collect::<Vec<_>>().join(" ");
-    let mut available: BTreeSet<String> = strings(root.get("commands")).iter().map(|command| first(command, 1)).collect();
+    let first = |command: &str, words: usize| {
+        command
+            .split_whitespace()
+            .take(words)
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let mut available: BTreeSet<String> = strings(root.get("commands"))
+        .iter()
+        .map(|command| first(command, 1))
+        .collect();
     for group in &groups {
         let document = inventory(router, &[group, "help"], &vault)?;
-        available.extend(strings(document.get("commands")).iter().map(|command| first(command, 2)));
+        available.extend(
+            strings(document.get("commands"))
+                .iter()
+                .map(|command| first(command, 2)),
+        );
     }
-    let mut calls: Vec<Vec<String>> = OWN_CALLS.iter().map(|call| call.iter().map(|word| word.to_string()).collect()).collect();
+    let mut calls: Vec<Vec<String>> = OWN_CALLS
+        .iter()
+        .map(|call| call.iter().map(|word| word.to_string()).collect())
+        .collect();
     for path in family(launcher) {
         let text = std::fs::read(&path)
             .map_err(|error| format!("{}: {error}", path.display()))
@@ -115,14 +150,25 @@ pub(super) fn check(router: &Path, launcher: &Path) -> Result<(), String> {
         .iter()
         .map(|words| {
             let take = if groups.contains(&words[0]) { 2 } else { 1 };
-            words.iter().take(take).cloned().collect::<Vec<_>>().join(" ")
+            words
+                .iter()
+                .take(take)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(" ")
         })
         .collect();
-    println!("launcher requires: {}", required.iter().cloned().collect::<Vec<_>>().join(", "));
+    println!(
+        "launcher requires: {}",
+        required.iter().cloned().collect::<Vec<_>>().join(", ")
+    );
     let missing: Vec<&String> = required.difference(&available).collect();
     if !missing.is_empty() {
         let names: Vec<&str> = missing.iter().map(|name| name.as_str()).collect();
-        return Err(format!("the pinned broker does not implement: {}", names.join(", ")));
+        return Err(format!(
+            "the pinned broker does not implement: {}",
+            names.join(", ")
+        ));
     }
     println!("the pinned broker advertises every literal command path the launcher invokes");
     Ok(())

@@ -20,6 +20,7 @@
 mod capability;
 mod installation;
 mod reachability;
+mod trust;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -61,9 +62,12 @@ impl Layout {
 
     /// One release-state record that names a release directory.
     fn release_record(&self, name: &str) -> Option<&Value> {
-        self.release_state
-            .get(name)
-            .filter(|record| record.get("release_dir").and_then(Value::as_str).is_some_and(|dir| !dir.is_empty()))
+        self.release_state.get(name).filter(|record| {
+            record
+                .get("release_dir")
+                .and_then(Value::as_str)
+                .is_some_and(|dir| !dir.is_empty())
+        })
     }
 
     fn release_root(&self, name: &str) -> Option<PathBuf> {
@@ -72,8 +76,13 @@ impl Layout {
     }
 
     fn config_dir_for(&self, generation: &Path) -> PathBuf {
-        let name = generation.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
-        self.home.join(".config/brama").join(format!("trust-{name}"))
+        let name = generation
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        self.home
+            .join(".config/brama")
+            .join(format!("trust-{name}"))
     }
 }
 
@@ -81,12 +90,18 @@ impl Layout {
 pub(super) fn moment(path: &Path) -> String {
     std::fs::symlink_metadata(path)
         .and_then(|meta| meta.modified())
-        .map(|time| chrono::DateTime::<chrono::Utc>::from(time).format("%Y-%m-%dT%H:%M:%SZ").to_string())
+        .map(|time| {
+            chrono::DateTime::<chrono::Utc>::from(time)
+                .format("%Y-%m-%dT%H:%M:%SZ")
+                .to_string()
+        })
         .unwrap_or_else(|_| "unknown".into())
 }
 
 pub(super) fn read_json(path: &Path) -> Option<Value> {
-    std::fs::read(path).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok())
+    std::fs::read(path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
 }
 
 pub(crate) async fn run() {

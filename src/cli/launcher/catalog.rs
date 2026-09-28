@@ -22,11 +22,14 @@ const AUTHENTICATE: &str = "brama.provider.authenticate";
 fn read(path: &Path) -> Result<Value, String> {
     std::fs::read(path)
         .map_err(|error| format!("{}: {error}", path.display()))
-        .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|error| format!("{}: {error}", path.display())))
+        .and_then(|bytes| {
+            serde_json::from_slice(&bytes).map_err(|error| format!("{}: {error}", path.display()))
+        })
 }
 
 fn tag_value<'a>(tags: &'a [&'a str], prefix: &str) -> Option<&'a str> {
-    tags.iter().find_map(|tag| tag.strip_prefix(prefix).filter(|rest| !rest.is_empty()))
+    tags.iter()
+        .find_map(|tag| tag.strip_prefix(prefix).filter(|rest| !rest.is_empty()))
 }
 
 pub(super) fn build(available: &Path, policy: &Path, output: &Path) -> Result<(), String> {
@@ -39,18 +42,36 @@ pub(super) fn build(available: &Path, policy: &Path, output: &Path) -> Result<()
         .flatten()
         .filter(|rule| rule.is_object())
         .map(|rule| {
-            let text = |key: &str| rule.get(key).and_then(Value::as_str).unwrap_or("").to_string();
+            let text = |key: &str| {
+                rule.get(key)
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string()
+            };
             (text("purpose"), text("resource"))
         })
         .collect();
     let mut catalog = Vec::new();
     let mut unnamed = Vec::new();
     for item in items.as_array().into_iter().flatten() {
-        if !item.is_object() || item.get("deleted").and_then(Value::as_bool).unwrap_or(false) {
+        if !item.is_object()
+            || item
+                .get("deleted")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        {
             continue;
         }
-        let Some(name) = item.get("id").and_then(Value::as_str) else { continue };
-        let tags: Vec<&str> = item.get("tags").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
+        let Some(name) = item.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        let tags: Vec<&str> = item
+            .get("tags")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect();
         if !tags.contains(&SUBSCRIPTION_TAG) {
             continue;
         }
@@ -58,11 +79,14 @@ pub(super) fn build(available: &Path, policy: &Path, output: &Path) -> Result<()
         let subscription = tag_value(&tags, SUBSCRIPTION_ID_TAG);
         let login = tag_value(&tags, LOGIN_TAG);
         let (Some(provider), Some(subscription)) = (provider, subscription) else {
-            let missing: Vec<String> = [(PROVIDER_TAG, provider), (SUBSCRIPTION_ID_TAG, subscription)]
-                .iter()
-                .filter(|(_, value)| value.is_none())
-                .map(|(prefix, _)| format!("{prefix}<value>"))
-                .collect();
+            let missing: Vec<String> = [
+                (PROVIDER_TAG, provider),
+                (SUBSCRIPTION_ID_TAG, subscription),
+            ]
+            .iter()
+            .filter(|(_, value)| value.is_none())
+            .map(|(prefix, _)| format!("{prefix}<value>"))
+            .collect();
             eprintln!(
                 "skipping {name}: carries {SUBSCRIPTION_TAG} but no {} tag, so nothing declares what it serves; tag it and it is served again",
                 missing.join(" and no ")

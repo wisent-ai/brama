@@ -26,13 +26,22 @@ fn item_fields(router: &Path, item: &str) -> Result<Map<String, Value>, String> 
     let output = Command::new(router)
         .args(["get", item])
         .output()
-        .map_err(|error| format!("reading {item} through the entitlements router failed: {error}"))?;
+        .map_err(|error| {
+            format!("reading {item} through the entitlements router failed: {error}")
+        })?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        let detail = if stderr.trim().is_empty() { String::from_utf8_lossy(&output.stdout).trim().to_string() } else { stderr.trim().to_string() };
-        return Err(format!("reading {item} through the entitlements router failed: {detail}"));
+        let detail = if stderr.trim().is_empty() {
+            String::from_utf8_lossy(&output.stdout).trim().to_string()
+        } else {
+            stderr.trim().to_string()
+        };
+        return Err(format!(
+            "reading {item} through the entitlements router failed: {detail}"
+        ));
     }
-    let payload: Value = serde_json::from_slice(&output.stdout).map_err(|error| format!("{item}: {error}"))?;
+    let payload: Value =
+        serde_json::from_slice(&output.stdout).map_err(|error| format!("{item}: {error}"))?;
     if payload.get("schema").and_then(Value::as_str) != Some(ITEM_SCHEMA) {
         return Err(format!("{item} did not return a Skarbiec v2 item"));
     }
@@ -58,8 +67,13 @@ pub(super) fn item_field(router: &Path, item: &str, name: &str) -> Result<String
 }
 
 /// The model-router client table, as JSON.
-pub(super) fn model_router(router: &Path, allowed: &str, backend_models: &str) -> Result<String, String> {
-    let backend: Vec<String> = serde_json::from_str(backend_models).map_err(|error| format!("backend models: {error}"))?;
+pub(super) fn model_router(
+    router: &Path,
+    allowed: &str,
+    backend_models: &str,
+) -> Result<String, String> {
+    let backend: Vec<String> =
+        serde_json::from_str(backend_models).map_err(|error| format!("backend models: {error}"))?;
     // The renewal caller's routes are derived from the same closed allowlist:
     // each provider's own route is what a reauth trajectory probes, and `best`
     // is the subscription alias those grants serve.
@@ -73,24 +87,60 @@ pub(super) fn model_router(router: &Path, allowed: &str, backend_models: &str) -
     renewal.sort();
     renewal.dedup();
     let clients = [
-        Client { id: "weles", item: "weles-model-router", agent: Some("weles"), models: Some(vec!["best".into(), "weles".into()]), required: true },
-        Client { id: "wisent-backend", item: "wisent-backend-model-router", agent: Some("wisent-app"), models: Some(backend), required: true },
-        Client { id: "wisent-app", item: "wisent-app-model-router", agent: Some("wisent-app"), models: Some(renewal), required: false },
-        Client { id: "brama-desktop", item: "brama-desktop-model-router", agent: None, models: None, required: false },
+        Client {
+            id: "weles",
+            item: "weles-model-router",
+            agent: Some("weles"),
+            models: Some(vec!["best".into(), "weles".into()]),
+            required: true,
+        },
+        Client {
+            id: "wisent-backend",
+            item: "wisent-backend-model-router",
+            agent: Some("wisent-app"),
+            models: Some(backend),
+            required: true,
+        },
+        Client {
+            id: "wisent-app",
+            item: "wisent-app-model-router",
+            agent: Some("wisent-app"),
+            models: Some(renewal),
+            required: false,
+        },
+        Client {
+            id: "brama-desktop",
+            item: "brama-desktop-model-router",
+            agent: None,
+            models: None,
+            required: false,
+        },
     ];
     let answers: Vec<Result<String, String>> = std::thread::scope(|scope| {
         let reads: Vec<_> = clients
             .iter()
-            .map(|client| scope.spawn(move || item_fields(router, client.item).and_then(|fields| {
-                fields
-                    .get("token")
-                    .and_then(Value::as_str)
-                    .filter(|value| !value.is_empty() && value.trim() == *value)
-                    .map(str::to_string)
-                    .ok_or_else(|| format!("{}/token is not a single non-empty value", client.item))
-            })))
+            .map(|client| {
+                scope.spawn(move || {
+                    item_fields(router, client.item).and_then(|fields| {
+                        fields
+                            .get("token")
+                            .and_then(Value::as_str)
+                            .filter(|value| !value.is_empty() && value.trim() == *value)
+                            .map(str::to_string)
+                            .ok_or_else(|| {
+                                format!("{}/token is not a single non-empty value", client.item)
+                            })
+                    })
+                })
+            })
             .collect();
-        reads.into_iter().map(|read| read.join().unwrap_or_else(|_| Err("a router read panicked".into()))).collect()
+        reads
+            .into_iter()
+            .map(|read| {
+                read.join()
+                    .unwrap_or_else(|_| Err("a router read panicked".into()))
+            })
+            .collect()
     });
     let mut identities = Vec::new();
     for (client, answer) in clients.iter().zip(answers) {
@@ -128,20 +178,31 @@ pub(super) fn request_sign(router: &Path) -> Result<String, String> {
     let answers: Vec<Result<(String, String), String>> = std::thread::scope(|scope| {
         let reads: Vec<_> = sources
             .iter()
-            .map(|&(expected, item)| scope.spawn(move || {
-                let fields = item_fields(router, item)?;
-                // `wisent-app` is Jeden's public runtime identity, held in the
-                // dedicated `agent:wisent-app` item.
-                if expected == "wisent-app" {
-                    return Ok((expected.to_string(), field(&fields, item, "value")?));
-                }
-                if field(&fields, item, "id")? != expected {
-                    return Err(format!("{item}/id does not match its product identity"));
-                }
-                Ok((expected.to_string(), field(&fields, item, "agent_auth_secret")?))
-            }))
+            .map(|&(expected, item)| {
+                scope.spawn(move || {
+                    let fields = item_fields(router, item)?;
+                    // `wisent-app` is Jeden's public runtime identity, held in the
+                    // dedicated `agent:wisent-app` item.
+                    if expected == "wisent-app" {
+                        return Ok((expected.to_string(), field(&fields, item, "value")?));
+                    }
+                    if field(&fields, item, "id")? != expected {
+                        return Err(format!("{item}/id does not match its product identity"));
+                    }
+                    Ok((
+                        expected.to_string(),
+                        field(&fields, item, "agent_auth_secret")?,
+                    ))
+                })
+            })
             .collect();
-        reads.into_iter().map(|read| read.join().unwrap_or_else(|_| Err("a router read panicked".into()))).collect()
+        reads
+            .into_iter()
+            .map(|read| {
+                read.join()
+                    .unwrap_or_else(|_| Err("a router read panicked".into()))
+            })
+            .collect()
     });
     let identities: Map<String, Value> = answers
         .into_iter()

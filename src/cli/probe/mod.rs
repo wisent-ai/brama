@@ -39,16 +39,24 @@ const SIGNING_ITEM: &str = "echo-agent-auth";
 /// One field of one vault item, read through the router with the
 /// environment the launcher builds from service.env: without it the router
 /// reports "vault not initialized" about a vault that is fine.
-fn vault_field(router: &str, settings: &BTreeMap<String, String>, item: &str, field: &str) -> Result<String, String> {
+fn vault_field(
+    router: &str,
+    settings: &BTreeMap<String, String>,
+    item: &str,
+    field: &str,
+) -> Result<String, String> {
     let output = Command::new(router)
         .args(["get", item])
         .envs(settings)
         .output()
         .map_err(|error| format!("{router}: {error}"))?;
     if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().replace('\n', " "));
+        return Err(String::from_utf8_lossy(&output.stderr)
+            .trim()
+            .replace('\n', " "));
     }
-    let payload: Value = serde_json::from_slice(&output.stdout).map_err(|_| "the router did not return a Skarbiec item".to_string())?;
+    let payload: Value = serde_json::from_slice(&output.stdout)
+        .map_err(|_| "the router did not return a Skarbiec item".to_string())?;
     payload
         .pointer(&format!("/fields/{field}"))
         .and_then(Value::as_str)
@@ -61,12 +69,18 @@ fn vault_field(router: &str, settings: &BTreeMap<String, String>, item: &str, fi
 /// refused off loopback and the log may name an older bind, so neither alone
 /// is reliable.
 fn candidates(settings: &BTreeMap<String, String>, home: &Path) -> Vec<String> {
-    let port = settings.get("PORT").cloned().unwrap_or_else(|| DEFAULT_PORT.to_string());
+    let port = settings
+        .get("PORT")
+        .cloned()
+        .unwrap_or_else(|| DEFAULT_PORT.to_string());
     let mut candidates = vec![format!("127.0.0.1:{port}")];
     let log = std::fs::read(home.join(".stado/logs/brama-always-on.err")).unwrap_or_default();
     let announced = String::from_utf8_lossy(&log)
         .lines()
-        .filter_map(|line| line.split_once(ANNOUNCEMENT).map(|(_, rest)| rest.trim().to_string()))
+        .filter_map(|line| {
+            line.split_once(ANNOUNCEMENT)
+                .map(|(_, rest)| rest.trim().to_string())
+        })
         .last();
     if let Some(announced) = announced.filter(|address| !candidates.contains(address)) {
         candidates.push(announced);
@@ -77,12 +91,20 @@ fn candidates(settings: &BTreeMap<String, String>, home: &Path) -> Vec<String> {
 async fn probe(args: ProbeArgs) -> Result<(), String> {
     let home = home();
     let settings = service_settings(&home)?;
-    let router = settings.get("ENTITLEMENTS_ROUTER_BIN").cloned().ok_or("service env names no entitlements router")?;
-    let token = vault_field(&router, &settings, BEARER_ITEM, "token").map_err(|error| format!("cannot read a bearer from the router: {error}"))?;
+    let router = settings
+        .get("ENTITLEMENTS_ROUTER_BIN")
+        .cloned()
+        .ok_or("service env names no entitlements router")?;
+    let token = vault_field(&router, &settings, BEARER_ITEM, "token")
+        .map_err(|error| format!("cannot read a bearer from the router: {error}"))?;
     let client = reqwest::Client::new();
     let mut base = None;
     for authority in candidates(&settings, &home) {
-        match client.get(format!("http://{authority}/health")).send().await {
+        match client
+            .get(format!("http://{authority}/health"))
+            .send()
+            .await
+        {
             Ok(answer) => {
                 println!("health {} at {authority}", answer.status().as_u16());
                 base = Some(format!("http://{authority}"));
@@ -97,16 +119,36 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
         .inspect_err(|problem| println!("request signing unavailable: {problem}"))
         .ok();
     for alias in args.aliases {
-        let body = serde_json::to_vec(&json!({ "model": alias, "messages": [{ "role": "user", "content": "say ok" }] })).expect("payload serialises");
-        let mut request = client.post(format!("{base}/v1/chat/completions")).bearer_auth(&token).header("Content-Type", "application/json");
+        let body = serde_json::to_vec(
+            &json!({ "model": alias, "messages": [{ "role": "user", "content": "say ok" }] }),
+        )
+        .expect("payload serialises");
+        let mut request = client
+            .post(format!("{base}/v1/chat/completions"))
+            .bearer_auth(&token)
+            .header("Content-Type", "application/json");
         if let (true, Some(secret)) = (alias == "best", &secret) {
-            let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|elapsed| elapsed.as_secs()).unwrap_or_default().to_string();
-            let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).map_err(|error| error.to_string())?;
-            mac.update(format!("{SIGNING_AGENT}:{stamp}:{}", hex::encode(Sha256::digest(&body))).as_bytes());
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|elapsed| elapsed.as_secs())
+                .unwrap_or_default()
+                .to_string();
+            let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
+                .map_err(|error| error.to_string())?;
+            mac.update(
+                format!(
+                    "{SIGNING_AGENT}:{stamp}:{}",
+                    hex::encode(Sha256::digest(&body))
+                )
+                .as_bytes(),
+            );
             request = request
                 .header("x-agent-id", SIGNING_AGENT)
                 .header("x-agent-timestamp", stamp)
-                .header("x-agent-signature", hex::encode(mac.finalize().into_bytes()));
+                .header(
+                    "x-agent-signature",
+                    hex::encode(mac.finalize().into_bytes()),
+                );
         }
         match request.body(body).send().await {
             Ok(answer) => {
@@ -114,11 +156,20 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
                 let text = answer.text().await.unwrap_or_default();
                 if status.is_success() {
                     let payload: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
-                    let said = payload.pointer("/choices/0/message/content").and_then(Value::as_str).unwrap_or("").trim().to_string();
+                    let said = payload
+                        .pointer("/choices/0/message/content")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .trim()
+                        .to_string();
                     let served = payload.get("model").and_then(Value::as_str).unwrap_or("");
                     println!("{alias} {} model={served} said={said:?}", status.as_u16());
                 } else {
-                    println!("{alias} {} {}", status.as_u16(), text.trim().replace('\n', " "));
+                    println!(
+                        "{alias} {} {}",
+                        status.as_u16(),
+                        text.trim().replace('\n', " ")
+                    );
                 }
             }
             Err(error) => println!("{alias} unreachable {error}"),

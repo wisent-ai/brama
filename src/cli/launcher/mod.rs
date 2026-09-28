@@ -76,19 +76,43 @@ fn printed(result: Result<String, String>) -> Result<(), String> {
 
 pub(crate) fn run(command: LauncherCommand) {
     let result = match command {
-        LauncherCommand::Catalog { available, policy, output } => catalog::build(&available, &policy, &output),
-        LauncherCommand::Policy { config, allowed, aliases, backend } => policy::check(
+        LauncherCommand::Catalog {
+            available,
+            policy,
+            output,
+        } => catalog::build(&available, &policy, &output),
+        LauncherCommand::Policy {
+            config,
+            allowed,
+            aliases,
+            backend,
+        } => policy::check(
             &config,
-            &policy::Outputs { allowed: &allowed, aliases: &aliases, backend: &backend },
+            &policy::Outputs {
+                allowed: &allowed,
+                aliases: &aliases,
+                backend: &backend,
+            },
         ),
         LauncherCommand::SeedRoutes { path } => std::env::var("BRAMA_MODEL_ALIASES")
             .map_err(|_| "BRAMA_MODEL_ALIASES is required".to_string())
             .and_then(|aliases| policy::seed_routes(&path, &aliases)),
-        LauncherCommand::ModelRouterIdentities { router, backend_models } => std::env::var("BRAMA_ALLOWED_MODELS")
+        LauncherCommand::ModelRouterIdentities {
+            router,
+            backend_models,
+        } => std::env::var("BRAMA_ALLOWED_MODELS")
             .map_err(|_| "BRAMA_ALLOWED_MODELS is required".to_string())
-            .and_then(|allowed| printed(identities::model_router(&router, &allowed, &backend_models))),
-        LauncherCommand::RequestSignIdentities { router } => printed(identities::request_sign(&router)),
-        LauncherCommand::ItemField { router, item, field } => printed(identities::item_field(&router, &item, &field)),
+            .and_then(|allowed| {
+                printed(identities::model_router(&router, &allowed, &backend_models))
+            }),
+        LauncherCommand::RequestSignIdentities { router } => {
+            printed(identities::request_sign(&router))
+        }
+        LauncherCommand::ItemField {
+            router,
+            item,
+            field,
+        } => printed(identities::item_field(&router, &item, &field)),
         LauncherCommand::CheckRouterVerbs { router, launcher } => verbs::check(&router, &launcher),
     };
     if let Err(detail) = result {

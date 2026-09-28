@@ -28,7 +28,12 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
     let mut granted = BTreeSet::new();
     match read_json(&policy_path) {
         Some(policy) => {
-            for rule in policy.pointer("/roles/brama-runtime").and_then(Value::as_array).into_iter().flatten() {
+            for rule in policy
+                .pointer("/roles/brama-runtime")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
                 if rule.get("purpose").and_then(Value::as_str) == Some(PROVIDER_PURPOSE) {
                     if let Some(resource) = rule.get("resource").and_then(Value::as_str) {
                         granted.insert(resource.to_string());
@@ -37,13 +42,27 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
             }
             println!("  policy.json written {}", moment(&policy_path));
             let listed: Vec<&str> = granted.iter().map(String::as_str).collect();
-            println!("  granted provider resources ({}): {}", granted.len(), if listed.is_empty() { "none".into() } else { listed.join(", ") });
+            println!(
+                "  granted provider resources ({}): {}",
+                granted.len(),
+                if listed.is_empty() {
+                    "none".into()
+                } else {
+                    listed.join(", ")
+                }
+            );
         }
         None => println!("  {}: absent", policy_path.display()),
     }
-    let routes_path = match (layout.settings.get("SKARBIEC_CAPABILITY_ROUTES_FILE"), layout.settings.get("SKARBIEC_VAULT_FILE")) {
+    let routes_path = match (
+        layout.settings.get("SKARBIEC_CAPABILITY_ROUTES_FILE"),
+        layout.settings.get("SKARBIEC_VAULT_FILE"),
+    ) {
         (Some(routes), _) => PathBuf::from(routes),
-        (None, Some(vault)) => Path::new(vault).parent().unwrap_or(Path::new("/")).join("capability-routes.json"),
+        (None, Some(vault)) => Path::new(vault)
+            .parent()
+            .unwrap_or(Path::new("/"))
+            .join("capability-routes.json"),
         (None, None) => layout.home.join(".config/skarbiec/capability-routes.json"),
     };
     let mut routed = BTreeSet::new();
@@ -51,7 +70,9 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
         Some(document) => {
             let table = document.get("routes").cloned().unwrap_or(document);
             for (resource, coordinate) in table.as_object().into_iter().flatten() {
-                if coordinate.get("item").is_some_and(Value::is_string) && coordinate.get("field").is_some_and(Value::is_string) {
+                if coordinate.get("item").is_some_and(Value::is_string)
+                    && coordinate.get("field").is_some_and(Value::is_string)
+                {
                     routed.insert(resource.clone());
                 }
             }
@@ -60,19 +81,28 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
             if !unrouted.is_empty() {
                 println!("  granted but unrouted: {}", unrouted.join(", "));
             }
-            let ungranted: Vec<&str> = routed.difference(&granted).map(String::as_str).filter(|resource| resource.starts_with("provider:")).collect();
+            let ungranted: Vec<&str> = routed
+                .difference(&granted)
+                .map(String::as_str)
+                .filter(|resource| resource.starts_with("provider:"))
+                .collect();
             if !ungranted.is_empty() {
-                println!("  routed without a provider grant: {}", ungranted.join(", "));
+                println!(
+                    "  routed without a provider grant: {}",
+                    ungranted.join(", ")
+                );
             }
         }
         None => println!("  {}: absent", routes_path.display()),
     }
     granted
         .intersection(&routed)
-        .filter_map(|resource| match resource.split(':').collect::<Vec<_>>().as_slice() {
-            ["provider", provider] => Some(normalize(provider)),
-            _ => None,
-        })
+        .filter_map(
+            |resource| match resource.split(':').collect::<Vec<_>>().as_slice() {
+                ["provider", provider] => Some(normalize(provider)),
+                _ => None,
+            },
+        )
         .collect()
 }
 
@@ -97,7 +127,12 @@ pub(super) fn print_alias_routes(layout: &Layout, providers: &BTreeSet<String>) 
         .filter_map(|entry| entry.get("name").and_then(Value::as_str))
         .filter(|name| !name.is_empty())
         .collect();
-    for (alias, route) in document.get("routes").and_then(Value::as_object).into_iter().flatten() {
+    for (alias, route) in document
+        .get("routes")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+    {
         let route = route.as_str().unwrap_or("");
         let provider = route.split('/').next().unwrap_or("");
         // A bare destination naming a declared deployment is served by the
@@ -115,5 +150,12 @@ pub(super) fn print_alias_routes(layout: &Layout, providers: &BTreeSet<String>) 
         };
         println!("    {alias} -> {route} [{verdict}]");
     }
-    println!("  deployments: {}", if deployments.is_empty() { "none".into() } else { deployments.join(", ") });
+    println!(
+        "  deployments: {}",
+        if deployments.is_empty() {
+            "none".into()
+        } else {
+            deployments.join(", ")
+        }
+    );
 }
