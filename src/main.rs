@@ -12,6 +12,7 @@ use cli::onboarding::OnboardArgs;
 use cli::serving::ServeArgs;
 use cli::subscriptions::credentials::SubscriptionCommand;
 use cli::subscriptions::SubscriptionsArgs;
+use cli::workload::WorkloadCommand;
 
 #[derive(Parser)]
 #[command(name = "brama", about = "Multi-provider LLM router")]
@@ -70,6 +71,11 @@ enum Commands {
     },
     /// Collect deterministic task-quality checks for active provider routes
     CollectTaskQuality(CollectTaskQualityArgs),
+    /// Act on this installation's workload identity in the vault
+    Workload {
+        #[command(subcommand)]
+        command: WorkloadCommand,
+    },
 }
 
 #[tokio::main]
@@ -97,5 +103,6 @@ async fn main() {
         Commands::Routes { command } => cli::aliases::routes(command),
         Commands::Subscription { command } => cli::subscriptions::credentials::run(command).await,
         Commands::CollectTaskQuality(args) => cli::diagnostics::collect_task_quality(args).await,
+        Commands::Workload { command } => cli::workload::run(command),
     }
 }

@@ -171,10 +171,7 @@ jobs:
           cp src/release/libexec/diagnose/capability_report.py "$stage/libexec/diagnose/capability_report.py"
           cp src/release/libexec/diagnose/reachability_report.py "$stage/libexec/diagnose/reachability_report.py"
           cp src/release/libexec/probes/brama-subscription-report.py "$stage/libexec/brama-subscription-report.py"
-          # The registration is the other half of provisioning: the broker looks
-          # in the vault for the public key the provisioner just minted, so a
-          # bundle that cannot register cannot redeem.
-          cp src/release/libexec/brama-register-workload.py "$stage/libexec/brama-register-workload.py"
+          # Workload registration is `brama workload register`, in the binary.
           cp src/release/libexec/probes/brama-route-probe.py "$stage/libexec/brama-route-probe.py"
           cp src/release/libexec/brama-repair-inference-routes.py "$stage/libexec/brama-repair-inference-routes.py"
           chmod 0755 \
