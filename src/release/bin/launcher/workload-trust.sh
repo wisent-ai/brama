@@ -25,36 +25,7 @@ fi
 
 registry_describes_this_installation() {
   [ -f "$config_dir/registry.json" ] || return
-  BRAMA_BIN="$BRAMA_BIN" "$PYTHON_BIN" - "$config_dir/registry.json" <<'PY'
-import hashlib
-import json
-import os
-import sys
-
-arguments = iter(sys.argv)
-next(arguments)
-registry_path = next(arguments)
-binary = os.environ["BRAMA_BIN"]
-try:
-    document = json.load(open(registry_path, encoding="utf-8"))
-except (OSError, ValueError) as error:
-    raise SystemExit(f"workload registry is unreadable: {error}")
-workload = next(iter(document.get("workloads", {}).values()), {})
-with open(binary, "rb") as handle:
-    digest = hashlib.sha256(handle.read()).hexdigest()
-expected = {
-    "uid": os.getuid(),
-    "gid": os.getgid(),
-    "executable_path": os.path.realpath(binary),
-    "executable_sha256": digest,
-}
-for name, value in expected.items():
-    if str(workload.get(name)) != str(value):
-        raise SystemExit(
-            f"workload registry disagrees on {name}: "
-            f"pinned={workload.get(name)} actual={value}"
-        )
-PY
+  "$BRAMA_BIN" workload check "$config_dir/registry.json" --binary "$BRAMA_BIN"
 }
 
 # The workload identity belongs to this host's gateway, not to a bundle

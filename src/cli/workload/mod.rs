@@ -31,6 +31,50 @@ pub(crate) enum WorkloadCommand {
     /// Grant each agent of this installation's workload exactly the vault
     /// coordinates its capability routes name, bound to its public key
     Register,
+    /// Succeed when REGISTRY pins exactly this process's uid, gid and
+    /// BINARY's resolved path and SHA-256; otherwise name the first mismatch
+    Check {
+        registry: PathBuf,
+        #[arg(long)]
+        binary: PathBuf,
+    },
+}
+
+/// The broker pins the process allowed to redeem a capability; a registry
+/// provisioned for another installation names someone else.
+fn check(registry: &Path, binary: &Path) -> Result<(), String> {
+    use sha2::{Digest, Sha256};
+    let document: Value = std::fs::read(registry)
+        .map_err(|error| error.to_string())
+        .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|error| error.to_string()))
+        .map_err(|error| format!("workload registry is unreadable: {error}"))?;
+    let workload = document
+        .get("workloads")
+        .and_then(Value::as_object)
+        .and_then(|workloads| workloads.values().next())
+        .cloned()
+        .unwrap_or(Value::Null);
+    let bytes = std::fs::read(binary).map_err(|error| format!("{}: {error}", binary.display()))?;
+    // SAFETY: getuid and getgid cannot fail and touch no memory.
+    let (uid, gid) = unsafe { (libc::getuid(), libc::getgid()) };
+    let path = std::fs::canonicalize(binary).map_err(|error| format!("{}: {error}", binary.display()))?;
+    let expected = [
+        ("uid", uid.to_string()),
+        ("gid", gid.to_string()),
+        ("executable_path", path.display().to_string()),
+        ("executable_sha256", hex::encode(Sha256::digest(&bytes))),
+    ];
+    for (name, actual) in expected {
+        let pinned = match workload.get(name) {
+            Some(Value::String(text)) => text.clone(),
+            Some(Value::Null) | None => "None".into(),
+            Some(other) => other.to_string(),
+        };
+        if pinned != actual {
+            return Err(format!("workload registry disagrees on {name}: pinned={pinned} actual={actual}"));
+        }
+    }
+    Ok(())
 }
 
 /// The fixed SubjectPublicKeyInfo header of an Ed25519 key: the registry
@@ -182,6 +226,12 @@ pub(crate) fn run(command: WorkloadCommand) {
     match command {
         WorkloadCommand::Register => {
             if let Err(detail) = register() {
+                eprintln!("{detail}");
+                std::process::exit(1);
+            }
+        }
+        WorkloadCommand::Check { registry, binary } => {
+            if let Err(detail) = check(&registry, &binary) {
                 eprintln!("{detail}");
                 std::process::exit(1);
             }

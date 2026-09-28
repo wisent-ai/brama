@@ -44,15 +44,7 @@ if [ -n "$stado_bin" ] && [ -z "$service_identity_present" ]; then
   else
     fleet_stado_config=${BRAMA_FLEET_STADO_CONFIG:-"${HOME:-/nonexistent}/.config/stado/config.json"}
     agent_skarbiec_url="$(
-      STADO_CONFIG="$fleet_stado_config" "$stado_bin" config show \
-        | "$PYTHON_BIN" -c '
-import json
-import sys
-value = json.load(sys.stdin).get("resolved", {}).get("agent_skarbiec_url")
-if not isinstance(value, str) or not value:
-    raise SystemExit("fleet Stado config has no agent_skarbiec_url")
-sys.stdout.write(value)
-'
+      STADO_CONFIG="$fleet_stado_config" "$stado_bin" config get agent_skarbiec_url
     )"
   fi
   service_key="$gnupg_dir/brama-service.key"
