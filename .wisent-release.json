@@ -137,7 +137,7 @@
         ]
       },
       "tests": [
-        {"name": "docs-site", "argv": ["cargo", "test", "--locked", "--release", "--test", "docs_site_assets"]}
+        {"name": "docs-site", "argv": ["cargo", "test", "--locked", "--release", "--test", "docs_site_assets", "--test", "docs_published_identity"]}
       ],
       "stage": {
         "dist/brama-web.tar.gz": "brama-web.tar.gz",
