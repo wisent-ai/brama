@@ -98,10 +98,34 @@ pub(in crate::providers::adapter) fn provider_credential_key(
     credential_key(item, secret)
 }
 
+/// The ChatGPT account a Codex credential acts for: `tokens.account_id` when
+/// the document names it, otherwise the `chatgpt_account_id` claim OpenAI
+/// puts in the grant's `tokens.id_token`. Weles banks the grant as OpenAI
+/// returned it, so this is the one place its identity token is read.
 fn credential_account_id(secret: &str) -> Option<String> {
-    credential_document(secret)?
+    let document = credential_document(secret)?;
+    let named = document
         .pointer("/tokens/account_id")
         .and_then(Value::as_str)
-        .map(str::to_string)
+        .map(str::to_string);
+    named
+        .or_else(|| id_token_account_id(&document))
         .filter(|value| !value.trim().is_empty())
+}
+
+fn id_token_account_id(document: &Value) -> Option<String> {
+    use base64::Engine as _;
+    let token = document.pointer("/tokens/id_token")?.as_str()?;
+    let payload = token.split('.').nth(1)?;
+    let claims: Value = serde_json::from_slice(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(payload.trim_end_matches('='))
+            .ok()?,
+    )
+    .ok()?;
+    claims
+        .get("https://api.openai.com/auth")?
+        .get("chatgpt_account_id")?
+        .as_str()
+        .map(str::to_string)
 }
