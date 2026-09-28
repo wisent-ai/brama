@@ -180,6 +180,12 @@ const CHILD_RESIDENT_CEILING_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// How often a running vault child's footprint is read.
 const FOOTPRINT_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
 
+/// How long a vault command may run before the gateway's log names it. A
+/// router child had been running for a day before anyone saw it, and the
+/// host's process table showed only the executable, never which operation it
+/// was; one line naming operation, pid and footprint makes that attributable.
+const LONG_RUNNING_NOTICE: std::time::Duration = std::time::Duration::from_secs(60);
+
 /// Wait for `child` to exit and collect its output, ending it once its
 /// resident memory passes [`CHILD_RESIDENT_CEILING_BYTES`]. The refusal
 /// names the operation, the pid and the measured footprint, so the stalled
@@ -189,6 +195,8 @@ pub(in crate::gateway::broker) async fn wait_within_footprint(
     operation: &str,
 ) -> Result<std::process::Output, String> {
     let pid = child.id();
+    let started = std::time::Instant::now();
+    let mut noticed = false;
     let output = child.wait_with_output();
     tokio::pin!(output);
     let mut system = sysinfo::System::new();
@@ -204,6 +212,16 @@ pub(in crate::gateway::broker) async fn wait_within_footprint(
                     continue;
                 }
                 let resident = system.process(pid).map_or(0, sysinfo::Process::memory);
+                if !noticed && started.elapsed() >= LONG_RUNNING_NOTICE {
+                    noticed = true;
+                    tracing::warn!(
+                        operation,
+                        pid = pid.as_u32(),
+                        resident_bytes = resident,
+                        elapsed_seconds = started.elapsed().as_secs(),
+                        "vault child still running"
+                    );
+                }
                 if resident > CHILD_RESIDENT_CEILING_BYTES {
                     // Dropping the pinned wait kills the child (kill_on_drop).
                     return Err(format!(
