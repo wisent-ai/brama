@@ -2,7 +2,7 @@
 # Start a standalone Brama gateway on loopback against the local stub
 # provider — no Skarbiec deployment, no real credential, no provider spend.
 #
-# The stub (stub-provider.py) listens on 127.0.0.1:18999 and answers the
+# The stub (`brama stub-provider`) listens on 127.0.0.1:18999 and answers the
 # OpenAI wire shape for models stub-ok, stub-401, and stub-429. The gateway
 # is pointed at it through the per-provider base-URL override, and all
 # durable state lands in a fresh temp directory, so nothing on the machine
@@ -24,7 +24,7 @@ STATE="$(mktemp -d)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 echo "isolated state: ${STATE}" >&2
 
-python3 "${HERE}/stub-provider.py" &
+"${BRAMA_BIN}" stub-provider --port 18999 &
 STUB_PID=$!
 trap 'kill "${STUB_PID}" 2>/dev/null || true' EXIT
 

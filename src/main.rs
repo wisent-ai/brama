@@ -11,6 +11,7 @@ use cli::media::{ImageArgs, SpeakArgs, VideoCommand};
 use cli::onboarding::OnboardArgs;
 use cli::launcher::LauncherCommand;
 use cli::serving::ServeArgs;
+use cli::stub::StubArgs;
 use cli::subscriptions::credentials::SubscriptionCommand;
 use cli::subscriptions::SubscriptionsArgs;
 use cli::workload::WorkloadCommand;
@@ -83,6 +84,10 @@ enum Commands {
         #[command(subcommand)]
         command: LauncherCommand,
     },
+    /// Serve a loopback OpenAI-shaped stub provider for the documentation
+    /// walk-through (models stub-ok, stub-401, stub-429)
+    #[command(hide = true)]
+    StubProvider(StubArgs),
 }
 
 #[tokio::main]
@@ -112,5 +117,6 @@ async fn main() {
         Commands::CollectTaskQuality(args) => cli::diagnostics::collect_task_quality(args).await,
         Commands::Workload { command } => cli::workload::run(command),
         Commands::Launcher { command } => cli::launcher::run(command),
+        Commands::StubProvider(args) => cli::stub::serve(args).await,
     }
 }

@@ -9,6 +9,7 @@ pub(crate) mod launcher;
 pub(crate) mod media;
 pub(crate) mod onboarding;
 pub(crate) mod serving;
+pub(crate) mod stub;
 pub(crate) mod subscriptions;
 pub(crate) mod workload;
 

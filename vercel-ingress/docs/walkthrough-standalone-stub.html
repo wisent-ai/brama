@@ -54,11 +54,11 @@ export the variable yourself. Restarting an unlaunched process will not
 repair this.
 </code></pre>
 <h2 id="2-a-stub-provider-on-loopback">2. A stub provider on loopback<a class="headerlink" href="#2-a-stub-provider-on-loopback" title="Link to this section">&para;</a></h2>
-<p>To exercise the full request path without calling a real provider, run a
-local OpenAI-shaped stub (<a href="https://github.com/wisent-ai/brama/blob/main/docs/examples/stub-provider.py">examples/stub-provider.py</a>)
+<p>To exercise the full request path without calling a real provider, run the
+local OpenAI-shaped stub that ships in Brama itself (<code>brama stub-provider</code>)
 and point the <code>openai</code> adapter at it. Loopback is accepted only through the
 explicit deployment override (<a href="/docs/concepts/provider">concepts/provider</a>):</p>
-<pre><code class="language-bash">python3 docs/examples/stub-provider.py &amp;          # listens on 127.0.0.1:18999
+<pre><code class="language-bash">brama stub-provider --port 18999 &amp;          # listens on 127.0.0.1:18999
 
 export BRAMA_PROVIDER_OPENAI_BASE_URL=http://127.0.0.1:18999
 export BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES='[{&quot;client_id&quot;:&quot;docs-test&quot;,&quot;token&quot;:&quot;docs-test-token&quot;}]'
