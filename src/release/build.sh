@@ -88,8 +88,8 @@ ENTITLEMENTS_ROUTER_BIN="$cargo_root/skarbiec/release/skarbiec" \
 CARGO_TARGET_DIR="$cargo_root/brama" \
   cargo test ${cargo_overrides[@]+"${cargo_overrides[@]}"} --locked --release --manifest-path "$build_source/Cargo.toml" \
     --test pool --test usage
-python3 -S "$source_dir/tests/release/check_router_verbs.py" \
-  "$cargo_root/skarbiec/release/skarbiec" "$source_dir/src/release/bin/start-with-skarbiec"
+"$cargo_root/brama/release/brama" launcher check-router-verbs \
+  --router "$cargo_root/skarbiec/release/skarbiec" --launcher "$source_dir/src/release/bin/start-with-skarbiec"
 
 install -m 0755 "$cargo_root/brama/release/brama" "$stage/bin/brama"
 install -m 0755 "$cargo_root/skarbiec/release/skarbiec" "$stage/bin/skarbiec-entitlements-router"

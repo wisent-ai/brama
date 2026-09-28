@@ -27,7 +27,11 @@ if [[ "$declared" != "$version" ]]; then
   exit 65
 fi
 
-sh -n "$source_dir/src/release/bin/start-with-skarbiec"
-sh -n "$source_dir/src/release/bin/provision-skarbiec-trust"
-python3 -S "$source_dir/tests/release/check_launcher_blocks.py" \
-  "$source_dir/src/release/bin/start-with-skarbiec"
+# The launcher is an entry point plus the stages it sources; every file of
+# that family must parse.
+for launcher_file in "$source_dir/src/release/bin/start-with-skarbiec" \
+  "$source_dir/src/release/bin/provision-skarbiec-trust" \
+  "$source_dir"/src/release/bin/launcher/*.sh \
+  "$source_dir"/src/release/bin/launcher/policy/*.sh; do
+  sh -n "$launcher_file"
+done

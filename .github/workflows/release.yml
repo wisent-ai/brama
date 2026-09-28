@@ -93,30 +93,18 @@ jobs:
         # capability-issue`. Free to catch here, days of a dead gateway
         # otherwise.
         run: |
-          python3 tests/release/check_router_verbs.py \
-            skarbiec-source/target/release/skarbiec \
-            src/release/bin/start-with-skarbiec \
-            src/release/bin/launcher/bundle-coordinates.sh \
-            src/release/bin/launcher/service-identity.sh \
-            src/release/bin/launcher/workload-trust.sh \
-            src/release/bin/launcher/capability-broker-socket.sh \
-            src/release/bin/launcher/policy/control-policy.sh \
-            src/release/bin/launcher/policy/router-identities.sh \
-            src/release/bin/launcher/policy/subscription-catalog.sh \
-            src/release/bin/launcher/gateway-launch.sh
+          target/release/brama launcher check-router-verbs \
+            --router skarbiec-source/target/release/skarbiec \
+            --launcher src/release/bin/start-with-skarbiec
       - name: Refuse a launcher that does not parse
-        # `sh -n` cannot see inside the heredoc Python the launcher carries, and
-        # a block that does not compile fails at boot on the host instead. The
-        # launcher is an entry point plus the stages it sources, so every file
-        # of that family is parsed and every embedded block compiled.
+        # The launcher is an entry point plus the stages it sources, so every
+        # file of that family is parsed.
         run: |
           for launcher_file in src/release/bin/start-with-skarbiec \
             src/release/bin/launcher/*.sh \
             src/release/bin/launcher/policy/*.sh; do
             sh -n "$launcher_file"
           done
-          python3 tests/release/check_launcher_blocks.py \
-            src/release/bin/start-with-skarbiec
       - name: Publish immutable tagged artifact
         env:
           GH_TOKEN: ${{ github.token }}

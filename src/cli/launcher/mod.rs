@@ -5,6 +5,7 @@
 mod catalog;
 mod identities;
 mod policy;
+mod verbs;
 
 use std::path::PathBuf;
 
@@ -59,6 +60,14 @@ pub(crate) enum LauncherCommand {
         item: String,
         field: String,
     },
+    /// Check that the pinned broker advertises every router command path the
+    /// launcher and these launcher steps invoke
+    CheckRouterVerbs {
+        #[arg(long)]
+        router: PathBuf,
+        #[arg(long)]
+        launcher: PathBuf,
+    },
 }
 
 fn printed(result: Result<String, String>) -> Result<(), String> {
@@ -80,6 +89,7 @@ pub(crate) fn run(command: LauncherCommand) {
             .and_then(|allowed| printed(identities::model_router(&router, &allowed, &backend_models))),
         LauncherCommand::RequestSignIdentities { router } => printed(identities::request_sign(&router)),
         LauncherCommand::ItemField { router, item, field } => printed(identities::item_field(&router, &item, &field)),
+        LauncherCommand::CheckRouterVerbs { router, launcher } => verbs::check(&router, &launcher),
     };
     if let Err(detail) = result {
         eprintln!("{detail}");
