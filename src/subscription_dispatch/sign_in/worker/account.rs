@@ -6,6 +6,9 @@ use super::super::blocked::{Blocked, SignInError};
 pub(crate) const LOGIN_ITEM_SELECTOR: &str = "login_item";
 /// Weles answers a finished resolution or trajectory with 200 and `ok: true`.
 pub(in crate::subscription_dispatch::sign_in) const HTTP_OK: u16 = 200;
+/// How much of an undecodable resolver answer a refusal quotes: enough to
+/// tell an HTML error page or a proxy message from truncated JSON.
+const RESPONSE_EXCERPT_CHARS: usize = 300;
 
 /// Only opaque vault coordinates and non-secret account provenance cross here.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -41,10 +44,23 @@ pub(crate) async fn resolve(
             detail: format!("POST {base}/reauth/resolve: {error:?}"),
         })?;
     let status = response.status().as_u16();
-    let answer: Value = response.json().await.map_err(|error| Blocked::Operation {
+    // The body is read as text first so an undecodable answer is reported
+    // with what Weles (or the Stado adapter in front of it) actually sent.
+    let body = response.text().await.map_err(|error| Blocked::Operation {
         code: "account_resolution_response_invalid".into(),
         stage: "identity".into(),
-        detail: format!("POST {base}/reauth/resolve returned invalid JSON: {error}"),
+        detail: format!("POST {base}/reauth/resolve HTTP {status}: body unreadable: {error}"),
+        status: Some(status),
+    })?;
+    let answer: Value = serde_json::from_str(&body).map_err(|error| Blocked::Operation {
+        code: "account_resolution_response_invalid".into(),
+        stage: "identity".into(),
+        detail: format!(
+            "POST {base}/reauth/resolve HTTP {status} returned invalid JSON ({error}): {}",
+            body.chars()
+                .take(RESPONSE_EXCERPT_CHARS)
+                .collect::<String>()
+        ),
         status: Some(status),
     })?;
     if status != HTTP_OK || answer.get("ok").and_then(Value::as_bool) != Some(true) {
