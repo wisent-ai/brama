@@ -79,6 +79,9 @@ pub fn code_for_kind(kind: &str) -> Option<Code> {
         // The four request-shaped refusals all mean the route, selector or
         // measured evidence asked for does not exist.
         "invalid_request" => Some(Code::NotFound),
+        // The prompt is longer than the model takes: a stated refusal of this
+        // request that no wait repairs.
+        "context_length_exceeded" => Some(Code::Refused),
         "provider_failure" | "internal_error" => Some(Code::Unknown),
         _ => None,
     }

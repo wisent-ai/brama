@@ -33,6 +33,12 @@ pub fn provider_refusal_contract(kind: ProviderRefusal) -> ModelErrorContract {
             code: "provider_quota_exhausted",
             retryable: false,
         },
+        ProviderRefusal::ContextLengthExceeded => ModelErrorContract {
+            status: StatusCode::BAD_REQUEST,
+            error_type: "request_error",
+            code: "context_length_exceeded",
+            retryable: false,
+        },
         ProviderRefusal::DependencyUnavailable
         | ProviderRefusal::Gateway(GatewayRefusal::DependencyUnavailable) => ModelErrorContract {
             status: StatusCode::SERVICE_UNAVAILABLE,

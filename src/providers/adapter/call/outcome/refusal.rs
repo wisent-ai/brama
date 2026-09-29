@@ -102,29 +102,43 @@ pub(in crate::providers::adapter) fn provider_refusal(
 /// object's `code` or `type` field.
 const INSUFFICIENT_QUOTA: &str = "insufficient_quota";
 
+/// The OpenAI-shape error code for a prompt longer than the model's context,
+/// read from the error object's `code` or `type` field.
+const CONTEXT_LENGTH_EXCEEDED: &str = "context_length_exceeded";
+
+/// Whether the error object's `code` or `type` field names `wanted`.
+fn error_names(body: &str, wanted: &str) -> bool {
+    serde_json::from_str::<Value>(body)
+        .ok()
+        .and_then(|value| value.get("error").cloned())
+        .is_some_and(|error| {
+            ["code", "type"]
+                .iter()
+                .any(|field| error.get(field).and_then(Value::as_str) == Some(wanted))
+        })
+}
+
 /// The class of a refused answer, from its status, and for a 429 from the error
 /// object's code, which is the only thing that tells a spent balance from a
-/// rate window. The kind clients read is exactly what it has always been, 404,
-/// 407, 408 and 410 attributed to nothing and 504 called an unreachable
-/// dependency included.
+/// rate window. A 413, or a client error whose error object names
+/// `context_length_exceeded`, is a prompt the model cannot take, so a client can
+/// promote the route or compact instead of failing the turn. The kind clients
+/// read otherwise is exactly what it has always been, 404, 407, 408 and 410
+/// attributed to nothing and 504 called an unreachable dependency included.
 pub(in crate::providers::adapter) fn refusal_class(
     status: reqwest::StatusCode,
     body: &str,
 ) -> ProviderRefusal {
     if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-        let error = serde_json::from_str::<Value>(body)
-            .ok()
-            .and_then(|value| value.get("error").cloned());
-        let spent = error.as_ref().is_some_and(|error| {
-            ["code", "type"]
-                .iter()
-                .any(|field| error.get(field).and_then(Value::as_str) == Some(INSUFFICIENT_QUOTA))
-        });
-        if spent {
+        if error_names(body, INSUFFICIENT_QUOTA) {
             ProviderRefusal::QuotaExhausted
         } else {
             ProviderRefusal::RateLimited
         }
+    } else if status == reqwest::StatusCode::PAYLOAD_TOO_LARGE
+        || (status.is_client_error() && error_names(body, CONTEXT_LENGTH_EXCEEDED))
+    {
+        ProviderRefusal::ContextLengthExceeded
     } else if matches!(
         status,
         reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN

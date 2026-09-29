@@ -16,6 +16,7 @@ fn stream_failure_class(error: Option<&Value>) -> ProviderRefusal {
     {
         Some("rate_limit_exceeded" | "slow_down") => ProviderRefusal::RateLimited,
         Some("insufficient_quota") => ProviderRefusal::QuotaExhausted,
+        Some("context_length_exceeded") => ProviderRefusal::ContextLengthExceeded,
         Some("server_error") => ProviderRefusal::DependencyUnavailable,
         _ => ProviderRefusal::ProviderFailure,
     }

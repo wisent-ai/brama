@@ -16,6 +16,11 @@ pub enum ProviderRefusal {
     Authentication,
     /// 5xx: the provider could not answer.
     DependencyUnavailable,
+    /// 413, or a 4xx whose error object's `code` or `type` is
+    /// `context_length_exceeded`: the prompt is longer than the model accepts.
+    /// Every credential refuses it alike; a larger model or a shorter context
+    /// serves it.
+    ContextLengthExceeded,
     /// Any other status: this request was refused, not the credential.
     ProviderFailure,
     /// Brama refused the request itself before or instead of asking a provider.
@@ -50,6 +55,7 @@ impl ProviderRefusal {
         match self {
             Self::RateLimited => "provider_rate_limited",
             Self::QuotaExhausted => "provider_quota_exhausted",
+            Self::ContextLengthExceeded => "context_length_exceeded",
             Self::Authentication => "provider_authentication",
             Self::DependencyUnavailable | Self::Gateway(GatewayRefusal::DependencyUnavailable) => {
                 "dependency_unavailable"

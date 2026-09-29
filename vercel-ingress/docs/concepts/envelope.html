@@ -88,6 +88,10 @@ the point. Otherwise Brama's own kind is translated exactly once:</p>
 <td><code>NotFound</code> — the route, selector, or evidence asked for does not exist</td>
 </tr>
 <tr>
+<td><code>context_length_exceeded</code></td>
+<td><code>Refused</code> — the prompt is longer than the model takes (the provider answered 413, or its error object's <code>code</code> or <code>type</code> is <code>context_length_exceeded</code>); HTTP 400, <code>retryable: false</code>. A client promotes the route or compacts; no wait or other credential repairs it</td>
+</tr>
+<tr>
 <td><code>provider_failure</code>, <code>internal_error</code></td>
 <td><code>Unknown</code></td>
 </tr>
