@@ -24,10 +24,50 @@ fn is_word(token: &str) -> bool {
         && chars.all(|c| c.is_ascii_lowercase() || c == '-')
 }
 
-/// The command words after each literal router call: every whitespace-
-/// separated word up to the first token that is not one.
+/// Shell keywords after which the next word is a command.
+const COMMAND_KEYWORDS: [&str; 9] = [
+    "then", "do", "else", "exec", "!", "time", "if", "while", "until",
+];
+
+/// Whether the router literal that follows `before` is the command of a
+/// simple command, rather than an argument (`--router "$…"`), a test operand
+/// (`[ -x "$…" ]`) or an assignment value (`NAME="$…"`). Only a command runs
+/// a broker verb; an argument is read by whatever program it is handed to.
+fn in_command_position(before: &str) -> bool {
+    let line = before.rsplit('\n').next().unwrap_or_default();
+    let trimmed = line.trim_end();
+    if trimmed.is_empty() {
+        return true;
+    }
+    if trimmed.ends_with(['(', '|', ';', '&', '{', '`']) {
+        return true;
+    }
+    if trimmed.len() == line.len() {
+        return false;
+    }
+    let last = trimmed
+        .rsplit(char::is_whitespace)
+        .next()
+        .unwrap_or_default();
+    COMMAND_KEYWORDS.contains(&last) || is_assignment(last)
+}
+
+/// `NAME=value`: an environment prefix of the command that follows it.
+fn is_assignment(token: &str) -> bool {
+    token.split_once('=').is_some_and(|(name, _)| {
+        let mut chars = name.chars();
+        chars
+            .next()
+            .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
+            && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+    })
+}
+
+/// The command words after each literal router call in command position:
+/// every whitespace-separated word up to the first token that is not one.
 fn shell_calls(text: &str) -> Vec<Vec<String>> {
     text.match_indices(ROUTER_CALL)
+        .filter(|(at, _)| in_command_position(&text[..*at]))
         .map(|(at, _)| {
             text[at + ROUTER_CALL.len()..]
                 .split_whitespace()
