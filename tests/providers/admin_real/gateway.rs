@@ -5,8 +5,7 @@
 //! table through the real entitlements router. No provider replacement,
 //! canned response, or dry run.
 
-use std::io::Write as _;
-use std::net::{Ipv4Addr, SocketAddr, TcpListener};
+use std::io::{BufRead, BufReader, Write as _};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -53,12 +52,28 @@ pub(crate) fn real_provider_credential(provider: &str) -> String {
         .to_owned()
 }
 
-fn available_port() -> u16 {
-    TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-        .expect("reserve loopback port")
-        .local_addr()
-        .expect("reserved port")
-        .port()
+/// The port the gateway reports after binding, read from its
+/// `brama server listening on 127.0.0.1:<port>` log line; the rest of its
+/// stderr keeps draining so the pipe never fills.
+fn bound_port(child: &mut Child) -> u16 {
+    const MARKER: &str = "brama server listening on ";
+    let mut lines = BufReader::new(child.stderr.take().expect("the gateway's stderr")).lines();
+    let port = lines
+        .by_ref()
+        .map_while(Result::ok)
+        .find_map(|line| {
+            let at = line.find(MARKER)? + MARKER.len();
+            line[at..]
+                .split_whitespace()
+                .next()?
+                .rsplit(':')
+                .next()?
+                .parse()
+                .ok()
+        })
+        .expect("the real Brama binary did not report a bound port");
+    std::thread::spawn(move || lines.for_each(drop));
+    port
 }
 
 fn scratch(story: &str) -> PathBuf {
@@ -112,14 +127,11 @@ impl Gateway {
             "allowed_models": [ALIAS, ROUTE, super::routes::REPLACEMENT_ROUTE],
         }));
 
-        let port = available_port();
+        // Port 0: the kernel picks a free port at the gateway's own bind and
+        // the gateway names it; a port reserved here and released first is
+        // one a concurrent story's listener can take.
         let mut child = Command::new(env!("CARGO_BIN_EXE_brama"))
-            .args([
-                "serve",
-                "--port",
-                &port.to_string(),
-                "--local-credentials-stdin",
-            ])
+            .args(["serve", "--port", "0", "--local-credentials-stdin"])
             .env(
                 "BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES",
                 serde_json::to_string(&identities).expect("serialize identities"),
@@ -139,6 +151,7 @@ impl Gateway {
             .write_all(b"{}")
             .expect("start with an empty standalone credential store");
 
+        let port = bound_port(&mut child);
         let origin = format!("http://127.0.0.1:{port}");
         let client = Client::builder()
             .timeout(Duration::from_secs(120))

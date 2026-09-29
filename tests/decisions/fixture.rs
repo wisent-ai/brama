@@ -9,7 +9,7 @@
 
 #![allow(dead_code)]
 
-use std::net::{Ipv4Addr, SocketAddr, TcpListener};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -81,12 +81,32 @@ pub fn declared_levels() -> usize {
         .len()
 }
 
-fn available_port() -> u16 {
-    TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-        .expect("reserve loopback port")
-        .local_addr()
-        .expect("reserved port")
-        .port()
+/// The port the gateway reports after binding, read from its
+/// `brama server listening on 127.0.0.1:<port>` log line; the rest of its
+/// stderr keeps draining so the pipe never fills. A gateway that exits
+/// before binding answers with everything it wrote.
+fn bound_port(child: &mut Child) -> Result<u16, String> {
+    const MARKER: &str = "brama server listening on ";
+    let mut lines = BufReader::new(child.stderr.take().expect("the gateway's stderr")).lines();
+    let mut written = String::new();
+    for line in lines.by_ref().map_while(Result::ok) {
+        let port = line.find(MARKER).and_then(|at| {
+            line[at + MARKER.len()..]
+                .split_whitespace()
+                .next()?
+                .rsplit(':')
+                .next()?
+                .parse()
+                .ok()
+        });
+        if let Some(port) = port {
+            std::thread::spawn(move || lines.for_each(drop));
+            return Ok(port);
+        }
+        written.push_str(&line);
+        written.push('\n');
+    }
+    Err(written)
 }
 
 /// A private scratch directory inside this package's own build area.
@@ -140,7 +160,6 @@ pub struct RealGateway {
 
 impl RealGateway {
     pub fn start(story: &str, routes: Value) -> Self {
-        let port = available_port();
         let scratch = scratch(story);
         let registry = registry(&scratch, &routes);
         // Three identities: the caller under test, and the two clients the
@@ -180,8 +199,11 @@ impl RealGateway {
             "weles": "best",
             "best": "best",
         });
-        let child = Command::new(env!("CARGO_BIN_EXE_brama"))
-            .args(["serve", "--port", &port.to_string()])
+        // Port 0: the kernel picks a free port at the gateway's own bind and
+        // the gateway names it; a port reserved here and released first is
+        // one a concurrent story's listener can take.
+        let mut child = Command::new(env!("CARGO_BIN_EXE_brama"))
+            .args(["serve", "--port", "0"])
             .env(
                 "BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES",
                 identities.to_string(),
@@ -194,6 +216,14 @@ impl RealGateway {
             .stderr(Stdio::piped())
             .spawn()
             .expect("start the real Brama gateway");
+        let port = match bound_port(&mut child) {
+            Ok(port) => port,
+            Err(refused) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("the real gateway exited before binding: {refused}");
+            }
+        };
         let mut gateway = Self {
             child,
             origin: format!("http://127.0.0.1:{port}"),

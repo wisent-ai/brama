@@ -13,8 +13,7 @@
 //! credential is never sent anywhere, because readiness obtains it and does
 //! not spend it.
 
-use std::io::Write;
-use std::net::{Ipv4Addr, SocketAddr, TcpListener};
+use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -52,18 +51,11 @@ impl Gateway {
             std::fs::set_permissions(&routes, std::fs::Permissions::from_mode(0o600))
                 .expect("protect the isolated route registry");
         }
-        let port = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-            .expect("reserve loopback port")
-            .local_addr()
-            .expect("reserved port")
-            .port();
+        // Port 0: the kernel picks a free port at the gateway's own bind and
+        // the gateway names it; a port reserved here and released first is
+        // one a concurrent test's listener can take.
         let mut child = Command::new(env!("CARGO_BIN_EXE_brama"))
-            .args([
-                "serve",
-                "--port",
-                &port.to_string(),
-                "--local-credentials-stdin",
-            ])
+            .args(["serve", "--port", "0", "--local-credentials-stdin"])
             .env(
                 "BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES",
                 json!([{"client_id": "brama-desktop", "token": CONSOLE_BEARER}]).to_string(),
@@ -84,6 +76,7 @@ impl Gateway {
             .expect("credential stdin")
             .write_all(local_credentials.as_bytes())
             .expect("hand the standalone credential store over");
+        let port = bound_port(&mut child);
         let origin = format!("http://127.0.0.1:{port}");
         let client = Client::builder()
             .timeout(Duration::from_secs(5))
@@ -137,6 +130,31 @@ impl Gateway {
         }
     }
 }
+
+/// The port the gateway reports after binding, read from its
+/// `brama server listening on 127.0.0.1:<port>` log line; the rest of its
+/// stderr keeps draining so the pipe never fills.
+fn bound_port(child: &mut Child) -> u16 {
+    const MARKER: &str = "brama server listening on ";
+    let mut lines = BufReader::new(child.stderr.take().expect("the gateway's stderr")).lines();
+    let port = lines
+        .by_ref()
+        .map_while(Result::ok)
+        .find_map(|line| {
+            let at = line.find(MARKER)? + MARKER.len();
+            line[at..]
+                .split_whitespace()
+                .next()?
+                .rsplit(':')
+                .next()?
+                .parse()
+                .ok()
+        })
+        .expect("the real Brama binary did not report a bound port");
+    std::thread::spawn(move || lines.for_each(drop));
+    port
+}
+
 impl Drop for Gateway {
     fn drop(&mut self) {
         let _ = self.child.kill();

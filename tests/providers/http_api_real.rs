@@ -32,8 +32,7 @@
 //! own `credential_unauthorized` sentence -- which is the finding, not a
 //! reason to soften the test.
 
-use std::io::Write as _;
-use std::net::{Ipv4Addr, SocketAddr, TcpListener};
+use std::io::{BufRead, BufReader, Write as _};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -48,12 +47,32 @@ const OPENAI_ROUTE: &str = "openai/default";
 const OPENROUTER_ROUTE: &str = "openrouter/openai/gpt-4o-mini";
 const FEATHERLESS_ROUTE: &str = "featherless/TheDrummer/Cydonia-24B-v4.3";
 
-fn available_port() -> u16 {
-    TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-        .expect("reserve loopback port")
-        .local_addr()
-        .expect("reserved port")
-        .port()
+/// The port the gateway reports after binding, read from its
+/// `brama server listening on 127.0.0.1:<port>` log line; the rest of its
+/// stderr keeps draining so the pipe never fills. A gateway that exits
+/// before binding answers with everything it wrote.
+fn bound_port(child: &mut Child) -> Result<u16, String> {
+    const MARKER: &str = "brama server listening on ";
+    let mut lines = BufReader::new(child.stderr.take().expect("the gateway's stderr")).lines();
+    let mut written = String::new();
+    for line in lines.by_ref().map_while(Result::ok) {
+        let port = line.find(MARKER).and_then(|at| {
+            line[at + MARKER.len()..]
+                .split_whitespace()
+                .next()?
+                .rsplit(':')
+                .next()?
+                .parse()
+                .ok()
+        });
+        if let Some(port) = port {
+            std::thread::spawn(move || lines.for_each(drop));
+            return Ok(port);
+        }
+        written.push_str(&line);
+        written.push('\n');
+    }
+    Err(written)
 }
 
 /// A private scratch directory under the operator-visible work area.
@@ -80,7 +99,6 @@ impl RealGateway {
     /// The real binary serving with the real inherited environment. Only the
     /// client identity, the state directory and the perf file are test-owned.
     fn start(story: &str, allowed_route: &str) -> Self {
-        let port = available_port();
         let scratch = scratch(story);
         let mut identities: Vec<Value> = serde_json::from_str(
             &std::env::var("BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES")
@@ -92,8 +110,11 @@ impl RealGateway {
             "token": BEARER,
             "allowed_models": [allowed_route],
         }));
-        let child = Command::new(env!("CARGO_BIN_EXE_brama"))
-            .args(["serve", "--port", &port.to_string()])
+        // Port 0: the kernel picks a free port at the gateway's own bind and
+        // the gateway names it; a port reserved here and released first is
+        // one a concurrent test's listener can take.
+        let mut child = Command::new(env!("CARGO_BIN_EXE_brama"))
+            .args(["serve", "--port", "0"])
             .env(
                 "BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES",
                 serde_json::to_string(&identities).expect("serialize client identity table"),
@@ -104,6 +125,17 @@ impl RealGateway {
             .stderr(Stdio::piped())
             .spawn()
             .expect("start real Brama gateway");
+        let port = match bound_port(&mut child) {
+            Ok(port) => port,
+            Err(refused) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "the real gateway exited before binding; it must run inside the launcher \
+                     environment: {refused}"
+                );
+            }
+        };
         let origin = format!("http://127.0.0.1:{port}");
         Self {
             child,
