@@ -30,7 +30,8 @@ struct Gateway {
 }
 
 fn required(name: &str) -> String {
-    std::env::var(name).unwrap_or_else(|_| panic!("{name} is required; this test fails rather than skips"))
+    std::env::var(name)
+        .unwrap_or_else(|_| panic!("{name} is required; this test fails rather than skips"))
 }
 
 fn root() -> PathBuf {
@@ -39,7 +40,9 @@ fn root() -> PathBuf {
 
 impl Gateway {
     fn http(&self, path: &str, payload: Option<&Value>) -> (u16, String) {
-        let body = payload.map(|value| serde_json::to_vec(value).expect("payload serialises")).unwrap_or_default();
+        let body = payload
+            .map(|value| serde_json::to_vec(value).expect("payload serialises"))
+            .unwrap_or_default();
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("clock after epoch")
@@ -50,7 +53,11 @@ impl Gateway {
         mac.update(format!("{}:{timestamp}:{body_hash}", self.agent).as_bytes());
         let signature = hex::encode(mac.finalize().into_bytes());
         let url = format!("{}{path}", self.origin);
-        let request = if payload.is_some() { self.client.post(url).body(body) } else { self.client.get(url) };
+        let request = if payload.is_some() {
+            self.client.post(url).body(body)
+        } else {
+            self.client.get(url)
+        };
         let response = request
             .bearer_auth(&self.token)
             .header("Content-Type", "application/json")
@@ -79,26 +86,41 @@ impl Gateway {
 }
 
 fn normalized(text: &str) -> String {
-    text.to_lowercase().split_whitespace().collect::<Vec<_>>().join(" ")
+    text.to_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn streamed_text(raw: &str) -> Result<String, String> {
     let mut text = String::new();
     let mut finished = false;
     for line in raw.lines() {
-        let Some(data) = line.strip_prefix("data:").map(str::trim) else { continue };
+        let Some(data) = line.strip_prefix("data:").map(str::trim) else {
+            continue;
+        };
         if data == "[DONE]" {
             finished = true;
             continue;
         }
-        let event: Value = serde_json::from_str(data).map_err(|error| format!("bad event {data}: {error}"))?;
-        for choice in event.get("choices").and_then(Value::as_array).into_iter().flatten() {
+        let event: Value =
+            serde_json::from_str(data).map_err(|error| format!("bad event {data}: {error}"))?;
+        for choice in event
+            .get("choices")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
             if let Some(content) = choice.pointer("/delta/content").and_then(Value::as_str) {
                 text.push_str(content);
             }
         }
     }
-    if finished { Ok(text) } else { Err("the gateway did not complete its event stream".into()) }
+    if finished {
+        Ok(text)
+    } else {
+        Err("the gateway did not complete its event stream".into())
+    }
 }
 
 #[test]
@@ -112,52 +134,91 @@ fn image_selection_real() {
         client: reqwest::blocking::Client::new(),
     };
     let expected = required("BRAMA_REAL_EXPECTED_REVISION");
-    let image = std::fs::read(root().join("tests/routing/fixtures/page.png")).expect("fixture page.png");
+    let image =
+        std::fs::read(root().join("tests/routing/fixtures/page.png")).expect("fixture page.png");
     let image_url = format!("data:image/png;base64,{}", STANDARD.encode(&image));
-    let mut report = json!({ "input_sha256": hex::encode(Sha256::digest(&image)), "observations": {} });
+    let mut report =
+        json!({ "input_sha256": hex::encode(Sha256::digest(&image)), "observations": {} });
 
     let (status, raw) = gateway.http("/health", None);
     let identity: Value = serde_json::from_str(&raw).unwrap_or(Value::Null);
     report["gateway_identity"] = json!({ "status": status, "body": identity });
-    let served = identity.pointer("/build/source_revision").and_then(Value::as_str);
+    let served = identity
+        .pointer("/build/source_revision")
+        .and_then(Value::as_str);
     let mut failures: Vec<String> = Vec::new();
     if status != 200 || served != Some(expected.as_str()) {
-        failures.push(format!("expected serving revision {expected}, got HTTP {status}: {raw}"));
+        failures.push(format!(
+            "expected serving revision {expected}, got HTTP {status}: {raw}"
+        ));
     } else {
         let (status, raw) = gateway.completion(&image_url, false, "best");
-        report["observations"]["buffered_image_answer"] = json!({ "status": status, "response": raw });
+        report["observations"]["buffered_image_answer"] =
+            json!({ "status": status, "response": raw });
         let answer = serde_json::from_str::<Value>(&raw)
             .ok()
-            .and_then(|payload| payload.pointer("/choices/0/message/content").and_then(Value::as_str).map(str::to_string));
-        if status != 200 || !answer.as_deref().map(normalized).unwrap_or_default().contains(EXPECTED_HEADING) {
+            .and_then(|payload| {
+                payload
+                    .pointer("/choices/0/message/content")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            });
+        if status != 200
+            || !answer
+                .as_deref()
+                .map(normalized)
+                .unwrap_or_default()
+                .contains(EXPECTED_HEADING)
+        {
             failures.push(format!("buffered image answer: HTTP {status}: {raw}"));
         }
         let (status, raw) = gateway.completion(&image_url, true, "best");
-        report["observations"]["streamed_image_answer"] = json!({ "status": status, "response": raw });
+        report["observations"]["streamed_image_answer"] =
+            json!({ "status": status, "response": raw });
         match streamed_text(&raw) {
             Ok(text) if status == 200 && normalized(&text).contains(EXPECTED_HEADING) => {}
             Ok(text) => failures.push(format!("streamed image answer: HTTP {status}: {text}")),
             Err(detail) => failures.push(format!("streamed image answer: {detail}")),
         }
-        let (status, raw) = gateway.completion(&image_url, false, "unauthorized-image-selection-probe");
-        report["observations"]["unauthorized_route_stays_refused"] = json!({ "status": status, "response": raw });
+        let (status, raw) =
+            gateway.completion(&image_url, false, "unauthorized-image-selection-probe");
+        report["observations"]["unauthorized_route_stays_refused"] =
+            json!({ "status": status, "response": raw });
         let code = serde_json::from_str::<Value>(&raw)
             .ok()
-            .and_then(|payload| payload.pointer("/error/code").and_then(Value::as_str).map(str::to_string));
+            .and_then(|payload| {
+                payload
+                    .pointer("/error/code")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            });
         if status != 403 || code.as_deref() != Some("forbidden") {
             failures.push(format!("unauthorized route: HTTP {status}: {raw}"));
         }
     }
 
     let revision = std::env::var("WISENT_SOURCE_COMMIT").unwrap_or_else(|_| {
-        let output = std::process::Command::new("git").args(["rev-parse", "HEAD"]).current_dir(root()).output().expect("git");
+        let output = std::process::Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(root())
+            .output()
+            .expect("git");
         String::from_utf8_lossy(&output.stdout).trim().to_string()
     });
     report["source_revision"] = json!(revision);
     report["failures"] = json!(failures);
-    let output = root().join(".wisent-output/image-selection-real").join(uuid::Uuid::new_v4().to_string());
+    let output = root()
+        .join(".wisent-output/image-selection-real")
+        .join(uuid::Uuid::new_v4().to_string());
     std::fs::create_dir_all(&output).expect("evidence directory");
-    std::fs::write(output.join("report.json"), serde_json::to_string_pretty(&report).expect("report") + "\n").expect("report written");
-    println!("Image selection evidence: {}", output.join("report.json").display());
+    std::fs::write(
+        output.join("report.json"),
+        serde_json::to_string_pretty(&report).expect("report") + "\n",
+    )
+    .expect("report written");
+    println!(
+        "Image selection evidence: {}",
+        output.join("report.json").display()
+    );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
