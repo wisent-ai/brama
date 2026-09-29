@@ -9,7 +9,6 @@
 #![allow(dead_code)]
 
 use std::io::{Read, Write};
-use std::net::{Ipv4Addr, SocketAddr, TcpListener};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -92,24 +91,16 @@ impl Gateway {
             },
             {"client_id": "brama-pool-stranger", "token": STRANGER_BEARER},
         ]);
-        // A port the kernel reserved for this story, never a fixed one.
-        let port = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-            .expect("reserve loopback port")
-            .local_addr()
-            .expect("reserved port")
-            .port();
+        // Port 0: the kernel picks a free port at the gateway's own bind, and
+        // the gateway names it. A port reserved here and released before the
+        // gateway binds is one a concurrent story's listener can take first.
         let mut command = Command::new("sh");
         command.arg("-eu");
         command.arg(
             Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("src/release/bin/launcher/gateway-launch.sh"),
         );
-        command.args([
-            "serve",
-            "--port",
-            &port.to_string(),
-            "--local-credentials-stdin",
-        ]);
+        command.args(["serve", "--port", "0", "--local-credentials-stdin"]);
         // The vault's environment carries HOME, GNUPGHOME and the vault path,
         // and Brama hands its whole environment to the real router child,
         // which is what keeps that child off the operator's vault.
@@ -168,27 +159,30 @@ impl Gateway {
             }
         });
 
-        let origin = format!("http://127.0.0.1:{port}");
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
             .build()
             .expect("HTTP client");
         let deadline = Instant::now() + Duration::from_secs(20);
         while Instant::now() < deadline {
-            if client
-                .get(format!("{origin}/health"))
-                .send()
-                .is_ok_and(|response| response.status().is_success())
-            {
-                return Self {
-                    child,
-                    _broker: broker,
-                    origin,
-                    client,
-                    directory,
-                    vault,
-                    log,
-                };
+            let bound = log.lock().ok().and_then(|buffer| bound_port(&buffer));
+            if let Some(port) = bound {
+                let origin = format!("http://127.0.0.1:{port}");
+                if client
+                    .get(format!("{origin}/health"))
+                    .send()
+                    .is_ok_and(|response| response.status().is_success())
+                {
+                    return Self {
+                        child,
+                        _broker: broker,
+                        origin,
+                        client,
+                        directory,
+                        vault,
+                        log,
+                    };
+                }
             }
             std::thread::sleep(Duration::from_millis(50));
         }
@@ -238,6 +232,15 @@ impl Drop for Gateway {
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
+}
+
+/// The port the gateway reported after binding, from its log line
+/// `brama server listening on 127.0.0.1:<port>`.
+fn bound_port(log: &str) -> Option<u16> {
+    const MARKER: &str = "brama server listening on ";
+    let at = log.find(MARKER)? + MARKER.len();
+    let address = log[at..].split_whitespace().next()?;
+    address.rsplit(':').next()?.parse().ok()
 }
 
 #[path = "pool_report.rs"]

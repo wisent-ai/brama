@@ -73,6 +73,9 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
     info!("Starting brama server on {addr}");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
+    // The bound address, not the requested one: `--port 0` asks the kernel
+    // for a free port, and this line is how a supervisor or test learns it.
+    info!("brama server listening on {}", listener.local_addr()?);
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
