@@ -179,7 +179,7 @@ pub(super) async fn calculate_readiness(
                 unroutable.push(json!({
                     "agent": agent,
                     "provider": "all",
-                    "reason": error,
+                    "reason": error.message,
                 }));
             }
         }

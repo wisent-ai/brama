@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use crate::gateway::broker;
 use crate::providers::adapter as provider_registry;
-use crate::types::{GatewayRefusal, ModelRequest, ModelResponse};
+use crate::types::{GatewayRefusal, ModelRequest, ModelResponse, Refusal};
 
 use super::catalogue::route::{provider_for, provider_requires_caller_identity};
 use super::routed_stream::RoutedStream;
@@ -13,68 +13,27 @@ use super::routed_stream::RoutedStream;
 /// Execute a caller-independent canonical route with Brama's dedicated direct
 /// provider capability. Subscription provider credentials are never eligible.
 pub async fn dispatch_direct(request: &ModelRequest) -> ModelResponse {
-    let provider = match provider_for(&request.model) {
-        Some(provider) => provider,
-        None => {
-            return ModelResponse::refused(
-                &request.model,
-                GatewayRefusal::InvalidRequest,
-                "unknown provider/model route".into(),
-            )
+    match direct_credential(&request.model).await {
+        Ok((provider, credential)) => {
+            provider_registry::dispatch(request, &broker::provider_resource(&provider), &credential)
+                .await
         }
-    };
-    if provider_requires_caller_identity(&request.model) {
-        return ModelResponse::refused(
-            &request.model,
-            GatewayRefusal::Unauthenticated,
-            "auth: caller identity is required for subscription providers".into(),
-        );
+        Err(refused) => ModelResponse::from_refusal(&request.model, refused),
     }
-    let credential = match broker::provider_credential(provider).await {
-        Some(credential) => credential,
-        None => {
-            return ModelResponse::refused(
-                &request.model,
-                GatewayRefusal::DependencyUnavailable,
-                format!("direct '{provider}' credential is unavailable"),
-            )
-        }
-    };
-    let credential = match credential.expose_utf8() {
-        Ok(credential) => credential,
-        Err(_) => {
-            return ModelResponse::refused(
-                &request.model,
-                GatewayRefusal::ProviderFailure,
-                format!("direct '{provider}' credential is not valid UTF-8"),
-            )
-        }
-    };
-    provider_registry::dispatch(request, &broker::provider_resource(provider), credential).await
 }
 
 pub async fn dispatch_direct_openai_typed(
     route_id: &str,
     path: &str,
     payload: serde_json::Map<String, Value>,
-) -> Result<Value, String> {
-    let provider =
-        provider_for(route_id).ok_or_else(|| "unknown provider/model route".to_string())?;
-    if provider_requires_caller_identity(route_id) {
-        return Err("auth: caller identity is required for subscription providers".to_string());
-    }
-    let credential = broker::provider_credential(provider)
-        .await
-        .ok_or_else(|| format!("direct '{provider}' credential is unavailable"))?;
-    let credential = credential
-        .expose_utf8()
-        .map_err(|_| format!("direct '{provider}' credential is not valid UTF-8"))?;
+) -> Result<Value, Refusal> {
+    let (provider, credential) = direct_credential(route_id).await?;
     provider_registry::dispatch_openai_typed(
         route_id,
         path,
         payload,
-        &broker::provider_resource(provider),
-        credential,
+        &broker::provider_resource(&provider),
+        &credential,
     )
     .await
 }
@@ -88,7 +47,7 @@ pub async fn dispatch_direct_openai_typed(
 pub async fn dispatch_direct_image(
     route_id: &str,
     payload: serde_json::Map<String, Value>,
-) -> Result<Value, String> {
+) -> Result<Value, Refusal> {
     let (provider, credential) = direct_credential(route_id).await?;
     provider_registry::dispatch_image(
         route_id,
@@ -103,7 +62,7 @@ pub async fn dispatch_direct_image(
 pub async fn dispatch_direct_video(
     route_id: &str,
     payload: serde_json::Map<String, Value>,
-) -> Result<Value, String> {
+) -> Result<Value, Refusal> {
     let (provider, credential) = direct_credential(route_id).await?;
     provider_registry::dispatch_video(
         route_id,
@@ -115,7 +74,7 @@ pub async fn dispatch_direct_video(
 }
 
 /// Read one started video job back from the provider that started it.
-pub async fn dispatch_direct_video_status(route_id: &str, job_id: &str) -> Result<Value, String> {
+pub async fn dispatch_direct_video_status(route_id: &str, job_id: &str) -> Result<Value, Refusal> {
     let (provider, credential) = direct_credential(route_id).await?;
     provider_registry::dispatch_video_status(
         route_id,
@@ -131,7 +90,7 @@ pub async fn dispatch_direct_video_status(route_id: &str, job_id: &str) -> Resul
 pub async fn dispatch_direct_speech(
     route_id: &str,
     payload: serde_json::Map<String, Value>,
-) -> Result<provider_registry::SpokenAudio, String> {
+) -> Result<provider_registry::SpokenAudio, Refusal> {
     let (provider, credential) = direct_credential(route_id).await?;
     provider_registry::dispatch_speech(
         route_id,
@@ -142,22 +101,41 @@ pub async fn dispatch_direct_speech(
     .await
 }
 
-/// The deployment's own credential for one canonical route, with the two
-/// refusals every direct path shares: a route no provider here serves, and a
-/// route whose provider is only reachable with a caller's own subscription.
-async fn direct_credential(route_id: &str) -> Result<(String, String), String> {
+/// The deployment's own credential for one canonical route, with the
+/// refusals every direct path shares, each with its class: a route no
+/// provider here serves, a route whose provider is only reachable with a
+/// caller's own subscription, and a credential this deployment cannot read.
+async fn direct_credential(route_id: &str) -> Result<(String, String), Refusal> {
     let provider = provider_for(route_id)
-        .ok_or_else(|| "unknown provider/model route".to_string())?
+        .ok_or_else(|| {
+            Refusal::gateway(
+                GatewayRefusal::InvalidRequest,
+                "unknown provider/model route",
+            )
+        })?
         .to_owned();
     if provider_requires_caller_identity(route_id) {
-        return Err("auth: caller identity is required for subscription providers".to_string());
+        return Err(Refusal::gateway(
+            GatewayRefusal::Unauthenticated,
+            "auth: caller identity is required for subscription providers",
+        ));
     }
     let credential = broker::provider_credential(&provider)
         .await
-        .ok_or_else(|| format!("direct '{provider}' credential is unavailable"))?;
+        .ok_or_else(|| {
+            Refusal::gateway(
+                GatewayRefusal::DependencyUnavailable,
+                format!("direct '{provider}' credential is unavailable"),
+            )
+        })?;
     let credential = credential
         .expose_utf8()
-        .map_err(|_| format!("direct '{provider}' credential is not valid UTF-8"))?
+        .map_err(|_| {
+            Refusal::gateway(
+                GatewayRefusal::ProviderFailure,
+                format!("direct '{provider}' credential is not valid UTF-8"),
+            )
+        })?
         .to_string();
     Ok((provider, credential))
 }
@@ -169,23 +147,13 @@ async fn direct_credential(route_id: &str) -> Result<(String, String), String> {
 pub async fn dispatch_direct_decision(
     route_id: &str,
     payload: serde_json::Map<String, Value>,
-) -> Result<Value, String> {
-    let provider =
-        provider_for(route_id).ok_or_else(|| "unknown provider/model route".to_string())?;
-    if provider_requires_caller_identity(route_id) {
-        return Err("auth: caller identity is required for subscription providers".to_string());
-    }
-    let credential = broker::provider_credential(provider)
-        .await
-        .ok_or_else(|| format!("direct '{provider}' credential is unavailable"))?;
-    let credential = credential
-        .expose_utf8()
-        .map_err(|_| format!("direct '{provider}' credential is not valid UTF-8"))?;
+) -> Result<Value, Refusal> {
+    let (provider, credential) = direct_credential(route_id).await?;
     provider_registry::dispatch_decision(
         route_id,
         payload,
-        &broker::provider_resource(provider),
-        credential,
+        &broker::provider_resource(&provider),
+        &credential,
     )
     .await
 }
@@ -193,47 +161,13 @@ pub async fn dispatch_direct_decision(
 /// Open one streaming generation on a direct route: one provider attempt, no
 /// rotation, no subscription credential ever eligible.
 pub async fn dispatch_direct_stream(request: &ModelRequest) -> Result<RoutedStream, ModelResponse> {
-    let provider = match provider_for(&request.model) {
-        Some(provider) => provider,
-        None => {
-            return Err(ModelResponse::refused(
-                &request.model,
-                GatewayRefusal::InvalidRequest,
-                "unknown provider/model route".into(),
-            ))
-        }
-    };
-    if provider_requires_caller_identity(&request.model) {
-        return Err(ModelResponse::refused(
-            &request.model,
-            GatewayRefusal::Unauthenticated,
-            "auth: caller identity is required for subscription providers".into(),
-        ));
-    }
-    let credential = match broker::provider_credential(provider).await {
-        Some(credential) => credential,
-        None => {
-            return Err(ModelResponse::refused(
-                &request.model,
-                GatewayRefusal::DependencyUnavailable,
-                format!("direct '{provider}' credential is unavailable"),
-            ))
-        }
-    };
-    let credential = match credential.expose_utf8() {
-        Ok(credential) => credential,
-        Err(_) => {
-            return Err(ModelResponse::refused(
-                &request.model,
-                GatewayRefusal::ProviderFailure,
-                format!("direct '{provider}' credential is not valid UTF-8"),
-            ))
-        }
-    };
+    let (provider, credential) = direct_credential(&request.model)
+        .await
+        .map_err(|refused| ModelResponse::from_refusal(&request.model, refused))?;
     let stream = provider_registry::dispatch_stream(
         request,
-        &broker::provider_resource(provider),
-        credential,
+        &broker::provider_resource(&provider),
+        &credential,
     )
     .await?;
     Ok(RoutedStream {

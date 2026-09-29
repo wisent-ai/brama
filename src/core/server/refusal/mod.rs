@@ -2,8 +2,8 @@
 //!
 //! One document shape for every path in this gateway: a sentence, the type, the
 //! contract code, whether waiting can help, and how many providers were asked.
-//! [`contract`] classifies a provider's or a dependency's own refusal sentence
-//! into that shape; [`envelope`] additionally records the fleet's reading of the
+//! [`classed`] answers a refusal from the class it was stated with, never from
+//! its sentence; [`envelope`] additionally records the fleet's reading of the
 //! same failure in the log, where a new key is not a wire change.
 
 pub(in crate::core::server) mod classed;

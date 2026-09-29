@@ -8,8 +8,9 @@ use tracing::{info, warn};
 use crate::gateway::broker;
 use crate::providers::adapter as provider_registry;
 use crate::subscription_dispatch::usage;
+use crate::types::{GatewayRefusal, ProviderRefusal, Refusal};
 
-use super::super::refusal::envelope::failure_detail;
+use super::super::refusal::envelope::{credential_refusal_class, failure_detail};
 use super::cache::{
     cached_subscription_models, lock_discovery, CachedRegistryModels, MODEL_FAILURE_CACHE_TTL,
     REGISTRY_MODEL_CACHE, REGISTRY_MODEL_FAILURE_CACHE,
@@ -17,7 +18,7 @@ use super::cache::{
 
 pub async fn registry_models_for_agent(
     agent_id: &str,
-) -> Result<Vec<provider_registry::RegistryModel>, String> {
+) -> Result<Vec<provider_registry::RegistryModel>, Refusal> {
     let entries = broker::list_subscriptions(agent_id)
         .await
         .into_iter()
@@ -28,7 +29,7 @@ pub async fn registry_models_for_agent(
 
 pub(super) async fn discover_subscription_models(
     entries: Vec<broker::SubscriptionEntry>,
-) -> Result<Vec<provider_registry::RegistryModel>, String> {
+) -> Result<Vec<provider_registry::RegistryModel>, Refusal> {
     if entries.is_empty() {
         return Ok(Vec::new());
     }
@@ -61,17 +62,23 @@ pub(super) async fn discover_subscription_models(
             // rather than reporting the sixty-second memo of the last refusal.
             if let Some(cause) = usage::awaiting_sign_in_cause(&entry.id) {
                 awaiting_sign_in += 1;
-                failures.push(format!("{}: awaiting sign-in: {cause}", entry.id));
+                failures.push(Refusal::gateway(
+                    GatewayRefusal::SubscriptionReauthorizationRequired,
+                    format!("{}: awaiting sign-in: {cause}", entry.id),
+                ));
                 continue;
             }
             let recent_failure = REGISTRY_MODEL_FAILURE_CACHE.lock().ok().and_then(|cache| {
                 cache
                     .get(&cache_key)
                     .filter(|(fetched, _)| fetched.elapsed() < MODEL_FAILURE_CACHE_TTL)
-                    .map(|(_, error)| error.clone())
+                    .map(|(_, refused)| refused.clone())
             });
-            if let Some(error) = recent_failure {
-                failures.push(format!("{}: {error}", entry.id));
+            if let Some(refused) = recent_failure {
+                failures.push(Refusal::new(
+                    refused.class,
+                    format!("{}: {}", entry.id, refused.message),
+                ));
                 continue;
             }
             read += 1;
@@ -79,6 +86,7 @@ pub(super) async fn discover_subscription_models(
                 Ok(secret) => secret,
                 Err(refused) => {
                     let detail = failure_detail(&refused);
+                    let class = credential_refusal_class(&refused);
                     warn!(
                         event = "subscription_model_credential_failed",
                         subscription = %entry.id,
@@ -90,16 +98,22 @@ pub(super) async fn discover_subscription_models(
                     // Remembered like a discovery failure, for the same reason:
                     // the next request is not a new fact about this credential.
                     if let Ok(mut cache) = REGISTRY_MODEL_FAILURE_CACHE.lock() {
-                        cache.insert(cache_key.clone(), (Instant::now(), detail.clone()));
+                        cache.insert(
+                            cache_key.clone(),
+                            (Instant::now(), Refusal::gateway(class, detail.clone())),
+                        );
                     }
-                    failures.push(format!("{}: {detail}", entry.id));
+                    failures.push(Refusal::gateway(class, format!("{}: {detail}", entry.id)));
                     continue;
                 }
             };
             let secret = match secret.expose_utf8() {
                 Ok(secret) => secret,
                 Err(error) => {
-                    failures.push(format!("{}: credential is not UTF-8: {error}", entry.id));
+                    failures.push(Refusal::gateway(
+                        GatewayRefusal::ProviderFailure,
+                        format!("{}: credential is not UTF-8: {error}", entry.id),
+                    ));
                     continue;
                 }
             };
@@ -108,10 +122,15 @@ pub(super) async fn discover_subscription_models(
             {
                 Ok(models) => models,
                 Err(error) => {
+                    // The provider's model list could not be read.
+                    let refused = Refusal::gateway(GatewayRefusal::DependencyUnavailable, error);
                     if let Ok(mut cache) = REGISTRY_MODEL_FAILURE_CACHE.lock() {
-                        cache.insert(cache_key.clone(), (Instant::now(), error.clone()));
+                        cache.insert(cache_key.clone(), (Instant::now(), refused.clone()));
                     }
-                    failures.push(format!("{}: {error}", entry.id));
+                    failures.push(Refusal::new(
+                        refused.class,
+                        format!("{}: {}", entry.id, refused.message),
+                    ));
                     continue;
                 }
             };
@@ -145,12 +164,33 @@ pub(super) async fn discover_subscription_models(
         "discovered the models an agent's subscriptions publish"
     );
     if models_by_route.is_empty() && !failures.is_empty() {
-        return Err(format!(
-            "could not discover native provider models: {}",
-            failures.join("; ")
+        return Err(Refusal::new(
+            discovery_class(&failures),
+            format!(
+                "could not discover native provider models: {}",
+                failures
+                    .iter()
+                    .map(|refused| refused.message.as_str())
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            ),
         ));
     }
     let mut models = models_by_route.into_values().collect::<Vec<_>>();
     models.sort_by(|left, right| left.route_id.cmp(&right.route_id));
     Ok(models)
+}
+
+/// The class a discovery that found nothing is answered with: a dependency
+/// that did not answer first, because a retry may reach it; then the
+/// authorization failures only an operator repairs.
+fn discovery_class(failures: &[Refusal]) -> ProviderRefusal {
+    [
+        ProviderRefusal::Gateway(GatewayRefusal::DependencyUnavailable),
+        ProviderRefusal::Gateway(GatewayRefusal::CredentialUnauthorized),
+        ProviderRefusal::Gateway(GatewayRefusal::SubscriptionReauthorizationRequired),
+    ]
+    .into_iter()
+    .find(|class| failures.iter().any(|refused| refused.class == *class))
+    .unwrap_or(ProviderRefusal::Gateway(GatewayRefusal::ProviderFailure))
 }

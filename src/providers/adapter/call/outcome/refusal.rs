@@ -6,7 +6,7 @@ use tracing::warn;
 use wisent_errors::Code;
 
 use crate::core::failure::{self, IMPACT_MODEL_REQUEST, POINT_PROVIDER_CALL};
-use crate::types::{ModelResponse, ProviderRefusal};
+use crate::types::{ModelResponse, ProviderRefusal, Refusal};
 
 /// Characters of a provider's own error sentence a refusal may carry.
 const MAX_PROVIDER_ERROR_CHARS: usize = 2048;
@@ -32,7 +32,7 @@ const MAX_TRANSPORT_CAUSE: usize = 300;
 ///
 /// The cause is bounded and carries no request body, only the client's own
 /// description of why the socket did not carry the call.
-pub(in crate::providers::adapter) fn transport_error_message(error: &reqwest::Error) -> String {
+pub(in crate::providers::adapter) fn transport_refusal(error: &reqwest::Error) -> Refusal {
     let mut cause = error.to_string();
     let mut source = std::error::Error::source(error);
     while let Some(inner) = source {
@@ -41,27 +41,50 @@ pub(in crate::providers::adapter) fn transport_error_message(error: &reqwest::Er
         source = std::error::Error::source(inner);
     }
     let cause: String = cause.chars().take(MAX_TRANSPORT_CAUSE).collect();
-    if error.is_timeout() {
-        format!("dependency_timeout: provider request timed out: {cause}")
+    let (class, said) = if error.is_timeout() {
+        (
+            ProviderRefusal::DependencyTimeout,
+            "provider request timed out",
+        )
     } else {
-        format!("dependency_unavailable: provider request failed: {cause}")
-    }
+        (
+            ProviderRefusal::DependencyUnavailable,
+            "provider request failed",
+        )
+    };
+    Refusal::new(class, format!("{}: {said}: {cause}", class.contract_kind()))
 }
 
 pub(in crate::providers::adapter) fn transport_failure(
     route_id: &str,
     error: &reqwest::Error,
 ) -> ModelResponse {
-    attempted_failure(route_id, transport_error_message(error))
+    attempted_failure(route_id, transport_refusal(error))
 }
 
 pub(in crate::providers::adapter) fn attempted_failure(
     route_id: &str,
-    message: String,
+    refusal: Refusal,
 ) -> ModelResponse {
-    let mut failure = ModelResponse::failure(route_id, message);
+    let mut failure = ModelResponse::from_refusal(route_id, refusal);
     failure.attempts = u32::from(true);
     failure
+}
+
+/// A provider's refusal as a typed call carries it, with the class read from
+/// the provider's status and the provider's sentence behind its kind.
+pub(in crate::providers::adapter) fn provider_refused(
+    route_id: &str,
+    status: reqwest::StatusCode,
+    body: &str,
+) -> Refusal {
+    let failure = provider_error(route_id, status, body);
+    Refusal::new(
+        failure
+            .failure_kind
+            .unwrap_or(ProviderRefusal::ProviderFailure),
+        failure.error.unwrap_or_default(),
+    )
 }
 
 /// Classify one refused provider answer: the contract kind clients read, and the
@@ -178,7 +201,8 @@ pub(in crate::providers::adapter) fn provider_error(
         "{}",
         refused.render()
     );
-    let mut failure = attempted_failure(route_id, format!("{kind}: {detail}"));
-    failure.failure_kind = Some(refusal_class(status, body));
-    failure
+    attempted_failure(
+        route_id,
+        Refusal::new(refusal_class(status, body), format!("{kind}: {detail}")),
+    )
 }

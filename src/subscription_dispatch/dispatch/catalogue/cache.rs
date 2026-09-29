@@ -6,6 +6,7 @@ use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::providers::adapter as provider_registry;
+use crate::types::Refusal;
 
 pub(super) struct CachedRegistryModels {
     pub(super) fetched: Instant,
@@ -18,10 +19,12 @@ pub(super) static REGISTRY_MODEL_CACHE: LazyLock<Mutex<HashMap<String, CachedReg
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Discovery failures are cached briefly too: without it every catalog call
-/// re-pays full provider timeouts for credentials that are stale anyway.
+/// re-pays full provider timeouts for credentials that are stale anyway. The
+/// refusal keeps its class, so a request answered from the cache is answered
+/// as the first one was.
 pub(super) const MODEL_FAILURE_CACHE_TTL: Duration = Duration::from_secs(60);
 pub(super) static REGISTRY_MODEL_FAILURE_CACHE: LazyLock<
-    Mutex<HashMap<String, (Instant, String)>>,
+    Mutex<HashMap<String, (Instant, Refusal)>>,
 > = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 type DiscoveryLocks = Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>;
@@ -80,7 +83,7 @@ pub fn discovery_failure(provider: &str, subscription_id: &str) -> Option<String
         .ok()?
         .get(&key)
         .filter(|(fetched, _)| fetched.elapsed() < MODEL_FAILURE_CACHE_TTL)
-        .map(|(_, error)| error.clone())
+        .map(|(_, refused)| refused.message.clone())
 }
 
 /// Everything currently held in the discovery cache, whatever put it there.

@@ -30,7 +30,7 @@ use crate::providers::adapter::native_decision_route;
 use crate::subscription_dispatch::{
     dispatch_best_subscription_for_agent, dispatch_direct, dispatch_direct_decision,
 };
-use crate::types::ModelResponse;
+use crate::types::{ModelResponse, ProviderRefusal, Refusal};
 
 pub use question::{DecisionRequest, Question};
 
@@ -53,8 +53,9 @@ pub struct DecisionOutcome {
 /// Why a decision was not answered, and whether the provider was reached.
 #[derive(Clone, Debug)]
 pub enum DecisionFailure {
-    /// The provider refused, or could not be reached. Its own sentence.
-    Provider(String),
+    /// The provider refused, or could not be reached: its own sentence and
+    /// the class the refusal was stated with.
+    Provider(Refusal),
     /// The provider answered, and the answer was not inside the schema the
     /// caller declared. Naming this separately is the point: a model that
     /// invents an option is a different fault from a provider that is down,
@@ -65,7 +66,8 @@ pub enum DecisionFailure {
 impl DecisionFailure {
     pub fn message(&self) -> &str {
         match self {
-            DecisionFailure::Provider(message) | DecisionFailure::Contract(message) => message,
+            DecisionFailure::Provider(refused) => &refused.message,
+            DecisionFailure::Contract(message) => message,
         }
     }
 }
@@ -188,8 +190,13 @@ pub fn outcome_from_chat(
     response: ModelResponse,
 ) -> Result<DecisionOutcome, DecisionFailure> {
     if !response.success {
-        return Err(DecisionFailure::Provider(response.error.unwrap_or_else(
-            || "the provider refused without a reason".to_string(),
+        return Err(DecisionFailure::Provider(Refusal::new(
+            response
+                .failure_kind
+                .unwrap_or(ProviderRefusal::ProviderFailure),
+            response
+                .error
+                .unwrap_or_else(|| "the provider refused without a reason".to_string()),
         )));
     }
     let answers = answers::answers_from_text(request, &response.content)

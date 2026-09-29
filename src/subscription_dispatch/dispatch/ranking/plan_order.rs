@@ -5,14 +5,20 @@ use std::io::Read;
 
 use crate::gateway::broker;
 use crate::subscription_dispatch::usage;
+use crate::types::{GatewayRefusal, Refusal};
 
 use super::super::catalogue::route::{provider_for, provider_matches};
 
-fn random_u64() -> Result<u64, String> {
+fn random_u64() -> Result<u64, Refusal> {
     let mut bytes = u64::default().to_ne_bytes();
     std::fs::File::open("/dev/urandom")
         .and_then(|mut source| source.read_exact(&mut bytes))
-        .map_err(|_| "operating system randomness is unavailable".to_string())?;
+        .map_err(|_| {
+            Refusal::gateway(
+                GatewayRefusal::DependencyUnavailable,
+                "operating system randomness is unavailable",
+            )
+        })?;
     Ok(u64::from_ne_bytes(bytes))
 }
 
@@ -27,7 +33,7 @@ fn random_u64() -> Result<u64, String> {
 pub(super) fn shuffle_within_equal<T, K: PartialOrd>(
     items: &mut [T],
     key: impl Fn(&T) -> K,
-) -> Result<(), String> {
+) -> Result<(), Refusal> {
     let mut start = 0;
     while start < items.len() {
         let mut end = start + 1;
@@ -84,7 +90,7 @@ pub(super) fn route_plan_key(subscriptions: &[broker::SubscriptionEntry], route_
 pub(super) async fn order_models_by_plan(
     agent_id: &str,
     models: &mut [String],
-) -> Result<(), String> {
+) -> Result<(), Refusal> {
     let subscriptions = broker::list_subscriptions(agent_id).await;
     models.sort_by(|left, right| {
         route_plan_key(&subscriptions, left)

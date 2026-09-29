@@ -5,9 +5,9 @@ use crate::core::failure::POINT_CREDENTIAL_SELECTION;
 use crate::gateway::broker;
 use crate::providers::adapter as provider_registry;
 use crate::subscription_dispatch::usage;
-use crate::types::{ModelRequest, ModelResponse};
+use crate::types::{GatewayRefusal, ModelRequest, ModelResponse};
 
-use super::super::refusal::envelope::{failure_detail, refuse};
+use super::super::refusal::envelope::{credential_refusal_class, failure_detail, refuse};
 
 /// Spend one provider call on exactly one subscription, for the on-demand usage
 /// probe.
@@ -39,6 +39,7 @@ pub async fn probe_subscription_usage(
             return refuse(
                 request,
                 POINT_CREDENTIAL_SELECTION,
+                credential_refusal_class(&refused),
                 failure_detail(&refused),
                 Some(refused),
             );
@@ -50,6 +51,7 @@ pub async fn probe_subscription_usage(
             return refuse(
                 request,
                 POINT_CREDENTIAL_SELECTION,
+                GatewayRefusal::ProviderFailure,
                 format!("credential is not valid UTF-8: {error}"),
                 None,
             );

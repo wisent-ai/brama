@@ -4,10 +4,10 @@
 use tracing::{info, warn};
 
 use crate::core::failure::POINT_MODEL_SELECTION;
-use crate::types::{ModelRequest, ModelResponse};
+use crate::types::{GatewayRefusal, ModelRequest, ModelResponse, ProviderRefusal};
 
 use super::super::catalogue::route::provider_for;
-use super::super::refusal::envelope::refuse;
+use super::super::refusal::envelope::refuse_as;
 use super::super::rotation::buffered::attempt_subscription;
 use super::super::rotation::streaming::attempt_subscription_stream;
 use super::super::routed_stream::RoutedStream;
@@ -45,6 +45,7 @@ struct RankedWalk {
     attempts: u32,
     provider_calls: usize,
     refusals: Vec<String>,
+    classes: Vec<ProviderRefusal>,
     emptied: Vec<String>,
 }
 
@@ -70,6 +71,11 @@ impl RankedWalk {
             self.provider_calls = self.provider_calls.saturating_add(usize::from(true));
         }
         let reason = response.error.as_deref().unwrap_or("failed");
+        self.classes.push(
+            response
+                .failure_kind
+                .unwrap_or(ProviderRefusal::ProviderFailure),
+        );
         warn!(
             event = "ranked_candidate_refused",
             model,
@@ -113,10 +119,34 @@ impl RankedWalk {
         } else {
             format!("{context}; {}", self.refusals.join(", "))
         };
-        let mut failure = refuse(request, POINT_MODEL_SELECTION, message, None);
+        let class = walked_class(&self.classes);
+        let mut failure = refuse_as(request, POINT_MODEL_SELECTION, class, message, None);
         failure.attempts = self.attempts;
         failure
     }
+}
+
+/// The class an exhausted walk is answered with, from the classes its
+/// candidates were refused with.
+///
+/// A spent paid balance comes first because no wait repairs it; a rate window
+/// next, because a wait does and the caller should take it; then the
+/// authorization failures, which only an operator repairs and which must never
+/// be dressed as capacity. A walk that saw none of these found nothing that
+/// could serve it right now.
+fn walked_class(classes: &[ProviderRefusal]) -> ProviderRefusal {
+    [
+        ProviderRefusal::QuotaExhausted,
+        ProviderRefusal::RateLimited,
+        ProviderRefusal::Gateway(GatewayRefusal::SubscriptionUnavailable),
+        ProviderRefusal::Gateway(GatewayRefusal::CredentialUnauthorized),
+        ProviderRefusal::Gateway(GatewayRefusal::SubscriptionReauthorizationRequired),
+    ]
+    .into_iter()
+    .find(|class| classes.contains(class))
+    .unwrap_or(ProviderRefusal::Gateway(
+        GatewayRefusal::SubscriptionUnavailable,
+    ))
 }
 
 /// Walk a ranked candidate list until one of them serves.

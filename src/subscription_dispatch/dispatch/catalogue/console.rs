@@ -6,6 +6,7 @@ use std::time::Instant;
 
 use crate::gateway::broker;
 use crate::providers::adapter as provider_registry;
+use crate::types::{GatewayRefusal, Refusal};
 
 use super::cache::{
     cached_registry_models, CachedRegistryModels, MODEL_CACHE_TTL, MODEL_FAILURE_CACHE_TTL,
@@ -129,7 +130,13 @@ async fn discover_direct_provider_models() -> Vec<provider_registry::RegistryMod
             }
             Err(error) => {
                 if let Ok(mut cache) = REGISTRY_MODEL_FAILURE_CACHE.lock() {
-                    cache.insert(cache_key, (Instant::now(), error.clone()));
+                    cache.insert(
+                        cache_key,
+                        (
+                            Instant::now(),
+                            Refusal::gateway(GatewayRefusal::DependencyUnavailable, error.clone()),
+                        ),
+                    );
                 }
                 tracing::warn!(
                     %provider,

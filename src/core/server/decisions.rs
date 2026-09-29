@@ -136,13 +136,13 @@ fn answered(alias: &str, outcome: &DecisionOutcome) -> Value {
 
 fn refused(alias: &str, route: &str, failure: DecisionFailure) -> ApiError {
     match failure {
-        DecisionFailure::Provider(message) => {
+        DecisionFailure::Provider(refused) => {
             warn!(
                 event = "decision_provider_failed",
-                alias, route, error = %message,
+                alias, route, error = %refused.message,
                 "the route behind a decision alias refused"
             );
-            typed_dispatch_error(&message)
+            typed_dispatch_error(&refused)
         }
         DecisionFailure::Contract(message) => {
             warn!(

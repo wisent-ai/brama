@@ -3,7 +3,7 @@
 use serde_json::Value;
 
 use crate::providers::adapter::call::outcome::refusal::attempted_failure;
-use crate::types::{ModelResponse, ProviderRefusal, ToolCall};
+use crate::types::{ModelResponse, ProviderRefusal, Refusal, ToolCall};
 
 /// The class of a failure the backend reported inside a 200 stream, from the
 /// error object's `code` (the Responses API's documented error codes, read the
@@ -116,10 +116,10 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
         }
     }
     if let Some((message, class)) = failure {
-        let mut refused =
-            attempted_failure(route_id, format!("{}: {message}", class.contract_kind()));
-        refused.failure_kind = Some(class);
-        return refused;
+        return attempted_failure(
+            route_id,
+            Refusal::new(class, format!("{}: {message}", class.contract_kind())),
+        );
     }
     let mut tool_calls = Vec::new();
     if let Some(output) = completed.get("output").and_then(Value::as_array) {

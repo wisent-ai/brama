@@ -16,11 +16,11 @@ use serde_json::{json, Map, Value};
 use crate::core::server::admission::identity::ModelClientIdentity;
 use crate::core::server::aliases::table::ModelAliases;
 use crate::core::server::aliases::{WISENT_EMBEDDING_ALIAS, WISENT_MODERATION_ALIAS};
-use crate::core::server::refusal::contract::model_error_contract;
 use crate::core::server::refusal::envelope::{typed_dispatch_attempts, typed_dispatch_error};
 use crate::core::server::refusal::{api_error, ApiError};
 use crate::core::server::telemetry::{record_typed_request, record_typed_usage};
 use crate::subscription_dispatch::dispatch_direct_openai_typed;
+use crate::types::{ProviderRefusal, Refusal};
 
 use requests::{EmbeddingRequest, ModerationRequest};
 
@@ -70,18 +70,18 @@ pub(in crate::core::server) async fn embeddings(
     }
     let body = match dispatch_direct_openai_typed(&source, "/v1/embeddings", payload).await {
         Ok(body) => body,
-        Err(message) => {
-            let attempts = typed_dispatch_attempts(model_error_contract(&message));
-            record_typed_request(attempts, true);
-            return Err(typed_dispatch_error(&message));
+        Err(refused) => {
+            record_typed_request(typed_dispatch_attempts(&refused), true);
+            return Err(typed_dispatch_error(&refused));
         }
     };
     record_typed_usage(&body);
     if !body.get("data").is_some_and(Value::is_array) {
         record_typed_request(u32::from(true), true);
-        return Err(typed_dispatch_error(
+        return Err(typed_dispatch_error(&Refusal::new(
+            ProviderRefusal::ProviderFailure,
             "embedding provider returned malformed data",
-        ));
+        )));
     }
     record_typed_request(u32::from(true), false);
     Ok(Json(body))
@@ -115,18 +115,18 @@ pub(in crate::core::server) async fn moderations(
     );
     let body = match dispatch_direct_openai_typed(&source, "/v1/moderations", payload).await {
         Ok(body) => body,
-        Err(message) => {
-            let attempts = typed_dispatch_attempts(model_error_contract(&message));
-            record_typed_request(attempts, true);
-            return Err(typed_dispatch_error(&message));
+        Err(refused) => {
+            record_typed_request(typed_dispatch_attempts(&refused), true);
+            return Err(typed_dispatch_error(&refused));
         }
     };
     record_typed_usage(&body);
     if !body.get("results").is_some_and(Value::is_array) {
         record_typed_request(u32::from(true), true);
-        return Err(typed_dispatch_error(
+        return Err(typed_dispatch_error(&Refusal::new(
+            ProviderRefusal::ProviderFailure,
             "moderation provider returned malformed data",
-        ));
+        )));
     }
     record_typed_request(u32::from(true), false);
     Ok(Json(body))

@@ -5,10 +5,11 @@ use crate::core::failure::POINT_BOUNDED_ROTATION;
 use crate::types::{GatewayRefusal, ModelRequest, ModelResponse, ProviderRefusal};
 use wisent_errors::Failure;
 
-use super::super::refusal::envelope::{failure_detail, refuse_as, refuse_classed};
+use super::super::refusal::envelope::{
+    credential_refusal_class, failure_detail, refuse, refuse_as,
+};
 use super::super::refusal::pool_empty::{
-    capacity_is_mixed, capacity_summary, pool_empty_summary, pool_is_capacity,
-    rotation_failure_kind, PoolEmptyCause,
+    capacity_is_mixed, capacity_summary, pool_empty_summary, pool_is_capacity, PoolEmptyCause,
 };
 
 /// What one walk of a provider's bounded pool actually saw, as opposed to what
@@ -62,10 +63,9 @@ pub(super) fn emptied_pool_refusal(
             capacity_is_mixed(cause),
             observed.block_lifts_at_ms,
         );
-        let mut failure = refuse_classed(
+        let mut failure = refuse(
             request,
             POINT_BOUNDED_ROTATION,
-            "subscription_unavailable",
             GatewayRefusal::SubscriptionUnavailable,
             summary,
             None,
@@ -84,31 +84,30 @@ pub(super) fn emptied_pool_refusal(
         let mut failure = refuse_as(
             request,
             POINT_BOUNDED_ROTATION,
-            ProviderRefusal::QuotaExhausted.contract_kind(),
+            ProviderRefusal::QuotaExhausted,
             format!("every usable '{provider}' credential has spent its paid balance"),
             None,
         );
-        failure.failure_kind = Some(ProviderRefusal::QuotaExhausted);
         failure.attempts = provider_attempts;
         return failure;
     }
-    // A lower layer's refusal is carried in its own words, and its class is not
-    // known here yet; every other emptied pool states its class.
+    // A lower layer's refusal is carried in its own words, with the class its
+    // failure code states; every other emptied pool states its class from why
+    // it emptied.
     let mut failure = match credential_refusal {
-        Some(refused) => refuse_as(
+        Some(refused) => refuse(
             request,
             POINT_BOUNDED_ROTATION,
-            rotation_failure_kind(cause),
+            credential_refusal_class(&refused),
             format!(
                 "'{provider}' subscription credential failed: {}",
                 failure_detail(&refused)
             ),
             Some(refused),
         ),
-        None => refuse_classed(
+        None => refuse(
             request,
             POINT_BOUNDED_ROTATION,
-            rotation_failure_kind(cause),
             pool_empty_class(cause),
             pool_empty_summary(provider, cause),
             None,
@@ -120,6 +119,13 @@ pub(super) fn emptied_pool_refusal(
 
 /// The class an emptied pool is answered with, from the same cause its
 /// sentence is chosen from.
+///
+/// A provider that refused every credential and a vault that produced none are
+/// both authorization failures no wait repairs; only a genuinely exhausted pool
+/// is capacity. A credential inside an authorization block counts with the
+/// first group: the router skips it without calling the provider, so for the
+/// half hour its block lasts it looks exactly like one out of quota, and
+/// answering that as capacity told the caller to retry.
 fn pool_empty_class(cause: PoolEmptyCause) -> GatewayRefusal {
     if cause.auth_rejection || cause.reauthorization_block {
         GatewayRefusal::SubscriptionReauthorizationRequired

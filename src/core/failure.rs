@@ -67,9 +67,10 @@ pub const IMPACT_CREDENTIAL_BLOCK: &str = "this subscription until its block exp
 /// its retryable kinds map to retryable codes and its permanent ones do not.
 pub fn code_for_kind(kind: &str) -> Option<Code> {
     match kind {
-        "provider_authentication" | "unauthenticated" | "credential_unauthorized" => {
-            Some(Code::Auth)
-        }
+        "provider_authentication"
+        | "unauthenticated"
+        | "credential_unauthorized"
+        | "subscription_reauthorization_required" => Some(Code::Auth),
         "provider_rate_limited" | "subscription_unavailable" => Some(Code::RateLimit),
         "dependency_timeout" => Some(Code::Timeout),
         "dependency_unavailable" => Some(Code::InfraDown),

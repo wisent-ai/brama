@@ -1,29 +1,6 @@
 //! Why an emptied credential pool emptied, and the one sentence each cause is
 //! reported with.
 
-/// Which kind an emptied credential pool is, so the log envelope and the HTTP
-/// answer say the same thing.
-///
-/// A provider that refused every credential and a vault that produced none are
-/// both authorization failures no wait repairs; only a genuinely exhausted pool
-/// is capacity.
-///
-/// A credential inside an authorization block counts with the first group. The
-/// router skips a blocked credential without calling the provider, so a
-/// credential the provider had already refused looked, for the half hour its
-/// block lasted, exactly like one that was merely out of quota - and the caller
-/// was told to retry. That is the same defect as reporting a refused redemption
-/// as capacity, arriving one layer further in.
-pub(in crate::subscription_dispatch::dispatch) fn rotation_failure_kind(
-    cause: PoolEmptyCause,
-) -> &'static str {
-    if cause.needs_authorization() {
-        "credential_unauthorized"
-    } else {
-        "subscription_unavailable"
-    }
-}
-
 /// Why an emptied credential pool emptied, as one value.
 ///
 /// The buffered and streaming paths reach this decision independently and used

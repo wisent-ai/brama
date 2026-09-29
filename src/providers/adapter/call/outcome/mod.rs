@@ -8,3 +8,4 @@
 pub(in crate::providers::adapter) mod refusal;
 pub(in crate::providers::adapter) mod response_body;
 pub(in crate::providers::adapter) mod retry;
+pub(in crate::providers::adapter) mod typed;

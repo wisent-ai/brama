@@ -12,10 +12,10 @@ use tracing::warn;
 
 use super::call::control_client;
 use super::call::credential::{authorize_provider, credential_key};
-use super::call::outcome::refusal::{provider_refusal, transport_error_message};
+use super::call::outcome::refusal::{provider_refusal, transport_refusal};
 use super::call::outcome::response_body::bounded_response_text;
 use super::registry::{provider, provider_base_url, ProviderDescriptor};
-use crate::types::LimitReading;
+use crate::types::{LimitReading, Refusal};
 use endpoint::{plan_usage_endpoint, PlanUsageEndpoint};
 use headers::observed_at_ms;
 use report::plan_usage_readings;
@@ -92,18 +92,23 @@ fn plan_usage_refusal(
     ))
 }
 
+/// A refusal that stated its own class, carried into the usage report with
+/// the kind that class reads as.
 fn classified_plan_usage_refusal(
     provider_id: &str,
     item: &str,
     url: &str,
     status: Option<reqwest::StatusCode>,
-    message: &str,
+    refused: &Refusal,
 ) -> PlanUsage {
-    let (kind, cause) = message
-        .split_once(':')
-        .map(|(kind, cause)| (kind.trim(), cause.trim()))
-        .unwrap_or(("provider_failure", message));
-    plan_usage_refusal(kind, provider_id, item, url, status, cause)
+    plan_usage_refusal(
+        refused.class.contract_kind(),
+        provider_id,
+        item,
+        url,
+        status,
+        &refused.message,
+    )
 }
 
 /// Read one subscription's plan windows from the provider's own usage report.
@@ -176,20 +181,20 @@ pub async fn read_plan_usage(provider_id: &str, item: &str, secret: &str) -> Pla
                 item,
                 &url,
                 None,
-                &transport_error_message(&error),
+                &transport_refusal(&error),
             );
         }
     };
     let response_status = response.status();
     let (status, _plan, text) = match bounded_response_text(response).await {
         Ok(parts) => parts,
-        Err(message) => {
+        Err(refused) => {
             return classified_plan_usage_refusal(
                 provider_id,
                 item,
                 &url,
                 Some(response_status),
-                &message,
+                &refused,
             );
         }
     };

@@ -47,7 +47,8 @@ pub use aliases::{
 };
 pub use lifecycle::start_server;
 pub use readiness::check::unroutable_reason;
-pub use refusal::contract::{model_error_contract, ModelErrorContract};
+pub use refusal::classed::provider_refusal_contract;
+pub use refusal::contract::ModelErrorContract;
 
 pub use administration::{route_shape_writable, valid_alias};
 pub(crate) use aliases::{

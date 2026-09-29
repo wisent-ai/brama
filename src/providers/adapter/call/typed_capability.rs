@@ -3,13 +3,12 @@
 
 use serde_json::{Map, Value};
 
-use super::super::registry::{
-    endpoint, provider_base_url, route, supports_embedding_route, supports_moderation_route,
-};
-use super::credential::{authorize_provider, provider_credential_key};
-use super::dispatch_client;
-use super::outcome::refusal::{provider_error, transport_error_message};
+use super::super::registry::{endpoint, supports_embedding_route, supports_moderation_route};
+use super::credential::authorize_provider;
+use super::outcome::refusal::{provider_refused, transport_refusal};
 use super::outcome::response_body::bounded_response_text;
+use super::outcome::typed::{typed_object, typed_route, typed_transport};
+use crate::types::{GatewayRefusal, Refusal};
 
 pub async fn dispatch_openai_typed(
     route_id: &str,
@@ -17,22 +16,22 @@ pub async fn dispatch_openai_typed(
     mut payload: Map<String, Value>,
     item: &str,
     secret: &str,
-) -> Result<Value, String> {
+) -> Result<Value, Refusal> {
     let supported = match path {
         "/v1/embeddings" => supports_embedding_route(route_id),
         "/v1/moderations" => supports_moderation_route(route_id),
         _ => false,
     };
     if !supported {
-        return Err("model route does not support the requested capability".to_string());
+        // The route comes from this deployment's alias, not from the caller.
+        return Err(Refusal::gateway(
+            GatewayRefusal::ProviderFailure,
+            "model route does not support the requested capability",
+        ));
     }
-    let (descriptor, model_id) =
-        route(route_id).ok_or_else(|| "invalid provider/model route".to_string())?;
-    let key = provider_credential_key(descriptor, item, secret)?;
-    let base_url = provider_base_url(descriptor)?;
-    let client = dispatch_client()
-        .map_err(|_| "dependency_unavailable: provider client could not be built".to_string())?;
-    payload.insert("model".to_string(), Value::String(model_id.to_string()));
+    let (descriptor, model_id) = typed_route(route_id)?;
+    let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
+    payload.insert("model".to_string(), Value::String(model_id));
     let response = authorize_provider(
         client.post(endpoint(&base_url, path)),
         descriptor,
@@ -42,20 +41,15 @@ pub async fn dispatch_openai_typed(
     .json(&Value::Object(payload))
     .send()
     .await
-    .map_err(|error| transport_error_message(&error))?;
+    .map_err(|error| transport_refusal(&error))?;
     let (status, _plan, text) = bounded_response_text(response).await?;
     if !status.is_success() {
-        let failure = provider_error(route_id, status, &text);
-        return Err(failure
-            .error
-            .unwrap_or_else(|| format!("provider returned HTTP {}", status.as_u16())));
+        return Err(provider_refused(route_id, status, &text));
     }
-    let mut body: Value = serde_json::from_str(&text)
-        .map_err(|_| "provider_failure: provider returned malformed JSON".to_string())?;
-    let object = body
-        .as_object_mut()
-        .ok_or_else(|| "provider_failure: provider returned a non-object response".to_string())?;
-    object.insert("model".to_string(), Value::String(route_id.to_string()));
+    let mut body = typed_object(&text)?;
+    if let Some(object) = body.as_object_mut() {
+        object.insert("model".to_string(), Value::String(route_id.to_string()));
+    }
     Ok(body)
 }
 
@@ -72,20 +66,16 @@ pub async fn dispatch_decision(
     mut payload: Map<String, Value>,
     item: &str,
     secret: &str,
-) -> Result<Value, String> {
-    let (descriptor, model_id) =
-        route(route_id).ok_or_else(|| "invalid provider/model route".to_string())?;
+) -> Result<Value, Refusal> {
+    let (descriptor, model_id) = typed_route(route_id)?;
     if descriptor.decision_path.is_empty() {
-        return Err(format!(
-            "provider `{}` serves no typed decisions",
-            descriptor.id
+        return Err(Refusal::gateway(
+            GatewayRefusal::ProviderFailure,
+            format!("provider `{}` serves no typed decisions", descriptor.id),
         ));
     }
-    let key = provider_credential_key(descriptor, item, secret)?;
-    let base_url = provider_base_url(descriptor)?;
-    let client = dispatch_client()
-        .map_err(|_| "dependency_unavailable: provider client could not be built".to_string())?;
-    payload.insert("model".to_string(), Value::String(model_id.to_string()));
+    let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
+    payload.insert("model".to_string(), Value::String(model_id));
     let response = authorize_provider(
         client.post(endpoint(&base_url, descriptor.decision_path)),
         descriptor,
@@ -95,18 +85,10 @@ pub async fn dispatch_decision(
     .json(&Value::Object(payload))
     .send()
     .await
-    .map_err(|error| transport_error_message(&error))?;
+    .map_err(|error| transport_refusal(&error))?;
     let (status, _plan, text) = bounded_response_text(response).await?;
     if !status.is_success() {
-        let failure = provider_error(route_id, status, &text);
-        return Err(failure
-            .error
-            .unwrap_or_else(|| format!("provider returned HTTP {}", status.as_u16())));
+        return Err(provider_refused(route_id, status, &text));
     }
-    let body: Value = serde_json::from_str(&text)
-        .map_err(|_| "provider_failure: provider returned malformed JSON".to_string())?;
-    if !body.is_object() {
-        return Err("provider_failure: provider returned a non-object response".to_string());
-    }
-    Ok(body)
+    typed_object(&text)
 }

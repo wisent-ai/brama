@@ -5,25 +5,25 @@ use tracing::warn;
 
 use crate::core::failure::{self, IMPACT_MODEL_REQUEST};
 use crate::types::{GatewayRefusal, ModelRequest, ModelResponse, ProviderRefusal};
-use wisent_errors::Failure;
+use wisent_errors::{Code, Failure};
 
 /// The envelope for one refused model request: where it broke, what the caller
 /// loses, the reason verbatim, and the failure underneath it when there is one.
 fn refusal_envelope(
     model: &str,
     point: &str,
-    kind: &str,
+    class: ProviderRefusal,
     message: &str,
     cause: Option<Failure>,
 ) -> Failure {
     let refusal = failure::envelope(
         point,
-        // The kind is the caller's own answer, passed in rather than assumed:
-        // an envelope that says `rate_limit` beside a `503 credential_
-        // unauthorized` body sends the operator looking for a busy provider
-        // while the actual break is an authorization chain. The code is looked
-        // up from that kind, so the two readings cannot drift apart.
-        failure::code_for(kind),
+        // The code is looked up from the class the caller is answered with,
+        // so the log and the HTTP body cannot drift apart: an envelope that
+        // says `rate_limit` beside a `503 credential_unauthorized` body sends
+        // the operator looking for a busy provider while the actual break is
+        // an authorization chain.
+        failure::code_for(class.contract_kind()),
         IMPACT_MODEL_REQUEST,
         message,
     )
@@ -34,29 +34,37 @@ fn refusal_envelope(
     }
 }
 
-/// Refuse one model request, saying where it broke and what the layer below
-/// said, and hand the caller the sentence it has always been handed.
+/// Refuse one model request on Brama's own account, saying where it broke,
+/// what class of refusal it is, and what the layer below said.
 ///
 /// The message is the envelope's detail and nothing else: clients parse these
 /// strings, so the envelope travels in the log beside them, never inside them.
 pub(in crate::subscription_dispatch::dispatch) fn refuse(
     request: &ModelRequest,
     point: &str,
+    class: GatewayRefusal,
     message: String,
     cause: Option<Failure>,
 ) -> ModelResponse {
-    refuse_as(request, point, "subscription_unavailable", message, cause)
+    refuse_as(
+        request,
+        point,
+        ProviderRefusal::Gateway(class),
+        message,
+        cause,
+    )
 }
 
-/// The same refusal, naming the kind the HTTP edge will answer with.
+/// The same refusal for any class, including a provider's own class carried
+/// up from the call that refused.
 pub(in crate::subscription_dispatch::dispatch) fn refuse_as(
     request: &ModelRequest,
     point: &str,
-    kind: &str,
+    class: ProviderRefusal,
     message: String,
     cause: Option<Failure>,
 ) -> ModelResponse {
-    let refusal = refusal_envelope(&request.model, point, kind, &message, cause);
+    let refusal = refusal_envelope(&request.model, point, class, &message, cause);
     warn!(
         event = "dispatch_refused",
         model = %request.model,
@@ -64,22 +72,21 @@ pub(in crate::subscription_dispatch::dispatch) fn refuse_as(
         "{}",
         refusal.render()
     );
-    ModelResponse::failure(&request.model, message)
+    ModelResponse::failure(&request.model, class, message)
 }
 
-/// The same refusal with the class the HTTP edge answers with stated, so the
-/// answer never depends on the sentence. `kind` stays the log envelope's kind.
-pub(in crate::subscription_dispatch::dispatch) fn refuse_classed(
-    request: &ModelRequest,
-    point: &str,
-    kind: &str,
-    class: GatewayRefusal,
-    message: String,
-    cause: Option<Failure>,
-) -> ModelResponse {
-    let mut response = refuse_as(request, point, kind, message, cause);
-    response.failure_kind = Some(ProviderRefusal::Gateway(class));
-    response
+/// The class a credential the vault would not produce is answered with: a
+/// vault or router that did not answer is a dependency a wait can repair;
+/// every other refusal is a broken authorization chain only an operator
+/// repairs.
+pub(in crate::subscription_dispatch::dispatch) fn credential_refusal_class(
+    failure: &Failure,
+) -> GatewayRefusal {
+    if matches!(failure.code, Code::Timeout | Code::InfraDown) {
+        GatewayRefusal::DependencyUnavailable
+    } else {
+        GatewayRefusal::CredentialUnauthorized
+    }
 }
 
 pub(in crate::subscription_dispatch::dispatch) fn failure_detail(failure: &Failure) -> String {

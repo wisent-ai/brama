@@ -22,8 +22,9 @@ use super::dialect::openai_chat::{model_response_from_openai, openai_messages};
 use super::dialect::tool_schema::normalized_tools_value;
 use super::plan::headers::{limit_readings, with_limits};
 use super::registry::{valid_model_id, valid_provider_id};
+use super::{client_unavailable, credential_refused, unconfigured_route};
 use crate::subscription_dispatch::model_catalog::{self, CatalogProtocol};
-use crate::types::{GatewayRefusal, ModelRequest, ModelResponse};
+use crate::types::{GatewayRefusal, ModelRequest, ModelResponse, ProviderRefusal, Refusal};
 use endpoint::{catalog_endpoint, catalog_provider_base_url};
 use google_generate::{google_payload, model_response_from_google};
 
@@ -48,7 +49,13 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
     }
     let catalog = match model_catalog::snapshot().await {
         Ok(catalog) => catalog,
-        Err(error) => return ModelResponse::failure(&request.model, error),
+        Err(error) => {
+            return ModelResponse::refused(
+                &request.model,
+                GatewayRefusal::DependencyUnavailable,
+                error,
+            )
+        }
     };
     let Some(descriptor) = catalog.providers.get(provider_id) else {
         return ModelResponse::refused(
@@ -80,15 +87,15 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
     }
     let key = match credential_key(item, secret) {
         Ok(key) => key,
-        Err(error) => return ModelResponse::failure(&request.model, error),
+        Err(error) => return credential_refused(request, error),
     };
     let base_url = match catalog_provider_base_url(descriptor) {
         Ok(base_url) => base_url,
-        Err(error) => return ModelResponse::failure(&request.model, error),
+        Err(error) => return unconfigured_route(request, error),
     };
     let client = match dispatch_client() {
         Ok(client) => client,
-        Err(error) => return ModelResponse::failure(&request.model, error),
+        Err(error) => return client_unavailable(request, error),
     };
     let (url, payload) = match descriptor.protocol {
         CatalogProtocol::OpenAiChat => {
@@ -133,7 +140,7 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
         CatalogProtocol::GoogleGenerateContent => {
             let mut url = match reqwest::Url::parse(&base_url) {
                 Ok(url) => url,
-                Err(error) => return ModelResponse::failure(&request.model, error.to_string()),
+                Err(error) => return unconfigured_route(request, error.to_string()),
             };
             match url.path_segments_mut() {
                 Ok(mut segments) => {
@@ -164,7 +171,7 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
     };
     let (status, plan, text) = match bounded_response_text(response).await {
         Ok(result) => result,
-        Err(message) => return attempted_failure(&request.model, message),
+        Err(refused) => return attempted_failure(&request.model, refused),
     };
     let limits = limit_readings(&descriptor.id, &plan);
     if !status.is_success() {
@@ -175,7 +182,10 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
         Err(error) => {
             return attempted_failure(
                 &request.model,
-                format!("invalid provider response: {error}"),
+                Refusal::new(
+                    ProviderRefusal::ProviderFailure,
+                    format!("invalid provider response: {error}"),
+                ),
             )
         }
     };

@@ -5,7 +5,7 @@ use tokio::sync::mpsc;
 
 use crate::providers::stream::{ProviderStream, StreamDelta, StreamItem};
 use crate::subscription_dispatch::usage;
-use crate::types::ModelResponse;
+use crate::types::{ModelResponse, ProviderRefusal};
 
 /// One committed, routed generation stream.
 ///
@@ -77,13 +77,17 @@ pub(in crate::subscription_dispatch::dispatch) fn spawn_stream_recorder(
             }
         }
         let success = finished && error.is_none();
+        // A stream that ended after it committed is recorded for spend only;
+        // no caller is answered from this class.
         let mut response = ModelResponse::failure(
             &model,
+            ProviderRefusal::ProviderFailure,
             error.unwrap_or_else(|| "provider stream ended without a verdict".to_string()),
         );
         response.success = success;
         if success {
             response.error = None;
+            response.failure_kind = None;
         }
         response.content = content;
         response.input_tokens = input_tokens;

@@ -16,6 +16,8 @@ pub enum ProviderRefusal {
     Authentication,
     /// 5xx: the provider could not answer.
     DependencyUnavailable,
+    /// The provider did not answer inside the transport's deadline.
+    DependencyTimeout,
     /// 413, or a 4xx whose error object's `code` or `type` is
     /// `context_length_exceeded`: the prompt is longer than the model accepts.
     /// Every credential refuses it alike; a larger model or a shorter context
@@ -60,6 +62,7 @@ impl ProviderRefusal {
             Self::DependencyUnavailable | Self::Gateway(GatewayRefusal::DependencyUnavailable) => {
                 "dependency_unavailable"
             }
+            Self::DependencyTimeout => "dependency_timeout",
             Self::ProviderFailure | Self::Gateway(GatewayRefusal::ProviderFailure) => {
                 "provider_failure"
             }
@@ -71,5 +74,40 @@ impl ProviderRefusal {
             }
             Self::Gateway(GatewayRefusal::SubscriptionUnavailable) => "subscription_unavailable",
         }
+    }
+}
+
+/// One refused call: the sentence the caller reads and the class the HTTP edge
+/// answers from. Built where the refusal happens, so nothing downstream has to
+/// read the sentence to learn what kind of refusal it was.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Refusal {
+    pub class: ProviderRefusal,
+    pub message: String,
+}
+
+impl Refusal {
+    pub fn new(class: ProviderRefusal, message: impl Into<String>) -> Self {
+        Self {
+            class,
+            message: message.into(),
+        }
+    }
+
+    /// A refusal Brama makes on its own account.
+    pub fn gateway(class: GatewayRefusal, message: impl Into<String>) -> Self {
+        Self::new(ProviderRefusal::Gateway(class), message)
+    }
+}
+
+impl std::fmt::Display for Refusal {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl From<Refusal> for String {
+    fn from(refusal: Refusal) -> Self {
+        refusal.message
     }
 }

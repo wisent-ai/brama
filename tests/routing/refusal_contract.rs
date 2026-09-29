@@ -26,8 +26,6 @@ mod support;
 
 use std::process::Command;
 
-use axum::http::StatusCode;
-use brama::core::server::model_error_contract;
 use brama::subscription_dispatch::dispatch::{
     capacity_is_mixed, capacity_summary, pool_empty_summary, pool_is_capacity, PoolEmptyCause,
 };
@@ -53,41 +51,6 @@ fn an_authorization_block_is_not_reported_as_capacity() {
     assert!(
         summary.contains("were rejected by the provider; automatic sign-in:"),
         "a blocked-for-authorization pool must say what the automatic sign-in did, said: {summary}"
-    );
-
-    // The sentence the dispatcher produces, classified the way the HTTP edge
-    // classifies it. Asserted together because the defect lived in the seam:
-    // each half was defensible alone.
-    let contract = model_error_contract(&summary);
-    assert_eq!(contract.status, StatusCode::SERVICE_UNAVAILABLE);
-    assert_eq!(contract.error_type, "authorization_error");
-    assert_eq!(contract.code, "subscription_reauthorization_required");
-    assert!(
-        !contract.retryable,
-        "no wait reaches a credential the provider has already refused"
-    );
-}
-
-/// The same sentence wrapped in the aggregate context a real multi-provider
-/// walk produces. This is the exact shape the Kronika documentation gate was
-/// answered with, and the classification must survive the wrapping.
-#[test]
-fn the_aggregate_refusal_keeps_the_authorization_classification() {
-    let summary = pool_empty_summary(
-        "codex",
-        PoolEmptyCause {
-            reauthorization_block: true,
-            ..NOTHING_OBSERVED
-        },
-    );
-    let aggregate =
-        format!("no working subscription model for signed agent; codex refused ({summary})");
-
-    let contract = model_error_contract(&aggregate);
-    assert_eq!(contract.status, StatusCode::SERVICE_UNAVAILABLE);
-    assert!(
-        !contract.retryable,
-        "the aggregate must not turn a sign-in into a retry: {aggregate}"
     );
 }
 
@@ -142,34 +105,6 @@ fn an_exhausted_pool_is_still_capacity() {
         summary.contains("all bounded"),
         "an exhausted pool keeps its own sentence, said: {summary}"
     );
-
-    let contract = model_error_contract(&summary);
-    assert_eq!(contract.status, StatusCode::TOO_MANY_REQUESTS);
-    assert_eq!(contract.error_type, "capacity_error");
-    assert_eq!(contract.code, "subscription_unavailable");
-    assert!(
-        contract.retryable,
-        "a recorded rate-limit block does expire, so this one is worth retrying"
-    );
-}
-
-/// A vault that produced no credential is an authorization failure too, and was
-/// already classified as one. Kept here so the arm cannot be lost while the
-/// neighbouring ones are edited.
-#[test]
-fn a_pool_that_produced_no_credential_is_an_authorization_failure() {
-    let summary = pool_empty_summary(
-        "codex",
-        PoolEmptyCause {
-            unredeemable_credential: true,
-            ..NOTHING_OBSERVED
-        },
-    );
-
-    let contract = model_error_contract(&summary);
-    assert_eq!(contract.status, StatusCode::SERVICE_UNAVAILABLE);
-    assert_eq!(contract.code, "credential_unauthorized");
-    assert!(!contract.retryable);
 }
 
 #[path = "refusal_contract/sentences.rs"]

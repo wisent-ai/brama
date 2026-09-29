@@ -120,7 +120,7 @@ diagnostic, not the machine contract.</p>
 <tr>
 <td style="text-align: right;">503</td>
 <td><code>credential_unauthorized</code></td>
-<td>redemption was refused, or no capability, read grant, or trust material could produce a credential at all</td>
+<td>redemption was refused, no capability, read grant, or trust material could produce a credential at all, or the credential produced carries no key</td>
 <td>Repair the authorization chain; waiting does not reach it</td>
 </tr>
 <tr>
@@ -138,7 +138,7 @@ diagnostic, not the machine contract.</p>
 <tr>
 <td style="text-align: right;">504</td>
 <td><code>dependency_timeout</code></td>
-<td>whole Brama request deadline expired</td>
+<td>a provider or the request deadline did not answer in time</td>
 <td>Inspect dependency; retry only when safe</td>
 </tr>
 <tr>
@@ -157,6 +157,14 @@ than claiming every account needs a new sign-in. A recorded quota block returns
 When no account can recover by waiting, the authorization refusal remains
 <code>503</code> with <code>retryable: false</code>. Buffered and streaming requests
 use the same precedence.</p>
+<p>The code a refusal is answered with comes from the class the refusal was
+stated with where it was built — the provider's HTTP status for a provider
+refusal, Brama's own reason for a refusal Brama makes — and never from the
+words of its message. A message may change its wording; its code does not.
+A walk over several candidates is answered with the most telling class it
+met: a spent balance, then a rate window or a quota block a wait reaches,
+then an authorization failure, and otherwise
+<code>429 subscription_unavailable</code>.</p>
 <h2 id="the-operator-envelope">The operator envelope<a class="headerlink" href="#the-operator-envelope" title="Link to this section">&para;</a></h2>
 <p><code>src/core/failure.rs</code> is the one place Brama's own vocabulary becomes the
 fleet's, using the <code>wisent-errors</code> crate for everything derivable and
@@ -223,7 +231,7 @@ otherwise Brama's own kind is translated exactly once:</p>
 </thead>
 <tbody>
 <tr>
-<td><code>provider_authentication</code>, <code>unauthenticated</code>, <code>credential_unauthorized</code></td>
+<td><code>provider_authentication</code>, <code>unauthenticated</code>, <code>credential_unauthorized</code>, <code>subscription_reauthorization_required</code></td>
 <td><code>Auth</code></td>
 </tr>
 <tr>

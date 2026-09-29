@@ -15,7 +15,7 @@ use std::time::Instant;
 
 use serde_json::Value;
 
-use crate::types::{GatewayRefusal, ModelRequest, ModelResponse};
+use crate::types::{GatewayRefusal, ModelRequest, ModelResponse, ProviderRefusal, Refusal};
 
 use call::credential::{authorize_provider, provider_body, provider_credential_key};
 use call::outcome::refusal::{attempted_failure, provider_error, transport_failure};
@@ -68,15 +68,15 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
     }
     let key = match provider_credential_key(descriptor, item, secret) {
         Ok(key) => key,
-        Err(error) => return ModelResponse::failure(&request.model, error),
+        Err(error) => return credential_refused(request, error),
     };
     let base_url = match provider_base_url_for(descriptor, &model_id) {
         Ok(base_url) => base_url,
-        Err(error) => return ModelResponse::failure(&request.model, error),
+        Err(error) => return unconfigured_route(request, error),
     };
     let client = match dispatch_client() {
         Ok(client) => client,
-        Err(error) => return ModelResponse::failure(&request.model, error),
+        Err(error) => return client_unavailable(request, error),
     };
     let payload = chat_payload(descriptor, model_id.as_ref(), request);
     let started = Instant::now();
@@ -98,7 +98,7 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
     };
     let (status, plan, text) = match bounded_response_text(response).await {
         Ok(result) => result,
-        Err(message) => return attempted_failure(&request.model, message),
+        Err(refused) => return attempted_failure(&request.model, refused),
     };
     let limits = limit_readings(descriptor.id, &plan);
     if !status.is_success() {
@@ -122,7 +122,10 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
         Err(error) => {
             return attempted_failure(
                 &request.model,
-                format!("invalid provider response: {error}"),
+                Refusal::new(
+                    ProviderRefusal::ProviderFailure,
+                    format!("invalid provider response: {error}"),
+                ),
             )
         }
     };
@@ -175,15 +178,15 @@ pub async fn dispatch_stream(
     }
     let key = match provider_credential_key(descriptor, item, secret) {
         Ok(key) => key,
-        Err(error) => return Err(ModelResponse::failure(&request.model, error)),
+        Err(error) => return Err(credential_refused(request, error)),
     };
     let base_url = match provider_base_url_for(descriptor, &model_id) {
         Ok(base_url) => base_url,
-        Err(error) => return Err(ModelResponse::failure(&request.model, error)),
+        Err(error) => return Err(unconfigured_route(request, error)),
     };
     let client = match stream_client() {
         Ok(client) => client,
-        Err(error) => return Err(ModelResponse::failure(&request.model, error)),
+        Err(error) => return Err(client_unavailable(request, error)),
     };
     let payload = streaming_chat_payload(descriptor, model_id.as_ref(), request);
     let response = match send_once_more_if_unsent(provider_body(
@@ -205,7 +208,7 @@ pub async fn dispatch_stream(
     if !response.status().is_success() {
         let (status, plan, text) = match bounded_response_text(response).await {
             Ok(result) => result,
-            Err(message) => return Err(attempted_failure(&request.model, message)),
+            Err(refused) => return Err(attempted_failure(&request.model, refused)),
         };
         // Nothing has reached the caller yet, so the one more send without
         // the refused setting is still possible here.
@@ -223,4 +226,24 @@ pub async fn dispatch_stream(
         limits,
         events: crate::providers::stream::spawn(descriptor.wire, response),
     })
+}
+
+/// A credential document that carries no key: the chain that produced it is
+/// broken, and only an operator repairs it.
+fn credential_refused(request: &ModelRequest, error: String) -> ModelResponse {
+    ModelResponse::refused(
+        &request.model,
+        GatewayRefusal::CredentialUnauthorized,
+        error,
+    )
+}
+
+/// A provider origin this deployment cannot use: its own configuration.
+fn unconfigured_route(request: &ModelRequest, error: String) -> ModelResponse {
+    ModelResponse::refused(&request.model, GatewayRefusal::ProviderFailure, error)
+}
+
+/// The HTTP client could not be built, so no provider could be asked.
+fn client_unavailable(request: &ModelRequest, error: String) -> ModelResponse {
+    ModelResponse::refused(&request.model, GatewayRefusal::DependencyUnavailable, error)
 }

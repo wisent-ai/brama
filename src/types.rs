@@ -191,16 +191,20 @@ pub struct ModelResponse {
     /// matters most.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub limits: Vec<LimitReading>,
-    /// The class of a provider's refusal, read from its HTTP status where the
-    /// answer arrived. Rotation decides auth refresh and quota exhaustion from
-    /// this, never from the provider's sentence, which is data and changes
-    /// wording without notice. Absent for failures no provider answered.
+    /// The class of a refusal, stated where it was built: from the provider's
+    /// HTTP status where one answered, and from Brama's own reason where Brama
+    /// refused. Rotation and the HTTP edge decide from this, never from the
+    /// sentence, which is data and changes wording without notice. Absent only
+    /// on a success.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failure_kind: Option<ProviderRefusal>,
 }
 
 impl ModelResponse {
-    pub fn failure(model: &str, error: String) -> Self {
+    /// A failed answer and its class. There is no failure without one: the
+    /// edge answers from the class, and a refusal whose class nobody stated
+    /// would have to be guessed from its sentence.
+    pub fn failure(model: &str, class: ProviderRefusal, error: String) -> Self {
         Self {
             content: String::new(),
             model: model.to_string(),
@@ -213,17 +217,20 @@ impl ModelResponse {
             error: Some(error),
             tool_calls: None,
             limits: Vec::new(),
-            failure_kind: None,
+            failure_kind: Some(class),
         }
     }
 
     /// A refusal Brama builds itself, with its class stated.
     pub fn refused(model: &str, class: GatewayRefusal, error: String) -> Self {
-        let mut response = Self::failure(model, error);
-        response.failure_kind = Some(ProviderRefusal::Gateway(class));
-        response
+        Self::failure(model, ProviderRefusal::Gateway(class), error)
+    }
+
+    /// A failed answer carrying one stated refusal.
+    pub fn from_refusal(model: &str, refusal: Refusal) -> Self {
+        Self::failure(model, refusal.class, refusal.message)
     }
 }
 
 mod refusal;
-pub use refusal::{GatewayRefusal, ProviderRefusal};
+pub use refusal::{GatewayRefusal, ProviderRefusal, Refusal};

@@ -1,24 +1,29 @@
-//! The contract a refusal is answered with when its class is known: provider
-//! refusals from their status, Brama's own from the class stated where they
-//! were built. Only a refusal without a class falls to its sentence.
+//! The contract a refusal is answered with, from its class: provider refusals
+//! from their status, Brama's own from the class stated where they were built.
+//! No refusal is answered from its sentence.
 
 use axum::http::StatusCode;
 
-use super::contract::{model_error_contract, ModelErrorContract};
+use super::contract::ModelErrorContract;
 use crate::types::{GatewayRefusal, ModelResponse, ProviderRefusal};
 
-/// The contract for one failed answer: from the refusal class when one was
-/// stated, and only for a refusal without a class from its sentence.
-pub fn response_contract(response: &ModelResponse) -> Option<ModelErrorContract> {
-    match response.failure_kind {
-        Some(kind) => Some(provider_refusal_contract(kind)),
-        None => response.error.as_deref().map(model_error_contract),
-    }
+/// The class of one failed answer. Every failure states one; a response that
+/// arrived failed without it was built by no path this gateway has, and reads
+/// as the unattributed provider failure it would otherwise be guessed as.
+pub fn failure_class(response: &ModelResponse) -> Option<ProviderRefusal> {
+    (!response.success).then(|| {
+        response
+            .failure_kind
+            .unwrap_or(ProviderRefusal::ProviderFailure)
+    })
 }
 
-/// The contract for a refusal, from its class. The same answers the sentence
-/// arms of `model_error_contract` give the same refusals, without reading the
-/// sentence.
+/// The contract for one failed answer, from its class.
+pub fn response_contract(response: &ModelResponse) -> Option<ModelErrorContract> {
+    failure_class(response).map(provider_refusal_contract)
+}
+
+/// The contract for a refusal, from its class.
 pub fn provider_refusal_contract(kind: ProviderRefusal) -> ModelErrorContract {
     match kind {
         ProviderRefusal::RateLimited => ModelErrorContract {
@@ -38,6 +43,12 @@ pub fn provider_refusal_contract(kind: ProviderRefusal) -> ModelErrorContract {
             error_type: "request_error",
             code: "context_length_exceeded",
             retryable: false,
+        },
+        ProviderRefusal::DependencyTimeout => ModelErrorContract {
+            status: StatusCode::GATEWAY_TIMEOUT,
+            error_type: "dependency_error",
+            code: "dependency_timeout",
+            retryable: true,
         },
         ProviderRefusal::DependencyUnavailable
         | ProviderRefusal::Gateway(GatewayRefusal::DependencyUnavailable) => ModelErrorContract {

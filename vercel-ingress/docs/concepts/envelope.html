@@ -64,7 +64,7 @@ the point. Otherwise Brama's own kind is translated exactly once:</p>
 </thead>
 <tbody>
 <tr>
-<td><code>provider_authentication</code>, <code>unauthenticated</code>, <code>credential_unauthorized</code></td>
+<td><code>provider_authentication</code>, <code>unauthenticated</code>, <code>credential_unauthorized</code>, <code>subscription_reauthorization_required</code></td>
 <td><code>Auth</code></td>
 </tr>
 <tr>
@@ -98,14 +98,14 @@ the point. Otherwise Brama's own kind is translated exactly once:</p>
 </tbody>
 </table>
 <p>Every arm preserves what the client contract already said about retrying:
-retryable kinds map to retryable codes and permanent ones do not. A message
-whose kind prefix is not one of Brama's is classified from the contract code
-the edge already derived (<code>code_for_message</code>), and an unrecognised kind is
-<code>Unknown</code> rather than a guess.</p>
-<p>Brama's provider layer writes the kind as a message prefix — the captured
-provider-authentication failure reads
-<code>provider_authentication: Incorrect API key provided: sk-…</code> — which is how a
-sentence carries its own classification across layers.</p>
+retryable kinds map to retryable codes and permanent ones do not. The kind is
+the refusal's class, stated where the refusal was built and carried with it to
+the HTTP edge, so the envelope's code and the client's answer are read from the
+same class and never from the words of the message.</p>
+<p>Brama's provider layer still writes the kind as a message prefix — the
+captured provider-authentication failure reads
+<code>provider_authentication: Incorrect API key provided: sk-…</code> — for the
+reader of the sentence; no answer to a model request is decided from it.</p>
 <h2 id="rendering-stays-local">Rendering stays local<a class="headerlink" href="#rendering-stays-local" title="Link to this section">&para;</a></h2>
 <p>The envelope travels beside the shapes readers already parse, never inside
 them:</p>

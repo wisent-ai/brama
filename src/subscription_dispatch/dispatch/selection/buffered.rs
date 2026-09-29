@@ -28,7 +28,7 @@ pub async fn dispatch_any_subscription(
     };
     let models = match active_supported_models_for_agent(&agent_id).await {
         Ok(models) => models,
-        Err(e) => return ModelResponse::failure(&request.model, e),
+        Err(e) => return ModelResponse::from_refusal(&request.model, e),
     };
     dispatch_ranked_models(&agent_id, request, models, ANY_SUBSCRIPTION_CONTEXT).await
 }
@@ -60,7 +60,7 @@ pub async fn dispatch_best_subscription_for_agent(
 ) -> ModelResponse {
     let models = match best_subscription_models(agent_id, preferred, request).await {
         Ok(models) => models,
-        Err(e) => return ModelResponse::failure(&request.model, e),
+        Err(e) => return ModelResponse::from_refusal(&request.model, e),
     };
     dispatch_ranked_models(agent_id, request, models, ANY_SUBSCRIPTION_CONTEXT).await
 }
@@ -78,7 +78,7 @@ pub async fn dispatch_any_vision_capable_subscription(
     };
     let models = match active_vision_capable_models_for_agent(&agent_id).await {
         Ok(models) => models,
-        Err(e) => return ModelResponse::failure(&request.model, e),
+        Err(e) => return ModelResponse::from_refusal(&request.model, e),
     };
     dispatch_ranked_models(&agent_id, request, models, ANY_VISION_CONTEXT).await
 }
@@ -98,7 +98,7 @@ pub async fn dispatch_task_subscription(
     };
     let models = match task_quality_models(&agent_id, task).await {
         Ok(models) => models,
-        Err(e) => return ModelResponse::failure(&request.model, e),
+        Err(e) => return ModelResponse::from_refusal(&request.model, e),
     };
     dispatch_ranked_models(
         &agent_id,

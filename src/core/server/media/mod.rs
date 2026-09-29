@@ -23,7 +23,6 @@ use serde_json::Value;
 use crate::core::server::admission::identity::ModelClientIdentity;
 use crate::core::server::aliases::table::ModelAliases;
 use crate::core::server::aliases::{IMAGE_ALIAS, VIDEO_ALIAS, VOICE_ALIAS};
-use crate::core::server::refusal::contract::model_error_contract;
 use crate::core::server::refusal::envelope::{typed_dispatch_attempts, typed_dispatch_error};
 use crate::core::server::refusal::{api_error, ApiError};
 use crate::core::server::telemetry::record_typed_request;
@@ -34,6 +33,7 @@ use crate::subscription_dispatch::{
     dispatch_direct_image, dispatch_direct_speech, dispatch_direct_video,
     dispatch_direct_video_status,
 };
+use crate::types::{ProviderRefusal, Refusal};
 
 use requests::{video_status_model, ImageRequest, SpeechRequest, VideoRequest};
 
@@ -49,7 +49,10 @@ pub(in crate::core::server) async fn image_generations(
     let body = dispatched(dispatch_direct_image(&route, request.payload()).await)?;
     if !body.get("data").is_some_and(Value::is_array) {
         record_typed_request(u32::from(true), true);
-        return Err(typed_dispatch_error("image provider returned no images"));
+        return Err(typed_dispatch_error(&Refusal::new(
+            ProviderRefusal::ProviderFailure,
+            "image provider returned no images",
+        )));
     }
     record_typed_request(u32::from(true), false);
     Ok(Json(body))
@@ -70,7 +73,10 @@ pub(in crate::core::server) async fn video_generations(
     let body = dispatched(dispatch_direct_video(&route, request.payload()).await)?;
     if !body.get("id").is_some_and(Value::is_string) {
         record_typed_request(u32::from(true), true);
-        return Err(typed_dispatch_error("video provider returned no job id"));
+        return Err(typed_dispatch_error(&Refusal::new(
+            ProviderRefusal::ProviderFailure,
+            "video provider returned no job id",
+        )));
     }
     record_typed_request(u32::from(true), false);
     Ok(Json(body))
@@ -105,11 +111,7 @@ pub(in crate::core::server) async fn audio_speech(
     let route = media_route(&client_identity, &aliases, &request.model, Shape::Voice).await?;
     let spoken = dispatch_direct_speech(&route, request.payload())
         .await
-        .map_err(|message| {
-            let attempts = typed_dispatch_attempts(model_error_contract(&message));
-            record_typed_request(attempts, true);
-            typed_dispatch_error(&message)
-        })?;
+        .map_err(|refused| refused_typed(&refused))?;
     record_typed_request(u32::from(true), false);
     Ok((
         [
@@ -241,10 +243,13 @@ fn api_error_for_alias(alias: &str, reason: Option<String>) -> ApiError {
     )
 }
 
-fn dispatched(result: Result<Value, String>) -> Result<Value, ApiError> {
-    result.map_err(|message| {
-        let attempts = typed_dispatch_attempts(model_error_contract(&message));
-        record_typed_request(attempts, true);
-        typed_dispatch_error(&message)
-    })
+fn dispatched(result: Result<Value, Refusal>) -> Result<Value, ApiError> {
+    result.map_err(|refused| refused_typed(&refused))
+}
+
+/// A refused typed call: counted with the provider calls it spent, and
+/// answered from its class.
+fn refused_typed(refused: &Refusal) -> ApiError {
+    record_typed_request(typed_dispatch_attempts(refused), true);
+    typed_dispatch_error(refused)
 }

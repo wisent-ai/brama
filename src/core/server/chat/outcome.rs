@@ -8,8 +8,9 @@ use axum::response::{IntoResponse, Response};
 use tracing::info;
 
 use crate::core::server::admission::identity::ModelClientIdentity;
-use crate::core::server::refusal::classed::response_contract;
-use crate::core::server::refusal::contract::model_error_contract;
+use crate::core::server::refusal::classed::{
+    failure_class, provider_refusal_contract, response_contract,
+};
 use crate::core::server::refusal::envelope::model_error_envelope;
 use crate::core::server::refusal::error_response;
 use crate::core::server::telemetry::{
@@ -17,7 +18,7 @@ use crate::core::server::telemetry::{
     TOTAL_REQUESTS,
 };
 use crate::subscription_dispatch::RoutedStream;
-use crate::types::ModelResponse;
+use crate::types::{ModelResponse, ProviderRefusal};
 
 use super::routing::RoutedCallMeta;
 
@@ -44,8 +45,8 @@ pub(super) fn tally_and_log_buffered(
     let failure_envelope = resp
         .error
         .as_deref()
-        .zip(failure_contract)
-        .map(|(message, contract)| model_error_envelope(message, contract))
+        .zip(failure_class(resp))
+        .map(|(message, class)| model_error_envelope(message, class))
         .unwrap_or_else(|| "none".to_owned());
     info!(
         event = "routing_complete",
@@ -73,9 +74,12 @@ pub(super) fn tally_and_log_buffered(
 /// Every format shares it: a caller that cannot get its generation needs the
 /// contract code and retryability, and those are Brama's, not the wire's.
 pub(super) fn failure_response(resp: &mut ModelResponse) -> Response {
-    // A failure with neither a class nor a sentence gets the contract of an
-    // empty sentence: an unattributed provider failure, as it always has.
-    let contract = response_contract(resp).unwrap_or_else(|| model_error_contract(""));
+    // Only a failure is answered here, and every failure states its class; one
+    // that arrived without it is the unattributed provider failure.
+    let contract = provider_refusal_contract(
+        resp.failure_kind
+            .unwrap_or(ProviderRefusal::ProviderFailure),
+    );
     let message = resp.error.take().unwrap_or_default();
     error_response(
         contract.status,

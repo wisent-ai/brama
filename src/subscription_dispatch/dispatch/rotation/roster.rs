@@ -8,7 +8,7 @@ use crate::types::{GatewayRefusal, ModelRequest, ModelResponse};
 
 use super::super::credential::eligibility::eligible_subscription_entries;
 use super::super::ranking::pin::apply_pin;
-use super::super::refusal::envelope::refuse_classed;
+use super::super::refusal::envelope::refuse;
 use super::super::refusal::pool_empty::no_active_credential_summary;
 
 pub(super) fn max_credential_attempts() -> usize {
@@ -34,22 +34,23 @@ pub(super) async fn ordered_candidate_rows(
         provider,
         request.billing_target.as_ref(),
     )
-    .map_err(|error| ModelResponse::failure(&request.model, error))?;
+    .map_err(|error| {
+        // The billing target the caller named does not fit this route.
+        ModelResponse::refused(&request.model, GatewayRefusal::InvalidRequest, error)
+    })?;
     if rows.is_empty() {
         // Not capacity. This agent holds no account this call could be billed
         // to at all, or the one it named is inactive, and no wait repairs
-        // either: the sign-in or the vault grant has to be repaired. The
-        // default `refuse` kind is `subscription_unavailable`, which the code
-        // table reads as `rate_limit` and every client reads as "try again" -
-        // Jeden retried twice and then reported a stream timeout, while Brama
-        // had known from the first attempt that nothing could pay for the
-        // call. `pool_empty.rs` records this same defect twice, one layer
-        // further out each time; this is the layer where the pool is empty
-        // before any provider is asked.
-        return Err(refuse_classed(
+        // either: the sign-in or the vault grant has to be repaired. Answered
+        // as capacity, it read as "try again" to every client - Jeden retried
+        // twice and then reported a stream timeout, while Brama had known from
+        // the first attempt that nothing could pay for the call. `verdict.rs`
+        // records this same defect twice, one layer further out each time;
+        // this is the layer where the pool is empty before any provider is
+        // asked.
+        return Err(refuse(
             request,
             POINT_CREDENTIAL_SELECTION,
-            "credential_unauthorized",
             GatewayRefusal::CredentialUnauthorized,
             request.billing_target.as_ref().map_or_else(
                 || no_active_credential_summary(provider),

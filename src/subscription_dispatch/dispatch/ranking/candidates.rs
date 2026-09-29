@@ -1,7 +1,7 @@
 //! The candidate lists a selector walks: every route this agent can be served
 //! from, in the order the ledger ranks them.
 
-use crate::types::ModelRequest;
+use crate::types::{GatewayRefusal, ModelRequest, Refusal};
 
 use super::super::catalogue::subscription_models::registry_models_for_agent;
 use super::plan_order::order_models_by_plan;
@@ -21,7 +21,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn best_subscription_models
     agent_id: &str,
     preferred: Option<&str>,
     request: &ModelRequest,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, Refusal> {
     let needs_image = request.messages.iter().any(|message| {
         message.content.as_array().is_some_and(|parts| {
             parts
@@ -44,20 +44,28 @@ pub(in crate::subscription_dispatch::dispatch) async fn best_subscription_models
     Ok(models)
 }
 
-pub async fn active_supported_models_for_agent(agent_id: &str) -> Result<Vec<String>, String> {
+/// Every stateless route this agent's subscriptions publish, freest plan
+/// first. An agent whose subscriptions publish nothing right now is answered
+/// as capacity: no subscription it holds can serve this request yet.
+pub async fn active_supported_models_for_agent(agent_id: &str) -> Result<Vec<String>, Refusal> {
     let mut models = registry_models_for_agent(agent_id)
         .await?
         .into_iter()
         .map(|model| model.route_id)
         .collect::<Vec<_>>();
     if models.is_empty() {
-        return Err("no active stateless provider models for signed agent".into());
+        return Err(Refusal::gateway(
+            GatewayRefusal::SubscriptionUnavailable,
+            "no active stateless provider models for signed agent",
+        ));
     }
     order_models_by_plan(agent_id, &mut models).await?;
     Ok(models)
 }
 
-pub async fn active_vision_capable_models_for_agent(agent_id: &str) -> Result<Vec<String>, String> {
+pub async fn active_vision_capable_models_for_agent(
+    agent_id: &str,
+) -> Result<Vec<String>, Refusal> {
     let mut models = registry_models_for_agent(agent_id)
         .await?
         .into_iter()
@@ -65,7 +73,10 @@ pub async fn active_vision_capable_models_for_agent(agent_id: &str) -> Result<Ve
         .map(|model| model.route_id)
         .collect::<Vec<_>>();
     if models.is_empty() {
-        return Err("no active vision-capable stateless provider model for signed agent".into());
+        return Err(Refusal::gateway(
+            GatewayRefusal::SubscriptionUnavailable,
+            "no active vision-capable stateless provider model for signed agent",
+        ));
     }
     order_models_by_plan(agent_id, &mut models).await?;
     Ok(models)

@@ -5,6 +5,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::gateway::broker;
+use crate::types::{GatewayRefusal, Refusal};
 
 use super::candidates::active_supported_models_for_agent;
 use super::plan_order::{ordered_float_key, route_plan_key, shuffle_within_equal};
@@ -39,11 +40,15 @@ fn checked_at_field(row: &Value) -> i64 {
 pub(in crate::subscription_dispatch::dispatch) async fn task_quality_models(
     agent_id: &str,
     task: &str,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, Refusal> {
     let active_models = active_supported_models_for_agent(agent_id).await?;
     let rows = crate::journal::checks_for_task(agent_id, task);
     if rows.is_empty() {
-        return Err(format!("no quality checks configured for task '{task}'"));
+        // A task nobody measured is a selector that names nothing here.
+        return Err(Refusal::gateway(
+            GatewayRefusal::InvalidRequest,
+            format!("no quality checks configured for task '{task}'"),
+        ));
     }
     let mut latest_by_model: HashMap<String, (f64, i64)> = HashMap::new();
     for row in rows
@@ -72,8 +77,10 @@ pub(in crate::subscription_dispatch::dispatch) async fn task_quality_models(
         .map(|(model, (score, checked_at))| (model, score, checked_at))
         .collect::<Vec<_>>();
     if scored.is_empty() {
-        return Err(format!(
-            "no active quality check result for task '{task}' and signed agent"
+        // Measured, but on no model this agent can reach right now.
+        return Err(Refusal::gateway(
+            GatewayRefusal::SubscriptionUnavailable,
+            format!("no active quality check result for task '{task}' and signed agent"),
         ));
     }
     scored.sort_by(|a, b| {

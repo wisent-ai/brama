@@ -14,13 +14,13 @@
 use serde_json::{Map, Value};
 
 use super::super::registry::{
-    endpoint, provider_base_url, route, supports_image_route, supports_speech_route,
-    supports_video_route,
+    endpoint, supports_image_route, supports_speech_route, supports_video_route,
 };
-use super::credential::{authorize_provider, provider_credential_key};
-use super::dispatch_client;
-use super::outcome::refusal::{provider_error, transport_error_message};
+use super::credential::authorize_provider;
+use super::outcome::refusal::{provider_refused, transport_refusal};
 use super::outcome::response_body::bounded_response_text;
+use super::outcome::typed::{typed_object, typed_route, typed_transport};
+use crate::types::{GatewayRefusal, ProviderRefusal, Refusal};
 
 /// Audio is answered as bytes, so a ceiling belongs here rather than in the
 /// JSON reader: sixty seconds of speech is a few hundred kilobytes, and a
@@ -45,19 +45,16 @@ pub async fn dispatch_speech(
     mut payload: Map<String, Value>,
     item: &str,
     secret: &str,
-) -> Result<SpokenAudio, String> {
+) -> Result<SpokenAudio, Refusal> {
     if !supports_speech_route(route_id) {
-        return Err(format!(
-            "invalid_request: route `{route_id}` does not generate speech"
+        return Err(Refusal::gateway(
+            GatewayRefusal::InvalidRequest,
+            format!("invalid_request: route `{route_id}` does not generate speech"),
         ));
     }
-    let (descriptor, model_id) =
-        route(route_id).ok_or_else(|| "invalid provider/model route".to_string())?;
-    let key = provider_credential_key(descriptor, item, secret)?;
-    let base_url = provider_base_url(descriptor)?;
-    let client = dispatch_client()
-        .map_err(|_| "dependency_unavailable: provider client could not be built".to_string())?;
-    payload.insert("model".to_string(), Value::String(model_id.to_string()));
+    let (descriptor, model_id) = typed_route(route_id)?;
+    let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
+    payload.insert("model".to_string(), Value::String(model_id));
     let response = authorize_provider(
         client.post(endpoint(&base_url, descriptor.speech_path)),
         descriptor,
@@ -67,7 +64,7 @@ pub async fn dispatch_speech(
     .json(&Value::Object(payload))
     .send()
     .await
-    .map_err(|error| transport_error_message(&error))?;
+    .map_err(|error| transport_refusal(&error))?;
     let status = response.status();
     let content_type = response
         .headers()
@@ -79,20 +76,25 @@ pub async fn dispatch_speech(
         // A refused speech request answers JSON, not audio, so the ordinary
         // provider refusal reader applies to exactly this branch.
         let text = response.text().await.unwrap_or_default();
-        let failure = provider_error(route_id, status, &text);
-        return Err(failure
-            .error
-            .unwrap_or_else(|| format!("provider returned HTTP {}", status.as_u16())));
+        return Err(provider_refused(route_id, status, &text));
     }
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|error| format!("provider_failure: spoken audio was not delivered: {error}"))?;
+    let bytes = response.bytes().await.map_err(|error| {
+        Refusal::new(
+            ProviderRefusal::ProviderFailure,
+            format!("provider_failure: spoken audio was not delivered: {error}"),
+        )
+    })?;
     if bytes.len() > MAX_SPEECH_BYTES {
-        return Err("provider_failure: spoken audio exceeds the accepted size".to_string());
+        return Err(Refusal::new(
+            ProviderRefusal::ProviderFailure,
+            "provider_failure: spoken audio exceeds the accepted size",
+        ));
     }
     if bytes.is_empty() {
-        return Err("provider_failure: provider returned no audio".to_string());
+        return Err(Refusal::new(
+            ProviderRefusal::ProviderFailure,
+            "provider_failure: provider returned no audio",
+        ));
     }
     Ok(SpokenAudio {
         content_type,
@@ -110,16 +112,15 @@ pub async fn dispatch_image(
     payload: Map<String, Value>,
     item: &str,
     secret: &str,
-) -> Result<Value, String> {
+) -> Result<Value, Refusal> {
     if !supports_image_route(route_id) {
-        return Err(format!(
-            "invalid_request: route `{route_id}` does not generate images"
+        return Err(Refusal::gateway(
+            GatewayRefusal::InvalidRequest,
+            format!("invalid_request: route `{route_id}` does not generate images"),
         ));
     }
-    let (descriptor, _) =
-        route(route_id).ok_or_else(|| "invalid provider/model route".to_string())?;
-    let path = descriptor.image_path;
-    generate(route_id, path, payload, item, secret).await
+    let (descriptor, _) = typed_route(route_id)?;
+    generate(route_id, descriptor.image_path, payload, item, secret).await
 }
 
 pub async fn dispatch_video(
@@ -127,16 +128,19 @@ pub async fn dispatch_video(
     payload: Map<String, Value>,
     item: &str,
     secret: &str,
-) -> Result<Value, String> {
+) -> Result<Value, Refusal> {
     if !supports_video_route(route_id) {
-        return Err(format!(
-            "invalid_request: route `{route_id}` does not generate video"
-        ));
+        return Err(does_not_generate_video(route_id));
     }
-    let (descriptor, _) =
-        route(route_id).ok_or_else(|| "invalid provider/model route".to_string())?;
-    let path = descriptor.video_path;
-    generate(route_id, path, payload, item, secret).await
+    let (descriptor, _) = typed_route(route_id)?;
+    generate(route_id, descriptor.video_path, payload, item, secret).await
+}
+
+fn does_not_generate_video(route_id: &str) -> Refusal {
+    Refusal::gateway(
+        GatewayRefusal::InvalidRequest,
+        format!("invalid_request: route `{route_id}` does not generate video"),
+    )
 }
 
 /// Read one started video job back from the provider that started it.
@@ -145,21 +149,18 @@ pub async fn dispatch_video_status(
     job_id: &str,
     item: &str,
     secret: &str,
-) -> Result<Value, String> {
+) -> Result<Value, Refusal> {
     if !supports_video_route(route_id) {
-        return Err(format!(
-            "invalid_request: route `{route_id}` does not generate video"
-        ));
+        return Err(does_not_generate_video(route_id));
     }
     if !valid_job_id(job_id) {
-        return Err("invalid_request: video id is not a provider job identifier".to_string());
+        return Err(Refusal::gateway(
+            GatewayRefusal::InvalidRequest,
+            "invalid_request: video id is not a provider job identifier",
+        ));
     }
-    let (descriptor, _) =
-        route(route_id).ok_or_else(|| "invalid provider/model route".to_string())?;
-    let key = provider_credential_key(descriptor, item, secret)?;
-    let base_url = provider_base_url(descriptor)?;
-    let client = dispatch_client()
-        .map_err(|_| "dependency_unavailable: provider client could not be built".to_string())?;
+    let (descriptor, _) = typed_route(route_id)?;
+    let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
     let path = descriptor.video_status_path.replace("{id}", job_id);
     let response = authorize_provider(
         client.get(endpoint(&base_url, &path)),
@@ -169,7 +170,7 @@ pub async fn dispatch_video_status(
     )
     .send()
     .await
-    .map_err(|error| transport_error_message(&error))?;
+    .map_err(|error| transport_refusal(&error))?;
     answered(route_id, response).await
 }
 
@@ -179,14 +180,10 @@ async fn generate(
     mut payload: Map<String, Value>,
     item: &str,
     secret: &str,
-) -> Result<Value, String> {
-    let (descriptor, model_id) =
-        route(route_id).ok_or_else(|| "invalid provider/model route".to_string())?;
-    let key = provider_credential_key(descriptor, item, secret)?;
-    let base_url = provider_base_url(descriptor)?;
-    let client = dispatch_client()
-        .map_err(|_| "dependency_unavailable: provider client could not be built".to_string())?;
-    payload.insert("model".to_string(), Value::String(model_id.to_string()));
+) -> Result<Value, Refusal> {
+    let (descriptor, model_id) = typed_route(route_id)?;
+    let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
+    payload.insert("model".to_string(), Value::String(model_id));
     let response = authorize_provider(
         client.post(endpoint(&base_url, path)),
         descriptor,
@@ -196,7 +193,7 @@ async fn generate(
     .json(&Value::Object(payload))
     .send()
     .await
-    .map_err(|error| transport_error_message(&error))?;
+    .map_err(|error| transport_refusal(&error))?;
     answered(route_id, response).await
 }
 
@@ -204,20 +201,15 @@ async fn generate(
 /// named written back into it. The caller asked for `openai/gpt-image-1`; the
 /// provider answers with its own bare model id, and a body that disagreed
 /// with the request would send the next call to a name Brama cannot route.
-async fn answered(route_id: &str, response: reqwest::Response) -> Result<Value, String> {
+async fn answered(route_id: &str, response: reqwest::Response) -> Result<Value, Refusal> {
     let (status, _plan, text) = bounded_response_text(response).await?;
     if !status.is_success() {
-        let failure = provider_error(route_id, status, &text);
-        return Err(failure
-            .error
-            .unwrap_or_else(|| format!("provider returned HTTP {}", status.as_u16())));
+        return Err(provider_refused(route_id, status, &text));
     }
-    let mut body: Value = serde_json::from_str(&text)
-        .map_err(|_| "provider_failure: provider returned malformed JSON".to_string())?;
-    let object = body
-        .as_object_mut()
-        .ok_or_else(|| "provider_failure: provider returned a non-object response".to_string())?;
-    object.insert("model".to_string(), Value::String(route_id.to_string()));
+    let mut body = typed_object(&text)?;
+    if let Some(object) = body.as_object_mut() {
+        object.insert("model".to_string(), Value::String(route_id.to_string()));
+    }
     Ok(body)
 }
 
