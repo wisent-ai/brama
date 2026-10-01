@@ -125,6 +125,9 @@ pub(in crate::core::server) async fn require_model_bearer(
         // workflow as starting it: the job identifier is in the path, and the
         // model allowlist is enforced per request further in.
         && !request.uri().path().starts_with("/v1/videos/")
+        // Deleting a voice is the library's own operation beside listing and
+        // cloning; the route is still checked against the allowlist inside.
+        && !request.uri().path().starts_with("/v1/audio/voices/")
         && !matches!(
             request.uri().path(),
             // Every inference and discovery path a model-scoped bearer may

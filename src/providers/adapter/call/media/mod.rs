@@ -28,7 +28,8 @@ use super::outcome::typed::{typed_object, typed_route, typed_transport};
 use crate::types::{GatewayRefusal, Refusal};
 
 pub use audio::{
-    dispatch_music, dispatch_speech, dispatch_voice_clone, dispatch_voices, SpokenAudio,
+    dispatch_music, dispatch_speech, dispatch_voice_clone, dispatch_voice_delete, dispatch_voices,
+    SpokenAudio,
     VoiceSample,
 };
 

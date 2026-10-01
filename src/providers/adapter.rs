@@ -33,7 +33,7 @@ use registry::{endpoint, provider_base_url_for};
 pub use call::control_client;
 pub use call::media::{
     dispatch_image, dispatch_music, dispatch_speech, dispatch_video, dispatch_video_status,
-    dispatch_voice_clone, dispatch_voices, SpokenAudio, VoiceSample,
+    dispatch_voice_clone, dispatch_voice_delete, dispatch_voices, SpokenAudio, VoiceSample,
 };
 pub use call::typed_capability::{dispatch_decision, dispatch_openai_typed};
 pub use plan::probe::plan_probe_route;

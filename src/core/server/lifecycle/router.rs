@@ -7,7 +7,7 @@
 
 use axum::extract::DefaultBodyLimit;
 use axum::middleware;
-use axum::routing::{get, post, put};
+use axum::routing::{delete, get, post, put};
 use axum::{Extension, Router};
 
 use crate::core::server::administration::credentials::{
@@ -32,7 +32,8 @@ use crate::core::server::chat::chat_completions;
 use crate::core::server::chat::dialects::{anthropic_messages, openai_responses};
 use crate::core::server::decisions::decisions;
 use crate::core::server::media::{
-    audio_music, audio_speech, audio_voice_clone, audio_voices, image_generations,
+    audio_music, audio_speech, audio_voice_clone, audio_voice_delete, audio_voices,
+    image_generations,
     video_generations, video_status,
 };
 use crate::core::server::readiness::{health, readyz};
@@ -77,6 +78,7 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
                 .post(audio_voice_clone)
                 .layer(DefaultBodyLimit::disable()),
         )
+        .route("/v1/audio/voices/:voice_id", delete(audio_voice_delete))
         .route("/v1/videos/:video_id", get(video_status))
         // The one endpoint that answers instead of generating: typed
         // questions in, one typed answer each out.

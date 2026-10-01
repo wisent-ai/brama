@@ -15,7 +15,9 @@
 mod library;
 mod requests;
 
-pub(in crate::core::server) use library::{audio_music, audio_voice_clone, audio_voices};
+pub(in crate::core::server) use library::{
+    audio_music, audio_voice_clone, audio_voice_delete, audio_voices,
+};
 
 use axum::extract::{Extension, Path, Query};
 use axum::http::{header, StatusCode};

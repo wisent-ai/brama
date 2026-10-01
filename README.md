@@ -70,7 +70,7 @@ promise, and what the catalogue says about a model, is documented in
 - Image, video, voice and music generation on `POST /v1/images/generations`
   (with input images), `POST /v1/videos` with `GET /v1/videos/{id}`,
   `POST /v1/audio/speech` and `POST /v1/audio/music`, plus the voice library
-  on `GET`/`POST /v1/audio/voices`, through the `image-model`, `video-model`
+  on `GET`/`POST /v1/audio/voices` and `DELETE /v1/audio/voices/{id}`, through the `image-model`, `video-model`
   and `voice-model` aliases or a canonical route the catalogue lists as that
   kind. ElevenLabs, MiniMax and Gemini are spoken by their own adapters.
 - A model catalogue that states what each model produces and whether its

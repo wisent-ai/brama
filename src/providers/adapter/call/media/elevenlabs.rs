@@ -143,6 +143,22 @@ pub(super) async fn clone_voice(
     answered(call.route_id, response).await
 }
 
+/// Delete one voice from the account; the answer is ElevenLabs' own
+/// acknowledgement. An id that is not one path segment is refused before
+/// any request, and a voice the account does not hold is the provider's
+/// refusal.
+pub(super) async fn delete_voice(call: &Call<'_>, voice_id: &str) -> Result<Value, Refusal> {
+    if !valid_path_segment(voice_id) {
+        return Err(invalid(format!("voice id `{voice_id}` is not one path segment")));
+    }
+    let response = call
+        .delete(&format!("{}/{voice_id}", call.descriptor.voices_path))
+        .send()
+        .await
+        .map_err(|error| transport_refusal(&error))?;
+    answered(call.route_id, response).await
+}
+
 /// One part of a `multipart/form-data` body. A header value that could end
 /// its own line or quote is refused, because it would rewrite the form.
 fn form_field(

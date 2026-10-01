@@ -142,6 +142,18 @@ pub async fn dispatch_direct_voice_clone(
     .await
 }
 
+/// Delete one voice from the deployment's account on this route.
+pub async fn dispatch_direct_voice_delete(route_id: &str, voice_id: &str) -> Result<Value, Refusal> {
+    let (provider, credential) = direct_credential(route_id).await?;
+    provider_registry::dispatch_voice_delete(
+        route_id,
+        voice_id,
+        &broker::provider_resource(&provider),
+        &credential,
+    )
+    .await
+}
+
 /// The deployment's own credential for one canonical route, with the
 /// refusals every direct path shares, each with its class: a route no
 /// provider here serves, a route whose provider is only reachable with a

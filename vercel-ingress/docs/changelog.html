@@ -37,6 +37,8 @@ release coordinate yet and do not concern the subscription pool:</p>
   account in through the operator's own browser and a pasted code, without Weles;</li>
 <li><a href="/docs/cli/subscription/sign-in-manual"><code>brama subscription sign-in-manual</code></a> no longer takes
   <code>--code</code>: the code is a credential and is read from stdin only, pasted or piped;</li>
+<li><code>brama voices remove VOICE_ID --confirm</code> and <code>DELETE /v1/audio/voices/{voice_id}?model=…</code>
+  delete a voice from the deployment's account, beside listing and cloning;</li>
 <li>an alias resolves to exactly one route, the registry document keeps <code>schema_version</code>,
   <code>deployments</code> and <code>routes</code> only, and
   <a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a> moves an existing registry file to that shape;</li>

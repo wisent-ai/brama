@@ -6,7 +6,7 @@
 //! one from recordings. Each names `voice-model` or a canonical route whose
 //! provider has that shape, exactly as the speech endpoint does.
 
-use axum::extract::{Extension, Query};
+use axum::extract::{Extension, Path, Query};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -24,7 +24,8 @@ use crate::core::server::refusal::{api_error, ApiError};
 use crate::core::server::telemetry::record_typed_request;
 use crate::providers::adapter::{supports_music_route, supports_voices_route, VoiceSample};
 use crate::subscription_dispatch::{
-    dispatch_direct_music, dispatch_direct_voice_clone, dispatch_direct_voices,
+    dispatch_direct_music, dispatch_direct_voice_clone, dispatch_direct_voice_delete,
+    dispatch_direct_voices,
 };
 
 #[derive(Debug, Deserialize)]
@@ -179,6 +180,34 @@ pub(in crate::core::server) async fn audio_voice_clone(
         )
         .await,
     )?;
+    record_typed_request(u32::from(true), false);
+    Ok(Json(body))
+}
+
+/// Delete one voice from the account behind a route:
+/// `DELETE /v1/audio/voices/{voice_id}?model=…`. The answer is the
+/// provider's own acknowledgement; a voice the account does not hold is the
+/// provider's refusal.
+pub(in crate::core::server) async fn audio_voice_delete(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Extension(aliases): Extension<ModelAliases>,
+    Path(voice_id): Path<String>,
+    Query(query): Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<Value>, ApiError> {
+    let model = video_status_model(query).map_err(|_| {
+        api_error(
+            StatusCode::BAD_REQUEST,
+            "a voice deletion names the route whose account holds the voice: DELETE /v1/audio/voices/{voice_id}?model=…",
+        )
+    })?;
+    let route = library_route(
+        &client_identity,
+        &aliases,
+        &model,
+        supports_voices_route,
+        "delete voices",
+    )?;
+    let body = dispatched(dispatch_direct_voice_delete(&route, &voice_id).await)?;
     record_typed_request(u32::from(true), false);
     Ok(Json(body))
 }

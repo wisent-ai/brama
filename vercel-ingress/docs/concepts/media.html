@@ -29,6 +29,7 @@
 <tr><td><code>POST /v1/audio/music</code></td><td><code>voice-model</code> or a music route</td><td>Encoded audio bytes of one song.</td></tr>
 <tr><td><code>GET /v1/audio/voices?model=…</code></td><td><code>voice-model</code></td><td>The provider's voice list for the deployment's account, under <code>voices</code>.</td></tr>
 <tr><td><code>POST /v1/audio/voices</code></td><td><code>voice-model</code></td><td>One voice cloned from recordings: the provider's answer, carrying <code>voice_id</code>.</td></tr>
+<tr><td><code>DELETE /v1/audio/voices/{voice_id}?model=…</code></td><td><code>voice-model</code></td><td>The voice deleted from the deployment's account: the provider's acknowledgement. A voice the account does not hold is the provider's refusal. On the shell, <code>brama voices remove VOICE_ID --confirm</code>; without <code>--confirm</code> it is refused with exit 2, because the provider keeps no copy.</td></tr>
 </tbody></table>
 
 <h2 id="request-fields">Request fields<a class="headerlink" href="#request-fields" title="Link to this section">&para;</a></h2>

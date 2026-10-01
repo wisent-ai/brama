@@ -1,6 +1,7 @@
 //! `brama music` and `brama voices`: songs, and the voice library behind
 //! `voice-model`, from an operator shell. They run the same dispatch as
-//! `POST /v1/audio/music` and `/v1/audio/voices`.
+//! `POST /v1/audio/music` and `GET|POST /v1/audio/voices` and
+//! `DELETE /v1/audio/voices/{voice_id}`.
 
 use clap::{Args, Subcommand};
 use serde_json::{Map, Value};
@@ -8,7 +9,8 @@ use serde_json::{Map, Value};
 use brama::core::server::VOICE_ALIAS;
 use brama::providers::adapter::VoiceSample;
 use brama::subscription_dispatch::{
-    dispatch_direct_music, dispatch_direct_voice_clone, dispatch_direct_voices,
+    dispatch_direct_music, dispatch_direct_voice_clone, dispatch_direct_voice_delete,
+    dispatch_direct_voices,
 };
 
 use super::resolve_media_route;
@@ -63,6 +65,18 @@ pub(crate) enum VoicesCommand {
         /// Acknowledge that this command performs a billable provider request
         #[arg(long, default_value_t = false)]
         allow_provider_cost: bool,
+    },
+    /// Delete one voice from the route's account; the provider no longer
+    /// keeps it, so this cannot be undone
+    Remove {
+        /// Voice alias or canonical provider/model route
+        #[arg(long, default_value = VOICE_ALIAS)]
+        model: String,
+        /// The voice to delete, as `voices list` and `voices clone` print it
+        voice_id: String,
+        /// Confirm the deletion; the provider keeps no copy
+        #[arg(long, default_value_t = false)]
+        confirm: bool,
     },
 }
 
@@ -147,6 +161,26 @@ pub(crate) async fn voices(command: VoicesCommand) {
                         eprintln!("{refused}");
                         std::process::exit(1);
                     });
+            super::super::print_json(&body);
+        }
+        VoicesCommand::Remove {
+            model,
+            voice_id,
+            confirm,
+        } => {
+            if !confirm {
+                eprintln!(
+                    "refusing to delete voice {voice_id} without --confirm: the provider keeps no copy"
+                );
+                std::process::exit(2);
+            }
+            let route = resolve_media_route(&model);
+            let body = dispatch_direct_voice_delete(&route, &voice_id)
+                .await
+                .unwrap_or_else(|refused| {
+                    eprintln!("{refused}");
+                    std::process::exit(1);
+                });
             super::super::print_json(&body);
         }
     }

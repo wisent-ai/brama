@@ -42,7 +42,7 @@ pub use direct_route::{
     dispatch_direct, dispatch_direct_decision, dispatch_direct_image, dispatch_direct_music,
     dispatch_direct_openai_typed, dispatch_direct_speech, dispatch_direct_stream,
     dispatch_direct_video, dispatch_direct_video_status, dispatch_direct_voice_clone,
-    dispatch_direct_voices,
+    dispatch_direct_voice_delete, dispatch_direct_voices,
 };
 pub use ranking::candidates::{
     active_supported_models_for_agent, active_vision_capable_models_for_agent,

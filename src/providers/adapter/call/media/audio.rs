@@ -173,6 +173,32 @@ pub async fn dispatch_voice_clone(
     }
 }
 
+/// Delete one voice from the account behind this route.
+pub async fn dispatch_voice_delete(
+    route_id: &str,
+    voice_id: &str,
+    item: &str,
+    secret: &str,
+) -> Result<Value, Refusal> {
+    let (descriptor, model_id) = voices_route(route_id)?;
+    let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
+    let call = Call {
+        route_id,
+        descriptor,
+        model_id: &model_id,
+        key: &key,
+        base_url: &base_url,
+        client: &client,
+        secret,
+    };
+    match descriptor.media_wire {
+        MediaWire::ElevenLabs => elevenlabs::delete_voice(&call, voice_id).await,
+        MediaWire::OpenAi | MediaWire::MiniMax | MediaWire::Gemini => {
+            Err(no_adapter(route_id, "voice library"))
+        }
+    }
+}
+
 /// Everything one vendor adapter needs to make its call.
 pub(super) struct Call<'a> {
     pub(super) route_id: &'a str,
@@ -197,6 +223,15 @@ impl Call<'_> {
     pub(super) fn get(&self, path: &str) -> reqwest::RequestBuilder {
         authorize_provider(
             self.client.get(endpoint(self.base_url, path)),
+            self.descriptor,
+            self.key,
+            self.secret,
+        )
+    }
+
+    pub(super) fn delete(&self, path: &str) -> reqwest::RequestBuilder {
+        authorize_provider(
+            self.client.delete(endpoint(self.base_url, path)),
             self.descriptor,
             self.key,
             self.secret,
