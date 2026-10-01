@@ -55,8 +55,18 @@ pub(crate) fn print_version() {
     );
 }
 
-pub(crate) fn detect() {
+pub(crate) fn detect(json: bool) {
     let res = detect_compute_resources();
+    let (model, backend) = select_model_for_resources(&res);
+    if json {
+        let report = serde_json::json!({
+            "resources": res,
+            "recommended_model": model,
+            "recommended_backend": backend,
+        });
+        println!("{}", serde_json::to_string_pretty(&report).unwrap_or_else(|_| "{}".into()));
+        return;
+    }
     println!("GPU Type: {}", res.gpu_type.as_deref().unwrap_or("none"));
     println!("GPU Name: {}", res.gpu_name.as_deref().unwrap_or("unknown"));
     println!("VRAM: {:.1} GB", res.vram_gb);
@@ -64,8 +74,6 @@ pub(crate) fn detect() {
     println!("CPU Cores: {}", res.cpu_cores);
     println!("CUDA: {}", res.has_cuda);
     println!("Metal: {}", res.has_metal);
-
-    let (model, backend) = select_model_for_resources(&res);
     println!("\nRecommended model: {model}");
     println!("Recommended backend: {backend}");
 }

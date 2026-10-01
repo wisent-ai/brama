@@ -40,7 +40,11 @@ enum Commands {
     /// Run a test inference through the router
     Test(TestArgs),
     /// Detect local hardware capabilities
-    Detect,
+    Detect {
+        /// Print the resources and the recommended model and backend as JSON
+        #[arg(long)]
+        json: bool,
+    },
     /// Serve the read-only stdio MCP server (agent surface)
     Mcp,
     /// Answer typed questions through a decision alias
@@ -134,7 +138,7 @@ async fn main() {
         Commands::Onboard(args) => cli::onboarding::onboard(args).await,
         Commands::Adopt(args) => cli::adoption::adopt(args).await,
         Commands::Test(args) => cli::diagnostics::test_inference(args).await,
-        Commands::Detect => cli::diagnostics::detect(),
+        Commands::Detect { json } => cli::diagnostics::detect(json),
         Commands::Mcp => cli::serving::mcp(),
         Commands::Decide(args) => cli::decisions::decide(args).await,
         Commands::Review(args) => cli::review::run(args).await,

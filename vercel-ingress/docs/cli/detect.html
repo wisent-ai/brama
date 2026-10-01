@@ -21,10 +21,10 @@
       <article class="doc"><h1 id="brama-detect"><code>brama detect</code><a class="headerlink" href="#brama-detect" title="Link to this section">&para;</a></h1>
 <p>Detect local hardware capabilities and select the model and backend Brama recommends for that host.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama detect</code></pre>
-<p>This command accepts no inputs or options.</p>
+<pre><code class="language-console">brama detect [--json]</code></pre>
+<p>The only option is <code>--json</code>.</p>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
-<p>It prints GPU type and name, VRAM, RAM, CPU core count, CUDA and Metal availability, then <code>Recommended model:</code> and <code>Recommended backend:</code>. It performs no network request, reads no credential, writes no state, incurs no provider cost, and exits 0.</p>
+<p>It prints GPU type and name, VRAM, RAM, CPU core count, CUDA and Metal availability, then <code>Recommended model:</code> and <code>Recommended backend:</code>. With <code>--json</code> it prints the same reading as one document: <code>resources</code> (the detected compute resources), <code>recommended_model</code> and <code>recommended_backend</code>. It performs no network request, reads no credential, writes no state, incurs no provider cost, and exits 0.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <p>There is no product-level refusal. Clap rejects unsupported operands or options before detection runs.</p>
 <p><a href="/docs/cli">Back to the complete CLI command tree</a>.</p></article>
