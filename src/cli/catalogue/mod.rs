@@ -21,11 +21,6 @@ pub(crate) use categories::run_categories;
 
 use rows::{matches_filters, row_json, ModelRow};
 
-/// The catalogue is several thousand models wide; a listing with no ceiling
-/// is a page nobody reads, so the default shows the first fifty matches and
-/// says how many there were.
-const DEFAULT_LIMIT: usize = 50;
-
 #[derive(Args)]
 pub(crate) struct ModelsArgs {
     /// Only models of this kind: text, image, video or audio
@@ -43,9 +38,9 @@ pub(crate) struct ModelsArgs {
     /// Only models whose route or name contains this text
     #[arg(long)]
     search: Option<String>,
-    /// How many matches to print; 0 prints every one
-    #[arg(long, default_value_t = DEFAULT_LIMIT)]
-    limit: usize,
+    /// How many matches to print; every one when not given
+    #[arg(long)]
+    limit: Option<usize>,
     /// Print the listing as JSON instead of a table
     #[arg(long, default_value_t = false)]
     json: bool,
@@ -103,11 +98,7 @@ pub(crate) async fn models(args: ModelsArgs) {
             )
         })
         .collect::<Vec<_>>();
-    let shown = if limit == usize::MIN {
-        matched.len()
-    } else {
-        matched.len().min(limit)
-    };
+    let shown = limit.map_or(matched.len(), |limit| matched.len().min(limit));
     if as_json {
         super::print_json(&json!({
             "catalogRevision": snapshot.revision,
