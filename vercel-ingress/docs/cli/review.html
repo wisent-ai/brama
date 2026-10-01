@@ -20,7 +20,7 @@
       <article class="doc"><h1 id="brama-review"><code>brama review</code><a class="headerlink" href="#brama-review" title="Link to this section">&para;</a></h1>
 <p>Ask a Brama gateway to review one change. The model gets the caller's instructions and request, may read and search the files of one directory, and ends by submitting a typed verdict: <code>approve</code> or <code>request_changes</code> with the review text. The verdict is the exit status, so a pull-request gate is the command itself.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama review --gateway &lt;URL&gt; --model &lt;ALIAS&gt; --instructions &lt;FILE&gt; --request &lt;FILE&gt; --root &lt;DIR&gt; --max-turns &lt;N&gt; [--token-env &lt;NAME&gt;] [--output &lt;FILE&gt;] [--json]</code></pre>
+<pre><code class="language-console">brama review --gateway &lt;URL&gt; --model &lt;ALIAS&gt; --instructions &lt;FILE&gt; --request &lt;FILE&gt; --root &lt;DIR&gt; --max-turns &lt;N&gt; [--output &lt;FILE&gt;] [--json] &lt; bearer</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>--gateway &lt;URL&gt;</code></td><td>required</td><td>Base URL of the gateway, for example <code>https://brama.wisent.com</code>. The review is asked of its <code>POST /v1/chat/completions</code>.</td></tr>
 <tr><td><code>--model &lt;ALIAS&gt;</code></td><td>required</td><td>The alias the review is asked of; it must be a route that accepts tools.</td></tr>
@@ -28,7 +28,7 @@
 <tr><td><code>--request &lt;FILE&gt;</code></td><td>required</td><td>What is reviewed: the change's description, the files it touches, its diff.</td></tr>
 <tr><td><code>--root &lt;DIR&gt;</code></td><td>required</td><td>The only directory the model can read or search. Every path is resolved, symlinks included, and refused when it lands outside.</td></tr>
 <tr><td><code>--max-turns &lt;N&gt;</code></td><td>required</td><td>Most model turns before the review fails as unfinished.</td></tr>
-<tr><td><code>--token-env &lt;NAME&gt;</code></td><td>optional; <code>BRAMA_TOKEN</code></td><td>The environment variable holding the gateway bearer.</td></tr>
+<tr><td>standard input</td><td>required</td><td>The gateway bearer, for example <code>skarbiec get &lt;item&gt; --field token | brama review …</code>. It is never taken from argv or the environment.</td></tr>
 <tr><td><code>--output &lt;FILE&gt;</code></td><td>optional</td><td>Also write the review text to this file, for posting it (for example <code>gh pr review --comment --body-file</code>).</td></tr>
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print <code>{"verdict", "review", "turns"}</code> instead of the review text.</td></tr>
 </tbody></table>
@@ -48,7 +48,7 @@
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <p>Each prints <code>review failed: &lt;reason&gt;</code> on standard error and exits 1.</p>
 <table><thead><tr><th>Reason</th><th>Meaning</th></tr></thead><tbody>
-<tr><td><code>BRAMA_TOKEN is not set</code></td><td>The variable named by <code>--token-env</code> is missing or blank.</td></tr>
+<tr><td><code>standard input carried no gateway bearer; …</code> or <code>the gateway bearer could not be read from standard input: &lt;error&gt;</code></td><td>Nothing usable was piped in.</td></tr>
 <tr><td><code>&lt;FILE&gt; is empty</code> or <code>&lt;FILE&gt;: &lt;io error&gt;</code></td><td>The instructions or request could not be read, or hold nothing.</td></tr>
 <tr><td><code>review root &lt;DIR&gt;: &lt;io error&gt;</code></td><td>The root does not exist or is not a directory.</td></tr>
 <tr><td><code>&lt;URL&gt; answered &lt;status&gt;: &lt;body&gt;</code></td><td>The gateway refused the completion; its own status and body follow.</td></tr>
@@ -59,7 +59,7 @@
 <h2 id="example">Example: a Supabase schema gate<a class="headerlink" href="#example" title="Link to this section">&para;</a></h2>
 <pre><code class="language-console">$ gh pr view "$PR_NUMBER" --json body --jq .body &gt; review/request.md
 $ git diff --unified=40 "$BASE_SHA...$HEAD_SHA" -- supabase/migrations &gt;&gt; review/request.md
-$ brama review --gateway https://brama.wisent.com --model wisent-backend/evaluation \
+$ skarbiec get &lt;item&gt; --field token | brama review --gateway https://brama.wisent.com --model wisent-backend/evaluation \
     --instructions release/schema-review.md --request review/request.md \
     --root supabase/migrations --max-turns 10 --output review/review.md
 $ gh pr review "$PR_NUMBER" --comment --body-file review/review.md</code></pre>

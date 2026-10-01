@@ -27,9 +27,6 @@ pub(crate) struct ReviewArgs {
     /// Base URL of the Brama gateway, e.g. https://brama.wisent.com
     #[arg(long)]
     gateway: String,
-    /// Environment variable holding the gateway bearer
-    #[arg(long, default_value = "BRAMA_TOKEN")]
-    token_env: String,
     /// Model alias the review is asked of
     #[arg(long)]
     model: String,
@@ -89,11 +86,21 @@ pub(crate) async fn run(args: ReviewArgs) {
     }
 }
 
+/// The gateway bearer, read from standard input: a secret never travels in
+/// argv or the environment (cli.md rule 15).
+fn bearer_from_stdin() -> Result<String, String> {
+    let mut text = String::new();
+    std::io::Read::read_to_string(&mut std::io::stdin(), &mut text)
+        .map_err(|error| format!("the gateway bearer could not be read from standard input: {error}"))?;
+    let token = text.trim().to_string();
+    if token.is_empty() {
+        return Err("standard input carried no gateway bearer; pipe it in, e.g. `skarbiec get <item> --field token | brama review ...`".into());
+    }
+    Ok(token)
+}
+
 async fn review(args: &ReviewArgs) -> Result<(Verdict, String, usize), String> {
-    let token = std::env::var(&args.token_env)
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| format!("{} is not set", args.token_env))?;
+    let token = bearer_from_stdin()?;
     let read = |path: &PathBuf| {
         std::fs::read_to_string(path)
             .map_err(|error| format!("{}: {error}", path.display()))
