@@ -109,7 +109,8 @@ attempt count the envelope reports. The full code list, with examples, is in
 <li>Direct routes perform one provider attempt.</li>
 <li>Explicit subscription routes perform at most two provider attempts, both on
   the one route the request named.</li>
-<li>Selectors perform at most three model candidates and six provider attempts.</li>
+<li>Selectors try every model candidate in order, each on at most two
+  credentials, and skip the routes of a provider whose whole pool refused.</li>
 <li>Brama does not retry arbitrary 5xx or malformed results automatically.</li>
 <li>Dropping the client connection cancels the in-process future where the HTTP
   stack propagates cancellation; Brama has no durable job to resume.</li>

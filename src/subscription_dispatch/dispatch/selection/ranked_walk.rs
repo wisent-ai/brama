@@ -12,13 +12,6 @@ use super::super::rotation::buffered::attempt_subscription;
 use super::super::rotation::streaming::attempt_subscription_stream;
 use super::super::routed_stream::RoutedStream;
 
-/// A selector walks at most three ranked models before it gives up.
-const MAX_SELECTOR_MODELS: usize = 3;
-
-fn max_selector_models() -> usize {
-    MAX_SELECTOR_MODELS
-}
-
 /// The sentence a selector that walked its whole candidate list opens with.
 /// One string per selector, shared by the buffered and streaming walks, so the
 /// two cannot drift into describing the same exhausted list differently.
@@ -31,19 +24,15 @@ pub(super) const ANY_VISION_CONTEXT: &str =
 /// A ranked selector is a list of routes, and several of those routes belong to
 /// the same provider. When a provider's whole credential pool empties, every
 /// remaining route of that provider will be refused for the identical reason,
-/// so re-dispatching them buys nothing and -- because the model budget is
-/// small -- costs the caller every candidate that could still have served. That
-/// is exactly how `best` answered `503` naming codex with `attempts: 0` while
-/// kimi was serving in the same second.
+/// so re-dispatching them buys nothing; the walk skips them and asks every
+/// other candidate on the list.
 ///
-/// So the walk remembers three things: which providers have already emptied,
-/// how many provider round trips have actually been paid for, and what each
-/// refusal said. A refusal that never reached a provider costs no budget --
-/// there is nothing to bound -- and a provider named once is not named twice.
+/// So the walk remembers which providers have already emptied, how many
+/// attempts were made, and what each refusal said; a provider named once is
+/// not named twice.
 #[derive(Default)]
 struct RankedWalk {
     attempts: u32,
-    provider_calls: usize,
     refusals: Vec<String>,
     classes: Vec<ProviderRefusal>,
     emptied: Vec<String>,
@@ -56,20 +45,11 @@ impl RankedWalk {
         self.emptied.iter().any(|seen| seen == provider)
     }
 
-    /// Whether the walk has paid for as many provider round trips as one
-    /// selector is allowed to spend.
-    fn budget_spent(&self) -> bool {
-        self.provider_calls >= max_selector_models()
-    }
-
     /// Record one refused candidate: its cost, its reason, and -- when the
     /// refusal was the provider's whole pool rather than this one route -- the
     /// fact that the rest of that provider's routes need not be asked.
     fn refused(&mut self, model: &str, provider: &str, response: &ModelResponse, emptied: bool) {
         self.attempts = self.attempts.saturating_add(response.attempts);
-        if response.attempts > u32::default() {
-            self.provider_calls = self.provider_calls.saturating_add(usize::from(true));
-        }
         let reason = response.error.as_deref().unwrap_or("failed");
         self.classes.push(
             response
@@ -171,9 +151,6 @@ pub(super) async fn dispatch_ranked_models(
             walk.skipped(&model, provider);
             continue;
         }
-        if walk.budget_spent() {
-            break;
-        }
         let mut candidate = request.clone();
         candidate.model = model.clone();
         let attempt = attempt_subscription(provider, agent_id, &candidate).await;
@@ -207,9 +184,6 @@ pub(super) async fn dispatch_ranked_models_stream(
         if walk.already_emptied(provider) {
             walk.skipped(&model, provider);
             continue;
-        }
-        if walk.budget_spent() {
-            break;
         }
         let mut candidate = request.clone();
         candidate.model = model.clone();

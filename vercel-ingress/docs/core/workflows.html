@@ -145,17 +145,16 @@ rank candidate subscriptions the caller already owns and to try them in that
 order, within the bounds below.</p>
 <h3 id="any"><code>any</code><a class="headerlink" href="#any" title="Link to this section">&para;</a></h3>
 <p>Select active agent-owned stateless routes, order them by the freest usable
-subscription behind each route, randomize exact ties, and try at most three
-model candidates. Each candidate may try at most two credentials. The whole
-request therefore performs at most six provider calls.</p>
+subscription behind each route, randomize exact ties, and try every model
+candidate in that order. Each candidate may try at most two credentials; the
+routes of a provider whose whole pool refused are skipped unasked.</p>
 <h3 id="any-vision-capable"><code>any-vision-capable</code><a class="headerlink" href="#any-vision-capable" title="Link to this section">&para;</a></h3>
 <p>Apply the <code>any</code> contract after filtering to catalog models whose input
 modalities include <code>image</code>.</p>
 <h3 id="tasktask-name"><code>task:&lt;task-name&gt;</code><a class="headerlink" href="#tasktask-name" title="Link to this section">&para;</a></h3>
 <p>Use the latest active quality observation per active model. Sort by score
 highest first and observation time newest first; inside one score, order by plan
-headroom and randomize exact ties. Try at most three model candidates and six
-provider calls in total.</p>
+headroom and randomize exact ties. Try every model candidate in that order.</p>
 <p>Selectors stop at the first successful result. They do not infer task names,
 reuse another agent's evidence, or continue beyond the documented limits. When
 every candidate is exhausted, the last classified refusal is the caller's
