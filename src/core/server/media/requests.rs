@@ -93,6 +93,10 @@ pub(in crate::core::server) struct SpeechRequest {
     /// MiniMax delivery, such as `happy` or `calm`.
     #[serde(default)]
     pub(super) emotion: Option<String>,
+    /// ElevenLabs only: answer JSON with `audio_base64` and the character
+    /// `alignment` instead of audio bytes.
+    #[serde(default)]
+    pub(super) timestamps: Option<bool>,
 }
 
 impl SpeechRequest {
@@ -139,6 +143,9 @@ impl SpeechRequest {
                         .map_or(Value::Null, Value::Number),
                 );
             }
+        }
+        if self.timestamps == Some(true) {
+            payload.insert("timestamps".to_string(), Value::Bool(true));
         }
         payload
     }

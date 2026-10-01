@@ -2,15 +2,20 @@
 //!
 //! Speech is `POST /v1/text-to-speech/{voice}` with the text, the model and
 //! the voice settings in the body and the encoding in `output_format`; the
-//! answer is the audio. The library is `GET /v1/voices`, and a clone is
+//! answer is the audio. With `timestamps` the call goes to
+//! `…/with-timestamps`, whose answer is JSON — the audio as `audio_base64`
+//! beside the character `alignment` — and that JSON is handed back as it
+//! arrived. The library is `GET /v1/voices`, and a clone is
 //! `POST /v1/voices/add` with the recordings as multipart files.
 
 use serde_json::{json, Map, Value};
 
-use super::super::outcome::refusal::transport_refusal;
-use super::audio::{audio_answer, Call, SpokenAudio, VoiceSample};
+use super::super::outcome::refusal::{provider_refused, transport_refusal};
+use super::super::outcome::response_body::bounded_response_text;
+use super::super::outcome::typed::typed_object;
+use super::audio::{audio, audio_answer, Call, SpokenAudio, VoiceSample};
 use super::{answered, valid_path_segment};
-use crate::types::{GatewayRefusal, Refusal};
+use crate::types::{GatewayRefusal, ProviderRefusal, Refusal};
 
 /// The OpenAI-shaped option ElevenLabs has no counterpart for.
 const UNSUPPORTED: &[&str] = &["instructions"];
@@ -36,7 +41,7 @@ pub(super) async fn speak(
         .filter(|voice| valid_path_segment(voice))
         .ok_or_else(|| invalid("voice must be an ElevenLabs voice id".to_string()))?;
     let mut body = json!({
-        "text": payload.get("input").cloned().unwrap_or(Value::Null),
+        "text": payload.get("input"),
         "model_id": call.model_id,
     });
     let settings = VOICE_SETTINGS
@@ -50,7 +55,12 @@ pub(super) async fn speak(
     if !settings.is_empty() {
         body["voice_settings"] = Value::Object(settings);
     }
-    let mut request = call.post(&call.descriptor.speech_path.replace("{voice}", voice));
+    let timed = payload.get("timestamps") == Some(&Value::Bool(true));
+    let mut path = call.descriptor.speech_path.replace("{voice}", voice);
+    if timed {
+        path.push_str("/with-timestamps");
+    }
+    let mut request = call.post(&path);
     if let Some(format) = payload.get("response_format").and_then(Value::as_str) {
         request = request.query(&[("output_format", format)]);
     }
@@ -59,7 +69,21 @@ pub(super) async fn speak(
         .send()
         .await
         .map_err(|error| transport_refusal(&error))?;
-    audio_answer(call.route_id, response).await
+    if !timed {
+        return audio_answer(call.route_id, response).await;
+    }
+    let (status, _plan, text) = bounded_response_text(response).await?;
+    if !status.is_success() {
+        return Err(provider_refused(call.route_id, status, &text));
+    }
+    let answer = typed_object(&text)?;
+    if !answer.get("audio_base64").is_some_and(Value::is_string) {
+        return Err(Refusal::new(
+            ProviderRefusal::ProviderFailure,
+            "provider_failure: elevenlabs answered timed speech without audio_base64",
+        ));
+    }
+    audio("application/json".to_string(), text.into_bytes())
 }
 
 /// The account's voices, as ElevenLabs lists them under `voices`.

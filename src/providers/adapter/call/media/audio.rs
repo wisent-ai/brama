@@ -24,9 +24,8 @@ const MAX_AUDIO_BYTES: usize = 24 * 1024 * 1024;
 /// The speech options only one vendor's contract carries. Sent anywhere else
 /// they would be dropped or refused by the vendor, so they are refused here
 /// by name.
-const ELEVENLABS_ONLY: &[&str] = &["stability", "similarity_boost"];
+const ELEVENLABS_ONLY: &[&str] = &["stability", "similarity_boost", "timestamps"];
 const MINIMAX_ONLY: &[&str] = &["emotion"];
-const VENDOR_ONLY: &[&str] = &["stability", "similarity_boost", "emotion"];
 
 /// One spoken or sung answer: the encoded audio and the content type the
 /// provider stated for it.
@@ -56,12 +55,16 @@ pub async fn dispatch_speech(
         ));
     }
     let (descriptor, model_id) = typed_route(route_id)?;
-    let foreign = match descriptor.media_wire {
-        MediaWire::ElevenLabs => MINIMAX_ONLY,
-        MediaWire::MiniMax => ELEVENLABS_ONLY,
-        MediaWire::OpenAi | MediaWire::Gemini => VENDOR_ONLY,
+    let foreign: &[&[&str]] = match descriptor.media_wire {
+        MediaWire::ElevenLabs => &[MINIMAX_ONLY],
+        MediaWire::MiniMax => &[ELEVENLABS_ONLY],
+        MediaWire::OpenAi | MediaWire::Gemini => &[ELEVENLABS_ONLY, MINIMAX_ONLY],
     };
-    if let Some(option) = foreign.iter().find(|option| payload.contains_key(**option)) {
+    if let Some(option) = foreign
+        .iter()
+        .flat_map(|options| options.iter())
+        .find(|option| payload.contains_key(**option))
+    {
         return Err(Refusal::gateway(
             GatewayRefusal::InvalidRequest,
             format!("invalid_request: route `{route_id}` takes no `{option}` option"),
