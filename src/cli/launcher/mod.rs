@@ -19,8 +19,11 @@ pub(crate) enum LauncherCommand {
         /// `skarbiec-entitlements-router list` output
         #[arg(long)]
         available: PathBuf,
+        /// Access policy JSON whose `roles.brama-runtime` rules name the
+        /// purposes and resources the gateway may read
         #[arg(long)]
         policy: PathBuf,
+        /// File the catalog is written to
         #[arg(long)]
         output: PathBuf,
     },
@@ -28,20 +31,28 @@ pub(crate) enum LauncherCommand {
     /// allowed models, the alias routes and the backend aliases, each to a
     /// new owner-only file
     Policy {
+        /// The control document holding `services.brama`
         #[arg(long)]
         config: PathBuf,
+        /// File the allowed model list is written to
         #[arg(long)]
         allowed: PathBuf,
+        /// File the alias routes are written to
         #[arg(long)]
         aliases: PathBuf,
+        /// File the backend aliases are written to
         #[arg(long)]
         backend: PathBuf,
     },
     /// Create the first inference-route registry at PATH from
     /// BRAMA_MODEL_ALIASES
-    SeedRoutes { path: PathBuf },
+    SeedRoutes {
+        /// Registry file to create
+        path: PathBuf,
+    },
     /// The preloaded model-router client table (JSON) for BRAMA_ALLOWED_MODELS
     ModelRouterIdentities {
+        /// The `skarbiec-entitlements-router` executable that reads the vault
         #[arg(long)]
         router: PathBuf,
         /// JSON list of the backend client's exact aliases
@@ -50,21 +61,28 @@ pub(crate) enum LauncherCommand {
     },
     /// Every product's request-sign identity (JSON object)
     RequestSignIdentities {
+        /// The `skarbiec-entitlements-router` executable that reads the vault
         #[arg(long)]
         router: PathBuf,
     },
     /// One non-empty field of one vault item, printed bare
     ItemField {
+        /// The `skarbiec-entitlements-router` executable that reads the vault
         #[arg(long)]
         router: PathBuf,
+        /// Vault item to read
         item: String,
+        /// Field of that item to print
         field: String,
     },
     /// Check that the pinned broker advertises every router command path the
     /// launcher and these launcher steps invoke
     CheckRouterVerbs {
+        /// The pinned `skarbiec-entitlements-router` executable to ask
         #[arg(long)]
         router: PathBuf,
+        /// The launcher script; it and the `.sh` stages in its `launcher/`
+        /// directory are scanned for router command paths
         #[arg(long)]
         launcher: PathBuf,
     },
