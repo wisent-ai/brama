@@ -47,10 +47,7 @@ use refusal::{
     invalid_credential_failure, is_provider_authentication, provider_failure, UNPUBLISHED_DETAIL,
 };
 
-// The one name the rest of the crate calls that no longer lives in this file,
-// re-exported by itself so `plan_usage::spawn` keeps working and nothing else
-// travels with it.
-pub use sweep::spawn;
+pub(crate) use sweep::sweep;
 
 async fn refresh_once(subscription_id: &str, provider: &str) -> RefreshResult {
     if !provider_registry::publishes_plan_usage(provider) {

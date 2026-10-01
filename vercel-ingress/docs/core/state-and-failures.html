@@ -128,22 +128,21 @@ attempt count the envelope reports. The full code list, with examples, is in
 <li>model and credential attempts are finite;</li>
 <li>the perf registry tracks at most 500 model keys;</li>
 <li>catalogue and subscription caches have explicit TTLs;</li>
-<li>the provider usage report sweep is bounded and spends no plan quota: one read
-  per active subscription per its own cache window
+<li>the provider usage report pass spends no plan quota: one read per active
+  subscription per its own cache window
   (<code>BRAMA_PLAN_USAGE_TTL_SECS</code>, spread by up to a quarter either way),
-  single-flighted per subscription, no retry inside a sweep, and the whole task
-  switched off by setting <code>BRAMA_PLAN_USAGE_SWEEP_SECS</code> to zero;</li>
+  single-flighted per subscription, no retry inside a pass, and it runs only
+  when <code>brama maintain</code> asks; a host with no schedule for it reads none;</li>
 <li>the completion probe is bounded to what an operator asks for: one attempt
   against one named subscription per request to
   <code>POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe</code>, no retry, no
   rotation to another credential, refused outright for a subscription inside a
   recorded block, and never triggered by a timer &mdash; the shipped
   configuration performs no quota-consuming request on any schedule;</li>
-<li>the credential refresh sweep is bounded: one refresh attempt per active
-  subscription per interval, single-flighted per subscription, no retry inside a
-  sweep, a definitively refused credential left alone until a sign-in replaces
-  it, and the whole task switched off by setting
-  <code>BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS</code> to zero;</li>
+<li>the credential refresh pass makes one refresh attempt per active
+  subscription per <code>brama maintain</code> run, single-flighted per
+  subscription, no retry inside a pass, a definitively refused credential left
+  alone until a sign-in replaces it; the gateway holds no timer that starts it;</li>
 <li>no unbounded background retry, queue, or provider worker exists;</li>
 <li>append-only journal growth is operator-monitored until a versioned compaction
   contract exists.</li>

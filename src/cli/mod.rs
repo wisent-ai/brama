@@ -7,6 +7,7 @@ pub(crate) mod decisions;
 pub(crate) mod diagnose;
 pub(crate) mod diagnostics;
 pub(crate) mod launcher;
+pub(crate) mod maintain;
 pub(crate) mod media;
 pub(crate) mod onboarding;
 pub(crate) mod probe;

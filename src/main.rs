@@ -8,6 +8,7 @@ use cli::catalogue::{CatalogueCommand, ModelsArgs};
 use cli::decisions::DecideArgs;
 use cli::diagnostics::{CollectTaskQualityArgs, TestArgs};
 use cli::launcher::LauncherCommand;
+use cli::maintain::MaintainArgs;
 use cli::media::{ImageArgs, SpeakArgs, VideoCommand};
 use cli::onboarding::OnboardArgs;
 use cli::probe::ProbeArgs;
@@ -101,6 +102,10 @@ enum Commands {
     /// installed generations, trust registry, service env, grants, alias
     /// routes, reachability and the current boot attempt. Read-only.
     Diagnose,
+    /// Run one maintenance pass on the serving gateway: read aged plan usage
+    /// reports, renew grants near expiry, take a fresh readiness reading.
+    /// Exits 1 naming each failed step.
+    Maintain(MaintainArgs),
     /// The pull-request version gate: surface, contract, baseline and the
     /// rule's shared-fixture conformance
     #[command(hide = true)]
@@ -141,6 +146,7 @@ async fn main() {
         Commands::StubProvider(args) => cli::stub::serve(args).await,
         Commands::Probe(args) => cli::probe::run(args).await,
         Commands::Diagnose => cli::diagnose::run().await,
+        Commands::Maintain(args) => cli::maintain::run(args).await,
         Commands::VersionGate { command } => {
             cli::version_gate::run(command, <Cli as clap::CommandFactory>::command())
         }

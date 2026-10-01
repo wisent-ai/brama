@@ -102,8 +102,8 @@ current credential, not as successfully queried billing APIs. Observed traffic
 counters remain available. Background reads obey
 <code>BRAMA_PLAN_USAGE_TTL_SECS</code> (default 300), jittered ±25% derived from the
 subscription id so accounts stay decorrelated across restarts, and
-single-flighted per subscription; the sweep runs every
-<code>BRAMA_PLAN_USAGE_SWEEP_SECS</code> (default 60, <code>0</code> disables). A failed read
+single-flighted per subscription; aged-out readings are read on each
+<code>brama maintain</code> pass, run by the host's Stado schedule. A failed read
 never blanks a row: the last good reading is served with <code>stale: true</code> and
 dropped only past <code>BRAMA_PLAN_USAGE_RETENTION_SECS</code> (default 86400).</p>
 <p><code>brama subscriptions --refresh-usage</code>, Brama Desktop's
@@ -137,8 +137,8 @@ and the block stands until its own expiry.</p>
 <h2 id="credential-lifecycle">Credential lifecycle<a class="headerlink" href="#credential-lifecycle" title="Link to this section">&para;</a></h2>
 <p>OAuth subscription credentials (<code>claude-code</code>, <code>codex</code>, <code>kimi</code> — token
 endpoints in <code>src/gateway/oauth_refresh.rs</code>) are refreshed ahead of expiry:
-every <code>BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS</code> (default 60, <code>0</code> disables)
-the gateway refreshes every active credential expiring within
+on each <code>brama maintain</code> pass the gateway refreshes every active
+credential expiring within
 <code>BRAMA_CREDENTIAL_REFRESH_SKEW_SECS</code> (default 300), single-flighted per
 subscription. Refreshing costs no plan quota. API keys have no refresh path
 and no invented expiry.</p>

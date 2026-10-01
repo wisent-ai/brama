@@ -65,18 +65,18 @@
           <tr><td><code>BRAMA_PERF_PATH</code></td><td><code>/tmp/brama-perf.json</code></td><td>replaceable process telemetry</td></tr>
         </tbody></table>
 
-        <h2 id="timers-and-freshness">Timers and freshness<a class="headerlink" href="#timers-and-freshness" title="Link to this section">&para;</a></h2>
+        <h2 id="timers-and-freshness">Freshness windows<a class="headerlink" href="#timers-and-freshness" title="Link to this section">&para;</a></h2>
         <table><thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
           <tr><td><code>BRAMA_PLAN_USAGE_TTL_SECS</code></td><td><code>300</code></td><td>freshness window per subscription's provider usage report; also when a reading turns <code>stale</code></td></tr>
-          <tr><td><code>BRAMA_PLAN_USAGE_SWEEP_SECS</code></td><td><code>60</code></td><td>how often aged-out readings are looked for; <code>0</code> disables the sweep</td></tr>
           <tr><td><code>BRAMA_PLAN_USAGE_RETENTION_SECS</code></td><td><code>86400</code></td><td>when a stale reading stops being served</td></tr>
-          <tr><td><code>BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS</code></td><td><code>60</code></td><td>refresh-ahead sweep interval; <code>0</code> disables it</td></tr>
           <tr><td><code>BRAMA_CREDENTIAL_REFRESH_SKEW_SECS</code></td><td><code>300</code></td><td>refresh credentials expiring within this window</td></tr>
           <tr><td><code>BRAMA_CREDENTIAL_SIGN_IN_COOLDOWN_SECS</code></td><td><code>1800</code></td><td>how long the gateway waits before driving a second sign-in for the same stored credential</td></tr>
           <tr><td><code>BRAMA_CREDENTIAL_SIGN_IN_TIMEOUT_MS</code></td><td><code>900000</code></td><td>how long Weles may spend driving one sign-in</td></tr>
         </tbody></table>
-        <p>With these defaults no timer performs a quota-consuming request: usage
-        reports and token refreshes are free, and the only quota-spending check is the
+        <p>The gateway keeps no timer: usage reports, token refreshes and the
+        readiness reading are each taken by one <code>brama maintain</code> pass, which
+        the host's Stado schedule runs. Usage reports and token refreshes are free, and
+        the only quota-spending check is the
         explicit admin probe route. Signing an account in is not configurable and not
         an operator action: when a provider refuses a grant, or the stored document is
         not a credential at all, the gateway asks Weles to sign that account in.

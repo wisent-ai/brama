@@ -2,25 +2,20 @@
 //!
 //! Two different questions with two different costs. `/health` answers the
 //! first from nothing at all. The second crosses the Skarbiec broker and
-//! provider discovery, so [`check`] runs it on a timer and `/readyz` returns
-//! the last completed answer: doing that work inside the request made each
-//! three-second deployment probe cancel before a response, then start the same
-//! work again.
+//! provider discovery, so [`check`] runs it once when the gateway starts and
+//! again on every `brama maintain` pass, and `/readyz` returns the last
+//! completed answer.
 
 mod accounts;
 pub(in crate::core::server) mod check;
 mod placement;
 
 use std::sync::LazyLock;
-use std::time::Duration;
 
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
 use serde_json::{json, Value};
-
-/// Readiness is recomputed every thirty seconds.
-const PROBE_INTERVAL: Duration = Duration::from_secs(30);
 
 pub(in crate::core::server) async fn health() -> impl IntoResponse {
     Json(json!({
@@ -116,14 +111,17 @@ pub(in crate::core::server) async fn readyz() -> impl IntoResponse {
     (report.status, Json(report.body))
 }
 
+/// Learn this host's placement and take the first readiness reading, once.
 pub(in crate::core::server) fn spawn_readiness_probe() {
     // Off the readiness path on purpose: this shells out to Stado.
     placement::learn();
-    tokio::spawn(async {
-        loop {
-            let report = check::calculate_readiness(publish).await;
-            publish(report);
-            tokio::time::sleep(PROBE_INTERVAL).await;
-        }
-    });
+    tokio::spawn(recompute());
+}
+
+/// Take one readiness reading, publish it for `/readyz`, and return its body.
+pub(in crate::core::server) async fn recompute() -> Value {
+    let report = check::calculate_readiness(publish).await;
+    let body = report.body.clone();
+    publish(report);
+    body
 }

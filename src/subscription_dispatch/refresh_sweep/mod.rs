@@ -6,23 +6,21 @@ mod renewal;
 
 use crate::gateway::broker;
 use crate::subscription_dispatch::usage::{self, RefreshHint};
-pub use cadence::spawn;
 use reauthorization::schedule_sign_in;
 pub(crate) use reauthorization::sign_in_cooldown;
 use renewal::{refresh_one, Swept};
+use serde_json::{json, Value};
 use std::collections::BTreeSet;
-use std::time::Duration;
-use tracing::{info, warn};
+use tracing::info;
 
-async fn sweep(skew: Duration) {
-    let entries = match broker::list_all_subscriptions().await {
-        Ok(entries) => entries,
-        Err(error) => {
-            warn!(event = "subscription_inventory_failed", operation = "skarbiec.list", %error,
-                "Automatic renewal could not read the current Skarbiec subscription inventory");
-            return;
-        }
-    };
+/// One pass over every subscription Skarbiec lists: each grant inside the skew
+/// window is renewed, each one that needs a browser gets its sign-in scheduled.
+/// An unreadable inventory is the failure, named with the broker's own error.
+pub(crate) async fn sweep() -> Result<Value, String> {
+    let skew = cadence::skew();
+    let entries = broker::list_all_subscriptions().await.map_err(|error| {
+        format!("the Skarbiec subscription inventory could not be read: {error}")
+    })?;
     let mut visited = BTreeSet::new();
     let mut refreshed = 0usize;
     let mut refused = 0usize;
@@ -67,4 +65,10 @@ async fn sweep(skew: Duration) {
         sign_in_checks_scheduled = checks_scheduled,
         "Finished subscription renewal; scheduled checks are not completed browser logins"
     );
+    Ok(json!({
+        "subscriptions": visited.len(),
+        "refreshed": refreshed,
+        "refused": refused,
+        "sign_in_checks_scheduled": checks_scheduled,
+    }))
 }

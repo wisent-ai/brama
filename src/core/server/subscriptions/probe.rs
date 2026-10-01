@@ -76,3 +76,32 @@ pub(in crate::core::server) async fn refresh_admin_subscription_pool(
     .map(Json)
     .map_err(|message| api_error(StatusCode::BAD_REQUEST, &message))
 }
+
+/// One maintenance pass of this serving process, the work it used to run on
+/// its own timers: read every plan usage report that has aged out, renew every
+/// grant inside its expiry window, and take a fresh readiness reading. The host's
+/// Stado schedule decides how often; `brama maintain` is the caller. `ok` is
+/// false when any step failed, and each failure is in the body with its error.
+pub(in crate::core::server) async fn maintain_admin(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    let plan_usage = crate::subscription_dispatch::plan_usage::sweep().await;
+    let credentials = crate::subscription_dispatch::refresh_sweep::sweep().await;
+    let readiness = crate::core::server::readiness::recompute().await;
+    let usage_failed = plan_usage
+        .get("failed")
+        .and_then(Value::as_array)
+        .is_some_and(|failed| !failed.is_empty());
+    let ready = readiness.get("ready").and_then(Value::as_bool) == Some(true);
+    let ok = !usage_failed && credentials.is_ok() && ready;
+    Ok(Json(json!({
+        "ok": ok,
+        "plan_usage": plan_usage,
+        "credentials": match credentials {
+            Ok(report) => report,
+            Err(error) => json!({"error": error}),
+        },
+        "readiness": readiness,
+    })))
+}

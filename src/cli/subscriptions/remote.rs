@@ -233,6 +233,28 @@ pub(crate) async fn refresh(
     Ok(body)
 }
 
+/// Ask the serving gateway for one maintenance pass and return its report.
+pub(crate) async fn maintain(gateway: &str, bearer: &str) -> Result<Value, String> {
+    let response = client()?
+        .post(format!(
+            "{}/v1/admin/maintain",
+            gateway.trim_end_matches('/')
+        ))
+        .bearer_auth(bearer)
+        .send()
+        .await
+        .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
+    let status = response.status().as_u16();
+    let body: Value = response.json().await.unwrap_or(Value::Null);
+    if !HTTP_SUCCESS.contains(&status) {
+        return Err(format!(
+            "the gateway refused the maintenance pass: HTTP {status}: {}",
+            refusal(&body)
+        ));
+    }
+    Ok(body)
+}
+
 /// What a refused answer says, wherever the gateway put it.
 fn refusal(body: &Value) -> String {
     body.pointer("/error/message")

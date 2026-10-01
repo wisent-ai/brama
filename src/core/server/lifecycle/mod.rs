@@ -17,7 +17,6 @@ use crate::core::server::aliases::table::ModelAliases;
 use crate::core::server::aliases::{BEST_ALIAS, WELES_ALIAS, WISENT_MODEL_ALIASES};
 use crate::core::server::readiness::spawn_readiness_probe;
 use crate::core::server::telemetry::STARTED_AT;
-use crate::subscription_dispatch::plan_usage;
 
 pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Error> {
     let _ = STARTED_AT.elapsed();
@@ -38,19 +37,11 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
         models = crate::core::perf::tracked_count(),
         "perf registry loaded"
     );
-    // Readiness crosses the local capability broker and provider discovery. It
-    // runs out of band so a deploy probe always receives the latest completed
-    // answer instead of canceling an in-flight check at its HTTP deadline.
+    // Readiness crosses the local capability broker and provider discovery. Its
+    // first reading is taken out of band so the listener opens at once; later
+    // readings, plan usage reports and credential renewal are each one pass of
+    // `brama maintain`, run by the host's Stado schedule.
     spawn_readiness_probe();
-    // Plan usage is read from each provider's own usage report on a timer rather
-    // than only from whatever traffic happens to arrive, so a subscription
-    // nobody routed through today still reports what its plan says -- and no
-    // timer spends a completion to find out.
-    plan_usage::spawn();
-    // A grant is replaced before it expires rather than when a request trips
-    // over it, and a grant the provider has disowned is recorded the first time
-    // it says so instead of being rediscovered by every later request.
-    crate::subscription_dispatch::refresh_sweep::spawn();
 
     let app = router::app(aliases, ingress_auth);
 
