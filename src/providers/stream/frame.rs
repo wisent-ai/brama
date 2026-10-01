@@ -3,16 +3,9 @@
 //! Every provider read here ships `text/event-stream`, so the framing is one
 //! subject shared by all of them and no wire module should ever see half a
 //! line: chunk boundaries fall wherever the network put them, one event's
-//! payload can arrive as several `data:` fields, and a peer that never
-//! terminates a line has to be refused rather than buffered without end. What
-//! a framed event then means is a different question, answered per provider.
-
-/// The parser's buffered ceiling.
-///
-/// A provider event is at most a content block; a buffer that will not drain
-/// past this is a peer sending an unterminated line, which is a failure, not a
-/// large generation.
-const MAX_EVENT_BUFFER_BYTES: usize = 1024 * 1024;
+//! payload can arrive as several `data:` fields, and a line is buffered until
+//! its end arrives. What a framed event then means is a different question,
+//! answered per provider.
 
 /// Line-based SSE framing: events in, complete `(event, data)` pairs out.
 ///
@@ -36,9 +29,6 @@ impl SseFramer {
 
     /// Append one received chunk and yield every event it completed.
     pub(super) fn feed(&mut self, chunk: &[u8]) -> Result<Vec<(Option<String>, String)>, String> {
-        if self.buffer.len().saturating_add(chunk.len()) > MAX_EVENT_BUFFER_BYTES {
-            return Err("provider stream carried an unterminated event".to_string());
-        }
         self.buffer.push_str(&String::from_utf8_lossy(chunk));
         let mut events = Vec::new();
         while let Some(line_end) = self.buffer.find('\n') {

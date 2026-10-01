@@ -10,7 +10,7 @@
 use serde_json::{json, Map, Value};
 
 use super::super::outcome::refusal::{provider_refused, transport_refusal};
-use super::super::outcome::response_body::bounded_response_text;
+use super::super::outcome::response_body::response_text;
 use super::super::outcome::typed::typed_object;
 use super::audio::{audio, Call, SpokenAudio};
 use crate::types::{GatewayRefusal, ProviderRefusal, Refusal};
@@ -96,7 +96,7 @@ async fn hex_audio(
     response: reqwest::Response,
     format: &str,
 ) -> Result<SpokenAudio, Refusal> {
-    let (status, _plan, text) = bounded_response_text(response).await?;
+    let (status, _plan, text) = response_text(response).await?;
     if !status.is_success() {
         return Err(provider_refused(route_id, status, &text));
     }

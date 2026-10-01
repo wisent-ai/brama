@@ -13,7 +13,7 @@ use serde_json::{json, Map, Value};
 use super::call::credential::{authorize_catalog, credential_key};
 use super::call::dispatch_client;
 use super::call::outcome::refusal::{attempted_failure, provider_error, transport_failure};
-use super::call::outcome::response_body::bounded_response_text;
+use super::call::outcome::response_body::response_text;
 use super::call::outcome::retry::send_once_more_if_unsent;
 use super::dialect::anthropic_messages::{
     anthropic_messages, anthropic_tool_choice, anthropic_tools, model_response_from_anthropic,
@@ -179,7 +179,7 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
         Ok(response) => response,
         Err(error) => return transport_failure(&request.model, &error),
     };
-    let (status, plan, text) = match bounded_response_text(response).await {
+    let (status, plan, text) = match response_text(response).await {
         Ok(result) => result,
         Err(refused) => return attempted_failure(&request.model, refused),
     };

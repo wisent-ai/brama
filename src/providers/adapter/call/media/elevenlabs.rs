@@ -11,7 +11,7 @@
 use serde_json::{json, Map, Value};
 
 use super::super::outcome::refusal::{provider_refused, transport_refusal};
-use super::super::outcome::response_body::bounded_response_text;
+use super::super::outcome::response_body::response_text;
 use super::super::outcome::typed::typed_object;
 use super::audio::{audio, audio_answer, Call, SpokenAudio, VoiceSample};
 use super::{answered, valid_path_segment};
@@ -72,7 +72,7 @@ pub(super) async fn speak(
     if !timed {
         return audio_answer(call.route_id, response).await;
     }
-    let (status, _plan, text) = bounded_response_text(response).await?;
+    let (status, _plan, text) = response_text(response).await?;
     if !status.is_success() {
         return Err(provider_refused(call.route_id, status, &text));
     }

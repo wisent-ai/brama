@@ -13,7 +13,7 @@ use tracing::warn;
 use super::call::control_client;
 use super::call::credential::{authorize_provider, credential_key};
 use super::call::outcome::refusal::{provider_refusal, transport_refusal};
-use super::call::outcome::response_body::bounded_response_text;
+use super::call::outcome::response_body::response_text;
 use super::registry::{provider, provider_base_url, ProviderDescriptor};
 use crate::types::{LimitReading, Refusal};
 use endpoint::{plan_usage_endpoint, PlanUsageEndpoint};
@@ -186,7 +186,7 @@ pub async fn read_plan_usage(provider_id: &str, item: &str, secret: &str) -> Pla
         }
     };
     let response_status = response.status();
-    let (status, _plan, text) = match bounded_response_text(response).await {
+    let (status, _plan, text) = match response_text(response).await {
         Ok(parts) => parts,
         Err(refused) => {
             return classified_plan_usage_refusal(

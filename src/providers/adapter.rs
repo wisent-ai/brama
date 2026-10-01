@@ -19,7 +19,7 @@ use crate::types::{GatewayRefusal, ModelRequest, ModelResponse, ProviderRefusal,
 
 use call::credential::{authorize_provider, provider_body, provider_credential_key};
 use call::outcome::refusal::{attempted_failure, provider_error, transport_failure};
-use call::outcome::response_body::bounded_response_text;
+use call::outcome::response_body::response_text;
 use call::outcome::retry::send_once_more_if_unsent;
 use call::{dispatch_client, stream_client};
 use catalog::dispatch_catalog;
@@ -98,7 +98,7 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
         Ok(response) => response,
         Err(error) => return transport_failure(&request.model, &error),
     };
-    let (status, plan, text) = match bounded_response_text(response).await {
+    let (status, plan, text) = match response_text(response).await {
         Ok(result) => result,
         Err(refused) => return attempted_failure(&request.model, refused),
     };
@@ -208,7 +208,7 @@ pub async fn dispatch_stream(
         Err(error) => return Err(transport_failure(&request.model, &error)),
     };
     if !response.status().is_success() {
-        let (status, plan, text) = match bounded_response_text(response).await {
+        let (status, plan, text) = match response_text(response).await {
             Ok(result) => result,
             Err(refused) => return Err(attempted_failure(&request.model, refused)),
         };

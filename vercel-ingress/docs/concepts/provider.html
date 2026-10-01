@@ -246,12 +246,10 @@ organization or billing API. Observed traffic counters remain available
 </tbody>
 </table>
 <h2 id="bounds">Bounds<a class="headerlink" href="#bounds" title="Link to this section">&para;</a></h2>
-<p>Per attempt: 255-second provider timeout (applied between reads on a
-stream); response bodies capped at 16 MiB before UTF-8 or JSON parsing —
-<code>provider_failure: provider response exceeded byte limit</code>. Model catalog
-downloads 30 seconds; provider model discovery 20 seconds; OAuth refresh 15
-seconds with a 64 KiB response cap. The whole-request deadline is 300
-seconds (<code>whole request deadline exceeded</code>). Public model metadata comes
+<p>Per attempt: no clock ends a provider call; it runs until the provider answers or
+refuses, and its answer is read whole before UTF-8 or JSON parsing (a body that is not
+UTF-8 is <code>provider_failure: provider response is not UTF-8</code>). Public model
+metadata comes
 from models.dev (<code>BRAMA_MODEL_CATALOG_URL</code>, default
 <code>https://models.dev/api.json</code>, cached 900 seconds) and is advisory only.</p>
 <h2 id="not-to-be-confused-with">Not to be confused with<a class="headerlink" href="#not-to-be-confused-with" title="Link to this section">&para;</a></h2>

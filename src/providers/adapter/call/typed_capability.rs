@@ -6,7 +6,7 @@ use serde_json::{Map, Value};
 use super::super::registry::{endpoint, supports_embedding_route, supports_moderation_route};
 use super::credential::authorize_provider;
 use super::outcome::refusal::{provider_refused, transport_refusal};
-use super::outcome::response_body::bounded_response_text;
+use super::outcome::response_body::response_text;
 use super::outcome::typed::{typed_object, typed_route, typed_transport};
 use crate::types::{GatewayRefusal, Refusal};
 
@@ -42,7 +42,7 @@ pub async fn dispatch_openai_typed(
     .send()
     .await
     .map_err(|error| transport_refusal(&error))?;
-    let (status, _plan, text) = bounded_response_text(response).await?;
+    let (status, _plan, text) = response_text(response).await?;
     if !status.is_success() {
         return Err(provider_refused(route_id, status, &text));
     }
@@ -86,7 +86,7 @@ pub async fn dispatch_decision(
     .send()
     .await
     .map_err(|error| transport_refusal(&error))?;
-    let (status, _plan, text) = bounded_response_text(response).await?;
+    let (status, _plan, text) = response_text(response).await?;
     if !status.is_success() {
         return Err(provider_refused(route_id, status, &text));
     }

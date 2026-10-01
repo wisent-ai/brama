@@ -23,7 +23,7 @@ use serde_json::{Map, Value};
 use super::super::registry::{endpoint, supports_image_route, supports_video_route, MediaWire};
 use super::credential::authorize_provider;
 use super::outcome::refusal::{provider_refused, transport_refusal};
-use super::outcome::response_body::bounded_response_text;
+use super::outcome::response_body::response_text;
 use super::outcome::typed::{typed_object, typed_route, typed_transport};
 use crate::types::{GatewayRefusal, Refusal};
 
@@ -146,7 +146,7 @@ async fn generate(
 /// provider answers with its own bare model id, and a body that disagreed
 /// with the request would send the next call to a name Brama cannot route.
 async fn answered(route_id: &str, response: reqwest::Response) -> Result<Value, Refusal> {
-    let (status, _plan, text) = bounded_response_text(response).await?;
+    let (status, _plan, text) = response_text(response).await?;
     if !status.is_success() {
         return Err(provider_refused(route_id, status, &text));
     }
