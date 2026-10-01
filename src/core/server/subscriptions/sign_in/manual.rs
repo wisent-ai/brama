@@ -2,15 +2,15 @@
 //! browser is the operator's and the gateway is not on the operator's machine.
 //!
 //! `begin` draws the PKCE verifier and hands back the page to open; the
-//! verifier stays here, keyed by a sign-in id, for as long as a Weles login is
-//! allowed to take. `complete` takes the code the operator pasted, exchanges
-//! it, stores the grant and proves it with one completion - the same `complete` the
+//! verifier stays here, keyed by a sign-in id, until the operator pastes the
+//! code or begins again for the same account. `complete` takes the pasted
+//! code, exchanges it, stores the grant and proves it with one completion -
+//! the same `complete` the
 //! CLI ends in. A verifier that never leaves the gateway is the whole point:
 //! the code alone, seen on a screen or in a paste, buys nothing.
 
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
-use std::time::{Duration, Instant};
 
 use axum::extract::{Extension, Path};
 use axum::http::StatusCode;
@@ -23,19 +23,13 @@ use crate::core::server::admission::identity::ModelClientIdentity;
 use crate::core::server::refusal::{api_error, ApiError};
 use crate::subscription_dispatch::sign_in::manual::{self, AuthorizationRequest};
 
-/// How long an opened page stays redeemable: the time a Weles-driven login
-/// is allowed, so an operator who is slow at a second factor is not refused.
-const PENDING_TTL: Duration = Duration::from_secs(900);
-
-/// How many sign-ins may be open at once. One console, one operator, one
-/// account at a time; the bound exists so a client that begins and never
-/// completes cannot grow this map.
-const PENDING_LIMIT: usize = 8;
-
+/// An open sign-in. Each pooled account holds at most one: beginning again
+/// for the same account replaces the page it had open, so the map holds no
+/// more entries than the pool has accounts and nothing expires on a clock.
 struct Pending {
     request: AuthorizationRequest,
     reason: String,
-    started: Instant,
+    subscription_id: String,
 }
 
 static PENDING: LazyLock<Mutex<HashMap<String, Pending>>> = LazyLock::new(Default::default);
@@ -100,19 +94,13 @@ pub(in crate::core::server) async fn begin_admin_manual_sign_in(
     let sign_in_id = authorization.state.clone();
     let url = authorization.url.clone();
     let mut pending = PENDING.lock().expect("pending manual sign-ins");
-    pending.retain(|_, open| open.started.elapsed() < PENDING_TTL);
-    if pending.len() >= PENDING_LIMIT {
-        return Err(api_error(
-            StatusCode::TOO_MANY_REQUESTS,
-            "too many manual sign-ins are open; complete or let one expire first",
-        ));
-    }
+    pending.retain(|_, open| open.subscription_id != entry.id);
     pending.insert(
         sign_in_id.clone(),
         Pending {
             request: authorization,
             reason: reason.to_owned(),
-            started: Instant::now(),
+            subscription_id: entry.id.clone(),
         },
     );
     Ok(Json(json!({
@@ -120,7 +108,6 @@ pub(in crate::core::server) async fn begin_admin_manual_sign_in(
         "provider": entry.provider,
         "subscription_id": entry.id,
         "url": url,
-        "expires_in_secs": PENDING_TTL.as_secs(),
     })))
 }
 
@@ -133,7 +120,6 @@ pub(in crate::core::server) async fn complete_admin_manual_sign_in(
     require_brama_desktop(&client_identity)?;
     let pending = {
         let mut pending = PENDING.lock().expect("pending manual sign-ins");
-        pending.retain(|_, open| open.started.elapsed() < PENDING_TTL);
         pending.remove(&sign_in_id)
     };
     let Some(pending) = pending else {
