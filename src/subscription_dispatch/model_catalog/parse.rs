@@ -82,14 +82,8 @@ pub(super) fn parse_catalog(raw: &str) -> Result<CatalogSnapshot, String> {
                     .and_then(Value::as_str)
                     .unwrap_or(model_id)
                     .to_string(),
-                context_window: model
-                    .pointer("/limit/context")
-                    .and_then(Value::as_u64)
-                    .unwrap_or(128_000),
-                max_output_tokens: model
-                    .pointer("/limit/output")
-                    .and_then(Value::as_u64)
-                    .unwrap_or(16_384),
+                context_window: model.pointer("/limit/context").and_then(Value::as_u64),
+                max_output_tokens: model.pointer("/limit/output").and_then(Value::as_u64),
                 input_modalities,
                 output_modalities,
                 // models.dev states this per model and states it for every

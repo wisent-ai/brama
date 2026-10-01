@@ -115,8 +115,10 @@ pub struct RegistryModel {
     /// What the source calls this model. The console groups and searches on
     /// it, and a declared category may name a model by it.
     pub display_name: String,
-    pub context_window: u64,
-    pub max_output_tokens: u64,
+    /// The model's context and output limits as its source states them;
+    /// `None` when the source does not say, never a guessed number.
+    pub context_window: Option<u64>,
+    pub max_output_tokens: Option<u64>,
     pub input_modalities: Vec<String>,
     /// What the model emits. A source that states nothing leaves this empty
     /// and every reader treats the model as text, which is what an

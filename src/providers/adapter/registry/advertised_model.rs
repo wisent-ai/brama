@@ -18,12 +18,10 @@ pub(in crate::providers::adapter) fn model_from_value(
     }
     let context_window = ["context_window", "context_length", "max_model_len"]
         .into_iter()
-        .find_map(|key| row.get(key).and_then(Value::as_u64))
-        .unwrap_or(128_000);
+        .find_map(|key| row.get(key).and_then(Value::as_u64));
     let max_output_tokens = ["max_output_tokens", "max_tokens"]
         .into_iter()
-        .find_map(|key| row.get(key).and_then(Value::as_u64))
-        .unwrap_or(16_384);
+        .find_map(|key| row.get(key).and_then(Value::as_u64));
     Some(RegistryModel {
         route_id: format!("{}/{}", descriptor.id, id),
         provider_id: descriptor.id.to_string(),

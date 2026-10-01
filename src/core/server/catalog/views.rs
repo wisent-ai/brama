@@ -54,8 +54,8 @@ pub(super) fn jeden(view: CatalogView, catalog_revision: String, degraded: bool)
                 .map(|model| model.output_modalities.clone())
                 .filter(|modalities| !modalities.is_empty())
                 .unwrap_or_else(|| vec!["text".to_string()]);
-            let context_window = registry.map_or(200_000, |model| model.context_window);
-            let max_output_tokens = registry.map_or(32_000, |model| model.max_output_tokens);
+            let context_window = registry.and_then(|model| model.context_window);
+            let max_output_tokens = registry.and_then(|model| model.max_output_tokens);
             let tools = registry.is_some_and(|model| model.tools);
             let reasoning = registry.is_some_and(|model| model.reasoning);
             let price = registry.map_or((0.0, 0.0, 0.0, 0.0), |model| {

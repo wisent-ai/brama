@@ -37,14 +37,12 @@ pub(in crate::providers::adapter) fn catalog_model_from_value(
             .get("inputTokenLimit")
             .or_else(|| row.get("context_window"))
             .or_else(|| row.get("context_length"))
-            .and_then(Value::as_u64)
-            .unwrap_or(128_000),
+            .and_then(Value::as_u64),
         max_output_tokens: row
             .get("outputTokenLimit")
             .or_else(|| row.get("max_output_tokens"))
             .or_else(|| row.get("max_tokens"))
-            .and_then(Value::as_u64)
-            .unwrap_or(16_384),
+            .and_then(Value::as_u64),
         input_modalities: vec!["text".into()],
         output_modalities: listed_output_modalities(row),
         open_weights: None,
