@@ -59,9 +59,16 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
             }
         };
         match brama::core::server::apply_subscription_membership(body.as_bytes()).await {
-            Ok(receipt) => crate::cli::print_json(&receipt),
+            Ok(receipt) => crate::cli::print_answer(&receipt, json),
             Err(error) => {
-                crate::cli::print_json(&error);
+                // The refusal is the HTTP error body; a machine that asked
+                // for --json reads it where it reads the receipt, a person
+                // reads it on standard error.
+                if json {
+                    crate::cli::print_json(&error);
+                } else {
+                    eprintln!("{error}");
+                }
                 std::process::exit(1);
             }
         }
