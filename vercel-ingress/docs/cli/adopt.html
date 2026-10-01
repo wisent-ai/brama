@@ -25,12 +25,12 @@
         <h1 id="brama-adopt"><code>brama adopt</code></h1>
         <p>Review and adopt selected routing aliases from an existing Brama route registry. The command uses the same Brama-owned operation and owner-only route-registry write as Brama Desktop. It reads provider identities only from the acquisition routes already configured for this Brama process and subscription identities only through Brama’s existing Skarbiec/entitlements discovery path. It never reads, prints, copies, or creates a provider credential, and it never enables a paid subscription or calls a model.</p>
         <h2 id="invocation">Invocation</h2>
-        <pre><code class="language-console">brama adopt --from &lt;FILE&gt; [--into &lt;FILE&gt;] [--agent-id &lt;ID&gt;] [--json]
-brama adopt --from &lt;FILE&gt; --apply (--select &lt;ALIAS&gt;... | --all-importable) [--replace-conflicts] [--into &lt;FILE&gt;] [--agent-id &lt;ID&gt;] [--json]</code></pre>
+        <pre><code class="language-console">brama adopt --from &lt;FILE&gt; --agent-id &lt;ID&gt; [--into &lt;FILE&gt;] [--json]
+brama adopt --from &lt;FILE&gt; --agent-id &lt;ID&gt; --apply (--select &lt;ALIAS&gt;... | --all-importable) [--replace-conflicts] [--into &lt;FILE&gt;] [--json]</code></pre>
         <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
           <tr><td><code>--from &lt;FILE&gt;</code></td><td>required</td><td>A regular, non-symlink UTF-8 Brama <code>inference-routes</code> JSON document, carrying the known top-level fields <code>schema_version</code>, <code>deployments</code>, and <code>routes</code>; an unknown top-level field is refused and the document is rejected whole. A zero-byte or whitespace-only file means an empty registry. A document written before this shape is brought forward with <a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a>.</td></tr>
           <tr><td><code>--into &lt;FILE&gt;</code></td><td>optional</td><td>The owner-only destination. The default is <code>BRAMA_INFERENCE_ROUTES_FILE</code>, then <code>~/.config/brama/inference-routes.json</code>.</td></tr>
-          <tr><td><code>--agent-id &lt;ID&gt;</code></td><td><code>wisent-app</code></td><td>The exact agent whose already-tagged Skarbiec subscriptions are included in the review.</td></tr>
+          <tr><td><code>--agent-id &lt;ID&gt;</code></td><td>required</td><td>The exact agent whose already-tagged Skarbiec subscriptions are included in the review. There is no built-in agent; without it the command exits 2.</td></tr>
           <tr><td><code>--apply</code></td><td>off</td><td>Permit an atomic destination write. Without it the command is review-only.</td></tr>
           <tr><td><code>--select &lt;ALIAS&gt;</code></td><td>repeatable</td><td>Select one exact source alias. Unknown or duplicate selections reject the request before mutation.</td></tr>
           <tr><td><code>--all-importable</code></td><td>off</td><td>Select aliases whose preview disposition is <code>importable</code> or <code>unchanged</code>, so repeat imports report existing accepted state. Conflicts and rejected routes are never added implicitly.</td></tr>
