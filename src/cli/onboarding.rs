@@ -9,11 +9,11 @@ use super::adoption::{run_adoption, AdoptionSelection};
 
 #[derive(Args)]
 pub(crate) struct OnboardArgs {
-    /// Canonical provider/model route for the first real response
-    #[arg(short, long, default_value = "openai/default")]
+    /// Canonical provider/model route for the first real response; required, no built-in route
+    #[arg(short, long)]
     model: String,
-    /// Stable workload id whose separately provisioned provider credential should be used
-    #[arg(long, default_value = "wisent-app")]
+    /// Stable workload id whose separately provisioned provider credential should be used; required
+    #[arg(long)]
     agent_id: String,
     /// Acknowledge that onboarding should perform one billable provider request
     #[arg(long, default_value_t = false)]
@@ -90,7 +90,7 @@ pub(crate) async fn onboard(args: OnboardArgs) {
         eprintln!(
             "Configuration adoption error: --adopt-from is required for every adoption option"
         );
-        std::process::exit(1);
+        std::process::exit(2);
     }
 
     match brama::onboarding::run_first_use(model, agent_id, allow_provider_cost, reset).await {

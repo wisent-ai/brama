@@ -44,7 +44,7 @@ release is currently published; <code>main</code> is not a production coordinate
 <h2 id="cli">CLI<a class="headerlink" href="#cli" title="Link to this section">&para;</a></h2>
 <pre><code class="language-bash">brama version                        # print product and build identity as JSON
 brama serve --port &lt;port&gt;            # start the authenticated HTTP gateway
-brama test --allow-provider-cost …   # execute one billable inference
+brama test --model &lt;route&gt; --agent-id &lt;id&gt; --allow-provider-cost # execute one billable inference
 brama detect                         # local hardware; no provider or credential
 brama subscriptions [--json]    # pool state per credential; reads nothing but the ledger
 brama subscription refresh &lt;provider&gt; --reason &lt;text&gt; # rotate that provider's grants now

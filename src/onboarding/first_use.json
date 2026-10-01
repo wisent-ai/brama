@@ -27,7 +27,7 @@
       ],
       "presentation": {
         "title": "Start with routes you already use",
-        "body": "Run brama onboard --adopt-from <FILE> to review an existing Brama inference-routes registry together with the provider acquisitions and Skarbiec subscription identities this installation can already use. Nothing is copied or changed until you rerun with --adopt-apply and select exact aliases; skip leaves an empty usable setup."
+        "body": "Run brama onboard --model <ROUTE> --agent-id <ID> --adopt-from <FILE> to review an existing Brama inference-routes registry together with the provider acquisitions and Skarbiec subscription identities this installation can already use. Nothing is copied or changed until you rerun with --adopt-apply and select exact aliases; skip leaves an empty usable setup."
       }
     },
     {

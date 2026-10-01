@@ -9,11 +9,11 @@ use brama::{detect_compute_resources, select_model_for_resources, Message, Model
 
 #[derive(Args)]
 pub(crate) struct TestArgs {
-    /// Canonical provider/model route to test
-    #[arg(short, long, default_value = "openai/default")]
+    /// Canonical provider/model route to test; required, no built-in route
+    #[arg(short, long)]
     model: String,
-    /// Jeden agent/client id whose provider credential should be used
-    #[arg(long, default_value = "wisent-app")]
+    /// Jeden agent/client id whose provider credential should be used; required
+    #[arg(long)]
     agent_id: String,
     /// Acknowledge that this command performs a billable provider request
     #[arg(long, default_value_t = false)]
