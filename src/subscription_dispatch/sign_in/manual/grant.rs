@@ -60,11 +60,11 @@ pub fn claude_document(access: &str, refresh: &str, expires_at_ms: i64) -> Zeroi
 }
 
 /// The marker a grant carried while Brama could take one from a harness on
-/// the machine. Borrowing was removed on 2026-09-20 — a provider issues one
-/// OAuth pair per sign-in and revokes it when a second holder refreshes, so
-/// the copy cost the operator the session they were working in — and the key
-/// stays named here because grants stored before then still carry it and are
-/// stripped of it on read.
+/// the machine. Borrowing is gone — a provider issues one OAuth pair per
+/// sign-in and revokes it when a second holder refreshes, so the copy cost
+/// the operator the session they were working in — and the key stays named
+/// here because grants stored before then still carry it and are stripped
+/// of it on read.
 pub const BORROWED_FROM: &str = "brama_borrowed_from";
 
 /// Store the document as this subscription's credential, once it is a grant
@@ -95,9 +95,9 @@ pub async fn store(
     let stored = Zeroizing::new(parsed.to_string());
     // The account the grant belongs to is written beside it as the item's
     // `account_ref`: it is what Weles resolves a sign-in from when this
-    // grant dies, and until 2026-09-18 every imported member carried none —
-    // `/readyz` reported each as `subscription_identity_missing`, and the
-    // automatic sign-in that exists to replace a burnt grant could not start.
+    // grant dies. An imported member that carries none is reported by
+    // `/readyz` as `subscription_identity_missing`, and the automatic sign-in
+    // that exists to replace a burnt grant cannot start.
     broker::put_subscription_credential_for_account(
         subscription_id,
         provider,
@@ -139,8 +139,8 @@ async fn already_stored(provider: &str, subscription_id: &str, document: &str) -
 /// Whether the item already names the account this grant belongs to. An
 /// unchanged grant on an item that names no account is still a write: the
 /// account is what Weles signs the subscription in from once the grant dies,
-/// and until 2026-09-18 the four imported members kept an unrotated grant
-/// and no account through every sweep, because the grant alone was compared.
+/// and comparing the grant alone leaves an imported member with an
+/// unrotated grant and no account through every sweep.
 /// A caller that knows no account has nothing to add, and neither has one
 /// writing to a local credential store: that store keeps the grant alone,
 /// so there is no account beside it to be missing.
@@ -182,12 +182,10 @@ pub async fn adopt(
     // `needs_reauthorization` with the harness named, expecting the sweep to
     // bring that harness's current grant — and the sweep then answered
     // `unchanged`, because the harness's grant is byte-for-byte the one
-    // already stored. On 2026-09-20 that pair left the gateway's whole
-    // claude-code pool disowned while `omp` on this machine went on
-    // answering on the same account, and Oko's judge got
-    // `no working subscription model` for it. The grant the harness still
-    // uses is the evidence the disowning was wrong, so it is proved again
-    // rather than skipped.
+    // already stored. That pair leaves a gateway's whole pool for a provider
+    // disowned while the harness on the machine goes on answering on the
+    // same account. The grant the harness still uses is the evidence the
+    // disowning was wrong, so it is proved again rather than skipped.
     let disowned = crate::subscription_dispatch::usage::needs_reauthorization(subscription_id);
     if !disowned
         && already_stored(provider, subscription_id, &document).await
@@ -217,10 +215,10 @@ pub async fn adopt(
         provider,
         None,
     );
-    // Every grant stored here is this gateway's own, so this is now always
-    // true. It was not while grants could be borrowed: until 2026-09-20 an
-    // imported grant was reported as "Brama will refresh it from now on"
-    // while `renewal` refused to rotate exactly that grant.
+    // Every grant stored here is this gateway's own, so this is always
+    // true. It was not while grants could be borrowed: an imported grant was
+    // reported as "Brama will refresh it from now on" while `renewal`
+    // refused to rotate exactly that grant.
     let refresher = "Brama will refresh it from now on";
     let (result, detail) = match probe_once(subscription_id, provider).await {
         Ok(probe) if probe.ok => (

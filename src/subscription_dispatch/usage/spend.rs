@@ -195,10 +195,10 @@ pub fn is_blocked(subscription_id: &str) -> bool {
 /// When this subscription's recorded block lifts, if it is inside one.
 ///
 /// The ledger has held this instant since blocks were recorded, and nothing
-/// read it: the refusal a caller receives said the quota "lifts on its own"
-/// and sent them to `brama subscriptions`, which prints the block's reason
-/// and not its end. On 2026-09-21 that left a judge's route refused all day
-/// with no hour anybody could name.
+/// read it: the refusal a caller received said the quota "lifts on its own"
+/// and sent them to `brama subscriptions`, which printed the block's reason
+/// and not its end, leaving a route refused all day with no hour anybody
+/// could name.
 pub fn blocked_until_ms(subscription_id: &str) -> Option<i64> {
     let now = now_ms();
     read_ledger(|ledger| {

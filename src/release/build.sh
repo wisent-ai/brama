@@ -44,11 +44,10 @@ fi
 # CARGO_TARGET_DIR (stado-rs/src/cli/release_submit/builds/worker/environment.rs)
 # precisely so the next release recompiles only what its commit changed.
 #
-# This script used to point cargo at the scratch root it had just deleted, and
-# it overrode the handed variable to do it. So every brama release rebuilt the
-# whole dependency graph, twice — the run register for 0.4.41 on 2026-09-19
-# reads "compiled 263 crates (~96% of the previous run)" — and
-# ~/.stado/build-cache/brama never came into existence on any builder.
+# A script that points cargo at the scratch root it has just deleted, and
+# overrides the handed variable to do it, rebuilds the whole dependency graph
+# on every release, twice, and the per-product build cache never comes into
+# existence on any builder.
 build_root="$output_dir/.build"
 cargo_root=${CARGO_TARGET_DIR:-"$build_root"}
 stage="$output_dir/stage"

@@ -28,9 +28,9 @@ const REAUTHORIZATION_BLOCK_MS: i64 = 30 * 60 * 1_000;
 /// `recorded_at_ms` is not "when this was last restated", and the difference
 /// is load-bearing: the renewal sweep compares it against the browser sign-in
 /// already spent on the credential, so restamping an identical refusal reads
-/// as new information and buys one more real sign-in. On 2026-09-02 a single
+/// as new information and buys one more real sign-in: a single
 /// operator-forced model call -- which re-records the same refusal on its way
-/// to failing -- was enough to reopen the loop the sweep gate had just closed.
+/// to failing -- is enough to reopen the loop the sweep gate had just closed.
 ///
 /// A refusal whose state and provider sentence are unchanged keeps the instant
 /// it was first established. Anything else is a new verdict and gets now: a

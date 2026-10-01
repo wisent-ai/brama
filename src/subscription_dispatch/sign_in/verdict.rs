@@ -81,10 +81,10 @@ fn stops_a_new_attempt(
     // Nobody knows what the provider did: the HTTP exchange with Weles died
     // before an answer, or the answer was unreadable. That is not evidence
     // that a repeat cannot repair the account, and treating it as evidence
-    // wedged `brama-sub-wisent-app-codex-primary` from 2026-09-18: one
-    // `IncompleteMessage` on POST /reauth, and every later sign-in - the
-    // sweep's and the operator's - replayed that verdict instead of running,
-    // while the account revision it is keyed to had no reason to change. An
+    // wedges the subscription: one `IncompleteMessage` on POST /reauth, and
+    // every later sign-in - the sweep's and the operator's - replays that
+    // verdict instead of running, while the account revision it is keyed to
+    // has no reason to change. An
     // unconfirmed result waits for the cooldown like any other retry.
     let unknown_effect = matches!(
         code,
