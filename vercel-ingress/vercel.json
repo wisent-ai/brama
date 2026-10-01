@@ -142,6 +142,18 @@
       "destination": "/docs/cli/host/maintain.html"
     },
     {
+      "source": "/docs/cli/workload/register",
+      "destination": "/docs/cli/workload/register.html"
+    },
+    {
+      "source": "/docs/cli/workload/deregister",
+      "destination": "/docs/cli/workload/deregister.html"
+    },
+    {
+      "source": "/docs/cli/workload/check",
+      "destination": "/docs/cli/workload/check.html"
+    },
+    {
       "source": "/docs/providers",
       "destination": "/docs/providers.html"
     },
