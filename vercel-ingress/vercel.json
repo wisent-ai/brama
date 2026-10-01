@@ -134,6 +134,14 @@
       "destination": "/docs/cli/host/probe.html"
     },
     {
+      "source": "/docs/cli/diagnose",
+      "destination": "/docs/cli/host/diagnose.html"
+    },
+    {
+      "source": "/docs/cli/maintain",
+      "destination": "/docs/cli/host/maintain.html"
+    },
+    {
       "source": "/docs/providers",
       "destination": "/docs/providers.html"
     },
