@@ -9,18 +9,6 @@
 
 use serde_json::Value;
 
-/// The most questions one call may carry. Every question is answered against
-/// the same state in the same request, so this bounds one provider call.
-pub const MAX_QUESTIONS: usize = 32;
-/// The most options a choice may declare, or levels a score may grade over.
-pub const MAX_OPTIONS: usize = 32;
-/// The state a decision is taken on, as bytes of its JSON encoding.
-pub const MAX_STATE_BYTES: usize = 131_072;
-/// One instruction or rubric line.
-pub const MAX_INSTRUCTIONS_BYTES: usize = 4_096;
-/// One question key.
-pub const MAX_KEY_BYTES: usize = 128;
-
 /// One typed question, already validated.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Question {
@@ -108,22 +96,12 @@ impl DecisionRequest {
         if state.is_null() || state.as_str().is_some_and(|text| text.trim().is_empty()) {
             return Err("`state` must not be empty".to_string());
         }
-        if state.to_string().len() > MAX_STATE_BYTES {
-            return Err(format!(
-                "`state` must be at most {MAX_STATE_BYTES} bytes of JSON"
-            ));
-        }
         let declared = object
             .get("questions")
             .and_then(Value::as_object)
             .ok_or_else(|| "`questions` must be an object of question keys".to_string())?;
         if declared.is_empty() {
             return Err("`questions` must declare at least one question".to_string());
-        }
-        if declared.len() > MAX_QUESTIONS {
-            return Err(format!(
-                "`questions` must declare at most {MAX_QUESTIONS} questions"
-            ));
         }
         let mut questions = Vec::with_capacity(declared.len());
         for (key, value) in declared {

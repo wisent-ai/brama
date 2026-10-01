@@ -4,12 +4,12 @@
 
 use serde_json::{Map, Value};
 
-use super::{Question, MAX_INSTRUCTIONS_BYTES, MAX_KEY_BYTES, MAX_OPTIONS};
+use super::Question;
 
 pub(super) fn validate_key(key: &str) -> Result<(), String> {
-    if key.is_empty() || key.len() > MAX_KEY_BYTES || key.trim() != key {
+    if key.is_empty() || key.trim() != key {
         return Err(format!(
-            "question key `{key}` must be non-empty, trimmed and at most {MAX_KEY_BYTES} bytes"
+            "question key `{key}` must be non-empty and trimmed"
         ));
     }
     if key.chars().any(char::is_control) {
@@ -55,24 +55,12 @@ pub(super) fn parse_question(key: &str, value: &Value) -> Result<Question, Strin
                     "question `{key}` must declare at least two options"
                 ));
             }
-            if criteria.len() > MAX_OPTIONS {
-                return Err(format!(
-                    "question `{key}` must declare at most {MAX_OPTIONS} options"
-                ));
-            }
             let mut options = Vec::with_capacity(criteria.len());
             for (label, rubric) in criteria {
                 validate_label(key, label)?;
                 let rubric = match rubric {
                     Value::Null => None,
-                    Value::String(text) if text.len() <= MAX_INSTRUCTIONS_BYTES => {
-                        Some(text.clone())
-                    }
-                    Value::String(_) => {
-                        return Err(format!(
-                            "question `{key}` option `{label}` describes itself in more than {MAX_INSTRUCTIONS_BYTES} bytes"
-                        ))
-                    }
+                    Value::String(text) => Some(text.clone()),
                     _ => {
                         return Err(format!(
                             "question `{key}` option `{label}` must describe itself with a string or null"
@@ -93,19 +81,12 @@ pub(super) fn parse_question(key: &str, value: &Value) -> Result<Question, Strin
             if criteria.len() < 2 {
                 return Err(format!("question `{key}` must declare at least two levels"));
             }
-            if criteria.len() > MAX_OPTIONS {
-                return Err(format!(
-                    "question `{key}` must declare at most {MAX_OPTIONS} levels"
-                ));
-            }
             let mut levels = Vec::with_capacity(criteria.len());
             for level in criteria {
-                let level = level.as_str().map(str::trim).filter(|text| {
-                    !text.is_empty() && text.len() <= MAX_INSTRUCTIONS_BYTES
-                });
+                let level = level.as_str().map(str::trim).filter(|text| !text.is_empty());
                 let Some(level) = level else {
                     return Err(format!(
-                        "question `{key}` must describe every level with a non-empty string of at most {MAX_INSTRUCTIONS_BYTES} bytes"
+                        "question `{key}` must describe every level with a non-empty string"
                     ));
                 };
                 levels.push(level.to_string());
@@ -131,18 +112,13 @@ fn text_field(object: &Map<String, Value>, key: &str, field: &str) -> Result<Str
         .map(str::trim)
         .filter(|text| !text.is_empty())
         .ok_or_else(|| format!("question `{key}` must carry non-empty `{field}`"))?;
-    if value.len() > MAX_INSTRUCTIONS_BYTES {
-        return Err(format!(
-            "question `{key}` field `{field}` must be at most {MAX_INSTRUCTIONS_BYTES} bytes"
-        ));
-    }
     Ok(value.to_string())
 }
 
 fn validate_label(key: &str, label: &str) -> Result<(), String> {
-    if label.is_empty() || label.trim() != label || label.len() > MAX_KEY_BYTES {
+    if label.is_empty() || label.trim() != label {
         return Err(format!(
-            "question `{key}` option `{label}` must be non-empty, trimmed and at most {MAX_KEY_BYTES} bytes"
+            "question `{key}` option `{label}` must be non-empty and trimmed"
         ));
     }
     if label.chars().any(char::is_control) {
