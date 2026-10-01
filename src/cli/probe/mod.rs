@@ -74,7 +74,11 @@ fn candidates(settings: &BTreeMap<String, String>, home: &Path) -> Vec<String> {
         .cloned()
         .unwrap_or_else(|| DEFAULT_PORT.to_string());
     let mut candidates = vec![format!("127.0.0.1:{port}")];
-    let log = std::fs::read(home.join(".stado/logs/brama-always-on.err")).unwrap_or_default();
+    let log = std::fs::read(
+        home.join(".stado/logs")
+            .join(format!("{}.log", super::diagnose::SERVICE_LABEL)),
+    )
+    .unwrap_or_default();
     let announced = String::from_utf8_lossy(&log)
         .lines()
         .filter_map(|line| {

@@ -29,8 +29,8 @@ use serde_json::Value;
 
 use super::workload::service_settings;
 
-/// The launchd label the always-on gateway runs under.
-const SERVICE_LABEL: &str = "com.wisent.always-on.brama";
+/// The one unit Brama runs under on every host, as the Stado catalog names it.
+pub(super) const SERVICE_LABEL: &str = "com.wisent.brama";
 
 /// Where this host keeps Brama, read once and handed to every section.
 pub(super) struct Layout {
@@ -38,8 +38,9 @@ pub(super) struct Layout {
     services: PathBuf,
     settings: BTreeMap<String, String>,
     release_state: Value,
-    error_log: PathBuf,
-    output_log: PathBuf,
+    /// The unit's one log: Stado writes a unit's stdout and stderr to
+    /// `~/.stado/logs/<unit>.log`.
+    log: PathBuf,
 }
 
 impl Layout {
@@ -52,8 +53,9 @@ impl Layout {
             .unwrap_or(Value::Null);
         Layout {
             services: home.join(".stado/services/brama"),
-            error_log: home.join(".stado/logs/brama-always-on.err"),
-            output_log: home.join(".stado/logs/brama-always-on.out"),
+            log: home
+                .join(".stado/logs")
+                .join(format!("{SERVICE_LABEL}.log")),
             home,
             settings,
             release_state,

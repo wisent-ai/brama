@@ -79,11 +79,16 @@ pub(super) fn print_units(layout: &Layout) -> Option<PathBuf> {
                 .filter_map(Value::as_str)
                 .collect();
             let joined = arguments.join(" ");
-            if !label.contains(SERVICE_LABEL) && !joined.contains("start-with-skarbiec") {
+            if !label.contains("brama") && !joined.contains("start-with-skarbiec") {
                 continue;
             }
+            let verdict = if label == SERVICE_LABEL {
+                "the one unit"
+            } else {
+                "DEFECT: a second unit; only com.wisent.brama runs Brama, and Stado removes this one with the next release"
+            };
             println!(
-                "  {}\n    label:    {label}\n    program:  {joined}",
+                "  {}\n    label:    {label} ({verdict})\n    program:  {joined}",
                 path.display()
             );
             if let Some(file) = arguments

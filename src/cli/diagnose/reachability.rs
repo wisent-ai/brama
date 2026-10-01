@@ -17,12 +17,10 @@ const TAILNET_PORT: &str = "8443";
 const ANNOUNCEMENT: &str = "Starting brama server on ";
 /// What the launcher logs at the start of every boot attempt.
 const BOOT_MARKER: &str = "Starting server";
-/// How much of the error stream's end is shown: the launcher's own account
-/// of provisioning and registration, which a slice starting at the last
+/// How much of the unit log's end is shown: the launcher's own account of
+/// provisioning and registration, which a slice starting at the last
 /// announcement hides when a start never got that far.
-const ERROR_TAIL: usize = 60;
-/// How much of the broker and launcher output stream's end is shown.
-const OUTPUT_TAIL: usize = 20;
+const LOG_TAIL: usize = 60;
 
 fn tail(lines: &[&str], count: usize) -> Vec<String> {
     lines[lines.len().saturating_sub(count)..]
@@ -39,7 +37,7 @@ pub(super) async fn print_reachability(layout: &Layout) {
         .cloned()
         .unwrap_or_else(|| DEFAULT_PORT.to_string());
     let mut targets = vec![format!("http://127.0.0.1:{port}/health")];
-    let log = std::fs::read(&layout.error_log)
+    let log = std::fs::read(&layout.log)
         .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
         .unwrap_or_default();
     if let Some(announced) = log
@@ -107,7 +105,7 @@ pub(super) async fn print_reachability(layout: &Layout) {
 
 pub(super) fn print_boot_attempt(layout: &Layout) {
     println!("\n=== current boot attempt");
-    match std::fs::read(&layout.error_log) {
+    match std::fs::read(&layout.log) {
         Ok(bytes) => {
             let text = String::from_utf8_lossy(&bytes);
             let latest = text
@@ -115,21 +113,11 @@ pub(super) fn print_boot_attempt(layout: &Layout) {
                 .map(|at| &text[at..])
                 .unwrap_or(&text);
             println!("{}", latest.trim());
-            println!("\n=== last lines of the error stream");
-            for line in tail(&text.lines().collect::<Vec<_>>(), ERROR_TAIL) {
+            println!("\n=== last lines of the unit's log");
+            for line in tail(&text.lines().collect::<Vec<_>>(), LOG_TAIL) {
                 println!("{line}");
             }
         }
-        Err(_) => println!("  {}: absent", layout.error_log.display()),
-    }
-    println!("\n=== broker and launcher output");
-    match std::fs::read(&layout.output_log) {
-        Ok(bytes) => {
-            let text = String::from_utf8_lossy(&bytes);
-            for line in tail(&text.lines().collect::<Vec<_>>(), OUTPUT_TAIL) {
-                println!("{line}");
-            }
-        }
-        Err(_) => println!("  {}: absent", layout.output_log.display()),
+        Err(_) => println!("  {}: absent", layout.log.display()),
     }
 }

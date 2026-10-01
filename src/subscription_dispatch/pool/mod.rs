@@ -1,14 +1,11 @@
 //! What the subscription pool holds, stated from what is already recorded.
 //!
-//! Browser automation across the company stopped for most of a working day
-//! because this pool was empty. Both codex subscription credentials were burnt,
-//! every `best`-aliased call answered `429 subscription_unavailable`, and the
-//! only way to learn which of the two facts was true -- an exhausted plan or a
-//! disowned grant -- was to grep `brama-always-on.err` for the code and read the
-//! timestamps by hand. The gateway had known since its first refresh sweep: the
-//! ledger already carried `needs_reauthorization` against both grants with the
-//! provider's own sentence beside them, and no command in the product would say
-//! it out loud. This document says it.
+//! Without this document, an empty pool shows only as `429
+//! subscription_unavailable` on every `best`-aliased call, and the only way to
+//! tell an exhausted plan from a disowned grant is to read the unit's log by
+//! hand. The gateway knows at its first refresh sweep: the ledger carries
+//! `needs_reauthorization` against the grant with the provider's own sentence
+//! beside it. This document says it out loud.
 //!
 //! [`report`] contacts no provider and redeems no capability -- it joins the
 //! deployment's subscription listing to the ledger and states what is already
