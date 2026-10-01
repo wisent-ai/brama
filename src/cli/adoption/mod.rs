@@ -10,9 +10,6 @@ mod render;
 
 use render::{print_adoption_preview, print_adoption_result};
 
-/// A route registry offered for adoption is read up to 1 MiB.
-const MAX_CONFIGURATION_BYTES: u64 = 1024 * 1024;
-
 #[derive(Args)]
 pub(crate) struct AdoptArgs {
     /// Existing Brama inference-routes JSON file to review
@@ -174,12 +171,6 @@ fn read_adoption_source(path: &Path) -> Result<String, String> {
     if metadata.file_type().is_symlink() || !metadata.is_file() {
         return Err(format!(
             "{} must be a regular non-symlink file",
-            path.display()
-        ));
-    }
-    if metadata.len() > MAX_CONFIGURATION_BYTES {
-        return Err(format!(
-            "{} exceeds the {MAX_CONFIGURATION_BYTES}-byte configuration limit",
             path.display()
         ));
     }

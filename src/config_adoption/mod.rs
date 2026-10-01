@@ -29,18 +29,6 @@ pub use preview::{
     AdoptionSubscriptionIdentity,
 };
 
-/// The bounds every offered document is held to before a single alias is read.
-///
-/// They are here rather than in `document` because the review, the write and
-/// the shape all answer to the same limits, and one copy of a limit is one
-/// answer about it.
-const MAX_DOCUMENT_BYTES: usize = 1024 * 1024;
-const MAX_SOURCE_NAME_CHARACTERS: usize = 512;
-const MAX_AGENT_ID_CHARACTERS: usize = 128;
-const MAX_ALIASES: usize = 1024;
-const MAX_DEPLOYMENTS: usize = 128;
-const MAX_DESTINATION_CHARACTERS: usize = 512;
-
 /// The registry schema this build reads and writes.
 const SCHEMA_VERSION: u32 = 1;
 

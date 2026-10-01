@@ -11,7 +11,7 @@ use crate::core::inference_routes::{self, RouteImport, RouteImportDisposition, R
 
 use super::document::{parse_source, source_deployments_by_name};
 use super::preview::preview_document;
-use super::{AdoptionDisposition, MAX_ALIASES, SCHEMA_VERSION};
+use super::{AdoptionDisposition, SCHEMA_VERSION};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AdoptionItemResult {
@@ -42,9 +42,6 @@ pub async fn apply_document(
     replace_alias_conflicts: bool,
 ) -> Result<AdoptionResult, String> {
     let preview = preview_document(encoded, source_name, destination, agent_id).await?;
-    if selected_aliases.len() > MAX_ALIASES {
-        return Err(format!("at most {MAX_ALIASES} aliases may be selected"));
-    }
     let selected = selected_aliases
         .iter()
         .map(String::as_str)

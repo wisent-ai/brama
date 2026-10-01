@@ -13,15 +13,9 @@ use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
-/// A deployment lists at most 32 adapters; an identifier is at most 128 bytes.
-const MAX_ADAPTERS_PER_DEPLOYMENT: usize = 32;
-const MAX_IDENTIFIER_BYTES: usize = 128;
-
 use crate::core::server::valid_alias;
 
-use super::{
-    MAX_ALIASES, MAX_DEPLOYMENTS, MAX_DESTINATION_CHARACTERS, MAX_DOCUMENT_BYTES, SCHEMA_VERSION,
-};
+use super::SCHEMA_VERSION;
 
 fn schema_version() -> u32 {
     SCHEMA_VERSION
@@ -107,11 +101,6 @@ where
 }
 
 pub(super) fn parse_source(encoded: &str) -> Result<SourceRegistry, String> {
-    if encoded.len() > MAX_DOCUMENT_BYTES {
-        return Err(format!(
-            "configuration input exceeds the {MAX_DOCUMENT_BYTES}-byte limit"
-        ));
-    }
     if encoded.trim().is_empty() {
         return Ok(SourceRegistry::default());
     }
@@ -126,16 +115,6 @@ pub(super) fn validate_source(source: &SourceRegistry) -> Result<(), String> {
             source.schema_version
         ));
     }
-    if source.routes.len() > MAX_ALIASES {
-        return Err(format!(
-            "inference routes may contain at most {MAX_ALIASES} aliases"
-        ));
-    }
-    if source.deployments.len() > MAX_DEPLOYMENTS {
-        return Err(format!(
-            "inference routes may contain at most {MAX_DEPLOYMENTS} deployments"
-        ));
-    }
     let mut deployment_names = HashSet::new();
     for deployment in &source.deployments {
         if !valid_identifier(&deployment.name) || !deployment_names.insert(deployment.name.as_str())
@@ -145,11 +124,10 @@ pub(super) fn validate_source(source: &SourceRegistry) -> Result<(), String> {
                 deployment.name
             ));
         }
-        if deployment.adapters.len() > MAX_ADAPTERS_PER_DEPLOYMENT
-            || deployment
-                .adapters
-                .iter()
-                .any(|entry| !valid_identifier(&entry.name))
+        if deployment
+            .adapters
+            .iter()
+            .any(|entry| !valid_identifier(&entry.name))
         {
             return Err(format!(
                 "deployment '{}' contains an invalid adapter list",
@@ -170,7 +148,6 @@ pub(super) fn validate_source(source: &SourceRegistry) -> Result<(), String> {
 
 fn valid_identifier(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= MAX_IDENTIFIER_BYTES
         && value.trim() == value
         && value.bytes().all(|byte| {
             byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'_' | b'.')
@@ -179,7 +156,6 @@ fn valid_identifier(value: &str) -> bool {
 
 fn valid_destination(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= MAX_DESTINATION_CHARACTERS
         && value.trim() == value
         && !value.contains('*')
         && !value.bytes().any(|byte| byte.is_ascii_control())
