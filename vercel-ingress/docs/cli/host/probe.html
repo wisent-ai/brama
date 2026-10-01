@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>brama test — Brama CLI Docs</title>
-  <meta name="description" content="Run one acknowledged test inference through Brama’s agent subscription path.">
-  <link rel="canonical" href="https://brama.wisent.com/docs/cli/test">
+  <title>brama probe — Brama CLI Docs</title>
+  <meta name="description" content="Ask the gateway running on this host to serve one real request per alias and report each answer or refusal.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/cli/probe">
   <link rel="stylesheet" href="/docs/assets/site.css">
 </head>
 <body>
@@ -18,21 +18,33 @@
     <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a class="active" aria-current="page" href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/decision">Decision</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
     <main>
       <p class="source-note">Brama CLI command reference</p>
-      <article class="doc"><h1 id="brama-test"><code>brama test</code><a class="headerlink" href="#brama-test" title="Link to this section">&para;</a></h1>
-<p>Run one test inference through the named agent’s subscription credential, not the deployment’s direct provider capability.</p>
+      <article class="doc"><h1 id="brama-probe"><code>brama probe</code><a class="headerlink" href="#brama-probe" title="Link to this section">&para;</a></h1>
+<p>On the gateway's own host, send one real completion per alias through the running gateway and report what each one answered. <code>/health</code> answering says the process started; this says whether a model answers through each alias.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama test (-m &lt;ROUTE&gt;|--model &lt;ROUTE&gt;) --agent-id &lt;ID&gt; [--json] --allow-provider-cost</code></pre>
+<pre><code class="language-console">brama probe --bearer-item &lt;ITEM#FIELD&gt; [--agent &lt;AGENT&gt; --signing-item &lt;ITEM#FIELD&gt;] [--alias &lt;ALIAS&gt;]... [--json] --allow-provider-cost</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
-<tr><td><code>-m, --model &lt;ROUTE&gt;</code></td><td>required</td><td>Canonical route to test. There is no built-in route; without it the command exits 2.</td></tr>
-<tr><td><code>--agent-id &lt;ID&gt;</code></td><td>required</td><td>Agent whose provider credential is used. There is no built-in agent; without it the command exits 2.</td></tr>
-<tr><td><code>--allow-provider-cost</code></td><td>required</td><td>Acknowledge the billable provider request. Without it the command exits 2 before any request.</td></tr>
-<tr><td><code>--json</code></td><td>optional; off</td><td>Print the answer as one JSON document instead of <code>key: value</code> lines.</td></tr>
+<tr><td><code>--bearer-item &lt;ITEM#FIELD&gt;</code></td><td>required</td><td>The vault item and field holding the client bearer every request presents. It is read through the entitlements router <code>~/.config/brama/service.env</code> names, never printed and never put in an argument.</td></tr>
+<tr><td><code>--agent &lt;AGENT&gt;</code></td><td>optional; needs <code>--signing-item</code></td><td>Sign every request as this agent with the <code>x-agent-id</code>, <code>x-agent-timestamp</code> and <code>x-agent-signature</code> headers. A subscription selector alias such as <code>best</code> needs a signed request.</td></tr>
+<tr><td><code>--signing-item &lt;ITEM#FIELD&gt;</code></td><td>optional; needs <code>--agent</code></td><td>The vault item and field holding that agent's request-sign secret.</td></tr>
+<tr><td><code>--alias &lt;ALIAS&gt;</code></td><td>repeatable; every declared alias</td><td>Which aliases to request. Without one, every alias the gateway declares — the list <a href="/docs/cli/aliases"><code>brama aliases</code></a> reports — is requested.</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td>Print the findings once as one JSON document instead of one line per step.</td></tr>
+<tr><td><code>--allow-provider-cost</code></td><td>required</td><td>Acknowledge that each alias spends one short provider request.</td></tr>
 </tbody></table>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
-<p>Success prints <code>model</code>, <code>response</code>, <code>input_tokens</code>, <code>output_tokens</code>, <code>latency_ms</code> and <code>cost_usd</code> as <code>key: value</code> lines, or as one JSON document with <code>--json</code>, then exits 0. It performs one billable request and may update normal subscription usage state; it does not print credentials.</p>
+<p>It tries <code>127.0.0.1:&lt;PORT&gt;</code> from service.env (8080 when it names none), then the address the last boot announced in the gateway's log, and stops at the first that answers <code>GET /health</code>. Each alias then gets <code>{"model": alias, "messages": [{"role": "user", "content": "say ok"}]}</code> on <code>POST /v1/chat/completions</code>. Lines read <code>health &lt;status&gt; at &lt;address&gt;</code>, then <code>&lt;alias&gt; &lt;status&gt; model=&lt;served&gt; said="…"</code> for an answer, <code>&lt;alias&gt; &lt;status&gt; &lt;refusal body&gt;</code> for a refusal, or <code>&lt;alias&gt; unreachable &lt;error&gt;</code>. With <code>--json</code>: <code>{"addresses": [{address, health | error}], "signing": null | {agent}, "aliases": [{alias, status, model, said | refusal | error}]}</code>.</p>
+<p>It writes nothing and changes no configuration. It exits 0 only when every requested alias answered 2xx.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
-<pre><code class="language-text">refusing billable inference without explicit --allow-provider-cost</code></pre>
-<p>That refusal is a usage error and exits 2 before a request. A dispatch failure prints <code>Error: &lt;dispatch reason&gt;</code> (for example, <code>Error: no active 'openai' credential for agent</code>) and exits 1.</p>
+<table><thead><tr><th>Sentence</th><th>Exit</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>refusing billable probe requests without explicit --allow-provider-cost</code></td><td>2</td><td>Nothing was read or sent.</td></tr>
+<tr><td>clap's own refusal for a missing <code>--bearer-item</code>, or <code>--agent</code> without <code>--signing-item</code></td><td>2</td><td>The invocation is incomplete; nothing was read.</td></tr>
+<tr><td><code>service env names no entitlements router</code></td><td>1</td><td><code>~/.config/brama/service.env</code> has no <code>ENTITLEMENTS_ROUTER_BIN</code>; this is not the gateway's host, or its installation is incomplete.</td></tr>
+<tr><td><code>cannot read the bearer &lt;ITEM#FIELD&gt; through &lt;router&gt;: &lt;router answer&gt;</code></td><td>1</td><td>The vault refused or holds no such field; the router's own sentence follows.</td></tr>
+<tr><td><code>cannot read &lt;ITEM#FIELD&gt; to sign as &lt;AGENT&gt;: &lt;router answer&gt;</code></td><td>1</td><td>The request-sign secret could not be read; nothing was sent unsigned in its place.</td></tr>
+<tr><td><code>--bearer-item is `&lt;item&gt;#&lt;field&gt;`, and `&lt;value&gt;` is not</code></td><td>1</td><td>The coordinate has no <code>#</code> or an empty side.</td></tr>
+<tr><td><code>this gateway declares no alias and none was named with --alias; `brama routes set` declares one</code></td><td>1</td><td>There is nothing to probe.</td></tr>
+<tr><td><code>no candidate address served /health</code></td><td>1</td><td>The gateway is not listening on any address it was expected on; each attempt's transport error is printed above.</td></tr>
+<tr><td><code>N of M alias(es) were not served; each line above names the refusal or the transport error</code></td><td>1</td><td>At least one alias did not answer 2xx.</td></tr>
+</tbody></table>
 <p><a href="/docs/cli">Back to the complete CLI command tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>
