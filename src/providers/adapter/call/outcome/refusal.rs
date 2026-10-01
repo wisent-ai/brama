@@ -23,12 +23,12 @@ const MAX_TRANSPORT_CAUSE: usize = 300;
 /// The reason a send failed, in the caller's vocabulary and with the cause.
 ///
 /// The bare sentences this used to return said a request failed and nothing
-/// else. On 2026-09-05 every product chat failed with `dependency_unavailable:
-/// provider request failed` while the model host answered other callers in
-/// 0.3 s, and the gateway's own log could not distinguish a refused
-/// connection, an unroutable address and a TLS refusal — so an outage that was
-/// entirely inside one hop took hours to name. The transport error carries that
-/// answer already; withholding it was the defect.
+/// else: every product chat failing with `dependency_unavailable: provider
+/// request failed` while the model host answers other callers in a fraction
+/// of a second, and a gateway log that cannot distinguish a refused
+/// connection, an unroutable address and a TLS refusal, is an outage
+/// entirely inside one hop that takes hours to name. The transport error
+/// carries that answer already; withholding it was the defect.
 ///
 /// The cause is bounded and carries no request body, only the client's own
 /// description of why the socket did not carry the call.

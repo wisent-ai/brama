@@ -77,7 +77,7 @@ pub(in crate::gateway::broker) async fn existing_item_account(
 /// Replace one item's credential value, keeping what the item already
 /// carries. `account` is the principal the credential belongs to, written
 /// as `context.account_ref` when given: the field Weles resolves a sign-in
-/// from, and the one every imported member lacked until 2026-09-18.
+/// from, which an imported member does not carry on its own.
 pub(in crate::gateway::broker) async fn put_credential(
     item_id: &str,
     secret: &[u8],

@@ -5,10 +5,9 @@
 //! system prompt that opens with a billing attestation and the sentence
 //! "You are a Claude agent, built on Anthropic's Claude Agent SDK.", and in that
 //! attestation a checksum of the body it travels in. Anthropic answers any
-//! other shape `429` with the one-word body `Error`, which is what Brama was
-//! answered for sonnet-4-6 and fable-5-1 on 2026-09-14 while `omp` -- the
-//! harness the grant was taken from -- was being answered on the same account
-//! in the same minute. So Brama sends what `omp` sends, byte for byte where
+//! other shape `429` with the one-word body `Error`, even while the harness
+//! the grant was taken from is being answered on the same account in the
+//! same minute. So Brama sends what that harness sends, byte for byte where
 //! the provider can see it.
 
 use reqwest::RequestBuilder;
@@ -19,10 +18,9 @@ use xxhash_rust::xxh64::xxh64;
 use crate::types::ModelRequest;
 
 /// The Claude Code release whose requests this shape was read from, and
-/// the Agent SDK release it presents as. Read from `omp` 16.5.2
-/// (`@oh-my-pi/pi-ai`), the harness whose requests Anthropic was answering
-/// on the operator's account on 2026-09-17 while Brama's, still shaped as
-/// Claude Code 2.1.257's CLI entrypoint, were answered `Third-party apps
+/// the Agent SDK release it presents as. Read from the harness whose
+/// requests Anthropic answers on the operator's account, while a request
+/// still shaped as an older CLI entrypoint is answered `Third-party apps
 /// now draw from your extra usage, not your plan limits`. The fingerprint
 /// below is derived from the version, so the two change together.
 const CLAUDE_CODE_VERSION: &str = "2.1.165";

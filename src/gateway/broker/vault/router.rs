@@ -26,13 +26,12 @@ const VAULT_HOME_RELATIVE: &str = ".stado/bin/skarbiec";
 /// Every reader of the vault's inventory — per-agent discovery, the console's
 /// pool, the readiness sweep's unroutable-account census, the sign-in loop,
 /// and each credential write's tag lookup — shells the same `list`, and the
-/// router decrypts and parses the whole vault to answer it. On the 16 GiB
-/// control host on 2026-09-18 the vault held 654 items, the readiness sweep
-/// and the sign-in loop asked concurrently every 30 seconds, the router sat
-/// at 954 MiB and 58% CPU beside a gateway at 100%, and the host's own
-/// object store closed connections for want of memory while the fleet's
-/// releases wrote to it. Concurrent callers now share the one listing in
-/// flight instead of each starting a router.
+/// router decrypts and parses the whole vault to answer it. With hundreds of
+/// items in the vault and the readiness sweep and the sign-in loop asking
+/// concurrently every half minute, the router alone can hold most of a
+/// gigabyte and half a core beside a saturated gateway, until the host's own
+/// object store closes connections for want of memory. Concurrent callers
+/// share the one listing in flight instead of each starting a router.
 ///
 /// Shared while in flight, never after: the vault changes under this
 /// gateway by hands it does not see — `skarbiec delete`, a vault sync, an
@@ -98,10 +97,10 @@ pub(in crate::gateway::broker) async fn raw_listing(
 /// fleet installs it at. The bare word `entitlements-router` used to be the
 /// whole answer, and on a machine where the vault is installed as
 /// `~/.stado/bin/skarbiec` and nothing exports either variable, every
-/// credential write failed with `No such file or directory (os error 2)` and
-/// named no program: on 2026-09-20 that is what `brama subscription sync`
-/// answered for all three grants this machine holds, while Oko's own
-/// verification could not be judged for want of a working subscription.
+/// credential write fails with `No such file or directory (os error 2)` and
+/// names no program — `brama subscription sync` answers that for every
+/// grant the machine holds, while nothing that needs a working subscription
+/// can be served.
 pub(crate) fn entitlements_router_bin() -> String {
     for declaration in [ENTITLEMENTS_ROUTER_BIN_ENV, SKARBIEC_BIN_ENV] {
         if let Some(value) = std::env::var(declaration)

@@ -32,10 +32,10 @@ pub(super) const TYPESAFE: ProviderDescriptor = ProviderDescriptor {
 /// bearer for exactly this caller (`provider:local-openai#token`, the item
 /// the operator's capability route already names). With `None` the broker
 /// returned an empty secret without reading anything and no Authorization
-/// header was sent, so on 2026-09-05 every product chat took HTTP 401 from
-/// the model host while the same request carrying that token answered in
-/// 0.3 s — and nothing in the gateway logged a credential step at all,
-/// because none happened.
+/// header was sent, so every product chat took HTTP 401 from the model host
+/// while the same request carrying that token answered at once — and
+/// nothing in the gateway logged a credential step at all, because none
+/// happened.
 pub(super) const LOCAL_OPENAI: ProviderDescriptor = ProviderDescriptor {
     id: "local-openai",
     display_name: "Local OpenAI",

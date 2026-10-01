@@ -2,11 +2,11 @@
 //!
 //! Anthropic's newest models answer a request that carries `temperature`
 //! with HTTP 400 and the sentence "`temperature` is deprecated for this
-//! model", whatever the value. On 2026-09-14 the gateway stopped inventing a
-//! temperature of its own; on 2026-09-18 a caller (Oko's task judge) sent
-//! its own, every Claude subscription model refused in turn, and the pool
-//! reported "no working subscription model for signed agent" for a fleet
-//! whose credentials were fine. A model list would go stale with the next
+//! model", whatever the value. The gateway invents no temperature of its
+//! own, and when a caller sends one, every Claude subscription model refuses
+//! in turn and the pool would report "no working subscription model for
+//! signed agent" for a fleet whose credentials are fine. A model list would
+//! go stale with the next
 //! release; the provider's own refusal is exact, so Brama learns from it:
 //! the model is noted once, the request is sent again without the setting,
 //! and every later request to that model omits it for the life of the
