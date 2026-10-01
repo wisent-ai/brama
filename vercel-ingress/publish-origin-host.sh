@@ -7,9 +7,9 @@
 #
 # Why this exists: vercel.json rewrites brama.wisent.com to this host's
 # Tailscale hostname, which is public only while Tailscale Funnel terminates
-# TLS for it. On 2026-08-17 a power cut took the funnel down; Vercel then
-# answered every Brama request with ROUTER_EXTERNAL_TARGET_HANDSHAKE_ERROR and
-# X-Vercel-Error: DNS_HOSTNAME_EMPTY, and every model call in the fleet failed.
+# TLS for it. When the funnel goes down (a power cut will do it), Vercel
+# answers every Brama request with ROUTER_EXTERNAL_TARGET_HANDSHAKE_ERROR and
+# X-Vercel-Error: DNS_HOSTNAME_EMPTY, and every model call in the fleet fails.
 # Re-serving is idempotent: an already-correct funnel is left alone.
 set -eu
 
