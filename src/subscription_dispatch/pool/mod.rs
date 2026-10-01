@@ -41,7 +41,7 @@ use attribution::accounts;
 
 pub use account::subscription_view;
 pub use attribution::{record_accounts, second_factor_report};
-pub use refresh::{refresh_provider, refresh_subscription, reinstate_member};
+pub use refresh::{refresh_provider, refresh_subscription, reinstate_member, ReinstateRefused};
 pub use scope::PoolScope;
 
 /// The pool as the gateway sees it, narrowed to what the caller proved.

@@ -128,28 +128,8 @@ pub(in crate::gateway::broker) async fn record_stated_account(
         .map_err(|error| format!("credential for {item_id} is not UTF-8: {error}"))?;
     let existing = existing_item_tags(&item_id).await?;
     let tags = subscription_tags_for_write(&existing, provider, subscription_id, Some(&account))?;
-    match put_credential(&item_id, raw.as_bytes(), Some(&tags), Some(&account)).await {
-        Ok(()) => Ok(Some(account)),
-        // A vault older than the `brama:account:` namespace refuses the tag
-        // by name. The account itself is not the tag: it is recorded as the
-        // item's own `account_ref`, which every reader of this can resolve,
-        // and the tag is the cheap index that vault cannot hold yet. So the
-        // account is still recorded, and the deployment is not left
-        // unattributed until its vault is delivered.
-        Err(refused) if refused.contains("namespace that is not registered") => {
-            let without_account =
-                subscription_tags_for_write(&existing, provider, subscription_id, None)?;
-            put_credential(
-                &item_id,
-                raw.as_bytes(),
-                Some(&without_account),
-                Some(&account),
-            )
-            .await?;
-            Ok(Some(account))
-        }
-        Err(refused) => Err(refused),
-    }
+    put_credential(&item_id, raw.as_bytes(), Some(&tags), Some(&account)).await?;
+    Ok(Some(account))
 }
 
 /// [`record_stated_account`] for a caller that does not hold the credential:

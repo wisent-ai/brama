@@ -246,13 +246,13 @@ pub(in crate::core::server) async fn reinstate_admin_grant(
                 "detail": verdict["detail"],
             }))
         })
-        .map_err(|detail| {
-            let status = if detail.contains("holds no member") {
-                StatusCode::NOT_FOUND
-            } else if detail.contains("is not retired") {
-                StatusCode::CONFLICT
-            } else {
-                StatusCode::BAD_REQUEST
+        .map_err(|(refused, detail)| {
+            use crate::subscription_dispatch::pool::ReinstateRefused;
+            let status = match refused {
+                ReinstateRefused::NoMember => StatusCode::NOT_FOUND,
+                ReinstateRefused::NotRetired => StatusCode::CONFLICT,
+                ReinstateRefused::Unreadable => StatusCode::SERVICE_UNAVAILABLE,
+                ReinstateRefused::Invalid => StatusCode::BAD_REQUEST,
             };
             api_error(status, &detail)
         })

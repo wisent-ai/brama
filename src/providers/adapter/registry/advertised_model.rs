@@ -24,7 +24,6 @@ pub(in crate::providers::adapter) fn model_from_value(
         .into_iter()
         .find_map(|key| row.get(key).and_then(Value::as_u64))
         .unwrap_or(16_384);
-    let lower = id.to_ascii_lowercase();
     Some(RegistryModel {
         route_id: format!("{}/{}", descriptor.id, id),
         provider_id: descriptor.id.to_string(),
@@ -42,12 +41,17 @@ pub(in crate::providers::adapter) fn model_from_value(
         // were published. Nothing here knows, so nothing here claims.
         open_weights: None,
         tools: true,
-        reasoning: lower.contains("reason")
-            || lower.contains("thinking")
-            || lower.contains("deepseek-r1")
-            || lower.contains("o1")
-            || lower.contains("o3")
-            || lower.contains("o4"),
+        // Whether a model reasons is what the listing states about it, not
+        // what its name looks like: OpenRouter lists `reasoning` among a
+        // model's `supported_parameters`, others carry `capabilities.reasoning`.
+        reasoning: row
+            .pointer("/capabilities/reasoning")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+            || row
+                .get("supported_parameters")
+                .and_then(Value::as_array)
+                .is_some_and(|listed| listed.iter().any(|item| item.as_str() == Some("reasoning"))),
         input_price: 0.0,
         output_price: 0.0,
         cache_read_price: 0.0,

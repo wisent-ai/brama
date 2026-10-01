@@ -194,26 +194,56 @@ pub async fn refresh_subscription(
 /// Why it exists: a retirement was permanent. A member given back was
 /// skipped by every later command, whatever the accounts in the vault were
 /// worth, and no command could say it is used again.
-pub async fn reinstate_member(subscription_id: &str, reason: &str) -> Result<Value, String> {
+/// Why a reinstatement was refused, so a caller maps it by kind rather than
+/// by the sentence's words.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReinstateRefused {
+    /// The request named no member or gave no reason.
+    Invalid,
+    /// The pool holds no member by that id.
+    NoMember,
+    /// The member is in the rotation already.
+    NotRetired,
+    /// The pool could not be read.
+    Unreadable,
+}
+
+pub async fn reinstate_member(
+    subscription_id: &str,
+    reason: &str,
+) -> Result<Value, (ReinstateRefused, String)> {
     let subscription_id = subscription_id.trim();
     if subscription_id.is_empty() {
-        return Err("name the subscription to reinstate".into());
+        return Err((
+            ReinstateRefused::Invalid,
+            "name the subscription to reinstate".into(),
+        ));
     }
     if reason.trim().is_empty() {
-        return Err("a reason must say why this member is used again".into());
+        return Err((
+            ReinstateRefused::Invalid,
+            "a reason must say why this member is used again".into(),
+        ));
     }
     let provider = broker::list_all_subscriptions()
-        .await?
+        .await
+        .map_err(|detail| (ReinstateRefused::Unreadable, detail))?
         .into_iter()
         .find(|entry| entry.id == subscription_id)
         .map(|entry| entry.provider)
-        .ok_or_else(|| format!("this deployment's pool holds no member `{subscription_id}`"))?;
+        .ok_or_else(|| {
+            (
+                ReinstateRefused::NoMember,
+                format!("this deployment's pool holds no member `{subscription_id}`"),
+            )
+        })?;
     // Retirement wrote a journal marker and a ledger state, and the pool
     // skips a member for either; a member whose credential the ledger calls
     // disabled is retired whatever the journal says.
     if !retired(subscription_id, usage::usage_for(subscription_id).as_ref()) {
-        return Err(format!(
-            "`{subscription_id}` is not retired, so there is nothing to reinstate"
+        return Err((
+            ReinstateRefused::NotRetired,
+            format!("`{subscription_id}` is not retired, so there is nothing to reinstate"),
         ));
     }
     crate::journal::reinstate(subscription_id);

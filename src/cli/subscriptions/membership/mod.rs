@@ -104,7 +104,7 @@ pub(super) async fn reinstate(destination: Destination, subscription_id: &str, r
                 text(&verdict, "subscription_id").unwrap_or_default(),
                 text(&verdict, "detail").unwrap_or_default()
             ),
-            Err(error) => {
+            Err((_, error)) => {
                 eprintln!("{error}");
                 std::process::exit(1);
             }
