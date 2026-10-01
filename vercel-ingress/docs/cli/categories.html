@@ -22,14 +22,14 @@
 
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
 <pre><code class="language-console">brama categories ls [--json]
-brama categories set &lt;NAME&gt; [--provider &lt;ID&gt;]... [--route &lt;PROVIDER/MODEL&gt;]... [--term &lt;TEXT&gt;]...
-brama categories rm &lt;NAME&gt;</code></pre>
+brama categories set &lt;NAME&gt; [--provider &lt;ID&gt;]... [--route &lt;PROVIDER/MODEL&gt;]... [--term &lt;TEXT&gt;]... [--json]
+brama categories rm &lt;NAME&gt; [--json]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>&lt;NAME&gt;</code></td><td>required</td><td>Lowercase letters, digits and hyphens.</td></tr>
 <tr><td><code>--provider &lt;ID&gt;</code></td><td>repeatable</td><td>Every model of that provider is in the category.</td></tr>
 <tr><td><code>--route &lt;PROVIDER/MODEL&gt;</code></td><td>repeatable</td><td>That exact route is in the category.</td></tr>
 <tr><td><code>--term &lt;TEXT&gt;</code></td><td>repeatable</td><td>A model whose route id or published name contains this text is in the category.</td></tr>
-<tr><td><code>--json</code></td><td><code>ls</code> only; off</td><td>Print the declarations as a document.</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td><code>ls</code> prints the declarations as a document; <code>set</code> and <code>rm</code> print <code>{"action": "declared" | "retired", "category", "registry"}</code> instead of the sentence.</td></tr>
 </tbody></table>
 <p><code>set</code> replaces the named category whole, so the three lists are always exactly what the operator last stated.</p>
 

@@ -39,12 +39,18 @@ pub(crate) struct SetArgs {
     /// A model whose route or published name contains this text is in the category; repeatable
     #[arg(long = "term")]
     terms: Vec<String>,
+    /// Print the result as JSON instead of a sentence
+    #[arg(long, default_value_t = false)]
+    json: bool,
 }
 
 #[derive(Args)]
 pub(crate) struct RemoveArgs {
     /// Category name to retire
     name: String,
+    /// Print the result as JSON instead of a sentence
+    #[arg(long, default_value_t = false)]
+    json: bool,
 }
 
 pub(crate) async fn run_categories(command: super::CatalogueCommand) {
@@ -114,7 +120,7 @@ fn set(args: SetArgs) {
         terms: args.terms,
     };
     match set_category(&path, &args.name, &category) {
-        Ok(_) => println!("declared model category {}", args.name),
+        Ok(_) => changed(args.json, "declared", &args.name, &path),
         Err(error) => {
             eprintln!("{error}");
             std::process::exit(1);
@@ -128,11 +134,24 @@ fn remove(args: RemoveArgs) {
         std::process::exit(1);
     };
     match delete_category(&path, &args.name) {
-        Ok(_) => println!("retired model category {}", args.name),
+        Ok(_) => changed(args.json, "retired", &args.name, &path),
         Err(error) => {
             eprintln!("{error}");
             std::process::exit(1);
         }
+    }
+}
+
+/// The one line a category write answers with, or its JSON document.
+fn changed(as_json: bool, action: &str, name: &str, path: &std::path::Path) {
+    if as_json {
+        super::super::print_json(&json!({
+            "action": action,
+            "category": name,
+            "registry": path.display().to_string(),
+        }));
+    } else {
+        println!("{action} model category {name}");
     }
 }
 
