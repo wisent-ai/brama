@@ -19,7 +19,7 @@ mod refusal;
 
 use serde::{Deserialize, Serialize};
 
-use super::{now_ms, read_ledger, with_ledger, REASON_LIMIT};
+use super::{now_ms, read_ledger, with_ledger};
 
 pub use refresh_hint::{
     awaiting_sign_in_cause, credential_recorded_at_ms, credential_refresh_hint, RefreshHint,
@@ -221,7 +221,7 @@ pub fn record_credential_disabled(subscription_id: &str, provider: &str, cause: 
             .and_then(|credential| credential.borrowed_from.clone());
         entry.credential = Some(Credential {
             state: CredentialState::Disabled,
-            cause: Some(cause.chars().take(REASON_LIMIT).collect()),
+            cause: Some(cause.to_string()),
             recorded_at_ms: now,
             expires_at_ms,
             refreshed_at_ms,
@@ -255,7 +255,7 @@ pub fn record_credential_reinstated(subscription_id: &str, provider: &str, reaso
         entry.updated_at_ms = Some(now);
         entry.credential = Some(Credential {
             state: CredentialState::NeedsReauthorization,
-            cause: Some(reason.chars().take(REASON_LIMIT).collect()),
+            cause: Some(reason.to_string()),
             recorded_at_ms: now,
             expires_at_ms,
             refreshed_at_ms,

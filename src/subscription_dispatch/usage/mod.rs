@@ -75,9 +75,6 @@ pub use self::spend::{
     Block, Measured,
 };
 
-// The stored reason is a sentence for an operator, not a payload.
-const REASON_LIMIT: usize = 200;
-
 static LEDGER: Mutex<Option<LedgerState>> = Mutex::new(None);
 
 /// Everything recorded about one subscription.

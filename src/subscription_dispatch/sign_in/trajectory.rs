@@ -40,7 +40,6 @@ pub(super) fn refusal(answer: &Value, status: u16, login_item: &str) -> Option<S
         .filter(|value| !value.trim().is_empty())
         .collect::<Vec<_>>()
         .join(" | ");
-    let said: String = said.chars().take(1800).collect();
     Some(format!(
         "Weles sign-in run {run_id} answered HTTP {status}, exit {exit_code}, login_item={}; {}",
         echoed.unwrap_or("unreported"),

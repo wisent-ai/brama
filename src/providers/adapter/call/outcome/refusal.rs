@@ -8,18 +8,6 @@ use wisent_errors::Code;
 use crate::core::failure::{self, IMPACT_MODEL_REQUEST, POINT_PROVIDER_CALL};
 use crate::types::{ModelResponse, ProviderRefusal, Refusal};
 
-/// Characters of a provider's own error sentence a refusal may carry.
-const MAX_PROVIDER_ERROR_CHARS: usize = 2048;
-
-fn max_provider_error_chars() -> usize {
-    MAX_PROVIDER_ERROR_CHARS
-}
-
-/// Characters of transport cause a failure sentence may carry. Long enough for
-/// a chain like "error sending request: connection refused", short enough that
-/// a log line survives whole.
-const MAX_TRANSPORT_CAUSE: usize = 300;
-
 /// The reason a send failed, in the caller's vocabulary and with the cause.
 ///
 /// The bare sentences this used to return said a request failed and nothing
@@ -30,8 +18,8 @@ const MAX_TRANSPORT_CAUSE: usize = 300;
 /// entirely inside one hop that takes hours to name. The transport error
 /// carries that answer already; withholding it was the defect.
 ///
-/// The cause is bounded and carries no request body, only the client's own
-/// description of why the socket did not carry the call.
+/// The cause carries no request body, only the client's own description of
+/// why the socket did not carry the call.
 pub(in crate::providers::adapter) fn transport_refusal(error: &reqwest::Error) -> Refusal {
     let mut cause = error.to_string();
     let mut source = std::error::Error::source(error);
@@ -40,7 +28,6 @@ pub(in crate::providers::adapter) fn transport_refusal(error: &reqwest::Error) -
         cause.push_str(&inner.to_string());
         source = std::error::Error::source(inner);
     }
-    let cause: String = cause.chars().take(MAX_TRANSPORT_CAUSE).collect();
     let (class, said) = if error.is_timeout() {
         (
             ProviderRefusal::DependencyTimeout,
@@ -114,10 +101,6 @@ pub(in crate::providers::adapter) fn provider_refusal(
             (!detail.is_empty()).then(|| detail.to_string())
         })
         .unwrap_or_else(|| format!("provider returned HTTP {}", status.as_u16()));
-    let detail = detail
-        .chars()
-        .take(max_provider_error_chars())
-        .collect::<String>();
     (refusal_class(status, body).contract_kind(), detail)
 }
 

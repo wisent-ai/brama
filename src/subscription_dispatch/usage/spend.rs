@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use crate::core::failure::{self, IMPACT_CREDENTIAL_BLOCK, POINT_CREDENTIAL_BLOCK};
 use crate::types::{ModelResponse, ProviderRefusal};
 
-use super::{now_ms, read_ledger, with_ledger, CredentialState, UsageSource, REASON_LIMIT};
+use super::{now_ms, read_ledger, with_ledger, CredentialState, UsageSource};
 
 const DEFAULT_BLOCK_MS: i64 = 15 * 60 * 1_000;
 const MAX_BLOCK_MS: i64 = 7 * 24 * 60 * 60 * 1_000;
@@ -172,7 +172,7 @@ pub fn record_block(subscription_id: &str, provider: &str, reason: &str, respons
         entry.updated_at_ms = Some(now);
         entry.block = Some(Block {
             blocked_until_ms: until,
-            reason: reason.chars().take(REASON_LIMIT).collect(),
+            reason: reason.to_string(),
             recorded_at_ms: now,
             envelope: Some(blocked.to_json()),
             quota_exhausted,

@@ -9,7 +9,7 @@
 //! spend path, which is where every provider answer's headers land. This file
 //! adds only the verdict, and only to the field completions own.
 
-use crate::subscription_dispatch::usage::{now_ms, with_ledger, REASON_LIMIT};
+use crate::subscription_dispatch::usage::{now_ms, with_ledger};
 
 use super::{CheckSource, Probe};
 
@@ -18,7 +18,7 @@ fn bounded_reason(detail: Option<&str>) -> Option<String> {
     detail
         .map(str::trim)
         .filter(|detail| !detail.is_empty())
-        .map(|detail| detail.chars().take(REASON_LIMIT).collect::<String>())
+        .map(|detail| detail.to_string())
 }
 
 /// Record what an operator's on-demand completion probe learned about one

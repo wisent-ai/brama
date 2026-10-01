@@ -116,7 +116,6 @@ pub async fn enrol_authenticator(
             .filter(|value| !value.trim().is_empty())
             .collect::<Vec<_>>()
             .join(" | ");
-        let said: String = said.chars().take(1800).collect();
         format!(
             "Weles enrolment run {run_id} answered HTTP {status}, login_item={}; {}",
             echoed.unwrap_or("unreported"),

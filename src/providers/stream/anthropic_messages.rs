@@ -100,7 +100,7 @@ pub(super) fn anthropic_items(
                 .pointer("/error/message")
                 .and_then(Value::as_str)
                 .unwrap_or("provider reported a stream error");
-            items.push(StreamItem::Failed(message.chars().take(200).collect()));
+            items.push(StreamItem::Failed(message.to_string()));
             return (items, true);
         }
         _ => {}

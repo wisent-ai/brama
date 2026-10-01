@@ -14,7 +14,7 @@
 //! first got, and the tests below pin exactly that.
 
 use crate::core::failure::{self, IMPACT_CREDENTIAL_BLOCK, POINT_CREDENTIAL_BLOCK};
-use crate::subscription_dispatch::usage::{now_ms, with_ledger, Block, REASON_LIMIT};
+use crate::subscription_dispatch::usage::{now_ms, with_ledger, Block};
 
 use super::{Credential, CredentialState};
 
@@ -68,7 +68,7 @@ pub fn record_reauthorization_needed(subscription_id: &str, provider: &str, reas
     )
     .with_context("subscription", subscription_id)
     .with_context("provider", provider);
-    let cause: String = reason.chars().take(REASON_LIMIT).collect();
+    let cause: String = reason.to_string();
     with_ledger(|ledger| {
         let entry = ledger
             .subscriptions
