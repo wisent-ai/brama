@@ -21,7 +21,7 @@
       <article class="doc"><h1 id="brama-collect-task-quality"><code>brama collect-task-quality</code><a class="headerlink" href="#brama-collect-task-quality" title="Link to this section">&para;</a></h1>
 <p>Send one deterministic check to each selected active stateless provider route so later <code>task:&lt;task&gt;</code> selection has quality evidence.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama collect-task-quality --agent-id &lt;ID&gt; --task &lt;KEY&gt; --prompt &lt;TEXT&gt; [--expected-exact &lt;TEXT&gt;] [--expected-contains &lt;TEXT&gt;] [--persist] [--max-models &lt;N&gt;] --allow-provider-cost</code></pre>
+<pre><code class="language-console">brama collect-task-quality --agent-id &lt;ID&gt; --task &lt;KEY&gt; --prompt &lt;TEXT&gt; [--expected-exact &lt;TEXT&gt;] [--expected-contains &lt;TEXT&gt;] [--persist] [--max-models &lt;N&gt;] [--json] --allow-provider-cost</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>--agent-id &lt;ID&gt;</code></td><td>required</td><td>Agent whose subscription routes are checked.</td></tr>
 <tr><td><code>--task &lt;KEY&gt;</code></td><td>required, nonempty</td><td>Key later selected as <code>task:&lt;task&gt;</code>.</td></tr>
@@ -31,9 +31,10 @@
 <tr><td><code>--persist</code></td><td>optional; off</td><td>Write check rows for later task selection.</td></tr>
 <tr><td><code>--max-models &lt;N&gt;</code></td><td>optional; <code>3</code></td><td>Bound selected models to 1 through 25.</td></tr>
 <tr><td><code>--allow-provider-cost</code></td><td>required by runtime; off</td><td>Acknowledge all billable requests.</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td>Print the report as one JSON document instead of <code>key: value</code> lines.</td></tr>
 </tbody></table>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
-<p>The command prints one JSON report with <code>agentId</code>, task, persistence flag, bounds, per-model checks, and best-model results. Each selected model receives one provider request through the agent subscription path. With <code>--persist</code>, check rows are added to task-quality state; otherwise no quality rows are written.</p>
+<p>The command prints its report — <code>agentId</code>, task, persistence flag, bounds, per-model checks, and best-model results — as <code>key: value</code> lines, or as one JSON document with <code>--json</code>. Each selected model receives one provider request through the agent subscription path. With <code>--persist</code>, check rows are added to task-quality state; otherwise no quality rows are written.</p>
 <h2 id="refusals">Exact refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <ul>
 <li><code>refusing billable task-quality collection without explicit cost acknowledgement</code></li>

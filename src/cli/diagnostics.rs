@@ -18,6 +18,9 @@ pub(crate) struct TestArgs {
     /// Acknowledge that this command performs a billable provider request
     #[arg(long, default_value_t = false)]
     allow_provider_cost: bool,
+    /// Print the answer as JSON instead of lines
+    #[arg(long, default_value_t = false)]
+    json: bool,
 }
 
 #[derive(Args)]
@@ -46,6 +49,9 @@ pub(crate) struct CollectTaskQualityArgs {
     /// Acknowledge that this command performs billable provider requests
     #[arg(long, default_value_t = false)]
     allow_provider_cost: bool,
+    /// Print the report as JSON instead of key: value lines
+    #[arg(long, default_value_t = false)]
+    json: bool,
 }
 
 /// One JSON line by default, which release tooling and the docs read; with
@@ -90,6 +96,7 @@ pub(crate) async fn test_inference(args: TestArgs) {
         model,
         agent_id,
         allow_provider_cost,
+        json,
     } = args;
     if !allow_provider_cost {
         eprintln!("refusing billable inference without explicit --allow-provider-cost");
@@ -114,14 +121,15 @@ pub(crate) async fn test_inference(args: TestArgs) {
     let resp =
         brama::subscription_dispatch::dispatch_subscription_for_agent(&agent_id, &request).await;
     if resp.success {
-        println!("Model: {}", resp.model);
-        println!("Response: {}", resp.content);
-        println!(
-            "Tokens: {} in / {} out",
-            resp.input_tokens, resp.output_tokens
-        );
-        println!("Latency: {:.0}ms", resp.latency_ms);
-        println!("Cost: ${:.6}", resp.cost);
+        let answer = serde_json::json!({
+            "model": resp.model,
+            "response": resp.content,
+            "input_tokens": resp.input_tokens,
+            "output_tokens": resp.output_tokens,
+            "latency_ms": resp.latency_ms,
+            "cost_usd": resp.cost,
+        });
+        super::print_answer(&answer, json);
     } else {
         eprintln!("Error: {}", resp.error.unwrap_or_default());
         std::process::exit(1);
@@ -138,6 +146,7 @@ pub(crate) async fn collect_task_quality(args: CollectTaskQualityArgs) {
         persist,
         max_models,
         allow_provider_cost,
+        json,
     } = args;
     match run_task_quality(TaskQualityOptions {
         agent_id,
@@ -151,12 +160,7 @@ pub(crate) async fn collect_task_quality(args: CollectTaskQualityArgs) {
     })
     .await
     {
-        Ok(value) => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".into())
-            );
-        }
+        Ok(value) => super::print_answer(&value, json),
         Err(e) => {
             eprintln!("{e}");
             std::process::exit(1);

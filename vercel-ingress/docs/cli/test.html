@@ -21,14 +21,15 @@
       <article class="doc"><h1 id="brama-test"><code>brama test</code><a class="headerlink" href="#brama-test" title="Link to this section">&para;</a></h1>
 <p>Run one test inference through the named agent’s subscription credential, not the deployment’s direct provider capability.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama test (-m &lt;ROUTE&gt;|--model &lt;ROUTE&gt;) --agent-id &lt;ID&gt; --allow-provider-cost</code></pre>
+<pre><code class="language-console">brama test (-m &lt;ROUTE&gt;|--model &lt;ROUTE&gt;) --agent-id &lt;ID&gt; [--json] --allow-provider-cost</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>-m, --model &lt;ROUTE&gt;</code></td><td>required</td><td>Canonical route to test. There is no built-in route; without it the command exits 2.</td></tr>
 <tr><td><code>--agent-id &lt;ID&gt;</code></td><td>required</td><td>Agent whose provider credential is used. There is no built-in agent; without it the command exits 2.</td></tr>
 <tr><td><code>--allow-provider-cost</code></td><td>required by runtime; off</td><td>Acknowledge the billable provider request.</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td>Print the answer as one JSON document instead of <code>key: value</code> lines.</td></tr>
 </tbody></table>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
-<p>Success prints <code>Model:</code>, <code>Response:</code>, input/output token counts, latency, and cost, then exits 0. It performs one billable request and may update normal subscription usage state; it does not print credentials.</p>
+<p>Success prints <code>model</code>, <code>response</code>, <code>input_tokens</code>, <code>output_tokens</code>, <code>latency_ms</code> and <code>cost_usd</code> as <code>key: value</code> lines, or as one JSON document with <code>--json</code>, then exits 0. It performs one billable request and may update normal subscription usage state; it does not print credentials.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <pre><code class="language-text">refusing billable inference without explicit --allow-provider-cost</code></pre>
 <p>That refusal exits 1 before a request. A dispatch failure prints <code>Error: &lt;dispatch reason&gt;</code> (for example, <code>Error: no active 'openai' credential for agent</code>) and exits 1.</p>
