@@ -24,6 +24,10 @@ pub(crate) struct ProbeArgs {
     /// agent identity the subscription route requires.
     #[arg(long = "alias", default_values_t = ["best".to_string(), "local-openai/chat-primary".to_string(), "wisent-backend".to_string()])]
     aliases: Vec<String>,
+    /// Print the addresses tried, request signing and every alias's answer as
+    /// one JSON document instead of lines
+    #[arg(long, default_value_t = false)]
+    json: bool,
 }
 
 /// The loopback port the gateway listens on when service.env names none.
@@ -102,6 +106,16 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
     let token = vault_field(&router, &settings, BEARER_ITEM, "token")
         .map_err(|error| format!("cannot read a bearer from the router: {error}"))?;
     let client = reqwest::Client::new();
+    let mut report = json!({ "addresses": [], "signing": Value::Null, "aliases": [] });
+    let mut say = |line: String, section: &str, entry: Value| {
+        if !args.json {
+            println!("{line}");
+        }
+        match report[section].as_array_mut() {
+            Some(list) => list.push(entry),
+            None => report[section] = entry,
+        }
+    };
     let mut base = None;
     for authority in candidates(&settings, &home) {
         match client
@@ -110,18 +124,35 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
             .await
         {
             Ok(answer) => {
-                println!("health {} at {authority}", answer.status().as_u16());
+                let status = answer.status().as_u16();
+                say(
+                    format!("health {status} at {authority}"),
+                    "addresses",
+                    json!({ "address": authority, "health": status }),
+                );
                 base = Some(format!("http://{authority}"));
                 break;
             }
-            Err(error) => println!("{authority}: {error}"),
+            Err(error) => say(
+                format!("{authority}: {error}"),
+                "addresses",
+                json!({ "address": authority, "error": error.to_string() }),
+            ),
         }
     }
     let base = base.ok_or("no candidate address served /health")?;
     // The secret stays in this process: never printed, never in argv.
-    let secret = vault_field(&router, &settings, SIGNING_ITEM, "agent_auth_secret")
-        .inspect_err(|problem| println!("request signing unavailable: {problem}"))
-        .ok();
+    let secret = match vault_field(&router, &settings, SIGNING_ITEM, "agent_auth_secret") {
+        Ok(secret) => Some(secret),
+        Err(problem) => {
+            say(
+                format!("request signing unavailable: {problem}"),
+                "signing",
+                json!({ "error": problem }),
+            );
+            None
+        }
+    };
     for alias in args.aliases {
         let body = serde_json::to_vec(
             &json!({ "model": alias, "messages": [{ "role": "user", "content": "say ok" }] }),
@@ -167,17 +198,29 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
                         .trim()
                         .to_string();
                     let served = payload.get("model").and_then(Value::as_str).unwrap_or("");
-                    println!("{alias} {} model={served} said={said:?}", status.as_u16());
+                    say(
+                        format!("{alias} {} model={served} said={said:?}", status.as_u16()),
+                        "aliases",
+                        json!({ "alias": alias, "status": status.as_u16(), "model": served, "said": said }),
+                    );
                 } else {
-                    println!(
-                        "{alias} {} {}",
-                        status.as_u16(),
-                        text.trim().replace('\n', " ")
+                    let refusal = text.trim().replace('\n', " ");
+                    say(
+                        format!("{alias} {} {refusal}", status.as_u16()),
+                        "aliases",
+                        json!({ "alias": alias, "status": status.as_u16(), "refusal": refusal }),
                     );
                 }
             }
-            Err(error) => println!("{alias} unreachable {error}"),
+            Err(error) => say(
+                format!("{alias} unreachable {error}"),
+                "aliases",
+                json!({ "alias": alias, "error": error.to_string() }),
+            ),
         }
+    }
+    if args.json {
+        crate::cli::print_json(&report);
     }
     Ok(())
 }
