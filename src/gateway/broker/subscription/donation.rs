@@ -227,8 +227,8 @@ impl DonationRefusal {
 /// `active`, because the sign-in this records marked it so. A length bound
 /// would not have told the two apart: a re-authentication trajectory's own
 /// configuration object is as short as a credential.
-/// object satisfies. The predicate is the request path's own reduction, so
-/// nothing a request could have presented is refused here.
+/// The predicate is the request path's own reduction, so nothing a request
+/// could have presented is refused here.
 pub async fn put_donated_credential(
     agent_id: &str,
     provider: &str,
