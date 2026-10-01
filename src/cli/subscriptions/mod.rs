@@ -1,4 +1,4 @@
-//! `brama subscriptions`: the subscription pool this deployment routes over,
+//! `brama subscription list`: the subscription pool this deployment routes over,
 //! and each provider's own usage report when it is asked for.
 //!
 //! The pool an operator needs to read is usually not this process's: the

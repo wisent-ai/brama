@@ -86,8 +86,8 @@
       "destination": "/docs/cli/mcp.html"
     },
     {
-      "source": "/docs/cli/subscriptions",
-      "destination": "/docs/cli/subscriptions.html"
+      "source": "/docs/cli/subscription/list",
+      "destination": "/docs/cli/subscription/accounts/list.html"
     },
     {
       "source": "/docs/cli/subscription",

@@ -156,7 +156,7 @@ pub(crate) async fn report(args: AliasesArgs) {
                      subscription_reauthorization_required until one account is signed in: \
                      `brama subscription sign-in` through Weles, or \
                      `brama subscription sign-in-manual` in your own browser. \
-                     `brama subscriptions` says why each member is not live."
+                     `brama subscription list` says why each member is not live."
                 );
             }
         }

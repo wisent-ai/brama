@@ -12,6 +12,7 @@ use super::SubscriptionCommand;
 
 pub(crate) async fn run(command: SubscriptionCommand) {
     match command {
+        SubscriptionCommand::List(args) => super::super::report(args).await,
         SubscriptionCommand::Refresh {
             provider,
             reason,

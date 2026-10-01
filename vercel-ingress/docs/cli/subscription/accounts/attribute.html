@@ -34,7 +34,7 @@
 1 of 4 member(s) name an account
   brama-sub-held-codex-&lt;account slug&gt; -&gt; &lt;address&gt;
   brama-sub-wisent-app-codex-primary: this member&rsquo;s grant states no account, so nothing was recorded</code></pre>
-<p>Then <a href="/docs/cli/subscriptions">brama subscriptions</a> states the accounts rather than the rows, naming which accounts it means per provider and which members record none.</p>
+<p>Then <a href="/docs/cli/subscription/list">brama subscription list</a> states the accounts rather than the rows, naming which accounts it means per provider and which members record none.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <p>An empty provider is refused with <code>a provider is required</code>, and a provider this deployment holds no member for with <code>this deployment&rsquo;s pool holds no &lt;provider&gt; member, so there is no grant to read an account from</code>. A member whose grant cannot be redeemed, or whose grant states no address, is reported with that reason and left unattributed; the command exits non-zero whenever any member is left unattributed, because the account count is short by exactly those members.</p>
 <p><code>brama:account:</code> is a registered Skarbiec tag namespace. A vault that refuses it answers <code>claims a namespace that is not registered</code>, which means that host&rsquo;s Skarbiec predates the registration and has to be delivered before any account can be recorded.</p>

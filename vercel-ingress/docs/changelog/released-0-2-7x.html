@@ -105,7 +105,7 @@ was precisely the thing that would not touch these.</p>
 <p><code>brama subscriptions list</code> reports the pool as the gateway sees it: one row per subscription with its provider, its <code>state</code> (<code>live</code>, <code>expired</code>,
 <code>burnt</code> or <code>unknown</code>), the provider's stated expiry, and the refusal standing in its way in the words of whatever refused it. It is read-only in the strict sense: no
 provider is contacted, no capability is redeemed, and the ledger is read without being written back. Rows come from the deployment's subscription listing joined to the ledger, because either
-source alone hides accounts the other holds; that listing is now the leaf command <a href="/docs/cli/subscriptions"><code>brama subscriptions</code></a>.
+source alone hides accounts the other holds; that listing is now <a href="/docs/cli/subscription/list"><code>brama subscription list</code></a>.
 <code>brama subscription refresh &lt;provider&gt; --reason &lt;text&gt;</code> runs the same refresh the timer runs, for one provider, now, and reports whether a credential was obtained; it
 shares the sweep's code path, so a grant cannot come back alive here and dead there and every refusal is classified once. <code>--reason</code> is required, because rotating a grant
 invalidates the previous refresh token, and it is journaled beside the verdict. An attempt that cannot proceed says which of three reasons it was &mdash; no usable subscription in the pool, a

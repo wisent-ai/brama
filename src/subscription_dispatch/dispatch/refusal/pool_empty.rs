@@ -109,7 +109,7 @@ pub(in crate::subscription_dispatch::dispatch) fn mixed_unavailable_summary(
 ) -> String {
     format!(
         "all bounded '{provider}' credentials unavailable for agent: the usable one is inside a \
-         quota block, and the rest need a sign-in (`brama subscriptions` says which)"
+         quota block, and the rest need a sign-in (`brama subscription list` says which)"
     )
 }
 

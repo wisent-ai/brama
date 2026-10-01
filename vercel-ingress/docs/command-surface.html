@@ -95,7 +95,7 @@ operator's word for the current state.</p>
 subscriptions exist and who owns them. The pool capability now answers it once from the
 vault declaration over <a href="/docs/http-api#the-subscription-pool"><code>GET</code>
 and <code>POST /v1/subscription-pool</code></a> and
-<a href="/docs/cli/subscriptions"><code>brama subscriptions</code></a>, scoping the
+<a href="/docs/cli/subscription/list"><code>brama subscription list</code></a>, scoping the
 answer by the caller's proven identity, which is where ownership already lives
 (<a href="/docs/concepts/entitlement">entitlement</a>). All eleven were deleted in the
 same change: their routes, their handlers, their tests, the desktop calls that reached
@@ -156,7 +156,7 @@ gateway can serve: <code>GET /v1/models</code>, <code>GET /v1/aliases</code>,
 <code>GET /v1/admin/snapshot</code>, <code>GET /stats</code>, <code>brama aliases</code>.
 The two subscription capabilities, which are capabilities rather than per-audience verbs:
 <code>GET</code> and <code>POST /v1/subscription-pool</code>,
-<code>POST /v1/plan-usage</code>, <code>brama subscriptions</code>.
+<code>POST /v1/plan-usage</code>, <code>brama subscription list</code>.
 Liveness and readiness, which answer different questions:
 <code>GET /health</code>, <code>GET /readyz</code>. Process and operator primitives:
 <code>brama serve</code>, <code>brama version</code>, <code>brama detect</code>,

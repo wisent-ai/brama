@@ -16,7 +16,6 @@ use cli::review::ReviewArgs;
 use cli::serving::ServeArgs;
 use cli::stub::StubArgs;
 use cli::subscriptions::credentials::SubscriptionCommand;
-use cli::subscriptions::SubscriptionsArgs;
 use cli::version_gate::VersionGateCommand;
 use cli::workload::WorkloadCommand;
 
@@ -52,8 +51,6 @@ enum Commands {
     /// Review a change through a gateway with read and search tools confined
     /// to one directory; exits 0 on approve, 3 on request changes, 1 on failure
     Review(ReviewArgs),
-    /// Report the subscription pool this gateway routes over
-    Subscriptions(SubscriptionsArgs),
     /// Report every model alias this gateway declares and whether it can serve
     Aliases(AliasesArgs),
     /// List the models this gateway can name, with kind, weights and categories
@@ -146,7 +143,6 @@ async fn main() {
         Commands::Mcp => cli::serving::mcp(),
         Commands::Decide(args) => cli::decisions::decide(args).await,
         Commands::Review(args) => cli::review::run(args).await,
-        Commands::Subscriptions(args) => cli::subscriptions::report(args).await,
         Commands::Aliases(args) => cli::aliases::report(args).await,
         Commands::Models(args) => cli::catalogue::models(args).await,
         Commands::Categories { command } => cli::catalogue::run_categories(command).await,

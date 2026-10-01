@@ -11,6 +11,9 @@ pub(crate) use run::run;
 
 #[derive(Subcommand)]
 pub(crate) enum SubscriptionCommand {
+    /// Report the subscription pool this gateway routes over: every member,
+    /// its state, its usage window and its failure
+    List(super::SubscriptionsArgs),
     /// Refresh this provider's subscription credentials now, here or on the
     /// gateway that holds them
     Refresh {

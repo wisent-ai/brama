@@ -51,7 +51,7 @@ deployment had no way to see, which is why <code>/readyz</code> reports such acc
 explicitly as <code>unroutable_accounts</code> (metadata only, recognised by tags or
 by the coordinate an unmarked item lives at).</p>
 <h2 id="states">States<a class="headerlink" href="#states" title="Link to this section">&para;</a></h2>
-<p><code>brama subscriptions</code> and <code>GET /v1/subscription-pool</code> report one
+<p><code>brama subscription list</code> and <code>GET /v1/subscription-pool</code> report one
 of four states per row (<code>src/subscription_dispatch/pool.rs</code>):</p>
 <table>
 <thead>
@@ -105,7 +105,7 @@ single-flighted per subscription; aged-out readings are read on each
 <code>brama maintain</code> pass, run by the host's Stado schedule. A failed read
 never blanks a row: the last good reading is served with <code>stale: true</code> and
 dropped only past <code>BRAMA_PLAN_USAGE_RETENTION_SECS</code> (default 86400).</p>
-<p><code>brama subscriptions --refresh-usage</code>, Brama Desktop's
+<p><code>brama subscription list --refresh-usage</code>, Brama Desktop's
 <strong>Refresh usage</strong> and
 <a href="/docs/http-api/discovery-and-subscriptions#post-v1plan-usage"><code>POST /v1/plan-usage</code></a> are one
 capability: they explicitly request new reports through that same
