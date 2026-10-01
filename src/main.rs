@@ -14,7 +14,6 @@ use cli::onboarding::OnboardArgs;
 use cli::probe::ProbeArgs;
 use cli::review::ReviewArgs;
 use cli::serving::ServeArgs;
-use cli::stub::StubArgs;
 use cli::subscriptions::credentials::SubscriptionCommand;
 use cli::version_gate::VersionGateCommand;
 use cli::workload::WorkloadCommand;
@@ -103,10 +102,6 @@ enum Commands {
         #[command(subcommand)]
         command: LauncherCommand,
     },
-    /// Serve a loopback OpenAI-shaped stub provider for the documentation
-    /// walk-through (models stub-ok, stub-401, stub-429)
-    #[command(hide = true)]
-    StubProvider(StubArgs),
     /// Ask the running gateway on this host to serve one real request per
     /// alias and report the answer or refusal
     Probe(ProbeArgs),
@@ -160,7 +155,6 @@ async fn main() {
         Commands::CollectTaskQuality(args) => cli::diagnostics::collect_task_quality(args).await,
         Commands::Workload { command } => cli::workload::run(command),
         Commands::Launcher { command } => cli::launcher::run(command),
-        Commands::StubProvider(args) => cli::stub::serve(args).await,
         Commands::Probe(args) => cli::probe::run(args).await,
         Commands::Diagnose { json } => cli::diagnose::run(json).await,
         Commands::Maintain(args) => cli::maintain::run(args).await,

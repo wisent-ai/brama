@@ -6,10 +6,10 @@
 #
 # Usage:
 #   ./health-then-ready.sh
-#   BRAMA_URL=http://127.0.0.1:18321 ./health-then-ready.sh
+#   BRAMA_URL=http://127.0.0.1:8080 ./health-then-ready.sh
 set -euo pipefail
 
-BRAMA_URL="${BRAMA_URL:-http://127.0.0.1:18321}"
+BRAMA_URL="${BRAMA_URL:-http://127.0.0.1:8080}"
 
 echo "== GET ${BRAMA_URL}/health"
 curl -sS "${BRAMA_URL}/health"

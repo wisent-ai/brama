@@ -194,10 +194,6 @@
       "destination": "/docs/runbook.html"
     },
     {
-      "source": "/docs/walkthrough-standalone-stub",
-      "destination": "/docs/walkthrough-standalone-stub.html"
-    },
-    {
       "source": "/docs/walkthrough-subscriptions",
       "destination": "/docs/walkthrough-subscriptions.html"
     },

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Runnable examples — Brama Docs</title>
-  <meta name="description" content="Runnable examples Scripts behind the standalone walkthrough../walkthrough-standalone-stub.md and the subscription walkthrough../walkthrough-subscriptions.md. All of them run agains">
+  <meta name="description" content="Runnable examples: scripts that read a running Brama gateway's health, readiness and subscription pool, and the subscription walkthrough they support.">
   <link rel="canonical" href="https://brama.wisent.com/docs/runnable-examples">
   <link rel="stylesheet" href="/docs/assets/site.css">
 </head>
@@ -13,18 +13,15 @@
     <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
     <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
   </header>
-  <details class="mobile-nav"><summary>Browse documentation</summary><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a class="active" aria-current="page" href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/decision">Decision</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></details>
+  <details class="mobile-nav"><summary>Browse documentation</summary><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a class="active" aria-current="page" href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/decision">Decision</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></details>
   <div class="layout">
-    <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-standalone-stub">Walkthrough: standalone gateway against a stub provider</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a class="active" aria-current="page" href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/decision">Decision</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
+    <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a class="active" aria-current="page" href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/decision">Decision</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
     <main>
       <p class="source-note">Documentation topic: docs/examples/README.md</p>
       <article class="doc"><h1 id="runnable-examples">Runnable examples<a class="headerlink" href="#runnable-examples" title="Link to this section">&para;</a></h1>
-<p>Scripts behind the <a href="/docs/walkthrough-standalone-stub">standalone walkthrough</a>
-and the <a href="/docs/walkthrough-subscriptions">subscription walkthrough</a>. All of
-them run against a development build on loopback with fresh temp-directory
-state: no Skarbiec deployment, no real credential, no provider spend, no
-operator state read or written. Output shown in the walkthroughs was captured
-from exactly these scripts.</p>
+<p>Scripts behind the <a href="/docs/walkthrough-subscriptions">subscription walkthrough</a>.
+Each one reads a real gateway or a real installation; none of them stands in for a
+provider, and none of them writes operator state.</p>
 <table>
 <thead>
 <tr>
@@ -33,14 +30,6 @@ from exactly these scripts.</p>
 </tr>
 </thead>
 <tbody>
-<tr>
-<td><code>brama stub-provider</code></td>
-<td>OpenAI-shaped provider stub on <code>127.0.0.1:18999</code>: <code>stub-ok</code> answers a completion (buffered or SSE), <code>stub-401</code> refuses the key, <code>stub-429</code> throttles</td>
-</tr>
-<tr>
-<td><a href="https://github.com/wisent-ai/brama/blob/main/docs/examples/standalone-serve-with-stub.sh">standalone-serve-with-stub.sh</a></td>
-<td>starts the stub plus a gateway routed at it, with client identity, request-sign secret, and fully isolated state</td>
-</tr>
 <tr>
 <td><a href="https://github.com/wisent-ai/brama/blob/main/docs/examples/health-then-ready.sh">health-then-ready.sh</a></td>
 <td><code>GET /health</code> then <code>GET /readyz</code> — liveness, then the readiness probe that actually redeems credentials</td>
@@ -56,50 +45,21 @@ from exactly these scripts.</p>
 </tbody>
 </table>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Link to this section">&para;</a></h2>
-<p>Terminal one — build once, then serve (foreground; Ctrl-C stops both
-processes):</p>
-<pre><code class="language-console">$ cargo build
-$ BRAMA_BIN=target/debug/brama docs/examples/standalone-serve-with-stub.sh
-isolated state: /var/folders/.../tmp.WGUxXgcjh6
-2026-08-24T22:33:34Z  INFO brama: Starting server on port 18321
-</code></pre>
-<p>Terminal two:</p>
+<p>Against a gateway serving on this host (<code>brama serve</code>, port 8080 unless
+<code>BRAMA_URL</code> names another):</p>
 <pre><code class="language-console">$ docs/examples/health-then-ready.sh
-== GET http://127.0.0.1:18321/health
-{&quot;build&quot;:{...},&quot;dependencies&quot;:&quot;not_probed&quot;,&quot;status&quot;:&quot;ok&quot;}
-== GET http://127.0.0.1:18321/readyz
-{...,&quot;providers&quot;:[{&quot;credential&quot;:true,&quot;provider&quot;:&quot;openai&quot;}],&quot;ready&quot;:true,...}
-HTTP 200
-
-$ docs/examples/signed-agent-listing.sh
-{&quot;subscriptions&quot;:[]}
-
+$ BRAMA_TOKEN=&lt;client bearer&gt; BRAMA_AGENT=&lt;agent&gt; BRAMA_AGENT_SECRET=&lt;request-sign secret&gt; \
+    docs/examples/signed-agent-listing.sh
 $ BRAMA_BIN=target/debug/brama docs/examples/subscription-pool-report.sh
-== brama subscription list
-0 of 0 subscription credentials are live
 </code></pre>
-<p>One routed completion and the two classified provider failures
-(<a href="/docs/walkthrough-standalone-stub#4-one-routed-completion">walkthrough §4–5</a>):</p>
-<pre><code class="language-console">$ curl -s -H &quot;Authorization: Bearer docs-test-token&quot; -H 'Content-Type: application/json' \
-    -d '{&quot;model&quot;:&quot;openai/stub-ok&quot;,&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Say hello in one sentence.&quot;}]}' \
-    http://127.0.0.1:18321/v1/chat/completions
-{&quot;choices&quot;:[{&quot;finish_reason&quot;:&quot;stop&quot;,&quot;index&quot;:0,&quot;message&quot;:{&quot;content&quot;:&quot;Hello from the stub provider.&quot;,&quot;role&quot;:&quot;assistant&quot;}}],...}
-
-$ # model &quot;openai/stub-401&quot; → HTTP 502, code provider_failure, retryable false
-$ # model &quot;openai/stub-429&quot; → HTTP 429, code provider_rate_limited, retryable true
-</code></pre>
+<p>To see each declared alias answer a real request, use
+<a href="/docs/cli"><code>brama probe</code></a> on the gateway's host.</p>
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Link to this section">&para;</a></h2>
 <ul>
 <li>Every script takes its knobs from <code>BRAMA_</code>-prefixed environment variables
-  (<code>BRAMA_BIN</code>, <code>BRAMA_PORT</code>, <code>BRAMA_URL</code>, <code>BRAMA_TOKEN</code>, <code>BRAMA_AGENT</code>,
-  <code>BRAMA_AGENT_SECRET</code>) with working defaults; nothing is positional.</li>
-<li><code>docs-test-token</code> and <code>docs-signing-secret</code> are documentation values wired
-  into the isolated gateway the serve script starts — they are not
-  credentials and unlock nothing outside it.</li>
-<li>The stub's port (<code>18999</code>) is fixed: the serve script points the <code>openai</code>
-  adapter at it via <code>BRAMA_PROVIDER_OPENAI_BASE_URL</code>, the explicit
-  per-deployment override that makes a loopback provider endpoint acceptable
-  (<a href="/docs/concepts/provider">concepts/provider</a>).</li>
+  (<code>BRAMA_BIN</code>, <code>BRAMA_URL</code>, <code>BRAMA_TOKEN</code>, <code>BRAMA_AGENT</code>,
+  <code>BRAMA_AGENT_SECRET</code>); nothing is positional. A variable without a working
+  default is refused by name before any request is made.</li>
 </ul></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>

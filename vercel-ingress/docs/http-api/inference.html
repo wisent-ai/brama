@@ -73,9 +73,7 @@ and <code>stream</code>. An unknown field is refused with the deserializer's own
 one route the named alias resolves to.</p>
 <p>With <code>"stream": true</code> the answer is a <code>text/event-stream</code> of
 <code>chat.completion.chunk</code> frames: a role delta first, then content deltas, a
-<code>finish_reason</code> frame, a usage frame, closed by <code>data: [DONE]</code>
-(captured in
-<a href="/docs/walkthrough-standalone-stub">the standalone walkthrough</a>).</p>
+<code>finish_reason</code> frame, a usage frame, closed by <code>data: [DONE]</code>.</p>
 <h3 id="post-v1messages"><code>POST /v1/messages</code><a class="headerlink" href="#post-v1messages" title="Link to this section">&para;</a></h3>
 <p>The Anthropic Messages dialect over the same routing decision. It accepts the Anthropic
 request shape: <code>model</code>, <code>max_tokens</code>, <code>messages</code>, system,

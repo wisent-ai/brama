@@ -7,21 +7,19 @@
 # where the timestamp is unix seconds (accepted within a ±300s window) and
 # the body hash is the empty string for a bodyless GET.
 #
-# The gateway must know the agent's signing secret:
-#   BRAMA_REQUEST_SIGN_IDENTITIES='{"wisent-app":"<secret>"}'
-# (standalone-serve-with-stub.sh sets it to docs-signing-secret).
+# The gateway must know the agent's signing secret through
+# BRAMA_REQUEST_SIGN_IDENTITIES='{"<agent>":"<secret>"}'.
 #
 # Usage:
-#   ./signed-agent-listing.sh
-#   BRAMA_URL=http://127.0.0.1:18321 BRAMA_TOKEN=docs-test-token \
-#     BRAMA_AGENT=wisent-app BRAMA_AGENT_SECRET=docs-signing-secret \
+#   BRAMA_TOKEN=<client bearer> BRAMA_AGENT=<agent> BRAMA_AGENT_SECRET=<secret> \
 #     ./signed-agent-listing.sh
+#   BRAMA_URL=http://127.0.0.1:8080 names another gateway.
 set -euo pipefail
 
-BRAMA_URL="${BRAMA_URL:-http://127.0.0.1:18321}"
-BRAMA_TOKEN="${BRAMA_TOKEN:-docs-test-token}"
-BRAMA_AGENT="${BRAMA_AGENT:-wisent-app}"
-BRAMA_AGENT_SECRET="${BRAMA_AGENT_SECRET:-docs-signing-secret}"
+BRAMA_URL="${BRAMA_URL:-http://127.0.0.1:8080}"
+: "${BRAMA_TOKEN:?BRAMA_TOKEN must hold the client bearer the gateway issued}"
+: "${BRAMA_AGENT:?BRAMA_AGENT must name the agent whose subscriptions are listed}"
+: "${BRAMA_AGENT_SECRET:?BRAMA_AGENT_SECRET must hold that agent's request-sign secret}"
 
 ts="$(date +%s)"
 body_hash=""    # bodyless GET signs the empty string

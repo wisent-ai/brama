@@ -13,7 +13,6 @@ pub(crate) mod onboarding;
 pub(crate) mod probe;
 pub(crate) mod review;
 pub(crate) mod serving;
-pub(crate) mod stub;
 pub(crate) mod subscriptions;
 pub(crate) mod version_gate;
 pub(crate) mod workload;
