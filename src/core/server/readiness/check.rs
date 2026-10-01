@@ -23,11 +23,11 @@ use super::ReadinessReport;
 /// pool ended with no models at all, so one working subscription silenced the
 /// reason every other one failed.
 ///
-/// Measured on charless-mac-mini on 2026-09-02: claude-code and kimi both
-/// redeemed and both discovered nothing while codex, in the same sweep on the
-/// same host, discovered five. Separating "the provider answered with nothing"
-/// from "we never asked" took reading this crate's branches and counting
-/// `static_models` entries, because no surface would say it. Every
+/// Two providers can redeem and discover nothing while a third, in the same
+/// sweep on the same host, discovers models. Separating "the provider
+/// answered with nothing" from "we never asked" would otherwise take reading
+/// this crate's branches and counting `static_models` entries, because no
+/// surface would say it. Every
 /// subscription provider in the registry carries a static model list, so an
 /// empty result cannot come from the provider's own answer at all — only from
 /// a refusal reached before that list is ever consulted.
@@ -44,11 +44,9 @@ pub fn unroutable_reason(refusals: &[String]) -> String {
 /// The sweep's second half — every agent's subscription discovery and one
 /// redemption per active subscription — takes as long as Skarbiec and every
 /// provider take to answer, and until it ends `/readyz` says `pending`,
-/// which is 503. On 2026-09-17 the 0.4.24 candidate on charless-mac-mini
-/// was still inside that half when Stado's 90-second readiness window
-/// closed, so the release that stops Brama rotating borrowed grants was
-/// quarantined by the gateway it was meant to replace, and the account
-/// fight it fixes revoked the operator's own session the next day. The
+/// which is 503. A candidate still inside that half when Stado's 90-second
+/// readiness window closes is quarantined by the gateway it was meant to
+/// replace, however correct it is. The
 /// first half — one capability per direct provider — costs one broker
 /// round trip, and a gateway that has obtained one can carry traffic, so
 /// that verdict is published the moment it is known; the full report

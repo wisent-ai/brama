@@ -83,11 +83,10 @@ pub(crate) async fn worker_api_base() -> Result<WelesEndpoint, String> {
                 .join("stado")
         });
     // A host may declare one resolver adapter per consumer, and Stado refuses
-    // to guess between them: on 2026-09-20 `brama subscription sign-in
-    // claude-code` died on "lukasz-macbook declares 3 resolver adapters for
-    // weles-admission, one per consumer (skarbiec,
-    // skarbiec-weles-credential-client, operator); name the caller with
-    // --consumer", so no account could be signed in from the command line at
+    // to guess between them: without a named consumer `brama subscription
+    // sign-in` dies on "<host> declares 3 resolver adapters for
+    // weles-admission, one per consumer (...); name the caller with
+    // --consumer", so no account can be signed in from the command line at
     // all. The sibling lookup in `cli::subscriptions::sync` already names its
     // consumer; this one did not.
     let consumer = env_or("BRAMA_WELES_ADMISSION_CONSUMER", "operator");

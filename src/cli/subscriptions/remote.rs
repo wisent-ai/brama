@@ -193,11 +193,10 @@ pub(crate) async fn reinstate(
 ///
 /// A refresh run in an operator shell refreshes that shell's own view. The
 /// block that empties a pool lives in the gateway's journal, so a local
-/// refresh cannot clear it: on 2026-09-21 the pool on charless-mac-mini held
-/// one live codex credential while every request answered
-/// `503 subscription_reauthorization_required` with `attempts: 0` — every
-/// candidate skipped unasked inside a recorded block — and the only refresh
-/// the CLI could run was the laptop's. The gateway has exposed
+/// refresh cannot clear it: a gateway's pool can hold a live credential while
+/// every request answers `503 subscription_reauthorization_required` with
+/// `attempts: 0` — every candidate skipped unasked inside a recorded block —
+/// and a refresh run from a laptop changes only the laptop's view. The gateway has exposed
 /// `POST /v1/admin/subscription-pool/refresh` all along; this is the verb
 /// that reaches it.
 pub(crate) async fn refresh(

@@ -35,8 +35,8 @@ same port. A queued workflow has not published anything, even when the runner
 is online.</p>
 <p>For an empty HTTP 502 from the public endpoint, compare the declared origin
 with the current forwarding rule and inspect the publisher's job:</p>
-<pre><code class="language-shell">stado service directory bind brama --target charless-mac-mini --json
-stado host exec charless-mac-mini -- tailscale serve status --json
+<pre><code class="language-shell">stado service directory bind brama --target &lt;host&gt; --json
+stado host exec &lt;host&gt; -- tailscale serve status --json
 gh run list --repo wisent-ai/brama --workflow funnel-keepalive.yml
 </code></pre>
 <p>If a checkout waits in <code>git-credential-osxkeychain</code>, do not approve a

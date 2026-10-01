@@ -65,10 +65,10 @@ pub(in crate::core::server) fn has_caller_auth_headers(headers: &HeaderMap) -> b
 /// that authority always answers with `allowed_models: Some(routes)`, and a
 /// human identity carries an empty allowlist. Leaving one of these paths out
 /// of the allowlist makes that capability unreachable by construction for the
-/// only callers it exists for: on charless-mac-mini the Weles renewal
-/// trajectory read `list subscriptions -> 401` on every tick while the pool it
-/// was there to refill stayed empty, and the refusal named neither the path
-/// nor the reason. The four per-audience usage refreshes plan usage replaces
+/// only callers it exists for: a renewal trajectory reads `list subscriptions
+/// -> 401` on every tick while the pool it is there to refill stays empty,
+/// and the refusal names neither the path nor the reason. The four
+/// per-audience usage refreshes plan usage replaces
 /// were never in this list at all, so the one audience that signs for itself
 /// could not reach its own usage on any of them.
 ///

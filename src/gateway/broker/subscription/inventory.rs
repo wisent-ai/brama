@@ -107,10 +107,9 @@ pub async fn list_all_subscriptions() -> Result<Vec<SubscriptionEntry>, String> 
 /// installed on a host, and the launcher builds the boot catalogue out of the
 /// subscriptions that policy names. An account added to the vault after that
 /// install is in neither, so the gateway does not merely fail to redeem it -
-/// it has never heard of it. On 2026-09-20 three paid Claude accounts and two
-/// Codex accounts sat in `charless-mac-mini`'s vault, correctly tagged and
-/// routed, while every request answered `no working subscription model for
-/// signed agent` and nothing in the readiness answer said why.
+/// it has never heard of it: accounts sit in the vault, correctly tagged and
+/// routed, while every request answers `no working subscription model for
+/// signed agent` and nothing in the readiness answer says why.
 ///
 /// Read from the same live listing the pool uses, against the boot catalogue
 /// the launcher exported. An empty catalogue means this process was started

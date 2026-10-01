@@ -68,10 +68,10 @@ pub(super) async fn lock_discovery(key: &str) -> tokio::sync::OwnedMutexGuard<()
 /// silences the reason every other one failed, and `/readyz` could say only
 /// "active subscription, no model discovered".
 ///
-/// Measured on charless-mac-mini on 2026-09-02: claude-code and kimi both
-/// redeemed and both discovered nothing, while codex on the same host in the
-/// same sweep discovered five. Establishing why took reading this module's
-/// branches and counting `static_models` entries, because no surface would say
+/// Two providers can redeem and discover nothing while a third on the same
+/// host in the same sweep discovers models. Establishing why would take
+/// reading this module's branches and counting `static_models` entries,
+/// because no surface would say
 /// it. Two of the three explanations that reading had to separate — a
 /// catalogue with nothing configured for the provider, and a discovery path
 /// that never ran — are ours to fix, and the third is not; the sentence this

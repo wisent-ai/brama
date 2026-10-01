@@ -104,9 +104,8 @@ pub(super) fn schedule_sign_in(subscription_id: String, provider: String) -> boo
                         .unwrap_or_default(),
                     detail = %error
                 );
-                // The gateway log on charless-mac-mini shows the missing seed
-                // arriving here, as `credential_sign_in_blocked` with
-                // `google_2fa_material_missing`.
+                // A missing seed arrives here as `credential_sign_in_blocked`
+                // with `google_2fa_material_missing`.
                 if error.to_string().contains(MISSING_SEED)
                     || blocked.is_some_and(|blocked| blocked.code() == MISSING_SEED)
                 {
