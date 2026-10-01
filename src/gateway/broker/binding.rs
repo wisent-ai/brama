@@ -156,21 +156,6 @@ fn resolve_grant_route(resource: &str) -> bool {
     else {
         return false;
     };
-    let deadline = std::time::Instant::now() + GRANT_PROBE_TIMEOUT;
-    loop {
-        match child.try_wait() {
-            Ok(Some(_)) => break,
-            Ok(None) if std::time::Instant::now() < deadline => {
-                std::thread::sleep(std::time::Duration::from_millis(5));
-            }
-            Ok(None) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return false;
-            }
-            Err(_) => return false,
-        }
-    }
     let Ok(output) = child.wait_with_output() else {
         return false;
     };
@@ -198,7 +183,3 @@ fn resolve_grant_route(resource: &str) -> bool {
             })
         })
 }
-
-/// The probe is a local question to a local binary; a router that has not
-/// answered by now is not going to change this answer.
-const GRANT_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
