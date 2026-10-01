@@ -6,12 +6,17 @@
 //! the serving process because that process holds the usage ledger, the
 //! journal and the credentials the launcher installed.
 
-use clap::Args;
+use clap::{ArgGroup, Args};
 use serde_json::Value;
 
 use crate::cli::subscriptions::remote::{self, Destination};
 
 #[derive(Args)]
+#[command(group(
+    ArgGroup::new("destination")
+        .required(true)
+        .args(["gateway", "gateway_consumer"])
+))]
 pub(crate) struct MaintainArgs {
     /// The gateway to maintain; the console's bearer is read from stdin
     #[arg(long)]
@@ -20,7 +25,7 @@ pub(crate) struct MaintainArgs {
     #[arg(long)]
     gateway_consumer: Option<String>,
     /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
-    #[arg(long)]
+    #[arg(long, value_name = "ITEM#FIELD")]
     bearer_item: Option<String>,
     /// Print the gateway's report as JSON instead of lines
     #[arg(long, default_value_t = false)]

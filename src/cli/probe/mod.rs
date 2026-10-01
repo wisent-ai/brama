@@ -108,11 +108,6 @@ fn candidates(settings: &BTreeMap<String, String>, home: &Path) -> Vec<String> {
 }
 
 async fn probe(args: ProbeArgs) -> Result<(), String> {
-    if !args.allow_provider_cost {
-        return Err(
-            "refusing billable probe requests without explicit --allow-provider-cost".to_string(),
-        );
-    }
     let home = home();
     let settings = service_settings(&home)?;
     let router = settings
@@ -277,6 +272,10 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
 }
 
 pub(crate) async fn run(args: ProbeArgs) {
+    if !args.allow_provider_cost {
+        eprintln!("refusing billable probe requests without explicit --allow-provider-cost");
+        std::process::exit(2);
+    }
     if let Err(detail) = probe(args).await {
         eprintln!("{detail}");
         std::process::exit(1);

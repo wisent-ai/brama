@@ -61,7 +61,8 @@ impl Destination {
         &self,
     ) -> Result<(Option<String>, Zeroizing<String>), String> {
         let mut stdin_bearer = Zeroizing::new(String::new());
-        if self.gateway.is_some() && self.bearer_item.is_none() {
+        let names_gateway = self.gateway.is_some() || self.gateway_consumer.is_some();
+        if names_gateway && self.bearer_item.is_none() {
             use std::io::Read as _;
             std::io::stdin()
                 .read_to_string(&mut stdin_bearer)

@@ -14,10 +14,11 @@ pub(crate) mod remote;
 pub(crate) mod unattended;
 pub(crate) mod verdicts;
 
-use clap::Args;
+use clap::{ArgGroup, Args};
 use serde_json::Value;
 
 #[derive(Args)]
+#[command(group(ArgGroup::new("destination").args(["gateway", "gateway_consumer"])))]
 pub(crate) struct SubscriptionsArgs {
     /// Print the report as JSON instead of lines
     #[arg(long, default_value_t = false)]
@@ -35,7 +36,7 @@ pub(crate) struct SubscriptionsArgs {
     #[arg(long, conflicts_with = "apply")]
     gateway_consumer: Option<String>,
     /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
-    #[arg(long, conflicts_with = "apply")]
+    #[arg(long, value_name = "ITEM#FIELD", conflicts_with = "apply", requires = "destination")]
     bearer_item: Option<String>,
 }
 
@@ -82,10 +83,6 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
     if destination.gateway.is_some() || destination.gateway_consumer.is_some() {
         remote_report(destination, refresh_usage, json).await;
         return;
-    }
-    if destination.bearer_item.is_some() {
-        eprintln!("--bearer-item is for a gateway; name --gateway or --gateway-consumer");
-        std::process::exit(1);
     }
     let scope = brama::subscription_dispatch::pool::PoolScope::Deployment;
     // Two capabilities, one per question, and the same document from

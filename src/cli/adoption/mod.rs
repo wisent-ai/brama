@@ -19,7 +19,7 @@ pub(crate) struct AdoptArgs {
     #[arg(long, value_name = "FILE")]
     into: Option<PathBuf>,
     /// Agent whose Skarbiec subscription identities should be discovered
-    #[arg(long, default_value = "wisent-app")]
+    #[arg(long)]
     agent_id: String,
     /// Persist the selected aliases after showing the same review data
     #[arg(long, default_value_t = false)]

@@ -100,7 +100,7 @@ pub(crate) async fn test_inference(args: TestArgs) {
     } = args;
     if !allow_provider_cost {
         eprintln!("refusing billable inference without explicit --allow-provider-cost");
-        std::process::exit(1);
+        std::process::exit(2);
     }
     let request = ModelRequest {
         messages: vec![Message {
@@ -148,6 +148,12 @@ pub(crate) async fn collect_task_quality(args: CollectTaskQualityArgs) {
         allow_provider_cost,
         json,
     } = args;
+    if !allow_provider_cost {
+        eprintln!(
+            "refusing billable task-quality collection without explicit --allow-provider-cost"
+        );
+        std::process::exit(2);
+    }
     match run_task_quality(TaskQualityOptions {
         agent_id,
         task,

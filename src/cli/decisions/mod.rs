@@ -31,7 +31,7 @@ pub(crate) struct DecideArgs {
     #[arg(long)]
     questions: String,
     /// Jeden agent/client id whose subscription answers `best-decision-model`
-    #[arg(long, default_value = "wisent-app")]
+    #[arg(long)]
     agent_id: String,
     /// Print the answer document as JSON instead of lines
     #[arg(long, default_value_t = false)]
@@ -52,18 +52,18 @@ pub(crate) async fn decide(args: DecideArgs) {
     } = args;
     if !allow_provider_cost {
         eprintln!("refusing a billable decision without explicit --allow-provider-cost");
-        std::process::exit(1);
+        std::process::exit(2);
     }
     if model != DECISION_ALIAS && model != BEST_DECISION_ALIAS {
         eprintln!("--model must be `{DECISION_ALIAS}` or `{BEST_DECISION_ALIAS}`");
-        std::process::exit(1);
+        std::process::exit(2);
     }
     let state = read_argument("state", &state);
     let questions: Value = match serde_json::from_str(&read_argument("questions", &questions)) {
         Ok(value) => value,
         Err(error) => {
             eprintln!("--questions is not JSON: {error}");
-            std::process::exit(1);
+            std::process::exit(2);
         }
     };
     let request = match DecisionRequest::parse(&json!({

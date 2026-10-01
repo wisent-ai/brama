@@ -5,7 +5,8 @@
 
 mod run;
 
-use clap::Subcommand;
+use clap::builder::NonEmptyStringValueParser;
+use clap::{ArgGroup, Subcommand};
 
 pub(crate) use run::run;
 
@@ -16,11 +17,12 @@ pub(crate) enum SubscriptionCommand {
     List(super::SubscriptionsArgs),
     /// Refresh this provider's subscription credentials now, here or on the
     /// gateway that holds them
+    #[command(group(ArgGroup::new("destination").args(["gateway", "gateway_consumer"])))]
     Refresh {
         /// The provider whose grants should be refreshed (`codex`, `claude-code`, `kimi`)
         provider: String,
         /// Why this refresh is being run; recorded in the journal beside the verdict
-        #[arg(long)]
+        #[arg(long, value_parser = NonEmptyStringValueParser::new())]
         reason: String,
         /// The gateway to refresh; the console's bearer is read from stdin
         #[arg(long)]
@@ -29,7 +31,7 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long)]
         gateway_consumer: Option<String>,
         /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
-        #[arg(long)]
+        #[arg(long, value_name = "ITEM#FIELD", requires = "destination")]
         bearer_item: Option<String>,
         /// Print the verdict as JSON instead of lines
         #[arg(long, default_value_t = false)]
@@ -105,13 +107,16 @@ pub(crate) enum SubscriptionCommand {
         json: bool,
     },
     /// Put one retired pool member back in the rotation, because this deployment uses that account after all
-    #[command(name = "reinstate")]
+    #[command(
+        name = "reinstate",
+        group(ArgGroup::new("destination").args(["gateway", "gateway_consumer"]))
+    )]
     Reinstate {
         /// The retired pool member to use again
         #[arg(long)]
         subscription_id: String,
         /// Why it is used again; recorded beside the gateway's own ledger entry
-        #[arg(long)]
+        #[arg(long, value_parser = NonEmptyStringValueParser::new())]
         reason: String,
         /// The gateway holding it; the console's bearer is read from stdin
         #[arg(long)]
@@ -120,20 +125,23 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long)]
         gateway_consumer: Option<String>,
         /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
-        #[arg(long)]
+        #[arg(long, value_name = "ITEM#FIELD", requires = "destination")]
         bearer_item: Option<String>,
         /// Print `{subscription_id, detail}` as JSON instead of a line
         #[arg(long, default_value_t = false)]
         json: bool,
     },
     /// Give one pool member back: the gateway retires it and forgets its credential, and any machine that signed that account in keeps its own session
-    #[command(name = "disown")]
+    #[command(
+        name = "disown",
+        group(ArgGroup::new("destination").args(["gateway", "gateway_consumer"]))
+    )]
     Disown {
         /// The pool member to give back
         #[arg(long)]
         subscription_id: String,
         /// Why it is given back; recorded beside the gateway's own ledger entry
-        #[arg(long)]
+        #[arg(long, value_parser = NonEmptyStringValueParser::new())]
         reason: String,
         /// The gateway holding it; the console's bearer is read from stdin
         #[arg(long)]
@@ -142,7 +150,7 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long)]
         gateway_consumer: Option<String>,
         /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
-        #[arg(long)]
+        #[arg(long, value_name = "ITEM#FIELD", requires = "destination")]
         bearer_item: Option<String>,
         /// Print `{subscription_id, detail}` as JSON instead of a line
         #[arg(long, default_value_t = false)]

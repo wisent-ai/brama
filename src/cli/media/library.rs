@@ -95,7 +95,7 @@ pub(crate) enum VoicesCommand {
 pub(crate) async fn music(args: MusicArgs) {
     if !args.allow_provider_cost {
         eprintln!("refusing a billable music request without explicit --allow-provider-cost");
-        std::process::exit(1);
+        std::process::exit(2);
     }
     let route = resolve_media_route(&args.model);
     let mut payload = Map::new();
@@ -148,7 +148,7 @@ pub(crate) async fn voices(command: VoicesCommand) {
         } => {
             if !allow_provider_cost {
                 eprintln!("refusing a billable voice clone without explicit --allow-provider-cost");
-                std::process::exit(1);
+                std::process::exit(2);
             }
             let route = resolve_media_route(&model);
             let mut recordings = Vec::with_capacity(samples.len());
