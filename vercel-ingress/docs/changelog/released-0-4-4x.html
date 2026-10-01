@@ -28,10 +28,10 @@ held: <code>subscription held</code>, <code>subscription import</code> and
 <code>POST /v1/admin/subscription-pool/grant</code>. All four are removed, with
 the harness readers behind them. A provider issues one OAuth pair per sign-in and
 revokes it when a second holder refreshes, so every borrowed member cost the
-machine it came from its own session: two accounts on 2026-09-17, and on
-2026-09-20 the operator's own Claude session, which had to be signed in again by
-hand. It also made a gateway depend on a workstation staying in the fleet and on
-that workstation running a particular harness at all.</p>
+machine it came from its own session — the operator's own, among them, which
+then had to be signed in again by hand. It also made a gateway depend on a
+workstation staying in the fleet and on that workstation running a
+particular harness at all.</p>
 <p>What replaces it is what already existed: a gateway signs itself in.
 <a href="/docs/cli/subscription/sign-in"><code>subscription sign-in</code></a>
 drives the provider's own login through Weles on the gateway's host, and
@@ -58,8 +58,7 @@ not a text-only substitution or a broader permission.</p>
 checks the visible heading through both HTTP response modes and preserves the
 out-of-scope model refusal. No credential, route, state schema or billing migration is required.</p>
 <p>Published to the candidate channel from <code>cbd297df3ed1efd961078b4aa45e7fca8f323b0f</code>
-through Stado run <code>4394248ac72d40c7a9e1adc0e88d3d0c</code> on 2026-09-15 for Darwin arm64
-and Linux amd64. The deployed gateway reported that exact revision. All three real image
+for Darwin arm64 and Linux amd64. The deployed gateway reported that exact revision. All three real image
 qualification cases passed: buffered reading, streamed reading and the unchanged HTTP 403
 refusal of an unauthorized route. Weles 0.7.3 separately passed its real text, image and
 invalid-token cases against this gateway.</p>

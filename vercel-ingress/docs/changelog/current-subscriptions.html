@@ -78,11 +78,10 @@ probe's answer should not vary
 <p>Every reader of the vault's inventory — per-agent discovery, the console's pool, the
 readiness sweep's unroutable-account census, the sign-in loop and each credential write's tag
 lookup — shelled the entitlements router's bare <code>list</code>, and the router decrypts and
-parses the whole vault to answer it. On the 16 GiB control host on 2026-09-18 the vault held
-654 items, the readiness sweep and the sign-in loop asked concurrently every 30 seconds, the
-router sat at 954 MiB and 58% CPU beside a gateway at 100%, the host's memory janitor ended
-Messages and WindowManager and reported progress, and the host's own object store closed
-connections for want of memory while the fleet's releases were writing to it. Concurrent
+parses the whole vault to answer it. With hundreds of items in the vault and the readiness
+sweep and the sign-in loop asking concurrently every half minute, the router alone held most
+of a gigabyte and half a core beside a saturated gateway, until the control host's own object
+store closed connections for want of memory while the fleet's releases were writing to it. Concurrent
 callers now share the one listing in flight instead of each starting a router; nothing is
 served after it returns, because the vault changes under this gateway by hands it does not
 see (<code>skarbiec delete</code>, a vault sync, an operator's <code>set</code>) and a listing
@@ -158,20 +157,19 @@ way, reason <code>a direct provider credential was obtained; the subscription sw
 running</code>; the full report replaces it when the sweep ends. 0.4.25.</p>
 
 <h2 id="unreleased-claude-shape">Unreleased: a Claude grant rides as the Agent SDK, the way the harness Anthropic answers sends it<a class="headerlink" href="#unreleased-claude-shape" title="Link to this section">&para;</a></h2>
-<p>On 2026-09-17 Anthropic answered every Claude model through Brama
-<code>Third-party apps now draw from your extra usage, not your plan limits</code> while the
-operator was talking to Claude on the same account through <code>omp</code>, whose requests
-were answered on plan limits. The operator's words were "jakim cudem jest exhausted skoro teraz
-rozmawiamy". Brama still sent Claude Code 2.1.257's CLI shape; <code>omp</code> 16.5.2 sends
+<p>Anthropic answers a Claude request that does not look like its own harness's with
+<code>Third-party apps now draw from your extra usage, not your plan limits</code>, while the
+harness on the same account is answered on plan limits in the same minute. Brama still sent
+an older Claude Code CLI shape; the harness Anthropic answers sends
 Claude Code 2.1.165 as the Claude Agent SDK 0.3.165: user agent
 <code>claude-cli/2.1.165 (external, local-agent, agent-sdk/0.3.165)</code>, entrypoint
 <code>local-agent</code>, the sentence "You are a Claude agent, built on Anthropic's Claude Agent
 SDK.", Claude Code's agent beta list, the Stainless client headers and a fresh
 <code>x-client-request-id</code>. Brama now sends that shape, byte for byte where the provider
-can see it. The same day two members the pool held for accounts <code>omp</code> also held died
-with <code>invalid_grant -- Refresh token not found or invalid</code> — and so did <code>omp</code>'s
+can see it. Members the pool held for accounts a harness also held died with
+<code>invalid_grant -- Refresh token not found or invalid</code> — and so did the harness's
 own copies, under the operator's open session: Brama had refreshed the shared grants and the
-provider revoked the refresh tokens <code>omp</code> held. A grant taken from a harness is now
+provider revoked the refresh tokens the harness held. A grant taken from a harness is now
 <em>borrowed</em>: Brama spends it as it stands and never rotates it, the pool report names the
 harness in <code>credential.borrowed_from</code>, a forced refresh disowns the member with
 <code>this grant is borrowed from omp, which refreshes it itself</code>, and
@@ -192,11 +190,10 @@ when its gateway is connected and every thirty minutes after, and its Subscripti
 says what the last sweep did, with <strong>Sweep now</strong> beside it.</p>
 
 <h2 id="unreleased-import-joins-pool">Unreleased: an imported grant for an id the pool does not hold yet joins the pool<a class="headerlink" href="#unreleased-import-joins-pool" title="Link to this section">&para;</a></h2>
-<p>On 2026-09-17 every Claude call through <code>best</code> was refused with
-<code>all bounded 'claude-code' credentials unavailable for agent</code> while the operator was
-talking to Claude on the same machine: the pool held one Claude account, rate-limited, and the
-machine held two more with quota that no pool member named. The operator's words were
-"mamy limit, tylko Ty patrzysz na złe konta". <code>brama subscription import --gateway</code>
+<p>Every Claude call through <code>best</code> is refused with
+<code>all bounded 'claude-code' credentials unavailable for agent</code> when the pool holds
+one rate-limited account while the machine holds more with quota that no pool member names.
+<code>brama subscription import --gateway</code>
 answered <code>404 subscription not found</code> for any id but the one already there, so the
 only way to add an account was a sign-in window. An import for an id the pool does not hold
 yet now creates that member under the named provider - the CLI sends the provider with the
@@ -206,9 +203,8 @@ lists it at once. <code>POST /v1/admin/subscription-pool/grant</code> takes
 refresh path cannot renew. The first import through the deployed gateway then answered <code>no capability route maps resource `provider:claude-code:brama-sub-wisent-app-claude-secondary`</code> while <code>stado route capability brama</code> listed that route: the gateway read the operator’s routes table file itself, and a route Skarbiec declares from an item’s own tags — every one a sign-in or an import creates — was never in that file. The gateway now asks Skarbiec (<code>route resolve</code>) for the coordinate a resource stands for, the same answer the authority gives, and reports Skarbiec’s own sentence when nothing declares it.</p>
 
 <h2 id="unreleased-import-from-omp">Unreleased: a grant any harness already holds is taken, not asked for again<a class="headerlink" href="#unreleased-import-from-omp" title="Link to this section">&para;</a></h2>
-<p>On 2026-09-13 the operator asked why Brama did not simply take the tokens from
-<code>omp</code>, and then why only from <code>omp</code>: the harnesses beside the gateway
-had been signed into the accounts the pool needed for a day. Four harnesses sign
+<p>The harnesses beside a gateway are often signed into the accounts the pool needs long
+before the pool is. Four harnesses sign
 accounts in on an operator's machine - <code>omp</code>, Claude Code, Codex CLI, Kimi
 Code - and each keeps the grant its own way.
 <a href="/docs/cli/subscription/import"><code>brama subscription held</code></a> lists what
@@ -259,12 +255,11 @@ returns the page and keeps the PKCE verifier in the gateway under a
 takes the paste and ends in the same exchange, store and proving refresh
 (<a href="/docs/http-api/administration-and-operations#administered-subscriptions">HTTP API</a>).
 Both are <code>brama-desktop</code> only.</p>
-<p>On 2026-09-12 every Claude subscription in the pool held no credential: the
-Skarbiec items carried a document with no grant, the only working account was
-signed into the harness on the operator's laptop, and every sign-in Brama
-offered went through Weles, which needs a login row and a browser host that
-account did not have. The gateway every product is told to use had nothing to
-answer with while the harness beside it did. The runbook entry
+<p>A pool whose every Claude subscription holds no credential — Skarbiec items carrying a
+document with no grant — while the only working account is signed into the harness on the
+operator's laptop, and every sign-in Brama offers goes through Weles, which needs a login row
+and a browser host that account does not have, is a gateway every product is told to use
+with nothing to answer with while the harness beside it has. The runbook entry
 <a href="/docs/runbook/credentials-and-subscriptions#a-request-answers-429-subscription_unavailable">A request answers 429 subscription_unavailable</a>
 now names this command as the repair for that state.</p>
 <h2 id="unreleased-request-path-trusts-the-ledger">Unreleased: the request path leaves a disowned grant alone<a class="headerlink" href="#unreleased-request-path-trusts-the-ledger" title="Link to this section">&para;</a></h2>

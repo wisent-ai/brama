@@ -49,8 +49,8 @@ Codex and Kimi subscriptions. The verified Wisent session owns the stored coordi
 availability discovered through those keys. Deployment credentials, another user's keys and loopback <code>local-openai</code> are never eligible. That account surface is now the one
 subscription pool capability (<a href="/docs/changelog/current#unreleased-subscription-pool">unreleased</a>).</p>
 <h3 id="best-became-a-selector-over-the-callers-own-subscription-models"><code>best</code> became a selector over the caller's own subscription models<a class="headerlink" href="#best-became-a-selector-over-the-callers-own-subscription-models" title="Link to this section">&para;</a></h3>
-<p>On 2026-08-18 a signed <code>best</code> call answered <code>503 credential_unauthorized</code> with &quot;no 'codex' credential could be redeemed for agent; a capability, read grant, or this
-installation's trust material is missing&quot; and <code>attempts: 0</code>, in a second when the same agent's kimi subscription was serving <code>200</code> on a canonical route.
+<p>A signed <code>best</code> call could answer <code>503 credential_unauthorized</code> with &quot;no 'codex' credential could be redeemed for agent; a capability, read grant, or this
+installation's trust material is missing&quot; and <code>attempts: 0</code>, in the same second that the same agent's kimi subscription was serving <code>200</code> on a canonical route.
 <code>best</code> was resolved as an alias &mdash; one configured provider route, here <code>codex/gpt-5.3-codex-spark</code> &mdash; so one refused redemption ended the request and the eleven
 other subscription models the caller held were never asked.</p>
 <p><code>best</code> became a selector rather than a route. A selector ranks models the caller's own subscriptions provide: the configured model leads, because an operator naming a model is
@@ -63,8 +63,8 @@ message, so a provider that answered and refused one model on its own merits sti
 happened. A failed request names everything it walked past &mdash; &quot;no working subscription model for signed agent; codex refused (...), kimi refused (...)&quot; &mdash; and
 <code>attempts</code> counts what was really attempted, so <code>0</code> again means no provider was ever asked.</p>
 <h3 id="a-donation-that-carries-no-credential-is-refused-instead-of-banked">A donation that carries no credential is refused instead of banked<a class="headerlink" href="#a-donation-that-carries-no-credential-is-refused-instead-of-banked" title="Link to this section">&para;</a></h3>
-<p>The vault item <code>provider:codex:brama-sub-wisent-app-codex-primary</code> &mdash; the codex account with 11,123 recorded requests &mdash; held a browser context options document
-(<code>deviceScaleFactor</code>, <code>extraHTTPHeaders</code>, <code>recordHar</code>, <code>recordVideo</code>, <code>viewport</code>) at revision 318 on 2026-08-19. The gateway's own
+<p>A provider's <code>-primary</code> vault item &mdash; a heavily used codex account &mdash; held a browser context options document
+(<code>deviceScaleFactor</code>, <code>extraHTTPHeaders</code>, <code>recordHar</code>, <code>recordVideo</code>, <code>viewport</code>) instead of a credential. The gateway's own
 plan-usage read reported that verbatim, so the coordinate redeemed perfectly and the thing at it was a re-authentication trajectory's configuration object rather than a credential; the
 ledger read <code>active</code> throughout, because storing a donation is what clears <code>needs_reauthorization</code>. The write paths bounded a donated credential by length alone (1..8000
 characters, which any JSON document satisfies) and wrote it to the single coordinate that provider's <code>-primary</code> subscription is read from, so a donation carrying anything else
@@ -72,10 +72,10 @@ destroyed a working credential and recorded the destruction as a successful sign
 performs, so nothing a request could have presented is refused; a document that carries no credential answers <code>400</code> naming the shape it had and the fields it could have carried,
 and the stored credential is left exactly as it was. A failed write answers as this installation's fault, which is a different repair and a different answer.</p>
 <h3 id="the-launcher-asserts-a-capability-route-for-every-banked-subscription">The launcher asserts a capability route for every banked subscription<a class="headerlink" href="#the-launcher-asserts-a-capability-route-for-every-banked-subscription" title="Link to this section">&para;</a></h3>
-<p>A signed <code>codex/gpt-5.6-sol</code> call as <code>wisent-app</code> answered <code>503 credential_unauthorized</code> with <code>attempts: 0</code> on 2026-08-19 in the same minute that
+<p>A signed <code>codex/gpt-5.6-sol</code> call as <code>wisent-app</code> could answer <code>503 credential_unauthorized</code> with <code>attempts: 0</code> in the same minute that
 the same agent's kimi subscription served <code>200</code>. Nothing was wrong with the credential: a banked subscription is spendable only when the vault holds the item, the signed policy
 allows its resource, the routes table maps that resource to an item and a field, and issuance succeeds &mdash; and that routes table was the one of the four written by a helper somebody had
-to remember to run, so the ChatGPT seat banked at 2026-08-18T21:42:04Z had no coordinate and <code>capability-issue</code> refused it by name.
+to remember to run, so a freshly banked seat had no coordinate and <code>capability-issue</code> refused it by name.
 <code>start-with-skarbiec.sh</code> now asserts the table at every start from the host's own contents, through the packaged <code>provision-capability-routes.py</code>. It is additive: an
 existing entry is never repointed or removed, the coordinate is the item's own id, and the field is taken only when the item carries exactly one, which is a fact rather than a choice. An
 ambiguous item is named and skipped rather than guessed at, and a failed provisioning pass is reported without stopping a gateway that can still serve every other subscription. Adding a
@@ -83,7 +83,7 @@ coordinate widens nothing: redemption is still authorised by the workload key th
 <code>SKARBIEC_CAPABILITY_ROUTES_FILE</code> is exported unconditionally rather than only when the file already exists, because the gateway's read-grant path resolves coordinates through that
 variable while the authority resolves its own path beside the vault, and an unset variable left the two readers disagreeing about which table is in force.</p>
 <h3 id="readiness-performs-the-act-instead-of-reading-a-declaration-about-it">Readiness performs the act instead of reading a declaration about it<a class="headerlink" href="#readiness-performs-the-act-instead-of-reading-a-declaration-about-it" title="Link to this section">&para;</a></h3>
-<p>All morning on 2026-08-18 <code>/readyz</code> answered <code>ready: true</code> on a gateway that could serve nothing: every live probe that morning was refused (codex
+<p><code>/readyz</code> could answer <code>ready: true</code> all morning on a gateway that could serve nothing: every live probe refused (codex
 <code>503 credential_unauthorized</code>, claude-code <code>429 all bounded 'claude-code' credentials unavailable for agent</code>, kimi <code>429 no active 'kimi' credential for
 agent</code>). Both halves the endpoint had were declarations &mdash; a provider credential obtained once at the top of the check, and a catalogue entry proving a model was listed at some
 point. <code>/readyz</code> keeps those halves and adds a third that performs the act: for every active subscription of every configured request-sign agent it redeems the credential at the
@@ -195,7 +195,7 @@ subscription routes admit that identity, so <code>any-vision-capable</code> eval
 signing identity.</p>
 <h3 id="readiness-now-answers-for-the-credential-chain">Readiness now answers for the credential chain<a class="headerlink" href="#readiness-now-answers-for-the-credential-chain" title="Link to this section">&para;</a></h3>
 <p><code>GET /health</code> is liveness and always was: its own body says <code>dependencies: not_probed</code>. It was nevertheless what every deploy check in this repository used as proof that
-a release worked, and on 2026-08-11 it answered <code>ok</code> for a full day from a gateway whose every capability redemption was being refused; the failure surfaced only when a person asked
+a release worked, and it answers <code>ok</code> from a gateway whose every capability redemption is being refused; the failure surfaces only when a person asks
 a model a question. <code>GET /readyz</code> is new and public: it redeems one capability per configured provider and returns <code>503</code> naming the providers that failed, carrying no
 secret beyond the provider name and whether its credential could be obtained. Deploy checks and monitors read it; <code>/health</code> proves only that the process is running. A refused
 redemption is also classified honestly: it was reported as <code>429 capacity_error</code> with code <code>subscription_unavailable</code> and <code>retryable: true</code>, while Skarbiec was
