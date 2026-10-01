@@ -35,6 +35,9 @@ pub(crate) struct MusicArgs {
     /// Acknowledge that this command performs a billable provider request
     #[arg(long, default_value_t = false)]
     allow_provider_cost: bool,
+    /// Print the result as JSON instead of lines
+    #[arg(long, default_value_t = false)]
+    json: bool,
 }
 
 #[derive(Subcommand)]
@@ -44,6 +47,9 @@ pub(crate) enum VoicesCommand {
         /// Voice alias or canonical provider/model route
         #[arg(long, default_value = VOICE_ALIAS)]
         model: String,
+        /// Print the voices as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
     },
     /// Clone a voice from recordings
     Clone {
@@ -65,6 +71,9 @@ pub(crate) enum VoicesCommand {
         /// Acknowledge that this command performs a billable provider request
         #[arg(long, default_value_t = false)]
         allow_provider_cost: bool,
+        /// Print the new voice as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
     },
     /// Delete one voice from the route's account; the provider no longer
     /// keeps it, so this cannot be undone
@@ -77,6 +86,9 @@ pub(crate) enum VoicesCommand {
         /// Confirm the deletion; the provider keeps no copy
         #[arg(long, default_value_t = false)]
         confirm: bool,
+        /// Print the provider's answer as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
     },
 }
 
@@ -104,14 +116,18 @@ pub(crate) async fn music(args: MusicArgs) {
         eprintln!("cannot write {}: {error}", args.output);
         std::process::exit(1);
     }
-    println!("Route: {route}");
-    println!("Audio: {}", song.content_type);
-    println!("Wrote {} bytes to {}", song.bytes.len(), args.output);
+    let written = serde_json::json!({
+        "route": route,
+        "audio": song.content_type,
+        "bytes": song.bytes.len(),
+        "output": args.output,
+    });
+    super::super::print_answer(&written, args.json);
 }
 
 pub(crate) async fn voices(command: VoicesCommand) {
     match command {
-        VoicesCommand::List { model } => {
+        VoicesCommand::List { model, json } => {
             let route = resolve_media_route(&model);
             let body = dispatch_direct_voices(&route)
                 .await
@@ -119,7 +135,7 @@ pub(crate) async fn voices(command: VoicesCommand) {
                     eprintln!("{refused}");
                     std::process::exit(1);
                 });
-            super::super::print_json(&body);
+            super::super::print_answer(&body, json);
         }
         VoicesCommand::Clone {
             model,
@@ -128,6 +144,7 @@ pub(crate) async fn voices(command: VoicesCommand) {
             samples,
             content_type,
             allow_provider_cost,
+            json,
         } => {
             if !allow_provider_cost {
                 eprintln!("refusing a billable voice clone without explicit --allow-provider-cost");
@@ -161,12 +178,13 @@ pub(crate) async fn voices(command: VoicesCommand) {
                         eprintln!("{refused}");
                         std::process::exit(1);
                     });
-            super::super::print_json(&body);
+            super::super::print_answer(&body, json);
         }
         VoicesCommand::Remove {
             model,
             voice_id,
             confirm,
+            json,
         } => {
             if !confirm {
                 eprintln!(
@@ -181,7 +199,7 @@ pub(crate) async fn voices(command: VoicesCommand) {
                     eprintln!("{refused}");
                     std::process::exit(1);
                 });
-            super::super::print_json(&body);
+            super::super::print_answer(&body, json);
         }
     }
 }

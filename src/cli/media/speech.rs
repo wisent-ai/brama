@@ -45,6 +45,9 @@ pub(crate) struct SpeakArgs {
     /// Acknowledge that this command performs a billable provider request
     #[arg(long, default_value_t = false)]
     allow_provider_cost: bool,
+    /// Print the result as JSON instead of lines
+    #[arg(long, default_value_t = false)]
+    json: bool,
 }
 
 pub(crate) async fn speak(args: SpeakArgs) {
@@ -59,6 +62,7 @@ pub(crate) async fn speak(args: SpeakArgs) {
         emotion,
         output,
         allow_provider_cost,
+        json,
     } = args;
     if !allow_provider_cost {
         eprintln!("refusing a billable speech request without explicit --allow-provider-cost");
@@ -102,8 +106,12 @@ pub(crate) async fn speak(args: SpeakArgs) {
         eprintln!("cannot write {output}: {error}");
         std::process::exit(1);
     }
-    println!("Model: {model}");
-    println!("Route: {route}");
-    println!("Audio: {}", spoken.content_type);
-    println!("Wrote {} bytes to {output}", spoken.bytes.len());
+    let written = serde_json::json!({
+        "model": model,
+        "route": route,
+        "audio": spoken.content_type,
+        "bytes": spoken.bytes.len(),
+        "output": output,
+    });
+    super::super::print_answer(&written, json);
 }

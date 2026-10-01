@@ -21,7 +21,7 @@
 <p>Speak one text through a <a href="/docs/concepts/media">voice route</a>, over the same credential redemption and refusals <code>POST /v1/audio/speech</code> uses. The provider answers encoded audio rather than JSON, so this command writes a file and says how many bytes went where; printing audio into a terminal is not an outcome anybody wanted, which is why <code>--output</code> is required rather than optional.</p>
 
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama speak --input &lt;TEXT&gt; --voice &lt;VOICE&gt; --output &lt;FILE&gt; [--model &lt;ALIAS|ROUTE&gt;] [--response-format &lt;FORMAT&gt;] [--speed &lt;SPEED&gt;] --allow-provider-cost</code></pre>
+<pre><code class="language-console">brama speak --input &lt;TEXT&gt; --voice &lt;VOICE&gt; --output &lt;FILE&gt; [--model &lt;ALIAS|ROUTE&gt;] [--response-format &lt;FORMAT&gt;] [--speed &lt;SPEED&gt;] [--json] --allow-provider-cost</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>--input &lt;TEXT&gt;</code></td><td>required</td><td>What to say. The endpoint accepts up to four thousand and ninety-six bytes in one request.</td></tr>
 <tr><td><code>--voice &lt;VOICE&gt;</code></td><td>required</td><td>The provider's own voice name, such as <code>alloy</code>. Every declared voice provider requires one.</td></tr>
@@ -30,10 +30,11 @@
 <tr><td><code>--response-format &lt;FORMAT&gt;</code></td><td>optional</td><td>The container the provider should encode, such as <code>mp3</code> or <code>wav</code>.</td></tr>
 <tr><td><code>--speed &lt;SPEED&gt;</code></td><td>optional</td><td>Playback speed between a quarter and four.</td></tr>
 <tr><td><code>--allow-provider-cost</code></td><td>required to send anything</td><td>Acknowledge that this performs a billable provider request.</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td>Print the result as one JSON document instead of <code>key: value</code> lines.</td></tr>
 </tbody></table>
 
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
-<p>A successful run prints the alias, the route it resolved to, the content type the provider stated, and how many bytes were written where. Brama re-encodes nothing: what lands on disk is exactly what the provider sent.</p>
+<p>A successful run prints <code>model</code>, the <code>route</code> it resolved to, the <code>audio</code> content type the provider stated, how many <code>bytes</code> were written and the <code>output</code> file, as <code>key: value</code> lines or, with <code>--json</code>, as one document with the same fields. Brama re-encodes nothing: what lands on disk is exactly what the provider sent.</p>
 <p>A refused run prints the provider's own sentence and exits non-zero. This is a real one, against <code>voice-model</code> routed to <code>openai/gpt-4o-mini-tts</code> on a deployment whose OpenAI account has no credit:</p>
 <pre><code class="language-console">$ brama speak --input "Brama speaks." --voice alloy --output spoken.mp3 --allow-provider-cost
 provider_rate_limited: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.</code></pre>
