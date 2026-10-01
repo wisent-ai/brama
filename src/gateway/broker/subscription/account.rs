@@ -179,14 +179,11 @@ fn subscription_tag_value<'a>(tags: &'a [String], prefix: &str) -> Option<&'a st
 /// id, so item ids stay opaque and renames are safe. Non-deleted resources
 /// become active entries.
 ///
-/// Until 2026-09-16 an item also had to carry `brama:agent:<agent>` for each
-/// agent allowed to spend it, and `best` rotated only over the items tagged
-/// for the caller. On that day two of three Claude subscriptions carried no
-/// agent tag at all and the consumer `oko` was tagged on nothing, so a fleet
-/// holding six paid subscriptions answered every verdict request with
-/// `all bounded 'codex' credentials unavailable`. The operator's word: a
-/// subscription in the vault is in the rotation for everyone. `brama:agent:`
-/// tags remain as provenance of who banked an account; they gate nothing.
+/// A subscription in the vault is in the rotation for everyone: an item is
+/// never gated by `brama:agent:<agent>` tags, because a rotation that only
+/// spans the items tagged for the caller refuses every call the moment the
+/// tags lag behind the vault. `brama:agent:` tags remain as provenance of
+/// who banked an account; they gate nothing.
 fn live_subscription_entry(item: &VaultListItem) -> Result<SubscriptionEntry, String> {
     let coordinate = if item.id.trim().is_empty() {
         "<unnamed vault item>"

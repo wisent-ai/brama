@@ -18,12 +18,11 @@ use wisent_errors::{Code, Failure};
 ///
 /// Asked of the router binary through `route resolve`, the same answer the
 /// authority gives, so nothing in this process ever decides for itself
-/// which credential a purpose means. Until 2026-09-17 this read the
-/// operator's routes table file directly, and a subscription whose route
-/// Skarbiec declares from the item's own tags - every one an import or a
-/// sign-in creates - was answered `no capability route maps resource`
-/// here while `stado route capability brama` listed it: the second reader
-/// of one table had drifted from the first.
+/// which credential a purpose means. A second reader of the routes table in
+/// this process would drift from the first: a subscription whose route
+/// Skarbiec declares from the item's own tags would be answered `no
+/// capability route maps resource` here while `stado route capability
+/// brama` listed it.
 pub(in crate::gateway::broker) async fn capability_route(
     resource: &str,
 ) -> Result<(String, String), Failure> {
