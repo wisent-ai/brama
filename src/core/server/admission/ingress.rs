@@ -187,10 +187,9 @@ impl ModelIngressAuth {
     /// client's allowed set. The set may hold more: the launcher's policy is
     /// where an operator adds an alias, and a client that is allowed one name
     /// this build does not know is not misconfigured, it is ahead. Requiring
-    /// equality here made every alias rename a flag day: the policy that let
-    /// the new release start refused the release still running, and on
-    /// 2026-09-05 0.2.75 died on this line while 0.2.72 could no longer be
-    /// restarted under the same file, leaving nothing on port 18080.
+    /// equality here makes every alias rename a flag day: the policy that lets
+    /// the new release start refuses the release still running, the new one
+    /// dies on this line, and nothing is left on the port.
     pub(in crate::core::server) fn requires_aliases(
         &self,
         client_id: &str,

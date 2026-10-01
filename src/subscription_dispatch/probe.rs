@@ -81,11 +81,11 @@ pub async fn probe_once(subscription_id: &str, provider: &str) -> Result<Probe, 
         }],
         model,
         max_tokens: PROBE_MAX_TOKENS,
-        // A probe asks whether the account answers, not how it samples. On
-        // 2026-09-18 the `0.0` it used to carry was refused by every newest
-        // Claude model ("`temperature` is deprecated for this model") and the
-        // pool reported no working subscription model for callers that had
-        // sent no temperature at all.
+        // A probe asks whether the account answers, not how it samples. A
+        // `0.0` it carries is refused by models that deprecate the setting
+        // ("`temperature` is deprecated for this model"), and the pool then
+        // reports no working subscription model for callers that sent no
+        // temperature at all.
         temperature: None,
         system: None,
         tools: None,

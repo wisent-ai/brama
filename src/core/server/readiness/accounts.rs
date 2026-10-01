@@ -81,10 +81,10 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
     };
 
     // An account the vault holds and this process was never started with: the
-    // runtime policy, generated at install, does not name it. Until
-    // 2026-09-20 the readiness answer could not say this, and a gateway that
-    // held five paid accounts reported none of them and refused every request
-    // with `no working subscription model for signed agent`.
+    // runtime policy, generated at install, does not name it. A readiness
+    // answer that cannot say this reports none of a gateway's paid accounts
+    // while every request is refused with `no working subscription model for
+    // signed agent`.
     let mut untagged = untagged;
     let mut unnamed = 0usize;
     if !facts.standalone {

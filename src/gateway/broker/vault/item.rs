@@ -44,10 +44,10 @@ pub(in crate::gateway::broker) async fn existing_item_tags(
 
 /// The principal one item already names as `context.account_ref`, or `None`
 /// when the item is absent or names none. A sweep that hands an unchanged
-/// grant over reads this before deciding there is nothing to write: on
-/// 2026-09-18 four members held a grant the harness had not rotated and no
-/// account, and `already_stored` answered "nothing to store" on every pass,
-/// so the account the harness knew never reached the item.
+/// grant over reads this before deciding there is nothing to write: a member
+/// holding a grant the harness has not rotated and no account would otherwise
+/// be answered "nothing to store" on every pass, and the account the harness
+/// knows would never reach the item.
 pub(in crate::gateway::broker) async fn existing_item_account(
     item_id: &str,
 ) -> Result<Option<String>, String> {

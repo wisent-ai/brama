@@ -71,8 +71,8 @@ pub async fn put_subscription_credential_for_account(
 }
 
 /// The account one subscription's item already names as `account_ref`, or
-/// `None` when it names none - the state every imported member was in until
-/// 2026-09-18, and the one Weles refuses to sign in from.
+/// `None` when it names none - the state an imported member starts in, and
+/// the one Weles refuses to sign in from.
 pub async fn subscription_account(
     subscription_id: &str,
     provider: &str,

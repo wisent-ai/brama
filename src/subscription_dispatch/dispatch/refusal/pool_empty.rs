@@ -33,16 +33,14 @@ impl PoolEmptyCause {
 /// pool is otherwise usable and merely out of quota, and a caller who waits
 /// is served by that member whatever the other members need.
 ///
-/// The order used to be the reverse, and both directions have cost a
-/// diagnosis. Production answered `429 all bounded 'codex' credentials
-/// unavailable for agent`, retryable, while its own ledger recorded that every
-/// one of those credentials needed a sign-in: that case sets no
-/// `rate_limit_block` at all, so it is authorization here and stays so. On
-/// 2026-09-21 the opposite happened — the pool held one live credential at
-/// 100% of its seven-day quota, resetting in fourteen hours, beside members
-/// burnt by the borrowing this product removed — and the answer was
-/// `503 subscription_reauthorization_required`, which reads as a task for a
-/// person while the repair was a wait.
+/// Both directions have cost a diagnosis. A `429 all bounded 'codex'
+/// credentials unavailable for agent`, retryable, while the ledger records
+/// that every one of those credentials needs a sign-in: that case sets no
+/// `rate_limit_block` at all, so it is authorization here and stays so. The
+/// opposite — one live credential at 100% of its seven-day quota, resetting
+/// in hours, beside members burnt by borrowing — answered as `503
+/// subscription_reauthorization_required` reads as a task for a person while
+/// the repair is a wait.
 pub fn pool_is_capacity(rate_limit_block: bool) -> bool {
     rate_limit_block
 }
@@ -118,10 +116,10 @@ pub(in crate::subscription_dispatch::dispatch) fn mixed_unavailable_summary(
 /// The whole capacity sentence: which members are unavailable, whether the
 /// rest need a sign-in, and the hour the wait ends when the ledger knows it.
 ///
-/// It used to end at "lifts on its own", pointing the reader at `brama
-/// subscriptions`, which prints a block's reason and not its end. On
-/// 2026-09-21 a judge's route was refused all day and no read anywhere named
-/// an hour, while `blocked_until_ms` had been in the ledger the whole time.
+/// A sentence that ends at "lifts on its own" and points the reader at `brama
+/// subscriptions`, which prints a block's reason and not its end, leaves a
+/// route refused all day with no read anywhere naming an hour, while
+/// `blocked_until_ms` sits in the ledger the whole time.
 pub fn capacity_summary(provider: &str, mixed: bool, block_lifts_at_ms: Option<i64>) -> String {
     let summary = if mixed {
         mixed_unavailable_summary(provider)
