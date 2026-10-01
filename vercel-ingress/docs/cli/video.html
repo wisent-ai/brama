@@ -52,7 +52,7 @@ provider_rate_limited: You have no credits remaining. Add credits to continue us
 <tr><td><code>invalid_request: video id is not a provider job identifier</code></td><td>The identifier carried something an identifier cannot: a separator, a space, a control byte.</td></tr>
 <tr><td><code>provider_rate_limited: &lt;the provider's own sentence&gt;</code></td><td>The route was reached and refused.</td></tr>
 </tbody></table>
-<p>Every refusal exits 1 and prints on standard error.</p>
+<p>Every refusal prints on standard error. A missing <code>--allow-provider-cost</code> on <code>video start</code> is a usage error and exits 2 before anything is sent; every other refusal exits 1.</p>
 <p>See <a href="/docs/concepts/media">media</a>, <a href="/docs/cli/image"><code>brama image</code></a>, <a href="/docs/cli/speak"><code>brama speak</code></a>, or <a href="/docs/cli">the CLI tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>
