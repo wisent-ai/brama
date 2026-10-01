@@ -11,9 +11,6 @@ use crate::core::server::refusal::{api_error, ApiError};
 
 use super::account::{account_credential_provider, donation_login_item};
 
-/// A banked credential is at most 8000 characters.
-const MAX_CREDENTIAL_CHARS: usize = 8000;
-
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct DonateSubscriptionRequest {
@@ -41,10 +38,10 @@ pub(super) async fn create_subscription(
         })?;
     let login_item = donation_login_item(request.login_item.as_deref())?;
     let api_key = request.api_key.as_deref().unwrap_or("");
-    if api_key.is_empty() || api_key.chars().count() > MAX_CREDENTIAL_CHARS {
+    if api_key.is_empty() {
         return Err(api_error(
             StatusCode::BAD_REQUEST,
-            &format!("api_key must contain 1..{MAX_CREDENTIAL_CHARS} characters"),
+            "api_key must not be empty",
         ));
     }
     // `claude-code` is the routing provider id, while the stable subscription

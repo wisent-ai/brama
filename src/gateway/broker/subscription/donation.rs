@@ -224,9 +224,9 @@ impl DonationRefusal {
 /// `extraHTTPHeaders`, `recordHar`, `recordVideo`, `viewport`) onto that
 /// coordinate leaves a heavily used account refused by the
 /// provider-authentication check on every call while the ledger reads
-/// `active`, because the sign-in this records marked it so. The only length
-/// bound the boundary applied was
-/// 1..8000 characters, which a re-authentication trajectory's own configuration
+/// `active`, because the sign-in this records marked it so. A length bound
+/// would not have told the two apart: a re-authentication trajectory's own
+/// configuration object is as short as a credential.
 /// object satisfies. The predicate is the request path's own reduction, so
 /// nothing a request could have presented is refused here.
 pub async fn put_donated_credential(

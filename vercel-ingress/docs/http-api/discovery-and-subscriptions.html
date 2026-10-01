@@ -162,7 +162,7 @@ and an unknown field is refused with the deserializer's own sentence.
   <code>404 subscription not found</code> for an unknown or unowned selection,
   <code>409 selected subscription belongs to a different provider</code>,
   <code>400 provider must name a supported remote API or subscription provider</code>,
-  <code>400 api_key must contain 1..8000 characters</code>,
+  <code>400 api_key must not be empty</code>,
   <code>400 login_item must contain 1..160 ASCII letters, digits, hyphens, underscores or
   dots</code>, a document that does not reduce to a bearer (400), a mapping conflict (409)
   and a failed vault write (500). Success is
