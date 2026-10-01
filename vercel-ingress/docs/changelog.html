@@ -35,6 +35,8 @@ release coordinate yet and do not concern the subscription pool:</p>
   already holds, and every grant that reaches Brama without Weles is proved by a probe;</li>
 <li><a href="/docs/cli/subscription/sign-in-manual"><code>brama subscription sign-in-manual</code></a> signs a Claude
   account in through the operator's own browser and a pasted code, without Weles;</li>
+<li><a href="/docs/cli/subscription/sign-in-manual"><code>brama subscription sign-in-manual</code></a> no longer takes
+  <code>--code</code>: the code is a credential and is read from stdin only, pasted or piped;</li>
 <li>an alias resolves to exactly one route, the registry document keeps <code>schema_version</code>,
   <code>deployments</code> and <code>routes</code> only, and
   <a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a> moves an existing registry file to that shape;</li>

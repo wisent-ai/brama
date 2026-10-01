@@ -107,10 +107,9 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             provider,
             subscription_id,
             reason,
-            code,
             json,
         } => manual::finish(
-            manual::sign_in(&provider, &subscription_id, &reason, code).await,
+            manual::sign_in(&provider, &subscription_id, &reason).await,
             json,
         ),
         SubscriptionCommand::Attribute { provider, json } => {

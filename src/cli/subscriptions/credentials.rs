@@ -68,7 +68,7 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long, default_value_t = false)]
         json: bool,
     },
-    /// Sign one Claude account in by hand: open the printed URL in your own browser, log in, and paste the code it shows
+    /// Sign one Claude account in by hand: open the printed URL in your own browser, log in, and paste the code it shows on stdin
     #[command(name = "sign-in-manual")]
     SignInManual {
         /// The provider whose account should be signed in; `claude-code` is the one with a manual flow
@@ -79,9 +79,6 @@ pub(crate) enum SubscriptionCommand {
         /// Why this sign-in is being run; recorded in the journal beside the verdict
         #[arg(long)]
         reason: String,
-        /// The `code#state` or redirect URL, when it is already at hand; without it the command asks on the terminal
-        #[arg(long)]
-        code: Option<String>,
         /// Print the verdict as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,

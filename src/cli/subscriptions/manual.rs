@@ -33,31 +33,26 @@ pub(crate) fn finish(verdict: Result<ManualSignIn, String>, json: bool) {
 }
 
 /// The manual sign-in on a terminal: the page to open, the paste, and the
-/// shared exchange-store-prove that Brama Desktop's route also ends in.
+/// shared exchange-store-prove that Brama Desktop's route also ends in. The
+/// code is a credential, so it is read from stdin (a terminal paste or a
+/// pipe), never taken on the command line.
 pub(crate) async fn sign_in(
     provider: &str,
     subscription_id: &str,
     reason: &str,
-    code: Option<String>,
 ) -> Result<ManualSignIn, String> {
     if reason.trim().is_empty() {
         return Err("--reason must say why this sign-in is being run".into());
     }
     let request = manual::begin(provider, subscription_id)?;
-    let pasted = match code {
-        Some(code) => code,
-        None => {
-            eprintln!("Open this page in your own browser and log in:");
-            eprintln!();
-            eprintln!("  {}", request.url);
-            eprintln!();
-            eprintln!("When it shows a code, paste it here (the `code#state` text, or the whole redirect URL):");
-            let mut line = String::new();
-            std::io::stdin()
-                .read_line(&mut line)
-                .map_err(|error| format!("reading the pasted code: {error}"))?;
-            line
-        }
-    };
+    eprintln!("Open this page in your own browser and log in:");
+    eprintln!();
+    eprintln!("  {}", request.url);
+    eprintln!();
+    eprintln!("When it shows a code, paste it here (the `code#state` text, or the whole redirect URL):");
+    let mut pasted = String::new();
+    std::io::stdin()
+        .read_line(&mut pasted)
+        .map_err(|error| format!("reading the pasted code: {error}"))?;
     manual::complete(request, &pasted, reason).await
 }
