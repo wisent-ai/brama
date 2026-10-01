@@ -15,11 +15,10 @@ use super::super::refusal::pool_empty::{
 /// Perform, for one subscription, the act a health check cannot infer: redeem
 /// its credential and answer in the request path's vocabulary.
 ///
-/// Readiness used to ask whether a subscription contributed a model, which is a
-/// declaration -- the catalogue answers it from discovery, and discovery
-/// answered `true` all through the morning of 2026-08-18 while every live call
-/// was refused. This asks the question a request asks, at the same boundary,
-/// through the same broker call, and returns what refused it.
+/// Asking whether a subscription contributes a model is a declaration -- the
+/// catalogue answers it from discovery, and discovery can answer `true` while
+/// every live call is refused. This asks the question a request asks, at the
+/// same boundary, through the same broker call, and returns what refused it.
 ///
 /// Redeeming is not the whole question, so the document is reduced the way a
 /// request reduces it before this answers -- see

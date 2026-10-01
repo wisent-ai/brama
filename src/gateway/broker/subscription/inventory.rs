@@ -92,9 +92,9 @@ pub async fn list_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
     entries
 }
 
-/// Every active subscription this deployment holds. Since 2026-09-16 this is
-/// the same pool every caller routes over; it stays a separate reader because
-/// it never consults the trusted boot catalog or a donated overlay.
+/// Every active subscription this deployment holds: the same pool every
+/// caller routes over. It stays a separate reader because it never consults
+/// the trusted boot catalog or a donated overlay.
 pub async fn list_all_subscriptions() -> Result<Vec<SubscriptionEntry>, String> {
     let stdout = raw_listing(&entitlements_router_bin(), "list all subscriptions").await?;
     Ok(with_recorded_accounts(parse_live_subscriptions(&stdout)?).await)
