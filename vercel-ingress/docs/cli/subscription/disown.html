@@ -22,16 +22,17 @@
 <p>Give one pool member back. The gateway retires it, forgets its stored credential and stops routing to it; any machine that signed that account in keeps its own session.</p>
 <p>This command exists because the pool once accepted a grant that a coding harness on another machine already held. A provider issues one OAuth pair per sign-in and revokes it when a second holder refreshes, so such a member cost the machine it came from its own session. Taking a grant from a harness is no part of this product; giving one back is this command, and a gateway that needs a credential signs itself in with <a href="/docs/cli/subscription/sign-in">sign-in</a> or <a href="/docs/cli/subscription/sign-in-manual">sign-in-manual</a>.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama subscription disown --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--gateway &lt;ORIGIN&gt; | --gateway-consumer &lt;NAME&gt;] [--bearer-item &lt;ITEM&gt;#&lt;FIELD&gt;]</code></pre>
+<pre><code class="language-console">brama subscription disown --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--gateway &lt;ORIGIN&gt; | --gateway-consumer &lt;NAME&gt;] [--bearer-item &lt;ITEM&gt;#&lt;FIELD&gt;] [--json]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>--subscription-id &lt;ID&gt;</code></td><td>required</td><td>The pool member to give back.</td></tr>
 <tr><td><code>--reason &lt;REASON&gt;</code></td><td>required</td><td>Nonempty audit reason, recorded beside the gateway&rsquo;s own ledger entry.</td></tr>
 <tr><td><code>--gateway &lt;ORIGIN&gt;</code></td><td>optional</td><td>The gateway holding the member; its console bearer is read from stdin.</td></tr>
 <tr><td><code>--gateway-consumer &lt;NAME&gt;</code></td><td>optional</td><td>Resolve that gateway through Stado&rsquo;s service directory as this consumer, instead of naming a port the resolver assigns.</td></tr>
 <tr><td><code>--bearer-item &lt;ITEM&gt;#&lt;FIELD&gt;</code></td><td>optional</td><td>Read the console bearer from the vault instead of stdin, so no secret is typed or written to disk.</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td>Print <code>{"subscription_id", "detail"}</code> instead of the line.</td></tr>
 </tbody></table>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
-<p>On success one line names the retired member. On the gateway the member is journaled as retired, the ledger records the reason, and the credential is removed from the vault item the pool wrote. Routing stops offering it at the next discovery.</p>
+<p>On success one line names the retired member, or with <code>--json</code> one document carrying the member and the same sentence as <code>detail</code>. On the gateway the member is journaled as retired, the ledger records the reason, and the credential is removed from the vault item the pool wrote. Routing stops offering it at the next discovery.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <p>An empty id is refused with <code>name the subscription to disown</code>, an empty reason with <code>--reason must say why this member is given back</code>, and a call naming no gateway with <code>name the gateway holding the member</code>. The route requires the <code>brama-desktop</code> console identity; a pool holding no such member answers HTTP 404 with <code>the pool holds no member with that id</code>.</p>
 <p>See <a href="/docs/cli/subscription">the command group</a> or <a href="/docs/cli">the CLI tree</a>.</p></article>

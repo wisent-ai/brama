@@ -96,13 +96,18 @@ pub(super) async fn second_factor(provider: Option<&str>, json: bool) {
 /// Named a gateway, this asks that gateway; named none, it acts on this
 /// host's own pool through the same code the gateway's route runs, because a
 /// deployment whose pool is on this machine has no remote to ask.
-pub(super) async fn reinstate(destination: Destination, subscription_id: &str, reason: &str) {
+pub(super) async fn reinstate(
+    destination: Destination,
+    subscription_id: &str,
+    reason: &str,
+    json: bool,
+) {
     if destination.gateway.is_none() && destination.gateway_consumer.is_none() {
         match brama::subscription_dispatch::pool::reinstate_member(subscription_id, reason).await {
-            Ok(verdict) => println!(
-                "{}: {}",
+            Ok(verdict) => said(
                 text(&verdict, "subscription_id").unwrap_or_default(),
-                text(&verdict, "detail").unwrap_or_default()
+                text(&verdict, "detail").unwrap_or_default(),
+                json,
             ),
             Err((_, error)) => {
                 eprintln!("{error}");
@@ -111,7 +116,7 @@ pub(super) async fn reinstate(destination: Destination, subscription_id: &str, r
         }
         return;
     }
-    act(destination, |gateway, bearer| {
+    act(destination, subscription_id, json, |gateway, bearer| {
         let subscription_id = subscription_id.to_owned();
         let reason = reason.to_owned();
         async move { super::remote::reinstate(&gateway, &bearer, &subscription_id, &reason).await }
@@ -120,8 +125,13 @@ pub(super) async fn reinstate(destination: Destination, subscription_id: &str, r
 }
 
 /// Give one member back on the gateway that holds it.
-pub(super) async fn disown(destination: Destination, subscription_id: &str, reason: &str) {
-    act(destination, |gateway, bearer| {
+pub(super) async fn disown(
+    destination: Destination,
+    subscription_id: &str,
+    reason: &str,
+    json: bool,
+) {
+    act(destination, subscription_id, json, |gateway, bearer| {
         let subscription_id = subscription_id.to_owned();
         let reason = reason.to_owned();
         async move { super::remote::disown(&gateway, &bearer, &subscription_id, &reason).await }
@@ -132,14 +142,15 @@ pub(super) async fn disown(destination: Destination, subscription_id: &str, reas
 /// Resolve the gateway and its bearer once, then run one membership call
 /// against it. Both calls refuse identically when no gateway is named,
 /// because the member and its journal live on the gateway, not in a shell.
-async fn act<Call, Running>(destination: Destination, call: Call)
+async fn act<Call, Running>(destination: Destination, subscription_id: &str, json: bool, call: Call)
 where
     Call: FnOnce(String, String) -> Running,
     Running: Future<Output = Result<String, String>>,
 {
     match destination.resolve_reading_stdin().await {
         Ok((Some(gateway), bearer)) => match call(gateway, bearer.trim().to_owned()).await {
-            Ok(said) => println!("{said}"),
+            Ok(detail) if json => said(subscription_id, &detail, true),
+            Ok(detail) => println!("{detail}"),
             Err(error) => {
                 eprintln!("{error}");
                 std::process::exit(1);
@@ -153,6 +164,19 @@ where
             eprintln!("{error}");
             std::process::exit(1);
         }
+    }
+}
+
+/// One membership change: `<member>: <detail>`, or `{subscription_id, detail}`
+/// with `--json`.
+fn said(subscription_id: &str, detail: &str, json: bool) {
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({ "subscription_id": subscription_id, "detail": detail })
+        );
+    } else {
+        println!("{subscription_id}: {detail}");
     }
 }
 

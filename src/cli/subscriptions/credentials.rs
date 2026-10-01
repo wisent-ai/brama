@@ -122,6 +122,9 @@ pub(crate) enum SubscriptionCommand {
         /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
         #[arg(long)]
         bearer_item: Option<String>,
+        /// Print `{subscription_id, detail}` as JSON instead of a line
+        #[arg(long, default_value_t = false)]
+        json: bool,
     },
     /// Give one pool member back: the gateway retires it and forgets its credential, and any machine that signed that account in keeps its own session
     #[command(name = "disown")]
@@ -141,5 +144,8 @@ pub(crate) enum SubscriptionCommand {
         /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
         #[arg(long)]
         bearer_item: Option<String>,
+        /// Print `{subscription_id, detail}` as JSON instead of a line
+        #[arg(long, default_value_t = false)]
+        json: bool,
     },
 }

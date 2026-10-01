@@ -125,6 +125,7 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             gateway,
             gateway_consumer,
             bearer_item,
+            json,
         } => {
             membership::reinstate(
                 remote::Destination {
@@ -134,6 +135,7 @@ pub(crate) async fn run(command: SubscriptionCommand) {
                 },
                 &subscription_id,
                 &reason,
+                json,
             )
             .await;
         }
@@ -143,6 +145,7 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             gateway,
             gateway_consumer,
             bearer_item,
+            json,
         } => {
             membership::disown(
                 remote::Destination {
@@ -152,6 +155,7 @@ pub(crate) async fn run(command: SubscriptionCommand) {
                 },
                 &subscription_id,
                 &reason,
+                json,
             )
             .await;
         }
