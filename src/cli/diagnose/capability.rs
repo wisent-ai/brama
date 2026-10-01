@@ -23,7 +23,7 @@ fn normalize(provider: &str) -> String {
 /// a route uses. A capability is issued at final use, so the durable
 /// agreement is the exact resource both files share.
 pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSet<String> {
-    println!("\n=== policy grants against authority routes");
+    say!("\n=== policy grants against authority routes");
     let policy_path = config_dir.join("policy.json");
     let mut granted = BTreeSet::new();
     match read_json(&policy_path) {
@@ -40,19 +40,17 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
                     }
                 }
             }
-            println!("  policy.json written {}", moment(&policy_path));
+            say!("  policy.json written {}", moment(&policy_path));
             let listed: Vec<&str> = granted.iter().map(String::as_str).collect();
-            println!(
-                "  granted provider resources ({}): {}",
-                granted.len(),
-                if listed.is_empty() {
-                    "none".into()
-                } else {
-                    listed.join(", ")
-                }
-            );
+            say!("  granted provider resources ({}): {}",
+            granted.len(),
+            if listed.is_empty() {
+                "none".into()
+            } else {
+                listed.join(", ")
+            });
         }
-        None => println!("  {}: absent", policy_path.display()),
+        None => say!("  {}: absent", policy_path.display()),
     }
     let routes_path = match (
         layout.settings.get("SKARBIEC_CAPABILITY_ROUTES_FILE"),
@@ -76,10 +74,10 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
                     routed.insert(resource.clone());
                 }
             }
-            println!("  {}", routes_path.display());
+            say!("  {}", routes_path.display());
             let unrouted: Vec<&str> = granted.difference(&routed).map(String::as_str).collect();
             if !unrouted.is_empty() {
-                println!("  granted but unrouted: {}", unrouted.join(", "));
+                say!("  granted but unrouted: {}", unrouted.join(", "));
             }
             let ungranted: Vec<&str> = routed
                 .difference(&granted)
@@ -87,13 +85,11 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
                 .filter(|resource| resource.starts_with("provider:"))
                 .collect();
             if !ungranted.is_empty() {
-                println!(
-                    "  routed without a provider grant: {}",
-                    ungranted.join(", ")
-                );
+                say!("  routed without a provider grant: {}",
+                ungranted.join(", "));
             }
         }
-        None => println!("  {}: absent", routes_path.display()),
+        None => say!("  {}: absent", routes_path.display()),
     }
     granted
         .intersection(&routed)
@@ -108,17 +104,17 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
 
 /// Every alias route against the providers policy and routes agree on.
 pub(super) fn print_alias_routes(layout: &Layout, providers: &BTreeSet<String>) {
-    println!("\n=== alias routes against routed provider grants");
+    say!("\n=== alias routes against routed provider grants");
     let routes_path = layout
         .settings
         .get("BRAMA_INFERENCE_ROUTES_FILE")
         .map(PathBuf::from)
         .unwrap_or_else(|| layout.home.join(".config/brama/inference-routes.json"));
     let Some(document) = read_json(&routes_path) else {
-        println!("  {}: absent", routes_path.display());
+        say!("  {}: absent", routes_path.display());
         return;
     };
-    println!("  {}", routes_path.display());
+    say!("  {}", routes_path.display());
     let deployments: Vec<&str> = document
         .get("deployments")
         .and_then(Value::as_array)
@@ -148,14 +144,12 @@ pub(super) fn print_alias_routes(layout: &Layout, providers: &BTreeSet<String>) 
         } else {
             "REFUSED: no routed provider grant"
         };
-        println!("    {alias} -> {route} [{verdict}]");
+        say!("    {alias} -> {route} [{verdict}]");
     }
-    println!(
-        "  deployments: {}",
-        if deployments.is_empty() {
-            "none".into()
-        } else {
-            deployments.join(", ")
-        }
-    );
+    say!("  deployments: {}",
+    if deployments.is_empty() {
+        "none".into()
+    } else {
+        deployments.join(", ")
+    });
 }

@@ -15,7 +15,25 @@
 //! 6. where the gateway is reachable, and by which scheme;
 //! 7. the current boot attempt and the ends of both log streams.
 //!
-//! Read-only throughout.
+//! Read-only throughout. Every section writes its lines through `say!`: on a
+//! terminal they are printed as they are found, and with `--json` the same
+//! lines are kept and printed once as `{sections: [{title, lines}]}`.
+
+/// The lines `--json` keeps instead of printing; `None` prints them.
+static COLLECTED: std::sync::Mutex<Option<Vec<String>>> = std::sync::Mutex::new(None);
+
+/// One diagnosis line, printed now or kept for the JSON document.
+pub(super) fn emit(line: String) {
+    let mut collected = COLLECTED.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    match collected.as_mut() {
+        Some(lines) => lines.push(line),
+        None => println!("{line}"),
+    }
+}
+
+macro_rules! say {
+    ($($arg:tt)*) => { super::emit(format!($($arg)*)) };
+}
 
 mod capability;
 mod installation;
@@ -106,7 +124,10 @@ pub(super) fn read_json(path: &Path) -> Option<Value> {
         .and_then(|bytes| serde_json::from_slice(&bytes).ok())
 }
 
-pub(crate) async fn run() {
+pub(crate) async fn run(json: bool) {
+    if json {
+        *COLLECTED.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Vec::new());
+    }
     let layout = Layout::read();
     let resolved = installation::print_units(&layout);
     installation::print_generations(&layout, resolved.as_deref());
@@ -115,4 +136,19 @@ pub(crate) async fn run() {
     capability::print_alias_routes(&layout, &providers);
     reachability::print_reachability(&layout).await;
     reachability::print_boot_attempt(&layout);
+    let Some(lines) = COLLECTED.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take() else {
+        return;
+    };
+    // A line `=== title` opens a section; every other line belongs to the
+    // section open at that point, exactly as the terminal shows it.
+    let mut sections: Vec<serde_json::Value> = Vec::new();
+    for line in lines.iter().flat_map(|line| line.split('\n')).filter(|line| !line.is_empty()) {
+        if let Some(title) = line.strip_prefix("=== ") {
+            sections.push(serde_json::json!({ "title": title, "lines": [] }));
+        } else if let Some(open) = sections.last_mut().and_then(|section| section["lines"].as_array_mut()) {
+            open.push(Value::String(line.to_string()));
+        }
+    }
+    let document = serde_json::json!({ "sections": sections });
+    println!("{}", serde_json::to_string_pretty(&document).unwrap_or_else(|_| "{}".into()));
 }

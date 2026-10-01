@@ -30,7 +30,7 @@ fn tail(lines: &[&str], count: usize) -> Vec<String> {
 }
 
 pub(super) async fn print_reachability(layout: &Layout) {
-    println!("\n=== reachability");
+    say!("\n=== reachability");
     let port = layout
         .settings
         .get("PORT")
@@ -80,7 +80,7 @@ pub(super) async fn print_reachability(layout: &Layout) {
                 .map(str::trim)
                 .filter(|line| line.contains("proxy") || line.contains("https://"))
             {
-                println!("  serve: {line}");
+                say!("  serve: {line}");
             }
         }
     }
@@ -96,15 +96,15 @@ pub(super) async fn print_reachability(layout: &Layout) {
             continue;
         }
         match client.get(&target).send().await {
-            Ok(answer) => println!("  {target} -> {}", answer.status().as_u16()),
-            Err(error) => println!("  {target} -> {error}"),
+            Ok(answer) => say!("  {target} -> {}", answer.status().as_u16()),
+            Err(error) => say!("  {target} -> {error}"),
         }
         seen.push(target);
     }
 }
 
 pub(super) fn print_boot_attempt(layout: &Layout) {
-    println!("\n=== current boot attempt");
+    say!("\n=== current boot attempt");
     match std::fs::read(&layout.log) {
         Ok(bytes) => {
             let text = String::from_utf8_lossy(&bytes);
@@ -112,12 +112,12 @@ pub(super) fn print_boot_attempt(layout: &Layout) {
                 .rfind(BOOT_MARKER)
                 .map(|at| &text[at..])
                 .unwrap_or(&text);
-            println!("{}", latest.trim());
-            println!("\n=== last lines of the unit's log");
+            say!("{}", latest.trim());
+            say!("\n=== last lines of the unit's log");
             for line in tail(&text.lines().collect::<Vec<_>>(), LOG_TAIL) {
-                println!("{line}");
+                say!("{line}");
             }
         }
-        Err(_) => println!("  {}: absent", layout.log.display()),
+        Err(_) => say!("  {}: absent", layout.log.display()),
     }
 }

@@ -43,15 +43,13 @@ fn plist(path: &Path) -> Option<Value> {
 
 /// The units that start Brama; returns where `current` resolves.
 pub(super) fn print_units(layout: &Layout) -> Option<PathBuf> {
-    println!("=== units that start Brama");
+    say!("=== units that start Brama");
     let current = layout.services.join("current");
     let resolved = std::fs::canonicalize(&current).ok();
     if let Ok(target) = std::fs::read_link(&current) {
-        println!(
-            "current -> {} (link written {})",
-            target.display(),
-            moment(&current)
-        );
+        say!("current -> {} (link written {})",
+        target.display(),
+        moment(&current));
     }
     for location in [
         PathBuf::from("/Library/LaunchDaemons"),
@@ -87,21 +85,17 @@ pub(super) fn print_units(layout: &Layout) -> Option<PathBuf> {
             } else {
                 "DEFECT: a second unit; only com.wisent.brama runs Brama, and Stado removes this one with the next release"
             };
-            println!(
-                "  {}\n    label:    {label} ({verdict})\n    program:  {joined}",
-                path.display()
-            );
+            say!("  {}\n    label:    {label} ({verdict})\n    program:  {joined}",
+            path.display());
             if let Some(file) = arguments
                 .iter()
                 .map(Path::new)
                 .find(|candidate| candidate.is_file())
             {
-                println!(
-                    "    leads to: {}",
-                    std::fs::canonicalize(file)
-                        .unwrap_or(file.to_path_buf())
-                        .display()
-                );
+                say!("    leads to: {}",
+                std::fs::canonicalize(file)
+                    .unwrap_or(file.to_path_buf())
+                    .display());
             }
         }
     }
@@ -143,7 +137,7 @@ fn architecture_root(generation: &Path) -> PathBuf {
 }
 
 pub(super) fn print_generations(layout: &Layout, resolved: Option<&Path>) {
-    println!("\n=== installed generations");
+    say!("\n=== installed generations");
     // Every role the release state records, as it records them.
     let roles_recorded: Vec<String> = layout
         .release_state
@@ -174,24 +168,18 @@ pub(super) fn print_generations(layout: &Layout, resolved: Option<&Path>) {
             .copied()
             .filter(|name| !root.join(name).exists())
             .collect();
-        println!(
-            "  {}{marker}  installed {}",
-            generation.display(),
-            moment(&generation)
-        );
-        println!(
-            "    files:    {}",
-            if missing.is_empty() {
-                "complete".into()
-            } else {
-                format!("missing {}", missing.join(", "))
-            }
-        );
-        println!(
-            "    router {}: {}",
-            CAPABILITY_COMMAND.join(" "),
-            router_answers(&root)
-        );
+        say!("  {}{marker}  installed {}",
+        generation.display(),
+        moment(&generation));
+        say!("    files:    {}",
+        if missing.is_empty() {
+            "complete".into()
+        } else {
+            format!("missing {}", missing.join(", "))
+        });
+        say!("    router {}: {}",
+        CAPABILITY_COMMAND.join(" "),
+        router_answers(&root));
         let unrunnable: Vec<&str> = RUNNABLE_FILES
             .iter()
             .copied()
@@ -201,10 +189,10 @@ pub(super) fn print_generations(layout: &Layout, resolved: Option<&Path>) {
             })
             .collect();
         if !unrunnable.is_empty() {
-            println!("    NOT EXECUTABLE: {}", unrunnable.join(", "));
+            say!("    NOT EXECUTABLE: {}", unrunnable.join(", "));
         }
         for line in registry_verdict(&root, &layout.config_dir_for(&generation)) {
-            println!("    registry: {line}");
+            say!("    registry: {line}");
         }
     }
 }
@@ -213,12 +201,12 @@ pub(super) fn print_generations(layout: &Layout, resolved: Option<&Path>) {
 /// directory of the generation that serves. A value is shown only when it is
 /// an existing path, so no secret the env carries is ever printed.
 pub(super) fn print_service_env(layout: &Layout, resolved: Option<&Path>) -> PathBuf {
-    println!("\n=== service env");
+    say!("\n=== service env");
     for (name, value) in &layout.settings {
         if Path::new(value).exists() {
-            println!("  {name}={value}");
+            say!("  {name}={value}");
         } else {
-            println!("  {name}=<not a path; value not shown>");
+            say!("  {name}=<not a path; value not shown>");
         }
     }
     let (config_dir, runtime_dir) = match layout.release_record("active") {
@@ -236,13 +224,11 @@ pub(super) fn print_service_env(layout: &Layout, resolved: Option<&Path>) -> Pat
             };
             let root = layout.release_root("active").unwrap_or_default();
             let generation = root.parent().map(Path::to_path_buf).unwrap_or_default();
-            println!(
-                "active release: {} pid={} port={} root={}",
-                text("version"),
-                text("pid"),
-                text("port"),
-                root.display()
-            );
+            say!("active release: {} pid={} port={} root={}",
+            text("version"),
+            text("pid"),
+            text("port"),
+            root.display());
             let runtime = layout.home.join(".stado/run/brama").join(format!(
                 "{}-{}",
                 text("version"),
@@ -261,7 +247,7 @@ pub(super) fn print_service_env(layout: &Layout, resolved: Option<&Path>) -> Pat
                     path.to_path_buf()
                 }
             });
-            println!("active release: absent; inspecting legacy current");
+            say!("active release: absent; inspecting legacy current");
             match generation {
                 Some(generation) => {
                     let name = generation
@@ -283,7 +269,7 @@ pub(super) fn print_service_env(layout: &Layout, resolved: Option<&Path>) -> Pat
             }
         }
     };
-    println!("config dir:  {}", config_dir.display());
-    println!("runtime dir: {}", runtime_dir.display());
+    say!("config dir:  {}", config_dir.display());
+    say!("runtime dir: {}", runtime_dir.display());
     config_dir
 }
