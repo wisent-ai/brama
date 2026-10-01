@@ -138,7 +138,7 @@ const directProviderRules = [...new Set([...credentialSubscriptions.map(({ provi
   target: 'brama',
   max_ttl_seconds: maxTtlSeconds,
   max_uses: maxUses,
-  delegation_depth: Number(false),
+  delegation_depth: 0,
 }));
 const requestSignRules = requestSignAgentIds.map((agentId) => ({
   purpose: 'brama.request.sign',
@@ -146,7 +146,7 @@ const requestSignRules = requestSignAgentIds.map((agentId) => ({
   target: 'brama',
   max_ttl_seconds: maxTtlSeconds,
   max_uses: maxUses,
-  delegation_depth: Number(false),
+  delegation_depth: 0,
 }));
 const rules = [...requestSignRules, ...directProviderRules, ...subscriptionRules];
 const policyKey = ed25519();
