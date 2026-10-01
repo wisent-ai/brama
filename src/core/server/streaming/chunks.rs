@@ -122,7 +122,7 @@ impl ChatChunkStream {
         TOTAL_INPUT_TOKENS.fetch_add(u64::from(self.input_tokens), Ordering::Relaxed);
         TOTAL_OUTPUT_TOKENS.fetch_add(u64::from(self.output_tokens), Ordering::Relaxed);
         if self.failed {
-            TOTAL_FAILURES.fetch_add(u64::from(true), Ordering::Relaxed);
+            TOTAL_FAILURES.fetch_add(1, Ordering::Relaxed);
         } else {
             crate::core::perf::record(
                 &self.requested_model,

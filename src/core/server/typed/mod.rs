@@ -32,9 +32,7 @@ pub(in crate::core::server) async fn embeddings(
     if request.model != WISENT_EMBEDDING_ALIAS
         || !client_identity.authorizes_model(&request.model)
         || !request.input.is_valid()
-        || request
-            .dimensions
-            .is_some_and(|value| value == u32::default())
+        || request.dimensions.is_some_and(|value| value == 0)
     {
         return Err(api_error(
             StatusCode::BAD_REQUEST,
@@ -77,13 +75,13 @@ pub(in crate::core::server) async fn embeddings(
     };
     record_typed_usage(&body);
     if !body.get("data").is_some_and(Value::is_array) {
-        record_typed_request(u32::from(true), true);
+        record_typed_request(1, true);
         return Err(typed_dispatch_error(&Refusal::new(
             ProviderRefusal::ProviderFailure,
             "embedding provider returned malformed data",
         )));
     }
-    record_typed_request(u32::from(true), false);
+    record_typed_request(1, false);
     Ok(Json(body))
 }
 
@@ -122,12 +120,12 @@ pub(in crate::core::server) async fn moderations(
     };
     record_typed_usage(&body);
     if !body.get("results").is_some_and(Value::is_array) {
-        record_typed_request(u32::from(true), true);
+        record_typed_request(1, true);
         return Err(typed_dispatch_error(&Refusal::new(
             ProviderRefusal::ProviderFailure,
             "moderation provider returned malformed data",
         )));
     }
-    record_typed_request(u32::from(true), false);
+    record_typed_request(1, false);
     Ok(Json(body))
 }

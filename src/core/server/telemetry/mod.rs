@@ -16,15 +16,15 @@ use serde_json::{json, Value};
 pub(in crate::core::server) static TOTAL_REQUESTS: AtomicU64 = AtomicU64::new(0);
 pub(in crate::core::server) static TOTAL_INPUT_TOKENS: AtomicU64 = AtomicU64::new(0);
 pub(in crate::core::server) static TOTAL_OUTPUT_TOKENS: AtomicU64 = AtomicU64::new(0);
-pub(in crate::core::server) static TOTAL_PROVIDER_ATTEMPTS: AtomicU64 = AtomicU64::new(u64::MIN);
-pub(in crate::core::server) static TOTAL_FAILURES: AtomicU64 = AtomicU64::new(u64::MIN);
+pub(in crate::core::server) static TOTAL_PROVIDER_ATTEMPTS: AtomicU64 = AtomicU64::new(0);
+pub(in crate::core::server) static TOTAL_FAILURES: AtomicU64 = AtomicU64::new(0);
 pub(in crate::core::server) static STARTED_AT: LazyLock<Instant> = LazyLock::new(Instant::now);
 
 pub(in crate::core::server) fn record_typed_request(attempts: u32, failed: bool) {
-    TOTAL_REQUESTS.fetch_add(u64::from(true), Ordering::Relaxed);
+    TOTAL_REQUESTS.fetch_add(1, Ordering::Relaxed);
     TOTAL_PROVIDER_ATTEMPTS.fetch_add(attempts as u64, Ordering::Relaxed);
     if failed {
-        TOTAL_FAILURES.fetch_add(u64::from(true), Ordering::Relaxed);
+        TOTAL_FAILURES.fetch_add(1, Ordering::Relaxed);
     }
 }
 
@@ -36,18 +36,18 @@ pub(in crate::core::server) fn record_decision_request(
     output_tokens: u32,
     failed: bool,
 ) {
-    TOTAL_REQUESTS.fetch_add(u64::from(true), Ordering::Relaxed);
-    TOTAL_PROVIDER_ATTEMPTS.fetch_add(u64::from(true), Ordering::Relaxed);
+    TOTAL_REQUESTS.fetch_add(1, Ordering::Relaxed);
+    TOTAL_PROVIDER_ATTEMPTS.fetch_add(1, Ordering::Relaxed);
     TOTAL_INPUT_TOKENS.fetch_add(u64::from(input_tokens), Ordering::Relaxed);
     TOTAL_OUTPUT_TOKENS.fetch_add(u64::from(output_tokens), Ordering::Relaxed);
     if failed {
-        TOTAL_FAILURES.fetch_add(u64::from(true), Ordering::Relaxed);
+        TOTAL_FAILURES.fetch_add(1, Ordering::Relaxed);
     }
 }
 
 fn typed_usage_tokens(body: &Value, keys: &[&str]) -> u64 {
     let Some(usage) = body.get("usage").and_then(Value::as_object) else {
-        return u64::default();
+        return 0;
     };
     keys.iter()
         .find_map(|key| usage.get(*key).and_then(Value::as_u64))

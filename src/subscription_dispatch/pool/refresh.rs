@@ -47,7 +47,7 @@ pub async fn refresh_provider(provider: &str, reason: &str) -> Result<Value, Str
         return Ok(verdict(
             provider,
             reason,
-            usize::default(),
+            0,
             FAILED,
             format!(
                 "no usable `{provider}` subscription is in this deployment's pool, so no \
@@ -60,7 +60,7 @@ pub async fn refresh_provider(provider: &str, reason: &str) -> Result<Value, Str
         return Ok(verdict(
             provider,
             reason,
-            usize::default(),
+            0,
             FAILED,
             format!(
                 "`{provider}` subscription credentials are API keys rather than OAuth grants, so \
@@ -70,9 +70,9 @@ pub async fn refresh_provider(provider: &str, reason: &str) -> Result<Value, Str
         ));
     }
     let attempted = candidates.len();
-    let mut refreshed = usize::default();
+    let mut refreshed = 0;
     let mut refusals = Vec::new();
-    let mut unreadable = usize::default();
+    let mut unreadable = 0;
     for subscription_id in &candidates {
         match broker::refresh_subscription_credential(subscription_id, provider).await {
             // Dropped unread. This command reports that a credential now exists,
@@ -140,7 +140,7 @@ pub async fn refresh_subscription(
         return Ok(verdict(
             provider,
             reason,
-            usize::default(),
+            0,
             FAILED,
             format!(
                 "`{subscription_id}` is not an active `{provider}` subscription in this deployment"
@@ -151,7 +151,7 @@ pub async fn refresh_subscription(
         return Ok(verdict(
             provider,
             reason,
-            usize::default(),
+            0,
             FAILED,
             format!("`{provider}` credentials have no OAuth refresh path"),
         ));
@@ -285,7 +285,7 @@ fn detail(
     unreadable: usize,
     refusals: &[String],
 ) -> String {
-    let mut detail = if refreshed > usize::default() {
+    let mut detail = if refreshed > 0 {
         format!("refreshed {refreshed} of {attempted} `{provider}` grants")
     } else {
         format!("refreshed no `{provider}` grant out of {attempted} tried")

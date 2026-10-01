@@ -29,7 +29,7 @@ pub(super) fn tally_and_log_buffered(
     meta: &RoutedCallMeta,
     requested_model: &str,
 ) {
-    if resp.latency_ms == f64::default() {
+    if resp.latency_ms == 0.0 {
         resp.latency_ms = meta.started.elapsed().as_millis() as f64;
     }
     TOTAL_REQUESTS.fetch_add(1, Ordering::Relaxed);
@@ -37,7 +37,7 @@ pub(super) fn tally_and_log_buffered(
     TOTAL_OUTPUT_TOKENS.fetch_add(resp.output_tokens as u64, Ordering::Relaxed);
     TOTAL_PROVIDER_ATTEMPTS.fetch_add(resp.attempts as u64, Ordering::Relaxed);
     if !resp.success {
-        TOTAL_FAILURES.fetch_add(u64::from(true), Ordering::Relaxed);
+        TOTAL_FAILURES.fetch_add(1, Ordering::Relaxed);
     }
     let failure_contract = response_contract(resp);
     // `error_code` below is Brama's own contract code, unchanged, because log
@@ -100,7 +100,7 @@ pub(super) fn log_stream_commit(
     meta: &RoutedCallMeta,
     requested_model: &str,
 ) {
-    TOTAL_REQUESTS.fetch_add(u64::from(true), Ordering::Relaxed);
+    TOTAL_REQUESTS.fetch_add(1, Ordering::Relaxed);
     TOTAL_PROVIDER_ATTEMPTS.fetch_add(u64::from(routed.attempts), Ordering::Relaxed);
     info!(
         event = "routing_complete",

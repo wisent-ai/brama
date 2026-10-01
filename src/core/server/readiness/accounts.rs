@@ -119,7 +119,7 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
     // sign-in, and it must be allowed to exist in order to run one. It answers
     // `ready: false` and `operator_action_required`, and `/readyz` answers 200
     // so a rollout can replace the build that cannot repair itself.
-    let repairable = !facts.providers.is_empty() || facts.active_subscriptions > usize::MIN;
+    let repairable = !facts.providers.is_empty() || facts.active_subscriptions > 0;
     // What the automatic loop can and cannot repair, which is a different
     // question from whether a credential is currently good: a deployment can
     // hold nothing but healthy grants and still be unable to replace any of
@@ -150,7 +150,7 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
         axum::http::StatusCode::SERVICE_UNAVAILABLE
     };
     let reason = if facts.providers.is_empty()
-        && facts.active_subscriptions == usize::MIN
+        && facts.active_subscriptions == 0
         && untagged.is_empty()
     {
         "no provider capability or subscription is configured"

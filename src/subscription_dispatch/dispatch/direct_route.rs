@@ -225,7 +225,7 @@ pub async fn dispatch_direct_stream(request: &ModelRequest) -> Result<RoutedStre
     .await?;
     Ok(RoutedStream {
         model: request.model.clone(),
-        attempts: u32::from(true),
+        attempts: 1,
         events: stream.events,
     })
 }

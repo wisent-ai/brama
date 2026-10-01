@@ -139,7 +139,7 @@ pub(super) async fn calculate_readiness(
                             .unwrap_or("unattributed")
                             .to_string();
                     model_providers.insert(provider.clone());
-                    *per_provider.entry(provider).or_default() += usize::from(true);
+                    *per_provider.entry(provider).or_default() += 1;
                 }
                 for provider in &subscribed {
                     if !per_provider.contains_key(provider) {

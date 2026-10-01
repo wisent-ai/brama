@@ -216,7 +216,7 @@ impl ModelResponse {
             output_tokens: 0,
             latency_ms: 0.0,
             cost: 0.0,
-            attempts: u32::default(),
+            attempts: 0,
             success: false,
             error: Some(error),
             tool_calls: None,

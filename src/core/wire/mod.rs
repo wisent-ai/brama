@@ -61,7 +61,7 @@ fn validate(model: &str, max_tokens: Option<u32>, temperature: Option<f64>) -> R
     if model.trim().is_empty() {
         return Err("missing field `model`".to_string());
     }
-    if max_tokens == Some(u32::default()) {
+    if max_tokens == Some(0) {
         return Err("max_tokens must be at least one when it is set".to_string());
     }
     if temperature.is_some_and(|temperature| {

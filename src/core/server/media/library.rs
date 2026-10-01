@@ -91,7 +91,7 @@ pub(in crate::core::server) async fn audio_music(
     let song = dispatch_direct_music(&route, payload)
         .await
         .map_err(|refused| refused_typed(&refused))?;
-    record_typed_request(u32::from(true), false);
+    record_typed_request(1, false);
     Ok((
         [
             (header::CONTENT_TYPE, song.content_type),
@@ -122,7 +122,7 @@ pub(in crate::core::server) async fn audio_voices(
         "list voices",
     )?;
     let body = dispatched(dispatch_direct_voices(&route).await)?;
-    record_typed_request(u32::from(true), false);
+    record_typed_request(1, false);
     Ok(Json(body))
 }
 
@@ -180,7 +180,7 @@ pub(in crate::core::server) async fn audio_voice_clone(
         )
         .await,
     )?;
-    record_typed_request(u32::from(true), false);
+    record_typed_request(1, false);
     Ok(Json(body))
 }
 
@@ -208,7 +208,7 @@ pub(in crate::core::server) async fn audio_voice_delete(
         "delete voices",
     )?;
     let body = dispatched(dispatch_direct_voice_delete(&route, &voice_id).await)?;
-    record_typed_request(u32::from(true), false);
+    record_typed_request(1, false);
     Ok(Json(body))
 }
 

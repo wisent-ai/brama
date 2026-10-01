@@ -53,13 +53,13 @@ pub(in crate::core::server) async fn image_generations(
     let route = media_route(&client_identity, &aliases, &request.model, Shape::Image).await?;
     let body = dispatched(dispatch_direct_image(&route, request.payload()).await)?;
     if !body.get("data").is_some_and(Value::is_array) {
-        record_typed_request(u32::from(true), true);
+        record_typed_request(1, true);
         return Err(typed_dispatch_error(&Refusal::new(
             ProviderRefusal::ProviderFailure,
             "image provider returned no images",
         )));
     }
-    record_typed_request(u32::from(true), false);
+    record_typed_request(1, false);
     Ok(Json(body))
 }
 
@@ -77,13 +77,13 @@ pub(in crate::core::server) async fn video_generations(
     let route = media_route(&client_identity, &aliases, &request.model, Shape::Video).await?;
     let body = dispatched(dispatch_direct_video(&route, request.payload()).await)?;
     if !body.get("id").is_some_and(Value::is_string) {
-        record_typed_request(u32::from(true), true);
+        record_typed_request(1, true);
         return Err(typed_dispatch_error(&Refusal::new(
             ProviderRefusal::ProviderFailure,
             "video provider returned no job id",
         )));
     }
-    record_typed_request(u32::from(true), false);
+    record_typed_request(1, false);
     Ok(Json(body))
 }
 
@@ -97,7 +97,7 @@ pub(in crate::core::server) async fn video_status(
         video_status_model(query).map_err(|reason| api_error(StatusCode::BAD_REQUEST, reason))?;
     let route = media_route(&client_identity, &aliases, &model, Shape::Video).await?;
     let body = dispatched(dispatch_direct_video_status(&route, &video_id).await)?;
-    record_typed_request(u32::from(true), false);
+    record_typed_request(1, false);
     Ok(Json(body))
 }
 
@@ -117,7 +117,7 @@ pub(in crate::core::server) async fn audio_speech(
     let spoken = dispatch_direct_speech(&route, request.payload())
         .await
         .map_err(|refused| refused_typed(&refused))?;
-    record_typed_request(u32::from(true), false);
+    record_typed_request(1, false);
     Ok((
         [
             (header::CONTENT_TYPE, spoken.content_type),

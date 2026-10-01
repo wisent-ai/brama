@@ -32,9 +32,9 @@ pub(in crate::core::server) fn model_error_envelope(
 /// provider or dependency answered, one otherwise.
 pub(in crate::core::server) fn typed_dispatch_attempts(refused: &Refusal) -> u32 {
     if provider_refusal_contract(refused.class).code == "dependency_unavailable" {
-        u32::default()
+        0
     } else {
-        u32::from(true)
+        1
     }
 }
 

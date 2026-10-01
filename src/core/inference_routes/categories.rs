@@ -92,7 +92,7 @@ impl Category {
 
     fn validate(&self, name: &str) -> Result<(), String> {
         let members = self.providers.len() + self.routes.len() + self.terms.len();
-        if members == usize::MIN {
+        if members == 0 {
             return Err(format!(
                 "model category '{name}' declares no providers, routes or terms"
             ));

@@ -85,7 +85,7 @@ pub async fn decide_on_direct_route(
     let started = std::time::Instant::now();
     let response = dispatch_direct(&call).await;
     let mut outcome = outcome_from_chat(route, request, response)?;
-    if outcome.latency_ms == f64::default() {
+    if outcome.latency_ms == 0.0 {
         outcome.latency_ms = started.elapsed().as_secs_f64() * 1_000.0;
     }
     Ok(outcome)

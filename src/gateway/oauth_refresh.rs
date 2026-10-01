@@ -85,7 +85,7 @@ fn parse_refresh_grant(body: &Value) -> Option<RefreshGrant> {
         expires_in: body
             .get("expires_in")
             .and_then(Value::as_u64)
-            .filter(|seconds| *seconds > u64::default()),
+            .filter(|seconds| *seconds > 0),
     })
 }
 

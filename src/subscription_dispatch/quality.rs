@@ -33,7 +33,7 @@ pub async fn collect_task_quality(opts: TaskQualityOptions) -> Result<Value, Str
                 .into(),
         );
     }
-    if opts.max_models == usize::default() || opts.max_models > max_quality_models() {
+    if opts.max_models == 0 || opts.max_models > max_quality_models() {
         return Err(format!(
             "max_models must be between one and {}",
             max_quality_models()

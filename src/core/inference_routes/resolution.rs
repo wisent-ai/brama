@@ -58,7 +58,7 @@ pub(super) fn resolved_destination(
         return Ok(destination.to_string());
     }
     let deployment = deployment_for_model(registry, destination)?;
-    if !safe_inference_host(&deployment.endpoint.host) || deployment.endpoint.port == u16::MIN {
+    if !safe_inference_host(&deployment.endpoint.host) || deployment.endpoint.port == 0 {
         return Err(format!(
             "inference deployment '{destination}' has no safe local or Tailscale endpoint"
         ));
@@ -78,7 +78,7 @@ pub fn resolved(path: &Path) -> Result<HashMap<String, String>, String> {
 pub fn base_url(path: &Path, model_name: &str) -> Result<String, String> {
     let registry = read(path)?;
     let deployment = deployment_for_model(&registry, model_name)?;
-    if !safe_inference_host(&deployment.endpoint.host) || deployment.endpoint.port == u16::MIN {
+    if !safe_inference_host(&deployment.endpoint.host) || deployment.endpoint.port == 0 {
         return Err(format!(
             "inference model '{model_name}' has no safe local or Tailscale endpoint"
         ));

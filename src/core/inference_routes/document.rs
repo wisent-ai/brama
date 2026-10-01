@@ -70,7 +70,7 @@ pub(super) fn read_body(path: &Path) -> Result<String, String> {
         if metadata.uid() != unsafe { libc::geteuid() } {
             return Err("inference routes must be owned by the Brama user".to_string());
         }
-        if metadata.permissions().mode() & NON_OWNER_MASK != u32::MIN {
+        if metadata.permissions().mode() & NON_OWNER_MASK != 0 {
             return Err("inference routes must not be accessible by group or other".to_string());
         }
     }
@@ -107,7 +107,7 @@ pub fn validate_document(value: &Value) -> Result<(), String> {
         if deployment.name.is_empty()
             || !deployment_names.insert(deployment.name.as_str())
             || !safe_inference_host(&deployment.endpoint.host)
-            || deployment.endpoint.port == u16::MIN
+            || deployment.endpoint.port == 0
         {
             return Err(format!(
                 "inference deployment '{}' is duplicated or has no safe local or Tailscale endpoint",

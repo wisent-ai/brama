@@ -45,8 +45,8 @@ pub(in crate::subscription_dispatch::dispatch) fn spawn_stream_recorder(
     let mut events = stream.events;
     tokio::spawn(async move {
         let mut content = String::new();
-        let mut input_tokens = u32::default();
-        let mut output_tokens = u32::default();
+        let mut input_tokens = 0;
+        let mut output_tokens = 0;
         let mut error: Option<String> = None;
         let mut finished = false;
         loop {

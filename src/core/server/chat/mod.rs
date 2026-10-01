@@ -45,7 +45,7 @@ pub(in crate::core::server) async fn chat_completions(
     if req.messages.is_empty() {
         return api_error(StatusCode::BAD_REQUEST, "messages must not be empty").into_response();
     }
-    if req.max_tokens == Some(u32::default()) {
+    if req.max_tokens == Some(0) {
         return api_error(
             StatusCode::BAD_REQUEST,
             "max_tokens must be at least one when it is set",
@@ -53,7 +53,7 @@ pub(in crate::core::server) async fn chat_completions(
         .into_response();
     }
     if req.temperature.is_some_and(|temperature| {
-        !temperature.is_finite() || temperature < f64::default() || temperature > MAX_TEMPERATURE
+        !temperature.is_finite() || temperature < 0.0 || temperature > MAX_TEMPERATURE
     }) {
         return api_error(
             StatusCode::BAD_REQUEST,

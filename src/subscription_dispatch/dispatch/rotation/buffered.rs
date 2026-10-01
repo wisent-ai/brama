@@ -43,7 +43,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
         Err(refusal) => return RouteAttempt::pool_empty(refusal),
     };
 
-    let mut provider_attempts = u32::default();
+    let mut provider_attempts = 0;
     // The newest credential-boundary refusal is the operation that finally
     // stopped this request, whether redemption, refresh, or credential decode.
     let mut credential_refusal: Option<Failure> = None;
@@ -139,7 +139,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
                 continue;
             }
         };
-        provider_attempts = provider_attempts.saturating_add(u32::from(true));
+        provider_attempts = provider_attempts.saturating_add(1);
         let item = broker::subscription_resource(provider, credential_id);
         let mut result = provider_registry::dispatch(request, &item, token).await;
         result.attempts = provider_attempts;
@@ -153,7 +153,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
             match broker::refresh_subscription_credential(credential_id, provider).await {
                 Ok(fresh) => match fresh.expose_utf8() {
                     Ok(fresh_token) => {
-                        provider_attempts = provider_attempts.saturating_add(u32::from(true));
+                        provider_attempts = provider_attempts.saturating_add(1);
                         result = provider_registry::dispatch(request, &item, fresh_token).await;
                         result.attempts = provider_attempts;
                         usage::record_call(credential_id, provider, &result);

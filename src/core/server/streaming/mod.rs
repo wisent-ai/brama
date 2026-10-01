@@ -54,7 +54,7 @@ pub(in crate::core::server) fn stream_accounting(
         TOTAL_INPUT_TOKENS.fetch_add(u64::from(input_tokens), Ordering::Relaxed);
         TOTAL_OUTPUT_TOKENS.fetch_add(u64::from(output_tokens), Ordering::Relaxed);
         if failed {
-            TOTAL_FAILURES.fetch_add(u64::from(true), Ordering::Relaxed);
+            TOTAL_FAILURES.fetch_add(1, Ordering::Relaxed);
         } else {
             crate::core::perf::record(
                 &requested_model,

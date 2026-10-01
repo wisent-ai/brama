@@ -32,7 +32,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
         Err(refusal) => return RouteAttempt::pool_empty(refusal),
     };
 
-    let mut provider_attempts = u32::default();
+    let mut provider_attempts = 0;
     let mut credential_refusal: Option<Failure> = None;
     let mut saw_auth_rejection = false;
     let mut saw_unredeemable_credential = false;
@@ -111,7 +111,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
                 continue;
             }
         };
-        provider_attempts = provider_attempts.saturating_add(u32::from(true));
+        provider_attempts = provider_attempts.saturating_add(1);
         let item = broker::subscription_resource(provider, credential_id);
         let started = Instant::now();
         let mut result = provider_registry::dispatch_stream(request, &item, token).await;
@@ -123,7 +123,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
             match broker::refresh_subscription_credential(credential_id, provider).await {
                 Ok(fresh) => match fresh.expose_utf8() {
                     Ok(fresh_token) => {
-                        provider_attempts = provider_attempts.saturating_add(u32::from(true));
+                        provider_attempts = provider_attempts.saturating_add(1);
                         result =
                             provider_registry::dispatch_stream(request, &item, fresh_token).await;
                         rejected_with_fresh_token =

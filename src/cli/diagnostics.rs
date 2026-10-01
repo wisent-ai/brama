@@ -78,7 +78,7 @@ pub(crate) async fn test_inference(args: TestArgs) {
     } = args;
     if !allow_provider_cost {
         eprintln!("refusing billable inference without explicit --allow-provider-cost");
-        std::process::exit(i32::from(true));
+        std::process::exit(1);
     }
     let request = ModelRequest {
         messages: vec![Message {

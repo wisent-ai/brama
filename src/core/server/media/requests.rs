@@ -148,7 +148,7 @@ impl ImageRequest {
         if self.prompt.trim().is_empty() {
             return Some("prompt must not be empty");
         }
-        if self.n == Some(u32::MIN) {
+        if self.n == Some(0) {
             return Some("n must be at least 1");
         }
         if self.image.as_ref().is_some_and(Vec::is_empty) {
@@ -191,7 +191,7 @@ impl VideoRequest {
         if self.prompt.trim().is_empty() {
             return Some("prompt must not be empty");
         }
-        if self.seconds == Some(u32::MIN) {
+        if self.seconds == Some(0) {
             return Some("seconds must be at least 1");
         }
         None

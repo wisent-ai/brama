@@ -54,7 +54,7 @@ pub(in crate::providers::adapter) fn attempted_failure(
     refusal: Refusal,
 ) -> ModelResponse {
     let mut failure = ModelResponse::from_refusal(route_id, refusal);
-    failure.attempts = u32::from(true);
+    failure.attempts = 1;
     failure
 }
 

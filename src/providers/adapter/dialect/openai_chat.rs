@@ -63,7 +63,7 @@ pub(in crate::providers::adapter) fn model_response_from_openai(
         latency_ms: elapsed_ms,
         cost: 0.0,
         success: true,
-        attempts: u32::from(true),
+        attempts: 1,
         error: None,
         tool_calls,
         limits: Vec::new(),

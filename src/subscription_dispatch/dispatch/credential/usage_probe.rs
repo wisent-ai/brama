@@ -59,7 +59,7 @@ pub async fn probe_subscription_usage(
     };
     let item = broker::subscription_resource(provider, subscription_id);
     let mut result = provider_registry::dispatch(request, &item, token).await;
-    result.attempts = u32::from(true);
+    result.attempts = 1;
     usage::record_call_from(
         subscription_id,
         provider,

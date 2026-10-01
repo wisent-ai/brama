@@ -52,7 +52,7 @@ pub(in crate::core::server) fn api_error(status: StatusCode, message: &str) -> A
         StatusCode::BAD_GATEWAY => ("provider_error", "provider_failure", false),
         _ => ("internal_error", "internal_error", false),
     };
-    error_response(status, error_type, code, message, retryable, u32::default())
+    error_response(status, error_type, code, message, retryable, 0)
 }
 
 /// An error whose code is the fault itself, with the facts a caller needs to

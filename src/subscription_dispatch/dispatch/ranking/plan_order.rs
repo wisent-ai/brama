@@ -10,7 +10,7 @@ use crate::types::{GatewayRefusal, Refusal};
 use super::super::catalogue::route::{provider_for, provider_matches};
 
 fn random_u64() -> Result<u64, Refusal> {
-    let mut bytes = u64::default().to_ne_bytes();
+    let mut bytes = [0; size_of::<u64>()];
     std::fs::File::open("/dev/urandom")
         .and_then(|mut source| source.read_exact(&mut bytes))
         .map_err(|_| {
