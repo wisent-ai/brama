@@ -9,8 +9,6 @@
 //! reason -- a redeployment, a Skarbiec rotation, a longer consent screen, a
 //! new health field -- and none of them changes when the sign-in itself does.
 
-use std::time::Duration;
-
 use serde_json::Value;
 
 /// Where Weles is, and what Stado knows about that placement.
@@ -90,35 +88,26 @@ pub(crate) async fn worker_api_base() -> Result<WelesEndpoint, String> {
     // all. The sibling lookup in `cli::subscriptions::sync` already names its
     // consumer; this one did not.
     let consumer = env_or("BRAMA_WELES_ADMISSION_CONSUMER", "operator");
-    let output = tokio::time::timeout(
-        Duration::from_secs(30),
-        tokio::process::Command::new(&stado)
-            .kill_on_drop(true)
-            .args([
-                "service",
-                "directory",
-                "connect",
-                "weles-admission",
-                "--consumer",
-                consumer.as_str(),
-                "--no-verify",
-                "--json",
-            ])
-            .output(),
-    )
-    .await
-    .map_err(|_| {
-        format!(
-            "Stado weles-admission lookup through {} timed out after 30 seconds",
-            stado.display()
-        )
-    })?
-    .map_err(|error| {
-        format!(
-            "cannot resolve weles-admission through {}: {error}",
-            stado.display()
-        )
-    })?;
+    let output = tokio::process::Command::new(&stado)
+        .kill_on_drop(true)
+        .args([
+            "service",
+            "directory",
+            "connect",
+            "weles-admission",
+            "--consumer",
+            consumer.as_str(),
+            "--no-verify",
+            "--json",
+        ])
+        .output()
+        .await
+        .map_err(|error| {
+            format!(
+                "cannot resolve weles-admission through {}: {error}",
+                stado.display()
+            )
+        })?;
     if !output.status.success() {
         let detail: String = String::from_utf8_lossy(&output.stderr)
             .trim()
@@ -163,15 +152,6 @@ fn env_or(key: &str, default: &str) -> String {
         Ok(value) if !value.trim().is_empty() => value.trim().to_string(),
         _ => default.to_string(),
     }
-}
-
-/// How long one HTTP exchange with Weles may take. The reauth call holds the
-/// connection for the length of the sign-in, so this must exceed the login
-/// budget.
-pub(crate) fn transport_timeout_seconds() -> u64 {
-    env_or("BRAMA_SIGN_IN_TRANSPORT_TIMEOUT_SECONDS", "1200")
-        .parse()
-        .unwrap_or(1200)
 }
 
 /// Brama's Weles admission credential. It is deliberately distinct from

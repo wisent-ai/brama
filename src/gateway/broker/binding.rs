@@ -142,10 +142,10 @@ fn provider_grant_routed(provider: &str) -> bool {
 static GRANT_ROUTED: LazyLock<RwLock<HashMap<String, bool>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
-/// One `route resolve` for one resource, bounded, reading only whether the
-/// vault answers a complete coordinate for it.
+/// One `route resolve` for one resource, run to its exit, reading only
+/// whether the vault answers a complete coordinate for it.
 fn resolve_grant_route(resource: &str) -> bool {
-    let Ok(mut child) = std::process::Command::new(super::vault::entitlements_router_bin())
+    let Ok(child) = std::process::Command::new(super::vault::entitlements_router_bin())
         .arg("route")
         .arg("resolve")
         .arg(resource)

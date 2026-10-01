@@ -1,8 +1,6 @@
 //! The code the operator pasted, exchanged at the provider's token endpoint
 //! for a grant, and handed on to be stored and proved like every other.
 
-use std::time::Duration;
-
 use serde::Serialize;
 use serde_json::Value;
 use zeroize::Zeroizing;
@@ -20,14 +18,9 @@ struct CodeExchange<'a> {
     code_verifier: &'a str,
 }
 
-/// The token endpoint gets thirty seconds and at most 64 KiB is read; it answers 2xx.
-const EXCHANGE_TIMEOUT: Duration = Duration::from_secs(30);
+/// At most 64 KiB of the token endpoint's answer is read; it answers 2xx.
 const MAX_RESPONSE_BYTES: u64 = 64 * 1024;
 const HTTP_SUCCESS: std::ops::Range<u16> = 200..300;
-
-fn exchange_timeout() -> Duration {
-    EXCHANGE_TIMEOUT
-}
 
 fn max_response_bytes() -> u64 {
     MAX_RESPONSE_BYTES
@@ -49,7 +42,6 @@ pub async fn complete(
     let (code, state) = parse_pasted(pasted, &request.state)?;
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
-        .timeout(exchange_timeout())
         .build()
         .map_err(|error| format!("token exchange client: {error}"))?;
     let response = client

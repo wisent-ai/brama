@@ -18,13 +18,11 @@
 //! reports the state of the field without disclosing it, because a trajectory
 //! that answers `ok` is a claim and the vault is the world.
 
-use std::time::Duration;
-
 use serde_json::{json, Value};
 
 use super::super::blocked::SignInError;
 use super::account::{resolve, HTTP_OK, LOGIN_ITEM_SELECTOR};
-use super::api::{transport_timeout_seconds, worker_api_base, worker_api_token};
+use super::api::{worker_api_base, worker_api_token};
 
 /// What one enrolment came to, in the words an operator repairs it with.
 pub struct Enrolment {
@@ -60,7 +58,6 @@ pub async fn enrol_authenticator(
         .url;
     let token = worker_api_token().map_err(SignInError::Dependency)?;
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(transport_timeout_seconds()))
         .build()
         .map_err(|error| SignInError::Dependency(format!("Weles HTTP client: {error}")))?;
     let resolved = resolve(

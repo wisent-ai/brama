@@ -8,9 +8,8 @@ pub mod worker;
 use crate::subscription_dispatch::pool;
 pub use blocked::{Blocked, SignInError};
 use serde_json::{json, Value};
-use std::time::Duration;
 use verdict::{verdict, FAILED, SIGNED_IN};
-use worker::api::{transport_timeout_seconds, worker_api_base, worker_api_token};
+use worker::api::{worker_api_base, worker_api_token};
 pub use worker::enrolment::{enrol_authenticator, Enrolment};
 
 pub struct SignInOptions {
@@ -174,7 +173,6 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
         }
     };
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(transport_timeout_seconds()))
         .build()
         .map_err(|error| SignInError::Dependency(format!("Weles HTTP client: {error}")))?;
     let resolved = worker::account::resolve(
