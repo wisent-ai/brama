@@ -46,7 +46,7 @@ pub(super) async fn print_reachability(layout: &Layout) {
             line.split_once(ANNOUNCEMENT)
                 .map(|(_, rest)| rest.trim().to_string())
         })
-        .last()
+        .next_back()
     {
         targets.push(format!("http://{announced}/health"));
     }

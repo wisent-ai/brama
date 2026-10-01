@@ -32,7 +32,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
         Err(refusal) => return RouteAttempt::pool_empty(refusal),
     };
 
-    let mut provider_attempts = 0;
+    let mut provider_attempts: u32 = 0;
     let mut credential_refusal: Option<Failure> = None;
     let mut saw_auth_rejection = false;
     let mut saw_unredeemable_credential = false;

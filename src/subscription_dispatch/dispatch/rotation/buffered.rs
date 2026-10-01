@@ -43,7 +43,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
         Err(refusal) => return RouteAttempt::pool_empty(refusal),
     };
 
-    let mut provider_attempts = 0;
+    let mut provider_attempts: u32 = 0;
     // The newest credential-boundary refusal is the operation that finally
     // stopped this request, whether redemption, refresh, or credential decode.
     let mut credential_refusal: Option<Failure> = None;

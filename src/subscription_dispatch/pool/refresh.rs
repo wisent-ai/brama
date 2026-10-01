@@ -70,9 +70,9 @@ pub async fn refresh_provider(provider: &str, reason: &str) -> Result<Value, Str
         ));
     }
     let attempted = candidates.len();
-    let mut refreshed = 0;
+    let mut refreshed: usize = 0;
     let mut refusals = Vec::new();
-    let mut unreadable = 0;
+    let mut unreadable: usize = 0;
     for subscription_id in &candidates {
         match broker::refresh_subscription_credential(subscription_id, provider).await {
             // Dropped unread. This command reports that a credential now exists,

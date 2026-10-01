@@ -89,7 +89,7 @@ fn candidates(settings: &BTreeMap<String, String>, home: &Path) -> Vec<String> {
             line.split_once(ANNOUNCEMENT)
                 .map(|(_, rest)| rest.trim().to_string())
         })
-        .last();
+        .next_back();
     if let Some(announced) = announced.filter(|address| !candidates.contains(address)) {
         candidates.push(announced);
     }
