@@ -171,7 +171,14 @@ fn installation() -> Result<Installation, String> {
         .and_then(|workloads| workloads.values().next())
         .cloned()
         .unwrap_or(Value::Null);
-    Ok(Installation { home, settings, router, vault, registry_path, workload })
+    Ok(Installation {
+        home,
+        settings,
+        router,
+        vault,
+        registry_path,
+        workload,
+    })
 }
 
 fn agent_ids(workload: &Value) -> Vec<&str> {
@@ -187,7 +194,11 @@ fn agent_ids(workload: &Value) -> Vec<&str> {
 /// The router's own words for a refusal: stderr, or stdout when stderr is empty.
 fn refusal_detail(output: &std::process::Output) -> String {
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let detail = if stderr.trim().is_empty() { String::from_utf8_lossy(&output.stdout).trim().to_string() } else { stderr.trim().to_string() };
+    let detail = if stderr.trim().is_empty() {
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    } else {
+        stderr.trim().to_string()
+    };
     detail.replace('\n', " ")
 }
 
@@ -195,10 +206,19 @@ fn refusal_detail(output: &std::process::Output) -> String {
 /// not an error at the router, so a rerun is harmless; any refusal stops the
 /// run with the agent and the router's answer named.
 fn deregister() -> Result<(), String> {
-    let Installation { settings, router, registry_path, workload, .. } = installation()?;
+    let Installation {
+        settings,
+        router,
+        registry_path,
+        workload,
+        ..
+    } = installation()?;
     let agents = agent_ids(&workload);
     if agents.is_empty() {
-        return Err(format!("{} names no agent whose grant could be revoked", registry_path.display()));
+        return Err(format!(
+            "{} names no agent whose grant could be revoked",
+            registry_path.display()
+        ));
     }
     println!("registry: {}", registry_path.display());
     for agent in agents {
@@ -208,7 +228,10 @@ fn deregister() -> Result<(), String> {
             .output()
             .map_err(|error| format!("grant revoke for {agent} could not run: {error}"))?;
         if !revoked.status.success() {
-            return Err(format!("grant revoke refused {agent}: {}", refusal_detail(&revoked)));
+            return Err(format!(
+                "grant revoke refused {agent}: {}",
+                refusal_detail(&revoked)
+            ));
         }
         println!("{agent}: revoked");
     }
@@ -216,7 +239,14 @@ fn deregister() -> Result<(), String> {
 }
 
 fn register() -> Result<(), String> {
-    let Installation { home, settings, router, vault, registry_path, workload } = installation()?;
+    let Installation {
+        home,
+        settings,
+        router,
+        vault,
+        registry_path,
+        workload,
+    } = installation()?;
     let env = |name: &str| std::env::var(name).ok().filter(|value| !value.is_empty());
     let setting = |name: &str| {
         settings
@@ -316,7 +346,10 @@ fn register() -> Result<(), String> {
             minted.map_err(|error| format!("grant issue for {agent} could not run: {error}"))?;
         let stdout = String::from_utf8_lossy(&minted.stdout);
         if !minted.status.success() {
-            return Err(format!("grant issue refused {agent}: {}", refusal_detail(&minted)));
+            return Err(format!(
+                "grant issue refused {agent}: {}",
+                refusal_detail(&minted)
+            ));
         }
         let answer: Value = serde_json::from_str(stdout.trim()).unwrap_or(Value::Null);
         println!(

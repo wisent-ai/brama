@@ -49,7 +49,9 @@ pub(crate) async fn sign_in(
     eprintln!();
     eprintln!("  {}", request.url);
     eprintln!();
-    eprintln!("When it shows a code, paste it here (the `code#state` text, or the whole redirect URL):");
+    eprintln!(
+        "When it shows a code, paste it here (the `code#state` text, or the whole redirect URL):"
+    );
     let mut pasted = String::new();
     std::io::stdin()
         .read_line(&mut pasted)

@@ -33,8 +33,7 @@ use crate::core::server::chat::dialects::{anthropic_messages, openai_responses};
 use crate::core::server::decisions::decisions;
 use crate::core::server::media::{
     audio_music, audio_speech, audio_voice_clone, audio_voice_delete, audio_voices,
-    image_generations,
-    video_generations, video_status,
+    image_generations, video_generations, video_status,
 };
 use crate::core::server::readiness::{health, readyz};
 use crate::core::server::subscriptions::probe::{

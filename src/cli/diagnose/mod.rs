@@ -24,7 +24,9 @@ static COLLECTED: std::sync::Mutex<Option<Vec<String>>> = std::sync::Mutex::new(
 
 /// One diagnosis line, printed now or kept for the JSON document.
 pub(super) fn emit(line: String) {
-    let mut collected = COLLECTED.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut collected = COLLECTED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     match collected.as_mut() {
         Some(lines) => lines.push(line),
         None => println!("{line}"),
@@ -126,7 +128,9 @@ pub(super) fn read_json(path: &Path) -> Option<Value> {
 
 pub(crate) async fn run(json: bool) {
     if json {
-        *COLLECTED.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Vec::new());
+        *COLLECTED
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Vec::new());
     }
     let layout = Layout::read();
     let resolved = installation::print_units(&layout);
@@ -136,19 +140,33 @@ pub(crate) async fn run(json: bool) {
     capability::print_alias_routes(&layout, &providers);
     reachability::print_reachability(&layout).await;
     reachability::print_boot_attempt(&layout);
-    let Some(lines) = COLLECTED.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take() else {
+    let Some(lines) = COLLECTED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take()
+    else {
         return;
     };
     // A line `=== title` opens a section; every other line belongs to the
     // section open at that point, exactly as the terminal shows it.
     let mut sections: Vec<serde_json::Value> = Vec::new();
-    for line in lines.iter().flat_map(|line| line.split('\n')).filter(|line| !line.is_empty()) {
+    for line in lines
+        .iter()
+        .flat_map(|line| line.split('\n'))
+        .filter(|line| !line.is_empty())
+    {
         if let Some(title) = line.strip_prefix("=== ") {
             sections.push(serde_json::json!({ "title": title, "lines": [] }));
-        } else if let Some(open) = sections.last_mut().and_then(|section| section["lines"].as_array_mut()) {
+        } else if let Some(open) = sections
+            .last_mut()
+            .and_then(|section| section["lines"].as_array_mut())
+        {
             open.push(Value::String(line.to_string()));
         }
     }
     let document = serde_json::json!({ "sections": sections });
-    println!("{}", serde_json::to_string_pretty(&document).unwrap_or_else(|_| "{}".into()));
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&document).unwrap_or_else(|_| "{}".into())
+    );
 }

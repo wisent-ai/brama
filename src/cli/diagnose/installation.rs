@@ -47,9 +47,11 @@ pub(super) fn print_units(layout: &Layout) -> Option<PathBuf> {
     let current = layout.services.join("current");
     let resolved = std::fs::canonicalize(&current).ok();
     if let Ok(target) = std::fs::read_link(&current) {
-        say!("current -> {} (link written {})",
-        target.display(),
-        moment(&current));
+        say!(
+            "current -> {} (link written {})",
+            target.display(),
+            moment(&current)
+        );
     }
     for location in [
         PathBuf::from("/Library/LaunchDaemons"),
@@ -85,17 +87,21 @@ pub(super) fn print_units(layout: &Layout) -> Option<PathBuf> {
             } else {
                 "DEFECT: a second unit; only com.wisent.brama runs Brama, and Stado removes this one with the next release"
             };
-            say!("  {}\n    label:    {label} ({verdict})\n    program:  {joined}",
-            path.display());
+            say!(
+                "  {}\n    label:    {label} ({verdict})\n    program:  {joined}",
+                path.display()
+            );
             if let Some(file) = arguments
                 .iter()
                 .map(Path::new)
                 .find(|candidate| candidate.is_file())
             {
-                say!("    leads to: {}",
-                std::fs::canonicalize(file)
-                    .unwrap_or(file.to_path_buf())
-                    .display());
+                say!(
+                    "    leads to: {}",
+                    std::fs::canonicalize(file)
+                        .unwrap_or(file.to_path_buf())
+                        .display()
+                );
             }
         }
     }
@@ -168,18 +174,24 @@ pub(super) fn print_generations(layout: &Layout, resolved: Option<&Path>) {
             .copied()
             .filter(|name| !root.join(name).exists())
             .collect();
-        say!("  {}{marker}  installed {}",
-        generation.display(),
-        moment(&generation));
-        say!("    files:    {}",
-        if missing.is_empty() {
-            "complete".into()
-        } else {
-            format!("missing {}", missing.join(", "))
-        });
-        say!("    router {}: {}",
-        CAPABILITY_COMMAND.join(" "),
-        router_answers(&root));
+        say!(
+            "  {}{marker}  installed {}",
+            generation.display(),
+            moment(&generation)
+        );
+        say!(
+            "    files:    {}",
+            if missing.is_empty() {
+                "complete".into()
+            } else {
+                format!("missing {}", missing.join(", "))
+            }
+        );
+        say!(
+            "    router {}: {}",
+            CAPABILITY_COMMAND.join(" "),
+            router_answers(&root)
+        );
         let unrunnable: Vec<&str> = RUNNABLE_FILES
             .iter()
             .copied()
@@ -224,11 +236,13 @@ pub(super) fn print_service_env(layout: &Layout, resolved: Option<&Path>) -> Pat
             };
             let root = layout.release_root("active").unwrap_or_default();
             let generation = root.parent().map(Path::to_path_buf).unwrap_or_default();
-            say!("active release: {} pid={} port={} root={}",
-            text("version"),
-            text("pid"),
-            text("port"),
-            root.display());
+            say!(
+                "active release: {} pid={} port={} root={}",
+                text("version"),
+                text("pid"),
+                text("port"),
+                root.display()
+            );
             let runtime = layout.home.join(".stado/run/brama").join(format!(
                 "{}-{}",
                 text("version"),

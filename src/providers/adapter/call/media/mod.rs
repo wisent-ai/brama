@@ -29,8 +29,7 @@ use crate::types::{GatewayRefusal, Refusal};
 
 pub use audio::{
     dispatch_music, dispatch_speech, dispatch_voice_clone, dispatch_voice_delete, dispatch_voices,
-    SpokenAudio,
-    VoiceSample,
+    SpokenAudio, VoiceSample,
 };
 
 /// A provider's job identifier travels into a URL path, so it is held to what

@@ -64,7 +64,10 @@ pub(crate) fn detect(json: bool) {
             "recommended_model": model,
             "recommended_backend": backend,
         });
-        println!("{}", serde_json::to_string_pretty(&report).unwrap_or_else(|_| "{}".into()));
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).unwrap_or_else(|_| "{}".into())
+        );
         return;
     }
     println!("GPU Type: {}", res.gpu_type.as_deref().unwrap_or("none"));

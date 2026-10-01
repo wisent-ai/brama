@@ -42,13 +42,15 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
             }
             say!("  policy.json written {}", moment(&policy_path));
             let listed: Vec<&str> = granted.iter().map(String::as_str).collect();
-            say!("  granted provider resources ({}): {}",
-            granted.len(),
-            if listed.is_empty() {
-                "none".into()
-            } else {
-                listed.join(", ")
-            });
+            say!(
+                "  granted provider resources ({}): {}",
+                granted.len(),
+                if listed.is_empty() {
+                    "none".into()
+                } else {
+                    listed.join(", ")
+                }
+            );
         }
         None => say!("  {}: absent", policy_path.display()),
     }
@@ -85,8 +87,10 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
                 .filter(|resource| resource.starts_with("provider:"))
                 .collect();
             if !ungranted.is_empty() {
-                say!("  routed without a provider grant: {}",
-                ungranted.join(", "));
+                say!(
+                    "  routed without a provider grant: {}",
+                    ungranted.join(", ")
+                );
             }
         }
         None => say!("  {}: absent", routes_path.display()),
@@ -146,10 +150,12 @@ pub(super) fn print_alias_routes(layout: &Layout, providers: &BTreeSet<String>) 
         };
         say!("    {alias} -> {route} [{verdict}]");
     }
-    say!("  deployments: {}",
-    if deployments.is_empty() {
-        "none".into()
-    } else {
-        deployments.join(", ")
-    });
+    say!(
+        "  deployments: {}",
+        if deployments.is_empty() {
+            "none".into()
+        } else {
+            deployments.join(", ")
+        }
+    );
 }

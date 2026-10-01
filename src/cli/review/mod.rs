@@ -90,8 +90,9 @@ pub(crate) async fn run(args: ReviewArgs) {
 /// argv or the environment (cli.md rule 15).
 fn bearer_from_stdin() -> Result<String, String> {
     let mut text = String::new();
-    std::io::Read::read_to_string(&mut std::io::stdin(), &mut text)
-        .map_err(|error| format!("the gateway bearer could not be read from standard input: {error}"))?;
+    std::io::Read::read_to_string(&mut std::io::stdin(), &mut text).map_err(|error| {
+        format!("the gateway bearer could not be read from standard input: {error}")
+    })?;
     let token = text.trim().to_string();
     if token.is_empty() {
         return Err("standard input carried no gateway bearer; pipe it in, e.g. `skarbiec get <item> --field token | brama review ...`".into());

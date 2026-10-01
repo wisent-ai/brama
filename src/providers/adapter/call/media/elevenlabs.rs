@@ -149,7 +149,9 @@ pub(super) async fn clone_voice(
 /// refusal.
 pub(super) async fn delete_voice(call: &Call<'_>, voice_id: &str) -> Result<Value, Refusal> {
     if !valid_path_segment(voice_id) {
-        return Err(invalid(format!("voice id `{voice_id}` is not one path segment")));
+        return Err(invalid(format!(
+            "voice id `{voice_id}` is not one path segment"
+        )));
     }
     let response = call
         .delete(&format!("{}/{voice_id}", call.descriptor.voices_path))
