@@ -15,6 +15,10 @@
 //! coordinates the broker will be asked to read and nothing more. The
 //! private half never leaves the installation, and nothing here prints a
 //! secret. The launcher runs it on every start.
+//!
+//! `brama workload deregister` is its inverse: it revokes the vault grant of
+//! every agent the same registry names, through the same router, and exits
+//! non-zero with the router's answer on the first refusal.
 
 pub(crate) mod pins;
 
@@ -33,6 +37,9 @@ pub(crate) enum WorkloadCommand {
     /// Grant each agent of this installation's workload exactly the vault
     /// coordinates its capability routes name, bound to its public key
     Register,
+    /// Withdraw what `register` granted: revoke the vault grant of every
+    /// agent this installation's workload names
+    Deregister,
     /// Succeed when REGISTRY pins exactly this process's uid, gid and
     /// BINARY's resolved path and SHA-256; otherwise name the first mismatch
     Check {
@@ -100,7 +107,19 @@ fn public_key_pem(raw: &str) -> Result<String, String> {
     ))
 }
 
-fn register() -> Result<(), String> {
+/// What `register` and `deregister` both act through: the entitlements
+/// router, the vault, the workload registry, and the service settings the
+/// router runs with.
+struct Installation {
+    home: PathBuf,
+    settings: BTreeMap<String, String>,
+    router: String,
+    vault: String,
+    registry_path: PathBuf,
+    workload: Value,
+}
+
+fn installation() -> Result<Installation, String> {
     let home = home();
     let settings = service_settings(&home)?;
     let env = |name: &str| std::env::var(name).ok().filter(|value| !value.is_empty());
@@ -152,17 +171,64 @@ fn register() -> Result<(), String> {
         .and_then(|workloads| workloads.values().next())
         .cloned()
         .unwrap_or(Value::Null);
-    let public_key = workload
-        .get("proof_key")
-        .and_then(Value::as_str)
-        .unwrap_or("");
-    let agents: Vec<&str> = workload
+    Ok(Installation { home, settings, router, vault, registry_path, workload })
+}
+
+fn agent_ids(workload: &Value) -> Vec<&str> {
+    workload
         .get("agent_ids")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
         .filter_map(Value::as_str)
-        .collect();
+        .collect()
+}
+
+/// The router's own words for a refusal: stderr, or stdout when stderr is empty.
+fn refusal_detail(output: &std::process::Output) -> String {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let detail = if stderr.trim().is_empty() { String::from_utf8_lossy(&output.stdout).trim().to_string() } else { stderr.trim().to_string() };
+    detail.replace('\n', " ")
+}
+
+/// The inverse of `register`. Revoking a grant the vault does not hold is
+/// not an error at the router, so a rerun is harmless; any refusal stops the
+/// run with the agent and the router's answer named.
+fn deregister() -> Result<(), String> {
+    let Installation { settings, router, registry_path, workload, .. } = installation()?;
+    let agents = agent_ids(&workload);
+    if agents.is_empty() {
+        return Err(format!("{} names no agent whose grant could be revoked", registry_path.display()));
+    }
+    println!("registry: {}", registry_path.display());
+    for agent in agents {
+        let revoked = Command::new(&router)
+            .args(["grant", "revoke", agent])
+            .envs(&settings)
+            .output()
+            .map_err(|error| format!("grant revoke for {agent} could not run: {error}"))?;
+        if !revoked.status.success() {
+            return Err(format!("grant revoke refused {agent}: {}", refusal_detail(&revoked)));
+        }
+        println!("{agent}: revoked");
+    }
+    Ok(())
+}
+
+fn register() -> Result<(), String> {
+    let Installation { home, settings, router, vault, registry_path, workload } = installation()?;
+    let env = |name: &str| std::env::var(name).ok().filter(|value| !value.is_empty());
+    let setting = |name: &str| {
+        settings
+            .get(name)
+            .cloned()
+            .filter(|value| !value.is_empty())
+    };
+    let public_key = workload
+        .get("proof_key")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let agents = agent_ids(&workload);
     if public_key.is_empty() || agents.is_empty() {
         return Err(format!(
             "{} names no proof key or agent to bind it to",
@@ -250,16 +316,7 @@ fn register() -> Result<(), String> {
             minted.map_err(|error| format!("grant issue for {agent} could not run: {error}"))?;
         let stdout = String::from_utf8_lossy(&minted.stdout);
         if !minted.status.success() {
-            let stderr = String::from_utf8_lossy(&minted.stderr);
-            let detail = if stderr.trim().is_empty() {
-                stdout.trim().to_string()
-            } else {
-                stderr.trim().to_string()
-            };
-            return Err(format!(
-                "grant issue refused {agent}: {}",
-                detail.replace('\n', " ")
-            ));
+            return Err(format!("grant issue refused {agent}: {}", refusal_detail(&minted)));
         }
         let answer: Value = serde_json::from_str(stdout.trim()).unwrap_or(Value::Null);
         println!(
@@ -275,6 +332,12 @@ pub(crate) fn run(command: WorkloadCommand) {
     match command {
         WorkloadCommand::Register => {
             if let Err(detail) = register() {
+                eprintln!("{detail}");
+                std::process::exit(1);
+            }
+        }
+        WorkloadCommand::Deregister => {
+            if let Err(detail) = deregister() {
                 eprintln!("{detail}");
                 std::process::exit(1);
             }
