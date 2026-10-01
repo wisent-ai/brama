@@ -26,16 +26,6 @@ use crate::providers::adapter::RegistryModel;
 
 use super::document::{read, snapshot, write_registry, ROUTE_WRITE_LOCK};
 
-/// A category name is a label in a URL query and a column in two consoles, so
-/// it is held to the same shape a route half is: lowercase, short, and free of
-/// anything that could split a list.
-const MAX_CATEGORY_NAME_BYTES: usize = 32;
-const MAX_CATEGORY_MEMBERS: usize = 512;
-const MAX_TERM_BYTES: usize = 64;
-/// One deployment declares a handful of categories; a document with hundreds
-/// is a mistake that would otherwise be paid for on every catalogue read.
-const MAX_CATEGORIES: usize = 32;
-
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Category {
@@ -107,11 +97,6 @@ impl Category {
                 "model category '{name}' declares no providers, routes or terms"
             ));
         }
-        if members > MAX_CATEGORY_MEMBERS {
-            return Err(format!(
-                "model category '{name}' declares more than {MAX_CATEGORY_MEMBERS} members"
-            ));
-        }
         for provider in &self.providers {
             if !crate::providers::adapter::valid_provider_id(provider) {
                 return Err(format!(
@@ -127,20 +112,19 @@ impl Category {
             }
         }
         for term in &self.terms {
-            if term.is_empty() || term.len() > MAX_TERM_BYTES {
-                return Err(format!(
-                    "model category '{name}' declares a term that is empty or longer than {MAX_TERM_BYTES} bytes"
-                ));
+            if term.is_empty() {
+                return Err(format!("model category '{name}' declares an empty term"));
             }
         }
         Ok(())
     }
 }
 
-/// A category name as it is written in the document and in `?category=`.
+/// A category name as it is written in the document and in `?category=`: a
+/// label in a URL query and a column in two consoles, so lowercase and free of
+/// anything that could split a list.
 pub fn valid_category_name(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= MAX_CATEGORY_NAME_BYTES
         && value
             .bytes()
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
@@ -148,15 +132,10 @@ pub fn valid_category_name(value: &str) -> bool {
 
 /// Validate the `categories` member of one registry document.
 pub fn validate_categories(categories: &Categories) -> Result<(), String> {
-    if categories.len() > MAX_CATEGORIES {
-        return Err(format!(
-            "inference routes declare more than {MAX_CATEGORIES} model categories"
-        ));
-    }
     for (name, category) in categories {
         if !valid_category_name(name) {
             return Err(format!(
-                "model category '{name}' must be lowercase letters, digits and hyphens, at most {MAX_CATEGORY_NAME_BYTES} bytes"
+                "model category '{name}' must be lowercase letters, digits and hyphens"
             ));
         }
         category.normalized().validate(name)?;
@@ -213,7 +192,7 @@ pub fn declared_names(categories: &Categories) -> Vec<String> {
 pub fn set_category(path: &Path, name: &str, category: &Category) -> Result<Value, String> {
     if !valid_category_name(name) {
         return Err(format!(
-            "model category '{name}' must be lowercase letters, digits and hyphens, at most {MAX_CATEGORY_NAME_BYTES} bytes"
+            "model category '{name}' must be lowercase letters, digits and hyphens"
         ));
     }
     let normalized = category.normalized();
