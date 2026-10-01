@@ -48,11 +48,15 @@ pub(crate) struct CollectTaskQualityArgs {
     allow_provider_cost: bool,
 }
 
-pub(crate) fn print_version() {
-    println!(
-        "{}",
-        serde_json::to_string(&brama::build_info()).unwrap_or_else(|_| "{}".into())
-    );
+/// One JSON line by default, which release tooling and the docs read; with
+/// `--text`, the same fields as `key: value` lines for a person.
+pub(crate) fn print_version(text: bool) {
+    let identity = serde_json::to_value(brama::build_info()).unwrap_or_default();
+    if text {
+        super::print_answer(&identity, false);
+    } else {
+        println!("{identity}");
+    }
 }
 
 pub(crate) fn detect(json: bool) {

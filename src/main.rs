@@ -29,7 +29,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Print secret-free product and build identity as JSON
-    Version,
+    Version {
+        /// Print the identity as `key: value` lines instead of JSON
+        #[arg(long, default_value_t = false)]
+        text: bool,
+    },
     /// Start the OpenAI-compatible HTTP server
     Serve(ServeArgs),
     /// Follow Brama's first-use journey and optionally receive one real model response
@@ -134,7 +138,7 @@ async fn main() {
         .init();
 
     match Cli::parse().command {
-        Commands::Version => cli::diagnostics::print_version(),
+        Commands::Version { text } => cli::diagnostics::print_version(text),
         Commands::Serve(args) => cli::serving::serve(args).await,
         Commands::Onboard(args) => cli::onboarding::onboard(args).await,
         Commands::Adopt(args) => cli::adoption::adopt(args).await,

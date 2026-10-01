@@ -21,8 +21,8 @@
       <article class="doc"><h1 id="brama-version"><code>brama version</code><a class="headerlink" href="#brama-version" title="Link to this section">&para;</a></h1>
 <p>Print Brama product and build identity as one secret-free JSON object.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama version</code></pre>
-<p>This command accepts no inputs or options.</p>
+<pre><code class="language-console">brama version [--text]</code></pre>
+<p><code>--text</code> prints the same fields as <code>key: value</code> lines for a person; without it the identity is one JSON object, which release tooling reads.</p>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
 <pre><code class="language-json">{"product":"brama","version":"0.2.41","source_revision":"development","platform":"development-host","built_at":"not-recorded"}</code></pre>
 <p>The fields are <code>product</code>, package <code>version</code>, compile-time <code>source_revision</code>, <code>platform</code>, and <code>built_at</code>. Development builds use the placeholders shown. The command writes no state, reads no credential, and exits 0 after printing.</p>
