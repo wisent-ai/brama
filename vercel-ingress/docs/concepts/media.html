@@ -37,7 +37,7 @@
 <li><strong>Image</strong>: <code>model</code>, <code>prompt</code>, and optionally <code>n</code>, <code>size</code>, <code>quality</code>, <code>background</code>, <code>output_format</code>, <code>response_format</code>, <code>user</code>, <code>image</code> (1–10 input images as <code>data:</code> or <code>https</code> URLs), <code>aspect_ratio</code>, <code>seed</code>, <code>watermark</code>. Gemini takes only <code>prompt</code>, <code>image</code> (as <code>data:</code> URLs) and <code>aspect_ratio</code>; any other field on a <code>gemini/…</code> route is refused with <code>route `gemini/…` takes prompt, image and aspect_ratio, not `…`</code>.</li>
 <li><strong>Speech</strong>: <code>model</code>, <code>input</code>, <code>voice</code> (a voice name, or the vendor's voice id), and optionally <code>response_format</code>, <code>speed</code>, <code>instructions</code> (OpenAI-shaped vendors only), <code>stability</code>, <code>similarity_boost</code> and <code>timestamps</code> (ElevenLabs only), <code>emotion</code> (MiniMax only). A misplaced option answers <code>invalid_request: route `…` takes no `…` option</code>.</li>
 <li><strong>Music</strong>: <code>model</code>, <code>lyrics</code> (lines separated by <code>\n</code>), and optionally <code>prompt</code> and <code>response_format</code>.</li>
-<li><strong>Voice clone</strong>: <code>model</code>, <code>name</code>, optionally <code>description</code>, and <code>samples</code>: 1–25 recordings, each <code>{"data_base64", "content_type", "filename"}</code>, each at most 10 MiB.</li>
+<li><strong>Voice clone</strong>: <code>model</code>, <code>name</code>, optionally <code>description</code>, and <code>samples</code>: one or more recordings, each <code>{"data_base64", "content_type", "filename"}</code>.</li>
 </ul>
 
 <h2 id="why-the-status-read-names-a-model">Why a status read names a model<a class="headerlink" href="#why-the-status-read-names-a-model" title="Link to this section">&para;</a></h2>
@@ -78,18 +78,14 @@ $ brama routes set video-model openai/sora-2
 $ brama routes set voice-model openai/gpt-4o-mini-tts</code></pre>
 
 <h2 id="bounds">Bounds<a class="headerlink" href="#bounds" title="Link to this section">&para;</a></h2>
-<table><thead><tr><th>Bound</th><th>Value</th><th>Refusal</th></tr></thead><tbody>
-<tr><td>Prompt</td><td>32,000 bytes</td><td><code>prompt is longer than this gateway accepts</code></td></tr>
-<tr><td>Images per request</td><td>1–10</td><td><code>n must be between 1 and 10</code></td></tr>
-<tr><td>Clip length</td><td>1–60 seconds</td><td><code>seconds must be between 1 and 60</code></td></tr>
-<tr><td>Spoken input</td><td>4,096 bytes</td><td><code>input is longer than this gateway speaks in one request</code></td></tr>
-<tr><td>Playback speed</td><td>0.25–4.0</td><td><code>speed must be between 0.25 and 4.0</code></td></tr>
-<tr><td>Audio answer</td><td>24 MiB</td><td><code>provider_failure: audio exceeds the accepted size</code></td></tr>
-<tr><td>Input images</td><td>1–10</td><td><code>image must carry between 1 and 10 input images</code></td></tr>
-<tr><td>Voice samples</td><td>1–25, each at most 10 MiB</td><td><code>samples must carry between 1 and 25 recordings</code></td></tr>
-<tr><td>Request body (images, voice clone)</td><td>64 MiB</td><td><code>413</code></td></tr>
+<p>Brama sets no size or count limits of its own: prompts, image counts, clip lengths, spoken input, samples and request bodies go to the provider, and a provider's limit comes back as that provider's refusal. Brama refuses only what cannot be a request at all:</p>
+<table><thead><tr><th>Check</th><th>Refusal</th></tr></thead><tbody>
+<tr><td>Empty prompt, input or lyrics</td><td><code>prompt must not be empty</code>, <code>input must not be empty</code>, <code>lyrics must carry the song's words</code></td></tr>
+<tr><td>Zero images or seconds</td><td><code>n must be at least 1</code>, <code>seconds must be at least 1</code></td></tr>
+<tr><td>Empty input image or sample list</td><td><code>image must carry at least one input image</code>, <code>samples must carry at least one recording</code></td></tr>
+<tr><td>Playback speed outside the OpenAI speech contract</td><td><code>speed must be between 0.25 and 4.0</code></td></tr>
+<tr><td>Empty audio answer</td><td><code>provider_failure: provider returned no audio</code></td></tr>
 </tbody></table>
-<p>Every one of these is decided before a provider is contacted, because a render is billed whether or not the caller meant it.</p>
 
 <h2 id="not-to-be-confused-with">Not to be confused with<a class="headerlink" href="#not-to-be-confused-with" title="Link to this section">&para;</a></h2>
 <ul>

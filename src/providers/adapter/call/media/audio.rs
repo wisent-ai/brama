@@ -17,10 +17,6 @@ use super::super::outcome::typed::{typed_route, typed_transport};
 use super::{elevenlabs, minimax};
 use crate::types::{GatewayRefusal, ProviderRefusal, Refusal};
 
-/// A few minutes of speech or one song is a few megabytes; a body larger
-/// than this is a provider malfunction rather than a sound.
-const MAX_AUDIO_BYTES: usize = 24 * 1024 * 1024;
-
 /// The speech options only one vendor's contract carries. Sent anywhere else
 /// they would be dropped or refused by the vendor, so they are refused here
 /// by name.
@@ -252,14 +248,8 @@ pub(super) async fn audio_answer(
     audio(content_type, bytes.to_vec())
 }
 
-/// Audio held to the size and non-emptiness every audio answer shares.
+/// Audio held to the non-emptiness every audio answer shares.
 pub(super) fn audio(content_type: String, bytes: Vec<u8>) -> Result<SpokenAudio, Refusal> {
-    if bytes.len() > MAX_AUDIO_BYTES {
-        return Err(Refusal::new(
-            ProviderRefusal::ProviderFailure,
-            "provider_failure: audio exceeds the accepted size",
-        ));
-    }
     if bytes.is_empty() {
         return Err(Refusal::new(
             ProviderRefusal::ProviderFailure,

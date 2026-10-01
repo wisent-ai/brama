@@ -9,18 +9,6 @@
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-/// A prompt is bounded because a provider bills the request either way and a
-/// caller that pastes a file into one is going to be told, not charged.
-pub(super) const MAX_PROMPT_BYTES: usize = 32_000;
-/// One request may ask for a handful of images; a hundred is a mistake with
-/// an invoice attached.
-pub(super) const MAX_IMAGES: u32 = 10;
-/// The longest clip any declared provider renders in one job.
-pub(super) const MAX_VIDEO_SECONDS: u32 = 60;
-/// Every declared voice provider caps one spoken request at a few thousand
-/// characters; a caller sending a chapter is told here rather than billed for
-/// the vendor's refusal.
-pub(super) const MAX_SPOKEN_BYTES: usize = 4_096;
 /// The playback speeds the OpenAI-shaped speech contract accepts.
 pub(super) const MIN_SPEED: f32 = 0.25;
 pub(super) const MAX_SPEED: f32 = 4.0;
@@ -104,9 +92,6 @@ impl SpeechRequest {
         if self.input.trim().is_empty() {
             return Some("input must not be empty");
         }
-        if self.input.len() > MAX_SPOKEN_BYTES {
-            return Some("input is longer than this gateway speaks in one request");
-        }
         if self.voice.trim().is_empty() {
             return Some("voice must name one of the provider's voices");
         }
@@ -163,21 +148,11 @@ impl ImageRequest {
         if self.prompt.trim().is_empty() {
             return Some("prompt must not be empty");
         }
-        if self.prompt.len() > MAX_PROMPT_BYTES {
-            return Some("prompt is longer than this gateway accepts");
+        if self.n == Some(u32::MIN) {
+            return Some("n must be at least 1");
         }
-        if self
-            .n
-            .is_some_and(|count| count == u32::MIN || count > MAX_IMAGES)
-        {
-            return Some("n must be between 1 and 10");
-        }
-        if self
-            .image
-            .as_ref()
-            .is_some_and(|images| images.is_empty() || images.len() > MAX_IMAGES as usize)
-        {
-            return Some("image must carry between 1 and 10 input images");
+        if self.image.as_ref().is_some_and(Vec::is_empty) {
+            return Some("image must carry at least one input image");
         }
         None
     }
@@ -216,14 +191,8 @@ impl VideoRequest {
         if self.prompt.trim().is_empty() {
             return Some("prompt must not be empty");
         }
-        if self.prompt.len() > MAX_PROMPT_BYTES {
-            return Some("prompt is longer than this gateway accepts");
-        }
-        if self
-            .seconds
-            .is_some_and(|seconds| seconds == u32::MIN || seconds > MAX_VIDEO_SECONDS)
-        {
-            return Some("seconds must be between 1 and 60");
+        if self.seconds == Some(u32::MIN) {
+            return Some("seconds must be at least 1");
         }
         None
     }

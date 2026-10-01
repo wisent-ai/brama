@@ -33,7 +33,7 @@ use crate::core::server::chat::dialects::{anthropic_messages, openai_responses};
 use crate::core::server::decisions::decisions;
 use crate::core::server::media::{
     audio_music, audio_speech, audio_voice_clone, audio_voices, image_generations,
-    video_generations, video_status, MEDIA_BODY_LIMIT,
+    video_generations, video_status,
 };
 use crate::core::server::readiness::{health, readyz};
 use crate::core::server::subscriptions::probe::{
@@ -66,7 +66,7 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
         // same model name that started it.
         .route(
             "/v1/images/generations",
-            post(image_generations).layer(DefaultBodyLimit::max(MEDIA_BODY_LIMIT)),
+            post(image_generations).layer(DefaultBodyLimit::disable()),
         )
         .route("/v1/videos", post(video_generations))
         .route("/v1/audio/speech", post(audio_speech))
@@ -75,7 +75,7 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
             "/v1/audio/voices",
             get(audio_voices)
                 .post(audio_voice_clone)
-                .layer(DefaultBodyLimit::max(MEDIA_BODY_LIMIT)),
+                .layer(DefaultBodyLimit::disable()),
         )
         .route("/v1/videos/:video_id", get(video_status))
         // The one endpoint that answers instead of generating: typed

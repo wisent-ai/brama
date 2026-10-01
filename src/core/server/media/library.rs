@@ -15,7 +15,7 @@ use base64::Engine as _;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use super::requests::{video_status_model, MAX_PROMPT_BYTES};
+use super::requests::video_status_model;
 use super::{api_error_for_alias, dispatched, refused_typed};
 use crate::core::server::admission::identity::ModelClientIdentity;
 use crate::core::server::aliases::table::ModelAliases;
@@ -26,11 +26,6 @@ use crate::providers::adapter::{supports_music_route, supports_voices_route, Voi
 use crate::subscription_dispatch::{
     dispatch_direct_music, dispatch_direct_voice_clone, dispatch_direct_voices,
 };
-
-/// The recordings one clone may carry, and how large each may be: enough for
-/// the few minutes of clean speech a clone wants, not a podcast archive.
-const MAX_SAMPLES: usize = 25;
-const MAX_SAMPLE_BYTES: usize = 10 * 1024 * 1024;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -68,10 +63,10 @@ pub(in crate::core::server) async fn audio_music(
     Extension(aliases): Extension<ModelAliases>,
     Json(request): Json<MusicRequest>,
 ) -> Result<Response, ApiError> {
-    if request.lyrics.trim().is_empty() || request.lyrics.len() > MAX_PROMPT_BYTES {
+    if request.lyrics.trim().is_empty() {
         return Err(api_error(
             StatusCode::BAD_REQUEST,
-            "lyrics must carry the song's words and stay within the prompt bound",
+            "lyrics must carry the song's words",
         ));
     }
     let route = library_route(
@@ -142,10 +137,10 @@ pub(in crate::core::server) async fn audio_voice_clone(
             "name must name the voice",
         ));
     }
-    if request.samples.is_empty() || request.samples.len() > MAX_SAMPLES {
+    if request.samples.is_empty() {
         return Err(api_error(
             StatusCode::BAD_REQUEST,
-            "samples must carry between 1 and 25 recordings",
+            "samples must carry at least one recording",
         ));
     }
     let route = library_route(
@@ -163,10 +158,10 @@ pub(in crate::core::server) async fn audio_voice_clone(
                 &format!("samples[{index}].data_base64 is not base64"),
             )
         })?;
-        if bytes.is_empty() || bytes.len() > MAX_SAMPLE_BYTES {
+        if bytes.is_empty() {
             return Err(api_error(
                 StatusCode::BAD_REQUEST,
-                &format!("samples[{index}] must hold between 1 byte and 10 MiB of audio"),
+                &format!("samples[{index}] holds no audio"),
             ));
         }
         samples.push(VoiceSample {
