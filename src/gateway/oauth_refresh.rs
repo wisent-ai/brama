@@ -65,20 +65,6 @@ impl Drop for RefreshGrant {
     }
 }
 
-/// A refresh call reads at most 64 KiB, and a credential blob written back is
-/// at most 8 KiB. How long the provider takes to answer is the provider's
-/// business: a refresh that is still in flight has not failed.
-const MAX_RESPONSE_BYTES: usize = 64 * 1024;
-const MAX_CREDENTIAL_BYTES: usize = 8 * 1024;
-
-fn max_response_bytes() -> usize {
-    MAX_RESPONSE_BYTES
-}
-
-fn max_credential_bytes() -> usize {
-    MAX_CREDENTIAL_BYTES
-}
-
 fn parse_refresh_grant(body: &Value) -> Option<RefreshGrant> {
     Some(RefreshGrant {
         access_token: body
@@ -103,14 +89,11 @@ fn parse_refresh_grant(body: &Value) -> Option<RefreshGrant> {
     })
 }
 
-/// Read a refused response's body under the same bound the success path uses. A
-/// provider that answers with a megabyte of HTML does not get to fill the log.
-async fn bounded_error_body(response: &mut reqwest::Response) -> String {
+/// A refused response's body, whole, so the failure says which of
+/// `invalid_grant`, a revoked client or a throttle it was.
+async fn error_body(response: &mut reqwest::Response) -> String {
     let mut text = String::new();
     while let Ok(Some(chunk)) = response.chunk().await {
-        if text.len().saturating_add(chunk.len()) > max_response_bytes() {
-            break;
-        }
         text.push_str(&String::from_utf8_lossy(&chunk));
     }
     text
@@ -153,17 +136,8 @@ async fn request_refresh_grant(
     // with the failure.
     if !response.status().is_success() {
         let status = response.status().as_u16();
-        let body = bounded_error_body(&mut response).await;
+        let body = error_body(&mut response).await;
         return Err(rejection_failure(status, &body));
-    }
-    if response
-        .content_length()
-        .is_some_and(|length| length > max_response_bytes() as u64)
-    {
-        return Err(refresh_failure(
-            Code::Unknown,
-            "OAuth refresh response is too large",
-        ));
     }
     let mut encoded = Zeroizing::new(Vec::new());
     while let Some(chunk) = response
@@ -171,12 +145,6 @@ async fn request_refresh_grant(
         .await
         .map_err(|_| refresh_failure(Code::InfraDown, "OAuth refresh response read failed"))?
     {
-        if encoded.len().saturating_add(chunk.len()) > max_response_bytes() {
-            return Err(refresh_failure(
-                Code::Unknown,
-                "OAuth refresh response is too large",
-            ));
-        }
         encoded.extend_from_slice(&chunk);
     }
     let mut body: Value = serde_json::from_slice(&encoded)
@@ -227,10 +195,10 @@ pub(super) async fn refresh(
                 "refreshed OAuth credential is not serializable",
             )
         })?);
-        if fresh.is_empty() || fresh.len() > max_credential_bytes() {
+        if fresh.is_empty() {
             return Err(refresh_failure(
                 Code::Config,
-                "refreshed OAuth credential size is invalid",
+                "refreshed OAuth credential is empty",
             ));
         }
         Ok(fresh)

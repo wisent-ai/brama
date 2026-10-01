@@ -18,13 +18,8 @@ struct CodeExchange<'a> {
     code_verifier: &'a str,
 }
 
-/// At most 64 KiB of the token endpoint's answer is read; it answers 2xx.
-const MAX_RESPONSE_BYTES: u64 = 64 * 1024;
+/// The token endpoint answers 2xx with the grant; its answer is read whole.
 const HTTP_SUCCESS: std::ops::Range<u16> = 200..300;
-
-fn max_response_bytes() -> u64 {
-    MAX_RESPONSE_BYTES
-}
 
 fn millis_per_second() -> i64 {
     super::MILLIS_PER_SECOND
@@ -59,12 +54,6 @@ pub async fn complete(
         .await
         .map_err(|error| format!("the token exchange did not reach the provider: {error}"))?;
     let status = response.status().as_u16();
-    if response
-        .content_length()
-        .is_some_and(|length| length > max_response_bytes())
-    {
-        return Err("the provider's answer is too large to be a grant".into());
-    }
     let body = Zeroizing::new(
         response
             .bytes()
