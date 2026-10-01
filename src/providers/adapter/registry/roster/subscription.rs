@@ -2,7 +2,7 @@
 //! deployment API key. Their wire is the vendor's ordinary one; what differs
 //! is the credential, which Weles mints by signing in and Skarbiec holds.
 
-use super::super::{AuthKind, ProviderDescriptor, WireProtocol};
+use super::super::{AuthKind, MediaWire, ProviderDescriptor, WireProtocol};
 
 pub(super) const CLAUDE_CODE: ProviderDescriptor = ProviderDescriptor {
     id: "claude-code",
@@ -15,6 +15,9 @@ pub(super) const CLAUDE_CODE: ProviderDescriptor = ProviderDescriptor {
     video_path: "",
     video_status_path: "",
     speech_path: "",
+    music_path: "",
+    voices_path: "",
+    media_wire: MediaWire::OpenAi,
     wire: WireProtocol::AnthropicMessages,
     auth: AuthKind::AnthropicBearer,
     static_models: &["claude-haiku-4-5", "claude-opus-4-6", "claude-sonnet-4-6"],
@@ -31,6 +34,9 @@ pub(super) const KIMI: ProviderDescriptor = ProviderDescriptor {
     video_path: "",
     video_status_path: "",
     speech_path: "",
+    music_path: "",
+    voices_path: "",
+    media_wire: MediaWire::OpenAi,
     wire: WireProtocol::OpenAiChat,
     auth: AuthKind::Bearer,
     static_models: &["kimi-for-coding"],
@@ -47,6 +53,9 @@ pub(super) const CODEX: ProviderDescriptor = ProviderDescriptor {
     video_path: "",
     video_status_path: "",
     speech_path: "",
+    music_path: "",
+    voices_path: "",
+    media_wire: MediaWire::OpenAi,
     wire: WireProtocol::OpenAiResponses,
     auth: AuthKind::Bearer,
     static_models: &[

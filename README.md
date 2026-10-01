@@ -67,10 +67,12 @@ promise, and what the catalogue says about a model, is documented in
 - Typed decisions on `POST /v1/decisions`, through the `decision-model` and
   `best-decision-model` aliases, served natively by a decision provider or by
   rendering the questions onto a chat model.
-- Image, video and voice generation on `POST /v1/images/generations`,
-  `POST /v1/videos` with `GET /v1/videos/{id}`, and `POST /v1/audio/speech`,
-  through the `image-model`, `video-model` and `voice-model` aliases or a
-  canonical route the catalogue lists as that kind.
+- Image, video, voice and music generation on `POST /v1/images/generations`
+  (with input images), `POST /v1/videos` with `GET /v1/videos/{id}`,
+  `POST /v1/audio/speech` and `POST /v1/audio/music`, plus the voice library
+  on `GET`/`POST /v1/audio/voices`, through the `image-model`, `video-model`
+  and `voice-model` aliases or a canonical route the catalogue lists as that
+  kind. ElevenLabs, MiniMax and Gemini are spoken by their own adapters.
 - A model catalogue that states what each model produces and whether its
   weights are published, and operator-declared categories such as
   `uncensored`, filterable on `GET /v1/models` and reported by

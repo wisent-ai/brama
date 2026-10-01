@@ -44,6 +44,17 @@ pub(in crate::core::server) struct ImageRequest {
     pub(super) response_format: Option<String>,
     #[serde(default)]
     pub(super) user: Option<String>,
+    /// Input images the picture is made from, as `data:` URLs or `https`
+    /// URLs, for the providers that take them: Seedream on BytePlus takes
+    /// either, Gemini needs `data:` URLs.
+    #[serde(default)]
+    pub(super) image: Option<Vec<String>>,
+    #[serde(default)]
+    pub(super) aspect_ratio: Option<String>,
+    #[serde(default)]
+    pub(super) seed: Option<i64>,
+    #[serde(default)]
+    pub(super) watermark: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -74,6 +85,14 @@ pub(in crate::core::server) struct SpeechRequest {
     pub(super) speed: Option<f32>,
     #[serde(default)]
     pub(super) instructions: Option<String>,
+    /// ElevenLabs voice settings.
+    #[serde(default)]
+    pub(super) stability: Option<f32>,
+    #[serde(default)]
+    pub(super) similarity_boost: Option<f32>,
+    /// MiniMax delivery, such as `happy` or `calm`.
+    #[serde(default)]
+    pub(super) emotion: Option<String>,
 }
 
 impl SpeechRequest {
@@ -108,6 +127,19 @@ impl SpeechRequest {
         }
         stated(&mut payload, "response_format", self.response_format);
         stated(&mut payload, "instructions", self.instructions);
+        stated(&mut payload, "emotion", self.emotion);
+        for (key, value) in [
+            ("stability", self.stability),
+            ("similarity_boost", self.similarity_boost),
+        ] {
+            if let Some(value) = value {
+                payload.insert(
+                    key.to_string(),
+                    serde_json::Number::from_f64(f64::from(value))
+                        .map_or(Value::Null, Value::Number),
+                );
+            }
+        }
         payload
     }
 }
@@ -133,6 +165,13 @@ impl ImageRequest {
         {
             return Some("n must be between 1 and 10");
         }
+        if self
+            .image
+            .as_ref()
+            .is_some_and(|images| images.is_empty() || images.len() > MAX_IMAGES as usize)
+        {
+            return Some("image must carry between 1 and 10 input images");
+        }
         None
     }
 
@@ -148,6 +187,19 @@ impl ImageRequest {
         stated(&mut payload, "output_format", self.output_format);
         stated(&mut payload, "response_format", self.response_format);
         stated(&mut payload, "user", self.user);
+        if let Some(images) = self.image {
+            payload.insert(
+                "image".to_string(),
+                Value::Array(images.into_iter().map(Value::String).collect()),
+            );
+        }
+        stated(&mut payload, "aspect_ratio", self.aspect_ratio);
+        if let Some(seed) = self.seed {
+            payload.insert("seed".to_string(), Value::from(seed));
+        }
+        if let Some(watermark) = self.watermark {
+            payload.insert("watermark".to_string(), Value::Bool(watermark));
+        }
         payload
     }
 }

@@ -21,7 +21,7 @@ pub(crate) struct SpeakArgs {
     /// The text to speak
     #[arg(long)]
     input: String,
-    /// The provider's voice name, such as alloy
+    /// The provider's voice: a name such as alloy, or a voice id
     #[arg(long)]
     voice: String,
     /// Audio container the provider should encode, such as mp3 or wav
@@ -30,6 +30,15 @@ pub(crate) struct SpeakArgs {
     /// Playback speed between 0.25 and 4.0
     #[arg(long)]
     speed: Option<f32>,
+    /// ElevenLabs voice stability, 0.0 to 1.0
+    #[arg(long)]
+    stability: Option<f32>,
+    /// ElevenLabs similarity boost, 0.0 to 1.0
+    #[arg(long)]
+    similarity_boost: Option<f32>,
+    /// MiniMax delivery, such as happy or calm
+    #[arg(long)]
+    emotion: Option<String>,
     /// Where to write the spoken audio
     #[arg(long)]
     output: String,
@@ -45,6 +54,9 @@ pub(crate) async fn speak(args: SpeakArgs) {
         voice,
         response_format,
         speed,
+        stability,
+        similarity_boost,
+        emotion,
         output,
         allow_provider_cost,
     } = args;
@@ -64,6 +76,20 @@ pub(crate) async fn speak(args: SpeakArgs) {
             "speed".to_string(),
             serde_json::Number::from_f64(f64::from(speed)).map_or(Value::Null, Value::Number),
         );
+    }
+    for (key, value) in [
+        ("stability", stability),
+        ("similarity_boost", similarity_boost),
+    ] {
+        if let Some(value) = value {
+            payload.insert(
+                key.to_string(),
+                serde_json::Number::from_f64(f64::from(value)).map_or(Value::Null, Value::Number),
+            );
+        }
+    }
+    if let Some(emotion) = emotion {
+        payload.insert("emotion".to_string(), Value::String(emotion));
     }
     let spoken = match dispatch_direct_speech(&route, payload).await {
         Ok(spoken) => spoken,

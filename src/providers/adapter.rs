@@ -32,7 +32,8 @@ use registry::{endpoint, provider_base_url_for};
 
 pub use call::control_client;
 pub use call::media::{
-    dispatch_image, dispatch_speech, dispatch_video, dispatch_video_status, SpokenAudio,
+    dispatch_image, dispatch_music, dispatch_speech, dispatch_video, dispatch_video_status,
+    dispatch_voice_clone, dispatch_voices, SpokenAudio, VoiceSample,
 };
 pub use call::typed_capability::{dispatch_decision, dispatch_openai_typed};
 pub use plan::probe::plan_probe_route;
@@ -40,8 +41,9 @@ pub use plan::{publishes_plan_usage, read_plan_usage, PlanUsage};
 pub use registry::{
     kind_from_output, native_decision_route, provider, provider_endpoint, provider_id_from_route,
     providers, route, supports_chat_route, supports_decision_route, supports_embedding_route,
-    supports_image_route, supports_moderation_route, supports_speech_route, supports_video_route,
-    valid_provider_id, AuthKind, ModelKind, ProviderDescriptor, RegistryModel, WireProtocol,
+    supports_image_route, supports_moderation_route, supports_music_route, supports_speech_route,
+    supports_video_route, supports_voices_route, valid_provider_id, AuthKind, MediaWire, ModelKind,
+    ProviderDescriptor, RegistryModel, WireProtocol,
 };
 
 pub(crate) use call::credential::credential_key;

@@ -23,7 +23,8 @@ pub(in crate::providers::adapter) use route::valid_model_id;
 pub use route::{
     native_decision_route, provider_id_from_route, route, supports_chat_route,
     supports_decision_route, supports_embedding_route, supports_image_route,
-    supports_moderation_route, supports_speech_route, supports_video_route, valid_provider_id,
+    supports_moderation_route, supports_music_route, supports_speech_route, supports_video_route,
+    supports_voices_route, valid_provider_id,
 };
 
 use roster::PROVIDERS;
@@ -45,6 +46,28 @@ pub enum AuthKind {
     Bearer,
     XApiKey,
     AnthropicBearer,
+    /// ElevenLabs: the key rides in `xi-api-key`.
+    XiApiKey,
+    /// Google's Generative Language API: the key rides in `x-goog-api-key`.
+    GoogleApiKey,
+}
+
+/// How a provider's media paths are spoken. Most vendors document the
+/// OpenAI shapes; the ones that do not are named here, so each media request
+/// is translated by the one adapter that knows that vendor's contract
+/// instead of being posted somewhere that will not understand it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MediaWire {
+    OpenAi,
+    /// ElevenLabs: speech on `/v1/text-to-speech/{voice}`, voice list and
+    /// voice cloning on `/v1/voices`.
+    ElevenLabs,
+    /// MiniMax: speech on `/v1/t2a_v2` and music on `/v1/music_generation`,
+    /// both answering hex-encoded audio inside JSON.
+    MiniMax,
+    /// Gemini: images from `generateContent`, with input images carried as
+    /// inline data and the picture answered as inline data.
+    Gemini,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -72,6 +95,11 @@ pub struct ProviderDescriptor {
     /// The answer is audio bytes rather than JSON, which is why it is a path
     /// of its own and not another media shape sharing the same reader.
     pub speech_path: &'static str,
+    /// Where this provider generates music, empty when it does not.
+    pub music_path: &'static str,
+    /// Where this provider lists and clones voices, empty when it does not.
+    pub voices_path: &'static str,
+    pub media_wire: MediaWire,
     pub wire: WireProtocol,
     pub auth: AuthKind,
     pub static_models: &'static [&'static str],

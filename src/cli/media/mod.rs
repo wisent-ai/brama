@@ -1,5 +1,6 @@
-//! `brama image`, `brama video` and `brama speak`: the three generation
-//! shapes that are not text, from an operator shell.
+//! `brama image`, `brama video`, `brama speak`, `brama music` and
+//! `brama voices`: the generation shapes that are not text, from an operator
+//! shell.
 //!
 //! They exist for the same two moments `brama decide` does: establishing that
 //! a media route answers at all before a gateway is running, and diagnosing
@@ -11,6 +12,7 @@
 //! decide` does.
 
 mod artifact;
+mod library;
 mod speech;
 mod video;
 
@@ -20,6 +22,7 @@ use serde_json::{json, Map, Value};
 use brama::core::server::{alias_routing, IMAGE_ALIAS};
 use brama::subscription_dispatch::dispatch_direct_image;
 
+pub(crate) use library::{music, voices, MusicArgs, VoicesCommand};
 pub(crate) use speech::{speak, SpeakArgs};
 pub(crate) use video::{video, VideoCommand};
 
@@ -42,6 +45,12 @@ pub(crate) struct ImageArgs {
     /// Provider quality string
     #[arg(long)]
     quality: Option<String>,
+    /// An input image file the picture is made from; repeat for several
+    #[arg(long = "image")]
+    images: Vec<String>,
+    /// Aspect ratio, such as 3:4, for providers that take one
+    #[arg(long)]
+    aspect_ratio: Option<String>,
     /// Write the rendered bytes to this file
     #[arg(long)]
     output: Option<String>,
@@ -60,6 +69,8 @@ pub(crate) async fn image(args: ImageArgs) {
         size,
         n,
         quality,
+        images,
+        aspect_ratio,
         output,
         json: as_json,
         allow_provider_cost,
@@ -79,6 +90,22 @@ pub(crate) async fn image(args: ImageArgs) {
     }
     if let Some(quality) = quality {
         payload.insert("quality".to_string(), Value::String(quality));
+    }
+    if !images.is_empty() {
+        let mut encoded = Vec::with_capacity(images.len());
+        for path in images {
+            match artifact::data_url(&path) {
+                Ok(url) => encoded.push(Value::String(url)),
+                Err(reason) => {
+                    eprintln!("{reason}");
+                    std::process::exit(1);
+                }
+            }
+        }
+        payload.insert("image".to_string(), Value::Array(encoded));
+    }
+    if let Some(aspect_ratio) = aspect_ratio {
+        payload.insert("aspect_ratio".to_string(), Value::String(aspect_ratio));
     }
     let body = match dispatch_direct_image(&route, payload).await {
         Ok(body) => body,

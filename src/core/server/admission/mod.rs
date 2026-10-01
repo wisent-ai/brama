@@ -141,6 +141,8 @@ pub(in crate::core::server) async fn require_model_bearer(
                 | "/v1/decisions"
                 | "/v1/images/generations"
                 | "/v1/audio/speech"
+                | "/v1/audio/music"
+                | "/v1/audio/voices"
                 | "/v1/videos"
                 | "/v1/models"
         )

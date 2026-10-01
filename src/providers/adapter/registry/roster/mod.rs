@@ -8,10 +8,10 @@
 //! model server.
 //!
 //! `image_path`, `video_path` and `video_status_path` are written only where
-//! the vendor documents that exact OpenAI-shaped endpoint. A provider that
-//! generates media behind a different contract is declared with empty media
-//! paths and refused by name, rather than sent a request its server has no
-//! route for.
+//! the vendor documents that exact endpoint. A provider whose media API is
+//! not OpenAI-shaped names its contract in `media_wire`, so the one adapter
+//! that speaks it translates the request instead of posting the OpenAI shape
+//! to a server that has no route for it.
 
 mod chat;
 mod media;
@@ -45,4 +45,8 @@ pub(super) const PROVIDERS: &[ProviderDescriptor] = &[
     chat::SYNTHETIC,
     special::TYPESAFE,
     special::LOCAL_OPENAI,
+    media::ELEVENLABS,
+    media::MINIMAX,
+    media::GEMINI,
+    media::BYTEPLUS,
 ];

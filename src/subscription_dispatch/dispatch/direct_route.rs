@@ -101,6 +101,47 @@ pub async fn dispatch_direct_speech(
     .await
 }
 
+/// Compose one song on a route this deployment pays for. The answer is audio.
+pub async fn dispatch_direct_music(
+    route_id: &str,
+    payload: serde_json::Map<String, Value>,
+) -> Result<provider_registry::SpokenAudio, Refusal> {
+    let (provider, credential) = direct_credential(route_id).await?;
+    provider_registry::dispatch_music(
+        route_id,
+        payload,
+        &broker::provider_resource(&provider),
+        &credential,
+    )
+    .await
+}
+
+/// The voices the deployment's account on this route can speak with.
+pub async fn dispatch_direct_voices(route_id: &str) -> Result<Value, Refusal> {
+    let (provider, credential) = direct_credential(route_id).await?;
+    provider_registry::dispatch_voices(route_id, &broker::provider_resource(&provider), &credential)
+        .await
+}
+
+/// Clone one voice on the deployment's account on this route.
+pub async fn dispatch_direct_voice_clone(
+    route_id: &str,
+    name: &str,
+    description: Option<&str>,
+    samples: Vec<provider_registry::VoiceSample>,
+) -> Result<Value, Refusal> {
+    let (provider, credential) = direct_credential(route_id).await?;
+    provider_registry::dispatch_voice_clone(
+        route_id,
+        name,
+        description,
+        samples,
+        &broker::provider_resource(&provider),
+        &credential,
+    )
+    .await
+}
+
 /// The deployment's own credential for one canonical route, with the
 /// refusals every direct path shares, each with its class: a route no
 /// provider here serves, a route whose provider is only reachable with a

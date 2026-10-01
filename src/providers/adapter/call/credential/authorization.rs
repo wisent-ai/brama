@@ -22,6 +22,8 @@ fn authorize(
                 .bearer_auth(key)
                 .header("anthropic-version", "2023-06-01"),
         ),
+        AuthKind::XiApiKey => builder.header("xi-api-key", key),
+        AuthKind::GoogleApiKey => builder.header("x-goog-api-key", key),
     }
 }
 

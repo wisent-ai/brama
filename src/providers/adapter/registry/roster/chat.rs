@@ -2,7 +2,7 @@
 //! the deployment's own long-lived key, redeemed at final use, and each speaks
 //! either the OpenAI chat wire or Anthropic's messages wire.
 
-use super::super::{AuthKind, ProviderDescriptor, WireProtocol};
+use super::super::{AuthKind, MediaWire, ProviderDescriptor, WireProtocol};
 
 /// Every entry below differs from its neighbours in four places at most — id,
 /// display name, base URL and the paths — so the shared shape is written once
@@ -26,6 +26,9 @@ const fn openai_chat(
         video_path: "",
         video_status_path: "",
         speech_path: "",
+        music_path: "",
+        voices_path: "",
+        media_wire: MediaWire::OpenAi,
         wire: WireProtocol::OpenAiChat,
         auth: AuthKind::Bearer,
         static_models,
@@ -43,6 +46,9 @@ pub(super) const ANTHROPIC: ProviderDescriptor = ProviderDescriptor {
     video_path: "",
     video_status_path: "",
     speech_path: "",
+    music_path: "",
+    voices_path: "",
+    media_wire: MediaWire::OpenAi,
     wire: WireProtocol::AnthropicMessages,
     auth: AuthKind::XApiKey,
     static_models: &["claude-haiku-4-5", "claude-opus-4-6", "claude-sonnet-4-6"],

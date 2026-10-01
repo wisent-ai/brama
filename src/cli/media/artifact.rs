@@ -28,6 +28,25 @@ pub(super) fn write_artifact(path: &str, index: usize, total: usize, encoded: &s
     );
 }
 
+/// One input image file as a `data:` URL. The image type is read from the
+/// file's own signature, so a misnamed file is described by what it holds.
+pub(super) fn data_url(path: &str) -> Result<String, String> {
+    let bytes = std::fs::read(path).map_err(|error| format!("cannot read {path}: {error}"))?;
+    let mime_type = if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
+        "image/png"
+    } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        "image/jpeg"
+    } else if bytes.len() > 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        "image/webp"
+    } else {
+        return Err(format!("{path} is not a PNG, JPEG or WebP image"));
+    };
+    Ok(format!(
+        "data:{mime_type};base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(&bytes)
+    ))
+}
+
 /// Write one artifact to the exact path asked for; number the rest so nothing
 /// overwrites its predecessor.
 fn numbered(path: &str, index: usize, total: usize) -> PathBuf {

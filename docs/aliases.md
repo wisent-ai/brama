@@ -52,16 +52,20 @@ Three names generate something that is not text: `image-model` on
 `POST /v1/images/generations`, `video-model` on `POST /v1/videos` with
 `GET /v1/videos/{id}` reading the job back, and `voice-model` on
 `POST /v1/audio/speech`, whose answer is the provider's encoded audio rather
-than JSON. Each accepts its own alias or a canonical route whose provider
-serves that shape and which the catalogue lists as that kind, so a chat model
+than JSON. `voice-model` also reaches the voice library (`GET` and `POST
+/v1/audio/voices`) and, where its provider composes music, `POST
+/v1/audio/music`. Each accepts its own alias or a canonical route whose
+provider serves that shape — ElevenLabs, MiniMax and Gemini through their
+own adapters — and which the catalogue lists as that kind, so a chat model
 named on the image endpoint is refused before a credential is redeemed.
 
 Media is paid by the deployment's own capability. No subscription in the pool
 carries an image, video or voice quota, so `best` cannot stand behind a media
 alias and the registry refuses one that tries. Brama keeps no job state: a
 video identifier belongs to the provider that issued it, so a status read
-names the same model that started it. `brama image`, `brama video` and
-`brama speak` drive all three from a shell. The shapes, the providers that
+names the same model that started it. `brama image`, `brama video`,
+`brama speak`, `brama music` and `brama voices` drive all of them from a
+shell. The shapes, the providers that
 serve them and every bound are in
 [`/docs/concepts/media`](https://brama.wisent.com/docs/concepts/media).
 

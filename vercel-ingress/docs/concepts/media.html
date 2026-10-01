@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Media — Brama Docs</title>
-  <meta name="description" content="Image, video and voice: the three generation shapes that are not text, the aliases that reach them, who pays for them, and what each endpoint answers.">
+  <meta name="description" content="Image, video, voice and music: the generation shapes that are not text, the voice library, the aliases that reach them, who pays for them, and what each endpoint answers.">
   <link rel="canonical" href="https://brama.wisent.com/docs/concepts/media">
   <link rel="stylesheet" href="/docs/assets/site.css">
 </head>
@@ -18,15 +18,27 @@
     <main>
       <p class="source-note">Documentation topic: docs/concepts/media.md</p>
       <article class="doc"><h1 id="media">Media<a class="headerlink" href="#media" title="Link to this section">&para;</a></h1>
-<p>Brama routes three generation shapes that are not text: an image, a video and a voice. They are reached the way every model here is reached — through an alias or a canonical <code>provider/model</code> route, over the same client identity, the same bounded attempt and the same refusal envelope as a chat completion.</p>
+<p>Brama routes the generation shapes that are not text: an image, a video, a voice and a song, and the voice library a voice is chosen from. They are reached the way every model here is reached — through an alias or a canonical <code>provider/model</code> route, over the same client identity, the same bounded attempt and the same refusal envelope as a chat completion.</p>
 
-<h2 id="the-three-shapes">The three shapes<a class="headerlink" href="#the-three-shapes" title="Link to this section">&para;</a></h2>
+<h2 id="the-three-shapes">The shapes<a class="headerlink" href="#the-three-shapes" title="Link to this section">&para;</a></h2>
 <table><thead><tr><th>Endpoint</th><th>Alias</th><th>Answer</th></tr></thead><tbody>
-<tr><td><code>POST /v1/images/generations</code></td><td><code>image-model</code></td><td>The provider's image document: <code>data[]</code> carrying <code>b64_json</code> or <code>url</code>, with <code>model</code> rewritten to the route the caller named.</td></tr>
+<tr><td><code>POST /v1/images/generations</code></td><td><code>image-model</code></td><td>The image document: <code>data[]</code> carrying <code>b64_json</code> or <code>url</code> (Gemini adds <code>mime_type</code>), with <code>model</code> rewritten to the route the caller named.</td></tr>
 <tr><td><code>POST /v1/videos</code></td><td><code>video-model</code></td><td>A job, not a render: an <code>id</code> and a <code>status</code>. The clip finishes minutes later.</td></tr>
 <tr><td><code>GET /v1/videos/{id}?model=…</code></td><td><code>video-model</code></td><td>That job as the provider reports it now.</td></tr>
-<tr><td><code>POST /v1/audio/speech</code></td><td><code>voice-model</code></td><td>Encoded audio bytes, with the provider's own <code>Content-Type</code>. This is the one endpoint that answers no JSON.</td></tr>
+<tr><td><code>POST /v1/audio/speech</code></td><td><code>voice-model</code></td><td>Encoded audio bytes, with the provider's <code>Content-Type</code>.</td></tr>
+<tr><td><code>POST /v1/audio/music</code></td><td><code>voice-model</code> or a music route</td><td>Encoded audio bytes of one song.</td></tr>
+<tr><td><code>GET /v1/audio/voices?model=…</code></td><td><code>voice-model</code></td><td>The provider's voice list for the deployment's account, under <code>voices</code>.</td></tr>
+<tr><td><code>POST /v1/audio/voices</code></td><td><code>voice-model</code></td><td>One voice cloned from recordings: the provider's answer, carrying <code>voice_id</code>.</td></tr>
 </tbody></table>
+
+<h2 id="request-fields">Request fields<a class="headerlink" href="#request-fields" title="Link to this section">&para;</a></h2>
+<p>Each endpoint refuses a field it does not know (<code>deny_unknown_fields</code>), and a vendor option sent to a route of another vendor is refused by name, never dropped.</p>
+<ul>
+<li><strong>Image</strong>: <code>model</code>, <code>prompt</code>, and optionally <code>n</code>, <code>size</code>, <code>quality</code>, <code>background</code>, <code>output_format</code>, <code>response_format</code>, <code>user</code>, <code>image</code> (1–10 input images as <code>data:</code> or <code>https</code> URLs), <code>aspect_ratio</code>, <code>seed</code>, <code>watermark</code>. Gemini takes only <code>prompt</code>, <code>image</code> (as <code>data:</code> URLs) and <code>aspect_ratio</code>; any other field on a <code>gemini/…</code> route is refused with <code>route `gemini/…` takes prompt, image and aspect_ratio, not `…`</code>.</li>
+<li><strong>Speech</strong>: <code>model</code>, <code>input</code>, <code>voice</code> (a voice name, or the vendor's voice id), and optionally <code>response_format</code>, <code>speed</code>, <code>instructions</code> (OpenAI-shaped vendors only), <code>stability</code> and <code>similarity_boost</code> (ElevenLabs only), <code>emotion</code> (MiniMax only). A misplaced option answers <code>invalid_request: route `…` takes no `…` option</code>.</li>
+<li><strong>Music</strong>: <code>model</code>, <code>lyrics</code> (lines separated by <code>\n</code>), and optionally <code>prompt</code> and <code>response_format</code>.</li>
+<li><strong>Voice clone</strong>: <code>model</code>, <code>name</code>, optionally <code>description</code>, and <code>samples</code>: 1–25 recordings, each <code>{"data_base64", "content_type", "filename"}</code>, each at most 10 MiB.</li>
+</ul>
 
 <h2 id="why-the-status-read-names-a-model">Why a status read names a model<a class="headerlink" href="#why-the-status-read-names-a-model" title="Link to this section">&para;</a></h2>
 <p>Brama holds no job state. A video identifier belongs to the provider that issued it, so the caller keeps the identifier and names the same model it started the job with; a gateway that guessed the vendor would eventually ask the wrong one, and a gateway that stored the job would become a second source of truth about somebody else's queue. A status read with no model is refused:</p>
@@ -37,15 +49,19 @@
 <p>The deployment does, through its own provider <a href="/docs/concepts/capability">capability</a>. No subscription in the pool carries an image, video or voice quota, so there is nothing for <code>best</code> to delegate to: a media alias whose route is <code>best</code> fails the shape check at startup and at <code>PUT /v1/admin/routes</code>. Media is the deployment's spend and appears on the deployment's bill.</p>
 
 <h2 id="which-providers">Which providers<a class="headerlink" href="#which-providers" title="Link to this section">&para;</a></h2>
-<p>A provider serves a media shape only where its vendor documents that exact OpenAI-shaped endpoint. Everything else is declared with an empty path and refused by name, rather than sent a request its server has no route for.</p>
-<table><thead><tr><th>Provider</th><th>Image</th><th>Video</th><th>Voice</th></tr></thead><tbody>
-<tr><td><code>openai</code></td><td><code>/v1/images/generations</code></td><td><code>/v1/videos</code> and <code>/v1/videos/{id}</code></td><td><code>/v1/audio/speech</code></td></tr>
-<tr><td><code>xai</code></td><td><code>/v1/images/generations</code></td><td>—</td><td>—</td></tr>
-<tr><td><code>together</code></td><td><code>/v1/images/generations</code></td><td>—</td><td>—</td></tr>
-<tr><td><code>venice</code></td><td><code>/v1/images/generations</code></td><td>—</td><td><code>/v1/audio/speech</code></td></tr>
-<tr><td><code>groq</code></td><td>—</td><td>—</td><td><code>/v1/audio/speech</code></td></tr>
+<p>A provider serves a media shape only where its vendor documents that endpoint. OpenAI-shaped vendors are spoken as they are; ElevenLabs, MiniMax and Gemini each have their own adapter that translates the request and the answer. Every other shape is declared with an empty path and refused by name.</p>
+<table><thead><tr><th>Provider</th><th>Image</th><th>Video</th><th>Voice</th><th>Music</th><th>Voice library</th></tr></thead><tbody>
+<tr><td><code>openai</code></td><td><code>/v1/images/generations</code></td><td><code>/v1/videos</code> and <code>/v1/videos/{id}</code></td><td><code>/v1/audio/speech</code></td><td>—</td><td>—</td></tr>
+<tr><td><code>xai</code></td><td><code>/v1/images/generations</code></td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td><code>together</code></td><td><code>/v1/images/generations</code></td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td><code>venice</code></td><td><code>/v1/images/generations</code></td><td>—</td><td><code>/v1/audio/speech</code></td><td>—</td><td>—</td></tr>
+<tr><td><code>groq</code></td><td>—</td><td>—</td><td><code>/v1/audio/speech</code></td><td>—</td><td>—</td></tr>
+<tr><td><code>byteplus</code> (Seedream)</td><td><code>/images/generations</code></td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td><code>gemini</code></td><td><code>/v1beta/models/{model}:generateContent</code></td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td><code>elevenlabs</code></td><td>—</td><td>—</td><td><code>/v1/text-to-speech/{voice}</code></td><td>—</td><td><code>/v1/voices</code>, <code>/v1/voices/add</code></td></tr>
+<tr><td><code>minimax</code></td><td>—</td><td>—</td><td><code>/v1/t2a_v2</code></td><td><code>/v1/music_generation</code></td><td>—</td></tr>
 </tbody></table>
-<p>The table in the source is <code>src/providers/adapter/registry/roster/media.rs</code>, and it is what these pages follow.</p>
+<p>MiniMax answers HTTP 200 with its outcome in <code>base_resp.status_code</code>; Brama refuses a non-zero code with that code and MiniMax's message (1002 and 1039 as rate-limited, 1004 as authentication, 1008 as quota exhausted, 1000, 1001 and 1013 as provider unavailable). Each provider's key is the deployment's own capability <code>provider:&lt;id&gt;</code>. The table in the source is <code>src/providers/adapter/registry/roster/media.rs</code>, and it is what these pages follow.</p>
 
 <h2 id="naming-a-model">Naming a model<a class="headerlink" href="#naming-a-model" title="Link to this section">&para;</a></h2>
 <p>Either the deployment's media alias or a canonical route. Two checks stand between a name and a bill:</p>
@@ -68,7 +84,10 @@ $ brama routes set voice-model openai/gpt-4o-mini-tts</code></pre>
 <tr><td>Clip length</td><td>1–60 seconds</td><td><code>seconds must be between 1 and 60</code></td></tr>
 <tr><td>Spoken input</td><td>4,096 bytes</td><td><code>input is longer than this gateway speaks in one request</code></td></tr>
 <tr><td>Playback speed</td><td>0.25–4.0</td><td><code>speed must be between 0.25 and 4.0</code></td></tr>
-<tr><td>Spoken audio</td><td>24 MiB</td><td><code>provider_failure: spoken audio exceeds the accepted size</code></td></tr>
+<tr><td>Audio answer</td><td>24 MiB</td><td><code>provider_failure: audio exceeds the accepted size</code></td></tr>
+<tr><td>Input images</td><td>1–10</td><td><code>image must carry between 1 and 10 input images</code></td></tr>
+<tr><td>Voice samples</td><td>1–25, each at most 10 MiB</td><td><code>samples must carry between 1 and 25 recordings</code></td></tr>
+<tr><td>Request body (images, voice clone)</td><td>64 MiB</td><td><code>413</code></td></tr>
 </tbody></table>
 <p>Every one of these is decided before a provider is contacted, because a render is billed whether or not the caller meant it.</p>
 
@@ -77,7 +96,7 @@ $ brama routes set voice-model openai/gpt-4o-mini-tts</code></pre>
 <li><strong>A vision model.</strong> A chat model that <em>reads</em> an image answers on <code>POST /v1/chat/completions</code> and is selected by the <code>any-vision-capable</code> selector. Media is about what a model <em>produces</em>.</li>
 <li><strong>Image Video Router.</strong> That internal service executes caller-built ComfyUI workflows for Content Platform. Brama routes the vendor-hosted media models behind one authenticated gateway, with client identity, catalogue and refusal contract; it builds no workflow graphs.</li>
 </ul>
-<p>See <a href="/docs/concepts/category">category</a> for how the catalogue says what a model produces, <a href="/docs/cli/image"><code>brama image</code></a>, <a href="/docs/cli/video"><code>brama video</code></a> and <a href="/docs/cli/speak"><code>brama speak</code></a> for the shell surface.</p></article>
+<p>See <a href="/docs/concepts/category">category</a> for how the catalogue says what a model produces, <a href="/docs/cli/image"><code>brama image</code></a>, <a href="/docs/cli/video"><code>brama video</code></a> and <a href="/docs/cli/speak"><code>brama speak</code></a> for the shell surface. <code>brama music --model minimax/music-2.6 --lyrics … --output song.mp3 --allow-provider-cost</code> composes a song, <code>brama voices list [--model …]</code> prints the voice list as JSON, and <code>brama voices clone --name … --sample a.mp3 --content-type audio/mpeg --allow-provider-cost</code> clones a voice; each refuses a billable call without <code>--allow-provider-cost</code>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>
   </div>

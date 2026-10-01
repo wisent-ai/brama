@@ -5,6 +5,7 @@
 //! and the bearer guard sits inside it around everything except `/health` and
 //! `/readyz` — the two paths a deployment probe reaches with nothing at all.
 
+use axum::extract::DefaultBodyLimit;
 use axum::middleware;
 use axum::routing::{get, post, put};
 use axum::{Extension, Router};
@@ -31,7 +32,8 @@ use crate::core::server::chat::chat_completions;
 use crate::core::server::chat::dialects::{anthropic_messages, openai_responses};
 use crate::core::server::decisions::decisions;
 use crate::core::server::media::{
-    audio_speech, image_generations, video_generations, video_status,
+    audio_music, audio_speech, audio_voice_clone, audio_voices, image_generations,
+    video_generations, video_status, MEDIA_BODY_LIMIT,
 };
 use crate::core::server::readiness::{health, readyz};
 use crate::core::server::subscriptions::probe::{
@@ -62,9 +64,19 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
         // The two generation shapes that are not text. An image is one
         // answer; a video is a job, read back from the third route with the
         // same model name that started it.
-        .route("/v1/images/generations", post(image_generations))
+        .route(
+            "/v1/images/generations",
+            post(image_generations).layer(DefaultBodyLimit::max(MEDIA_BODY_LIMIT)),
+        )
         .route("/v1/videos", post(video_generations))
         .route("/v1/audio/speech", post(audio_speech))
+        .route("/v1/audio/music", post(audio_music))
+        .route(
+            "/v1/audio/voices",
+            get(audio_voices)
+                .post(audio_voice_clone)
+                .layer(DefaultBodyLimit::max(MEDIA_BODY_LIMIT)),
+        )
         .route("/v1/videos/:video_id", get(video_status))
         // The one endpoint that answers instead of generating: typed
         // questions in, one typed answer each out.

@@ -37,6 +37,10 @@ fn trusted_provider_hosts(provider_id: &str) -> Option<&'static [&'static str]> 
         "perplexity" => Some(&["api.perplexity.ai"]),
         "deepinfra" => Some(&["api.deepinfra.com"]),
         "google" => Some(&["generativelanguage.googleapis.com"]),
+        "gemini" => Some(&["generativelanguage.googleapis.com"]),
+        "elevenlabs" => Some(&["api.elevenlabs.io"]),
+        "minimax" => Some(&["api.minimax.io"]),
+        "byteplus" => Some(&["ark.ap-southeast.bytepluses.com"]),
         "local-openai" => Some(&[]),
         _ => None,
     }

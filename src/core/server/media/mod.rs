@@ -12,7 +12,14 @@
 //! the pool carries an image or video quota, so there is nothing for `best`
 //! to delegate to and no caller plan to bill.
 
+mod library;
 mod requests;
+
+pub(in crate::core::server) use library::{audio_music, audio_voice_clone, audio_voices};
+
+/// Requests carrying input images or voice recordings as base64 are far
+/// larger than a chat turn; this is the body bound those routes accept.
+pub(in crate::core::server) const MEDIA_BODY_LIMIT: usize = 64 * 1024 * 1024;
 
 use axum::extract::{Extension, Path, Query};
 use axum::http::{header, StatusCode};

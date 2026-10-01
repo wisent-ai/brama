@@ -9,7 +9,7 @@ use cli::decisions::DecideArgs;
 use cli::diagnostics::{CollectTaskQualityArgs, TestArgs};
 use cli::launcher::LauncherCommand;
 use cli::maintain::MaintainArgs;
-use cli::media::{ImageArgs, SpeakArgs, VideoCommand};
+use cli::media::{ImageArgs, MusicArgs, SpeakArgs, VideoCommand, VoicesCommand};
 use cli::onboarding::OnboardArgs;
 use cli::probe::ProbeArgs;
 use cli::review::ReviewArgs;
@@ -68,6 +68,13 @@ enum Commands {
     },
     /// Speak one text through a voice route
     Speak(SpeakArgs),
+    /// Compose one song through a music route
+    Music(MusicArgs),
+    /// List or clone voices on a voice route's account
+    Voices {
+        #[command(subcommand)]
+        command: VoicesCommand,
+    },
     /// Act on this gateway's inference-route registry
     Routes {
         #[command(subcommand)]
@@ -138,6 +145,8 @@ async fn main() {
         Commands::Image(args) => cli::media::image(args).await,
         Commands::Video { command } => cli::media::video(command).await,
         Commands::Speak(args) => cli::media::speak(args).await,
+        Commands::Music(args) => cli::media::music(args).await,
+        Commands::Voices { command } => cli::media::voices(command).await,
         Commands::Routes { command } => cli::aliases::routes(command),
         Commands::Subscription { command } => cli::subscriptions::credentials::run(command).await,
         Commands::CollectTaskQuality(args) => cli::diagnostics::collect_task_quality(args).await,

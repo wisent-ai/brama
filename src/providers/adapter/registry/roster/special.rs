@@ -2,7 +2,7 @@
 //! subscription: the one that answers typed decisions and generates no text,
 //! and this deployment's own model server.
 
-use super::super::{AuthKind, ProviderDescriptor, WireProtocol};
+use super::super::{AuthKind, MediaWire, ProviderDescriptor, WireProtocol};
 
 /// The one provider here that generates no text. TypeSafe AI's System One
 /// model answers a state and a set of typed questions with typed answers, so
@@ -21,6 +21,9 @@ pub(super) const TYPESAFE: ProviderDescriptor = ProviderDescriptor {
     video_path: "",
     video_status_path: "",
     speech_path: "",
+    music_path: "",
+    voices_path: "",
+    media_wire: MediaWire::OpenAi,
     wire: WireProtocol::TypeSafeSystemOne,
     auth: AuthKind::Bearer,
     static_models: &["jev-latest", "jev-preview"],
@@ -47,6 +50,9 @@ pub(super) const LOCAL_OPENAI: ProviderDescriptor = ProviderDescriptor {
     video_path: "",
     video_status_path: "",
     speech_path: "",
+    music_path: "",
+    voices_path: "",
+    media_wire: MediaWire::OpenAi,
     wire: WireProtocol::OpenAiChat,
     auth: AuthKind::Bearer,
     static_models: &[],

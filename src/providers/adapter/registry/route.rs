@@ -84,6 +84,16 @@ pub fn supports_speech_route(value: &str) -> bool {
     route(value).is_some_and(|(descriptor, _)| !descriptor.speech_path.is_empty())
 }
 
+/// Whether this route reaches a provider that composes music from lyrics.
+pub fn supports_music_route(value: &str) -> bool {
+    route(value).is_some_and(|(descriptor, _)| !descriptor.music_path.is_empty())
+}
+
+/// Whether this route reaches a provider that lists and clones voices.
+pub fn supports_voices_route(value: &str) -> bool {
+    route(value).is_some_and(|(descriptor, _)| !descriptor.voices_path.is_empty())
+}
+
 pub(in crate::providers::adapter) fn valid_model_id(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= MAX_MODEL_ID_BYTES
