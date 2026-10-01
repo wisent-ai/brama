@@ -79,9 +79,8 @@ two cases, <code>agent_id</code> on a pool write and any field at all on plan us
   <a href="/docs/http-api/administration-and-operations#get-stats"><code>GET /stats</code></a>
   reports as <code>limits.maxOutputTokens</code>. An inference request asking for more is
   refused with the sentence in <a href="/docs/http-api/inference">inference</a>.</li>
-<li>The request deadline, reported as <code>limits.requestDeadlineSeconds</code>, is the
-  deadline of the one attempt the request makes. Because an alias resolves to exactly one
-  route, there is no number of routes for it to be multiplied by.</li>
+<li>A request has no deadline of its own: its one attempt runs until the provider answers
+  or refuses, and that answer or refusal is what the caller receives.</li>
 <li>Unknown request fields are refused with the deserializer's own sentence, naming the
   field it did not expect and listing the fields it did. The bodies on every page in this
   family are therefore exhaustive.</li>

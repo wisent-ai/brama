@@ -1,16 +1,14 @@
 //! The chat-completions wire shapes, the selectors a model name may be instead
-//! of a route, and the three limits every request in this gateway is held to.
+//! of a route, and the limits every request in this gateway is held to.
 
 use serde::{Deserialize, Serialize};
 
 use crate::types::{BillingTarget, Tool, ToolCall};
 
-/// One request may ask for at most 32 768 output tokens, a temperature up to 2, and is
-/// given five minutes end to end.
+/// One request may ask for at most 32 768 output tokens and a temperature up
+/// to 2. It runs until the provider answers or refuses; no clock ends it.
 pub(crate) const MAX_OUTPUT_TOKENS: u32 = 32_768;
 pub(crate) const MAX_TEMPERATURE: f64 = 2.0;
-pub(in crate::core::server) const REQUEST_DEADLINE: std::time::Duration =
-    std::time::Duration::from_secs(300);
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
