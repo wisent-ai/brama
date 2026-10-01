@@ -120,13 +120,11 @@ attempt count the envelope reports. The full code list, with examples, is in
 </ul>
 <h2 id="resource-behavior">Resource behavior<a class="headerlink" href="#resource-behavior" title="Link to this section">&para;</a></h2>
 <ul>
-<li>request body and provider response limits are enforced at their protocol
-  seams;</li>
-<li>provider response bodies are capped at 16 MiB before UTF-8 or JSON parsing;</li>
+<li>provider answers, OAuth answers and credentials are read whole; a size
+  limit is a provider's own and comes back as its refusal;</li>
 <li><code>max_tokens</code> is the caller's or, when omitted, the model's own limit;</li>
-<li>OAuth credential input and response sizes are bounded;</li>
 <li>model and credential attempts are finite;</li>
-<li>the perf registry tracks at most 500 model keys;</li>
+<li>the perf registry keeps one entry per route that was ever served;</li>
 <li>catalogue and subscription caches have explicit TTLs;</li>
 <li>the provider usage report pass spends no plan quota: one read per active
   subscription per its own cache window
