@@ -150,12 +150,12 @@ pub(in crate::core::server) async fn complete_admin_manual_sign_in(
     ))
 }
 
-// `POST /v1/admin/subscription-pool/grant` stood here until 2026-09-20: the
-// console handed Brama a grant it already had, usually one a coding harness
-// on some machine was signed into. It is gone. A provider issues one OAuth
-// pair per sign-in and revokes it when a second holder refreshes, so every
-// adopted grant was a session somebody else lost — twice on this fleet, the
-// second time the operator's own, mid-session. A gateway signs itself in:
+// There is no `POST /v1/admin/subscription-pool/grant`: a console that hands
+// Brama a grant it already has, usually one a coding harness on some machine
+// is signed into, hands it a session somebody else loses. A provider issues
+// one OAuth pair per sign-in and revokes it when a second holder refreshes,
+// so every adopted grant costs its first holder its session, the operator's
+// own included. A gateway signs itself in:
 // `subscription sign-in` through Weles on its own host, or
 // `subscription sign-in-manual`, which runs the provider's OAuth flow here
 // and mints a pair that belongs to this gateway.
@@ -164,11 +164,10 @@ pub(in crate::core::server) async fn complete_admin_manual_sign_in(
 /// it adopted.
 ///
 /// The agent-facing `retire` accepts only the agent that banked a member, and
-/// a grant the console adopted was banked by nobody: on 2026-09-20 the three
-/// claude-code accounts imported from a workstation could not be given back
-/// by any caller, while the provider kept revoking that workstation's own
-/// session because two machines held one pair. What the console created, the
-/// console can retire.
+/// a grant the console adopted was banked by nobody, so accounts imported
+/// from a workstation could be given back by no caller while the provider
+/// kept revoking that workstation's own session because two machines held
+/// one pair. What the console created, the console can retire.
 pub(in crate::core::server) async fn disown_admin_grant(
     Extension(client_identity): Extension<ModelClientIdentity>,
     Json(request): Json<DisownRequest>,

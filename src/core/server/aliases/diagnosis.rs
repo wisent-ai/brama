@@ -28,12 +28,12 @@ pub struct AliasDiagnosis {
     /// a route this gateway can check on its own.
     ///
     /// `serving` for such an alias means the selector is declared, which is
-    /// not the same as a credential existing: on 2026-09-21 `brama aliases`
-    /// reported `best serving best` while every request for it was refused
-    /// with `subscription_reauthorization_required`, because the pool held no
+    /// not the same as a credential existing: `brama aliases` can report
+    /// `best serving best` while every request for it is refused with
+    /// `subscription_reauthorization_required`, because the pool holds no
     /// live member. A report that cannot be told apart from a working gateway
-    /// is what sent that diagnosis to the wrong place, so the flag is carried
-    /// here and the pool's own count is printed beside it.
+    /// sends a diagnosis to the wrong place, so the flag is carried here and
+    /// the pool's own count is printed beside it.
     #[serde(default)]
     pub subscription_resolved: bool,
 }

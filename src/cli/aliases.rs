@@ -57,10 +57,10 @@ pub(crate) enum RoutesCommand {
 /// What the pool holds, for the aliases this gateway cannot check on its own.
 ///
 /// `serving` for a subscription selector means the selector is declared. It
-/// says nothing about a credential, and on 2026-09-21 that gap cost an
-/// evening: `best serving best` was printed while every request for `best`
-/// was refused with `subscription_reauthorization_required`, because the pool
-/// held no live member. The pool's own count now stands beside it.
+/// says nothing about a credential: `best serving best` can be printed while
+/// every request for `best` is refused with
+/// `subscription_reauthorization_required`, because the pool holds no live
+/// member. The pool's own count stands beside it.
 struct PoolCount {
     live: usize,
     members: usize,

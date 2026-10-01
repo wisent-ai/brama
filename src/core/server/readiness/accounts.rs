@@ -110,11 +110,11 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
     // Keep the full account verdict in this same report as `degraded`; a single
     // broken account remains visible without taking working routes offline.
     let serving = facts.provider_available || facts.subscription_available;
-    // The same deadlock, one step further out, and the state this fleet was in
-    // on 2026-09-19: EVERY credential was dead, so no release could be ready,
-    // so the candidate carrying the sign-in fix was quarantined for losing
-    // readiness - and the sign-in that repairs the credentials is a command of
-    // the release that could not be promoted. A configured gateway with no live
+    // The same deadlock, one step further out: with EVERY credential dead no
+    // release can be ready, so the candidate carrying the sign-in fix is
+    // quarantined for losing readiness - and the sign-in that repairs the
+    // credentials is a command of the release that cannot be promoted. A
+    // configured gateway with no live
     // credential is not a broken deployment; it is a deployment waiting for a
     // sign-in, and it must be allowed to exist in order to run one. It answers
     // `ready: false` and `operator_action_required`, and `/readyz` answers 200

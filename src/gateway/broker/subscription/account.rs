@@ -108,8 +108,8 @@ fn required_broker_field(
 /// The trusted boot catalog and the donated overlay share this row shape.
 /// `owner` narrows to rows whose `agent_id` names that agent - the notion a
 /// retire needs - while routing reads every row: a subscription is routable
-/// for every caller, and a catalog written before 2026-09-16 may still carry
-/// one row per agent, which is one subscription.
+/// for every caller, and an older catalog may still carry one row per agent,
+/// which is one subscription.
 pub(super) fn parse_subscriptions(
     output: &[u8],
     owner: Option<&str>,

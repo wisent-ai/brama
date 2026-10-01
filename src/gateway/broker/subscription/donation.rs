@@ -219,13 +219,13 @@ impl DonationRefusal {
 ///
 /// A donation is refused unless the document reduces to a bearer, because this
 /// write lands on the one coordinate a provider's `-primary` subscription is
-/// read from and there is no second copy. On 2026-08-19 the vault item
-/// `provider:codex:brama-sub-wisent-app-codex-primary` -- an account with 11,123
-/// recorded requests -- held a browser context options document
-/// (`deviceScaleFactor`, `extraHTTPHeaders`, `recordHar`, `recordVideo`,
-/// `viewport`) at revision 318, so every call routed to it was refused by the
-/// provider-authentication check while the ledger read `active`: the sign-in
-/// this records had marked it so. The only length bound the boundary applied was
+/// read from and there is no second copy. A sign-in trajectory that writes
+/// its own browser context options document (`deviceScaleFactor`,
+/// `extraHTTPHeaders`, `recordHar`, `recordVideo`, `viewport`) onto that
+/// coordinate leaves a heavily used account refused by the
+/// provider-authentication check on every call while the ledger reads
+/// `active`, because the sign-in this records marked it so. The only length
+/// bound the boundary applied was
 /// 1..8000 characters, which a re-authentication trajectory's own configuration
 /// object satisfies. The predicate is the request path's own reduction, so
 /// nothing a request could have presented is refused here.

@@ -34,15 +34,14 @@ pub(in crate::gateway::broker) async fn refresh_subscription_credential_inner(
     let _guard = OAUTH_REFRESH_LOCK.lock().await;
     let credential = redeem_subscription_credential(subscription_id, provider).await?;
     // A grant taken from a harness is the harness's to rotate. Rotating it
-    // here revokes the refresh token the harness holds: on 2026-09-17 two
-    // accounts `omp` was signed into died within the hour of Brama's first
-    // refresh of their copies, one of them under the operator's own open
-    // session. So a borrowed grant is spent as it stands - its expiry is a
-    // hint, and the provider is the one to say no - and when the provider
-    // has said no (`force`: the request path asking for a rotation after a
-    // refusal, or an operator's refresh), the member needs a sign-in. Nothing
-    // copies a harness grant in any more (borrowing ended on 2026-09-20), so
-    // the refusal names the sign-in routes that do exist.
+    // here revokes the refresh token the harness holds, and the accounts the
+    // harness is signed into die within the hour of Brama's first refresh of
+    // their copies, the operator's own open session among them. So a borrowed
+    // grant is spent as it stands - its expiry is a hint, and the provider is
+    // the one to say no - and when the provider has said no (`force`: the
+    // request path asking for a rotation after a refusal, or an operator's
+    // refresh), the member needs a sign-in. Nothing copies a harness grant in
+    // any more, so the refusal names the sign-in routes that do exist.
     let borrowed = borrowed_from(&credential);
     if !force && (borrowed.is_some() || !oauth_refresh::needs_refresh(&credential, provider)) {
         return Ok(credential);
