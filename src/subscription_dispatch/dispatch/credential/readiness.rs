@@ -76,11 +76,10 @@ pub async fn probe_subscription_redemption(
 /// present, in the words the router itself would use.
 ///
 /// `Some` from the broker is not the same statement as "the credential
-/// redeemed", and reading it as one is how `/readyz` came to answer
-/// `redeemable: true` for `brama-sub-wisent-app-codex-secondary` on 2026-09-02
-/// while the same gateway's own model call answered `no value at
-/// provider:codex:brama-sub-wisent-app-codex-secondary#value` and then `OAuth
-/// credential has no refresh token`. The vault row is account metadata: the
+/// redeemed", and reading it as one is how `/readyz` comes to answer
+/// `redeemable: true` for a subscription while the same gateway's own model
+/// call answers `no value at <item>#value` and then `OAuth credential has no
+/// refresh token`. The vault row is account metadata: the
 /// capability redemption is refused, the read grant hands back the document
 /// anyway, it carries no access token, and nothing between there and the
 /// provider looked. The catalogue path already said so in its own report --

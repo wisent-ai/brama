@@ -4,12 +4,12 @@
 //! The flow is the one every coding harness runs, parameter for parameter:
 //! same client id, same scopes, same loopback callback, same `code#state`
 //! paste, same token endpoint. Run here it mints a NEW pair, which is the
-//! whole point. Brama used to be able to take the pair a harness on the
-//! machine already held, and that was removed on 2026-09-20: a provider
-//! issues one pair per sign-in and revokes it when a second holder refreshes,
-//! so the borrowed copy cost the operator the session they were working in,
-//! twice, and it made a gateway depend on a workstation staying in the fleet
-//! and on that workstation running omp at all. A gateway signs itself in.
+//! whole point. Brama does not take the pair a harness on the machine
+//! already holds: a provider issues one pair per sign-in and revokes it when
+//! a second holder refreshes, so a borrowed copy costs the operator the
+//! session they are working in, and it makes a gateway depend on a
+//! workstation staying in the fleet and running a particular harness at
+//! all. A gateway signs itself in.
 //!
 //! Weles drives this same flow headlessly on the gateway's own host
 //! (`subscription sign-in`); this module is the path a person can run from a

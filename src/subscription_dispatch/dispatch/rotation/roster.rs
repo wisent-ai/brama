@@ -80,12 +80,11 @@ pub(super) async fn ordered_candidate_rows(
     // first `max_credential_attempts` rows and skips the blocked ones among
     // them without asking a provider, so a blocked row at the front spends
     // an attempt a live row could have used. A burnt subscription has no
-    // plan reading, and no reading sorts as the freest plan: on 2026-09-18
-    // the pool held two live Claude accounts behind three burnt ones, every
-    // `best` call for `oko` took the two burnt rows, walked nothing, and was
-    // refused `all bounded 'claude-code' credentials were rejected by the
-    // provider; re-authorization required` with `attempts: 0` while the live
-    // accounts were never tried. The blocked rows stay in the list, after
+    // plan reading, and no reading sorts as the freest plan: with live
+    // accounts behind burnt ones, every `best` call takes the burnt rows,
+    // walks nothing, and is refused `all bounded credentials were rejected
+    // by the provider; re-authorization required` with `attempts: 0` while
+    // the live accounts are never tried. The blocked rows stay in the list, after
     // the live ones, so a pool with nothing but blocks still reports the
     // block it is inside.
     let (live, blocked): (Vec<_>, Vec<_>) = rows

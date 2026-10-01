@@ -39,11 +39,11 @@ pub fn observed_failure(subscription_id: &str) -> Option<Blocked> {
 ///
 /// Re-authorization is this product's own job: the refresh sweep signs a
 /// refused subscription back in through Weles with the login row Skarbiec
-/// holds. A refusal that said only "re-authorization required" read as an
-/// instruction to a person, and on 2026-09-18 the operator was asked to sign
-/// in by hand for a sweep that had already run and failed. The refusal now
-/// says, per subscription, whether that sweep does not apply, never ran, last
-/// succeeded, or failed and on what.
+/// holds. A refusal that says only "re-authorization required" reads as an
+/// instruction to a person, and asks the operator to sign in by hand for a
+/// sweep that already ran and failed. The refusal says, per subscription,
+/// whether that sweep does not apply, never ran, last succeeded, or failed
+/// and on what.
 pub fn automatic_sign_in_sentence(provider: &str) -> String {
     let recorded = crate::subscription_dispatch::usage::recorded_subscriptions();
     let mut ids: Vec<&String> = recorded
