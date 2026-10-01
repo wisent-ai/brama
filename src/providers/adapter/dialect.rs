@@ -8,7 +8,7 @@ pub(in crate::providers::adapter) mod tool_schema;
 
 use serde_json::{json, Map, Value};
 
-use super::registry::{ProviderDescriptor, WireProtocol};
+use super::registry::{known_max_output_tokens, ProviderDescriptor, WireProtocol};
 use crate::types::ModelRequest;
 use anthropic_messages::{anthropic_tool_choice, anthropic_tools};
 use openai_chat::openai_messages;
@@ -51,7 +51,9 @@ pub(in crate::providers::adapter) fn chat_payload(
             let mut body = Map::new();
             body.insert("model".into(), json!(model_id));
             body.insert("messages".into(), Value::Array(openai_messages(request)));
-            body.insert("max_tokens".into(), json!(request.max_tokens));
+            if let Some(max_tokens) = request.max_tokens {
+                body.insert("max_tokens".into(), json!(max_tokens));
+            }
             // kimi-for-coding pins temperature to 1 and rejects any other value.
             if let Some(temperature) = request.temperature.filter(|_| descriptor.id != "kimi") {
                 body.insert("temperature".into(), json!(temperature));
@@ -68,8 +70,16 @@ pub(in crate::providers::adapter) fn chat_payload(
             let mut body = json!({
                 "model": model_id,
                 "messages": self::anthropic_messages::anthropic_messages(request),
-                "max_tokens": request.max_tokens,
             });
+            // The format requires an answer length: the caller's, else the
+            // model's own limit.
+            let max_tokens = request
+                .max_tokens
+                .map(u64::from)
+                .or_else(|| known_max_output_tokens(descriptor.id, model_id));
+            if let Some(max_tokens) = max_tokens {
+                body["max_tokens"] = json!(max_tokens);
+            }
             if let Some(temperature) = request.temperature {
                 body["temperature"] = json!(temperature);
             }

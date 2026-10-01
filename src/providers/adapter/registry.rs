@@ -18,7 +18,9 @@ pub(in crate::providers::adapter) use address::{
 };
 pub(in crate::providers::adapter) use advertised_model::model_from_value;
 pub use facets::{kind_from_output, ModelKind};
-pub(in crate::providers::adapter) use known_limits::apply_omp_model_metadata;
+pub(in crate::providers::adapter) use known_limits::{
+    apply_omp_model_metadata, known_max_output_tokens,
+};
 pub(in crate::providers::adapter) use route::valid_model_id;
 pub use route::{
     native_decision_route, provider_id_from_route, route, supports_chat_route,

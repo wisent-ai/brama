@@ -112,7 +112,7 @@ async fn check_model(opts: &TaskQualityOptions, model: &str) -> Value {
             tool_calls: None,
         }],
         model: model.to_string(),
-        max_tokens: 96,
+        max_tokens: None,
         temperature: None,
         system: None,
         tools: None,

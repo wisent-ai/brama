@@ -78,10 +78,11 @@ pub(super) fn google_payload(request: &ModelRequest) -> Value {
                 "parts": google_parts(message),
             })
         }).collect::<Vec<_>>(),
-        "generationConfig": {
-            "maxOutputTokens": request.max_tokens,
-        },
+        "generationConfig": {},
     });
+    if let Some(max_tokens) = request.max_tokens {
+        body["generationConfig"]["maxOutputTokens"] = json!(max_tokens);
+    }
     if let Some(temperature) = request.temperature {
         body["generationConfig"]["temperature"] = json!(temperature);
     }

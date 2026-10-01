@@ -123,7 +123,7 @@ attempt count the envelope reports. The full code list, with examples, is in
 <li>request body and provider response limits are enforced at their protocol
   seams;</li>
 <li>provider response bodies are capped at 16 MiB before UTF-8 or JSON parsing;</li>
-<li><code>max_tokens</code> is globally bounded at 32768;</li>
+<li><code>max_tokens</code> is the caller's or, when omitted, the model's own limit;</li>
 <li>OAuth credential input and response sizes are bounded;</li>
 <li>model and credential attempts are finite;</li>
 <li>the perf registry tracks at most 500 model keys;</li>

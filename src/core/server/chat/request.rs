@@ -1,13 +1,13 @@
 //! The chat-completions wire shapes, the selectors a model name may be instead
-//! of a route, and the limits every request in this gateway is held to.
+//! of a route, and the bounds every request in this gateway is held to.
 
 use serde::{Deserialize, Serialize};
 
 use crate::types::{BillingTarget, Tool, ToolCall};
 
-/// One request may ask for at most 32 768 output tokens and a temperature up
-/// to 2. It runs until the provider answers or refuses; no clock ends it.
-pub(crate) const MAX_OUTPUT_TOKENS: u32 = 32_768;
+/// A temperature runs from zero to 2, the range the chat-completions format
+/// defines. A request names no answer length unless the caller does, and it
+/// runs until the provider answers or refuses; no clock ends it.
 pub(crate) const MAX_TEMPERATURE: f64 = 2.0;
 
 #[derive(Debug, Deserialize)]
@@ -16,8 +16,8 @@ pub(super) struct ChatCompletionRequest {
     #[serde(default)]
     pub(super) model: Option<String>,
     pub(super) messages: Vec<ChatMessage>,
-    #[serde(default = "default_max_tokens")]
-    pub(super) max_tokens: u32,
+    #[serde(default)]
+    pub(super) max_tokens: Option<u32>,
     #[serde(default)]
     pub(super) temperature: Option<f64>,
     #[serde(default)]
@@ -29,10 +29,6 @@ pub(super) struct ChatCompletionRequest {
     /// Ask for server-sent events instead of one buffered completion.
     #[serde(default)]
     pub(super) stream: bool,
-}
-
-fn default_max_tokens() -> u32 {
-    1024
 }
 
 pub(super) fn is_any_subscription_selector(model: &str) -> bool {

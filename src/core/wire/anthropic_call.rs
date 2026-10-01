@@ -117,8 +117,8 @@ fn anthropic_content_in(content: &Value) -> (Value, Option<Vec<Value>>, Vec<Mess
 
 /// Parse one Anthropic Messages request into the internal call shape.
 ///
-/// `max_tokens` is required by the format and bounded by the same contract the
-/// chat endpoint enforces. `metadata`, `stop_sequences`, `cache_control` and
+/// `max_tokens` is required by the format and must be at least one; no other
+/// bound is put on it. `metadata`, `stop_sequences`, `cache_control` and
 /// `thinking` blocks are accepted and dropped: the internal request has no
 /// field that could hold them honestly.
 pub fn anthropic_request(body: &[u8]) -> Result<InboundCall, String> {
@@ -134,9 +134,11 @@ pub fn anthropic_request(body: &[u8]) -> Result<InboundCall, String> {
         .get("max_tokens")
         .and_then(Value::as_u64)
         .and_then(|value| u32::try_from(value).ok())
-        .unwrap_or_default();
+        .ok_or_else(|| {
+            "missing field `max_tokens`: the Anthropic Messages format requires it".to_string()
+        })?;
     let temperature = raw.get("temperature").and_then(Value::as_f64);
-    validate(&model, max_tokens, temperature)?;
+    validate(&model, Some(max_tokens), temperature)?;
     let system = match raw.get("system") {
         Some(Value::String(text)) => Some(text.clone()),
         Some(Value::Array(blocks)) => {
@@ -223,7 +225,7 @@ pub fn anthropic_request(body: &[u8]) -> Result<InboundCall, String> {
         request: ModelRequest {
             messages,
             model: String::new(),
-            max_tokens,
+            max_tokens: Some(max_tokens),
             temperature,
             system,
             tools,

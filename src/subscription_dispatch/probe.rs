@@ -36,11 +36,6 @@ use crate::subscription_dispatch::dispatch::probe_subscription_usage;
 use crate::subscription_dispatch::usage::{self, Probe};
 use crate::types::{Message, ModelRequest};
 
-/// The smallest output budget that is accepted everywhere. Anthropic allows one
-/// token; the OpenAI Responses API that Codex speaks rejects anything below
-/// sixteen, and a probe refused for its own shape would report a broken
-/// credential where there is none.
-const PROBE_MAX_TOKENS: u32 = 16;
 /// The probe reads response headers and discards the body, so the prompt only
 /// has to be a well-formed turn.
 const PROBE_PROMPT: &str = "ping";
@@ -80,7 +75,7 @@ pub async fn probe_once(subscription_id: &str, provider: &str) -> Result<Probe, 
             tool_calls: None,
         }],
         model,
-        max_tokens: PROBE_MAX_TOKENS,
+        max_tokens: None,
         // A probe asks whether the account answers, not how it samples. A
         // `0.0` it carries is refused by models that deprecate the setting
         // ("`temperature` is deprecated for this model"), and the pool then

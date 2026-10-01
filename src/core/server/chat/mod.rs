@@ -25,8 +25,7 @@ use crate::types::{Message, ModelRequest};
 
 use outcome::{failure_response, log_stream_commit, tally_and_log_buffered};
 use request::{
-    ChatCompletionRequest, ChatCompletionResponse, Choice, ChoiceMessage, Usage, MAX_OUTPUT_TOKENS,
-    MAX_TEMPERATURE,
+    ChatCompletionRequest, ChatCompletionResponse, Choice, ChoiceMessage, Usage, MAX_TEMPERATURE,
 };
 use routing::{route_model_call, DispatchedCall};
 
@@ -46,10 +45,10 @@ pub(in crate::core::server) async fn chat_completions(
     if req.messages.is_empty() {
         return api_error(StatusCode::BAD_REQUEST, "messages must not be empty").into_response();
     }
-    if req.max_tokens == u32::default() || req.max_tokens > MAX_OUTPUT_TOKENS {
+    if req.max_tokens == Some(u32::default()) {
         return api_error(
             StatusCode::BAD_REQUEST,
-            &format!("max_tokens must be between one and {MAX_OUTPUT_TOKENS}"),
+            "max_tokens must be at least one when it is set",
         )
         .into_response();
     }

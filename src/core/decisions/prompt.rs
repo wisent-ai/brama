@@ -22,21 +22,9 @@ and each value is an object mapping every declared label of that question to a n
 and 1. The numbers for one question sum to 1. Use every label the question declares and no other \
 label.";
 
-/// Room for the answer object: the labels plus the JSON around them. Nothing
-/// is generated but numbers, so this is small by construction.
-const TOKENS_PER_LABEL: u32 = 12;
-const TOKENS_OVERHEAD: u32 = 64;
-
-/// The chat request that carries one decision to a text model.
+/// The chat request that carries one decision to a text model. It names no
+/// answer length: the model's own limit applies.
 pub fn chat_request(request: &DecisionRequest, route: &str) -> ModelRequest {
-    let labels: u32 = request
-        .questions
-        .iter()
-        .map(|(_, question)| question.labels().len() as u32)
-        .sum();
-    let max_tokens = TOKENS_OVERHEAD
-        .saturating_add(TOKENS_PER_LABEL.saturating_mul(labels))
-        .min(crate::core::server::MAX_OUTPUT_TOKENS);
     ModelRequest {
         messages: vec![Message {
             role: "user".to_string(),
@@ -46,7 +34,7 @@ pub fn chat_request(request: &DecisionRequest, route: &str) -> ModelRequest {
             tool_calls: None,
         }],
         model: route.to_string(),
-        max_tokens,
+        max_tokens: None,
         temperature: None,
         system: Some(SYSTEM_PROMPT.to_string()),
         tools: None,

@@ -7,8 +7,6 @@ use axum::response::IntoResponse;
 use axum::Json;
 use serde_json::json;
 
-use crate::core::server::chat::request::MAX_OUTPUT_TOKENS;
-
 use super::{
     STARTED_AT, TOTAL_FAILURES, TOTAL_INPUT_TOKENS, TOTAL_OUTPUT_TOKENS, TOTAL_PROVIDER_ATTEMPTS,
     TOTAL_REQUESTS,
@@ -77,9 +75,6 @@ pub(in crate::core::server) async fn get_stats() -> impl IntoResponse {
         "uptimeSeconds": STARTED_AT.elapsed().as_secs(),
         "providers": providers,
         "models": models,
-        "limits": {
-            "maxOutputTokens": MAX_OUTPUT_TOKENS,
-        },
         "dependencyPolicy": {
             "catalog": "lazy",
             "capabilityBroker": "final-use",

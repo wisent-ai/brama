@@ -60,7 +60,7 @@ route, and <code>GET /v1/aliases</code> returns the same reading as rows of
 states <code>serving</code>, <code>no_route</code>, <code>capability_absent</code> and
 <code>routes_file_invalid</code>.</p>
 <p>Validation is strict before any provider is considered: unknown JSON fields
-are refused, <code>max_tokens</code> is bounded at 32768, <code>temperature</code> at 2, and a
+are refused, a stated <code>max_tokens</code> must be at least one, <code>temperature</code> is bounded at 2, and a
 model name outside the four-part vocabulary is
 <code>400 invalid_request</code> (<a href="/docs/http-api">http-api</a>). Every failure is logged
 beside the client body as a fleet envelope

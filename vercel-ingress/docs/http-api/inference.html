@@ -39,8 +39,12 @@ serve is refused before any provider is contacted, with the <code>503</code>
   bare vendor name is
   <code>400 model must be a canonical provider/model route or a supported selector</code>
   (both captured).</li>
-<li><code>max_tokens</code> is 1024 when the request omits it, and a stated value outside
-  1..32768 is refused with <code>max_tokens must be between one and 32768</code>.</li>
+<li><code>max_tokens</code> reaches the provider only when the request states one, and a
+  stated zero is refused with <code>max_tokens must be at least one when it is set</code>.
+  An omitted value is omitted on the wire, so the model's own output limit applies; on
+  the Anthropic Messages wire, which requires the field, Brama sends the model's known
+  limit, and a model whose limit it does not know answers with the provider's own
+  refusal.</li>
 <li><code>temperature</code> reaches the provider only when the request states one; an
   omitted temperature is omitted on the wire too, so the provider applies its own default.
   A gateway that invents a temperature for every request without one gets Claude's

@@ -55,21 +55,14 @@ pub struct InboundCall {
     pub stream: bool,
 }
 
-fn default_max_tokens() -> u32 {
-    1024
-}
-
 /// Shared inbound bounds, identical to the chat-completions contract so the
 /// answer does not depend on which format the caller speaks.
-fn validate(model: &str, max_tokens: u32, temperature: Option<f64>) -> Result<(), String> {
+fn validate(model: &str, max_tokens: Option<u32>, temperature: Option<f64>) -> Result<(), String> {
     if model.trim().is_empty() {
         return Err("missing field `model`".to_string());
     }
-    if max_tokens == u32::default() || max_tokens > crate::core::server::MAX_OUTPUT_TOKENS {
-        return Err(format!(
-            "max_tokens must be between one and {}",
-            crate::core::server::MAX_OUTPUT_TOKENS
-        ));
+    if max_tokens == Some(u32::default()) {
+        return Err("max_tokens must be at least one when it is set".to_string());
     }
     if temperature.is_some_and(|temperature| {
         !temperature.is_finite()

@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 
 use crate::types::{Message, ModelRequest, Tool, ToolFunction};
 
-use super::{default_max_tokens, validate, InboundCall};
+use super::{validate, InboundCall};
 
 /// Parse one OpenAI Responses request into the internal call shape.
 ///
@@ -33,9 +33,7 @@ pub fn responses_request(body: &[u8]) -> Result<InboundCall, String> {
     let max_tokens = raw
         .get("max_output_tokens")
         .and_then(Value::as_u64)
-        .and_then(|value| u32::try_from(value).ok())
-        .filter(|value| *value > 0)
-        .unwrap_or_else(default_max_tokens);
+        .and_then(|value| u32::try_from(value).ok());
     let temperature = raw.get("temperature").and_then(Value::as_f64);
     validate(&model, max_tokens, temperature)?;
     let system = raw

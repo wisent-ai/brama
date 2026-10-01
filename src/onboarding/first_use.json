@@ -69,8 +69,8 @@
       ],
       "presentation": {
         "title": "Use the OpenAI-compatible request and response contract",
-        "body": "Send model, messages, max_tokens, and temperature to POST /v1/chat/completions. A successful response returns id, model, choices[0].message, finish_reason, and token usage; routing details stay Brama-owned.",
-        "request_example": "{\"model\":\"openai/default\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello in one sentence.\"}],\"max_tokens\":256,\"temperature\":0.7}",
+        "body": "Send model and messages, and optionally max_tokens and temperature, to POST /v1/chat/completions. A successful response returns id, model, choices[0].message, finish_reason, and token usage; routing details stay Brama-owned.",
+        "request_example": "{\"model\":\"openai/default\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello in one sentence.\"}]}",
         "response_example": "{\"id\":\"chatcmpl-...\",\"model\":\"...\",\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"...\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":0,\"completion_tokens\":0,\"total_tokens\":0}}"
       }
     },

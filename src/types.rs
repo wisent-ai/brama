@@ -126,7 +126,11 @@ pub struct BillingTarget {
 pub struct ModelRequest {
     pub messages: Vec<Message>,
     pub model: String,
-    pub max_tokens: u32,
+    /// Sent to the provider only when the caller set one; otherwise the
+    /// model's own output limit applies. A default the gateway invents would
+    /// cut every answer of every caller that never asked for a cut.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
     /// Sent to the provider only when the caller set one. A default the
     /// gateway invents reaches every provider as a real setting, and a model
     /// that refuses it ("`temperature` is deprecated for this model") refuses
