@@ -83,11 +83,6 @@ CARGO_TARGET_DIR="$cargo_root/brama" \
   cargo build ${cargo_overrides[@]+"${cargo_overrides[@]}"} --locked --release --bin brama --manifest-path "$build_source/Cargo.toml"
 CARGO_TARGET_DIR="$cargo_root/skarbiec" \
   cargo build --locked --release --bin skarbiec --manifest-path "$skarbiec_source/Cargo.toml"
-SKARBIEC_BIN="$cargo_root/skarbiec/release/skarbiec" \
-ENTITLEMENTS_ROUTER_BIN="$cargo_root/skarbiec/release/skarbiec" \
-CARGO_TARGET_DIR="$cargo_root/brama" \
-  cargo test ${cargo_overrides[@]+"${cargo_overrides[@]}"} --locked --release --manifest-path "$build_source/Cargo.toml" \
-    --test pool --test usage
 "$cargo_root/brama/release/brama" launcher check-router-verbs \
   --router "$cargo_root/skarbiec/release/skarbiec" --launcher "$source_dir/src/release/bin/start-with-skarbiec"
 

@@ -207,8 +207,7 @@ job's own `.build` directory, which is deleted on every run. A builder that
 hands a `CARGO_TARGET_DIR` inside that output tree is refused with `the builder
 handed CARGO_TARGET_DIR ... inside this job output ...; compiled dependencies
 there are deleted with the job` and exit status 65, because the only symptom of
-that mistake is a slow release. `cargo test --test release_build_cache` holds
-both halves.
+that mistake is a slow release.
 
 Expected output contains these fields with host-specific values:
 

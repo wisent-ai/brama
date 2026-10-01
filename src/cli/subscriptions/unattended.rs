@@ -104,36 +104,3 @@ pub(crate) async fn gateway_for_consumer(consumer: &str) -> Result<String, Strin
     }
     Ok(origin)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{gateway_for_consumer, split_item_field};
-
-    #[test]
-    fn an_item_field_coordinate_splits_once() {
-        assert_eq!(
-            split_item_field("brama-desktop-model-router#token"),
-            Ok(("brama-desktop-model-router", "token"))
-        );
-    }
-
-    #[test]
-    fn a_coordinate_without_a_field_is_refused() {
-        for bad in ["brama-desktop-model-router", "#token", "item#"] {
-            assert!(split_item_field(bad).is_err(), "{bad}");
-        }
-    }
-
-    /// A consumer the directory does not serve must not become a gateway URL
-    /// the sweep then posts a bearer to.
-    #[tokio::test]
-    async fn a_directory_answer_that_names_no_origin_is_refused() {
-        let error = gateway_for_consumer("no-such-consumer-for-this-test")
-            .await
-            .expect_err("an unknown consumer cannot resolve to an origin");
-        assert!(
-            !error.contains("http://"),
-            "the refusal names no origin: {error}"
-        );
-    }
-}

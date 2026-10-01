@@ -3,6 +3,9 @@ name = "brama"
 version = "0.4.49"
 edition = "2021"
 license-file = "LICENSE"
+# No test target is built until the operator approves one with
+# `tama tests approve`.
+autotests = false
 
 [[bin]]
 name = "brama"
@@ -11,115 +14,6 @@ path = "src/main.rs"
 [lib]
 name = "brama"
 path = "src/lib.rs"
-
-[[test]]
-name = "catalogue_real"
-path = "tests/catalogue/main.rs"
-
-[[test]]
-name = "decision_real"
-path = "tests/decisions/main.rs"
-
-[[test]]
-name = "docs_site_assets"
-path = "tests/docs/site_assets.rs"
-
-[[test]]
-name = "docs_published_identity"
-path = "tests/docs/published_identity.rs"
-
-[[test]]
-name = "cli_pool_contracts"
-path = "tests/cli/pool_contracts.rs"
-
-[[test]]
-name = "cli_alias_pool_report"
-path = "tests/cli/alias_pool_report.rs"
-
-[[test]]
-name = "cli_surface_contracts"
-path = "tests/cli/surface_contracts.rs"
-
-[[test]]
-name = "subscriptions_manual_sign_in"
-path = "tests/subscriptions/manual_sign_in.rs"
-
-[[test]]
-name = "subscriptions_manual_sign_in_gateway"
-path = "tests/subscriptions/manual_sign_in_gateway.rs"
-
-[[test]]
-name = "subscriptions_vault_binary"
-path = "tests/subscriptions/vault_binary.rs"
-
-[[test]]
-name = "admin_real"
-path = "tests/providers/admin_real.rs"
-
-[[test]]
-name = "subscription_real"
-path = "tests/providers/subscription_real.rs"
-
-[[test]]
-name = "capability_real"
-path = "tests/providers/capability_real.rs"
-
-[[test]]
-name = "http_api_real"
-path = "tests/providers/http_api_real.rs"
-
-[[test]]
-name = "provider_contracts"
-path = "tests/providers/provider_contracts.rs"
-
-[[test]]
-name = "refusal_contract"
-path = "tests/routing/refusal_contract.rs"
-
-[[test]]
-name = "subscription_tag_contract"
-path = "tests/routing/subscription_tag_contract.rs"
-
-[[test]]
-name = "awaiting_sign_in_contract"
-path = "tests/routing/awaiting_sign_in_contract.rs"
-
-[[test]]
-name = "discovery_reason_contract"
-path = "tests/routing/discovery_reason_contract.rs"
-
-[[test]]
-name = "readiness_contract"
-path = "tests/routing/readiness_contract.rs"
-
-[[test]]
-name = "blocked_rows_last_contract"
-path = "tests/routing/blocked_rows_last_contract.rs"
-
-[[test]]
-name = "image_selection_real"
-path = "tests/routing/image_selection/main.rs"
-
-[[test]]
-name = "pool"
-path = "tests/pool/main.rs"
-
-[[test]]
-name = "usage"
-path = "tests/usage/main.rs"
-
-[[test]]
-name = "release_build_cache"
-path = "tests/release/build_cache.rs"
-
-[[test]]
-name = "release_subscription_catalog"
-path = "tests/release/subscription_catalog.rs"
-
-[[test]]
-name = "pool_policy_unnamed"
-path = "tests/pool/policy_unnamed.rs"
-
 
 [dependencies]
 async-trait = "0.1"

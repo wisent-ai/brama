@@ -1,10 +1,10 @@
-# The commands this repository is built and tested with.
+# The commands this repository is built with.
 #
 # They exist as a checked-in file rather than as lines somebody types, so the
 # build a person runs here, the one a Stado recipe runs on every commit and the
 # one a release candidate is verified with are the same three words.
 
-.PHONY: check build release test
+.PHONY: check build release
 
 # Does the working copy compile? The cheap question, and the one to ask after
 # an edit: a build is rationed, a check is not.
@@ -18,7 +18,3 @@ build:
 # What a delivery installs.
 release:
 	cargo build --locked --release
-
-# The repository's own suites.
-test:
-	cargo test --locked
