@@ -33,12 +33,11 @@ stay opaque. The credential coordinate is
 <code>provider:&lt;provider&gt;:&lt;subscription&gt;</code> (<code>src/gateway/broker.rs</code>).</p>
 <p>Every subscription in the vault serves every caller. <code>best</code> walks the whole
 pool, freest plan first; a plan a caller cannot use is one whose provider
-refuses the credential, never one a tag withheld. Until 2026-09-16 an item
-also needed one <code>brama:agent:&lt;agent&gt;</code> tag per caller allowed to spend
-it, and that gate cost more than it protected: on one laptop two of three Claude
-subscriptions were tagged for nobody and the consumer <code>oko</code> was tagged on
-nothing, so six paid plans answered <code>all bounded 'codex' credentials
-unavailable</code>. The tag remains as provenance of who banked an account and
+refuses the credential, never one a tag withheld. An item used to need one
+<code>brama:agent:&lt;agent&gt;</code> tag per caller allowed to spend
+it, and that gate cost more than it protected: subscriptions tagged for nobody
+and a consumer tagged on nothing left paid plans answering <code>all bounded
+credentials unavailable</code>. The tag remains as provenance of who banked an account and
 decides who may retire it; it gates no routing.</p>
 <p>Discovery shells the local entitlements router's <code>list</code> (binary from
 <code>ENTITLEMENTS_ROUTER_BIN</code>, default <code>entitlements-router</code>); a successful

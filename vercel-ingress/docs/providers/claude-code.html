@@ -74,10 +74,10 @@ cch=&lt;checksum&gt;;</code>) and the sentence <em>You are Claude Code, Anthropi
 CLI for Claude.</em>, followed by the caller's own system prompt. The checksum is the low
 twenty bits of xxHash64 over the body it travels in; the fingerprint salts the Claude Code
 version with three characters of the first user message. Anthropic honours a subscription
-grant for its newest models only in this shape: on 2026-09-14 the same grant was answered
-<code>429</code> with the one-word body <code>Error</code> for sonnet-4-6 and fable-5-1
-when presented with the OAuth beta header alone, while <code>omp</code> — the harness the
-grant was taken from — was being answered on the same account in the same minute. No copy
+grant for its newest models only in this shape: the same grant is answered
+<code>429</code> with the one-word body <code>Error</code> when presented with the OAuth
+beta header alone, while the harness the grant was taken from is being answered on the
+same account in the same minute. No copy
 of the token outlives the request.</p>
 <h2 id="refresh">Refresh<a class="headerlink" href="#refresh" title="Link to this section">&para;</a></h2>
 <p>Ahead of expiry the gateway posts <code>grant_type=refresh_token</code> with the stored

@@ -32,8 +32,7 @@ item Brama Desktop acquires through its workload key — and admits its value as
 instead always carries the routes it was issued, so it can never reach this family. When
 the launcher cannot read that item it says <code>optional client brama-desktop skipped</code>
 on its stderr and starts anyway; the admin family then answers <code>401</code> to the
-desktop and to the console's own admin calls alike, which is what every
-deployed gateway did until 2026-09-14. Responses carry identifiers, usage and status only: a
+desktop and to the console's own admin calls alike. Responses carry identifiers, usage and status only: a
 subscription credential is write-only and is never part of an answer, on any path,
 including an error path.</p>
 <h2 id="get-v1adminsnapshot"><code>GET /v1/admin/snapshot</code><a class="headerlink" href="#get-v1adminsnapshot" title="Link to this section">&para;</a></h2>
@@ -201,8 +200,9 @@ console asked for it; no timer reaches any of them.</p>
   Answers <code>{"ok", "subscription_id", "provider", "detail"}</code>. Refusals:
   <code>400 subscription_id is required</code>, <code>404 the pool holds no member with
   that id</code>, <code>403</code> for any caller but the console.
-  <code>POST /v1/admin/subscription-pool/grant</code> stood beside it until 2026-09-20 and
-  is gone: it took a grant a coding harness on the console's machine already held, and a
+  There is no <code>POST /v1/admin/subscription-pool/grant</code>: an endpoint that
+  takes a grant a coding harness on the console's machine already holds hands over a
+  session, because a
   provider issues one OAuth pair per sign-in and revokes it when a second holder refreshes,
   so each adopted grant signed that machine out. A gateway signs itself in instead.</li>
 <li><strong>POST <code>/v1/admin/subscription-pool/reinstate</code></strong> takes one
