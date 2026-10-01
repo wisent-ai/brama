@@ -30,29 +30,44 @@ use std::process::Command;
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use clap::Subcommand;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 #[derive(Subcommand)]
 pub(crate) enum WorkloadCommand {
     /// Grant each agent of this installation's workload exactly the vault
     /// coordinates its capability routes name, bound to its public key
-    Register,
+    Register {
+        /// Print the grants as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
     /// Withdraw what `register` granted: revoke the vault grant of every
     /// agent this installation's workload names
-    Deregister,
+    Deregister {
+        /// Print the revocations as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
     /// Succeed when REGISTRY pins exactly this process's uid, gid and
     /// BINARY's resolved path and SHA-256; otherwise name the first mismatch
     Check {
         registry: PathBuf,
         #[arg(long)]
         binary: PathBuf,
+        /// Print the agreement as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
     },
 }
 
-fn check(registry: &Path, binary: &Path) -> Result<(), String> {
+fn check(registry: &Path, binary: &Path) -> Result<Value, String> {
     match pins::mismatches(registry, binary)?.into_iter().next() {
         Some(mismatch) => Err(format!("workload registry disagrees on {mismatch}")),
-        None => Ok(()),
+        None => Ok(json!({
+            "registry": registry.display().to_string(),
+            "binary": binary.display().to_string(),
+            "pinned": true,
+        })),
     }
 }
 
@@ -205,7 +220,7 @@ fn refusal_detail(output: &std::process::Output) -> String {
 /// The inverse of `register`. Revoking a grant the vault does not hold is
 /// not an error at the router, so a rerun is harmless; any refusal stops the
 /// run with the agent and the router's answer named.
-fn deregister() -> Result<(), String> {
+fn deregister() -> Result<Value, String> {
     let Installation {
         settings,
         router,
@@ -220,7 +235,7 @@ fn deregister() -> Result<(), String> {
             registry_path.display()
         ));
     }
-    println!("registry: {}", registry_path.display());
+    let mut revoked_agents = Vec::with_capacity(agents.len());
     for agent in agents {
         let revoked = Command::new(&router)
             .args(["grant", "revoke", agent])
@@ -233,12 +248,12 @@ fn deregister() -> Result<(), String> {
                 refusal_detail(&revoked)
             ));
         }
-        println!("{agent}: revoked");
+        revoked_agents.push(agent);
     }
-    Ok(())
+    Ok(json!({ "registry": registry_path.display().to_string(), "revoked": revoked_agents }))
 }
 
-fn register() -> Result<(), String> {
+fn register() -> Result<Value, String> {
     let Installation {
         home,
         settings,
@@ -305,7 +320,7 @@ fn register() -> Result<(), String> {
             Some(format!("acquire:{item}#{field}"))
         })
         .collect();
-    println!("routes:   {}", routes_path.display());
+    let mut granted = Vec::with_capacity(agents.len());
     if capabilities.is_empty() {
         return Err(format!(
             "{} maps nothing, so there is nothing to grant",
@@ -313,9 +328,6 @@ fn register() -> Result<(), String> {
         ));
     }
     let capabilities: Vec<String> = capabilities.into_iter().collect();
-    println!("registry: {}", registry_path.display());
-    println!("agents:   {}", agents.join(", "));
-    println!("granting: {}", capabilities.join(", "));
     let pem = public_key_pem(public_key)?;
     let key_file =
         registry_path.with_file_name(format!(".workload-key-{}.pem", std::process::id()));
@@ -352,34 +364,35 @@ fn register() -> Result<(), String> {
             ));
         }
         let answer: Value = serde_json::from_str(stdout.trim()).unwrap_or(Value::Null);
-        println!(
-            "{agent}: workload_bound={} expires_at={}",
-            answer.get("workload_bound").unwrap_or(&Value::Null),
-            answer.get("expires_at").unwrap_or(&Value::Null)
-        );
+        granted.push(json!({
+            "agent": agent,
+            "workload_bound": answer.get("workload_bound").unwrap_or(&Value::Null),
+            "expires_at": answer.get("expires_at").unwrap_or(&Value::Null),
+        }));
     }
-    Ok(())
+    Ok(json!({
+        "routes": routes_path.display().to_string(),
+        "registry": registry_path.display().to_string(),
+        "granting": capabilities,
+        "granted": granted,
+    }))
 }
 
 pub(crate) fn run(command: WorkloadCommand) {
-    match command {
-        WorkloadCommand::Register => {
-            if let Err(detail) = register() {
-                eprintln!("{detail}");
-                std::process::exit(1);
-            }
-        }
-        WorkloadCommand::Deregister => {
-            if let Err(detail) = deregister() {
-                eprintln!("{detail}");
-                std::process::exit(1);
-            }
-        }
-        WorkloadCommand::Check { registry, binary } => {
-            if let Err(detail) = check(&registry, &binary) {
-                eprintln!("{detail}");
-                std::process::exit(1);
-            }
+    let (answer, json) = match command {
+        WorkloadCommand::Register { json } => (register(), json),
+        WorkloadCommand::Deregister { json } => (deregister(), json),
+        WorkloadCommand::Check {
+            registry,
+            binary,
+            json,
+        } => (check(&registry, &binary), json),
+    };
+    match answer {
+        Ok(answer) => super::print_answer(&answer, json),
+        Err(detail) => {
+            eprintln!("{detail}");
+            std::process::exit(1);
         }
     }
 }
