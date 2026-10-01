@@ -166,12 +166,10 @@ console asked for it; no timer reaches any of them.</p>
   <code>{"ok": true, "probe": {...}, "subscription": {...}}</code>.</li>
 <li><strong>POST <code>/v1/admin/subscription-sign-in/:agent_id/:subscription_id</code></strong>
   signs in one subscription owned by the administered agent. It requires a nonempty
-  <code>reason</code> and accepts <code>login_item</code> and
-  <code>login_timeout_ms</code>.</li>
+  <code>reason</code> and accepts <code>login_item</code>.</li>
 <li><strong>POST <code>/v1/admin/subscription-pool/sign-in</code></strong> signs in the
   selected pooled account through Weles. It requires a nonempty <code>reason</code> and
-  <code>subscription_id</code>, and accepts <code>login_item</code> and
-  <code>login_timeout_ms</code>. Both sign-in paths verify current ownership, refuse a
+  <code>subscription_id</code>, and accepts <code>login_item</code>. Both sign-in paths verify current ownership, refuse a
   retired or mismapped account, derive the provider from the selected subscription, and
   return the native <code>signed_in</code> or <code>failed</code> verdict with its actual
   detail.</li>

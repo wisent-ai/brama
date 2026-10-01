@@ -27,7 +27,6 @@ pub(in crate::core::server) struct SignInSubscriptionRequest {
     subscription_id: Option<String>,
     reason: Option<String>,
     login_item: Option<String>,
-    login_timeout_ms: Option<u64>,
 }
 
 pub(in crate::core::server) async fn sign_in_account_subscription(
@@ -120,7 +119,6 @@ async fn sign_in_selected_subscription(
             subscription_id: Some(entry.id),
             login_item: request.login_item.or(entry.login_item),
             reason: reason.to_string(),
-            login_timeout_ms: request.login_timeout_ms.unwrap_or(900_000),
         },
     )
     .await

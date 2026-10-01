@@ -57,7 +57,6 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             login_item,
             subscription_id,
             reason,
-            login_timeout_ms,
             json,
         } => match brama::subscription_dispatch::sign_in::sign_in_provider(
             brama::subscription_dispatch::sign_in::SignInOptions {
@@ -65,7 +64,6 @@ pub(crate) async fn run(command: SubscriptionCommand) {
                 login_item,
                 subscription_id,
                 reason,
-                login_timeout_ms,
             },
         )
         .await
@@ -94,7 +92,6 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             subscription_id,
             reason,
             login_item,
-            login_timeout_ms,
             json,
         } => {
             enrol_authenticator(
@@ -102,7 +99,6 @@ pub(crate) async fn run(command: SubscriptionCommand) {
                 &subscription_id,
                 &reason,
                 login_item.as_deref(),
-                login_timeout_ms,
                 json,
             )
             .await

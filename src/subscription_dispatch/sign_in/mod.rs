@@ -18,7 +18,6 @@ pub struct SignInOptions {
     pub login_item: Option<String>,
     pub subscription_id: Option<String>,
     pub reason: String,
-    pub login_timeout_ms: u64,
 }
 
 pub fn weles_provider(provider: &str) -> Option<&'static str> {
@@ -200,7 +199,7 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
         .bearer_auth(&token)
         .json(&json!({
             "provider": provider, "subscription_id": id, "login_item": resolved.login_item,
-            "account_revision": resolved.account_revision, "timeout_ms": options.login_timeout_ms,
+            "account_revision": resolved.account_revision,
         }))
         .send()
         .await

@@ -22,9 +22,7 @@ use crate::subscription_dispatch::sign_in;
 use super::claim::InFlight;
 
 const SIGN_IN_COOLDOWN_ENV: &str = "BRAMA_CREDENTIAL_SIGN_IN_COOLDOWN_SECS";
-const SIGN_IN_TIMEOUT_ENV: &str = "BRAMA_CREDENTIAL_SIGN_IN_TIMEOUT_MS";
 const DEFAULT_SIGN_IN_COOLDOWN_SECS: u64 = 30 * 60;
-const DEFAULT_SIGN_IN_TIMEOUT_MS: u64 = 15 * 60 * 1000;
 
 /// Only one remote browser sign-in may own Weles at a time. OAuth refreshes
 /// remain per-subscription and continue while this lock is held.
@@ -38,14 +36,6 @@ pub(crate) fn sign_in_cooldown() -> Duration {
         .filter(|seconds| *seconds > 0)
         .unwrap_or(DEFAULT_SIGN_IN_COOLDOWN_SECS);
     Duration::from_secs(seconds)
-}
-
-fn sign_in_timeout_ms() -> u64 {
-    std::env::var(SIGN_IN_TIMEOUT_ENV)
-        .ok()
-        .and_then(|value| value.trim().parse::<u64>().ok())
-        .filter(|timeout| *timeout > 0)
-        .unwrap_or(DEFAULT_SIGN_IN_TIMEOUT_MS)
 }
 
 /// Start one account sign-in without making the refresh sweep wait for a
@@ -67,7 +57,6 @@ pub(super) fn schedule_sign_in(subscription_id: String, provider: String) -> boo
             login_item: None,
             subscription_id: Some(subscription_id.clone()),
             reason: reason.clone(),
-            login_timeout_ms: sign_in_timeout_ms(),
         };
         match tokio::spawn(sign_in::sign_in_provider(options)).await {
             Ok(Ok(verdict)) => {
@@ -135,8 +124,6 @@ const MISSING_SEED: &str = "google_2fa_material_missing";
 /// How long one subscription waits before its enrolment is ordered again.
 /// Each enrolment pages the operator for one approval on the phone.
 const ENROL_COOLDOWN: Duration = Duration::from_secs(6 * 60 * 60);
-/// The same bound the sign-in gives the operator to approve Google's push.
-const ENROL_TIMEOUT_MS: u64 = 15 * 60 * 1000;
 
 static ENROLLED_AT: LazyLock<
     std::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>,
@@ -167,9 +154,7 @@ async fn enrol_missing_seed(subscription_id: &str, provider: &str) {
     let Some(weles) = sign_in::weles_provider(provider) else {
         return;
     };
-    match sign_in::enrol_authenticator(provider, weles, subscription_id, None, ENROL_TIMEOUT_MS)
-        .await
-    {
+    match sign_in::enrol_authenticator(provider, weles, subscription_id, None).await {
         Ok(enrolment) => info!(
             event = "credential_authenticator_enrolment",
             subscription = %subscription_id,

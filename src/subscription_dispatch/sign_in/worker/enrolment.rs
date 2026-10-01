@@ -50,7 +50,6 @@ pub async fn enrol_authenticator(
     weles_provider: &str,
     subscription_id: &str,
     login_item: Option<&str>,
-    timeout_ms: u64,
 ) -> Result<Enrolment, SignInError> {
     let base = worker_api_base()
         .await
@@ -76,7 +75,6 @@ pub async fn enrol_authenticator(
             "provider": weles_provider,
             "subscription_id": subscription_id,
             "login_item": resolved.login_item,
-            "timeout_ms": timeout_ms,
         }))
         .send()
         .await

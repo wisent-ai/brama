@@ -234,7 +234,7 @@ failure appears in the result naming the failed operation and the actual reason.
 subscription owned by the authenticated account. Neither the pool read nor plan usage ever
 starts this flow; it happens because a caller asked for it on this path.</p>
 <p>The sign-in routes require a nonempty <code>reason</code> and accept
-<code>login_item</code> and <code>login_timeout_ms</code>; the pooled administrative
+<code>login_item</code>; the pooled administrative
 variant additionally requires <code>subscription_id</code> in the body. Brama verifies
 current ownership, refuses a retired or mismapped account, derives the provider from the
 selected subscription, and invokes the existing Weles flow on the Stado-selected host. It

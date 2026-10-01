@@ -34,10 +34,6 @@ pub(super) fn refusal(answer: &Value, status: u16, login_item: &str) -> Option<S
         .and_then(Value::as_i64)
         .map(|code| code.to_string())
         .unwrap_or_else(|| "unreported".to_string());
-    let timed_out = answer
-        .get("timed_out")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
     let said = ["error", "message", "stderr_tail", "stdout_tail"]
         .iter()
         .filter_map(|field| answer.get(field).and_then(Value::as_str))
@@ -46,8 +42,7 @@ pub(super) fn refusal(answer: &Value, status: u16, login_item: &str) -> Option<S
         .join(" | ");
     let said: String = said.chars().take(1800).collect();
     Some(format!(
-        "Weles sign-in run {run_id} answered HTTP {status}, exit {exit_code}, timed_out={timed_out}, \
-         login_item={}; {}",
+        "Weles sign-in run {run_id} answered HTTP {status}, exit {exit_code}, login_item={}; {}",
         echoed.unwrap_or("unreported"),
         if said.is_empty() {
             "the trajectory reported no stderr or message"

@@ -18,7 +18,6 @@ pub(crate) async fn enrol_authenticator(
     subscription_id: &str,
     reason: &str,
     login_item: Option<&str>,
-    login_timeout_ms: u64,
     as_json: bool,
 ) {
     let Some(weles) = weles_provider(provider) else {
@@ -27,15 +26,7 @@ pub(crate) async fn enrol_authenticator(
         );
         std::process::exit(1);
     };
-    match enrol(
-        provider,
-        weles,
-        subscription_id,
-        login_item,
-        login_timeout_ms,
-    )
-    .await
-    {
+    match enrol(provider, weles, subscription_id, login_item).await {
         Ok(enrolment) => {
             if as_json {
                 crate::cli::print_json(&json!({

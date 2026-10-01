@@ -46,9 +46,6 @@ pub(crate) enum SubscriptionCommand {
         /// Why this sign-in is being run; recorded in the journal beside the verdict
         #[arg(long)]
         reason: String,
-        /// How long Weles may spend driving the browser, in milliseconds
-        #[arg(long, default_value_t = 900_000)]
-        login_timeout_ms: u64,
         /// Print the verdict as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,
@@ -67,9 +64,6 @@ pub(crate) enum SubscriptionCommand {
         /// Exact Skarbiec login item, when the subscription names more than one
         #[arg(long)]
         login_item: Option<String>,
-        /// How long Weles may spend driving the browser, in milliseconds
-        #[arg(long, default_value_t = 900_000)]
-        login_timeout_ms: u64,
         /// Print the verdict as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,

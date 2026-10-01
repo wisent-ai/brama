@@ -23,13 +23,12 @@
 <h2 id="why-it-exists">Why it exists<a class="headerlink" href="#why-it-exists" title="Link to this section">&para;</a></h2>
 <p>An automatic sign-in stops at <code>google_2fa_material_missing</code> when the login carries no authenticator seed, and no sign-in can produce one: the provider shows a setup key only inside a signed-in session. The enrolment trajectory signs in with the stored password, waits once for the operator's phone approval, opens the account's authenticator setup, reads the key behind <em>Can't scan it?</em>, confirms the first code and writes the key to the login item. After it, every later sign-in for that account answers the second factor by itself — which is the difference between this and pasting a one-time code, a repair that renews one grant and leaves the next sign-in stopping in the same place.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama subscription enrol-authenticator &lt;PROVIDER&gt; --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--login-item &lt;LOGIN_ITEM&gt;] [--login-timeout-ms &lt;MILLISECONDS&gt;] [--json]</code></pre>
+<pre><code class="language-console">brama subscription enrol-authenticator &lt;PROVIDER&gt; --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--login-item &lt;LOGIN_ITEM&gt;] [--json]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>&lt;PROVIDER&gt;</code></td><td>required</td><td>One of <code>codex</code>, <code>claude-code</code>, or <code>kimi</code>.</td></tr>
 <tr><td><code>--subscription-id &lt;ID&gt;</code></td><td>required</td><td>The Brama subscription whose login gains the authenticator. Weles resolves which vault row that is, exactly as it does for a sign-in.</td></tr>
 <tr><td><code>--reason &lt;REASON&gt;</code></td><td>required</td><td>Why this enrolment is being run; recorded beside the verdict.</td></tr>
 <tr><td><code>--login-item &lt;LOGIN_ITEM&gt;</code></td><td>optional</td><td>An exact Skarbiec login reference, for a subscription whose identity names more than one.</td></tr>
-<tr><td><code>--login-timeout-ms &lt;MILLISECONDS&gt;</code></td><td>optional; <code>900000</code></td><td>Maximum time Weles may spend driving the browser, including the wait for the phone approval.</td></tr>
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print the verdict as JSON instead of labeled lines.</td></tr>
 </tbody></table>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
