@@ -101,16 +101,17 @@ only. The provider's sentence no longer decides either, so a request error that 
 or a limit leaves the account alone. A credential refused again right after a forced refresh is
 still retired, and a refresh the provider disowns is still recorded as needing a sign-in.</p>
 
-<h2 id="unreleased-automatic-enrolment">Unreleased: a sign-in stopped by a missing authenticator seed orders the enrolment itself<a class="headerlink" href="#unreleased-automatic-enrolment" title="Link to this section">&para;</a></h2>
-<p>An automatic sign-in of a Google login whose Skarbiec item holds no <code>totp_secret</code>
-stops at <code>google_2fa_material_missing</code>, and only <code>brama subscription enrol-authenticator</code>
-ordered the enrolment that writes the seed. Nothing typed it, so a pool could read no
-subscription live while Weles never asked the operator for the one phone approval enrolment
-needs. The refresh sweep now orders that enrolment itself when a sign-in
-ends in <code>google_2fa_material_missing</code>, under the same serial lock as sign-ins, at most once
-per subscription every six hours, and logs <code>credential_authenticator_enrolment</code> with the
-login item, the Weles run and whether the seed is present afterwards, or
-<code>credential_authenticator_enrolment_failed</code> with the refusal.</p>
+<h2 id="unreleased-automatic-enrolment">Unreleased: shared second-factor recovery and observed approvals<a class="headerlink" href="#unreleased-automatic-enrolment" title="Link to this section">&para;</a></h2>
+<p>CLI, Desktop and background sign-ins use one recovery path. Weles can answer an
+offered Google phone challenge when no authenticator seed is held. A structured
+<code>google_2fa_material_missing</code> refusal orders enrolment for the same resolved
+subscription and login; only a confirmed worker run and independent seed readback
+permit a new sign-in and credential refresh. An existing authenticator is not rotated.</p>
+<p>The saved verdict and pool retain the observed second-factor method and Weles run.
+Unknown evidence is no longer inferred as “no second factor” from a successful grant.
+CLI and Desktop distinguish a missing seed from a failed seed inspection. Real
+qualification uses <code>tests/authentication/journey.rs</code> and the matching Weles
+<code>tests/security/second-factor.mjs</code>; source changes alone are not a passing run.</p>
 
 <h2 id="unreleased-imported-account-ref">Unreleased: an imported member names its account, so Weles can sign it in when its grant dies<a class="headerlink" href="#unreleased-imported-account-ref" title="Link to this section">&para;</a></h2>
 <p>Weles resolves an automatic sign-in from the subscription item's <code>account_ref</code>

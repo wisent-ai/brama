@@ -19,7 +19,7 @@
     <main>
       <p class="source-note">Brama CLI command reference</p>
       <article class="doc"><h1 id="brama-subscription-second-factor"><code>brama subscription second-factor</code><a class="headerlink" href="#brama-subscription-second-factor" title="Link to this section">&para;</a></h1>
-<p>Report which subscription accounts need a second factor to be signed in, and which of them hold the authenticator secret that lets a sign-in answer it without a person. An account that needs one and holds no secret is the one <a href="/docs/cli/subscription/enrol-authenticator"><code>brama subscription enrol-authenticator</code></a> is for.</p>
+<p>Report what the latest provider sign-in observed and whether Skarbiec reports a usable authenticator seed. These are separate observations: an account can require a phone approval without a stored seed, and a successful sign-in alone does not prove that two-factor authentication is disabled.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
 <pre><code class="language-console">brama subscription second-factor [--provider &lt;PROVIDER&gt;] [--json]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
@@ -27,10 +27,11 @@
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print the report document instead of lines.</td></tr>
 </tbody></table>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
-<pre><code class="language-text">&lt;N&gt; account(s) need a second factor, &lt;N&gt; do not, &lt;N&gt; unobserved
-  &lt;provider&gt; &lt;account&gt; -&gt; needs a second factor | needs none | unobserved; seed &lt;state&gt;
+<pre><code class="language-text">&lt;N&gt; account(s) asked for a second factor, &lt;N&gt; did not ask in the observed sign-in, &lt;N&gt; unobserved
+  &lt;provider&gt; &lt;account&gt; -&gt; needs a second factor | not requested in the observed sign-in | unobserved; seed &lt;state&gt;
     &lt;evidence&gt;</code></pre>
-<p>With <code>--json</code>: <code>{required, not_required, unknown, accounts: [{provider, account, required, seed, evidence}]}</code>. <code>unobserved</code> means no sign-in has shown whether the provider asks; it is not a "no". It reads the pool and the vault's metadata, prints no secret and writes nothing.</p>
+<p>With <code>--json</code>: <code>{required, not_required, unknown, accounts: [{provider, account, login_item, required, method, seed, seed_error, evidence}]}</code>. <code>required</code> is true, false or null. False means no challenge was requested in the observed sign-in; null means the sign-in supplied no challenge observation. <code>method</code> distinguishes an observed <code>phone</code> approval from an <code>authenticator</code> challenge. A missing login reports <code>no_login_declared</code>, not a missing seed.</p>
+<p>The command reads the pool and vault metadata, prints no secret and writes nothing. A failed seed inspection reports the actual operation and error. In pool responses, an unavailable seed observation is null with <code>seed_error</code>; Brama Desktop displays it in the selected account's <strong>Second factor</strong> section rather than showing an absent seed.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <p>A pool or vault read that fails prints its own sentence on standard error and exits 1. An unknown argument exits 2.</p>
 <p><a href="/docs/cli/subscription">Back to <code>brama subscription</code></a> or <a href="/docs/cli">the CLI tree</a>.</p></article>

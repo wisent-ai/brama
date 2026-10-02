@@ -1,6 +1,7 @@
 //! Brama requests authentication for a Skarbiec subscription; Weles executes it.
 pub mod blocked;
 pub mod manual;
+mod recovery;
 mod trajectory;
 mod verdict;
 pub mod worker;
@@ -89,7 +90,7 @@ pub fn automatic_sign_in_sentence(provider: &str) -> String {
 }
 
 pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, SignInError> {
-    let result = execute(&options).await;
+    let result = recovery::execute(&options).await;
     if let Err(error) = &result {
         // Only an exchange Weles actually answered is journaled. A refusal
         // taken before the worker was reached -- an unknown provider, a
@@ -137,10 +138,8 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
             .to_string()
             .into());
     }
-    // The host's own prerequisites are read before Skarbiec is asked
-    // anything. A missing startup credential or an unreachable worker is a
-    // fact about this host, and reporting it as "Skarbiec lists 0 active
-    // subscriptions" sends an operator to the wrong system.
+    // Resolve the worker first: a transport refusal must name the failed
+    // service, not be reported as an empty subscription pool.
     let endpoint = worker_api_base()
         .await
         .map_err(|detail| Blocked::WelesUnreachable { detail })?;
@@ -222,7 +221,7 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
     };
     let status = response.status().as_u16();
     identity["http_status"] = json!(status);
-    let answer: Value = match response.json().await {
+    let mut answer: Value = match response.json().await {
         Ok(answer) => answer,
         Err(error) => {
             return Ok(verdict(
@@ -238,13 +237,16 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
             ))
         }
     };
-    if let Some(detail) = trajectory::refusal(&answer, status, &resolved.login_item) {
+    let refusal = trajectory::refusal(&answer, status, &resolved.login_item);
+    identity["second_factor"] = answer.get_mut("second_factor").map(Value::take).unwrap_or(Value::Null);
+    identity["run_id"] = answer.get_mut("run_id").map(Value::take).unwrap_or(Value::Null);
+    if let Some(detail) = refusal {
         let mut failure = answer.get("failure").filter(|value| value.is_object()).cloned().unwrap_or_else(|| json!({
             "code": answer.get("error").and_then(Value::as_str).unwrap_or("authentication_failed"),
             "stage": answer.get("stage").and_then(Value::as_str).unwrap_or("weles_execution"),
             "browser_started": null, "retryable": false,
         }));
-        failure["run_id"] = answer.get("run_id").cloned().unwrap_or(Value::Null);
+        failure["run_id"] = identity.get("run_id").cloned().unwrap_or(Value::Null);
         failure["weles_http_status"] = json!(status);
         return Ok(verdict(
             options,
@@ -264,7 +266,7 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
                 FAILED,
                 detail,
                 json!({"code": "persisted_credential_refresh_failed", "stage": "refresh_verification",
-                "http_status": status, "run_id": answer.get("run_id"),
+                "http_status": status, "run_id": identity.get("run_id"),
                 "browser_started": true, "retryable": false}),
                 Value::Null,
             ))
@@ -282,7 +284,7 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
     } else {
         json!({
             "code": "persisted_credential_refresh_failed", "stage": "refresh_verification",
-            "http_status": status, "run_id": answer.get("run_id"),
+            "http_status": status, "run_id": identity.get("run_id"),
             "browser_started": true, "retryable": false,
         })
     };

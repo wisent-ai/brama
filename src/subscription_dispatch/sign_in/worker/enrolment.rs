@@ -31,12 +31,14 @@ pub struct Enrolment {
     pub run_id: String,
     /// Whether Skarbiec reports a usable seed on that login afterwards.
     pub seed_present: bool,
+    /// Weles confirmed this exact account revision and a successful run.
+    pub confirmed: bool,
     pub detail: String,
 }
 
 impl Enrolment {
     pub fn ok(&self) -> bool {
-        self.seed_present
+        self.confirmed && self.seed_present
     }
 }
 
@@ -75,6 +77,7 @@ pub async fn enrol_authenticator(
             "provider": weles_provider,
             "subscription_id": subscription_id,
             "login_item": resolved.login_item,
+            "account_revision": resolved.account_revision,
         }))
         .send()
         .await
@@ -97,16 +100,21 @@ pub async fn enrol_authenticator(
     let echoed = answer.get(LOGIN_ITEM_SELECTOR).and_then(Value::as_str);
     let claimed = status == HTTP_OK
         && answer.get("ok").and_then(Value::as_bool) == Some(true)
-        && echoed == Some(resolved.login_item.as_str());
-    let seed_present = crate::gateway::broker::login_seed_present(&resolved.login_item);
+        && echoed == Some(resolved.login_item.as_str())
+        && answer.get("subscription_id").and_then(Value::as_str) == Some(resolved.subscription_id.as_str())
+        && answer.get("account_revision").and_then(Value::as_str) == Some(resolved.account_revision.as_str())
+        && answer.get("source_revision").and_then(Value::as_str) == Some(resolved.source_revision.as_str())
+        && answer.get("run_id").and_then(Value::as_str).is_some_and(|run| !run.is_empty());
+    let seed_present = crate::gateway::broker::login_seed_present(&resolved.login_item)
+        .map_err(SignInError::Dependency)?;
     let detail = if claimed && seed_present {
         format!(
-            "Weles enrolled an authenticator for {} and Skarbiec now holds its seed; every later sign-in for {provider} answers Google itself",
+            "Weles confirmed authenticator enrolment for {} and Skarbiec holds its seed; later {provider} sign-ins can answer authenticator challenges",
             resolved.login_item
         )
     } else if claimed {
         format!(
-            "Weles reported an enrolment for {}, and Skarbiec reports no usable seed on that login: the run wrote nothing that answers a second factor",
+            "Weles reported enrolment for {}, but Skarbiec did not confirm a usable seed on that login",
             resolved.login_item
         )
     } else {
@@ -131,6 +139,7 @@ pub async fn enrol_authenticator(
         login_item: resolved.login_item,
         run_id,
         seed_present,
+        confirmed: claimed,
         detail,
     })
 }

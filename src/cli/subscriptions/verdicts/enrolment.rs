@@ -1,14 +1,7 @@
-//! `brama subscription enrol-authenticator`: the repair that makes every
-//! later sign-in unattended.
-//!
-//! An automatic sign-in stops at `google_2fa_material_missing` when the
-//! Skarbiec login behind a subscription holds no authenticator seed, and no
-//! sign-in can produce one, because the provider shows a setup key only
-//! inside a signed-in session. This orders the Weles trajectory that signs in
-//! once, enrols an authenticator, reads the key it is shown and writes it to
-//! that login item. It takes one approval on the operator's phone, and after
-//! it no sign-in for that account needs a person again — which is the whole
-//! difference between this and pasting a one-time code.
+//! Enrol authenticator material for a resolved Google login without replacing
+//! an existing authenticator. Google may require a phone approval. Success
+//! requires both a confirmed Weles run and a usable seed reported by Skarbiec;
+//! it does not promise that Google will never request another approval.
 
 use brama::subscription_dispatch::sign_in::{enrol_authenticator as enrol, weles_provider};
 use serde_json::json;
@@ -35,6 +28,7 @@ pub(crate) async fn enrol_authenticator(
                     "login_item": enrolment.login_item,
                     "run_id": enrolment.run_id,
                     "seed_present": enrolment.seed_present,
+                    "confirmed": enrolment.confirmed,
                     "reason": reason,
                     "result": if enrolment.ok() { "enrolled" } else { "not_enrolled" },
                     "detail": enrolment.detail,
@@ -44,6 +38,8 @@ pub(crate) async fn enrol_authenticator(
                 println!("subscription_id: {}", enrolment.subscription_id);
                 println!("login_item: {}", enrolment.login_item);
                 println!("run: {}", enrolment.run_id);
+                println!("confirmed: {}", enrolment.confirmed);
+                println!("seed_present: {}", enrolment.seed_present);
                 println!(
                     "result: {}",
                     if enrolment.ok() {

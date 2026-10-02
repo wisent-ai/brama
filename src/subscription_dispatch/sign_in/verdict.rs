@@ -22,6 +22,8 @@ pub(super) fn verdict(
         "account_revision": identity.get("account_revision"),
         "started_at_ms": identity.get("started_at_ms"),
         "http_status": identity.get("http_status"),
+        "second_factor": identity.get("second_factor"),
+        "run_id": identity.get("run_id"),
         "reason": options.reason,
         "result": result,
         "detail": detail,

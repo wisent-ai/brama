@@ -57,7 +57,7 @@ pub(super) async fn second_factor(provider: Option<&str>, json: bool) {
                     .unwrap_or_default()
             };
             println!(
-                "{} account(s) need a second factor, {} do not, {} unobserved",
+                "{} account(s) asked for a second factor, {} did not ask in the observed sign-in, {} unobserved",
                 count("required"),
                 count("not_required"),
                 count("unknown")
@@ -70,7 +70,7 @@ pub(super) async fn second_factor(provider: Option<&str>, json: bool) {
             {
                 let needs = match row.get("required").and_then(Value::as_bool) {
                     Some(true) => "needs a second factor",
-                    Some(false) => "needs none",
+                    Some(false) => "not requested in the observed sign-in",
                     None => "unobserved",
                 };
                 println!(

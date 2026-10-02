@@ -19,9 +19,9 @@
     <main>
       <p class="source-note">Brama CLI command reference</p>
       <article class="doc"><h1 id="brama-subscription-enrol-authenticator"><code>brama subscription enrol-authenticator</code><a class="headerlink" href="#brama-subscription-enrol-authenticator" title="Link to this section">&para;</a></h1>
-<p>Ask Weles to enrol an authenticator for the Skarbiec login behind one subscription, and confirm with Skarbiec that the seed landed. It is the repair for the one refusal a sign-in cannot repair itself.</p>
+<p>Ask Weles to add an authenticator to the Google login behind one subscription, without replacing an existing authenticator. Confirm both the worker's completed setup and Skarbiec's usable seed.</p>
 <h2 id="why-it-exists">Why it exists<a class="headerlink" href="#why-it-exists" title="Link to this section">&para;</a></h2>
-<p>An automatic sign-in stops at <code>google_2fa_material_missing</code> when the login carries no authenticator seed, and no sign-in can produce one: the provider shows a setup key only inside a signed-in session. The enrolment trajectory signs in with the stored password, waits once for the operator's phone approval, opens the account's authenticator setup, reads the key behind <em>Can't scan it?</em>, confirms the first code and writes the key to the login item. After it, every later sign-in for that account answers the second factor by itself — which is the difference between this and pasting a one-time code, a repair that renews one grant and leaves the next sign-in stopping in the same place.</p>
+<p>A sign-in cannot invent a missing authenticator seed: Google reveals a setup key only inside an authenticated account session. Enrolment signs in with the resolved login, uses an offered phone approval when needed, opens authenticator setup, confirms its first code and writes the seed to that login item only after setup is observed as complete. A stored seed answers later authenticator challenges; Google can still require another method or phone approval. Normal sign-in can use an offered phone approval without enrolling an authenticator.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
 <pre><code class="language-console">brama subscription enrol-authenticator &lt;PROVIDER&gt; --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--login-item &lt;LOGIN_ITEM&gt;] [--json]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
@@ -32,19 +32,17 @@
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print the verdict as JSON instead of labeled lines.</td></tr>
 </tbody></table>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
-<p>Brama resolves the account through Weles's <code>POST /reauth/resolve</code>, then orders the enrolment with <code>POST /reauth/enrol-authenticator</code> — admitted by the same <code>brama-weles-reauth</code> bearer the sign-in uses, never by Weles's general worker token. Afterwards it asks Skarbiec whether that login now holds a usable seed, through <code>totp-seed-state</code>, which reports the state of the field and never its value. The verdict is <code>enrolled</code> only when the vault agrees; a run that answers <code>ok</code> while the seed is absent is reported as <code>not_enrolled</code> and exits 1, because the next sign-in would stop in the same place.</p>
-<pre><code class="language-console">provider: codex
-subscription_id: brama-sub-wisent-app-codex-primary
-login_item: codex-wisent-google-sso
-result: enrolled
-detail: Weles enrolled an authenticator for codex-wisent-google-sso and Skarbiec now holds its seed; every later sign-in for codex answers Google itself</code></pre>
+<p>Brama resolves the account through <code>POST /reauth/resolve</code>, then sends its <code>account_revision</code> to <code>POST /reauth/enrol-authenticator</code> using the scoped <code>brama-weles-reauth</code> bearer. A changed revision is refused before a browser opens. Concurrent requests for the same account and login join the same live enrolment; a conflicting login is refused. Brama accepts the result only when the subscription, login, account revision, worker revision and run id match, and <code>totp-seed-state</code> independently reports a usable seed. This read exposes metadata, never the seed.</p>
+<p>The JSON verdict includes <code>confirmed</code> and <code>seed_present</code>. Both must be true for <code>enrolled</code>; an old seed or an unconfirmed worker response alone cannot prove a successful enrolment. <code>not_enrolled</code> exits 1. A failed seed inspection names the operation and its error rather than claiming that the field is absent.</p>
+<pre><code class="language-console">brama subscription enrol-authenticator codex --subscription-id &lt;TEST_SUBSCRIPTION&gt; --login-item &lt;TEST_LOGIN&gt; --reason "Enable authenticator sign-in for the isolated test account" --json</code></pre>
 <h2 id="refusals">Exact refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <ul>
 <li>A provider with no Weles sign-in: <code>provider `&lt;provider&gt;` has no Weles sign-in, so it has no authenticator to enrol</code>.</li>
 <li>A login that signs in with a password: <code>authenticator_enrolment_unsupported_login_method</code>, naming the login and its method — there is no authenticator on it to enrol.</li>
 <li>Missing admission credential: <code>BRAMA_WELES_REAUTH_TOKEN is unavailable; Brama must acquire brama-weles-reauth/token from Skarbiec at startup</code>.</li>
 <li>A worker that does not serve the route answers <code>HTTP 404</code>, which is what a deployment older than this release reports.</li>
-<li>Every stop inside the trajectory keeps its own name — <code>google_push_not_approved</code>, <code>setup_key_not_shown</code>, <code>setup_code_rejected</code>, <code>seed_persist_unconfirmed</code> — and the key is redacted from any page preview.</li>
+<li>Trajectory refusals retain their names, including <code>google_push_not_approved</code>, <code>setup_key_not_shown</code>, <code>setup_code_rejected</code> and <code>seed_persist_unconfirmed</code>. Weles does not write a seed when Google setup confirmation is unobserved (<code>setup_confirmation_unobserved</code>).</li>
+<li>An existing authenticator is not rotated automatically: <code>authenticator_replacement_requires_consent</code>. A conflicting live enrolment reports <code>authenticator_enrolment_in_progress</code>. The Google phone approval appears in Weles Desktop's <strong>Approvals</strong> screen; there is no local-browser fallback.</li>
 </ul>
 <p>See <a href="/docs/cli/subscription/sign-in"><code>subscription sign-in</code></a>, <a href="/docs/cli/subscription">the command group</a>, or <a href="/docs/cli">the CLI tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>

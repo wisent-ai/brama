@@ -51,13 +51,14 @@ fn identity(row: &Value) -> Option<&str> {
 /// a provider and no browser starts.
 pub async fn second_factor_report(provider: Option<&str>) -> Result<Value, String> {
     let provider = provider.map(str::trim).filter(|named| !named.is_empty());
-    let seeds = crate::gateway::broker::login_seed_states();
+    let seeds = std::cell::OnceCell::from(Ok(crate::gateway::broker::login_seed_states()?));
     let mut accounts: BTreeMap<String, Value> = BTreeMap::new();
     for entry in crate::gateway::broker::list_all_subscriptions().await? {
         if provider.is_some_and(|named| entry.provider != named) || entry.status != "active" {
             continue;
         }
-        let row = super::account::subscription_view(&entry);
+        let mut row = super::account::subscription_view(&entry);
+        super::account::annotate_second_factor(&mut row, &seeds);
         let account = identity(&row)
             .map(str::to_owned)
             .unwrap_or_else(|| entry.id.clone());
@@ -65,10 +66,6 @@ pub async fn second_factor_report(provider: Option<&str>) -> Result<Value, Strin
             .pointer("/second_factor/login_item")
             .and_then(Value::as_str)
             .map(str::to_owned);
-        let seed = login
-            .as_deref()
-            .and_then(|login| seeds.get(login).cloned())
-            .unwrap_or_else(|| "no_login_declared".to_owned());
         accounts.insert(
             format!("{}\u{1f}{account}", entry.provider),
             json!({
@@ -77,8 +74,10 @@ pub async fn second_factor_report(provider: Option<&str>) -> Result<Value, Strin
                 "member": entry.id,
                 "login_item": login,
                 "required": row.pointer("/second_factor/required").cloned(),
+                "method": row.pointer("/second_factor/method"),
                 "evidence": row.pointer("/second_factor/evidence").cloned(),
-                "seed": seed,
+                "seed": row.pointer("/second_factor/seed"),
+                "seed_error": row.pointer("/second_factor/seed_error"),
             }),
         );
     }

@@ -90,23 +90,21 @@ fn automatic_sign_in_view(entry: &SubscriptionEntry) -> Value {
 /// absence of a seed -- an account with no seed and no attempt is not an
 /// account without a second factor.
 ///
-/// The requirement is read from the sign-in this gateway already ran: a run
-/// stopped for missing second-factor material proves the provider asked for
-/// one, and a run that completed without it proves it did not.
+/// A successful sign-in alone says nothing about the second factor: it may
+/// have used a stored authenticator, a phone approval or a trusted session.
+/// Only the worker's explicit observation answers this part of the report.
 fn second_factor_view(entry: &SubscriptionEntry) -> Value {
     let failure = crate::subscription_dispatch::sign_in::observed_failure(&entry.id);
-    let code = failure.as_ref().map(|failure| failure.code().to_owned());
-    let asked_for_material = code
-        .as_deref()
-        .is_some_and(|code| code.contains("2fa") || code.contains("second_factor"));
-    let signed_in = crate::journal::latest_subscription_sign_in(&entry.id).is_some();
-    let required = if asked_for_material {
-        Some(true)
-    } else if signed_in && failure.is_none() {
-        Some(false)
-    } else {
-        None
-    };
+    let latest = crate::journal::latest_subscription_sign_in(&entry.id);
+    let observation = latest.as_ref().and_then(|attempt| attempt.get("second_factor"));
+    let method = observation.and_then(|value| value.get("method")).and_then(Value::as_str);
+    let required = observation
+        .and_then(|value| value.get("required"))
+        .and_then(Value::as_bool)
+        .or_else(|| {
+            failure.as_ref().filter(|failure| failure.code() == "google_2fa_material_missing")
+                .map(|_| true)
+        });
     // A refusal carries the whole browser trajectory behind it, which is
     // evidence for reading a failed run and noise in a one-line answer.
     let sentence = |detail: String| -> String {
@@ -121,25 +119,42 @@ fn second_factor_view(entry: &SubscriptionEntry) -> Value {
     // The login a sign-in resolved is the one that would answer the
     // challenge; an item that declares none still signs in through whatever
     // Weles resolved for it, and the seed lives on that row.
-    let login = entry.login_item.clone().or_else(|| {
-        crate::journal::latest_subscription_sign_in(&entry.id)
-            .as_ref()
-            .and_then(|attempt| attempt.get("login_item"))
-            .and_then(Value::as_str)
-            .map(str::to_owned)
+    let login = entry.login_item.as_deref().or_else(|| {
+        latest.as_ref().and_then(|attempt| attempt.get("login_item")).and_then(Value::as_str)
     });
     json!({
         "required": required,
+        "method": method,
         "evidence": match required {
-            Some(true) => failure.as_ref().map(|failure| sentence(failure.detail())),
+            Some(true) => Some(failure.as_ref().map(|failure| sentence(failure.detail()))
+                .unwrap_or_else(|| format!("Weles observed a second-factor challenge; method: {}", method.unwrap_or("unreported")))),
             Some(false) => Some(
-                "a sign-in through Weles completed without asking for second-factor material"
-                    .to_owned(),
+                "Weles observed no second-factor challenge in this sign-in; this does not mean the account has 2FA disabled".to_owned()
             ),
             None => None,
         },
         "login_item": login,
     })
+}
+
+/// Add one shared vault observation without re-reading the vault per account.
+pub(super) fn annotate_second_factor(
+    row: &mut Value,
+    seeds: &std::cell::OnceCell<Result<std::collections::BTreeMap<String, String>, String>>,
+) {
+    let observation = &mut row["second_factor"];
+    let (state, error) = match observation.get("login_item").and_then(Value::as_str) {
+        None => (json!("no_login_declared"), Value::Null),
+        Some(login) => match seeds.get_or_init(crate::gateway::broker::login_seed_states) {
+            Ok(states) => match states.get(login) {
+                Some(state) => (json!(state), Value::Null),
+                None => (Value::Null, json!(format!("totp-seed-state returned no row for resolved login {login}"))),
+            },
+            Err(detail) => (Value::Null, json!(detail)),
+        },
+    };
+    observation["seed"] = state;
+    observation["seed_error"] = error;
 }
 
 fn credential_view(entry: &SubscriptionEntry, recorded: Option<&SubscriptionUsage>) -> Value {

@@ -72,6 +72,7 @@ pub(crate) fn document(
         .map(|error| failure_json(&error))
         .collect();
     let observed_at_ms = now_ms();
+    let seed_states = std::cell::OnceCell::new();
     // One row shape for every audience. The rows an agent may see are fewer
     // than the operator's, and that is the whole of the difference: a console
     // and an agent reading the same account read the same fields about it,
@@ -101,6 +102,7 @@ pub(crate) fn document(
                 }
             }
             let mut row = subscription_row(entry, recorded.as_ref(), windows);
+            account::annotate_second_factor(&mut row, &seed_states);
             row["state"] = json!(if entry.status == "undiscovered" {
                 "unknown"
             } else if retired(&entry.id, recorded.as_ref()) {
