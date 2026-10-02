@@ -35,6 +35,18 @@
 <p>The verdict contains <code>provider</code>, <code>attempted</code>, <code>result</code> (<code>refreshed</code> or <code>failed</code>), and <code>detail</code>. The command may rotate OAuth grants, updates the credential usage ledger, and journals completed verdicts with their reason. Retired subscriptions are excluded. It exits 0 only when every attempted credential was obtained; a partial refresh remains a failure and preserves each account's refusal. An inventory failure reports the actual discovery error instead of pretending there are no accounts.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <p>An empty provider is refused with <code>a provider is required</code>; an empty reason with <code>--reason must say why this refresh is being run</code>. No usable row produces a failed verdict whose detail starts <code>no usable `&lt;provider&gt;` subscription is in this deployment's pool</code>. An API-key provider produces <code>`&lt;provider&gt;` subscription credentials are API keys rather than OAuth grants, so no refresh path exists for them: replacing one means storing a new credential in the vault</code>. Provider or credential refusals are quoted in <code>detail</code>; failure exits 1.</p>
+<p>A transport failure names the token endpoint and retains its underlying cause.
+If reading a response fails, the detail also names its HTTP status and the number
+of bytes received before the failure. Brama does not classify a partial 401 or
+403 body as a definitive rejection: that read failure leaves the recorded grant
+state unchanged. A complete provider refusal still determines whether the
+credential needs a new sign-in. Malformed successful responses retain the JSON
+parser's error or name the missing <code>access_token</code>.</p>
+<p>The HTTP refresh verdict carries the same <code>detail</code>. Brama Desktop's
+<strong>Subscription Pool</strong> screen, under <strong>Credential refresh</strong>,
+puts that verdict in its operation result bar rather than replacing the cause
+with a generic refresh error. The <a href="/docs/testing#real-oauth-refresh">real
+OAuth diagnostic journeys</a> describe the native checks and their limits.</p>
 <p>See <a href="/docs/cli/subscription">the command group</a> or <a href="/docs/cli">the CLI tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>

@@ -143,6 +143,27 @@ configuration is changed. Missing access or an unavailable provider fails the ru
 it is not skipped. Reports under <code>.wisent-output/image-selection-real/</code>
 retain the client source, input digest, actual gateway build, response bodies,
 command and exit status.</p>
+<h3 id="real-oauth-refresh">Real OAuth refresh diagnostics<a class="headerlink" href="#real-oauth-refresh" title="Link to this section">&para;</a></h3>
+<p><code>tests/oauth_refresh/real.mjs</code> runs the installed Brama and Skarbiec
+CLIs without building either product. Invoke it with
+<code>node tests/oauth_refresh/real.mjs --expected-revision REVISION</code>,
+replacing <code>REVISION</code> with the exact 40-character source revision being
+qualified. <code>BRAMA_REAL_BIN</code> and <code>SKARBIEC_BIN</code> may name the
+candidate executables. A different Brama revision produces
+<code>BRAMA_REVISION_NOT_INSTALLED</code> and runs no refresh cases.</p>
+<p>The runner creates its own vault, keyring, journal and usage ledger under
+<code>.build/rf-*/</code>. It stores a deliberately invalid Codex grant, never an
+operator's account. A refused loopback HTTPS proxy connection must name the
+real endpoint and connection cause without changing the grant's saved state.
+A separate request reaches the real OpenAI token endpoint: its complete
+authentication refusal must make that invalid grant unusable without overwriting
+the stored value. Neither case sends a model request or rotates a real account.</p>
+<p>Each <code>report.json</code> retains the native revisions, executable and
+runner digests, commands, exit statuses, observed refusals and persisted-state
+evidence. The runner deletes its test credential and ends only its isolated
+GnuPG daemon, removing that keyring after use. A failed case stays failed.
+These cases do not qualify successful grant rotation, interrupted response
+bodies, inference or Desktop rendering; those need their own real execution.</p>
 <h3 id="release-qualification">Release qualification<a class="headerlink" href="#release-qualification" title="Link to this section">&para;</a></h3>
 <p>Run against one selected source revision and exact candidate bytes. Combine the
 approved layers, verify identity and digest, exercise supported upgrade and

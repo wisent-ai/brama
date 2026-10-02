@@ -17,6 +17,7 @@ use serde_json::Value;
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::capability::Secret;
+use crate::core::failure;
 use wisent_errors::{Code, Failure};
 
 use provider::{oauth_provider, oauth_refresh_token, patch_oauth_blob, zeroize_json_strings};
@@ -89,14 +90,27 @@ fn parse_refresh_grant(body: &Value) -> Option<RefreshGrant> {
     })
 }
 
-/// A refused response's body, whole, so the failure says which of
-/// `invalid_grant`, a revoked client or a throttle it was.
-async fn error_body(response: &mut reqwest::Response) -> String {
-    let mut text = String::new();
-    while let Ok(Some(chunk)) = response.chunk().await {
-        text.push_str(&String::from_utf8_lossy(&chunk));
+/// Read the whole response before deciding what the provider refused.
+/// An incomplete refusal cannot establish that the grant is invalid.
+async fn response_body(
+    response: &mut reqwest::Response,
+    endpoint: &str,
+) -> Result<Zeroizing<Vec<u8>>, Failure> {
+    let mut encoded = Zeroizing::new(Vec::new());
+    while let Some(chunk) = response.chunk().await.map_err(|error| {
+        refresh_failure(
+            Code::InfraDown,
+            format!(
+                "OAuth refresh POST {endpoint}: HTTP {} body read failed after {} bytes: {}",
+                response.status().as_u16(),
+                encoded.len(),
+                failure::error_chain(&error),
+            ),
+        )
+    })? {
+        encoded.extend_from_slice(&chunk);
     }
-    text
+    Ok(encoded)
 }
 
 async fn request_refresh_grant(
@@ -110,11 +124,16 @@ async fn request_refresh_grant(
             reqwest::Client::builder()
                 .redirect(reqwest::redirect::Policy::none())
                 .build()
-                .map_err(|_| "OAuth refresh client configuration failed".to_owned())
+                .map_err(|error| {
+                    format!(
+                        "OAuth refresh client configuration failed: {}",
+                        failure::error_chain(&error),
+                    )
+                })
         });
     let client = REFRESH_CLIENT
-        .clone()
-        .map_err(|detail| refresh_failure(Code::Config, detail))?;
+        .as_ref()
+        .map_err(|detail| refresh_failure(Code::Config, detail.as_str()))?;
     let parameters = OAuthRefreshRequest {
         grant_type: "refresh_token",
         refresh_token,
@@ -129,31 +148,49 @@ async fn request_refresh_grant(
     }
     .send()
     .await
-    .map_err(|_| refresh_failure(Code::InfraDown, "OAuth refresh transport failure"))?;
+    .map_err(|error| {
+        refresh_failure(
+            Code::InfraDown,
+            format!(
+                "OAuth refresh POST {} failed: {}",
+                config.token_endpoint,
+                failure::error_chain(&error),
+            ),
+        )
+    })?;
     // The status alone was all this returned, and the status alone is what a
     // day went into supplementing by hand. The body says which of
     // `invalid_grant`, a revoked client or a throttle it was, so it travels
     // with the failure.
-    if !response.status().is_success() {
-        let status = response.status().as_u16();
-        let body = error_body(&mut response).await;
-        return Err(rejection_failure(status, &body));
+    let status = response.status();
+    let mut encoded = response_body(&mut response, config.token_endpoint).await?;
+    if !status.is_success() {
+        let body = String::from_utf8_lossy(&encoded);
+        return Err(rejection_failure(status.as_u16(), &body));
     }
-    let mut encoded = Zeroizing::new(Vec::new());
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|_| refresh_failure(Code::InfraDown, "OAuth refresh response read failed"))?
-    {
-        encoded.extend_from_slice(&chunk);
-    }
-    let mut body: Value = serde_json::from_slice(&encoded)
-        .map_err(|_| refresh_failure(Code::Unknown, "OAuth refresh response is not JSON"))?;
+    let mut body: Value = serde_json::from_slice(&encoded).map_err(|error| {
+        refresh_failure(
+            Code::Unknown,
+            format!(
+                "OAuth refresh response from {} (HTTP {}) is not JSON: {error}",
+                config.token_endpoint,
+                status.as_u16(),
+            ),
+        )
+    })?;
     encoded.zeroize();
     let grant = parse_refresh_grant(&body);
     zeroize_json_strings(&mut body);
-    grant
-        .ok_or_else(|| refresh_failure(Code::Unknown, "OAuth refresh response has no access token"))
+    grant.ok_or_else(|| {
+        refresh_failure(
+            Code::Unknown,
+            format!(
+                "OAuth refresh response from {} (HTTP {}) has no nonempty access_token",
+                config.token_endpoint,
+                status.as_u16(),
+            ),
+        )
+    })
 }
 
 pub(super) async fn refresh(

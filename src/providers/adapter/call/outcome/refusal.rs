@@ -21,13 +21,7 @@ use crate::types::{ModelResponse, ProviderRefusal, Refusal};
 /// The cause carries no request body, only the client's own description of
 /// why the socket did not carry the call.
 pub(in crate::providers::adapter) fn transport_refusal(error: &reqwest::Error) -> Refusal {
-    let mut cause = error.to_string();
-    let mut source = std::error::Error::source(error);
-    while let Some(inner) = source {
-        cause.push_str(": ");
-        cause.push_str(&inner.to_string());
-        source = std::error::Error::source(inner);
-    }
+    let cause = failure::error_chain(error);
     let (class, said) = if error.is_timeout() {
         (
             ProviderRefusal::DependencyTimeout,

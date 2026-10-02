@@ -100,9 +100,13 @@ attempt count the envelope reports. The full code list, with examples, is in
 <li>Catalogue reads, provider model discovery and OAuth refresh also have no
   Brama elapsed-time cutoff. Provider responses are read whole; the resource
   behavior below describes their handling.</li>
-<li>An inference transport failure retains its cause. Removing a gateway clock does not
-  turn a refused connection, TLS failure, provider refusal or incomplete stream
-  into a successful answer.</li>
+<li>Inference and OAuth transport failures retain their underlying causes.
+  Removing a gateway clock does not turn a refused connection, TLS failure,
+  provider refusal or incomplete stream into a successful answer.</li>
+<li>An OAuth response read failure names the token endpoint, HTTP status and
+  bytes received. Even a partial 401 or 403 remains a transport failure, not
+  evidence that the provider disowned the grant; its recorded credential state
+  stays unchanged. Only a complete response reaches refusal classification.</li>
 <li>Direct routes perform one provider attempt.</li>
 <li>Explicit subscription routes perform at most two provider attempts, both on
   the one route the request named.</li>

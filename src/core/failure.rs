@@ -22,6 +22,8 @@
 //! already decided. Where the two readings differ, both are logged; neither
 //! stands in for the other.
 
+use std::fmt::Write as _;
+
 use wisent_errors::{Code, Failure};
 
 /// The service name every Brama envelope carries.
@@ -113,4 +115,15 @@ pub fn envelope(point: &str, code: Code, impact: &str, detail: impl Into<String>
     Failure::or_fallback(point, code, SERVICE)
         .impact(impact)
         .detail(detail)
+}
+
+/// Preserve the underlying causes as well as the outer operation's error.
+pub(crate) fn error_chain(error: &(dyn std::error::Error + 'static)) -> String {
+    let mut detail = error.to_string();
+    let mut source = error.source();
+    while let Some(inner) = source {
+        write!(detail, ": {inner}").expect("formatting an error into a string");
+        source = inner.source();
+    }
+    detail
 }
