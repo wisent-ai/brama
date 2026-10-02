@@ -12,7 +12,7 @@ use super::super::refusal::envelope::refuse;
 use super::super::refusal::pool_empty::no_active_credential_summary;
 
 pub(super) fn max_credential_attempts() -> usize {
-    "2".parse().expect("valid credential attempt limit")
+    2
 }
 
 /// The accounts one route may rotate across, already ordered.
