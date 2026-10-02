@@ -5,11 +5,11 @@ umask 077
 stado=$(command -v stado || true)
 [ -x "$stado" ] || { printf '%s\n' 'Stado product signing capability is not installed' >&2; exit 1; }
 
-export HOME=/Users/charles
+export HOME="${HOME:?Runner account HOME is required}"
 export PATH="$HOME/.stado/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 root="${BRAMA_RUNNER_ROOT:-$HOME/.stado/actions-runner-brama-release}"
-runner_name="${BRAMA_RUNNER_NAME:-charless-mac-mini-stado-release}"
+runner_name="${BRAMA_RUNNER_NAME:?Set BRAMA_RUNNER_NAME to the declared GitHub runner name}"
 runner_labels="${BRAMA_RUNNER_LABELS:-stado-release}"
 runner_url="${BRAMA_RUNNER_URL:-https://github.com/wisent-ai/brama}"
 # v2.336.0 regresses process startup on macOS arm64: actions/runner#4570.

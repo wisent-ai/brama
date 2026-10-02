@@ -199,6 +199,8 @@ refusal.</p>
 </ol>
 <p>Steps that execute validation or contact environments require the explicit
 approval described in <a href="/docs/testing"><code>TESTING.md</code></a>.</p>
+<p>The maintained runner entry point, <code>.github/runner/reconcile-release-runner.sh</code>, uses its service account's exported <code>HOME</code> and requires <code>BRAMA_RUNNER_NAME</code> from the service definition. Neither defaults to a personal account or machine name. A missing value refuses before download or registration. <code>BRAMA_RUNNER_ROOT</code>, labels, repository URL and registration-token file keep their declared overrides. Inspect the resulting registration in GitHub Settings → Actions → Runners; an accepted configuration alone does not prove the runner is serving jobs.</p>
+<p>Raw run records stay in private evidence storage or ignored local output. The legacy <code>.evidence/</code> directory is ignored and is not an audit exception for source files. Removing those records from Git's index does not rewrite their observations or delete the retained local files. New release evidence must follow the normal release receipt and artifact flow, not a source commit.</p>
 <h3 id="release-control-workflow">Release control workflow<a class="headerlink" href="#release-control-workflow" title="Link to this section">&para;</a></h3>
 <p>The <code>release-control</code> Actions form and <code>gh workflow run release-control.yml</code>
 invoke the same Stado operations. Every invocation requires <code>runner_label</code>

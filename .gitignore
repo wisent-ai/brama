@@ -24,3 +24,6 @@ router.log
 
 # The ignored build directory every checkout keeps its throwaway state in.
 .build/
+
+# Raw run records belong to private evidence storage, not product source.
+/.evidence/
