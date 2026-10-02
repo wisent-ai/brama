@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>brama subscription sign-in-manual — Brama CLI Docs</title>
-  <meta name="description" content="Sign one Claude account into Brama through your own browser and a pasted code, without Weles, and prove it with one completion.">
+  <meta name="description" content="Sign one subscription account into Brama through your own browser and a pasted code, without Weles, and prove it with one completion.">
   <link rel="canonical" href="https://brama.wisent.com/docs/cli/subscription/sign-in-manual">
   <link rel="stylesheet" href="/docs/assets/site.css">
 </head>
@@ -19,7 +19,7 @@
     <main>
       <p class="source-note">Brama CLI command reference</p>
       <article class="doc"><h1 id="brama-subscription-sign-in-manual"><code>brama subscription sign-in-manual</code><a class="headerlink" href="#brama-subscription-sign-in-manual" title="Link to this section">&para;</a></h1>
-<p>Sign one Claude account in by hand: Brama prints the provider’s authorize page, you open it in your own browser and log in, you paste the code the page shows, and Brama exchanges it for a grant, stores the grant as that subscription’s credential and proves it with one minimal completion. No Weles host, worker credential or Skarbiec login row is involved. The flow is the one <code>omp auth-broker login anthropic</code> runs, parameter for parameter, so the stored grant is the same kind the automatic refresh already keeps alive.</p>
+<p>Sign one account in by hand: Brama prints the provider’s authorize page, you open it in your own browser and log in, you paste the code the page shows, and Brama exchanges it for a grant, stores the grant as that subscription’s credential and proves it with one minimal completion. No Weles host, worker credential or Skarbiec login row is involved. The provider is the command’s argument; one that has no manual flow is refused by name, with the providers that have one. For <code>claude-code</code> the flow is the one <code>omp auth-broker login anthropic</code> runs, parameter for parameter, so the stored grant is the same kind the automatic refresh already keeps alive.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
 <pre><code class="language-console">brama subscription sign-in-manual &lt;PROVIDER&gt; --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--json]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
