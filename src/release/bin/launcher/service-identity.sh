@@ -49,22 +49,16 @@ if [ -n "$stado_bin" ] && [ -z "$service_identity_present" ]; then
   fi
   service_key="$gnupg_dir/brama-service.key"
   rm -f "$service_key"
-  read_attempt=1
-  read_attempts=${BRAMA_SKARBIEC_READ_ATTEMPTS:-3}
-  while ! ( umask 077
+  # One read: a refusal is the answer, named with the item it was for, and
+  # the supervisor's own restart is the next attempt.
+  ( umask 077
     WC_AGENT_SKARBIEC_URL="$agent_skarbiec_url" \
       STADO_CONFIG=${BRAMA_SKARBIEC_STADO_CONFIG:-"${HOME:-/nonexistent}/.config/stado/brama-service.json"} \
-      "$stado_bin" secrets get brama-service --field gpg_private_key > "$service_key" )
-  do
+      "$stado_bin" credentials get brama-service --field gpg_private_key > "$service_key" ) || {
     rm -f "$service_key"
-    if [ "$read_attempt" -ge "$read_attempts" ]; then
-      printf '%s\n' 'cannot read this service identity from Skarbiec (brama-service.gpg_private_key)' >/dev/stderr
-      false
-    fi
-    printf '%s\n' "Skarbiec could not return the Brama identity; retrying ($read_attempt/$read_attempts)" >/dev/stderr
-    read_attempt=$((read_attempt + 1))
-    sleep 2
-  done
+    printf '%s\n' "cannot read this service identity from Skarbiec at $agent_skarbiec_url (brama-service.gpg_private_key)" >/dev/stderr
+    false
+  }
   gpg --batch --quiet --import "$service_key" || {
     rm -f "$service_key"
     printf '%s\n' 'the service identity from Skarbiec did not import' >/dev/stderr

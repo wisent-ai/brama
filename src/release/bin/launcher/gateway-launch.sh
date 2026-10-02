@@ -32,16 +32,9 @@ if [ -x /usr/sbin/lsof ]; then
       "${HOME:-/nonexistent}/.stado/services/brama/releases/"*/darwin-arm64/bin/brama)
         if [ "$(realpath "$stale_bin")" != "$(realpath "$BRAMA_BIN")" ]; then
           printf '%s\n' "retiring stale managed Brama process $stale_pid from $stale_bin" >/dev/stderr
+          # No wait for it to go: if it still holds the port when Brama binds,
+          # Brama's own bind error names the port and the supervisor restarts.
           kill "$stale_pid"
-          attempt=0
-          while kill -0 "$stale_pid" 2>/dev/null; do
-            attempt=$((attempt + 1))
-            if [ "$attempt" -ge 100 ]; then
-              printf '%s\n' "stale managed Brama process $stale_pid did not stop" >/dev/stderr
-              exit 1
-            fi
-            sleep 0.05
-          done
         fi
         ;;
     esac
