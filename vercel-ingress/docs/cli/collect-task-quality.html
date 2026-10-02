@@ -21,7 +21,7 @@
       <article class="doc"><h1 id="brama-collect-task-quality"><code>brama collect-task-quality</code><a class="headerlink" href="#brama-collect-task-quality" title="Link to this section">&para;</a></h1>
 <p>Send one deterministic check to each selected active stateless provider route so later <code>task:&lt;task&gt;</code> selection has quality evidence.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama collect-task-quality --agent-id &lt;ID&gt; --task &lt;KEY&gt; --prompt &lt;TEXT&gt; [--expected-exact &lt;TEXT&gt;] [--expected-contains &lt;TEXT&gt;] [--persist] [--max-models &lt;N&gt;] [--json] --allow-provider-cost</code></pre>
+<pre><code class="language-console">brama collect-task-quality --agent-id &lt;ID&gt; --task &lt;KEY&gt; --prompt &lt;TEXT&gt; --max-models &lt;N&gt; [--expected-exact &lt;TEXT&gt;] [--expected-contains &lt;TEXT&gt;] [--persist] [--json] --allow-provider-cost</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>--agent-id &lt;ID&gt;</code></td><td>required</td><td>Agent whose subscription routes are checked.</td></tr>
 <tr><td><code>--task &lt;KEY&gt;</code></td><td>required, nonempty</td><td>Key later selected as <code>task:&lt;task&gt;</code>.</td></tr>
@@ -29,7 +29,7 @@
 <tr><td><code>--expected-exact &lt;TEXT&gt;</code></td><td>one expectation required</td><td>Score 1 only for an exact response.</td></tr>
 <tr><td><code>--expected-contains &lt;TEXT&gt;</code></td><td>one expectation required</td><td>Score 1 when the response contains the text.</td></tr>
 <tr><td><code>--persist</code></td><td>optional; off</td><td>Write check rows for later task selection.</td></tr>
-<tr><td><code>--max-models &lt;N&gt;</code></td><td>optional; <code>3</code></td><td>Bound selected models to 1 through 25.</td></tr>
+<tr><td><code>--max-models &lt;N&gt;</code></td><td>required</td><td>How many active models to check, 1 through 25; each is one billable request. No count is assumed, and a call without it exits 2.</td></tr>
 <tr><td><code>--allow-provider-cost</code></td><td>required by runtime; off</td><td>Acknowledge all billable requests.</td></tr>
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print the report as one JSON document instead of <code>key: value</code> lines.</td></tr>
 </tbody></table>

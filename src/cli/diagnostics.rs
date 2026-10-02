@@ -43,8 +43,9 @@ pub(crate) struct CollectTaskQualityArgs {
     /// Write results into subscription_router_checks
     #[arg(long, default_value_t = false)]
     persist: bool,
-    /// Maximum active models to check (bounded again by the library)
-    #[arg(long, default_value = "3")]
+    /// How many active models to check, each one a billable request (1 to
+    /// 25). No count is assumed: the caller decides what it spends.
+    #[arg(long)]
     max_models: usize,
     /// Acknowledge that this command performs billable provider requests
     #[arg(long, default_value_t = false)]
