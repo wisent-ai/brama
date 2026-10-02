@@ -49,7 +49,7 @@ owns:</p>
 <li>credential extraction and provider authorization shape;</li>
 <li>request and response translation;</li>
 <li>model discovery and capability declaration;</li>
-<li>completion, cancellation and response-size limits;</li>
+<li>completion, cancellation and response decoding;</li>
 <li>provider-specific error classification and telemetry;</li>
 <li>compatibility and disable/removal behavior.</li>
 </ul>
@@ -101,7 +101,7 @@ the caller receives.</p>
 <ul>
 <li>a provider attempt finishes when the provider answers or refuses, or its
   connection fails; Brama does not stop it because of elapsed time;</li>
-<li>provider response bodies are capped at 16 MiB before UTF-8 or JSON parsing;</li>
+<li>buffered provider response bodies are read whole before UTF-8 or JSON parsing;</li>
 <li>selector and credential attempts are bounded by
   <a href="/docs/core"><code>CORE.md</code></a>;</li>
 <li>only authentication, quota, and rate-limit exhaustion move to another
@@ -109,12 +109,12 @@ the caller receives.</p>
 <li>permanent authentication failure appends a retirement marker;</li>
 <li>a malformed or permanent provider result stops replay and returns a
   normalized failure to the caller;</li>
-<li>provider status and body are treated as untrusted and bounded before
-  parsing.</li>
+<li>provider status and body are treated as untrusted; response handling follows
+  the <a href="/docs/core/state-and-failures#resource-behavior">core resource contract</a>.</li>
 </ul>
 <h2 id="compatibility">Compatibility<a class="headerlink" href="#compatibility" title="Link to this section">&para;</a></h2>
-<p>Brama supports the request/response shapes implemented by its protocol
-adapters, not every feature exposed by a provider SDK. Streaming output, batch
+<p>Brama supports the buffered and streaming shapes implemented by its protocol
+adapters, not every feature exposed by a provider SDK. Batch
 APIs, files, assistants, fine-tuning, and provider control planes are
 unsupported. Provider-only corrections may remain compatible when the
 normalized contract is unchanged; schema, behavior, or error changes visible to

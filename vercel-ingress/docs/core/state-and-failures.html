@@ -97,10 +97,10 @@ attempt count the envelope reports. The full code list, with examples, is in
 <li>Buffered and streaming requests run until the provider answers, refuses, or
   the connection fails. Brama adds no elapsed-time cutoff before the first
   streamed byte or between later reads.</li>
-<li>Catalogue reads, provider model discovery and OAuth refresh also finish on
-  their actual result or failure. Response-size bounds remain independent of
-  elapsed time.</li>
-<li>A transport failure retains its cause. Removing a gateway clock does not
+<li>Catalogue reads, provider model discovery and OAuth refresh also have no
+  Brama elapsed-time cutoff. Provider responses are read whole; the resource
+  behavior below describes their handling.</li>
+<li>An inference transport failure retains its cause. Removing a gateway clock does not
   turn a refused connection, TLS failure, provider refusal or incomplete stream
   into a successful answer.</li>
 <li>Direct routes perform one provider attempt.</li>

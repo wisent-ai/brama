@@ -27,9 +27,11 @@ Semantic Versioning and the pre-one compatibility policy in
 <h2 id="unreleased-request-completion-contract">Unreleased: request completion and concrete failures<a class="headerlink" href="#unreleased-request-completion-contract" title="Link to this section">&para;</a></h2>
 <p>The current request, streaming, integration and error pages now describe the
 shared transport's actual contract: completion or a concrete failure, not a
-gateway clock. Candidate counts, credential limits and response-size bounds
-remain in force. Transport errors retain their cause; an incomplete provider
-stream is not a completed answer. Historical released entries remain unchanged.
+gateway clock. Candidate and credential selection remain finite. Provider and
+OAuth responses are read whole, as the core resource contract states; these
+pages no longer promise obsolete byte caps either. Inference transport errors
+retain their cause; an incomplete provider stream is not a completed answer.
+Historical released entries remain unchanged.
 This documentation correction does not qualify a new binary or a provider
 journey; those require their own recorded execution.</p>
 <h2 id="unreleased-subscription-list">Unreleased: <code>brama subscription list</code> and <code>brama diagnose --json</code><a class="headerlink" href="#unreleased-subscription-list" title="Link to this section">&para;</a></h2>
