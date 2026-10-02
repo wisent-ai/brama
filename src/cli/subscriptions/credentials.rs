@@ -73,10 +73,10 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long, default_value_t = false)]
         json: bool,
     },
-    /// Sign one Claude account in by hand: open the printed URL in your own browser, log in, and paste the code it shows on stdin
+    /// Sign one account in by hand: open the printed URL in your own browser, log in, and paste the code it shows on stdin; a provider without a manual flow is refused by name
     #[command(name = "sign-in-manual")]
     SignInManual {
-        /// The provider whose account should be signed in; `claude-code` is the one with a manual flow
+        /// The provider whose account should be signed in; one without a manual flow is refused by name
         provider: String,
         /// Exact Brama subscription whose grant this sign-in replaces
         #[arg(long)]
