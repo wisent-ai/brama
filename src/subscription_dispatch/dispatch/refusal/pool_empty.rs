@@ -3,10 +3,8 @@
 
 /// Why an emptied credential pool emptied, as one value.
 ///
-/// The buffered and streaming paths reach this decision independently and used
-/// to spell it twice. They now share it, because the two spellings drifting is
-/// how the same broken credential comes to answer `503` to one caller and `429`
-/// to another.
+/// Buffered and streaming requests share this classification so the same
+/// credential state produces the same refusal on both paths.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PoolEmptyCause {
     /// A provider refused a credential outright during this request.
@@ -32,15 +30,6 @@ impl PoolEmptyCause {
 /// reads the ledger for each one. So its presence means one member of this
 /// pool is otherwise usable and merely out of quota, and a caller who waits
 /// is served by that member whatever the other members need.
-///
-/// Both directions have cost a diagnosis. A `429 all bounded 'codex'
-/// credentials unavailable for agent`, retryable, while the ledger records
-/// that every one of those credentials needs a sign-in: that case sets no
-/// `rate_limit_block` at all, so it is authorization here and stays so. The
-/// opposite — one live credential at 100% of its seven-day quota, resetting
-/// in hours, beside members burnt by borrowing — answered as `503
-/// subscription_reauthorization_required` reads as a task for a person while
-/// the repair is a wait.
 pub fn pool_is_capacity(rate_limit_block: bool) -> bool {
     rate_limit_block
 }
@@ -60,14 +49,8 @@ pub fn capacity_is_mixed(cause: PoolEmptyCause) -> bool {
 /// capability or grant repaired, and everything else is quota worth waiting
 /// out. Only the last is retryable.
 ///
-/// The block case is why this is a named function with a test beside it.
-/// `codex` answered `401 Your session has ended. Please log in again`, which
-/// recorded `needs_reauthorization` and a half-hour block; every request inside
-/// that window skipped the credential without asking anyone, emptied the pool
-/// with nothing observed, and was reported as capacity anyway. The ledger
-/// had recorded the authorization failure the whole time, and the caller was
-/// told to retry -- which is the defect ARCHITECTURE.md records as fixed,
-/// reappearing one layer further in.
+/// A recorded authorization block remains an authorization failure even when
+/// the credential is skipped before a new provider request.
 pub fn pool_empty_summary(provider: &str, cause: PoolEmptyCause) -> String {
     if cause.auth_rejection || cause.reauthorization_block {
         auth_rejected_summary(provider)
