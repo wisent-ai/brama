@@ -79,18 +79,18 @@ must resolve to an active, non-retired resource owned by the signed agent.
 Selectors never authorize a direct provider credential or another agent's
 subscription.</p>
 <h2 id="bounds">Bounds<a class="headerlink" href="#bounds" title="Link to this section">&para;</a></h2>
-<p>Every call is finitely bounded before the first byte
-(<code>src/subscription_dispatch/dispatch.rs</code>):</p>
+<p>Candidate and credential selection follow the
+<a href="/docs/core/state-and-failures">core request contract</a>:</p>
 <ul>
 <li>a direct route: one attempt;</li>
 <li>an explicit subscription route: at most <strong>2</strong> eligible credentials
   (<code>max_credential_attempts</code>);</li>
-<li>a selector: at most <strong>3</strong> model candidates (<code>max_selector_models</code>), each
-  trying up to 2 credentials — at most 6 provider calls, and a refusal that
-  never reached a provider costs no budget;</li>
+<li>a selector walks its ordered model candidates, trying at most two eligible
+  credentials per route; a refusal that never reached a provider spends no
+  provider attempt;</li>
 <li>a provider whose whole pool emptied is skipped for its remaining
   candidates and named once, not twice;</li>
-<li>all inside the 300-second whole-request deadline.</li>
+<li>elapsed time alone does not stop a request.</li>
 </ul>
 <p>Once a stream commits, nothing is retried on any credential — a second
 attempt would double both the bill and the text. Only authentication, quota,

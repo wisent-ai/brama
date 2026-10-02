@@ -36,8 +36,8 @@ non-group-readable file. The file is re-read per request, so a repaired file nee
 restart.</p>
 <h2 id="models">Models<a class="headerlink" href="#models" title="Link to this section">&para;</a></h2>
 <p>No pinned rows: the catalog is discovered live from the resolved endpoint&#x27;s own
-<code>/v1/models</code>, bounded at 20 seconds per discovery. What is served depends
-entirely on what the deployment loaded into its engine.</p>
+<code>/v1/models</code>. Discovery follows the <a href="/docs/integrations/model-providers#reliability">shared provider transport contract</a>.
+What is served depends entirely on what the deployment loaded into its engine.</p>
 <h2 id="plan-usage">Plan usage<a class="headerlink" href="#plan-usage" title="Link to this section">&para;</a></h2>
 <p>There is no plan: the deployment owns the hardware. No usage report exists and none is
 invented (<a href="/docs/concepts/subscription#the-usage-ledger">subscription</a>).</p>

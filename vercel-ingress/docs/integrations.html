@@ -130,8 +130,8 @@ four pages that carry the contracts.</p>
 <p>Which provider serves an alias is Brama's own decision, recorded in the route
 registry document. An alias names exactly one destination route. When that
 route refuses a request, the refusal is what the caller receives: no second
-route is attempted, and the request deadline is the deadline of that one
-attempt.</p>
+route is attempted. Completion and failures follow the
+<a href="/docs/core/state-and-failures">core request contract</a>, not a gateway clock.</p>
 <p>The registry document carries three known top-level fields — the schema
 version, <code>deployments</code> and <code>routes</code> — and the schema version
 is the number one. <code>routes</code> maps an alias to its single destination.

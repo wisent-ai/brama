@@ -70,8 +70,9 @@ ChatGPT backend requires and every other provider never sees:
 <h2 id="refresh">Refresh<a class="headerlink" href="#refresh" title="Link to this section">&para;</a></h2>
 <p>Ahead of expiry the gateway posts <code>grant_type=refresh_token</code> with the stored
 refresh token and the public client id <code>app_EMoamEEZ73f0CkXaXp7hrann</code> to
-<code>https://auth.openai.com/oauth/token</code>, form-encoded, bounded at 15 seconds and a
-64&nbsp;KiB answer. Each <code>brama maintain</code> pass refreshes every active
+<code>https://auth.openai.com/oauth/token</code>, form-encoded, with a 64&nbsp;KiB answer limit.
+Completion and failures follow the <a href="/docs/core/state-and-failures">core request contract</a>.
+Each <code>brama maintain</code> pass refreshes every active
 credential expiring within
 <code>BRAMA_CREDENTIAL_REFRESH_SKEW_SECS</code> (300), single-flighted per subscription; a
 token is considered dead 60 seconds before its stated expiry. OpenAI rotates the refresh

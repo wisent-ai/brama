@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>State and failures — Brama Docs</title>
-  <meta name="description" content="Who owns each piece of Brama state, the public error envelope and code table, the attempt and deadline bounds, resource limits, and how the contract evolves.">
+  <meta name="description" content="Who owns each piece of Brama state, the public error envelope and code table, attempt counts, completion and cancellation, resource limits, and how the contract evolves.">
   <link rel="canonical" href="https://brama.wisent.com/docs/core/state-and-failures">
   <link rel="stylesheet" href="/docs/assets/site.css">
 </head>
@@ -79,7 +79,7 @@ this request actually made:</p>
 <tr><td style="text-align: right;">503</td><td><code>credential_unauthorized</code></td><td>redemption was refused, or no capability, read grant, or installation trust material could produce a credential at all</td><td>Repair the authorization chain; waiting does not reach it</td></tr>
 <tr><td style="text-align: right;">503</td><td><code>subscription_reauthorization_required</code></td><td>every credential within the bound was refused by the provider</td><td>Sign the subscription in again</td></tr>
 <tr><td style="text-align: right;">503</td><td><code>dependency_unavailable</code></td><td>a required catalogue, broker, vault, or provider is unavailable</td><td>Restore the named dependency</td></tr>
-<tr><td style="text-align: right;">504</td><td><code>dependency_timeout</code></td><td>the whole Brama request deadline expired</td><td>Inspect the dependency; retry only when it is safe</td></tr>
+<tr><td style="text-align: right;">504</td><td><code>dependency_timeout</code></td><td>the transport reported that the provider request timed out</td><td>Inspect the recorded cause; retry only when it is safe</td></tr>
 <tr><td style="text-align: right;">500</td><td><code>internal_error</code></td><td>Brama failed outside a classified dependency</td><td>Operator investigation is required</td></tr>
 </tbody>
 </table>
@@ -94,18 +94,15 @@ attempt count the envelope reports. The full code list, with examples, is in
 <a href="/docs/errors">Errors</a>.</p>
 <h2 id="cancellation-timeout-and-retry">Cancellation, timeout, and retry<a class="headerlink" href="#cancellation-timeout-and-retry" title="Link to this section">&para;</a></h2>
 <ul>
-<li>One buffered HTTP inference request has a 300-second whole-request deadline.
-  That deadline covers the one attempt the request is entitled to; it is not
-  multiplied by a number of routes, because an alias has one route.</li>
-<li>One streaming request has that same deadline up to the moment its provider
-  stream commits, and none after: a committed generation is bounded by the
-  per-read timeout below, because a total budget cannot tell a model that is
-  thinking from a socket that has died.</li>
-<li>One buffered provider HTTP attempt has a 255-second timeout. A streaming
-  attempt applies those same 255 seconds between reads.</li>
-<li>Model catalogue calls have a 30-second timeout.</li>
-<li>Provider model discovery has a 20-second timeout.</li>
-<li>OAuth refresh has a 15-second timeout and a bounded response size.</li>
+<li>Buffered and streaming requests run until the provider answers, refuses, or
+  the connection fails. Brama adds no elapsed-time cutoff before the first
+  streamed byte or between later reads.</li>
+<li>Catalogue reads, provider model discovery and OAuth refresh also finish on
+  their actual result or failure. Response-size bounds remain independent of
+  elapsed time.</li>
+<li>A transport failure retains its cause. Removing a gateway clock does not
+  turn a refused connection, TLS failure, provider refusal or incomplete stream
+  into a successful answer.</li>
 <li>Direct routes perform one provider attempt.</li>
 <li>Explicit subscription routes perform at most two provider attempts, both on
   the one route the request named.</li>

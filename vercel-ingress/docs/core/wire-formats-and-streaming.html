@@ -79,15 +79,14 @@ contacted, rather than reported as a provider failure.</p>
 <p>One rule governs it. A stream is either committed or it is not, and the
 boundary is the provider's response status:</p>
 <ul>
-<li>before commit, every bound in the core contract applies unchanged &mdash; the
-  selector's model candidates, credential rotation within one route, one forced
-  OAuth refresh, the whole-request deadline &mdash; because the caller has
-  received nothing and a refusal is still an ordinary error document;</li>
-<li>after commit, nothing is retried. A provider that fails, stalls for longer
-  than the per-attempt timeout, or ends without its terminal event ends the
-  caller's stream without one too. Brama does not continue that generation on
-  another credential, because a second attempt would duplicate both cost and
-  emitted text.</li>
+<li>before commit, candidate and credential counts and the one forced OAuth
+  refresh remain bounded. A refusal is an ordinary error document because the
+  caller has received nothing;</li>
+<li>after commit, nothing is retried. A failed connection or a provider that ends
+  without its terminal event ends the caller's stream without one too. Brama
+  does not stop a generation merely because no bytes arrived for a while, and
+  does not continue it on another credential: a second attempt would duplicate
+  both cost and emitted text.</li>
 </ul>
 <p>Credential rotation before the first streamed byte is rotation across
 credentials for the one route the request named. It never reaches a second

@@ -112,8 +112,8 @@ alias you intend to call to read <code>serving</code> first.</p>
 <code>/v1/chat/completions</code>, <code>/v1/messages</code>, or <code>/v1/responses</code> until the intended
 provider, account, and cost are explicit: the three formats are one workflow and
 every one of them spends real quota, whether it answers in one piece or as a
-stream. The request deadline you set is the deadline of that one attempt against
-that one route; it is not multiplied by anything.</p>
+stream. Brama does not stop that attempt because of elapsed time. Completion,
+cancellation and failures follow the <a href="/docs/core/state-and-failures">core request contract</a>.</p>
 <p>A routed answer from a <code>serving</code> alias is first success. A refusal from the
 route is the caller's result, and the repair belongs to the named dependency:
 see <a href="/docs/onboarding/failures-and-reset">failures and reset</a>.</p>

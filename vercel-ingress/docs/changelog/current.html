@@ -24,6 +24,14 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-request-completion-contract">Unreleased: request completion and concrete failures<a class="headerlink" href="#unreleased-request-completion-contract" title="Link to this section">&para;</a></h2>
+<p>The current request, streaming, integration and error pages now describe the
+shared transport's actual contract: completion or a concrete failure, not a
+gateway clock. Candidate counts, credential limits and response-size bounds
+remain in force. Transport errors retain their cause; an incomplete provider
+stream is not a completed answer. Historical released entries remain unchanged.
+This documentation correction does not qualify a new binary or a provider
+journey; those require their own recorded execution.</p>
 <h2 id="unreleased-subscription-list">Unreleased: <code>brama subscription list</code> and <code>brama diagnose --json</code><a class="headerlink" href="#unreleased-subscription-list" title="Link to this section">&para;</a></h2>
 <p>The pool report moved from the top-level <code>brama subscriptions</code> into the
 <a href="/docs/cli/subscription"><code>brama subscription</code></a> group as
@@ -120,8 +128,8 @@ endpoint each provider resolves, or why it resolves none.</p>
 <h2 id="unreleased-one-route-per-alias">Unreleased: an alias resolves to exactly one route<a class="headerlink" href="#unreleased-one-route-per-alias" title="Link to this section">&para;</a></h2>
 <p>An alias now names one destination and nothing else. When that route refuses,
 the refusal is what the caller receives: no second route is attempted, so the
-answer an operator reads is the answer the route gave. The request deadline is
-the deadline of that one attempt and is not multiplied by a number of routes.</p>
+answer an operator reads is the answer the route gave. Brama adds no
+elapsed-time cutoff to that attempt.</p>
 <p>The route registry document carries exactly three known top-level fields:
 <code>schema_version</code>, whose value is the number one, <code>deployments</code>, and
 <code>routes</code>, which maps an alias to its single destination. Any other

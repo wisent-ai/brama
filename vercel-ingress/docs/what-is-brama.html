@@ -56,10 +56,10 @@ is quietly charged in place of the named one. The two pools are
 <a href="/docs/concepts/subscription">concepts/subscription</a>; who may spend what is
 <a href="/docs/concepts/entitlement">concepts/entitlement</a>.</p>
 <h2 id="bounded-dispatch-records">Bounded dispatch records<a class="headerlink" href="#bounded-dispatch-records" title="Link to this section">&para;</a></h2>
-<p>Every call is finitely bounded before the first byte: one attempt for a
-direct route, at most two credentials for an explicit subscription route, at
-most three model candidates and six provider attempts for a selector, all
-inside a 300-second whole-request deadline. Once a stream commits, nothing is
+<p>Candidate and credential selection follow the
+<a href="/docs/core/state-and-failures">core request contract</a>: a selector
+walks its ordered model candidates, with at most two eligible credentials per
+route. Brama adds no elapsed-time cutoff. Once a stream commits, nothing is
 retried on any credential — a second attempt would double both the bill and
 the text. What happened is recorded: structured logs carry routing mode,
 selected route, attempts, and outcome in the fleet's <code>wisent-errors</code>

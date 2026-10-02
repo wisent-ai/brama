@@ -57,8 +57,8 @@ structured errors and logs carry actual integration state:</p>
 <ul>
 <li><code>dependency_unavailable</code>: the required broker, catalog, or
   provider seam could not serve that workflow;</li>
-<li><code>dependency_timeout</code>: the request deadline elapsed, and that
-  deadline covers the single attempt the alias resolves to;</li>
+<li><code>dependency_timeout</code>: the transport reported that the provider
+  request timed out; inspect its recorded cause, not an assumed gateway clock;</li>
 <li><code>provider_rate_limited</code> or <code>subscription_unavailable</code>:
   bounded capacity was exhausted;</li>
 <li><code>provider_failure</code>: a permanent or malformed provider result
@@ -83,7 +83,7 @@ owners own subscriptions, billing, quota, and revocation. Skarbiec owns secret
 authority; Brama release owners own GitHub publication; deployment operators
 own installation, process control, network, and host recovery.</p>
 <p>An integration change is complete only when capability, configuration, data,
-timeout, errors, compatibility, observability, disablement, removal, examples,
+completion, cancellation, errors, compatibility, observability, disablement, removal, examples,
 and approved evidence agree.</p>
 </article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>

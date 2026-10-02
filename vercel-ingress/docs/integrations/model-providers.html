@@ -49,7 +49,7 @@ owns:</p>
 <li>credential extraction and provider authorization shape;</li>
 <li>request and response translation;</li>
 <li>model discovery and capability declaration;</li>
-<li>timeout and response limits;</li>
+<li>completion, cancellation and response-size limits;</li>
 <li>provider-specific error classification and telemetry;</li>
 <li>compatibility and disable/removal behavior.</li>
 </ul>
@@ -99,8 +99,8 @@ reaches exactly one provider. When that provider refuses, the refusal is what
 the caller receives.</p>
 <h2 id="reliability">Reliability<a class="headerlink" href="#reliability" title="Link to this section">&para;</a></h2>
 <ul>
-<li>provider attempt timeout: 255 seconds; the request deadline is the deadline
-  of that one attempt;</li>
+<li>a provider attempt finishes when the provider answers or refuses, or its
+  connection fails; Brama does not stop it because of elapsed time;</li>
 <li>provider response bodies are capped at 16 MiB before UTF-8 or JSON parsing;</li>
 <li>selector and credential attempts are bounded by
   <a href="/docs/core"><code>CORE.md</code></a>;</li>

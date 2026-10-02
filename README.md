@@ -169,7 +169,7 @@ Wisent service / Jeden
                          Skarbiec final-use capability redemption
                                                 │
                                                 ▼
-                              provider protocol adapter + timeout
+                                   provider protocol adapter
                                                 │
                                                 ▼
                          normalized response, error, metrics, journal

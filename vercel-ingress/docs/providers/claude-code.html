@@ -83,8 +83,9 @@ of the token outlives the request.</p>
 <p>Ahead of expiry the gateway posts <code>grant_type=refresh_token</code> with the stored
 <code>refreshToken</code> and the public client id
 <code>9d1c250a-e61b-44d9-88ed-5944d1962f5e</code> to
-<code>https://claude.ai/v1/oauth/token</code>, as JSON, bounded at 15 seconds and a 64&nbsp;KiB
-answer. Each <code>brama maintain</code> pass
+<code>https://claude.ai/v1/oauth/token</code>, as JSON, with a 64&nbsp;KiB answer limit.
+Completion and failures follow the <a href="/docs/core/state-and-failures">core request contract</a>.
+Each <code>brama maintain</code> pass
 refreshes every active credential expiring within
 <code>BRAMA_CREDENTIAL_REFRESH_SKEW_SECS</code> (300), single-flighted per subscription; a
 token is considered dead 60 seconds before its stated expiry. Anthropic rotates the

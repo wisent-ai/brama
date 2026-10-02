@@ -53,7 +53,7 @@
 <td>504</td>
 <td><code>dependency_timeout</code></td>
 <td style="text-align: right;">true</td>
-<td>Brama request deadline expired</td>
+<td>The transport reported that the provider request timed out; inspect the recorded cause</td>
 </tr>
 <tr>
 <td>502</td>
@@ -63,7 +63,7 @@
 </tr>
 </tbody>
 </table>
-<p><code>attempts</code> is the number of outbound provider calls consumed. <code>any</code> and <code>task:</code> stop after at most six model candidates; each subscription provider stops after at most two credentials. The whole HTTP request stops at five minutes. Caller retries are outside that budget and must remain bounded.</p>
+<p><code>attempts</code> counts the outbound provider calls consumed. Selectors walk their ordered model candidates and try at most two eligible credentials per route, as specified by the <a href="/docs/core/state-and-failures">core request contract</a>. Brama does not stop the HTTP request because of elapsed time. Caller retries are separate requests, not evidence that the earlier request failed or did no work.</p>
 <h2 id="recovery">Recovery<a class="headerlink" href="#recovery" title="Link to this section">&para;</a></h2>
 <ol>
 <li>Check <code>/health</code> for build identity only and <code>/stats</code> for redacted counters/limits; neither probes dependencies.</li>

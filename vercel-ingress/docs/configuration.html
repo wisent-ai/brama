@@ -56,8 +56,8 @@
         <h2 id="the-route-contract">The route contract in one paragraph<a class="headerlink" href="#the-route-contract" title="Link to this section">&para;</a></h2>
         <p>An alias resolves to exactly one route. The registry maps an alias to a
         single destination, and when that destination refuses, the refusal is what
-        the caller receives: no second route is attempted for the same request, and
-        the request deadline is the deadline of that one attempt. The four alias
+        the caller receives. No second route is attempted, and Brama adds no
+        elapsed-time cutoff. The four alias
         states are <code>serving</code>, <code>no_route</code>,
         <code>capability_absent</code>, and <code>routes_file_invalid</code>; they are
         reported by <a href="/docs/http-api">GET /v1/aliases</a> and by

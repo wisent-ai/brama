@@ -80,8 +80,8 @@ that documents it.</p>
 <h2 id="what-holds-across-the-family">What holds across the family<a class="headerlink" href="#what-holds-across-the-family" title="Link to this section">&para;</a></h2>
 <p>An alias resolves to exactly one route. The registry maps an alias to its single
 destination, and when that route refuses the request, the refusal is what the caller
-receives: no second route is attempted, and the request deadline is the deadline of that
-one attempt. A declared alias that cannot serve is refused with <code>503</code> and code
+receives: no second route is attempted, and Brama adds no elapsed-time cutoff.
+A declared alias that cannot serve is refused with <code>503</code> and code
 <code>alias_unserviceable</code>, whose <code>details</code> carry the alias <code>state</code> and
 its <code>route</code>; an alias this gateway does not declare is <code>404</code>, whose
 <code>details</code> carry the same two fields. The four states an alias can be in are

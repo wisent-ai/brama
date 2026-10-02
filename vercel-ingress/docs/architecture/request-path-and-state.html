@@ -52,8 +52,8 @@ route, including <code>/health</code>, sits behind the transport guard.</p>
 </code></pre>
 <p>Alias resolution has exactly one outcome per alias: the destination recorded
 in <code>routes</code>. If that route refuses the call, its refusal is what the caller
-receives, and Brama dispatches nowhere else. The request deadline is the
-deadline of that one attempt; it is not multiplied by a count of routes.
+receives, and Brama dispatches nowhere else. That attempt finishes on its
+provider result or transport failure, not on an elapsed-time cutoff.
 <a href="/docs/cli/aliases"><code>brama aliases</code></a> prints the alias, its state and its
 route, and <code>GET /v1/aliases</code> returns the same reading as rows of
 <code>{"alias","state","route","reason","required","authorized"}</code> with the four
