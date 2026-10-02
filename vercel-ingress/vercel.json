@@ -86,6 +86,26 @@
       "destination": "/docs/cli/mcp.html"
     },
     {
+      "source": "/docs/cli/models",
+      "destination": "/docs/cli/models.html"
+    },
+    {
+      "source": "/docs/cli/categories",
+      "destination": "/docs/cli/categories.html"
+    },
+    {
+      "source": "/docs/cli/image",
+      "destination": "/docs/cli/image.html"
+    },
+    {
+      "source": "/docs/cli/video",
+      "destination": "/docs/cli/video.html"
+    },
+    {
+      "source": "/docs/cli/speak",
+      "destination": "/docs/cli/speak.html"
+    },
+    {
       "source": "/docs/cli/subscription/list",
       "destination": "/docs/cli/subscription/accounts/list.html"
     },
