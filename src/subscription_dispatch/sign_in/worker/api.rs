@@ -13,11 +13,9 @@ use serde_json::Value;
 
 /// Where Weles is, and what Stado knows about that placement.
 ///
-/// The URL alone is a loopback address on this machine — Stado publishes a
-/// forward — so a sign-in that dies in transport used to read as
-/// `POST http://127.0.0.1:17690/reauth is unconfirmed`, naming a port and
-/// no service, no host and no log. The rest of Stado's own answer is kept
-/// here so a failure can say whose machine actually serves it.
+/// A forwarded loopback URL does not identify the host serving Weles.
+/// Retain Stado's placement and observation so failures name that host and
+/// expose the freshness of the route.
 pub(crate) struct WelesEndpoint {
     pub url: String,
     /// The host Stado places the service on, when its answer names one.
