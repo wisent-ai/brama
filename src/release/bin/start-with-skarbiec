@@ -58,7 +58,7 @@ if [ -n "${BRAMA_LOCAL_CREDENTIALS_FILE:-}" ]; then
       ;;
   esac
   printf '%s\n' "starting Brama without Skarbiec: provider credentials from $BRAMA_LOCAL_CREDENTIALS_FILE" >/dev/stderr
-  exec "$BRAMA_BIN" serve --port "${BRAMA_PORT_OVERRIDE:-${PORT:-8080}}" --local-credentials-stdin <"$BRAMA_LOCAL_CREDENTIALS_FILE"
+  exec "$BRAMA_BIN" serve --port "$brama_port" --local-credentials-stdin <"$BRAMA_LOCAL_CREDENTIALS_FILE"
 fi
 
 . "$launcher_dir/service-identity.sh"

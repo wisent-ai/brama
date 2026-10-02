@@ -9,8 +9,9 @@ use brama::start_server;
 
 #[derive(Args)]
 pub(crate) struct ServeArgs {
-    /// Port to listen on
-    #[arg(short, long, default_value_t = 8080)]
+    /// Port to listen on. No port is assumed: the service declaration
+    /// (`PORT` in the unit's environment) or the caller names it.
+    #[arg(short, long)]
     port: u16,
     /// Read a standalone provider-to-credential JSON object from stdin
     #[arg(long, default_value_t = false)]

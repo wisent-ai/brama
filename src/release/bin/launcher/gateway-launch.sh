@@ -22,7 +22,7 @@ fi
 # the launchd job therefore left that child alive on its port, and every newer
 # release was quarantined even though its own process model was correct. Retire
 # only an exact stale managed executable: never kill an arbitrary listener.
-brama_port=${BRAMA_PORT_OVERRIDE:-${PORT:-8080}}
+# `brama_port` was resolved by bundle-coordinates.sh from the declaration.
 if [ -x /usr/sbin/lsof ]; then
   for stale_pid in $(/usr/sbin/lsof -nP -tiTCP:"$brama_port" -sTCP:LISTEN 2>/dev/null || true); do
     stale_bin=$(ps -p "$stale_pid" -o comm= 2>/dev/null || true)

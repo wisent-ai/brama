@@ -889,10 +889,13 @@ recorded and the discarded attempt stays `in_progress` forever on the Echo side.
   owner-only is refused with "BRAMA_LOCAL_CREDENTIALS_FILE must be readable by
   its owner only". `stado product install brama --surface service --without
   skarbiec` installs the service on such a host.
-- **Network:** Brama binds to loopback. Standalone desktop clients use their
-  bundled process; managed clients may discover a local Brama service through
-  Stado. Provider endpoints require approved HTTPS hosts, disable redirects,
-  and bypass ambient proxies.
+- **Network:** Brama binds to loopback on the port its service declaration
+  names (`PORT` in the unit's environment, which Stado's product catalogue
+  carries; `BRAMA_PORT_OVERRIDE` overrides one start). `brama serve --port`
+  is required and no port is assumed: a launch without one stops with "PORT
+  is not set". Standalone desktop clients use their bundled process; managed
+  clients may discover a local Brama service through Stado. Provider endpoints
+  require approved HTTPS hosts, disable redirects, and bypass ambient proxies.
 - **Failure:** stable HTTP error codes distinguish invalid input, authentication,
   authorization, quota, timeout, dependency unavailability, and provider
   failure. Retryability is included in the error envelope.

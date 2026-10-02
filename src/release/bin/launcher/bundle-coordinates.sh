@@ -33,6 +33,16 @@ if [ -n "$requested_port_override" ]; then
   BRAMA_PORT_OVERRIDE=$requested_port_override
   export BRAMA_PORT_OVERRIDE
 fi
+# The port Brama listens on is declared by the service unit's environment
+# (`PORT`), overridable per start with BRAMA_PORT_OVERRIDE. No port is assumed:
+# a launch without one stops here and says which variable the declaration
+# must carry.
+brama_port=${BRAMA_PORT_OVERRIDE:-${PORT:-}}
+if [ -z "$brama_port" ]; then
+  printf '%s\n' 'PORT is not set: the Brama service declaration names the port the gateway listens on, and no port is assumed' >/dev/stderr
+  exit 2
+fi
+export brama_port
 configured_config_dir=$requested_config_dir
 
 # A versioned bundle carries its own executables and trust material; these must
