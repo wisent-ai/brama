@@ -39,6 +39,28 @@ done
 unset stage
 
 . "$launcher_dir/bundle-coordinates.sh"
+
+# A host without Skarbiec names an owner-only provider-to-credential JSON file
+# (`{"openai":"sk-..."}`) as BRAMA_LOCAL_CREDENTIALS_FILE, here or in
+# service.env. The gateway then runs in the standalone mode the desktop app
+# uses: the file is handed over stdin, kept in process memory, and no Skarbiec
+# stage below runs. A path that is not an owner-only regular file is refused.
+if [ -n "${BRAMA_LOCAL_CREDENTIALS_FILE:-}" ]; then
+  [ -f "$BRAMA_LOCAL_CREDENTIALS_FILE" ] || {
+    printf '%s\n' "BRAMA_LOCAL_CREDENTIALS_FILE is not a regular file: $BRAMA_LOCAL_CREDENTIALS_FILE" >/dev/stderr
+    exit 1
+  }
+  case "$(ls -ln -- "$BRAMA_LOCAL_CREDENTIALS_FILE")" in
+    -rw-------*|-r--------*) ;;
+    *)
+      printf '%s\n' "BRAMA_LOCAL_CREDENTIALS_FILE must be readable by its owner only (chmod 600): $BRAMA_LOCAL_CREDENTIALS_FILE" >/dev/stderr
+      exit 1
+      ;;
+  esac
+  printf '%s\n' "starting Brama without Skarbiec: provider credentials from $BRAMA_LOCAL_CREDENTIALS_FILE" >/dev/stderr
+  exec "$BRAMA_BIN" serve --port "${BRAMA_PORT_OVERRIDE:-${PORT:-8080}}" --local-credentials-stdin <"$BRAMA_LOCAL_CREDENTIALS_FILE"
+fi
+
 . "$launcher_dir/service-identity.sh"
 . "$launcher_dir/workload-trust.sh"
 . "$launcher_dir/capability-broker-socket.sh"

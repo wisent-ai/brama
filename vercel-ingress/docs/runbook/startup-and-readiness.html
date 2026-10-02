@@ -64,7 +64,12 @@ repair this.
 launcher, and restarting the same bare invocation cannot change the answer.
 Start through <code>src/release/bin/start-with-skarbiec</code>; a standalone desktop
 deployment instead passes <code>--local-credentials-stdin</code>
-(<a href="/docs/configuration">configuration</a>). Other startup refusals in the same
+(<a href="/docs/configuration">configuration</a>). A service host without Skarbiec
+sets <code>BRAMA_LOCAL_CREDENTIALS_FILE</code> (in the environment or in
+<code>~/.config/brama/service.env</code>) to an owner-only provider-to-credential
+JSON file; the launcher then starts that standalone mode itself, says
+<code>starting Brama without Skarbiec: provider credentials from &lt;file&gt;</code>
+on stderr, and refuses a file that is not a regular, owner-only file. Other startup refusals in the same
 class — duplicate client tokens, malformed identities, an alias route with
 <code>*</code> or stray whitespace — also stop the process before it binds; the log
 names the offending entry.</p>
