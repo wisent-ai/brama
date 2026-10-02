@@ -25,10 +25,8 @@ recovered.</p>
 <h2 id="current-release-state">Current release state<a class="headerlink" href="#current-release-state" title="Link to this section">&para;</a></h2>
 <p>Brama is pre-1.0 and does publish immutable binary releases. <code>main</code> remains
 mutable development source and is never a production coordinate.</p>
-<p>Which release is newest is deliberately not restated here. A version written
-into prose goes stale the moment the next tag lands, which is how this section
-came to claim that no release existed while five were published. Two records
-answer it instead, and a machine maintains both:</p>
+<p>Read the release records rather than treating a version copied into prose as
+the newest release:</p>
 <ul>
 <li><code>released-surface.json</code> names the newest release this repository has recorded;
   <code>brama version-gate baseline --write</code> regenerates it from that release rather than
@@ -153,15 +151,10 @@ every request needing a provider credential returns <code>503
 dependency_unavailable</code> with <code>capability redemption denied: peer mismatch</code> on
 stderr. The message names none of the four fields it compared, and three of
 them can be right while the fourth is wrong.</p>
-<p>The registry pins <code>executable_path</code>, <code>executable_sha256</code>, <code>uid</code> and <code>gid</code>, and
-on macOS the designated code-signing requirement. The failure seen in practice
-was the uid: <code>generate-skarbiec-config.mjs</code> defaults to the account the
-container image creates, which exists on no host, so an installation
-provisioned before this was fixed pinned a workload nobody could be — while
-the path and digest in the same record matched exactly, which is what made it
-read like a signing or key problem for days. <code>bin/provision-skarbiec-trust</code>
-now always passes the provisioning account's uid and gid, and
-<code>BRAMA_WORKLOAD_UID</code> / <code>BRAMA_WORKLOAD_GID</code> remain the override.</p>
+<p>The registry pins <code>executable_path</code>, <code>executable_sha256</code>,
+<code>uid</code>, <code>gid</code> and, on macOS, the designated code-signing requirement.
+<code>bin/provision-skarbiec-trust</code> uses the provisioning account's uid and gid;
+<code>BRAMA_WORKLOAD_UID</code> and <code>BRAMA_WORKLOAD_GID</code> override them.</p>
 <p>The launcher now does this itself. When the registry in the installation it is
 about to run does not describe that installation - wrong path, wrong digest,
 wrong account - it provisions before starting rather than refusing, because the
@@ -206,6 +199,37 @@ refusal.</p>
 </ol>
 <p>Steps that execute validation or contact environments require the explicit
 approval described in <a href="/docs/testing"><code>TESTING.md</code></a>.</p>
+<h3 id="release-control-workflow">Release control workflow<a class="headerlink" href="#release-control-workflow" title="Link to this section">&para;</a></h3>
+<p>The <code>release-control</code> Actions form and <code>gh workflow run release-control.yml</code>
+invoke the same Stado operations. Every invocation requires <code>runner_label</code>
+for a Stado-selected macOS ARM64 control runner. In the selected GitHub environment,
+set <code>STADO_CONFIG_PATH</code> to its readable absolute Stado configuration file
+and <code>STADO_BIN_PATH</code> to its executable absolute Stado binary. Neither has
+a built-in account path. Missing or unusable paths fail before release mutation.</p>
+<ul>
+<li><code>submit-candidate</code> and <code>submit-stable</code> require <code>version</code>,
+<code>source_directory</code> and <code>source_revision</code>. The directory is an existing
+checkout on that runner; the revision is a full lowercase 40-character commit.
+Its committed manifest must name Brama. Stado reads that exact tree without changing
+the checkout and requires its version declaration to match the requested version.</li>
+<li><code>promote-candidate</code> and <code>promote-stable</code> require only
+<code>version</code> beside the runner label and consume qualified published bytes.</li>
+<li><code>status</code> and <code>rollback</code> accept no version or source inputs.
+Rollback restores the previous desired release; it does not select an arbitrary version.</li>
+</ul>
+<pre><code>gh workflow run release-control.yml -f action=submit-candidate \
+  -f runner_label=&lt;label&gt; -f version=&lt;semver&gt; \
+  -f source_directory=&lt;absolute-checkout&gt; -f source_revision=&lt;full-sha&gt;
+</code></pre>
+<p>Stable submission, stable promotion and rollback use <code>release-production</code>;
+candidate submission uses <code>release-qualification</code>; other actions use
+<code>release-operations</code>. Configure approval and identity grants on those environments.</p>
+<p>The workflow prints Stado's JSON and preserves its refusal. Successful submission
+means a run was accepted, not that its qualification or rollout passed. Read
+<code>stado release status brama --json</code> for the actual persisted result.
+The workflow neither restarts credential services nor creates qualification receipts.
+The former <code>prepare</code> action and <code>rollback_compatible_with</code> input
+are removed; use <code>submit-candidate</code> and Stado's recorded release policy.</p>
 <h2 id="release-notes">Release notes<a class="headerlink" href="#release-notes" title="Link to this section">&para;</a></h2>
 <p>Each release section in <code>CHANGELOG.md</code> states:</p>
 <ul>

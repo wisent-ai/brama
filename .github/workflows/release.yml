@@ -15,10 +15,7 @@ jobs:
           - os: ubuntu-latest
             platform: linux-amd64
             architecture: x86_64
-          # The Stado release host builds its own platform. GitHub-hosted macOS
-          # minutes are billed at ten times the Linux rate against a monthly
-          # budget this organisation has already spent, and the host that runs
-          # Brama is the same arm64 macOS machine the artifact targets.
+          # Build this platform on a matching fleet runner.
           - os: stado-release
             platform: darwin-arm64
             architecture: arm64
@@ -42,12 +39,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Refuse a tag that disagrees with the manifest
-        # Five releases, v0.2.9 through v0.2.13, were cut from trees already
-        # declaring 0.3.0, so each published a breaking change under a
-        # patch-looking name and a consumer selecting one had no warning. A
-        # published coordinate is immutable, so the only repair available
-        # afterwards was prose. This refuses before the first artifact is built,
-        # which is the only point where the mistake is still free.
+        # Refuse mismatched identities before an immutable artifact is published.
         run: |
           set -euo pipefail
           declared="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
@@ -87,11 +79,7 @@ jobs:
           cargo build --locked --release --bin brama
           cargo build --locked --release --bin skarbiec --manifest-path skarbiec-source/Cargo.toml
       - name: Refuse a router that cannot answer the launcher
-        # The launcher and the router come from two repositories and the pin
-        # between them was unchecked, which is how every release for weeks
-        # shipped a bundle whose first start died on `unknown command:
-        # capability-issue`. Free to catch here, days of a dead gateway
-        # otherwise.
+        # Verify the pinned router implements the verbs the bundled launcher calls.
         run: |
           target/release/brama launcher check-router-verbs \
             --router skarbiec-source/target/release/skarbiec \

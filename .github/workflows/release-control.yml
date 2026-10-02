@@ -4,22 +4,30 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: Exact release-control operation
+        description: Exact Stado release operation
         required: true
         type: choice
         options:
-          - prepare
+          - submit-candidate
           - submit-stable
           - promote-candidate
           - promote-stable
           - status
           - rollback
-      version:
-        description: Exact SemVer without the v prefix
+      runner_label:
+        description: Label of the Stado-selected macOS ARM64 control runner
         required: true
         type: string
-      rollback_compatible_with:
-        description: Additional rollback-compatible SemVer; active host versions are derived
+      version:
+        description: Exact SemVer for submit or promote; leave empty for status or rollback
+        required: false
+        type: string
+      source_directory:
+        description: Existing Brama checkout on the selected runner; submit actions only
+        required: false
+        type: string
+      source_revision:
+        description: Full committed source SHA; submit actions only
         required: false
         type: string
 
@@ -32,319 +40,74 @@ permissions:
 
 jobs:
   release-control:
-    runs-on: [self-hosted, macOS, ARM64, stado-release]
-    environment: ${{ (inputs.action == 'prepare' || inputs.action == 'submit-stable') && 'release-qualification' || inputs.action == 'promote-stable' && 'release-production' || 'release-operations' }}
+    runs-on: [self-hosted, macOS, ARM64, "${{ inputs.runner_label }}"]
+    environment: ${{ (inputs.action == 'submit-stable' || inputs.action == 'promote-stable' || inputs.action == 'rollback') && 'release-production' || inputs.action == 'submit-candidate' && 'release-qualification' || 'release-operations' }}
     env:
-      GIT_CONFIG_NOSYSTEM: "1"
       GIT_TERMINAL_PROMPT: "0"
-      GIT_ASKPASS: /usr/bin/false
-      STADO_CONFIG: /Users/charles/.config/stado/config.json
-      STADO_BIN: /Users/charles/.stado/bin/stado
+      STADO_CONFIG: ${{ vars.STADO_CONFIG_PATH }}
+      STADO_BIN: ${{ vars.STADO_BIN_PATH }}
+      RELEASE_ACTION: ${{ inputs.action }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_SOURCE: ${{ inputs.source_directory }}
+      RELEASE_COMMIT: ${{ inputs.source_revision }}
     steps:
-      - name: Use job-local Git configuration
-        run: |
-          git_config=$(mktemp "$RUNNER_TEMP/brama-gitconfig.XXXXXX")
-          printf 'GIT_CONFIG_GLOBAL=%s\n' "$git_config" >> "$GITHUB_ENV"
-      - uses: actions/checkout@v4
-        with:
-          ref: v${{ inputs.version }}
-          path: brama-source
-      - name: Prepare ephemeral release workspace
-        env:
-          BRAMA_RELEASE_SIGNING_KEY_B64: ${{ secrets.BRAMA_RELEASE_SIGNING_KEY_B64 }}
-        run: |
-          umask 077
-          mkdir -p "$RUNNER_TEMP/release-control"
-          if [ "${{ inputs.action }}" = prepare ] || [ "${{ inputs.action }}" = submit-stable ]; then
-            : "${BRAMA_RELEASE_SIGNING_KEY_B64:?BRAMA_RELEASE_SIGNING_KEY_B64 is required to prepare release objects}"
-            printf '%s' "$BRAMA_RELEASE_SIGNING_KEY_B64" | base64 --decode > "$RUNNER_TEMP/release-control/brama-release.pk8"
-          fi
-      - name: Verify managed Stado release client
-        run: $STADO_BIN --version
-      - name: Keep the release credential service responsive
+      - name: Validate explicitly configured Stado client
+        shell: bash
         run: |
           set -euo pipefail
-
-          PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
-          export PATH
-
-          url=${SKARBIEC_HEALTH_URL:-http://127.0.0.1:8895/health}
-          if curl --fail --silent --max-time 5 "$url" >/dev/null; then
-            printf 'skarbiec already responsive\n'
-            exit 0
+          : "${STADO_CONFIG:?Set STADO_CONFIG_PATH in the selected GitHub environment}"
+          : "${STADO_BIN:?Set STADO_BIN_PATH in the selected GitHub environment}"
+          if [[ "$STADO_CONFIG" != /* || ! -f "$STADO_CONFIG" || ! -r "$STADO_CONFIG" ]]; then
+            printf '%s\n' 'STADO_CONFIG_PATH must name a readable absolute configuration file on this runner' >&2
+            exit 66
           fi
-
-          uid=$(id -u)
-          label=''
-          domain=''
-          for plist in "$HOME"/Library/LaunchAgents/*.plist /Library/LaunchDaemons/*.plist; do
-            [ -f "$plist" ] || continue
-            candidate=$(/usr/libexec/PlistBuddy -c 'Print :Label' "$plist" 2>/dev/null || true)
-            arguments=$(/usr/libexec/PlistBuddy -c 'Print :ProgramArguments' "$plist" 2>/dev/null || true)
-            case "$arguments" in
-              *skarbiec*serve*8895*)
-                label=$candidate
-                case "$plist" in
-                  /Library/LaunchDaemons/*) domain=system ;;
-                  *) domain="gui/$uid" ;;
-                esac
-                break
-                ;;
-            esac
-          done
-
-          [ -n "$label" ] || {
-            printf 'no launchd unit owns the Skarbiec listener on port 8895\n' >&2
+          if [[ "$STADO_BIN" != /* || ! -f "$STADO_BIN" || ! -x "$STADO_BIN" ]]; then
+            printf '%s\n' 'STADO_BIN_PATH must name an executable absolute Stado binary on this runner' >&2
             exit 69
-          }
-
-          # Preserve the loaded definition. Unload/bootstrap can destroy the only known
-          # working state; kickstart replaces only the unhealthy process in place.
-          launchctl kickstart -k "$domain/$label"
-
-          for attempt in 1 2 3 4 5 6 7 8 9 10; do
-            if curl --fail --silent --max-time 5 "$url" >/dev/null; then
-              printf 'skarbiec responsive after in-place recovery (%s)\n' "$label"
-              exit 0
-            fi
-            sleep 2
-          done
-
-          printf 'skarbiec unit %s did not become responsive\n' "$label" >&2
-          exit 69
-      - name: Download exact GitHub release bytes
-        if: inputs.action == 'prepare' || inputs.action == 'submit-stable'
-        working-directory: brama-source
-        env:
-          RELEASE_BASE_URL: https://github.com/${{ github.repository }}/releases/download/v${{ inputs.version }}
-        run: |
-          for platform in linux-amd64 darwin-arm64; do
-            curl --fail --location --proto '=https' --tlsv1.2 \
-              --output "brama-v${{ inputs.version }}-$platform.tar.gz" \
-              "$RELEASE_BASE_URL/brama-v${{ inputs.version }}-$platform.tar.gz"
-          done
-      - name: Publish signed qualified artifacts to Stado
-        if: inputs.action == 'prepare' || inputs.action == 'submit-stable'
-        working-directory: brama-source
-        env:
-          RECEIPT_DIR: ${{ runner.temp }}/release-control
-          ADDITIONAL_ROLLBACK_COMPATIBILITY: ${{ inputs.rollback_compatible_with }}
-        run: |
-          run_stado() {
-            attempts=${STADO_RETRY_ATTEMPTS:-5}
-            delay=${STADO_RETRY_DELAY_SECONDS:-15}
-            case "$attempts" in
-              ''|*[!0-9]*|0) printf 'STADO_RETRY_ATTEMPTS must be a positive integer\n' >&2; return 64 ;;
-            esac
-            case "$delay" in
-              ''|*[!0-9]*) printf 'STADO_RETRY_DELAY_SECONDS must be a non-negative integer\n' >&2; return 64 ;;
-            esac
-            attempt=1
-            while :; do
-              if "$@"; then
-                return 0
-              else
-                status=$?
-              fi
-              [ "$status" -eq 69 ] || return "$status"
-              [ "$attempt" -lt "$attempts" ] || return "$status"
-              printf 'Stado dependency unavailable; retrying in %ss (%s/%s)\n' "$delay" "$attempt" "$attempts" >&2
-              sleep "$delay"
-              attempt=$((attempt + 1))
-            done
-          }
-          source_revision="$(git rev-parse HEAD)"
-          source_archive="$RUNNER_TEMP/release-control/brama-source.tar.gz"
-          git archive --format=tar HEAD | gzip -9 -n > "$source_archive"
-          source_sha256="$(openssl dgst -sha256 "$source_archive")"
-          source_sha256="${source_sha256##* }"
-          pipeline_manifest_sha256="$(openssl dgst -sha256 .github/workflows/release.yml)"
-          pipeline_manifest_sha256="${pipeline_manifest_sha256##* }"
-          builder="github-actions/${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}"
-          status_file="$RECEIPT_DIR/brama-rollout-status.json"
-          if ! "$STADO_BIN" release status brama --json > "$status_file"; then
-            printf '%s\n' 'The rollout is not settled; using its observed active versions for compatibility.'
           fi
-          jq -e '(.targets | type) == "array" and (.targets | length) > 0' "$status_file" >/dev/null
-          compatibility=()
-          seen_versions=" "
-          while IFS= read -r active_version; do
-            [ -n "$active_version" ] || continue
-            case "$seen_versions" in
-              *" $active_version "*) ;;
-              *)
-                compatibility+=(--rollback-compatible-with "$active_version")
-                seen_versions="${seen_versions}${active_version} "
-                ;;
-            esac
-          done < <(jq -r '.targets[].observed.active_version // empty' "$status_file" | sort -u)
-          if [ -n "$ADDITIONAL_ROLLBACK_COMPATIBILITY" ]; then
-            case "$seen_versions" in
-              *" $ADDITIONAL_ROLLBACK_COMPATIBILITY "*) ;;
-              *) compatibility+=(--rollback-compatible-with "$ADDITIONAL_ROLLBACK_COMPATIBILITY") ;;
-            esac
-          fi
-          if [ "${#compatibility[@]}" -eq 0 ]; then
-            printf '%s\n' 'No active Brama version was observed; refusing an unsafe release manifest.'
-            false
-          fi
-          for platform in linux-amd64 darwin-arm64; do
-            archive="brama-v${{ inputs.version }}-$platform.tar.gz"
-            artifact_sha256="$(openssl dgst -sha256 "$archive")"
-            artifact_sha256="${artifact_sha256##* }"
-            # /usr/bin/wc by path: the release runner's PATH carries a Wisent
-            # `wc` that takes subcommands, so a bare `wc -c` answered
-            # "unexpected argument '-c'", the byte count came out empty, and
-            # `jq --argjson` refused the manifest. Run 35676943268 died there
-            # with nothing published.
-            artifact_bytes="$(/usr/bin/wc -c < "$archive" | tr -d '[:space:]')"
-            qualification="$RECEIPT_DIR/qualification-$platform.json"
-            jq -n \
-              --arg product brama \
-              --arg version "${{ inputs.version }}" \
-              --arg platform "$platform" \
-              --arg builder "$builder" \
-              --arg source_commit "$source_revision" \
-              --arg source_sha256 "$source_sha256" \
-              --arg manifest_sha256 "$pipeline_manifest_sha256" \
-              --arg artifact_sha256 "$artifact_sha256" \
-              --arg artifact_path "$archive" \
-              --arg completed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-              --argjson artifact_bytes "$artifact_bytes" \
-              '{schema_version:1,run_id:env.GITHUB_RUN_ID,job_id:env.GITHUB_JOB,
-                product:$product,version:$version,platform:$platform,builder:$builder,
-                source_commit:$source_commit,source_sha256:$source_sha256,
-                manifest_sha256:$manifest_sha256,inputs:{},secret_env:{},
-                quality:[{name:"github-release-quality",argv:["release.yml"],status:"passed",exit_code:0}],
-                build:{name:"github-release-build",argv:["cargo","build","--release"],status:"passed",exit_code:0},
-                status:"passed",artifact:{sha256:$artifact_sha256,bytes:$artifact_bytes,path:$artifact_path},
-                completed_at:$completed_at,failure:null}' > "$qualification"
-            run_stado "$STADO_BIN" release prepare brama "${{ inputs.version }}" "$platform" \
-              --archive "$archive" \
-              --source-revision "$source_revision" \
-              --binary bin/brama \
-              --launcher bin/start-with-skarbiec \
-              --signing-key-file "$RUNNER_TEMP/release-control/brama-release.pk8" \
-              --key-id brama-release-2026-08 \
-              --source-sha256 "$source_sha256" \
-              --pipeline-manifest-sha256 "$pipeline_manifest_sha256" \
-              --qualification "$qualification" \
-              --minimum-stado-version 0.5.1 \
-              "${compatibility[@]}" \
-              --builder "$builder" \
-              --json
-          done
-          if [ "${{ inputs.action }}" = submit-stable ]; then
-            run_stado "$STADO_BIN" release promote brama "${{ inputs.version }}" --channel stable --json
-          fi
-      - name: Promote candidate routing
-        if: inputs.action == 'promote-candidate'
+          "$STADO_BIN" --version
+      - name: Execute the requested Stado operation
+        shell: bash
         run: |
-          run_stado() {
-            attempts=${STADO_RETRY_ATTEMPTS:-5}
-            delay=${STADO_RETRY_DELAY_SECONDS:-15}
-            case "$attempts" in
-              ''|*[!0-9]*|0) printf 'STADO_RETRY_ATTEMPTS must be a positive integer\n' >&2; return 64 ;;
-            esac
-            case "$delay" in
-              ''|*[!0-9]*) printf 'STADO_RETRY_DELAY_SECONDS must be a non-negative integer\n' >&2; return 64 ;;
-            esac
-            attempt=1
-            while :; do
-              if "$@"; then
-                return 0
-              else
-                status=$?
+          set -euo pipefail
+          case "$RELEASE_ACTION" in
+            submit-candidate|submit-stable)
+              : "${RELEASE_VERSION:?submit requires version}"
+              : "${RELEASE_SOURCE:?submit requires source_directory}"
+              if [[ "$RELEASE_SOURCE" != /* || ! -d "$RELEASE_SOURCE" ]]; then
+                printf '%s\n' 'source_directory must name an existing absolute checkout path on this runner' >&2
+                exit 66
               fi
-              [ "$status" -eq 69 ] || return "$status"
-              [ "$attempt" -lt "$attempts" ] || return "$status"
-              printf 'Stado dependency unavailable; retrying in %ss (%s/%s)\n' "$delay" "$attempt" "$attempts" >&2
-              sleep "$delay"
-              attempt=$((attempt + 1))
-            done
-          }
-          run_stado "$STADO_BIN" release promote brama "${{ inputs.version }}" --channel candidate --json
-      - name: Promote stable routing
-        if: inputs.action == 'promote-stable'
-        run: |
-          run_stado() {
-            attempts=${STADO_RETRY_ATTEMPTS:-5}
-            delay=${STADO_RETRY_DELAY_SECONDS:-15}
-            case "$attempts" in
-              ''|*[!0-9]*|0) printf 'STADO_RETRY_ATTEMPTS must be a positive integer\n' >&2; return 64 ;;
-            esac
-            case "$delay" in
-              ''|*[!0-9]*) printf 'STADO_RETRY_DELAY_SECONDS must be a non-negative integer\n' >&2; return 64 ;;
-            esac
-            attempt=1
-            while :; do
-              if "$@"; then
-                return 0
-              else
-                status=$?
+              if [[ ! "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+                printf '%s\n' 'submit requires source_revision as 40 lowercase hexadecimal characters' >&2
+                exit 64
               fi
-              [ "$status" -eq 69 ] || return "$status"
-              [ "$attempt" -lt "$attempts" ] || return "$status"
-              printf 'Stado dependency unavailable; retrying in %ss (%s/%s)\n' "$delay" "$attempt" "$attempts" >&2
-              sleep "$delay"
-              attempt=$((attempt + 1))
-            done
-          }
-          run_stado "$STADO_BIN" release promote brama "${{ inputs.version }}" --channel stable --json
-      - name: Read rollout status
-        if: inputs.action == 'status'
-        run: |
-          run_stado() {
-            attempts=${STADO_RETRY_ATTEMPTS:-5}
-            delay=${STADO_RETRY_DELAY_SECONDS:-15}
-            case "$attempts" in
-              ''|*[!0-9]*|0) printf 'STADO_RETRY_ATTEMPTS must be a positive integer\n' >&2; return 64 ;;
-            esac
-            case "$delay" in
-              ''|*[!0-9]*) printf 'STADO_RETRY_DELAY_SECONDS must be a non-negative integer\n' >&2; return 64 ;;
-            esac
-            attempt=1
-            while :; do
-              if "$@"; then
-                return 0
-              else
-                status=$?
+              source_product="$(git -C "$RELEASE_SOURCE" show "$RELEASE_COMMIT:.wisent-release.json" | jq -er '.product')"
+              if [[ "$source_product" != brama ]]; then
+                printf 'source commit %s declares product %s, not brama\n' "$RELEASE_COMMIT" "$source_product" >&2
+                exit 64
               fi
-              [ "$status" -eq 69 ] || return "$status"
-              [ "$attempt" -lt "$attempts" ] || return "$status"
-              printf 'Stado dependency unavailable; retrying in %ss (%s/%s)\n' "$delay" "$attempt" "$attempts" >&2
-              sleep "$delay"
-              attempt=$((attempt + 1))
-            done
-          }
-          run_stado "$STADO_BIN" release status brama --json
-      - name: Request rollback
-        if: inputs.action == 'rollback'
-        run: |
-          run_stado() {
-            attempts=${STADO_RETRY_ATTEMPTS:-5}
-            delay=${STADO_RETRY_DELAY_SECONDS:-15}
-            case "$attempts" in
-              ''|*[!0-9]*|0) printf 'STADO_RETRY_ATTEMPTS must be a positive integer\n' >&2; return 64 ;;
-            esac
-            case "$delay" in
-              ''|*[!0-9]*) printf 'STADO_RETRY_DELAY_SECONDS must be a non-negative integer\n' >&2; return 64 ;;
-            esac
-            attempt=1
-            while :; do
-              if "$@"; then
-                return 0
-              else
-                status=$?
+              "$STADO_BIN" release submit --source "$RELEASE_SOURCE" --commit "$RELEASE_COMMIT" \
+                --version "$RELEASE_VERSION" --channel "${RELEASE_ACTION#submit-}" --json
+              ;;
+            promote-candidate|promote-stable)
+              : "${RELEASE_VERSION:?promote requires version}"
+              if [[ -n "$RELEASE_SOURCE" || -n "$RELEASE_COMMIT" ]]; then
+                printf '%s\n' 'promote consumes a published version; source inputs are not accepted' >&2
+                exit 64
               fi
-              [ "$status" -eq 69 ] || return "$status"
-              [ "$attempt" -lt "$attempts" ] || return "$status"
-              printf 'Stado dependency unavailable; retrying in %ss (%s/%s)\n' "$delay" "$attempt" "$attempts" >&2
-              sleep "$delay"
-              attempt=$((attempt + 1))
-            done
-          }
-          run_stado "$STADO_BIN" release rollback brama --json
-      - name: Remove ephemeral release credentials
-        if: always()
-        run: rm -rf "$RUNNER_TEMP/release-control"
+              "$STADO_BIN" release promote brama "$RELEASE_VERSION" \
+                --channel "${RELEASE_ACTION#promote-}" --json
+              ;;
+            status|rollback)
+              if [[ -n "$RELEASE_VERSION" || -n "$RELEASE_SOURCE" || -n "$RELEASE_COMMIT" ]]; then
+                printf '%s\n' 'status and rollback do not accept version or source inputs' >&2
+                exit 64
+              fi
+              "$STADO_BIN" release "$RELEASE_ACTION" brama --json
+              ;;
+            *)
+              printf 'unsupported release action: %s\n' "$RELEASE_ACTION" >&2
+              exit 64
+              ;;
+          esac
