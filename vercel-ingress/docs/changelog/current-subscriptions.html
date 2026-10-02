@@ -109,9 +109,8 @@ subscription and login; only a confirmed worker run and independent seed readbac
 permit a new sign-in and credential refresh. An existing authenticator is not rotated.</p>
 <p>The saved verdict and pool retain the observed second-factor method and Weles run.
 Unknown evidence is no longer inferred as “no second factor” from a successful grant.
-CLI and Desktop distinguish a missing seed from a failed seed inspection. Real
-qualification uses <code>tests/authentication/journey.rs</code> and the matching Weles
-<code>tests/security/second-factor.mjs</code>; source changes alone are not a passing run.</p>
+CLI and Desktop distinguish a missing seed from a failed seed inspection.
+Source changes alone are not a passing real authentication run.</p>
 
 <h2 id="unreleased-imported-account-ref">Unreleased: an imported member names its account, so Weles can sign it in when its grant dies<a class="headerlink" href="#unreleased-imported-account-ref" title="Link to this section">&para;</a></h2>
 <p>Weles resolves an automatic sign-in from the subscription item's <code>account_ref</code>
