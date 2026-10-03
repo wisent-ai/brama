@@ -22,6 +22,23 @@
 changes are on <a href="/docs/changelog/current">current changes</a>; published releases are on
 <a href="/docs/changelog/released-0-4-4x">0.4.46 to 0.4.13</a>, <a href="/docs/changelog/released-0-2-7x">0.2.77 to 0.2.42</a> and
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>.</p>
+<h2 id="unreleased-gateway-attribution">Unreleased: pool accounts are recorded in the vault the gateway reads<a class="headerlink" href="#unreleased-gateway-attribution" title="Link to this section">&para;</a></h2>
+<p><code>brama subscription attribute</code> wrote each member's stated account
+through whatever <code>skarbiec</code> binary the operator's own machine
+resolved. On a machine that reads the fleet vault over the network that is a
+retired local copy: the command printed <code>recorded</code>, the fleet vault
+kept no <code>brama:account</code> tag, and Weles refused every automatic
+sign-in with <code>subscription_identity_missing</code> before a browser opened,
+so no Google prompt ever reached a phone. With <code>--gateway</code> (or
+<code>--gateway-consumer</code> and <code>--bearer-item</code>) the command now
+asks the gateway itself, over
+<a href="/docs/http-api/administration-and-operations"><code>POST /v1/admin/subscription-pool/attribute</code></a>,
+to record the accounts in the vault it serves from; the route answers
+<code>403</code> to a caller that is not the operator console. Brama Desktop's
+Subscription Pool screen calls the same route from <strong>Record accounts</strong>.
+The renewal sweep no longer discards a failed account write: it logs
+<code>subscription_account_unrecorded</code> with the subscription and the
+vault's error.</p>
 <h2 id="unreleased-policy-unnamed-subscription">Unreleased: a subscription the runtime policy does not name is reported, not dropped<a class="headerlink" href="#unreleased-policy-unnamed-subscription" title="Link to this section">&para;</a></h2>
 <p>The runtime policy is generated from the vault's own tags when a release is
 installed on a host. A subscription added to the vault after that install is not
