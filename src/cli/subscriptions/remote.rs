@@ -234,6 +234,45 @@ pub(crate) async fn refresh(
     Ok(body)
 }
 
+/// Ask the gateway that holds the vault to record which account each member
+/// of one provider belongs to, and return its verdict.
+///
+/// An attribution run in an operator shell writes the vault that shell's
+/// vault program opens. On a workstation that reads the fleet vault through
+/// Skarbiec's API, that is a local copy: the shell answered `recorded` for
+/// every member while the vault Weles resolves a sign-in from still named no
+/// account, so every sign-in stopped at `subscription_identity_missing`
+/// before a browser opened and no second-factor prompt was ever sent.
+pub(crate) async fn attribute(
+    gateway: &str,
+    bearer: &str,
+    provider: &str,
+) -> Result<Value, String> {
+    let provider = provider.trim();
+    if provider.is_empty() {
+        return Err("name the provider whose members should be attributed".into());
+    }
+    let response = client()?
+        .post(format!(
+            "{}/v1/admin/subscription-pool/attribute",
+            gateway.trim_end_matches('/')
+        ))
+        .bearer_auth(bearer)
+        .json(&json!({"provider": provider}))
+        .send()
+        .await
+        .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
+    let status = response.status().as_u16();
+    let body: Value = response.json().await.unwrap_or(Value::Null);
+    if !HTTP_SUCCESS.contains(&status) {
+        return Err(format!(
+            "the gateway refused to attribute {provider}: HTTP {status}: {}",
+            refusal(&body)
+        ));
+    }
+    Ok(body)
+}
+
 /// Ask the serving gateway for one maintenance pass and return its report.
 pub(crate) async fn maintain(gateway: &str, bearer: &str) -> Result<Value, String> {
     let response = client()?

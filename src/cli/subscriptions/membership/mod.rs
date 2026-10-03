@@ -18,8 +18,21 @@ use super::text;
 /// Record which account each member of one provider belongs to, read from
 /// that member's own grant, and exit non-zero while any member is left
 /// unattributed: the pool's account count is short by exactly those.
-pub(super) async fn attribute(provider: &str, json: bool) {
-    match brama::subscription_dispatch::pool::record_accounts(provider).await {
+///
+/// Named a gateway, the gateway records them in the vault it serves from,
+/// which is the vault Weles resolves a sign-in from. Named none, this host's
+/// own vault program records them: on a workstation that reads the fleet
+/// vault remotely that is a local copy Weles never reads, so the account
+/// reaches no sign-in.
+pub(super) async fn attribute(destination: Destination, provider: &str, json: bool) {
+    let verdict = match destination.resolve_reading_stdin().await {
+        Ok((Some(gateway), bearer)) => {
+            super::remote::attribute(&gateway, bearer.trim(), provider).await
+        }
+        Ok((None, _)) => brama::subscription_dispatch::pool::record_accounts(provider).await,
+        Err(error) => Err(error),
+    };
+    match verdict {
         Ok(verdict) => {
             if json {
                 crate::cli::print_json(&verdict);

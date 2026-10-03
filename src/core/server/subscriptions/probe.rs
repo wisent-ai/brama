@@ -1,6 +1,7 @@
-//! The two operator-driven acts against the pool that cost something: spending
-//! one minimal completion to learn whether a provider will serve an account,
-//! and asking a provider to refresh its pooled grants.
+//! The operator-driven acts against the pool that need the serving process:
+//! spending one minimal completion to learn whether a provider will serve an
+//! account, asking a provider to refresh its pooled grants, and recording
+//! which account each member belongs to in the vault this process serves from.
 
 use axum::extract::{Extension, Path};
 use axum::http::StatusCode;
@@ -18,6 +19,12 @@ use crate::subscription_dispatch::pool;
 pub(in crate::core::server) struct RefreshSubscriptionPoolRequest {
     provider: Option<String>,
     reason: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(in crate::core::server) struct AttributeSubscriptionPoolRequest {
+    provider: String,
 }
 
 /// Spend one minimal completion against one subscription, because an operator
@@ -75,6 +82,23 @@ pub(in crate::core::server) async fn refresh_admin_subscription_pool(
     .await
     .map(Json)
     .map_err(|message| api_error(StatusCode::BAD_REQUEST, &message))
+}
+
+/// Record which account each member of one provider belongs to, in the vault
+/// this serving process reads, which is the vault Weles resolves a sign-in
+/// from. The same attribution run from a workstation shell writes whatever
+/// vault that shell's program opens, so the account never reached a sign-in.
+/// Members left unattributed are in the 200 body with their reasons; a
+/// provider with no member is a 400.
+pub(in crate::core::server) async fn attribute_admin_subscription_pool(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Json(request): Json<AttributeSubscriptionPoolRequest>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    pool::record_accounts(&request.provider)
+        .await
+        .map(Json)
+        .map_err(|message| api_error(StatusCode::BAD_REQUEST, &message))
 }
 
 /// One maintenance pass of this serving process, the work it used to run on

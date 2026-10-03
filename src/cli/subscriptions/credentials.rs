@@ -88,10 +88,20 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long, default_value_t = false)]
         json: bool,
     },
-    /// Record which account each pool member of one provider belongs to, read from the member's own grant
+    /// Record which account each pool member of one provider belongs to, read from the member's own grant, here or on the gateway that holds the vault
+    #[command(group(ArgGroup::new("destination").args(["gateway", "gateway_consumer"])))]
     Attribute {
         /// The provider whose members should be attributed (`codex`, `claude-code`, `kimi`)
         provider: String,
+        /// The gateway whose vault records the accounts; the console's bearer is read from stdin
+        #[arg(long)]
+        gateway: Option<String>,
+        /// Resolve the gateway through Stado's service directory as this consumer
+        #[arg(long)]
+        gateway_consumer: Option<String>,
+        /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
+        #[arg(long, value_name = "ITEM#FIELD", requires = "destination")]
+        bearer_item: Option<String>,
         /// Print the verdict as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,

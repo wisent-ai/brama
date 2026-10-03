@@ -245,8 +245,21 @@ pub async fn refresh_subscription_credential_ahead(
     // rest as unattributed, however exactly their own ids name an account.
     // This is the reusable repair: the sweep opens every member's credential
     // on every pass anyway, and the provider's own claim about it is what
-    // gets written.
-    let _ = super::tags::record_stated_account(subscription_id, provider, &credential).await;
+    // gets written. A failed write is logged with the member and its error:
+    // discarded, it left every burnt member without an account and every
+    // automatic sign-in refused at `subscription_identity_missing` with
+    // nothing on record saying why the account was never written.
+    if let Err(error) =
+        super::tags::record_stated_account(subscription_id, provider, &credential).await
+    {
+        warn!(
+            event = "subscription_account_unrecorded",
+            subscription = %subscription_id,
+            provider = %provider,
+            %error,
+            "the account this grant states could not be recorded on its vault item"
+        );
+    }
     let expires_at_ms = oauth_refresh::access_token_expiry_ms(&credential, provider);
     // Ask what the document is before asking when it dies. A document that is
     // not a credential has no expiry either, and "no expiry" read as "nothing

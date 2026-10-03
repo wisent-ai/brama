@@ -222,6 +222,15 @@ console asked for it; no timer reaches any of them.</p>
   <code>{"attempted":0,"detail":"no usable `codex` subscription is in this deployment's
   pool, ...","provider":"codex","result":"failed"}</code>). The verdict is the answer; only
   the CLI turns a <code>failed</code> verdict into a non-zero exit code.</li>
+<li><strong>POST <code>/v1/admin/subscription-pool/attribute</code></strong> takes
+  <code>{"provider"}</code> and records which account each member of that provider
+  belongs to in the vault this gateway serves from, which is the vault Weles resolves a
+  sign-in from. This is
+  <a href="/docs/cli/subscription/attribute"><code>brama subscription attribute --gateway</code></a>.
+  Answers <code>{"provider", "recorded": [{"member", "account"}], "unattributed":
+  [{"member", "reason"}]}</code> with status 200 even when members are left unattributed.
+  Refusals: <code>400</code> for an empty provider or one this pool holds no member of,
+  <code>403</code> for any caller but the console.</li>
 </ul>
 <p>Reading the pool, rather than acting on it, is
 <a href="/docs/http-api/discovery-and-subscriptions#the-subscription-pool">discovery and

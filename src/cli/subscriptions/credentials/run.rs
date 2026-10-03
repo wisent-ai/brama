@@ -113,8 +113,23 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             manual::sign_in(&provider, &subscription_id, &reason).await,
             json,
         ),
-        SubscriptionCommand::Attribute { provider, json } => {
-            membership::attribute(&provider, json).await;
+        SubscriptionCommand::Attribute {
+            provider,
+            gateway,
+            gateway_consumer,
+            bearer_item,
+            json,
+        } => {
+            membership::attribute(
+                remote::Destination {
+                    gateway,
+                    gateway_consumer,
+                    bearer_item,
+                },
+                &provider,
+                json,
+            )
+            .await;
         }
         SubscriptionCommand::SecondFactor { provider, json } => {
             membership::second_factor(provider.as_deref(), json).await;
