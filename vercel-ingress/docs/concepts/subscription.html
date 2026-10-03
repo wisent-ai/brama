@@ -150,8 +150,14 @@ provider refusals.</p>
 subscription requiring authentication it asks Weles to resolve the same
 subscription id against Skarbiec, then execute the provider OAuth flow on its
 Stado-selected host. Account identity, login method and login material come
-from Skarbiec; Weles has no independently maintained account catalogue.
-An optional existing login reference may identify the item, but no additional
+from Skarbiec; Weles has no independently maintained account catalogue. The
+account is the subscription item's own <code>account_ref</code>, or else its
+<code>brama:account:&lt;address&gt;</code> tag, which
+<a href="/docs/cli/subscription/accounts/attribute"><code>brama subscription attribute</code></a>
+writes from the member's own grant; Weles then signs in through the login row
+whose username is that address and which declares a <code>login_method</code>
+(<code>google_sso</code> or <code>email_password</code>). An optional existing
+login reference may identify the item, but no additional
 <code>brama:login:</code> tag is required to make an account eligible.</p>
 <p>Weles performs OAuth without launching provider CLIs or copying their local
 sessions. The captured grant is persisted for the same subscription and Brama
