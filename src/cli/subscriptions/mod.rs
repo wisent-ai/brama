@@ -35,9 +35,9 @@ pub(crate) struct SubscriptionsArgs {
     /// Read the pool of the gateway Stado's service directory gives this consumer
     #[arg(long, conflicts_with = "apply")]
     gateway_consumer: Option<String>,
-    /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
-    #[arg(long, value_name = "ITEM#FIELD", conflicts_with = "apply", requires = "destination")]
-    bearer_item: Option<String>,
+    /// Read the console's bearer from the vault item playing this role (its `token` field) instead of from stdin
+    #[arg(long, value_name = "ROLE", conflicts_with = "apply", requires = "destination")]
+    bearer_role: Option<String>,
 }
 
 // The operator's own console: this process holds the vault and the
@@ -49,7 +49,7 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
         apply,
         gateway,
         gateway_consumer,
-        bearer_item,
+        bearer_role,
     } = args;
     if apply {
         let body = match std::io::read_to_string(std::io::stdin()) {
@@ -78,7 +78,7 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
     let destination = remote::Destination {
         gateway,
         gateway_consumer,
-        bearer_item,
+        bearer_role,
     };
     if destination.gateway.is_some() || destination.gateway_consumer.is_some() {
         remote_report(destination, refresh_usage, json).await;
@@ -116,7 +116,7 @@ async fn remote_report(destination: remote::Destination, refresh_usage: bool, js
         std::process::exit(1);
     }
     let mut stdin_bearer = zeroize::Zeroizing::new(String::new());
-    if destination.bearer_item.is_none() {
+    if destination.bearer_role.is_none() {
         if let Err(error) = std::io::Read::read_to_string(&mut std::io::stdin(), &mut stdin_bearer)
         {
             eprintln!("reading the console bearer from stdin: {error}");

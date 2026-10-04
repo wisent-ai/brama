@@ -28,7 +28,7 @@ the product workflow; they are not captured execution results.</p>
 credential state, actual plan windows, observation/reset times, and latest
 <code>usage_check</code>. A live credential alone is not proof of current usage.</p>
 <h2 id="refresher">Read the pool of the gateway that serves, and who refreshes each grant</h2>
-<pre><code class="language-console">brama subscription list --gateway-consumer oko --bearer-item brama-desktop-model-router#token</code></pre>
+<pre><code class="language-console">brama subscription list --gateway-consumer &lt;consumer&gt; --bearer-role &lt;console bearer role&gt;</code></pre>
 <p>Run on the machine whose harnesses hold the grants, this reads the pool of the
 gateway Stado places the service on, with the console's bearer taken from the
 vault at the moment it is used. Every member states who refreshes it:

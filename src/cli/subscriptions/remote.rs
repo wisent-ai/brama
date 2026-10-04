@@ -20,7 +20,9 @@ const HTTP_SUCCESS: std::ops::Range<u16> = 200..300;
 pub(crate) struct Destination {
     pub gateway: Option<String>,
     pub gateway_consumer: Option<String>,
-    pub bearer_item: Option<String>,
+    /// The role the vault item holding the console's bearer plays; the
+    /// bearer is that item's `token` field. No item is named.
+    pub bearer_role: Option<String>,
 }
 
 impl Destination {
@@ -39,30 +41,30 @@ impl Destination {
             (None, None) => None,
         };
         if gateway.is_none() {
-            if self.bearer_item.is_some() {
-                return Err("--bearer-item is for a gateway; name one".into());
+            if self.bearer_role.is_some() {
+                return Err("--bearer-role is for a gateway; name one".into());
             }
             return Ok((None, Zeroizing::new(String::new())));
         }
-        let bearer = match &self.bearer_item {
-            Some(coordinate) => unattended::bearer_from_vault(coordinate).await?,
+        let bearer = match &self.bearer_role {
+            Some(role) => unattended::bearer_from_role(role).await?,
             None => stdin_bearer.clone(),
         };
         if bearer.trim().is_empty() {
             return Err(
-                "a gateway needs the console's bearer: --bearer-item, or the token on stdin".into(),
+                "a gateway needs the console's bearer: --bearer-role, or the token on stdin".into(),
             );
         }
         Ok((gateway, bearer))
     }
 
-    /// The same, reading stdin itself when no vault coordinate was named.
+    /// The same, reading stdin itself when no bearer role was named.
     pub(crate) async fn resolve_reading_stdin(
         &self,
     ) -> Result<(Option<String>, Zeroizing<String>), String> {
         let mut stdin_bearer = Zeroizing::new(String::new());
         let names_gateway = self.gateway.is_some() || self.gateway_consumer.is_some();
-        if names_gateway && self.bearer_item.is_none() {
+        if names_gateway && self.bearer_role.is_none() {
             use std::io::Read as _;
             std::io::stdin()
                 .read_to_string(&mut stdin_bearer)

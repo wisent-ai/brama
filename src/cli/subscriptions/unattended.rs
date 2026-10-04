@@ -66,15 +66,27 @@ pub(crate) fn split_item_field(coordinate: &str) -> Result<(&str, &str), String>
     }
 }
 
-/// The console bearer, read out of the vault at the moment it is used.
+/// The field of a bearer item that holds the bearer itself.
+const BEARER_FIELD: &str = "token";
+
+/// The console bearer, read out of the vault at the moment it is used, from
+/// the item that plays `role` (`stado credentials get --role`); no item is
+/// named, so replacing or renaming the item changes nothing here.
 ///
 /// Read per pass rather than once at start: a service that cached it would
 /// keep presenting a rotated token until somebody restarted it.
-pub(crate) async fn bearer_from_vault(coordinate: &str) -> Result<Zeroizing<String>, String> {
-    let (item, field) = split_item_field(coordinate)?;
-    let bearer = stado(&["credentials", "get", item, "--field", field]).await?;
+pub(crate) async fn bearer_from_role(role: &str) -> Result<Zeroizing<String>, String> {
+    let role = role.trim();
+    if role.is_empty() || role.contains('#') {
+        return Err(format!(
+            "--bearer-role names the role the console's bearer item plays, and `{role}` is not one"
+        ));
+    }
+    let bearer = stado(&["credentials", "get", "--role", role, "--field", BEARER_FIELD]).await?;
     if bearer.trim().is_empty() {
-        return Err(format!("the vault holds no value at {item}#{field}"));
+        return Err(format!(
+            "the item playing role {role} holds no value in its {BEARER_FIELD} field"
+        ));
     }
     Ok(bearer)
 }

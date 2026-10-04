@@ -21,14 +21,14 @@
       <article class="doc"><h1 id="brama-maintain"><code>brama maintain</code><a class="headerlink" href="#brama-maintain" title="Link to this section">&para;</a></h1>
 <p>Ask the serving gateway for one maintenance pass through <code>POST /v1/admin/maintain</code>. The gateway keeps no timers of its own; the host's Stado schedule decides how often this runs, and the pass runs inside the serving process because that process holds the usage ledger, the journal and the credentials.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama maintain (--gateway &lt;URL&gt; | --gateway-consumer &lt;CONSUMER&gt;) [--bearer-item &lt;ITEM#FIELD&gt;] [--json] [&lt; bearer]</code></pre>
+<pre><code class="language-console">brama maintain (--gateway &lt;URL&gt; | --gateway-consumer &lt;CONSUMER&gt;) [--bearer-role &lt;ROLE&gt;] [--json] [&lt; bearer]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>--gateway &lt;URL&gt;</code></td><td>one of the two</td><td>The gateway's origin.</td></tr>
 <tr><td><code>--gateway-consumer &lt;CONSUMER&gt;</code></td><td>one of the two</td><td>Resolve the gateway through <code>stado service directory connect brama --consumer &lt;CONSUMER&gt;</code>.</td></tr>
-<tr><td><code>--bearer-item &lt;ITEM#FIELD&gt;</code></td><td>optional</td><td>Read the console bearer from the vault through <code>stado credentials get</code> at the moment of the pass. Without it the bearer is read from standard input.</td></tr>
+<tr><td><code>--bearer-role &lt;ROLE&gt;</code></td><td>optional</td><td>Read the console bearer at the moment of the pass from the <code>token</code> field of the vault item that plays this role, through <code>stado credentials get --role &lt;ROLE&gt; --field token</code>. No item is named, so replacing the item changes nothing here. Without it the bearer is read from standard input.</td></tr>
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print the gateway's report as JSON instead of lines.</td></tr>
 </tbody></table>
-<p>A scheduled pass, for example: <code>stado schedule create --pinned-host &lt;gateway host&gt; --cron '* * * * *' 'brama maintain --gateway-consumer &lt;consumer&gt; --bearer-item &lt;item#field&gt;'</code>.</p>
+<p>A scheduled pass, for example: <code>stado schedule create --pinned-host &lt;gateway host&gt; --cron '* * * * *' 'brama maintain --gateway-consumer &lt;consumer&gt; --bearer-role &lt;console bearer role&gt;'</code>.</p>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
 <p>The pass reads every plan usage report that has aged past its freshness window, renews every grant expiring within <code>BRAMA_CREDENTIAL_REFRESH_SKEW_SECS</code>, and takes a fresh readiness reading for <code>/readyz</code>. Lines read:</p>
 <pre><code class="language-text">plan usage: &lt;N&gt; subscription(s), &lt;N&gt; read
@@ -40,9 +40,9 @@ readiness: ready=&lt;bool&gt; &lt;reason&gt;</code></pre>
 <table><thead><tr><th>Sentence</th><th>Exit</th><th>Meaning</th></tr></thead><tbody>
 <tr><td>the parser's refusal for neither or both of <code>--gateway</code> and <code>--gateway-consumer</code></td><td>2</td><td>The pass has to run in one serving gateway; nothing was contacted.</td></tr>
 <tr><td><code>reading the console bearer from stdin: &lt;error&gt;</code></td><td>1</td><td>Standard input could not be read.</td></tr>
-<tr><td><code>a gateway needs the console's bearer: --bearer-item, or the token on stdin</code></td><td>1</td><td>No bearer was given either way.</td></tr>
-<tr><td><code>--bearer-item is `&lt;item&gt;#&lt;field&gt;`, and `&lt;value&gt;` is not</code></td><td>1</td><td>The coordinate is malformed.</td></tr>
-<tr><td><code>the vault holds no value at &lt;item&gt;#&lt;field&gt;</code></td><td>1</td><td>The vault answered with an empty field.</td></tr>
+<tr><td><code>a gateway needs the console's bearer: --bearer-role, or the token on stdin</code></td><td>1</td><td>No bearer was given either way.</td></tr>
+<tr><td><code>--bearer-role names the role the console's bearer item plays, and `&lt;value&gt;` is not one</code></td><td>1</td><td>The value is empty or is an <code>item#field</code> coordinate.</td></tr>
+<tr><td><code>the item playing role &lt;role&gt; holds no value in its token field</code></td><td>1</td><td>The vault answered with an empty field.</td></tr>
 <tr><td><code>`&lt;stado&gt; &lt;arguments&gt;` refused: &lt;stado's own sentence&gt;</code>, or <code>`&lt;stado&gt;` could not be run: &lt;error&gt;</code></td><td>1</td><td>The vault read or directory lookup failed in Stado; <code>BRAMA_STADO_BIN</code> names another Stado binary.</td></tr>
 <tr><td><code>Stado's service directory answered `&lt;answer&gt;` for consumer `&lt;consumer&gt;`, which names no gateway origin</code></td><td>1</td><td>The directory has no Brama origin for that consumer.</td></tr>
 <tr><td><code>the gateway &lt;origin&gt; did not answer: &lt;error&gt;</code></td><td>1</td><td>Transport failure; nothing ran.</td></tr>

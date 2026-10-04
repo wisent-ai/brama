@@ -21,13 +21,13 @@
       <article class="doc"><h1 id="brama-subscription-refresh"><code>brama subscription refresh</code><a class="headerlink" href="#brama-subscription-refresh" title="Link to this section">&para;</a></h1>
 <p>Run the gateway’s credential refresh path now for every usable subscription held for one provider, without the background sweep’s expiry window.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama subscription refresh &lt;PROVIDER&gt; --reason &lt;REASON&gt; [--gateway &lt;ORIGIN&gt; | --gateway-consumer &lt;CONSUMER&gt;] [--bearer-item &lt;ITEM#FIELD&gt;] [--json]</code></pre>
+<pre><code class="language-console">brama subscription refresh &lt;PROVIDER&gt; --reason &lt;REASON&gt; [--gateway &lt;ORIGIN&gt; | --gateway-consumer &lt;CONSUMER&gt;] [--bearer-role &lt;ROLE&gt;] [--json]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>&lt;PROVIDER&gt;</code></td><td>required</td><td>Provider whose grants are refreshed, normally <code>codex</code>, <code>claude-code</code>, or <code>kimi</code>.</td></tr>
 <tr><td><code>--reason &lt;REASON&gt;</code></td><td>required</td><td>Nonempty audit reason recorded beside the verdict.</td></tr>
 <tr><td><code>--gateway &lt;ORIGIN&gt;</code></td><td>optional</td><td>Refresh the pool of the gateway at this origin instead of this machine's own view; the console bearer is read from stdin.</td></tr>
 <tr><td><code>--gateway-consumer &lt;CONSUMER&gt;</code></td><td>optional</td><td>Resolve that gateway through Stado's service directory as this consumer.</td></tr>
-<tr><td><code>--bearer-item &lt;ITEM#FIELD&gt;</code></td><td>optional</td><td>Read the console bearer from the vault as <code>&lt;item&gt;#&lt;field&gt;</code> instead of from stdin.</td></tr>
+<tr><td><code>--bearer-role &lt;ROLE&gt;</code></td><td>optional</td><td>Read the console bearer from the <code>token</code> field of the vault item that plays this role instead of from stdin; no item is named.</td></tr>
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print JSON instead of labeled lines.</td></tr>
 </tbody></table>
 <p>Without a gateway the refresh acts on this machine's own view. The block that empties a pool lives in the gateway's journal, so a refresh run in an operator shell cannot clear it: a gateway can hold one live <code>codex</code> credential while every request answers <code>503 subscription_reauthorization_required</code> with <code>attempts: 0</code> — every candidate skipped unasked inside a recorded block — and only a refresh sent to that gateway renews the grant. Naming a gateway posts to its <code>POST /v1/admin/subscription-pool/refresh</code> with the console bearer and prints the gateway's own verdict.</p>

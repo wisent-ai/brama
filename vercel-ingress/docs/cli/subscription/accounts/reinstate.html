@@ -23,13 +23,13 @@
 <p>The mirror of <a href="/docs/cli/subscription/disown">disown</a>, and the reason it exists: a retirement was permanent. <code>is_retired</code> answered yes to any retirement record ever written, and the retirement also recorded the member&rsquo;s credential as <code>disabled</code>, so every later command skipped that member for good: the gateway answered <code>no active credential for agent</code> for it, its own sign-in report said <code>retired</code>, and nothing in the product could take that back.</p>
 <p>A reinstatement is membership, not a credential. The member is offered to dispatch again and still holds no grant of this gateway&rsquo;s own, which is what its recorded state then says: <code>needs_reauthorization</code>, repaired by <a href="/docs/cli/subscription/sign-in">sign-in</a> or <a href="/docs/cli/subscription/sign-in-manual">sign-in-manual</a>.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama subscription reinstate --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--gateway &lt;ORIGIN&gt; | --gateway-consumer &lt;NAME&gt;] [--bearer-item &lt;ITEM&gt;#&lt;FIELD&gt;] [--json]</code></pre>
+<pre><code class="language-console">brama subscription reinstate --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--gateway &lt;ORIGIN&gt; | --gateway-consumer &lt;NAME&gt;] [--bearer-role &lt;ROLE&gt;] [--json]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>--subscription-id &lt;ID&gt;</code></td><td>required</td><td>The retired pool member to use again.</td></tr>
 <tr><td><code>--reason &lt;REASON&gt;</code></td><td>required</td><td>Nonempty audit reason, recorded beside the gateway&rsquo;s own ledger entry.</td></tr>
 <tr><td><code>--gateway &lt;ORIGIN&gt;</code></td><td>optional</td><td>The gateway holding the member; its console bearer is read from stdin. Named neither this nor <code>--gateway-consumer</code>, the command acts on this host&rsquo;s own pool through the same code the gateway&rsquo;s route runs.</td></tr>
 <tr><td><code>--gateway-consumer &lt;NAME&gt;</code></td><td>optional</td><td>Resolve that gateway through Stado&rsquo;s service directory as this consumer.</td></tr>
-<tr><td><code>--bearer-item &lt;ITEM&gt;#&lt;FIELD&gt;</code></td><td>optional</td><td>Read the console bearer from the vault instead of stdin.</td></tr>
+<tr><td><code>--bearer-role &lt;ROLE&gt;</code></td><td>optional</td><td>Read the console bearer from the <code>token</code> field of the vault item that plays this role instead of stdin.</td></tr>
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print <code>{"subscription_id", "detail"}</code> instead of the line.</td></tr>
 </tbody></table>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>

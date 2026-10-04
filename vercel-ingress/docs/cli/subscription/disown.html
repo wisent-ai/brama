@@ -22,13 +22,13 @@
 <p>Give one pool member back. The gateway retires it, forgets its stored credential and stops routing to it; any machine that signed that account in keeps its own session.</p>
 <p>This command exists because the pool once accepted a grant that a coding harness on another machine already held. A provider issues one OAuth pair per sign-in and revokes it when a second holder refreshes, so such a member cost the machine it came from its own session. Taking a grant from a harness is no part of this product; giving one back is this command, and a gateway that needs a credential signs itself in with <a href="/docs/cli/subscription/sign-in">sign-in</a> or <a href="/docs/cli/subscription/sign-in-manual">sign-in-manual</a>.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama subscription disown --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--gateway &lt;ORIGIN&gt; | --gateway-consumer &lt;NAME&gt;] [--bearer-item &lt;ITEM&gt;#&lt;FIELD&gt;] [--json]</code></pre>
+<pre><code class="language-console">brama subscription disown --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--gateway &lt;ORIGIN&gt; | --gateway-consumer &lt;NAME&gt;] [--bearer-role &lt;ROLE&gt;] [--json]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>--subscription-id &lt;ID&gt;</code></td><td>required</td><td>The pool member to give back.</td></tr>
 <tr><td><code>--reason &lt;REASON&gt;</code></td><td>required</td><td>Nonempty audit reason, recorded beside the gateway&rsquo;s own ledger entry.</td></tr>
 <tr><td><code>--gateway &lt;ORIGIN&gt;</code></td><td>optional</td><td>The gateway holding the member; its console bearer is read from stdin.</td></tr>
 <tr><td><code>--gateway-consumer &lt;NAME&gt;</code></td><td>optional</td><td>Resolve that gateway through Stado&rsquo;s service directory as this consumer, instead of naming a port the resolver assigns.</td></tr>
-<tr><td><code>--bearer-item &lt;ITEM&gt;#&lt;FIELD&gt;</code></td><td>optional</td><td>Read the console bearer from the vault instead of stdin, so no secret is typed or written to disk.</td></tr>
+<tr><td><code>--bearer-role &lt;ROLE&gt;</code></td><td>optional</td><td>Read the console bearer from the <code>token</code> field of the vault item that plays this role instead of stdin, so no secret is typed or written to disk and no item is named.</td></tr>
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print <code>{"subscription_id", "detail"}</code> instead of the line.</td></tr>
 </tbody></table>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>

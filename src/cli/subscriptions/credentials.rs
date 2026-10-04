@@ -30,9 +30,9 @@ pub(crate) enum SubscriptionCommand {
         /// Resolve the gateway through Stado's service directory as this consumer
         #[arg(long)]
         gateway_consumer: Option<String>,
-        /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
-        #[arg(long, value_name = "ITEM#FIELD", requires = "destination")]
-        bearer_item: Option<String>,
+        /// Read the console's bearer from the vault item playing this role (its `token` field) instead of from stdin
+        #[arg(long, value_name = "ROLE", requires = "destination")]
+        bearer_role: Option<String>,
         /// Print the verdict as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,
@@ -99,9 +99,9 @@ pub(crate) enum SubscriptionCommand {
         /// Resolve the gateway through Stado's service directory as this consumer
         #[arg(long)]
         gateway_consumer: Option<String>,
-        /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
-        #[arg(long, value_name = "ITEM#FIELD", requires = "destination")]
-        bearer_item: Option<String>,
+        /// Read the console's bearer from the vault item playing this role (its `token` field) instead of from stdin
+        #[arg(long, value_name = "ROLE", requires = "destination")]
+        bearer_role: Option<String>,
         /// Print the verdict as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,
@@ -134,9 +134,9 @@ pub(crate) enum SubscriptionCommand {
         /// Resolve the gateway through Stado's service directory as this consumer
         #[arg(long)]
         gateway_consumer: Option<String>,
-        /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
-        #[arg(long, value_name = "ITEM#FIELD", requires = "destination")]
-        bearer_item: Option<String>,
+        /// Read the console's bearer from the vault item playing this role (its `token` field) instead of from stdin
+        #[arg(long, value_name = "ROLE", requires = "destination")]
+        bearer_role: Option<String>,
         /// Print `{subscription_id, detail}` as JSON instead of a line
         #[arg(long, default_value_t = false)]
         json: bool,
@@ -159,9 +159,9 @@ pub(crate) enum SubscriptionCommand {
         /// Resolve the gateway through Stado's service directory as this consumer
         #[arg(long)]
         gateway_consumer: Option<String>,
-        /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
-        #[arg(long, value_name = "ITEM#FIELD", requires = "destination")]
-        bearer_item: Option<String>,
+        /// Read the console's bearer from the vault item playing this role (its `token` field) instead of from stdin
+        #[arg(long, value_name = "ROLE", requires = "destination")]
+        bearer_role: Option<String>,
         /// Print `{subscription_id, detail}` as JSON instead of a line
         #[arg(long, default_value_t = false)]
         json: bool,

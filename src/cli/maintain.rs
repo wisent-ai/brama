@@ -24,9 +24,10 @@ pub(crate) struct MaintainArgs {
     /// Resolve the gateway through Stado's service directory as this consumer
     #[arg(long)]
     gateway_consumer: Option<String>,
-    /// Read the console's bearer from the vault as `<item>#<field>` instead of from stdin
-    #[arg(long, value_name = "ITEM#FIELD")]
-    bearer_item: Option<String>,
+    /// Read the console's bearer from the vault item playing this role (its
+    /// `token` field) instead of from stdin
+    #[arg(long, value_name = "ROLE")]
+    bearer_role: Option<String>,
     /// Print the gateway's report as JSON instead of lines
     #[arg(long, default_value_t = false)]
     json: bool,
@@ -36,7 +37,7 @@ pub(crate) async fn run(args: MaintainArgs) {
     let destination = Destination {
         gateway: args.gateway,
         gateway_consumer: args.gateway_consumer,
-        bearer_item: args.bearer_item,
+        bearer_role: args.bearer_role,
     };
     let report = match pass(destination).await {
         Ok(report) => report,

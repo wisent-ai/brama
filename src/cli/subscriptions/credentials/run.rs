@@ -18,7 +18,7 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             reason,
             gateway,
             gateway_consumer,
-            bearer_item,
+            bearer_role,
             json,
         } => {
             // A block that empties a pool lives in the gateway's journal, so a
@@ -27,7 +27,7 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             let destination = remote::Destination {
                 gateway,
                 gateway_consumer,
-                bearer_item,
+                bearer_role,
             };
             let verdict = if destination.gateway.is_some() || destination.gateway_consumer.is_some()
             {
@@ -117,14 +117,14 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             provider,
             gateway,
             gateway_consumer,
-            bearer_item,
+            bearer_role,
             json,
         } => {
             membership::attribute(
                 remote::Destination {
                     gateway,
                     gateway_consumer,
-                    bearer_item,
+                    bearer_role,
                 },
                 &provider,
                 json,
@@ -139,14 +139,14 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             reason,
             gateway,
             gateway_consumer,
-            bearer_item,
+            bearer_role,
             json,
         } => {
             membership::reinstate(
                 remote::Destination {
                     gateway,
                     gateway_consumer,
-                    bearer_item,
+                    bearer_role,
                 },
                 &subscription_id,
                 &reason,
@@ -159,14 +159,14 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             reason,
             gateway,
             gateway_consumer,
-            bearer_item,
+            bearer_role,
             json,
         } => {
             membership::disown(
                 remote::Destination {
                     gateway,
                     gateway_consumer,
-                    bearer_item,
+                    bearer_role,
                 },
                 &subscription_id,
                 &reason,

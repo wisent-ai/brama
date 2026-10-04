@@ -25,15 +25,15 @@
 <h2 id="where">Where the account is recorded<a class="headerlink" href="#where" title="Link to this section">&para;</a></h2>
 <p>The account is written into the vault the process running the attribution opens. Weles resolves a sign-in from the fleet vault on the vault owner host, so on a workstation that reads that vault through Skarbiec&rsquo;s API, a run without a gateway writes the workstation&rsquo;s own vault program&rsquo;s file: it answers <code>recorded</code> for every member while the fleet vault still names no account, and every sign-in of those members still stops at <code>subscription_identity_missing</code> before a browser opens, so no second-factor prompt is sent. Name the gateway that holds the credentials and it records them in the vault it serves from, through <code>POST /v1/admin/subscription-pool/attribute</code>.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama subscription attribute &lt;PROVIDER&gt; [--gateway &lt;URL&gt; | --gateway-consumer &lt;CONSUMER&gt;] [--bearer-item &lt;ITEM#FIELD&gt;] [--json]</code></pre>
+<pre><code class="language-console">brama subscription attribute &lt;PROVIDER&gt; [--gateway &lt;URL&gt; | --gateway-consumer &lt;CONSUMER&gt;] [--bearer-role &lt;ROLE&gt;] [--json]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>&lt;PROVIDER&gt;</code></td><td>required</td><td>The provider whose members are attributed: <code>codex</code>, <code>claude-code</code> or <code>kimi</code>.</td></tr>
 <tr><td><code>--gateway</code></td><td>optional</td><td>The gateway that holds the credentials; it records the accounts in its own vault. The console&rsquo;s bearer is read from stdin.</td></tr>
 <tr><td><code>--gateway-consumer</code></td><td>optional</td><td>Resolve that gateway through Stado&rsquo;s service directory as this consumer instead of naming its URL.</td></tr>
-<tr><td><code>--bearer-item</code></td><td>optional, needs a gateway</td><td>Read the console&rsquo;s bearer from the vault as <code>&lt;item&gt;#&lt;field&gt;</code> instead of from stdin.</td></tr>
+<tr><td><code>--bearer-role</code></td><td>optional, needs a gateway</td><td>Read the console&rsquo;s bearer from the <code>token</code> field of the vault item that plays this role instead of from stdin; no item is named.</td></tr>
 <tr><td><code>--json</code></td><td>optional</td><td>Print the verdict document instead of lines.</td></tr>
 </tbody></table>
-<pre><code class="language-console">brama subscription attribute claude-code --gateway-consumer operator --bearer-item &lt;CONSOLE BEARER ITEM&gt;#token</code></pre>
+<pre><code class="language-console">brama subscription attribute claude-code --gateway-consumer operator --bearer-role &lt;CONSOLE BEARER ROLE&gt;</code></pre>
 <h2 id="what-it-does">What it does<a class="headerlink" href="#what-it-does" title="Link to this section">&para;</a></h2>
 <p>Nothing is rotated and no provider is contacted. For each member of that provider the gateway reads what its item already records; when the item records no account, the member&rsquo;s grant is opened, the address its issuer signed into it is read, and that address is written back beside the unchanged grant &mdash; as the item&rsquo;s <code>account_ref</code> and its <code>brama:account:</code> tag. Claude Code records the address beside the grant; Codex and Kimi sign it into the identity token stored next to the access token.</p>
 <pre><code class="language-console">$ brama subscription attribute codex
