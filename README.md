@@ -270,13 +270,14 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   `GET|POST /v1/account/subscriptions` and
   `DELETE /v1/account/subscriptions/:subscription_id`. Every human request sends
   `Authorization: Bearer <Supabase JWT>` and
-  `X-Wisent-Organization-ID: <uuid>`. Brama validates the JWT with the canonical
-  Wisent Supabase at `https://alvaewvbyxpgwdpugnxy.supabase.co`, calls
-  `authorize_organization` with the same bearer, and accepts only the returned
-  user, organization, and typed `owner`, `admin`, or `member` role. The
-  `BRAMA_WISENT_AUTH_ANON_KEY` may override the built-in public anon key for a
-  different identity deployment; an explicitly empty override makes the
-  identity authority unavailable instead of weakening authentication. The
+  `X-Wisent-Organization-ID: <uuid>`. Brama validates the JWT with the Wisent
+  Identity authority named by `BRAMA_WISENT_AUTH_URL` and
+  `BRAMA_WISENT_AUTH_ANON_KEY` (Stado's service catalog sets both for the
+  gateway), calls `authorize_organization` with the same bearer, and accepts
+  only the returned user, organization, and typed `owner`, `admin`, or
+  `member` role. No authority is compiled in: with either variable unset the
+  identity authority is unavailable, logged as `wisent_identity_unconfigured`,
+  instead of authentication being weakened. The
   organization is verified request context, not subscription ownership: Brama
   continues to derive the subscription owner from the verified user, and the
   caller never supplies an account or agent identifier. `POST` accepts an API

@@ -9,9 +9,6 @@ use serde_json::{json, Value};
 use super::super::identity::{HumanOrganizationContext, OrganizationRole};
 use super::{IdentityResolutionError, WisentIdentityAnswer, WISENT_ORGANIZATION_HEADER};
 
-const WISENT_SUPABASE_URL: &str = "https://alvaewvbyxpgwdpugnxy.supabase.co";
-const WISENT_SUPABASE_ANON_KEY: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFsdmFld3ZieXhwZ3dkcHVnbnh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzOTc5NDcsImV4cCI6MjA5Njk3Mzk0N30.xkkJ36ZTwtqyVZLFju0vc9S25grTuKbj9ILKlsXdUPA";
-
 #[derive(Deserialize)]
 struct OrganizationAuthorization {
     user_id: uuid::Uuid,
@@ -19,34 +16,37 @@ struct OrganizationAuthorization {
     role: OrganizationRole,
 }
 
-/// Where the Wisent Identity authority answers.
-///
-/// The anon key this gateway presents was already deployment-configurable
-/// while the origin it presents it to was compiled in, which left the human
-/// half of every identity decision unprovable anywhere except against the
-/// production project. A deployment overriding this is choosing its own
-/// identity authority, exactly as `WC_SKARBIEC_URL` chooses the workload one;
-/// unset, it is canonical Wisent Supabase and nothing changes.
-fn wisent_identity_origin() -> String {
-    std::env::var("BRAMA_WISENT_AUTH_URL")
-        .ok()
-        .map(|configured| configured.trim().trim_end_matches('/').to_owned())
-        .filter(|configured| !configured.is_empty())
-        .unwrap_or_else(|| WISENT_SUPABASE_URL.to_owned())
+/// Where the Wisent Identity authority answers, and the anon key it is asked
+/// with: `BRAMA_WISENT_AUTH_URL` and `BRAMA_WISENT_AUTH_ANON_KEY`, which the
+/// Stado service catalog sets for the gateway. No authority is compiled in: a
+/// deployment that names none cannot resolve a person, and says so.
+fn wisent_identity() -> Option<(String, String)> {
+    let configured = |name: &str| {
+        std::env::var(name)
+            .ok()
+            .map(|value| value.trim().trim_end_matches('/').to_owned())
+            .filter(|value| !value.is_empty())
+    };
+    Some((
+        configured("BRAMA_WISENT_AUTH_URL")?,
+        configured("BRAMA_WISENT_AUTH_ANON_KEY")?,
+    ))
 }
 
 pub(super) async fn ask_wisent_identity(bearer: &str) -> WisentIdentityAnswer {
-    let anon_key = std::env::var("BRAMA_WISENT_AUTH_ANON_KEY")
-        .unwrap_or_else(|_| WISENT_SUPABASE_ANON_KEY.to_string());
-    if anon_key.trim().is_empty() {
+    let Some((origin, anon_key)) = wisent_identity() else {
+        tracing::warn!(
+            event = "wisent_identity_unconfigured",
+            "BRAMA_WISENT_AUTH_URL or BRAMA_WISENT_AUTH_ANON_KEY is unset; no person can be resolved"
+        );
         return WisentIdentityAnswer::Unavailable;
-    }
+    };
     let client = match crate::providers::adapter::control_client() {
         Ok(client) => client,
         Err(_) => return WisentIdentityAnswer::Unavailable,
     };
     let response = match client
-        .get(format!("{}/auth/v1/user", wisent_identity_origin()))
+        .get(format!("{origin}/auth/v1/user"))
         .header("apikey", &anon_key)
         .bearer_auth(bearer)
         .send()
@@ -83,18 +83,13 @@ pub(super) async fn authorize_organization(
     expected_user_id: uuid::Uuid,
     expected_organization_id: uuid::Uuid,
 ) -> Result<HumanOrganizationContext, IdentityResolutionError> {
-    let anon_key = std::env::var("BRAMA_WISENT_AUTH_ANON_KEY")
-        .unwrap_or_else(|_| WISENT_SUPABASE_ANON_KEY.to_string());
-    if anon_key.trim().is_empty() {
+    let Some((origin, anon_key)) = wisent_identity() else {
         return Err(IdentityResolutionError::UpstreamUnavailable);
-    }
+    };
     let client = crate::providers::adapter::control_client()
         .map_err(|_| IdentityResolutionError::UpstreamUnavailable)?;
     let response = client
-        .post(format!(
-            "{}/rest/v1/rpc/authorize_organization",
-            wisent_identity_origin()
-        ))
+        .post(format!("{origin}/rest/v1/rpc/authorize_organization"))
         .header("apikey", anon_key)
         .header("Accept", "application/vnd.pgrst.object+json")
         .header(

@@ -72,9 +72,9 @@ one of two disjoint identity kinds:</p>
 <ol>
 <li>Static boot-table and Skarbiec-introspected tokens are workload/model-client
     identities. They do not require or acquire organization context.</li>
-<li>A JWT validated by canonical Wisent Supabase
-    (<code>https://alvaewvbyxpgwdpugnxy.supabase.co</code>, configured only with
-    <code>BRAMA_WISENT_AUTH_ANON_KEY</code>) is a human identity. The request must
+<li>A JWT validated by the Wisent Identity authority (the origin and anon key
+    <code>BRAMA_WISENT_AUTH_URL</code> and <code>BRAMA_WISENT_AUTH_ANON_KEY</code>
+    name; nothing is compiled in) is a human identity. The request must
     also carry <code>X-Wisent-Organization-ID: &lt;uuid&gt;</code>; Brama calls
     <code>authorize_organization(target_org_id)</code> with the same bearer and
     accepts only its matching user, organization, and typed

@@ -45,7 +45,7 @@
           <tr><td><code>BRAMA_PROVIDER_CAPABILITY_IDS</code></td><td>unset</td><td>optional direct-provider capability seeds; the managed launcher clears them and issues at final use</td></tr>
           <tr><td><code>BRAMA_SUBSCRIPTION_CATALOG</code></td><td>unset</td><td>trusted startup subscription metadata the operator declares, read to seed the inventory before live discovery has answered; a discovery refusal is still reported as a refusal</td></tr>
           <tr><td><code>WC_SKARBIEC_URL</code>, <code>BRAMA_SKARBIEC_CONSUMER</code>, <code>BRAMA_SKARBIEC_TOKEN_FILE</code></td><td>unset</td><td>bearer introspection against Skarbiec for tokens not in the boot table</td></tr>
-          <tr><td><code>BRAMA_WISENT_AUTH_ANON_KEY</code></td><td>unset</td><td>public anon key for human identity and organization authorization at canonical Wisent Supabase <code>https://alvaewvbyxpgwdpugnxy.supabase.co</code>; never a service-role key</td></tr>
+          <tr><td><code>BRAMA_WISENT_AUTH_URL</code>, <code>BRAMA_WISENT_AUTH_ANON_KEY</code></td><td>unset (Stado's catalog sets both)</td><td>the Wisent Identity origin and its public anon key, for human identity and organization authorization; never a service-role key. Nothing is compiled in: with either unset no person can be resolved and the gateway logs <code>wisent_identity_unconfigured</code></td></tr>
           <tr><td><code>ENTITLEMENTS_ROUTER_BIN</code></td><td><code>entitlements-router</code></td><td>binary shelled for vault listing and credential writes</td></tr>
         </tbody></table>
         <p>Alias policy and the route registry are separate inputs with separate
