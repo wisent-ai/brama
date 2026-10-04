@@ -49,14 +49,15 @@ if [ -n "$stado_bin" ] && [ -z "$service_identity_present" ]; then
   fi
   service_key="$gnupg_dir/brama-service.key"
   rm -f "$service_key"
-  # One read: a refusal is the answer, named with the item it was for, and
-  # the supervisor's own restart is the next attempt.
+  # One read, by the role the item plays (no item id is named here): a
+  # refusal is the answer, named with the role it was for, and the
+  # supervisor's own restart is the next attempt.
   ( umask 077
     WC_AGENT_SKARBIEC_URL="$agent_skarbiec_url" \
       STADO_CONFIG=${BRAMA_SKARBIEC_STADO_CONFIG:-"${HOME:-/nonexistent}/.config/stado/brama-service.json"} \
-      "$stado_bin" credentials get brama-service --field gpg_private_key > "$service_key" ) || {
+      "$stado_bin" credentials get --role brama-service --field gpg_private_key > "$service_key" ) || {
     rm -f "$service_key"
-    printf '%s\n' "cannot read this service identity from Skarbiec at $agent_skarbiec_url (brama-service.gpg_private_key)" >/dev/stderr
+    printf '%s\n' "cannot read this service identity from Skarbiec at $agent_skarbiec_url (role brama-service, field gpg_private_key)" >/dev/stderr
     false
   }
   gpg --batch --quiet --import "$service_key" || {
