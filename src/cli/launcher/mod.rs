@@ -7,6 +7,8 @@ mod identities;
 mod policy;
 mod verbs;
 
+pub(crate) use identities::role_field_in;
+
 use std::path::PathBuf;
 
 use clap::Subcommand;

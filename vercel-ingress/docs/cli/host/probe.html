@@ -21,11 +21,11 @@
       <article class="doc"><h1 id="brama-probe"><code>brama probe</code><a class="headerlink" href="#brama-probe" title="Link to this section">&para;</a></h1>
 <p>On the gateway's own host, send one real completion per alias through the running gateway and report what each one answered. <code>/health</code> answering says the process started; this says whether a model answers through each alias.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama probe --bearer-item &lt;ITEM#FIELD&gt; [--agent &lt;AGENT&gt; --signing-item &lt;ITEM#FIELD&gt;] [--alias &lt;ALIAS&gt;]... [--json] --allow-provider-cost</code></pre>
+<pre><code class="language-console">brama probe --bearer-role &lt;ROLE#FIELD&gt; [--agent &lt;AGENT&gt; --signing-role &lt;ROLE#FIELD&gt;] [--alias &lt;ALIAS&gt;]... [--json] --allow-provider-cost</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
-<tr><td><code>--bearer-item &lt;ITEM#FIELD&gt;</code></td><td>required</td><td>The vault item and field holding the client bearer every request presents. It is read through the entitlements router <code>~/.config/brama/service.env</code> names, never printed and never put in an argument.</td></tr>
-<tr><td><code>--agent &lt;AGENT&gt;</code></td><td>optional; needs <code>--signing-item</code></td><td>Sign every request as this agent with the <code>x-agent-id</code>, <code>x-agent-timestamp</code> and <code>x-agent-signature</code> headers. A subscription selector alias such as <code>best</code> needs a signed request.</td></tr>
-<tr><td><code>--signing-item &lt;ITEM#FIELD&gt;</code></td><td>optional; needs <code>--agent</code></td><td>The vault item and field holding that agent's request-sign secret.</td></tr>
+<tr><td><code>--bearer-role &lt;ROLE#FIELD&gt;</code></td><td>required</td><td>The vault role whose item holds the client bearer every request presents, and its field: the one live item tagged <code>stado:role:&lt;ROLE&gt;</code>, read through the entitlements router <code>~/.config/brama/service.env</code> names, never printed and never put in an argument. No item is named, so replacing the item changes nothing here.</td></tr>
+<tr><td><code>--agent &lt;AGENT&gt;</code></td><td>optional; needs <code>--signing-role</code></td><td>Sign every request as this agent with the <code>x-agent-id</code>, <code>x-agent-timestamp</code> and <code>x-agent-signature</code> headers. A subscription selector alias such as <code>best</code> needs a signed request.</td></tr>
+<tr><td><code>--signing-role &lt;ROLE#FIELD&gt;</code></td><td>optional; needs <code>--agent</code></td><td>The vault role whose item holds that agent's request-sign secret, and its field.</td></tr>
 <tr><td><code>--alias &lt;ALIAS&gt;</code></td><td>repeatable; every declared alias</td><td>Which aliases to request. Without one, every alias the gateway declares — the list <a href="/docs/cli/aliases"><code>brama aliases</code></a> reports — is requested.</td></tr>
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print the findings once as one JSON document instead of one line per step.</td></tr>
 <tr><td><code>--allow-provider-cost</code></td><td>required</td><td>Acknowledge that each alias spends one short provider request.</td></tr>
@@ -36,11 +36,11 @@
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <table><thead><tr><th>Sentence</th><th>Exit</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>refusing billable probe requests without explicit --allow-provider-cost</code></td><td>2</td><td>Nothing was read or sent.</td></tr>
-<tr><td>clap's own refusal for a missing <code>--bearer-item</code>, or <code>--agent</code> without <code>--signing-item</code></td><td>2</td><td>The invocation is incomplete; nothing was read.</td></tr>
+<tr><td>clap's own refusal for a missing <code>--bearer-role</code>, or <code>--agent</code> without <code>--signing-role</code></td><td>2</td><td>The invocation is incomplete; nothing was read.</td></tr>
 <tr><td><code>service env names no entitlements router</code></td><td>1</td><td><code>~/.config/brama/service.env</code> has no <code>ENTITLEMENTS_ROUTER_BIN</code>; this is not the gateway's host, or its installation is incomplete.</td></tr>
-<tr><td><code>cannot read the bearer &lt;ITEM#FIELD&gt; through &lt;router&gt;: &lt;router answer&gt;</code></td><td>1</td><td>The vault refused or holds no such field; the router's own sentence follows.</td></tr>
-<tr><td><code>cannot read &lt;ITEM#FIELD&gt; to sign as &lt;AGENT&gt;: &lt;router answer&gt;</code></td><td>1</td><td>The request-sign secret could not be read; nothing was sent unsigned in its place.</td></tr>
-<tr><td><code>--bearer-item is `&lt;item&gt;#&lt;field&gt;`, and `&lt;value&gt;` is not</code></td><td>1</td><td>The coordinate has no <code>#</code> or an empty side.</td></tr>
+<tr><td><code>cannot read the bearer &lt;ROLE#FIELD&gt; through &lt;router&gt;: &lt;cause&gt;</code></td><td>1</td><td>No item, or several, carry the role tag, the router refused, or the field is empty; the cause names which.</td></tr>
+<tr><td><code>cannot read &lt;ROLE#FIELD&gt; to sign as &lt;AGENT&gt;: &lt;cause&gt;</code></td><td>1</td><td>The request-sign secret could not be read; nothing was sent unsigned in its place.</td></tr>
+<tr><td><code>`&lt;value&gt;` is not `&lt;role&gt;#&lt;field&gt;`</code></td><td>1</td><td>The coordinate has no <code>#</code> or an empty side.</td></tr>
 <tr><td><code>this gateway declares no alias and none was named with --alias; `brama routes set` declares one</code></td><td>1</td><td>There is nothing to probe.</td></tr>
 <tr><td><code>no candidate address served /health</code></td><td>1</td><td>The gateway is not listening on any address it was expected on; each attempt's transport error is printed above.</td></tr>
 <tr><td><code>N of M alias(es) were not served; each line above names the refusal or the transport error</code></td><td>1</td><td>At least one alias did not answer 2xx.</td></tr>

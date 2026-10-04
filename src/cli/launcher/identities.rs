@@ -39,11 +39,20 @@ struct Listed {
     deleted: bool,
 }
 
-/// Every live item id carrying each role tag, from one listing.
-fn role_holders(router: &Path) -> Result<BTreeMap<String, Vec<String>>, String> {
-    let output = Command::new(router).arg("list").output().map_err(|error| {
-        format!("listing the vault through the entitlements router failed: {error}")
-    })?;
+/// Every live item id carrying each role tag, from one listing. `envs` is the
+/// environment the router runs with: empty inside the launcher, which already
+/// carries it, and service.env's settings for a caller outside it.
+fn role_holders(
+    router: &Path,
+    envs: &BTreeMap<String, String>,
+) -> Result<BTreeMap<String, Vec<String>>, String> {
+    let output = Command::new(router)
+        .arg("list")
+        .envs(envs)
+        .output()
+        .map_err(|error| {
+            format!("listing the vault through the entitlements router failed: {error}")
+        })?;
     if !output.status.success() {
         return Err(format!(
             "listing the vault through the entitlements router failed: {}",
@@ -83,9 +92,14 @@ fn item_for_role<'a>(
 }
 
 /// The fields of one vault item, or why the router would not give them.
-fn item_fields(router: &Path, item: &str) -> Result<Map<String, Value>, String> {
+fn item_fields(
+    router: &Path,
+    envs: &BTreeMap<String, String>,
+    item: &str,
+) -> Result<Map<String, Value>, String> {
     let output = Command::new(router)
         .args(["get", item])
+        .envs(envs)
         .output()
         .map_err(|error| {
             format!("reading {item} through the entitlements router failed: {error}")
@@ -124,9 +138,21 @@ fn field(fields: &Map<String, Value>, item: &str, name: &str) -> Result<String, 
 
 /// One field of the item that plays `role`, printed bare.
 pub(super) fn role_field(router: &Path, role: &str, name: &str) -> Result<String, String> {
-    let holders = role_holders(router)?;
+    role_field_in(router, &BTreeMap::new(), role, name)
+}
+
+/// One field of the item that plays `role`, read with the router running in
+/// `envs` — what a command outside the launcher, such as `brama probe`, passes
+/// from service.env so the router finds the vault.
+pub(crate) fn role_field_in(
+    router: &Path,
+    envs: &BTreeMap<String, String>,
+    role: &str,
+    name: &str,
+) -> Result<String, String> {
+    let holders = role_holders(router, envs)?;
     let item = item_for_role(&holders, role)?;
-    field(&item_fields(router, item)?, role, name)
+    field(&item_fields(router, envs, item)?, role, name)
 }
 
 /// The model-router client table, as JSON.
@@ -179,7 +205,7 @@ pub(super) fn model_router(
             required: false,
         },
     ];
-    let holders = role_holders(router)?;
+    let holders = role_holders(router, &BTreeMap::new())?;
     let answers: Vec<Result<String, String>> = std::thread::scope(|scope| {
         let reads: Vec<_> = clients
             .iter()
@@ -187,7 +213,7 @@ pub(super) fn model_router(
                 let holders = &holders;
                 scope.spawn(move || {
                     let item = item_for_role(holders, client.role)?;
-                    item_fields(router, item).and_then(|fields| {
+                    item_fields(router, &BTreeMap::new(), item).and_then(|fields| {
                         fields
                             .get("token")
                             .and_then(Value::as_str)
@@ -247,7 +273,7 @@ pub(super) fn request_sign(router: &Path) -> Result<String, String> {
         ("probierz", "probierz-agent-auth"),
         ("wisent-app", "wisent-app-agent"),
     ];
-    let holders = role_holders(router)?;
+    let holders = role_holders(router, &BTreeMap::new())?;
     let answers: Vec<Result<(String, String), String>> = std::thread::scope(|scope| {
         let reads: Vec<_> = sources
             .iter()
@@ -255,7 +281,7 @@ pub(super) fn request_sign(router: &Path) -> Result<String, String> {
                 let holders = &holders;
                 scope.spawn(move || {
                     let item = item_for_role(holders, role)?;
-                    let fields = item_fields(router, item)?;
+                    let fields = item_fields(router, &BTreeMap::new(), item)?;
                     if expected == "wisent-app" {
                         return Ok((expected.to_string(), field(&fields, role, "value")?));
                     }

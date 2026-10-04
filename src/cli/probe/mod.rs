@@ -6,18 +6,18 @@
 //! command exists for: healthy and serving nothing. Each alias is a real
 //! completion through the gateway's own listener, so a line with a body means
 //! a model answered. It makes requests and changes nothing. The caller names
-//! the client identity it probes as; no item, agent or alias is built in.
+//! the client identity it probes as; no item, agent or alias is built in, and
+//! the bearer and signing secret are read by the vault role their items play.
 
 use std::collections::BTreeMap;
 use std::path::Path;
-use std::process::Command;
 
 use clap::Args;
 use hmac::{Hmac, Mac};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
-use super::subscriptions::unattended::split_item_field;
+use super::launcher::role_field_in;
 use super::workload::{home, service_settings};
 
 #[derive(Args)]
@@ -26,17 +26,18 @@ pub(crate) struct ProbeArgs {
     /// gateway declares is requested.
     #[arg(long = "alias")]
     aliases: Vec<String>,
-    /// `<item>#<field>` of the client bearer the requests present, read
-    /// through the entitlements router service.env names
-    #[arg(long, value_name = "ITEM#FIELD")]
-    bearer_item: String,
-    /// Agent id every request is signed as; needs --signing-item
-    #[arg(long, value_name = "AGENT", requires = "signing_item")]
+    /// `<role>#<field>` of the client bearer the requests present: the item
+    /// tagged `stado:role:<role>`, read through the entitlements router
+    /// service.env names
+    #[arg(long, value_name = "ROLE#FIELD")]
+    bearer_role: String,
+    /// Agent id every request is signed as; needs --signing-role
+    #[arg(long, value_name = "AGENT", requires = "signing_role")]
     agent: Option<String>,
-    /// `<item>#<field>` of the request-sign secret that signs each request as
+    /// `<role>#<field>` of the request-sign secret that signs each request as
     /// --agent; needs --agent
-    #[arg(long, value_name = "ITEM#FIELD", requires = "agent")]
-    signing_item: Option<String>,
+    #[arg(long, value_name = "ROLE#FIELD", requires = "agent")]
+    signing_role: Option<String>,
     /// Acknowledge that each alias spends one short provider request
     #[arg(long, default_value_t = false)]
     allow_provider_cost: bool,
@@ -51,7 +52,7 @@ const DEFAULT_PORT: &str = "8080";
 /// What the gateway logs when it binds, followed by the address.
 const ANNOUNCEMENT: &str = "Starting brama server on ";
 
-/// One field of one vault item, read through the router with the
+/// One field of the item playing a role, read through the router with the
 /// environment the launcher builds from service.env: without it the router
 /// reports "vault not initialized" about a vault that is fine.
 fn vault_field(
@@ -59,25 +60,11 @@ fn vault_field(
     settings: &BTreeMap<String, String>,
     coordinate: &str,
 ) -> Result<String, String> {
-    let (item, field) = split_item_field(coordinate)?;
-    let output = Command::new(router)
-        .args(["get", item])
-        .envs(settings)
-        .output()
-        .map_err(|error| format!("{router}: {error}"))?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr)
-            .trim()
-            .replace('\n', " "));
-    }
-    let payload: Value = serde_json::from_slice(&output.stdout)
-        .map_err(|_| "the router did not return a Skarbiec item".to_string())?;
-    payload
-        .pointer(&format!("/fields/{field}"))
-        .and_then(Value::as_str)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)
-        .ok_or_else(|| format!("{item}/{field} is empty"))
+    let (role, field) = coordinate
+        .split_once('#')
+        .filter(|(role, field)| !role.is_empty() && !field.is_empty())
+        .ok_or_else(|| format!("`{coordinate}` is not `<role>#<field>`"))?;
+    role_field_in(Path::new(router), settings, role, field)
 }
 
 /// Loopback first, then the address the last boot announced; plain HTTP is
@@ -114,14 +101,14 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
         .get("ENTITLEMENTS_ROUTER_BIN")
         .cloned()
         .ok_or("service env names no entitlements router")?;
-    let token = vault_field(&router, &settings, &args.bearer_item).map_err(|error| {
+    let token = vault_field(&router, &settings, &args.bearer_role).map_err(|error| {
         format!(
             "cannot read the bearer {} through {router}: {error}",
-            args.bearer_item
+            args.bearer_role
         )
     })?;
     // The secret stays in this process: never printed, never in argv.
-    let signing = match (&args.agent, &args.signing_item) {
+    let signing = match (&args.agent, &args.signing_role) {
         (Some(agent), Some(coordinate)) => {
             let secret = vault_field(&router, &settings, coordinate).map_err(|error| {
                 format!("cannot read {coordinate} to sign as {agent}: {error}")

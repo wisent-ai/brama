@@ -54,18 +54,6 @@ async fn stado(arguments: &[&str]) -> Result<Zeroizing<String>, String> {
     ))
 }
 
-/// One `<item>#<field>` coordinate, split exactly once.
-pub(crate) fn split_item_field(coordinate: &str) -> Result<(&str, &str), String> {
-    match coordinate.split_once('#') {
-        Some((item, field)) if !item.trim().is_empty() && !field.trim().is_empty() => {
-            Ok((item.trim(), field.trim()))
-        }
-        _ => Err(format!(
-            "--bearer-item is `<item>#<field>`, and `{coordinate}` is not"
-        )),
-    }
-}
-
 /// The field of a bearer item that holds the bearer itself.
 const BEARER_FIELD: &str = "token";
 
