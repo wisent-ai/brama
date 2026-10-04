@@ -15,9 +15,8 @@ rm -f "$identities_file"
 export BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES
 unset BRAMA_ALLOWED_MODELS backend_models
 
-# Product request-sign identities are projected from their exact Skarbiec items.
-# `wisent-app` is Jeden's public runtime identity and uses the dedicated
-# `agent:wisent-app` item rather than a product-specific `agent_auth_secret`.
+# Product request-sign identities are read from the items that play each
+# product's agent-auth role; no item is named.
 BRAMA_REQUEST_SIGN_IDENTITIES="$(
 printf '%s\n' "reading request-sign identities" >/dev/stderr
   "$BRAMA_BIN" launcher request-sign-identities --router "$ENTITLEMENTS_ROUTER_BIN"
@@ -35,7 +34,7 @@ export BRAMA_REQUEST_SIGN_IDENTITIES
 # copy through its own identity. Neither service reads the other's files.
 printf '%s\n' "reading Brama-Weles reauthentication identity" >/dev/stderr
 BRAMA_WELES_REAUTH_TOKEN="$(
-  "$BRAMA_BIN" launcher item-field --router "$ENTITLEMENTS_ROUTER_BIN" brama-weles-reauth token
+  "$BRAMA_BIN" launcher role-field --router "$ENTITLEMENTS_ROUTER_BIN" brama-weles-reauth token
 )"
 printf '%s\n' "read Brama-Weles reauthentication identity" >/dev/stderr
 [ -n "$BRAMA_WELES_REAUTH_TOKEN" ] || {

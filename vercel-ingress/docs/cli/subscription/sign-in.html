@@ -40,7 +40,7 @@
 <ul>
 <li>Unsupported provider: <code>Weles does not support subscription authentication for &lt;provider&gt;</code>.</li>
 <li>Empty reason: <code>--reason must say why this sign-in is being run</code>.</li>
-<li>Missing admission credential: <code>BRAMA_WELES_REAUTH_TOKEN is unavailable; Brama must acquire brama-weles-reauth/token from Skarbiec at startup</code>.</li>
+<li>Missing admission credential: when <code>BRAMA_WELES_REAUTH_TOKEN</code> is unset, Brama reads the item playing role <code>brama-weles-reauth</code>; no such item is refused with <code>no vault item carries stado:role:brama-weles-reauth</code>, and two with the number of items that carry it.</li>
 <li>Identity failures name the Skarbiec subscription and distinguish <code>subscription_identity_missing</code>, <code>skarbiec_login_missing</code>, conflicting login material and a changed account revision.</li>
 <li>Weles execution failures retain the actual <code>failure.code</code>, <code>stage</code>, provider HTTP status and <code>run_id</code>. An unreadable or lost execution response is unconfirmed, not proof that no browser ran.</li>
 <li>A phone approval that Google does not complete reports <code>google_push_not_approved</code>. A method that cannot be selected reports its observed challenge rather than treating it as no second factor.</li>

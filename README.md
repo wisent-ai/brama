@@ -674,9 +674,17 @@ brama subscription sign-in codex \
   --json
 ```
 
-Brama and Weles each acquire `brama-weles-reauth/token` from Skarbiec under
-their own workload identities when their service starts. Brama receives
-`BRAMA_WELES_REAUTH_TOKEN` and presents it only to `POST /reauth`; Weles
+Brama and Weles each acquire the `token` of the vault item that plays the role
+`brama-weles-reauth` (the one live item tagged `stado:role:brama-weles-reauth`)
+under their own workload identities when their service starts. Every secret the
+launcher preloads is selected the same way, by role, never by item name: the
+model-router bearers by `weles-model-router`, `wisent-backend-model-router`,
+`wisent-app-model-router` and `brama-desktop-model-router`, and each product's
+request-sign secret by `<product>-agent-auth` (`wisent-app-agent` for Jeden's
+runtime identity). A role no item plays, or plays twice, is refused at start
+with the role and its tag. `brama launcher role-field --router ROUTER ROLE
+FIELD` prints one field of the item playing ROLE.
+Brama receives `BRAMA_WELES_REAUTH_TOKEN` and presents it only to `POST /reauth`; Weles
 receives the same field and accepts it only on that route. At every start the
 Brama launcher reads `agent_skarbiec_url` from the host's fleet Stado config
 while retaining the dedicated `brama-service` identity; a stale endpoint in an

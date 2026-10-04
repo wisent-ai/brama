@@ -65,13 +65,13 @@ pub(crate) enum LauncherCommand {
         #[arg(long)]
         router: PathBuf,
     },
-    /// One non-empty field of one vault item, printed bare
-    ItemField {
+    /// One non-empty field of the vault item that plays a role, printed bare
+    RoleField {
         /// The `skarbiec-entitlements-router` executable that reads the vault
         #[arg(long)]
         router: PathBuf,
-        /// Vault item to read
-        item: String,
+        /// Role whose item to read: the one live item tagged `stado:role:<ROLE>`
+        role: String,
         /// Field of that item to print
         field: String,
     },
@@ -126,11 +126,11 @@ pub(crate) fn run(command: LauncherCommand) {
         LauncherCommand::RequestSignIdentities { router } => {
             printed(identities::request_sign(&router))
         }
-        LauncherCommand::ItemField {
+        LauncherCommand::RoleField {
             router,
-            item,
+            role,
             field,
-        } => printed(identities::item_field(&router, &item, &field)),
+        } => printed(identities::role_field(&router, &role, &field)),
         LauncherCommand::CheckRouterVerbs { router, launcher } => verbs::check(&router, &launcher),
     };
     if let Err(detail) = result {
