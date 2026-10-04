@@ -22,7 +22,9 @@ const SEED_HEX_CHARS: usize = 64;
 
 use super::purpose::CapabilityError;
 
-const MAX_KEY_BYTES: u64 = 4096;
+/// The longest file a valid key can be: the hex seed and a CRLF ending.
+/// Anything longer is refused before it is read, because it cannot parse.
+const MAX_KEY_BYTES: u64 = (SEED_HEX_CHARS + b"\r\n".len()) as u64;
 
 pub(super) fn read_owner_key(path: &Path) -> Result<SigningKey, CapabilityError> {
     let mut file = OpenOptions::new()

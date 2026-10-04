@@ -5,38 +5,21 @@
 
 use std::process::Command;
 
-use serde_json::Value;
-
 use super::Layout;
 
-/// The loopback port the gateway listens on when service.env names none.
-const DEFAULT_PORT: &str = "8080";
-/// The port the tailnet serve proxy publishes the gateway on.
-const TAILNET_PORT: &str = "8443";
 /// What the gateway logs when it binds, followed by the address.
 const ANNOUNCEMENT: &str = "Starting brama server on ";
-/// What the launcher logs at the start of every boot attempt.
-const BOOT_MARKER: &str = "Starting server";
-/// How much of the unit log's end is shown: the launcher's own account of
-/// provisioning and registration, which a slice starting at the last
-/// announcement hides when a start never got that far.
-const LOG_TAIL: usize = 60;
-
-fn tail(lines: &[&str], count: usize) -> Vec<String> {
-    lines[lines.len().saturating_sub(count)..]
-        .iter()
-        .map(|line| format!("  {line}"))
-        .collect()
-}
+/// The first line `start-with-skarbiec` writes on every boot attempt, before
+/// any stage runs: the current attempt is everything from its last occurrence.
+const BOOT_MARKER: &str = "brama launcher: boot attempt of ";
 
 pub(super) async fn print_reachability(layout: &Layout) {
     say!("\n=== reachability");
-    let port = layout
-        .settings
-        .get("PORT")
-        .cloned()
-        .unwrap_or_else(|| DEFAULT_PORT.to_string());
-    let mut targets = vec![format!("http://127.0.0.1:{port}/health")];
+    let mut targets = Vec::new();
+    match layout.settings.get("PORT") {
+        Some(port) => targets.push(format!("http://127.0.0.1:{port}/health")),
+        None => say!("  service.env names no PORT; only the address the gateway announced is probed"),
+    }
     let log = std::fs::read(&layout.log)
         .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
         .unwrap_or_default();
@@ -58,17 +41,6 @@ pub(super) async fn print_reachability(layout: &Layout) {
     .into_iter()
     .find(|path| std::path::Path::new(path).exists());
     if let Some(tailscale) = tailscale {
-        if let Ok(status) = Command::new(tailscale).args(["status", "--json"]).output() {
-            let document: Value = serde_json::from_slice(&status.stdout).unwrap_or(Value::Null);
-            if let Some(name) = document
-                .pointer("/Self/DNSName")
-                .and_then(Value::as_str)
-                .map(|name| name.trim_end_matches('.'))
-                .filter(|name| !name.is_empty())
-            {
-                targets.push(format!("https://{name}:{TAILNET_PORT}/health"));
-            }
-        }
         if let Ok(served) = Command::new(tailscale).args(["serve", "status"]).output() {
             let text = format!(
                 "{}{}",
@@ -81,6 +53,14 @@ pub(super) async fn print_reachability(layout: &Layout) {
                 .filter(|line| line.contains("proxy") || line.contains("https://"))
             {
                 say!("  serve: {line}");
+                // Each published origin is probed as published; no port is
+                // assumed for the tailnet proxy.
+                for origin in line
+                    .split_whitespace()
+                    .filter(|word| word.starts_with("https://"))
+                {
+                    targets.push(format!("{}/health", origin.trim_end_matches('/')));
+                }
             }
         }
     }
@@ -104,18 +84,20 @@ pub(super) async fn print_reachability(layout: &Layout) {
 }
 
 pub(super) fn print_boot_attempt(layout: &Layout) {
-    say!("\n=== current boot attempt");
     match std::fs::read(&layout.log) {
         Ok(bytes) => {
             let text = String::from_utf8_lossy(&bytes);
-            let latest = text
-                .rfind(BOOT_MARKER)
-                .map(|at| &text[at..])
-                .unwrap_or(&text);
-            say!("{}", latest.trim());
-            say!("\n=== last lines of the unit's log");
-            for line in tail(&text.lines().collect::<Vec<_>>(), LOG_TAIL) {
-                say!("{line}");
+            match text.rfind(BOOT_MARKER) {
+                Some(at) => {
+                    say!("\n=== current boot attempt");
+                    say!("{}", text[at..].trim());
+                }
+                // A launcher that predates the marker leaves no boundary, so
+                // the whole log is the only account that hides nothing.
+                None => {
+                    say!("\n=== the unit's log (no boot attempt marker in it)");
+                    say!("{}", text.trim());
+                }
             }
         }
         Err(_) => say!("  {}: absent", layout.log.display()),

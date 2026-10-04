@@ -25,7 +25,9 @@ use source::{read_cache, read_live_catalog, write_cache};
 
 pub use provider::{CatalogAuth, CatalogProtocol, CatalogProvider};
 
-const DEFAULT_TTL_SECONDS: u64 = 900;
+/// The age at which a loaded catalog is fetched again, in seconds. Unset, a
+/// loaded catalog is kept for the life of the process: no age is assumed.
+const TTL_ENV: &str = "BRAMA_MODEL_CATALOG_TTL_SECONDS";
 
 #[derive(Clone, Debug)]
 pub struct CatalogSnapshot {
@@ -49,12 +51,7 @@ static LOAD_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 /// cache after taking it, so the fetch that already happened is the one they
 /// all get.
 pub async fn snapshot() -> Result<Arc<CatalogSnapshot>, String> {
-    let ttl = Duration::from_secs(
-        std::env::var("BRAMA_MODEL_CATALOG_TTL_SECONDS")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .unwrap_or(DEFAULT_TTL_SECONDS),
-    );
+    let ttl = catalog_ttl()?;
     if let Some(fresh) = cached_within(ttl).await {
         return Ok(fresh);
     }
@@ -76,10 +73,7 @@ pub async fn snapshot() -> Result<Arc<CatalogSnapshot>, String> {
     };
     let parsed = Arc::new(parse_catalog(&raw)?);
     let mut cache = MEMORY_CACHE.write().await;
-    if let Some(cached) = cache
-        .as_ref()
-        .filter(|cached| cached.loaded_at.elapsed() < ttl)
-    {
+    if let Some(cached) = cache.as_ref().filter(|cached| fresh(cached, ttl)) {
         return Ok(Arc::clone(&cached.snapshot));
     }
     *cache = Some(CachedSnapshot {
@@ -89,10 +83,25 @@ pub async fn snapshot() -> Result<Arc<CatalogSnapshot>, String> {
     Ok(parsed)
 }
 
-async fn cached_within(ttl: Duration) -> Option<Arc<CatalogSnapshot>> {
+async fn cached_within(ttl: Option<Duration>) -> Option<Arc<CatalogSnapshot>> {
     let cache = MEMORY_CACHE.read().await;
     cache
         .as_ref()
-        .filter(|cached| cached.loaded_at.elapsed() < ttl)
+        .filter(|cached| fresh(cached, ttl))
         .map(|cached| Arc::clone(&cached.snapshot))
+}
+
+fn fresh(cached: &CachedSnapshot, ttl: Option<Duration>) -> bool {
+    ttl.is_none_or(|ttl| cached.loaded_at.elapsed() < ttl)
+}
+
+fn catalog_ttl() -> Result<Option<Duration>, String> {
+    match std::env::var(TTL_ENV) {
+        Err(_) => Ok(None),
+        Ok(value) => value
+            .trim()
+            .parse()
+            .map(|seconds| Some(Duration::from_secs(seconds)))
+            .map_err(|_| format!("{TTL_ENV} must be a whole number of seconds; it is {value:?}")),
+    }
 }

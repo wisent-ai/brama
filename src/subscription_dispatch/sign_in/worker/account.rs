@@ -6,9 +6,6 @@ use super::super::blocked::{Blocked, SignInError};
 pub(crate) const LOGIN_ITEM_SELECTOR: &str = "login_item";
 /// Weles answers a finished resolution or trajectory with 200 and `ok: true`.
 pub(in crate::subscription_dispatch::sign_in) const HTTP_OK: u16 = 200;
-/// How much of an undecodable resolver answer a refusal quotes: enough to
-/// tell an HTML error page or a proxy message from truncated JSON.
-const RESPONSE_EXCERPT_CHARS: usize = 300;
 
 /// Only opaque vault coordinates and non-secret account provenance cross here.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -57,9 +54,7 @@ pub(crate) async fn resolve(
         stage: "identity".into(),
         detail: format!(
             "POST {base}/reauth/resolve HTTP {status} returned invalid JSON ({error}): {}",
-            body.chars()
-                .take(RESPONSE_EXCERPT_CHARS)
-                .collect::<String>()
+            body.trim()
         ),
         status: Some(status),
     })?;

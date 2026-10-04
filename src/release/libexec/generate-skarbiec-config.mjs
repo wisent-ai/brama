@@ -14,9 +14,9 @@ const [
   workloadGidInput,
   controlConfigInput,
 ] = process.argv;
-if (!binaryPath || !outputDir || !isAbsolute(executablePath)) {
+if (!binaryPath || !outputDir || !isAbsolute(executablePath) || workloadUidInput === undefined || workloadGidInput === undefined) {
   throw new Error(
-    'usage: generate-skarbiec-config.mjs <brama-binary> <output-dir> [absolute-runtime-binary] [uid] [gid] [control-config]',
+    'usage: generate-skarbiec-config.mjs <brama-binary> <output-dir> <absolute-runtime-binary> <uid> <gid> [control-config]',
   );
 }
 
@@ -45,13 +45,10 @@ const tagValue = (tags, prefix) => {
   return found === undefined ? null : found.slice(prefix.length);
 };
 
-// The Brama workload runs as uid/gid 10001 unless the deployment says otherwise.
-const DEFAULT_WORKLOAD_UID = 10001;
-const DEFAULT_WORKLOAD_GID = 10001;
-const workloadUid = DEFAULT_WORKLOAD_UID;
-const workloadGid = DEFAULT_WORKLOAD_GID;
-const configuredWorkloadUid = workloadUidInput === undefined ? workloadUid : Number(workloadUidInput);
-const configuredWorkloadGid = workloadGidInput === undefined ? workloadGid : Number(workloadGidInput);
+// The workload's account is the one provision-skarbiec-trust names: the account
+// that runs it, or BRAMA_WORKLOAD_UID/GID. No account is assumed here.
+const configuredWorkloadUid = Number(workloadUidInput);
+const configuredWorkloadGid = Number(workloadGidInput);
 if (
   !Number.isSafeInteger(configuredWorkloadUid) ||
   !Number.isSafeInteger(configuredWorkloadGid) ||

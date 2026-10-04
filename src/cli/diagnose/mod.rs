@@ -13,7 +13,7 @@
 //! 4. the policy's provider grants against the authority-owned routes table;
 //! 5. every alias route against the providers policy and routes agree on;
 //! 6. where the gateway is reachable, and by which scheme;
-//! 7. the current boot attempt and the ends of both log streams.
+//! 7. the current boot attempt, whole, from the launcher's first line on.
 //!
 //! Read-only throughout. Every section writes its lines through `say!`: on a
 //! terminal they are printed as they are found, and with `--json` the same

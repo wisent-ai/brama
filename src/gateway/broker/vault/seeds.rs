@@ -6,8 +6,6 @@
 
 use super::entitlements_router_bin;
 
-const ERROR_PREVIEW_CHARS: usize = 512;
-
 /// What Skarbiec says about the authenticator seed of every login it holds,
 /// keyed by login item.
 ///
@@ -22,7 +20,8 @@ pub fn login_seed_states() -> Result<std::collections::BTreeMap<String, String>,
         .output()
         .map_err(|error| format!("{program} totp-seed-state could not start: {error}"))?;
     if !output.status.success() {
-        let detail: String = String::from_utf8_lossy(&output.stderr).chars().take(ERROR_PREVIEW_CHARS).collect();
+        let detail = String::from_utf8_lossy(&output.stderr);
+        let detail = detail.trim();
         return Err(format!("{program} totp-seed-state exited {}: {detail}", output.status));
     }
     let document: serde_json::Value = serde_json::from_slice(&output.stdout)

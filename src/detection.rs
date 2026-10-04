@@ -5,10 +5,6 @@ use tracing::{debug, info, warn};
 
 use crate::types::ComputeResources;
 
-/// An 8B-class model needs 24 GB of GPU memory; a 4B-class model needs 8 GB.
-const LARGE_MODEL_VRAM_GB: f64 = 24.0;
-const SMALL_MODEL_VRAM_GB: f64 = 8.0;
-
 pub fn detect_compute_resources() -> ComputeResources {
     let mut sys = System::new_all();
     sys.refresh_all();
@@ -108,23 +104,4 @@ fn detect_nvidia() -> Option<(String, f64)> {
             None
         }
     }
-}
-
-/// Given detected compute resources, recommend a model and
-/// backend (provider name) for local or external API inference.
-pub fn select_model_for_resources(resources: &ComputeResources) -> (String, String) {
-    if resources.has_metal && resources.vram_gb >= LARGE_MODEL_VRAM_GB {
-        return ("qwen3-8b".into(), "local".into());
-    }
-    if resources.has_metal && resources.vram_gb >= SMALL_MODEL_VRAM_GB {
-        return ("qwen3-4b".into(), "local".into());
-    }
-    if resources.has_cuda && resources.vram_gb >= LARGE_MODEL_VRAM_GB {
-        return ("deepseek-r1-qwen3-8b".into(), "local".into());
-    }
-    if resources.has_cuda && resources.vram_gb >= SMALL_MODEL_VRAM_GB {
-        return ("qwen3-4b".into(), "local".into());
-    }
-    // No local GPU capacity: this host's model runs at the configured remote provider.
-    ("cydonia-24b".into(), "featherless".into())
 }

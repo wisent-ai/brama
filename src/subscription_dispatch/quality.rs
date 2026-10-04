@@ -7,13 +7,6 @@ use crate::types::{Message, ModelRequest};
 
 const SOURCE: &str = "brama-task-quality";
 
-/// A task-quality run tries at most 25 models.
-const MAX_QUALITY_MODELS: usize = 25;
-
-fn max_quality_models() -> usize {
-    MAX_QUALITY_MODELS
-}
-
 #[derive(Debug, Clone)]
 pub struct TaskQualityOptions {
     pub agent_id: String,
@@ -33,11 +26,8 @@ pub async fn collect_task_quality(opts: TaskQualityOptions) -> Result<Value, Str
                 .into(),
         );
     }
-    if opts.max_models == 0 || opts.max_models > max_quality_models() {
-        return Err(format!(
-            "max_models must be between one and {}",
-            max_quality_models()
-        ));
+    if opts.max_models == 0 {
+        return Err("max_models must be at least one".into());
     }
     if opts.task.trim().is_empty() {
         return Err("task is required".into());
@@ -144,7 +134,7 @@ async fn check_model(opts: &TaskQualityOptions, model: &str) -> Value {
             "prompt": opts.prompt,
             "expectedExact": opts.expected_exact,
             "expectedContains": opts.expected_contains,
-            "output": truncate(&content, 1500),
+            "output": content,
             "latencyMs": resp.latency_ms,
             "attempts": resp.attempts,
             "success": resp.success,
@@ -212,8 +202,4 @@ fn service_name(provider: &str) -> String {
         "opencode" => "OpenCode".to_string(),
         _ => provider.to_string(),
     }
-}
-
-fn truncate(value: &str, max: usize) -> String {
-    value.chars().take(max).collect()
 }

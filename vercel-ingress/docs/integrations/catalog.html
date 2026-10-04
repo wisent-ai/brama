@@ -29,7 +29,7 @@ credential, subscription, or billing authority.</p>
 <ul>
 <li>default origin: <code>https://models.dev/api.json</code>;</li>
 <li>a request finishes on the catalog's response or a transport failure, without a Brama elapsed-time cutoff;</li>
-<li>default cache TTL: 900 seconds;</li>
+<li>the in-memory catalog is fetched again only when <code>BRAMA_MODEL_CATALOG_TTL_SECONDS</code> names an age; without it, once per process;</li>
 <li>default replaceable cache: <code>/tmp/brama-models-dev-cache.json</code>;</li>
 <li>provider/model identifiers and numeric metadata are validated and
   normalized;</li>

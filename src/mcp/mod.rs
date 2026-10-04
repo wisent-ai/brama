@@ -13,7 +13,7 @@ use std::io::{BufRead, Write};
 
 use serde_json::{json, Value};
 
-use crate::{detect_compute_resources, select_model_for_resources};
+use crate::detect_compute_resources;
 
 // Spec-mandated JSON-RPC 2.0 / MCP wire values (not tunables); kept as strings
 // and parsed so no numeric literal appears (matches the crate style).
@@ -49,7 +49,6 @@ fn text_result(value: &Value) -> Value {
 
 fn detect_tool() -> Value {
     let res = detect_compute_resources();
-    let (model, backend) = select_model_for_resources(&res);
     json!({
         "gpu_type": res.gpu_type,
         "gpu_name": res.gpu_name,
@@ -58,8 +57,6 @@ fn detect_tool() -> Value {
         "cpu_cores": res.cpu_cores,
         "has_cuda": res.has_cuda,
         "has_metal": res.has_metal,
-        "recommended_model": model,
-        "recommended_backend": backend,
     })
 }
 

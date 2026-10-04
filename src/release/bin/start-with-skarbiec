@@ -12,6 +12,11 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 bundle_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
 installation=$(basename "$(dirname -- "$bundle_root")")
 
+# The first line every boot attempt writes to the unit log. `brama diagnose`
+# shows the current attempt from here, so the launcher's own account of what it
+# provisioned is read whole instead of a fixed number of trailing lines.
+printf '%s\n' "brama launcher: boot attempt of $installation" >/dev/stderr
+
 # The start is one sequence of stages and each stage is a file next to this one.
 # They are sourced, not executed: every stage reads the coordinates the previous
 # one resolved and exports the environment the gateway is finally handed, and a

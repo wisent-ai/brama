@@ -15,11 +15,6 @@ use crate::subscription_dispatch::usage::{CredentialState, SubscriptionUsage};
 /// never keyed on an empty string.
 const UNATTRIBUTED: &str = "unattributed";
 
-/// How much of a refusal is quoted as evidence on one line. The refusal's
-/// own first sentence says what the provider asked for; everything after it
-/// is the browser trajectory, which the sign-in report already carries.
-const EVIDENCE_CHARACTERS: usize = 200;
-
 /// One account projection shared by the HTTP list, pool, CLI and refresh.
 pub fn subscription_view(entry: &SubscriptionEntry) -> Value {
     let recorded = usage::usage_for(&entry.id);
@@ -106,15 +101,10 @@ fn second_factor_view(entry: &SubscriptionEntry) -> Value {
                 .map(|_| true)
         });
     // A refusal carries the whole browser trajectory behind it, which is
-    // evidence for reading a failed run and noise in a one-line answer.
+    // evidence for reading a failed run and noise in a one-line answer: its
+    // first line says what the provider asked for, and it is quoted whole.
     let sentence = |detail: String| -> String {
-        detail
-            .lines()
-            .next()
-            .unwrap_or_default()
-            .chars()
-            .take(EVIDENCE_CHARACTERS)
-            .collect()
+        detail.lines().next().unwrap_or_default().to_owned()
     };
     // The login a sign-in resolved is the one that would answer the
     // challenge; an item that declares none still signs in through whatever

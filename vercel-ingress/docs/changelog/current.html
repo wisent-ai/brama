@@ -24,6 +24,24 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-no-invented-bounds">Unreleased: no invented counts, lengths or windows<a class="headerlink" href="#unreleased-no-invented-bounds" title="Link to this section">&para;</a></h2>
+<p>Numbers nobody decided are gone. <code>brama detect</code> and the MCP
+<code>brama_detect</code> tool report resources only: the model and backend they
+recommended came from memory thresholds written in source. <code>brama diagnose</code>
+shows the whole current boot attempt from the launcher's new first line,
+<code>brama launcher: boot attempt of &lt;installation&gt;</code>, instead of the log's
+last sixty lines, probes the loopback port only when <code>service.env</code> names one,
+and probes the origins <code>tailscale serve status</code> publishes instead of an
+assumed tailnet port. Refusals quote the whole undecodable answer or router error.
+<code>collect-task-quality --max-models</code> accepts any count of at least one.
+Model, provider and path-segment identifiers are checked for the characters that
+could break a route, without a byte ceiling, by one validator. The workload key file
+is bounded by the longest valid key. The in-memory model catalog is fetched again
+only when <code>BRAMA_MODEL_CATALOG_TTL_SECONDS</code> names an age, and an
+unparseable value is refused instead of read as fifteen minutes. The trust generator
+takes the workload account from <code>provision-skarbiec-trust</code> and assumes none
+(<a href="/docs/configuration/gateway-inputs">gateway inputs</a>,
+<a href="/docs/cli/detect"><code>detect</code></a>).</p>
 <h2 id="unreleased-no-default-model-routes">Unreleased: no compiled-in default models<a class="headerlink" href="#unreleased-no-default-model-routes" title="Link to this section">&para;</a></h2>
 <p><code>openai/default</code> and <code>qwen/default</code> no longer resolve to a model
 chosen in source (<code>gpt-5.4</code>, <code>qwen-max</code>); they are ordinary model ids

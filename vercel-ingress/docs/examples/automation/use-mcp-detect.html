@@ -37,7 +37,7 @@
 <pre><code class="language-json">{&quot;name&quot;:&quot;brama_detect&quot;,&quot;arguments&quot;:{}}
 </code></pre>
 <h2 id="observable-result">Observable result<a class="headerlink" href="#observable-result" title="Link to this section">&para;</a></h2>
-<p><code>tools/list</code> exposes exactly one tool, <code>brama_detect</code>. Its result is text containing JSON fields for GPU type/name, VRAM, RAM, CPU cores, CUDA, Metal, recommended model, and recommended backend.</p>
+<p><code>tools/list</code> exposes exactly one tool, <code>brama_detect</code>. Its result is text containing JSON fields for GPU type/name, VRAM, RAM, CPU cores, CUDA and Metal.</p>
 <h2 id="failure-path">Failure path<a class="headerlink" href="#failure-path" title="Link to this section">&para;</a></h2>
 <p>Unknown tools return a JSON-RPC error. Any <code>brama_models</code> result indicates a wrong or stale binary because that capability is intentionally absent. Repair the registered executable path; do not grant credentials to MCP.</p>
 <h2 id="cleanup">Cleanup<a class="headerlink" href="#cleanup" title="Link to this section">&para;</a></h2>

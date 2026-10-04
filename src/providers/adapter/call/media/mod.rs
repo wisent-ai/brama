@@ -34,11 +34,6 @@ pub use audio::{
     SpokenAudio, VoiceSample,
 };
 
-/// A provider's job identifier travels into a URL path, so it is held to what
-/// an identifier can be: printable, short, and unable to leave the path
-/// segment it was put in.
-const MAX_PATH_SEGMENT_BYTES: usize = 128;
-
 pub async fn dispatch_image(
     route_id: &str,
     payload: Map<String, Value>,
@@ -166,10 +161,10 @@ async fn answered(route_id: &str, response: reqwest::Response) -> Result<Value, 
 }
 
 /// Whether a value may be written into one URL path segment: a provider job
-/// id or a voice id.
+/// id or a voice id. Only characters that cannot leave the segment it was put
+/// in are accepted.
 fn valid_path_segment(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= MAX_PATH_SEGMENT_BYTES
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))

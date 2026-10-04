@@ -21,12 +21,11 @@ pub use facets::{kind_from_output, ModelKind};
 pub(in crate::providers::adapter) use known_limits::{
     apply_omp_model_metadata, known_max_output_tokens,
 };
-pub(in crate::providers::adapter) use route::valid_model_id;
 pub use route::{
     native_decision_route, provider_id_from_route, route, supports_chat_route,
     supports_decision_route, supports_embedding_route, supports_image_route,
     supports_moderation_route, supports_music_route, supports_speech_route, supports_video_route,
-    supports_voices_route, valid_provider_id,
+    supports_voices_route, valid_model_id, valid_provider_id,
 };
 
 use roster::PROVIDERS;

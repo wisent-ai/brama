@@ -5,7 +5,7 @@
 use clap::Args;
 
 use brama::subscription_dispatch::{collect_task_quality as run_task_quality, TaskQualityOptions};
-use brama::{detect_compute_resources, select_model_for_resources, Message, ModelRequest};
+use brama::{detect_compute_resources, Message, ModelRequest};
 
 #[derive(Args)]
 pub(crate) struct TestArgs {
@@ -68,13 +68,8 @@ pub(crate) fn print_version(text: bool) {
 
 pub(crate) fn detect(json: bool) {
     let res = detect_compute_resources();
-    let (model, backend) = select_model_for_resources(&res);
     if json {
-        let report = serde_json::json!({
-            "resources": res,
-            "recommended_model": model,
-            "recommended_backend": backend,
-        });
+        let report = serde_json::json!({ "resources": res });
         println!(
             "{}",
             serde_json::to_string_pretty(&report).unwrap_or_else(|_| "{}".into())
@@ -88,8 +83,6 @@ pub(crate) fn detect(json: bool) {
     println!("CPU Cores: {}", res.cpu_cores);
     println!("CUDA: {}", res.has_cuda);
     println!("Metal: {}", res.has_metal);
-    println!("\nRecommended model: {model}");
-    println!("Recommended backend: {backend}");
 }
 
 pub(crate) async fn test_inference(args: TestArgs) {

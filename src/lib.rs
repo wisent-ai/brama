@@ -19,7 +19,7 @@ pub mod types;
 
 pub use crate::build_info::{current as build_info, BuildInfo};
 pub use crate::core::server::start_server;
-pub use crate::detection::{detect_compute_resources, select_model_for_resources};
+pub use crate::detection::detect_compute_resources;
 pub use crate::providers::adapter as provider_registry;
 pub use crate::types::{
     ComputeResources, Message, ModelRequest, ModelResponse, RouterError, Tool, ToolCall,

@@ -253,7 +253,7 @@ refuses, and its answer is read whole before UTF-8 or JSON parsing (a body that 
 UTF-8 is <code>provider_failure: provider response is not UTF-8</code>). Public model
 metadata comes
 from models.dev (<code>BRAMA_MODEL_CATALOG_URL</code>, default
-<code>https://models.dev/api.json</code>, cached 900 seconds) and is advisory only.</p>
+<code>https://models.dev/api.json</code>, kept in memory for <code>BRAMA_MODEL_CATALOG_TTL_SECONDS</code> or for the life of the process) and is advisory only.</p>
 <h2 id="not-to-be-confused-with">Not to be confused with<a class="headerlink" href="#not-to-be-confused-with" title="Link to this section">&para;</a></h2>
 <ul>
 <li><strong>A capability.</strong> The descriptor is speech; the

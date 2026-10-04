@@ -43,7 +43,7 @@ enum Commands {
     Test(TestArgs),
     /// Detect local hardware capabilities
     Detect {
-        /// Print the resources and the recommended model and backend as JSON
+        /// Print the detected resources as JSON
         #[arg(long)]
         json: bool,
     },

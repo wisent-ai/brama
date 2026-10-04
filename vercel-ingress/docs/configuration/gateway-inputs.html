@@ -89,7 +89,7 @@
         <h2 id="catalog-and-providers">Catalog and providers<a class="headerlink" href="#catalog-and-providers" title="Link to this section">&para;</a></h2>
         <table><thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
           <tr><td><code>BRAMA_MODEL_CATALOG_URL</code></td><td><code>https://models.dev/api.json</code></td><td>public metadata origin</td></tr>
-          <tr><td><code>BRAMA_MODEL_CATALOG_TTL_SECONDS</code></td><td><code>900</code></td><td>in-memory catalog TTL</td></tr>
+          <tr><td><code>BRAMA_MODEL_CATALOG_TTL_SECONDS</code></td><td>unset: the catalog is fetched once per process</td><td>age in whole seconds at which the in-memory catalog is fetched again; any other value stops catalog reads with <code>BRAMA_MODEL_CATALOG_TTL_SECONDS must be a whole number of seconds; it is "&lt;value&gt;"</code></td></tr>
           <tr><td><code>BRAMA_MODEL_CATALOG_PATH</code></td><td>unset</td><td>read the catalog from a local file instead of the origin</td></tr>
           <tr><td><code>BRAMA_MODEL_CATALOG_CACHE</code></td><td><code>/tmp/brama-models-dev-cache.json</code></td><td>replaceable on-disk cache</td></tr>
           <tr><td><code>BRAMA_CATALOG_REVISION</code></td><td><code>brama-v1</code></td><td>revision string reported by <code>/v1/models</code></td></tr>

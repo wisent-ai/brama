@@ -6,9 +6,6 @@ use super::{provider, ProviderDescriptor};
 
 const OPENAI_EMBEDDING_MODEL: &str = "text-embedding-3-small";
 const OPENAI_MODERATION_MODEL: &str = "omni-moderation-latest";
-/// A model id is at most 512 bytes; a provider id at most 128.
-const MAX_MODEL_ID_BYTES: usize = 512;
-const MAX_PROVIDER_ID_BYTES: usize = 128;
 
 pub fn provider_id_from_route(value: &str) -> Option<&str> {
     let (provider_id, model_id) = value.split_once('/')?;
@@ -91,16 +88,15 @@ pub fn supports_voices_route(value: &str) -> bool {
     route(value).is_some_and(|(descriptor, _)| !descriptor.voices_path.is_empty())
 }
 
-pub(in crate::providers::adapter) fn valid_model_id(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= MAX_MODEL_ID_BYTES
-        && value.trim() == value
-        && !value.chars().any(char::is_control)
+/// A model id can be any text a provider names a model with, as long as it
+/// cannot hide or split a route: no surrounding blanks, no control characters.
+pub fn valid_model_id(value: &str) -> bool {
+    !value.is_empty() && value.trim() == value && !value.chars().any(char::is_control)
 }
 
+/// A provider id has to survive being one half of a `provider/model` route.
 pub fn valid_provider_id(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= MAX_PROVIDER_ID_BYTES
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))

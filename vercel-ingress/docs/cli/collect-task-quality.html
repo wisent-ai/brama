@@ -29,7 +29,7 @@
 <tr><td><code>--expected-exact &lt;TEXT&gt;</code></td><td>one expectation required</td><td>Score 1 only for an exact response.</td></tr>
 <tr><td><code>--expected-contains &lt;TEXT&gt;</code></td><td>one expectation required</td><td>Score 1 when the response contains the text.</td></tr>
 <tr><td><code>--persist</code></td><td>optional; off</td><td>Write check rows for later task selection.</td></tr>
-<tr><td><code>--max-models &lt;N&gt;</code></td><td>required</td><td>How many active models to check, 1 through 25; each is one billable request. No count is assumed, and a call without it exits 2.</td></tr>
+<tr><td><code>--max-models &lt;N&gt;</code></td><td>required</td><td>How many active models to check, at least one; each is one billable request. No count is assumed, and a call without it exits 2.</td></tr>
 <tr><td><code>--allow-provider-cost</code></td><td>required by runtime; off</td><td>Acknowledge all billable requests.</td></tr>
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print the report as one JSON document instead of <code>key: value</code> lines.</td></tr>
 </tbody></table>
@@ -38,7 +38,7 @@
 <h2 id="refusals">Exact refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <ul>
 <li><code>refusing billable task-quality collection without explicit cost acknowledgement</code></li>
-<li><code>max_models must be between one and 25</code></li>
+<li><code>max_models must be at least one</code></li>
 <li><code>task is required</code></li>
 <li><code>prompt is required</code></li>
 <li><code>expected_exact or expected_contains is required</code></li>
