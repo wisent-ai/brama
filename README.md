@@ -586,76 +586,19 @@ environment gets, and not a broken account. A retired subscription is never
 refreshed, because rotating its grant would put back what somebody removed. The
 exit status is non-zero unless a credential was obtained.
 
-### Reusing an existing OMP subscription session without signing in
+### Reading the hosted subscription view
 
-`scripts/operations/sync-omp-session.py` sends the selected existing
-OMP account's access token to the signed Brama donation API for `codex` or
-`claude-code`. It never opens a browser, starts Weles, copies a refresh token, or
-starts a new login. OMP remains the only owner of refresh-token rotation.
-The expected email and provider account UUID prevent a changed account index
-from silently selecting another identity.
-
-List Codex account identities with `omp token openai-codex --list` and read
-their provider-reported quota and ChatGPT UUIDs with
-`omp usage --provider openai-codex --json`. For Claude Code, use
-`omp token anthropic --list` and `omp usage --provider anthropic --json`;
-the latter reports the Claude account UUID in `metadata.accountId`.
-Select the account and its already assigned Brama subscription; do not overwrite
-another account's slot. The synchronizer accepts any existing subscription of
-the selected provider owned by the signed agent, not only the primary slot.
-Omit `--login-item` when neither the subscription nor its vault tags declares a
-login mapping.
+Read the serving gateway's subscription view, including its provider usage
+windows, without copying a credential into a shell command:
 
 ```bash
-python3 scripts/operations/sync-omp-session.py \
-  --provider codex \
-  --brama-url https://brama.wisent.com \
-  --host <Stado-host-owning-Brama-vault> \
-  --agent-id wisent-app \
-  --subscription-id brama-sub-wisent-app-codex-primary \
-  --login-item <existing-login-item> \
-  --account <OMP-account-number> \
-  --email <expected-email> \
-  --account-id <expected-provider-account-UUID> \
-  --bearer-item jeden-model-router \
-  --signing-item agent:wisent-app \
-  --reason 'synchronize an already signed-in OMP account'
+brama subscription list --gateway-consumer <consumer> --bearer-role <console bearer role> --json
 ```
 
-For Claude Code, pass `--provider claude-code` and that account's Claude
-subscription, login item, OMP index, email, and account UUID. Claude tokens are
-opaque, so the command checks the exact OMP account selection and its
-provider-reported usage identity rather than guessing an expiry; the result's
-`access_expires_at` is `null`.
-
-The command reads credentials from the local owner vault and uses Stado to
-inspect the target item's digest and tags. Only Brama writes the donated token
-and acknowledges the replaced credential in its subscription ledger. A direct
-vault write alone cannot clear Brama's recorded `needs_reauthorization` state.
-Shared subscriptions keep every existing `brama:agent:` tag; another authorized
-consumer is not an account-mapping conflict. A caller not assigned to the item,
-a different provider, subscription or login mapping, or an inactive or
-unexpectedly shaped bundle is refused without replacing it.
-
-`stored` or `current` reports the target vault revision, access-token expiry
-and verified preservation of its consumers, not successful model inference.
-The next actual model task supplies that evidence. A failed synchronization
-exits non-zero and includes the failed operation; no token is printed.
-`--watch` repeats every five minutes when run as a Stado-managed user service on
-the host that owns the OMP session. An unavailable or invalid OMP session exits
-instead of opening a login, and the existing account must remain usable by OMP.
-
-Read the hosted subscription view, including its provider usage windows,
-without copying credentials into a shell command:
-
-```bash
-python3 scripts/read-subscription-view.py https://brama.wisent.com wisent-app \
-  --bearer-item wisent-app-model-router --signing-item agent:wisent-app --json
-```
-
-Both operations accept `--vault` to select the local Skarbiec vault. The reader
-uses the named items' `token` and `value` fields, performs a signed GET, and exits
-nonzero for an HTTP refusal. A missing or stale provider usage report is not
+The gateway's origin comes from Stado's service directory and the console
+bearer from the vault item that plays the role, read with
+`stado credentials get --role`; no item is named. A refusal exits nonzero with
+the gateway's own sentence. A missing or stale provider usage report is not
 zero usage; read each window's observation and reset times.
 
 ### `brama subscription sign-in <provider> --reason <text>`

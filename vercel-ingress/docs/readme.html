@@ -544,65 +544,15 @@ exit status is non-zero unless a credential was obtained.</p>
 <p>No credential material is printed by either command: the listing reads a ledger
 that has never held any, and the refresh drops the credential it obtains without
 looking at it.</p>
-<h3 id="reusing-an-existing-omp-subscription-session-without-signing-in">Reusing an existing OMP subscription session without signing in<a class="headerlink" href="#reusing-an-existing-omp-subscription-session-without-signing-in" title="Link to this section">&para;</a></h3>
-<p><code>scripts/operations/sync-omp-session.py</code> sends the selected existing
-OMP account's access token to the signed Brama donation API for <code>codex</code> or
-<code>claude-code</code>. It never opens a browser, starts Weles, copies a refresh token,
-or starts a new login. OMP remains the only owner of refresh-token rotation.
-The expected email and provider account UUID prevent a changed account index
-from silently selecting another identity.</p>
-<p>List Codex account identities with <code>omp token openai-codex --list</code> and read
-their provider-reported quota and ChatGPT UUIDs with
-<code>omp usage --provider openai-codex --json</code>. For Claude Code, use
-<code>omp token anthropic --list</code> and <code>omp usage --provider anthropic --json</code>;
-the latter reports the Claude account UUID in <code>metadata.accountId</code>.
-Select the account and its already assigned Brama subscription; do not overwrite
-another account's slot. The synchronizer accepts any existing subscription of
-the selected provider owned by the signed agent, not only the primary slot.
-Omit <code>--login-item</code> when neither the subscription nor its vault tags declares a
-login mapping.</p>
-<pre><code class="language-bash">python3 scripts/operations/sync-omp-session.py \
-  --provider codex \
-  --brama-url https://brama.wisent.com \
-  --host &lt;Stado-host-owning-Brama-vault&gt; \
-  --agent-id wisent-app \
-  --subscription-id brama-sub-wisent-app-codex-primary \
-  --login-item &lt;existing-login-item&gt; \
-  --account &lt;OMP-account-number&gt; \
-  --email &lt;expected-email&gt; \
-  --account-id &lt;expected-provider-account-UUID&gt; \
-  --bearer-item jeden-model-router \
-  --signing-item agent:wisent-app \
-  --reason 'synchronize an already signed-in OMP account'
+<h3 id="reading-the-hosted-subscription-view">Reading the hosted subscription view<a class="headerlink" href="#reading-the-hosted-subscription-view" title="Link to this section">&para;</a></h3>
+<p>Read the serving gateway's subscription view, including its provider usage
+windows, without copying a credential into a shell command:</p>
+<pre><code class="language-bash">brama subscription list --gateway-consumer &lt;consumer&gt; --bearer-role &lt;console bearer role&gt; --json
 </code></pre>
-<p>For Claude Code, pass <code>--provider claude-code</code> and that account's Claude
-subscription, login item, OMP index, email, and account UUID. Claude tokens are
-opaque, so the command checks the exact OMP account selection and its
-provider-reported usage identity rather than guessing an expiry; the result's
-<code>access_expires_at</code> is <code>null</code>.</p>
-<p>The command reads credentials from the local owner vault and uses Stado to
-inspect the target item's digest and tags. Only Brama writes the donated token
-and acknowledges the replaced credential in its subscription ledger. A direct
-vault write alone cannot clear Brama's recorded <code>needs_reauthorization</code> state.
-Shared subscriptions keep every existing <code>brama:agent:</code> tag; another authorized
-consumer is not an account-mapping conflict. A caller not assigned to the item,
-a different provider, subscription or login mapping, or an inactive or
-unexpectedly shaped bundle is refused without replacing it.</p>
-<p><code>stored</code> or <code>current</code> reports the target vault revision, access-token expiry
-and verified preservation of its consumers, not successful model inference.
-The next actual model task supplies that evidence. A failed synchronization
-exits non-zero and includes the failed operation; no token is printed.
-<code>--watch</code> repeats every five minutes when run as a Stado-managed user service on
-the host that owns the OMP session. An unavailable or invalid OMP session exits
-instead of opening a login, and the existing account must remain usable by OMP.</p>
-<p>Read the hosted subscription view, including its provider usage windows,
-without copying credentials into a shell command:</p>
-<pre><code class="language-bash">python3 scripts/read-subscription-view.py https://brama.wisent.com wisent-app \
-  --bearer-item wisent-app-model-router --signing-item agent:wisent-app --json
-</code></pre>
-<p>Both operations accept <code>--vault</code> to select the local Skarbiec vault. The reader
-uses the named items' <code>token</code> and <code>value</code> fields, performs a signed GET, and exits
-nonzero for an HTTP refusal. A missing or stale provider usage report is not
+<p>The gateway's origin comes from Stado's service directory and the console
+bearer from the vault item that plays the role, read with
+<code>stado credentials get --role</code>; no item is named. A refusal exits nonzero with
+the gateway's own sentence. A missing or stale provider usage report is not
 zero usage; read each window's observation and reset times.</p>
 <h2 id="operational-model">Operational model<a class="headerlink" href="#operational-model" title="Link to this section">&para;</a></h2>
 <ul>
