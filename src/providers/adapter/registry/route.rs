@@ -4,8 +4,6 @@ use std::borrow::Cow;
 
 use super::{provider, ProviderDescriptor};
 
-const QWEN_DEFAULT_MODEL: &str = "qwen-max";
-const OPENAI_DEFAULT_MODEL: &str = "gpt-5.4";
 const OPENAI_EMBEDDING_MODEL: &str = "text-embedding-3-small";
 const OPENAI_MODERATION_MODEL: &str = "omni-moderation-latest";
 /// A model id is at most 512 bytes; a provider id at most 128.
@@ -24,8 +22,6 @@ pub fn route(value: &str) -> Option<(&'static ProviderDescriptor, Cow<'_, str>)>
         return None;
     }
     let concrete = match value {
-        "qwen/default" => QWEN_DEFAULT_MODEL,
-        "openai/default" => OPENAI_DEFAULT_MODEL,
         "openai/embeddings" => OPENAI_EMBEDDING_MODEL,
         "openai/moderation" => OPENAI_MODERATION_MODEL,
         _ => return Some((descriptor, Cow::Borrowed(model_id))),

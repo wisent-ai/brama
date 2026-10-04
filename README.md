@@ -707,7 +707,7 @@ Brama accepts one routing request and selects the configured provider/model rout
 
 Use the OpenAI-compatible request and response contract
 Send model, messages, max_tokens, and temperature to POST /v1/chat/completions. ...
-request_example: {"model":"openai/default","messages":[...],"max_tokens":256,"temperature":0.7}
+request_example: {"model":"best","messages":[...],"max_tokens":256,"temperature":0.7}
 response_example: {"id":"chatcmpl-...","model":"...","choices":[...],"usage":{...}}
 
 Receive one real model response

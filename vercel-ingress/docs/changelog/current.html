@@ -24,6 +24,19 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-no-default-model-routes">Unreleased: no compiled-in default models<a class="headerlink" href="#unreleased-no-default-model-routes" title="Link to this section">&para;</a></h2>
+<p><code>openai/default</code> and <code>qwen/default</code> no longer resolve to a model
+chosen in source (<code>gpt-5.4</code>, <code>qwen-max</code>); they are ordinary model ids
+the provider is asked for, which it refuses. A caller that wants the gateway to
+choose names an alias (<code>best</code>, or one declared with <code>brama aliases set</code>)
+and the route registry says where it points. The first-use example request names
+<code>best</code> (<a href="/docs/concepts/provider">provider</a>).</p>
+<h2 id="unreleased-identity-authority-configured">Unreleased: Wisent Identity is configuration<a class="headerlink" href="#unreleased-identity-authority-configured" title="Link to this section">&para;</a></h2>
+<p>The Wisent Identity origin and anon key are no longer compiled in. The gateway
+reads <code>BRAMA_WISENT_AUTH_URL</code> and <code>BRAMA_WISENT_AUTH_ANON_KEY</code> (Stado's
+catalog sets both for the service); with either unset no person is resolved,
+the log says <code>wisent_identity_unconfigured</code>, and organization calls answer
+identity unavailable (<a href="/docs/configuration/gateway-inputs">gateway inputs</a>).</p>
 <h2 id="unreleased-image-edits">Unreleased: <code>POST /v1/images/edits</code><a class="headerlink" href="#unreleased-image-edits" title="Link to this section">&para;</a></h2>
 <p>Brama answered no image edit, so a client written against the OpenAI edit
 contract (Lem's figure edits among them) failed every edit of a picture it already

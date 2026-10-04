@@ -43,10 +43,10 @@ produced and OpenAI rejected it — repair the provider account.</p>
 <p>No pinned rows: the catalog is discovered live from
 <code>https://api.openai.com/v1/models</code>. Discovery follows the
 <a href="/docs/integrations/model-providers#reliability">shared provider transport contract</a>;
-public metadata comes from models.dev and is advisory only. Three convenience routes resolve to
-pinned concrete models: <code>openai/default</code> → <code>gpt-5.4</code>,
-<code>openai/embeddings</code> → <code>text-embedding-3-small</code>,
-<code>openai/moderation</code> → <code>omni-moderation-latest</code>.</p>
+public metadata comes from models.dev and is advisory only. Two capability routes resolve to
+pinned concrete models: <code>openai/embeddings</code> → <code>text-embedding-3-small</code>,
+<code>openai/moderation</code> → <code>omni-moderation-latest</code>. Chat names a concrete
+<code>openai/&lt;model&gt;</code> or an alias the route registry points here.</p>
 <h2 id="plan-usage">Plan usage<a class="headerlink" href="#plan-usage" title="Link to this section">&para;</a></h2>
 <p>OpenAI publishes no free plan-usage report for API keys. The ledger records that
 absence as the provider&#x27;s own answer, never as a zero

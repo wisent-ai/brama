@@ -186,10 +186,12 @@ it serves chat or <a href="/docs/concepts/decision">decisions</a>.</p>
 </tr>
 </tbody>
 </table>
-<p>Four convenience routes resolve to pinned concrete models:
-<code>openai/default</code> → <code>gpt-5.4</code>, <code>openai/embeddings</code> →
-<code>text-embedding-3-small</code>, <code>openai/moderation</code> → <code>omni-moderation-latest</code>,
-<code>qwen/default</code> → <code>qwen-max</code>.</p>
+<p>Two capability routes resolve to pinned concrete models:
+<code>openai/embeddings</code> → <code>text-embedding-3-small</code> and
+<code>openai/moderation</code> → <code>omni-moderation-latest</code>. There is no
+per-provider default model: a caller that wants "the model this gateway
+chooses" names an alias (<code>best</code>, or one the route registry
+declares with <code>brama aliases set</code>), and the registry says where it points.</p>
 <p><code>local-openai</code> is the deployment-owned inference target: its base URL
 resolves per request through the routes file, and only loopback or Tailscale
 IPv4 endpoints are accepted (<a href="/docs/concepts/alias">alias</a>). Brama does not start or
