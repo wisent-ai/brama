@@ -264,6 +264,13 @@ working routes and failed accounts reports <code>200</code> and <code>degraded: 
 Routing results appear under <code>routing</code>. Rows in <code>subscriptions[]</code> carry per-subscription
 <code>redeemable</code> and the refusal in the words of whatever refused it, and never a
 secret.</p>
+<p>Every answer also carries <code>maintenance</code>: the last
+<a href="/docs/cli/maintain"><code>brama maintain</code></a> pass this process ran,
+as <code>{"last_pass_unix": &lt;seconds&gt;, "last_pass_ok": &lt;bool&gt;}</code>. Before the
+first pass it reads <code>{"last_pass_unix": null, "detail": "no maintenance pass has run
+since this process started: nothing renews a grant or schedules a sign-in until the host's
+Stado schedule runs brama maintain"}</code>. The gateway keeps no timer, so it does not judge
+lateness; a monitor compares <code>last_pass_unix</code> with the schedule it declared.</p>
 <h2 id="get-stats"><code>GET /stats</code><a class="headerlink" href="#get-stats" title="Link to this section">&para;</a></h2>
 <p>Bearer-protected process telemetry, with no dependency probing. Captured keys:
 <code>build</code>, <code>configuredDirectProviders</code>, <code>dependencyPolicy</code>

@@ -119,6 +119,7 @@ pub(in crate::core::server) async fn maintain_admin(
         .is_some_and(|failed| !failed.is_empty());
     let ready = readiness.get("ready").and_then(Value::as_bool) == Some(true);
     let ok = !usage_failed && credentials.is_ok() && ready;
+    crate::core::server::readiness::record_maintenance(ok);
     Ok(Json(json!({
         "ok": ok,
         "plan_usage": plan_usage,

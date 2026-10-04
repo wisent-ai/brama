@@ -102,13 +102,55 @@ fn publish(report: ReadinessReport) {
     }
 }
 
-/// Return the last completed credential and routing check.
+/// The last `brama maintain` pass this process ran: when it finished, in Unix
+/// seconds, and whether every step succeeded. `None` until the first pass.
+static LAST_MAINTENANCE: LazyLock<std::sync::RwLock<Option<(u64, bool)>>> =
+    LazyLock::new(|| std::sync::RwLock::new(None));
+
+/// Record one finished maintenance pass for `/readyz`.
+pub(in crate::core::server) fn record_maintenance(ok: bool) {
+    let finished = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or_default();
+    match LAST_MAINTENANCE.write() {
+        Ok(mut last) => *last = Some((finished, ok)),
+        Err(poisoned) => *poisoned.into_inner() = Some((finished, ok)),
+    }
+}
+
+/// What `/readyz` says about maintenance. The gateway keeps no timer, so it
+/// cannot tell a late pass from an early one; it states when the last pass
+/// ended and how, and says plainly when none has run, because then nothing
+/// renews a grant or schedules a sign-in until the host's Stado schedule runs
+/// `brama maintain`.
+fn maintenance_state() -> Value {
+    let last = match LAST_MAINTENANCE.read() {
+        Ok(last) => *last,
+        Err(poisoned) => *poisoned.into_inner(),
+    };
+    match last {
+        Some((finished, ok)) => json!({"last_pass_unix": finished, "last_pass_ok": ok}),
+        None => json!({
+            "last_pass_unix": null,
+            "detail": "no maintenance pass has run since this process started: nothing renews a \
+                       grant or schedules a sign-in until the host's Stado schedule runs brama maintain"
+        }),
+    }
+}
+
+/// Return the last completed credential and routing check, with the last
+/// maintenance pass beside it.
 pub(in crate::core::server) async fn readyz() -> impl IntoResponse {
     let report = match READINESS_REPORT.read() {
         Ok(current) => current.clone(),
         Err(poisoned) => poisoned.into_inner().clone(),
     };
-    (report.status, Json(report.body))
+    let mut body = report.body;
+    if let Some(object) = body.as_object_mut() {
+        object.insert("maintenance".to_string(), maintenance_state());
+    }
+    (report.status, Json(body))
 }
 
 /// Learn this host's placement and take the first readiness reading, once.
