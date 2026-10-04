@@ -11,12 +11,11 @@
 # BRAMA_REQUEST_SIGN_IDENTITIES='{"<agent>":"<secret>"}'.
 #
 # Usage:
-#   BRAMA_TOKEN=<client bearer> BRAMA_AGENT=<agent> BRAMA_AGENT_SECRET=<secret> \
-#     ./signed-agent-listing.sh
-#   BRAMA_URL=http://127.0.0.1:8080 names another gateway.
+#   BRAMA_URL=<gateway origin> BRAMA_TOKEN=<client bearer> BRAMA_AGENT=<agent> \
+#     BRAMA_AGENT_SECRET=<secret> ./signed-agent-listing.sh
 set -euo pipefail
 
-BRAMA_URL="${BRAMA_URL:-http://127.0.0.1:8080}"
+: "${BRAMA_URL:?BRAMA_URL must name the gateway to ask}"
 : "${BRAMA_TOKEN:?BRAMA_TOKEN must hold the client bearer the gateway issued}"
 : "${BRAMA_AGENT:?BRAMA_AGENT must name the agent whose subscriptions are listed}"
 : "${BRAMA_AGENT_SECRET:?BRAMA_AGENT_SECRET must hold that agent's request-sign secret}"

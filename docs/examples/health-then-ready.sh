@@ -5,11 +5,11 @@
 # traffic and whether the remaining configured accounts are degraded.
 #
 # Usage:
-#   ./health-then-ready.sh
-#   BRAMA_URL=http://127.0.0.1:8080 ./health-then-ready.sh
+#   BRAMA_URL=<gateway origin> ./health-then-ready.sh
+#   (`stado service directory connect brama --consumer <you> --json` prints it)
 set -euo pipefail
 
-BRAMA_URL="${BRAMA_URL:-http://127.0.0.1:8080}"
+: "${BRAMA_URL:?BRAMA_URL must name the gateway to probe}"
 
 echo "== GET ${BRAMA_URL}/health"
 curl -sS "${BRAMA_URL}/health"
