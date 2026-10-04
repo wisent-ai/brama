@@ -55,7 +55,11 @@ pub(super) async fn edit_image(
     }
     // One image is the `image` field every edit model reads; several are
     // `image[]`, which only the models that take several accept.
-    let field = if images.len() == 1 { "image" } else { "image[]" };
+    let field = if images.len() == 1 {
+        "image"
+    } else {
+        "image[]"
+    };
     for (index, image) in images.iter().enumerate() {
         let (content_type, bytes) = data_url(image, &format!("image[{index}]"))?;
         form.file(
