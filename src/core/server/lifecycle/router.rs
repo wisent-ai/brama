@@ -32,7 +32,7 @@ use crate::core::server::chat::chat_completions;
 use crate::core::server::chat::dialects::{anthropic_messages, openai_responses};
 use crate::core::server::decisions::decisions;
 use crate::core::server::media::{
-    audio_music, audio_speech, audio_voice_clone, audio_voice_delete, audio_voices,
+    audio_music, audio_speech, audio_voice_clone, audio_voice_delete, audio_voices, image_edits,
     image_generations, video_generations, video_status,
 };
 use crate::core::server::readiness::{health, readyz};
@@ -68,6 +68,12 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
         .route(
             "/v1/images/generations",
             post(image_generations).layer(DefaultBodyLimit::disable()),
+        )
+        // The OpenAI edit contract: the same picture request, as a form
+        // whose files are the input images.
+        .route(
+            "/v1/images/edits",
+            post(image_edits).layer(DefaultBodyLimit::disable()),
         )
         .route("/v1/videos", post(video_generations))
         .route("/v1/audio/speech", post(audio_speech))

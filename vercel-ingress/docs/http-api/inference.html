@@ -171,7 +171,16 @@ route belonging to a decision-only provider is refused there too —
 optional <code>n</code>, <code>size</code>, <code>quality</code>, <code>background</code>,
 <code>output_format</code>, <code>response_format</code> and <code>user</code>, and answers the
 provider's image document with <code>model</code> rewritten to the route the caller
-named. <code>POST /v1/videos</code> takes <code>{"model", "prompt"}</code> with
+named. Input images ride in <code>image</code> as <code>data:</code> URLs, with an optional
+<code>mask</code> beside them. <code>POST /v1/images/edits</code> is the OpenAI edit
+contract for the same request: a <code>multipart/form-data</code> form whose text fields
+are those options and whose files are the input images (<code>image</code>, or
+<code>image[]</code> for several) and an optional <code>mask</code>. A provider that
+declares an edit endpoint (OpenAI) is sent the edit there; Gemini and Seedream read
+the images in their generation request. A form with no input image, a file that is
+not an image, or a body that is not a form is <code>400</code> naming what was wrong,
+and JSON sent to the edit path is pointed at <code>/v1/images/generations</code>.
+<code>POST /v1/videos</code> takes <code>{"model", "prompt"}</code> with
 <code>size</code> and <code>seconds</code>, and answers a job — an <code>id</code> and a
 <code>status</code> — which <code>GET /v1/videos/{id}?model=…</code> reads back from the
 provider that issued it. <code>POST /v1/audio/speech</code> takes

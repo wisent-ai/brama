@@ -14,6 +14,7 @@ use super::super::outcome::refusal::{provider_refused, transport_refusal};
 use super::super::outcome::response_body::response_text;
 use super::super::outcome::typed::typed_object;
 use super::audio::{audio, audio_answer, Call, SpokenAudio, VoiceSample};
+use super::form::Form;
 use super::{answered, valid_path_segment};
 use crate::types::{GatewayRefusal, ProviderRefusal, Refusal};
 
@@ -97,45 +98,29 @@ pub(super) async fn voices(call: &Call<'_>) -> Result<Value, Refusal> {
 }
 
 /// One voice cloned from recordings; the answer carries its `voice_id`.
-///
-/// The form is written here rather than by the HTTP client, so the client
-/// keeps the small feature set every other provider call uses.
 pub(super) async fn clone_voice(
     call: &Call<'_>,
     name: &str,
     description: Option<&str>,
     samples: Vec<VoiceSample>,
 ) -> Result<Value, Refusal> {
-    let boundary = format!("brama-{}", uuid::Uuid::new_v4().simple());
-    let mut body = Vec::new();
-    form_field(&mut body, &boundary, "name", None, None, name.as_bytes())?;
+    let mut form = Form::new();
+    form.text("name", name)?;
     if let Some(description) = description {
-        form_field(
-            &mut body,
-            &boundary,
-            "description",
-            None,
-            None,
-            description.as_bytes(),
-        )?;
+        form.text("description", description)?;
     }
     for sample in &samples {
-        form_field(
-            &mut body,
-            &boundary,
+        form.file(
             "files",
-            Some(&sample.filename),
-            Some(&sample.content_type),
+            &sample.filename,
+            &sample.content_type,
             &sample.bytes,
         )?;
     }
-    body.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
+    let (content_type, body) = form.finish();
     let response = call
         .post(&format!("{}/add", call.descriptor.voices_path))
-        .header(
-            reqwest::header::CONTENT_TYPE,
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header(reqwest::header::CONTENT_TYPE, content_type)
         .body(body)
         .send()
         .await
@@ -159,41 +144,6 @@ pub(super) async fn delete_voice(call: &Call<'_>, voice_id: &str) -> Result<Valu
         .await
         .map_err(|error| transport_refusal(&error))?;
     answered(call.route_id, response).await
-}
-
-/// One part of a `multipart/form-data` body. A header value that could end
-/// its own line or quote is refused, because it would rewrite the form.
-fn form_field(
-    body: &mut Vec<u8>,
-    boundary: &str,
-    name: &str,
-    filename: Option<&str>,
-    content_type: Option<&str>,
-    value: &[u8],
-) -> Result<(), Refusal> {
-    for header in filename.into_iter().chain(content_type) {
-        if header.is_empty() || header.contains(['\r', '\n', '"']) {
-            return Err(invalid(format!(
-                "`{}` cannot be written into a form header",
-                header.escape_debug()
-            )));
-        }
-    }
-    body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
-    let disposition = match filename {
-        Some(filename) => {
-            format!("Content-Disposition: form-data; name=\"{name}\"; filename=\"{filename}\"\r\n")
-        }
-        None => format!("Content-Disposition: form-data; name=\"{name}\"\r\n"),
-    };
-    body.extend_from_slice(disposition.as_bytes());
-    if let Some(content_type) = content_type {
-        body.extend_from_slice(format!("Content-Type: {content_type}\r\n").as_bytes());
-    }
-    body.extend_from_slice(b"\r\n");
-    body.extend_from_slice(value);
-    body.extend_from_slice(b"\r\n");
-    Ok(())
 }
 
 fn invalid(reason: String) -> Refusal {

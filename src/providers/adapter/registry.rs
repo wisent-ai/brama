@@ -86,6 +86,12 @@ pub struct ProviderDescriptor {
     /// images. Only a path the vendor documents is written here: a guessed
     /// one turns a refusal the caller could act on into somebody else's 404.
     pub image_path: &'static str,
+    /// Where this provider edits pictures it is handed (the OpenAI
+    /// `multipart/form-data` edit contract), empty when it takes no input
+    /// images on a path of its own. A provider that reads input images in
+    /// its generation request (Gemini, Seedream on BytePlus) leaves this
+    /// empty and is sent the generation request with them.
+    pub image_edit_path: &'static str,
     /// The video-generation path, empty when this provider generates no
     /// video.
     pub video_path: &'static str,

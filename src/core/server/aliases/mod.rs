@@ -57,8 +57,8 @@ pub const BEST_DECISION_ALIAS: &str = "best-decision-model";
 /// them and answers a caller that asks with the state of the alias it asked
 /// for.
 pub(crate) const DECISION_ALIASES: &[&str] = &[DECISION_ALIAS, BEST_DECISION_ALIAS];
-/// The deployment's image alias: `POST /v1/images/generations` and nothing
-/// else. Like the decision names it is known by name and required of nobody,
+/// The deployment's image alias: `POST /v1/images/generations` and its edit
+/// form `POST /v1/images/edits`, nothing else. Like the decision names it is known by name and required of nobody,
 /// so a gateway that generates no images changes no policy to take the
 /// release; unrouted, it reports `no_route` with the command that declares
 /// it.

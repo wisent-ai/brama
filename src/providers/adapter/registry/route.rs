@@ -63,7 +63,8 @@ pub fn supports_moderation_route(value: &str) -> bool {
 }
 
 /// Whether this route reaches a provider that generates images, which is the
-/// only thing `POST /v1/images/generations` can send anywhere.
+/// only thing `POST /v1/images/generations` and `POST /v1/images/edits` can
+/// send anywhere.
 pub fn supports_image_route(value: &str) -> bool {
     route(value).is_some_and(|(descriptor, _)| !descriptor.image_path.is_empty())
 }

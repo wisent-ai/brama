@@ -1,6 +1,7 @@
 //! The three generation shapes that are not text: `POST
-//! /v1/images/generations`, `POST /v1/videos` with `GET /v1/videos/{id}`
-//! reading one started job back, and `POST /v1/audio/speech`.
+//! /v1/images/generations` with `POST /v1/images/edits` taking the same
+//! request as the OpenAI edit form, `POST /v1/videos` with `GET
+//! /v1/videos/{id}` reading one started job back, and `POST /v1/audio/speech`.
 //!
 //! Both accept the same two kinds of name the chat endpoints do — the
 //! deployment's media alias, or a canonical `provider/model` route the
@@ -12,8 +13,12 @@
 //! the pool carries an image or video quota, so there is nothing for `best`
 //! to delegate to and no caller plan to bill.
 
+mod edits;
 mod library;
+mod multipart;
 mod requests;
+
+pub(in crate::core::server) use edits::image_edits;
 
 pub(in crate::core::server) use library::{
     audio_music, audio_voice_clone, audio_voice_delete, audio_voices,
@@ -47,10 +52,20 @@ pub(in crate::core::server) async fn image_generations(
     Extension(aliases): Extension<ModelAliases>,
     Json(request): Json<ImageRequest>,
 ) -> Result<Json<Value>, ApiError> {
+    image(&client_identity, &aliases, request).await
+}
+
+/// One picture, from text or from the input images the request carries: the
+/// JSON generation request and the multipart edit form both end here.
+async fn image(
+    client_identity: &ModelClientIdentity,
+    aliases: &ModelAliases,
+    request: ImageRequest,
+) -> Result<Json<Value>, ApiError> {
     if let Some(reason) = request.invalid() {
         return Err(api_error(StatusCode::BAD_REQUEST, reason));
     }
-    let route = media_route(&client_identity, &aliases, &request.model, Shape::Image).await?;
+    let route = media_route(client_identity, aliases, &request.model, Shape::Image).await?;
     let body = dispatched(dispatch_direct_image(&route, request.payload()).await)?;
     if !body.get("data").is_some_and(Value::is_array) {
         record_typed_request(1, true);

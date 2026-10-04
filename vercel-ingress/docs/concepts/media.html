@@ -23,6 +23,7 @@
 <h2 id="the-three-shapes">The shapes<a class="headerlink" href="#the-three-shapes" title="Link to this section">&para;</a></h2>
 <table><thead><tr><th>Endpoint</th><th>Alias</th><th>Answer</th></tr></thead><tbody>
 <tr><td><code>POST /v1/images/generations</code></td><td><code>image-model</code></td><td>The image document: <code>data[]</code> carrying <code>b64_json</code> or <code>url</code> (Gemini adds <code>mime_type</code>), with <code>model</code> rewritten to the route the caller named.</td></tr>
+<tr><td><code>POST /v1/images/edits</code></td><td><code>image-model</code></td><td>The same image document, from the OpenAI edit form: input images as files (<code>image</code> or <code>image[]</code>) and an optional <code>mask</code>. A provider with an edit endpoint edits there; one that reads input images in its generation request is sent that request with them.</td></tr>
 <tr><td><code>POST /v1/videos</code></td><td><code>video-model</code></td><td>A job, not a render: an <code>id</code> and a <code>status</code>. The clip finishes minutes later.</td></tr>
 <tr><td><code>GET /v1/videos/{id}?model=…</code></td><td><code>video-model</code></td><td>That job as the provider reports it now.</td></tr>
 <tr><td><code>POST /v1/audio/speech</code></td><td><code>voice-model</code></td><td>Encoded audio bytes, with the provider's <code>Content-Type</code>. With <code>"timestamps": true</code> (ElevenLabs only) the answer is <code>application/json</code>: ElevenLabs' own document with the audio as <code>audio_base64</code> beside the character <code>alignment</code> and <code>normalized_alignment</code>.</td></tr>
@@ -52,7 +53,7 @@
 <h2 id="which-providers">Which providers<a class="headerlink" href="#which-providers" title="Link to this section">&para;</a></h2>
 <p>A provider serves a media shape only where its vendor documents that endpoint. OpenAI-shaped vendors are spoken as they are; ElevenLabs, MiniMax and Gemini each have their own adapter that translates the request and the answer. Every other shape is declared with an empty path and refused by name.</p>
 <table><thead><tr><th>Provider</th><th>Image</th><th>Video</th><th>Voice</th><th>Music</th><th>Voice library</th></tr></thead><tbody>
-<tr><td><code>openai</code></td><td><code>/v1/images/generations</code></td><td><code>/v1/videos</code> and <code>/v1/videos/{id}</code></td><td><code>/v1/audio/speech</code></td><td>—</td><td>—</td></tr>
+<tr><td><code>openai</code></td><td><code>/v1/images/generations</code>; edits on <code>/v1/images/edits</code></td><td><code>/v1/videos</code> and <code>/v1/videos/{id}</code></td><td><code>/v1/audio/speech</code></td><td>—</td><td>—</td></tr>
 <tr><td><code>xai</code></td><td><code>/v1/images/generations</code></td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
 <tr><td><code>together</code></td><td><code>/v1/images/generations</code></td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
 <tr><td><code>venice</code></td><td><code>/v1/images/generations</code></td><td>—</td><td><code>/v1/audio/speech</code></td><td>—</td><td>—</td></tr>

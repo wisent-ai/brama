@@ -14,7 +14,9 @@
 //! declaration's `media_wire`.
 
 mod audio;
+mod edit;
 mod elevenlabs;
+mod form;
 mod gemini;
 mod minimax;
 
@@ -50,7 +52,11 @@ pub async fn dispatch_image(
         ));
     }
     let (descriptor, model_id) = typed_route(route_id)?;
-    if descriptor.media_wire == MediaWire::Gemini {
+    // Gemini reads input images in its generation request, and so does a
+    // provider that declares no edit path; one that declares an edit path
+    // edits on it, because its generation endpoint takes no input image.
+    let edits = !descriptor.image_edit_path.is_empty() && edit::asks_for_edit(&payload);
+    if descriptor.media_wire == MediaWire::Gemini || edits {
         let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
         let call = audio::Call {
             route_id,
@@ -61,6 +67,9 @@ pub async fn dispatch_image(
             client: &client,
             secret,
         };
+        if edits {
+            return edit::edit_image(&call, payload).await;
+        }
         return gemini::generate_image(&call, payload).await;
     }
     generate(route_id, descriptor.image_path, payload, item, secret).await

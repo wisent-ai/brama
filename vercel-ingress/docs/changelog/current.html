@@ -24,6 +24,19 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-image-edits">Unreleased: <code>POST /v1/images/edits</code><a class="headerlink" href="#unreleased-image-edits" title="Link to this section">&para;</a></h2>
+<p>Brama answered no image edit, so a client written against the OpenAI edit
+contract (Lem's figure edits among them) failed every edit of a picture it already
+had. <code>POST /v1/images/edits</code> now takes the OpenAI
+<code>multipart/form-data</code> form &mdash; the options as text fields, the input
+images as <code>image</code> or <code>image[]</code> files and an optional
+<code>mask</code> &mdash; and serves it as the image request it is, on the
+<code>image-model</code> alias or a canonical image route. A provider that declares an
+edit endpoint (OpenAI's <code>/v1/images/edits</code>) is sent the edit there, also when
+the input images arrive in the JSON generation request; Gemini and Seedream keep
+reading them in their generation request. <code>brama image</code> takes
+<code>--mask</code> beside <code>--image</code> for the same edit from a shell
+(<a href="/docs/concepts/media">media</a>).</p>
 <h2 id="unreleased-oauth-failure-causes">Unreleased: OAuth refresh failure causes<a class="headerlink" href="#unreleased-oauth-failure-causes" title="Link to this section">&para;</a></h2>
 <p>OAuth refresh now retains the client's underlying failure chain. A failed
 response read reports the endpoint, HTTP status and received byte count instead

@@ -45,9 +45,14 @@ pub(crate) struct ImageArgs {
     /// Provider quality string
     #[arg(long)]
     quality: Option<String>,
-    /// An input image file the picture is made from; repeat for several
+    /// An input image file the picture is made from; repeat for several. A
+    /// provider with an edit endpoint (OpenAI) edits them there
     #[arg(long = "image")]
     images: Vec<String>,
+    /// A mask file over the first input image: its transparent pixels are
+    /// what the edit repaints
+    #[arg(long, requires = "images")]
+    mask: Option<String>,
     /// Aspect ratio, such as 3:4, for providers that take one
     #[arg(long)]
     aspect_ratio: Option<String>,
@@ -70,6 +75,7 @@ pub(crate) async fn image(args: ImageArgs) {
         n,
         quality,
         images,
+        mask,
         aspect_ratio,
         output,
         json: as_json,
@@ -103,6 +109,17 @@ pub(crate) async fn image(args: ImageArgs) {
             }
         }
         payload.insert("image".to_string(), Value::Array(encoded));
+    }
+    if let Some(path) = mask {
+        match artifact::data_url(&path) {
+            Ok(url) => {
+                payload.insert("mask".to_string(), Value::String(url));
+            }
+            Err(reason) => {
+                eprintln!("{reason}");
+                std::process::exit(1);
+            }
+        }
     }
     if let Some(aspect_ratio) = aspect_ratio {
         payload.insert("aspect_ratio".to_string(), Value::String(aspect_ratio));

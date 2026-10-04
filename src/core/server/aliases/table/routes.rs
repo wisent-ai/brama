@@ -75,7 +75,7 @@ impl ModelAliases {
     ///
     /// The same mirror as the decision route, in the three media shapes:
     /// `image-model` resolves here and on `POST /v1/images/generations`
-    /// alone, `video-model` on `POST /v1/videos`, `voice-model` on
+    /// and `POST /v1/images/edits` alone, `video-model` on `POST /v1/videos`, `voice-model` on
     /// `POST /v1/audio/speech`, and none of them on chat. Asking for the
     /// wrong one is a refusal rather than a render nobody can pay for.
     pub(in crate::core::server) fn image_route(&self, alias: &str) -> Option<String> {

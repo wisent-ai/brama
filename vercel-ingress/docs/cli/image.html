@@ -21,13 +21,16 @@
 <p>Render one image from a shell through the same route, the same Skarbiec credential redemption and the same refusals <code>POST /v1/images/generations</code> uses. It exists for the two moments the HTTP surface cannot cover: establishing that a <a href="/docs/concepts/media">media</a> route answers at all before a gateway runs, and diagnosing one that stopped.</p>
 
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama image --prompt &lt;TEXT&gt; [--model &lt;ALIAS|ROUTE&gt;] [--size &lt;SIZE&gt;] [--n &lt;COUNT&gt;] [--quality &lt;QUALITY&gt;] [--output &lt;FILE&gt;] [--json] --allow-provider-cost</code></pre>
+<pre><code class="language-console">brama image --prompt &lt;TEXT&gt; [--model &lt;ALIAS|ROUTE&gt;] [--size &lt;SIZE&gt;] [--n &lt;COUNT&gt;] [--quality &lt;QUALITY&gt;] [--image &lt;FILE&gt;]... [--mask &lt;FILE&gt;] [--aspect-ratio &lt;RATIO&gt;] [--output &lt;FILE&gt;] [--json] --allow-provider-cost</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>--prompt &lt;TEXT&gt;</code></td><td>required</td><td>What to render.</td></tr>
 <tr><td><code>--model &lt;ALIAS|ROUTE&gt;</code></td><td>optional; <code>image-model</code></td><td>The media alias, or a canonical <code>provider/model</code> route the catalogue lists as an image model.</td></tr>
 <tr><td><code>--size &lt;SIZE&gt;</code></td><td>optional</td><td>The provider's own size string, such as <code>1024x1024</code>.</td></tr>
 <tr><td><code>--n &lt;COUNT&gt;</code></td><td>optional</td><td>How many images. The endpoint accepts between one and ten.</td></tr>
 <tr><td><code>--quality &lt;QUALITY&gt;</code></td><td>optional</td><td>The provider's own quality string.</td></tr>
+<tr><td><code>--image &lt;FILE&gt;</code></td><td>optional; repeatable</td><td>An input image the picture is made from. A provider that declares an edit endpoint (OpenAI) is sent an edit on <code>/v1/images/edits</code>; Gemini and Seedream read the images in their generation request. This is the same edit <code>POST /v1/images/edits</code> serves.</td></tr>
+<tr><td><code>--mask &lt;FILE&gt;</code></td><td>optional; needs <code>--image</code></td><td>A PNG over the first input image whose transparent pixels are what the edit repaints. Only a provider with an edit endpoint takes it.</td></tr>
+<tr><td><code>--aspect-ratio &lt;RATIO&gt;</code></td><td>optional</td><td>An aspect ratio such as <code>3:4</code>, for the providers that take one.</td></tr>
 <tr><td><code>--output &lt;FILE&gt;</code></td><td>optional</td><td>Decode the returned bytes and write them there. Several images are numbered beside that name.</td></tr>
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print the provider's document instead of lines.</td></tr>
 <tr><td><code>--allow-provider-cost</code></td><td>required to send anything</td><td>Acknowledge that this performs a billable provider request.</td></tr>
@@ -46,6 +49,7 @@ provider_rate_limited: You have no credits remaining. Add credits to continue us
 <tr><td><code>refusing a billable image generation without explicit --allow-provider-cost</code></td><td>Nothing was sent. Nothing is spent by running this command by accident.</td></tr>
 <tr><td><code>alias `image-model` is a media alias this gateway knows but no route is declared for it; declare one with `brama routes set image-model &lt;provider/model&gt;` or `PUT /v1/admin/routes`</code></td><td>The alias has no route here.</td></tr>
 <tr><td><code>invalid_request: route `anthropic/claude-sonnet-4-6` does not generate images</code></td><td>The named route's provider serves no image endpoint.</td></tr>
+<tr><td><code>invalid_request: image[0] must be a data: URL; an edit is handed the image, Brama does not fetch it</code></td><td>An edit route was handed an <code>https</code> address instead of image bytes.</td></tr>
 <tr><td><code>provider_rate_limited: &lt;the provider's own sentence&gt;</code></td><td>The route was reached and refused — no credits, a rate limit, a rejected key.</td></tr>
 <tr><td><code>the provider's image is not base64: &lt;reason&gt;</code></td><td>The answer arrived but its bytes could not be decoded, so no file was written.</td></tr>
 </tbody></table>

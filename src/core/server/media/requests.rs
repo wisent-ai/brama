@@ -37,6 +37,11 @@ pub(in crate::core::server) struct ImageRequest {
     /// either, Gemini needs `data:` URLs.
     #[serde(default)]
     pub(super) image: Option<Vec<String>>,
+    /// The area of the first input image an edit may change, as a `data:`
+    /// URL: transparent pixels are repainted. Only a provider that declares
+    /// an edit path takes it.
+    #[serde(default)]
+    pub(super) mask: Option<String>,
     #[serde(default)]
     pub(super) aspect_ratio: Option<String>,
     #[serde(default)]
@@ -154,6 +159,9 @@ impl ImageRequest {
         if self.image.as_ref().is_some_and(Vec::is_empty) {
             return Some("image must carry at least one input image");
         }
+        if self.mask.is_some() && self.image.is_none() {
+            return Some("mask marks what to change in an input image, and image names none");
+        }
         None
     }
 
@@ -175,6 +183,7 @@ impl ImageRequest {
                 Value::Array(images.into_iter().map(Value::String).collect()),
             );
         }
+        stated(&mut payload, "mask", self.mask);
         stated(&mut payload, "aspect_ratio", self.aspect_ratio);
         if let Some(seed) = self.seed {
             payload.insert("seed".to_string(), Value::from(seed));
