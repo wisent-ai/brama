@@ -62,15 +62,14 @@ reduces it to the access token, and sends
 <code>Authorization: Bearer &lt;access_token&gt;</code> — nothing provider-specific beyond
 that. No copy of the token outlives the request.</p>
 <h2 id="refresh">Refresh<a class="headerlink" href="#refresh" title="Link to this section">&para;</a></h2>
-<p>Ahead of expiry the gateway posts <code>grant_type=refresh_token</code> with the stored
+<p>Once a token expires the gateway posts <code>grant_type=refresh_token</code> with the stored
 refresh token and the public client id
 <code>17e5f671-d194-4dfb-9706-5516cb48c098</code> to
 <code>https://auth.kimi.com/api/oauth/token</code>, form-encoded. The answer is read whole.
 Completion and response handling follow the <a href="/docs/core/state-and-failures">core request contract</a>.
 Each <code>brama maintain</code> pass refreshes every active
-credential expiring within <code>BRAMA_CREDENTIAL_REFRESH_SKEW_SECS</code> (300),
-single-flighted per subscription; a token is considered dead 60 seconds before its stated
-expiry. The refresh token rotates on issue, so a refreshed grant that cannot be written
+credential whose stated expiry has passed, single-flighted per subscription; a
+token is used until that instant. The refresh token rotates on issue, so a refreshed grant that cannot be written
 back to the vault is a failed refresh. <code>brama subscription refresh kimi --reason
 &quot;&lt;why&gt;&quot;</code> forces the same path now and journals the reason. Refreshing
 costs no plan quota.</p>

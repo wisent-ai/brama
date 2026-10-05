@@ -4,9 +4,8 @@
 //!
 //! Signed message: `{agent_id}:{timestamp}:{body_sha256_hex}`.
 //! Body hash is `sha256(canonical_json_body)` hex-encoded, or empty when no
-//! body is provided. Timestamp window is ±300 seconds.
-
-use std::time::{SystemTime, UNIX_EPOCH};
+//! body is provided. No clock window is applied: a replay is refused by
+//! [`super::replay::accept_once`], which accepts each signature once.
 
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
@@ -15,16 +14,12 @@ use thiserror::Error;
 
 type HmacSha256 = Hmac<Sha256>;
 
-const SKEW_SECS: i64 = 300;
-
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum HmacAuthError {
     #[error("missing auth headers: {0}")]
     MissingHeader(&'static str),
     #[error("invalid timestamp: {0}")]
     InvalidTimestamp(String),
-    #[error("timestamp outside ±{0}s window")]
-    TimestampExpired(i64),
     #[error("invalid signature")]
     BadSignature,
     #[error("hmac init: {0}")]
@@ -59,17 +54,10 @@ pub fn verify_agent_hmac(
         return Err(HmacAuthError::MissingHeader("x-agent-signature"));
     }
 
-    let ts: i64 = headers
+    headers
         .timestamp
-        .parse()
+        .parse::<i64>()
         .map_err(|e: std::num::ParseIntError| HmacAuthError::InvalidTimestamp(e.to_string()))?;
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
-    if (now - ts).abs() > SKEW_SECS {
-        return Err(HmacAuthError::TimestampExpired(SKEW_SECS));
-    }
 
     let body_hash_hex = if body.is_empty() {
         String::new()

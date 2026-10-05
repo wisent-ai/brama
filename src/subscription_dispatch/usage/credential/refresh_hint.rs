@@ -13,8 +13,6 @@
 //! repair loop compares itself against to know whether another sign-in could
 //! possibly answer differently.
 
-use std::time::Duration;
-
 use crate::subscription_dispatch::usage::{now_ms, read_ledger};
 
 /// What the ledger alone says about one subscription's grant, before anything is
@@ -24,16 +22,14 @@ pub enum RefreshHint {
     /// The provider disowned this grant, or it was retired. Leave it alone: no
     /// refresh can repair it and only a sign-in replaces it.
     AwaitingSignIn,
-    /// The recorded expiry is further away than the window asked about, so
-    /// nothing is due.
+    /// The recorded expiry has not passed, so nothing is due.
     NotDue,
     /// Nothing recorded rules a refresh out. Read the credential and decide from
     /// what it says.
     Read,
 }
 
-/// What the ledger already knows about whether this grant needs refreshing
-/// within `within`.
+/// What the ledger already knows about whether this grant has expired.
 ///
 /// One ledger read answers both questions a sweep asks, because each of them
 /// otherwise costs a load of its own. And answering them from here at all is
@@ -45,8 +41,7 @@ pub enum RefreshHint {
 /// Silence is never evidence. A subscription with no recorded credential
 /// answers [`RefreshHint::Read`], so a host whose ledger file was just created
 /// refreshes normally instead of skipping every account on it.
-pub fn credential_refresh_hint(subscription_id: &str, within: Duration) -> RefreshHint {
-    let horizon = now_ms().saturating_add(i64::try_from(within.as_millis()).unwrap_or(i64::MAX));
+pub fn credential_refresh_hint(subscription_id: &str) -> RefreshHint {
     read_ledger(|ledger| {
         let Some(credential) = ledger
             .subscriptions
@@ -59,11 +54,11 @@ pub fn credential_refresh_hint(subscription_id: &str, within: Duration) -> Refre
             return RefreshHint::AwaitingSignIn;
         }
         match credential.expires_at_ms {
-            // A recorded expiry beyond the horizon is this credential's own
+            // A recorded expiry still in the future is this credential's own
             // statement about itself, written the last time it was read or
             // refreshed. A grant replaced outside Brama can make it wrong, and
             // the request path's own refresh is what covers that case.
-            Some(expires_at_ms) if expires_at_ms > horizon => RefreshHint::NotDue,
+            Some(expires_at_ms) if expires_at_ms > now_ms() => RefreshHint::NotDue,
             _ => RefreshHint::Read,
         }
     })

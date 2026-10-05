@@ -35,5 +35,9 @@ pub(crate) async fn authenticate_agent(
     };
     crypto::verify_agent_hmac(&headers_for_check, raw_body, secret.expose())
         .map_err(|e| format!("auth: {e}"))?;
+    let timestamp = ts
+        .parse::<i64>()
+        .map_err(|e| format!("auth: invalid timestamp: {e}"))?;
+    crypto::accept_once(&agent_id, timestamp, sig).map_err(|e| format!("auth: {e}"))?;
     Ok(agent_id)
 }

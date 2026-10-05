@@ -1,11 +1,10 @@
 //! When a stored credential's access token stops working.
 //!
-//! One reader answers all three questions asked of it — is a refresh due now,
-//! is one due inside a sweep's skew window, and until when is this grant good
-//! — because a second copy of this parsing is a second answer that disagrees
-//! with the first.
+//! One reader answers both questions asked of it -- has this access token
+//! expired, and until when is this grant good -- because a second copy of
+//! this parsing is a second answer that disagrees with the first.
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde_json::Value;
@@ -16,15 +15,10 @@ use crate::capability::Secret;
 
 const EXPIRY_KEYS: &[&str] = &["expiresAt", "expires_at", "expires", "expiry"];
 
-/// A token is refreshed a minute before it expires. An expiry above 10^11 cannot be
-/// seconds (that is the year 5138) and is read as milliseconds.
-const EXPIRY_MARGIN_SECONDS: i64 = 60;
+/// An expiry above 10^11 cannot be seconds (that is the year 5138) and is read
+/// as milliseconds.
 const EPOCH_MILLIS_THRESHOLD: f64 = 100_000_000_000.0;
 pub(super) const MILLIS_PER_SECOND: i64 = 1000;
-
-fn expiry_margin_seconds() -> i64 {
-    EXPIRY_MARGIN_SECONDS
-}
 
 fn epoch_millis_threshold() -> f64 {
     EPOCH_MILLIS_THRESHOLD
@@ -107,21 +101,11 @@ fn expiry_epoch(secret: &Secret, provider: &str) -> Option<i64> {
     expiry
 }
 
+/// Whether this access token has expired. A token is used until the instant
+/// its credential states; a request it no longer authorizes is answered by
+/// the provider, and that rejection forces a refresh on the request path.
 pub(in crate::gateway) fn needs_refresh(secret: &Secret, provider: &str) -> bool {
-    expiry_epoch(secret, provider)
-        .is_some_and(|expiry| now_seconds() + expiry_margin_seconds() >= expiry)
-}
-
-/// Whether this access token dies inside `skew`.
-///
-/// The refresh-ahead sweep asks a wider question than the request path does:
-/// the margin above is the last moment a token can still be used, while the
-/// skew is how far ahead of that moment the grant should already have been
-/// replaced.
-pub(in crate::gateway) fn expires_within(secret: &Secret, provider: &str, skew: Duration) -> bool {
-    let skew_seconds = i64::try_from(skew.as_secs()).unwrap_or(i64::MAX);
-    expiry_epoch(secret, provider)
-        .is_some_and(|expiry| now_seconds().saturating_add(skew_seconds) >= expiry)
+    expiry_epoch(secret, provider).is_some_and(|expiry| now_seconds() >= expiry)
 }
 
 /// The instant this credential's access token stops working, in epoch

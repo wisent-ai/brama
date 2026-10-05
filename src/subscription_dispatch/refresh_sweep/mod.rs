@@ -1,5 +1,4 @@
 //! Keep the subscriptions Skarbiec actually lists usable without operator actions.
-mod cadence;
 mod claim;
 mod reauthorization;
 mod renewal;
@@ -13,11 +12,11 @@ use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use tracing::info;
 
-/// One pass over every subscription Skarbiec lists: each grant inside the skew
-/// window is renewed, each one that needs a browser gets its sign-in scheduled.
+/// One pass over every subscription Skarbiec lists: each expired grant is
+/// renewed, each one that needs a browser gets its sign-in scheduled. How often
+/// passes run is the host's Stado schedule for `brama maintain`.
 /// An unreadable inventory is the failure, named with the broker's own error.
 pub(crate) async fn sweep() -> Result<Value, String> {
-    let skew = cadence::skew();
     let entries = broker::list_all_subscriptions().await.map_err(|error| {
         format!("the Skarbiec subscription inventory could not be read: {error}")
     })?;
@@ -33,7 +32,7 @@ pub(crate) async fn sweep() -> Result<Value, String> {
         {
             continue;
         }
-        match usage::credential_refresh_hint(&entry.id, skew) {
+        match usage::credential_refresh_hint(&entry.id) {
             RefreshHint::AwaitingSignIn => {
                 if schedule_sign_in(entry.id, entry.provider) {
                     checks_scheduled += 1;
@@ -43,7 +42,7 @@ pub(crate) async fn sweep() -> Result<Value, String> {
             RefreshHint::NotDue => continue,
             RefreshHint::Read => {}
         }
-        match refresh_one(entry.id, entry.provider, skew).await {
+        match refresh_one(entry.id, entry.provider).await {
             Swept::Refreshed => refreshed += 1,
             Swept::Refused => refused += 1,
             Swept::AwaitingSignIn {

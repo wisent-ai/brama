@@ -98,13 +98,12 @@ with last-good in-memory readings.</p>
 (<a href="/docs/concepts/provider">provider</a> lists the three supported endpoints).
 Other providers are reported as unsupported by this free-report path with the
 current credential, not as successfully queried billing APIs. Observed traffic
-counters remain available. Background reads obey
-<code>BRAMA_PLAN_USAGE_TTL_SECS</code> (default 300), jittered ±25% derived from the
-subscription id so accounts stay decorrelated across restarts, and
-single-flighted per subscription; aged-out readings are read on each
-<code>brama maintain</code> pass, run by the host's Stado schedule. A failed read
-never blanks a row: the last good reading is served with <code>stale: true</code> and
-dropped only past <code>BRAMA_PLAN_USAGE_RETENTION_SECS</code> (default 86400).</p>
+counters remain available. A background read is due when a subscription has no
+reading, a reading whose window has reset, a reading that names no reset, or a
+failed last read; due readings are read on each <code>brama maintain</code> pass, run by
+the host's Stado schedule, single-flighted per subscription. A failed read never
+blanks a row: the last good reading is served with <code>stale: true</code> until a newer
+one replaces it.</p>
 <p><code>brama subscription list --refresh-usage</code>, Brama Desktop's
 <strong>Refresh usage</strong> and
 <a href="/docs/http-api/discovery-and-subscriptions#post-v1plan-usage"><code>POST /v1/plan-usage</code></a> are one
@@ -112,8 +111,8 @@ capability: they explicitly request new reports through that same
 bounded operation, and the route narrows its answer to the accounts the caller proved it
 owns. Neither starts a sign-in nor sends a model request.
 Concurrent attempts for one subscription cannot silently skip their result.
-A failed attempt, an elapsed reset or an aged retained window marks the
-reading stale immediately; one fresh window does not make older windows current.</p>
+A failed attempt or an elapsed reset marks the reading stale immediately; one
+fresh window does not make older windows current.</p>
 <p>In listings, <code>usage_source</code> names which statement the newest window is —
 <code>provider</code> (the provider's report, no quota), <code>traffic</code> (response headers),
 or <code>probe</code> (the operator's on-demand check). <code>usage_check</code>
@@ -135,12 +134,11 @@ A blocked credential is skipped by ordering, refused by the probe (<code>409</co
 and the block stands until its own expiry.</p>
 <h2 id="credential-lifecycle">Credential lifecycle<a class="headerlink" href="#credential-lifecycle" title="Link to this section">&para;</a></h2>
 <p>OAuth subscription credentials (<code>claude-code</code>, <code>codex</code>, <code>kimi</code> — token
-endpoints in <code>src/gateway/oauth_refresh.rs</code>) are refreshed ahead of expiry:
-on each <code>brama maintain</code> pass the gateway refreshes every active
-credential expiring within
-<code>BRAMA_CREDENTIAL_REFRESH_SKEW_SECS</code> (default 300), single-flighted per
-subscription. Refreshing costs no plan quota. API keys have no refresh path
-and no invented expiry.</p>
+endpoints in <code>src/gateway/oauth_refresh.rs</code>) are refreshed once their stated
+expiry has passed: on each <code>brama maintain</code> pass the gateway refreshes every
+active expired credential, single-flighted per subscription, and a request the
+provider rejects forces a refresh on the request path. Refreshing costs no plan
+quota. API keys have no refresh path and no invented expiry.</p>
 <p>A provider refusal such as <code>invalid_grant</code>, <code>invalid_token</code>,
 <code>revoked</code> or HTTP 401/403 records <code>needs_reauthorization</code>.
 A stored OAuth document with no refresh token also requires authentication;

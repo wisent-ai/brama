@@ -11,7 +11,6 @@
 //! rejected request's.
 
 use std::sync::LazyLock;
-use std::time::Duration;
 
 use tracing::warn;
 
@@ -206,7 +205,7 @@ pub fn supports_oauth_refresh(provider: &str) -> bool {
 /// What one refresh-ahead attempt concluded, for a caller that never holds the
 /// credential itself.
 pub enum RefreshAhead {
-    /// This grant has more than the skew window left, or the provider is not one
+    /// This grant has not expired, or the provider is not one
     /// whose credentials Brama refreshes at all. `expires_at_ms` is present only
     /// when the credential states an expiry.
     NotDue { expires_at_ms: Option<i64> },
@@ -220,8 +219,8 @@ pub enum RefreshAhead {
     Unavailable(Failure),
 }
 
-/// Replace one subscription's access token before it expires, when it expires
-/// inside `skew`.
+/// Replace one subscription's access token once it has expired, so the stored
+/// grant stays usable between requests.
 ///
 /// The credential is read twice on the path that does refresh, and that is not
 /// an oversight: the expiry has to be read before deciding, and the refresh
@@ -232,7 +231,6 @@ pub enum RefreshAhead {
 pub async fn refresh_subscription_credential_ahead(
     subscription_id: &str,
     provider: &str,
-    skew: Duration,
 ) -> RefreshAhead {
     let credential = match redeem_subscription_credential(subscription_id, provider).await {
         Ok(credential) => credential,
@@ -286,7 +284,7 @@ pub async fn refresh_subscription_credential_ahead(
             .with_context("provider", provider),
         );
     }
-    if !oauth_refresh::expires_within(&credential, provider, skew) {
+    if !oauth_refresh::needs_refresh(&credential, provider) {
         return RefreshAhead::NotDue { expires_at_ms };
     }
     // Dropped before the refresh so this token is not held in memory across the

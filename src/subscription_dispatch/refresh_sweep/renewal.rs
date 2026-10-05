@@ -13,8 +13,6 @@
 //! selecting subscriptions and surviving one of them are different problems,
 //! and only this one has to know what the broker's four verdicts mean.
 
-use std::time::Duration;
-
 use tracing::{info, warn};
 
 use crate::gateway::broker::{self, RefreshAhead};
@@ -25,7 +23,7 @@ use super::claim::InFlight;
 /// What one subscription's turn came to, so the sweep can say what it did
 /// rather than only that it ran.
 pub(super) enum Swept {
-    /// This grant has more than the skew window left.
+    /// This grant has not expired.
     NotDue,
     /// The access token was replaced before it expired.
     Refreshed,
@@ -46,14 +44,10 @@ pub(super) enum Swept {
 /// The work runs in its own task so that a panic below -- in a credential
 /// parser, a provider client or the vault writer -- is a logged join error
 /// against one subscription instead of the silent death of the whole timer.
-pub(super) async fn refresh_one(
-    subscription_id: String,
-    provider: String,
-    skew: Duration,
-) -> Swept {
+pub(super) async fn refresh_one(subscription_id: String, provider: String) -> Swept {
     let logged_id = subscription_id.clone();
     let logged_provider = provider.clone();
-    match tokio::spawn(refresh_subscription(subscription_id, provider, skew)).await {
+    match tokio::spawn(refresh_subscription(subscription_id, provider)).await {
         Ok(swept) => swept,
         Err(error) => {
             warn!(
@@ -68,8 +62,8 @@ pub(super) async fn refresh_one(
     }
 }
 
-/// Refresh one subscription's grant when it expires inside the skew window.
-async fn refresh_subscription(subscription_id: String, provider: String, skew: Duration) -> Swept {
+/// Refresh one subscription's grant once it has expired.
+async fn refresh_subscription(subscription_id: String, provider: String) -> Swept {
     let Some(_claim) = InFlight::claim(&subscription_id) else {
         info!(
             event = "credential_refresh_already_running",
@@ -79,7 +73,7 @@ async fn refresh_subscription(subscription_id: String, provider: String, skew: D
         );
         return Swept::Skipped;
     };
-    match broker::refresh_subscription_credential_ahead(&subscription_id, &provider, skew).await {
+    match broker::refresh_subscription_credential_ahead(&subscription_id, &provider).await {
         RefreshAhead::NotDue { expires_at_ms } => {
             // Recorded so a reader can say until when this grant is good, which
             // is the question the console could not answer at all. The ledger
@@ -94,7 +88,6 @@ async fn refresh_subscription(subscription_id: String, provider: String, skew: D
                 subscription = %subscription_id,
                 provider = %provider,
                 expires_at_ms,
-                skew_secs = skew.as_secs(),
                 "replaced an access token before it expired"
             );
             Swept::Refreshed

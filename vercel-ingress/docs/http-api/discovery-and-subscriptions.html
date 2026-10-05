@@ -191,8 +191,8 @@ else is <code>403 forbidden</code>; a request with no bearer at all is
 a signed workload able to read its own plans at all.</p>
 <p>It is a <code>POST</code> because answering reads each provider's own usage report and
 records what it said. That spends no plan quota: no completion is sent and no sign-in is
-started. A read asked for here is taken now, unlike the timer's sweep, which reads an
-account only once per its own cache window (<code>BRAMA_PLAN_USAGE_TTL_SECS</code>);
+started. A read asked for here is taken now, unlike the maintenance sweep, which reads an
+account only when its reading is due (no reading, a reset window, no stated reset, or a failed last read);
 concurrent readers join one bounded read per account rather than asking a provider the same
 question twice in the same second, and no more than four accounts are read at a time
 because several accounts on one host share one source address.</p>

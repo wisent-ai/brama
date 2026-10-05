@@ -101,10 +101,9 @@ granted
 (<a href="/docs/runbook/credentials-and-subscriptions">credentials and subscriptions</a>).</p>
 
 <h2 id="the-ledger-looks-wrong-not-the-pool">The ledger looks wrong, not the pool<a class="headerlink" href="#the-ledger-looks-wrong-not-the-pool" title="Link to this section">&para;</a></h2>
-<p>An empty <code>limits</code> array in a listing is one of four states told apart by
-the newest check — a refused credential, a subscription nothing has used, a
-provider that publishes no plan state, or windows that aged out
-(<code>BRAMA_PLAN_USAGE_RETENTION_SECS</code>, default 86400 seconds). Only the third
+<p>An empty <code>limits</code> array in a listing is one of three states told apart by
+the newest check — a refused credential, a subscription nothing has used, or a
+provider that publishes no plan state. Only the last
 may be read as "no plan window"; none of them is a zero. A reading marked
 <code>stale: true</code> is the last value the provider actually reported, kept and
 labelled because the report has been failing since — information about the

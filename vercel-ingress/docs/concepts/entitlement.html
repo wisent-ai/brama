@@ -29,7 +29,9 @@ HMAC identity: the trio <code>x-agent-id</code>, <code>x-agent-timestamp</code>,
 <code>x-agent-signature</code>, where the signature is HMAC-SHA256 over
 <code>{agent_id}:{timestamp}:{body_sha256_hex}</code> (<code>body_sha256_hex</code> is the SHA-256
 hex of the exact raw body, or the empty string when there is no body), with
-a ±300-second timestamp window and constant-time comparison
+no clock window, a refusal of any signature already accepted or signed earlier
+than the newest one accepted for that agent (<code>src/crypto/replay.rs</code>, kept in
+<code>$BRAMA_STATE_DIR/agent-replay.json</code>), and constant-time comparison
 (<code>src/crypto/hmac_auth.rs</code>). The per-agent secret is resolved immediately
 before verification; <code>echo</code>, <code>content-platform</code>, <code>oko</code>, <code>weles</code>, <code>lem</code>,
 <code>probierz</code>, and <code>wisent-app</code> are strict central-item projections through

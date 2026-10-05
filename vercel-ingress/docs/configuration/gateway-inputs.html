@@ -65,11 +65,11 @@
           <tr><td><code>BRAMA_PERF_PATH</code></td><td><code>/tmp/brama-perf.json</code></td><td>replaceable process telemetry</td></tr>
         </tbody></table>
 
-        <h2 id="timers-and-freshness">Freshness windows<a class="headerlink" href="#timers-and-freshness" title="Link to this section">&para;</a></h2>
+        <h2 id="timers-and-freshness">Sign-in pacing<a class="headerlink" href="#timers-and-freshness" title="Link to this section">&para;</a></h2>
+        <p>Plan readings stay current until the window they describe resets, and a
+        credential is refreshed once its stated expiry has passed; neither has a
+        configurable window.</p>
         <table><thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
-          <tr><td><code>BRAMA_PLAN_USAGE_TTL_SECS</code></td><td><code>300</code></td><td>freshness window per subscription's provider usage report; also when a reading turns <code>stale</code></td></tr>
-          <tr><td><code>BRAMA_PLAN_USAGE_RETENTION_SECS</code></td><td><code>86400</code></td><td>when a stale reading stops being served</td></tr>
-          <tr><td><code>BRAMA_CREDENTIAL_REFRESH_SKEW_SECS</code></td><td><code>300</code></td><td>refresh credentials expiring within this window</td></tr>
           <tr><td><code>BRAMA_CREDENTIAL_SIGN_IN_COOLDOWN_SECS</code></td><td><code>1800</code></td><td>how long the gateway waits before driving a second sign-in for the same stored credential</td></tr>
         </tbody></table>
         <p>The gateway keeps no timer: usage reports, token refreshes and the

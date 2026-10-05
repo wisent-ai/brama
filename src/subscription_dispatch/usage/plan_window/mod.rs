@@ -8,21 +8,15 @@
 //! they came from, whether the newest of them can honestly be called current,
 //! and the one number the router places candidates by.
 //!
-//! Serving a stale reading is deliberate and is the reason this projection
-//! exists at all: a reading that says when it was taken is information, an
-//! empty plan is not, and the difference between the two is a row that goes
-//! blank because an upstream had a bad ten minutes. How long that stays true
-//! lives in `freshness`.
-
-mod freshness;
+//! Serving a reading after its source started failing is deliberate and is
+//! the reason this projection exists at all: a reading that says when it was
+//! taken is information, an empty plan is not.
 
 use serde::{Deserialize, Serialize};
 
 use crate::types::LimitReading;
 
 use super::{now_ms, read_ledger, usage_for, SubscriptionUsage};
-
-pub use freshness::{jittered_plan_usage_ttl_ms, plan_usage_retention_ms, plan_usage_ttl_ms};
 
 /// Where one plan reading came from.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -52,29 +46,26 @@ impl UsageSource {
 
 /// Whether this subscription's usage report is due to be read again.
 ///
-/// A recent report attempt owns the cache window, whether it succeeded or
-/// failed. Otherwise every retained window must still be current; one new
-/// traffic header cannot make an older or already-reset window fresh.
+/// A reading is current until the window it describes resets, which is the
+/// provider's own statement. A subscription is due when it has no reading, a
+/// reading without a reset instant (it cannot say how long it holds, so every
+/// maintenance pass the operator's schedule runs reads it again), a reading
+/// whose window has reset, or a last report attempt that failed. How often
+/// passes run is the host's Stado schedule; no cache window is chosen here.
 pub fn plan_usage_due(subscription_id: &str) -> bool {
     let now = now_ms();
-    let window = jittered_plan_usage_ttl_ms(subscription_id);
     read_ledger(|ledger| {
         let Some(entry) = ledger.subscriptions.get(subscription_id) else {
             return true;
         };
-        let checked_recently = entry
-            .plan_usage_checked_at_ms
-            .is_some_and(|checked| now.saturating_sub(checked) < window);
-        let readings_current = !entry.limits.is_empty()
-            && entry.limits.values().all(|reading| {
-                let recorded_is_current = reading.recorded_at_ms > 0
-                    && now.saturating_sub(reading.recorded_at_ms) < window;
-                let reset_is_current = reading
+        let last_check_failed = entry.usage_check.as_ref().is_some_and(|check| !check.ok);
+        last_check_failed
+            || entry.limits.is_empty()
+            || entry.limits.values().any(|reading| {
+                reading
                     .resets_at_ms
-                    .is_none_or(|resets_at_ms| resets_at_ms > now);
-                recorded_is_current && reset_is_current
-            });
-        !checked_recently && !readings_current
+                    .is_none_or(|resets_at_ms| resets_at_ms <= now)
+            })
     })
 }
 
@@ -88,12 +79,11 @@ pub struct PlanWindows {
 
 /// Project one subscription's readings for a reader.
 ///
-/// A stale reading is served, with `stale` set, because a reading that states
-/// when it was taken is information and an empty plan is not -- an upstream that
-/// fails for ten minutes must not blank a row that was right ten minutes ago.
-/// Past the retention window it stops being served: a fraction of a five-hour
-/// window that has since reset four times describes nothing, and a reader has no
-/// way to know that from the number alone.
+/// Every recorded reading is served: a reading that states when it was taken
+/// and when its window resets is information, and an empty plan is not. A
+/// reading whose window has reset is still shown (the router counts it as
+/// empty) until a newer reading replaces it. `stale` says the newest usage
+/// report failed or a served window has already reset.
 pub fn plan_windows(usage: Option<&SubscriptionUsage>) -> PlanWindows {
     let Some(usage) = usage else {
         return PlanWindows {
@@ -103,18 +93,7 @@ pub fn plan_windows(usage: Option<&SubscriptionUsage>) -> PlanWindows {
         };
     };
     let now = now_ms();
-    let retention = plan_usage_retention_ms();
-    let limits = usage
-        .limits
-        .values()
-        .filter(|reading| {
-            // A reading with no instant is still useful legacy evidence, but
-            // cannot truthfully be called current; the freshness projection
-            // below marks it stale.
-            reading.recorded_at_ms == 0 || now.saturating_sub(reading.recorded_at_ms) <= retention
-        })
-        .cloned()
-        .collect::<Vec<_>>();
+    let limits = usage.limits.values().cloned().collect::<Vec<_>>();
     if limits.is_empty() {
         return PlanWindows {
             limits,
@@ -124,8 +103,7 @@ pub fn plan_windows(usage: Option<&SubscriptionUsage>) -> PlanWindows {
     }
     let stale = usage.usage_check.as_ref().is_some_and(|check| !check.ok)
         || limits.iter().any(|reading| {
-            (reading.recorded_at_ms == 0
-                || now.saturating_sub(reading.recorded_at_ms) > plan_usage_ttl_ms())
+            reading.recorded_at_ms == 0
                 || reading
                     .resets_at_ms
                     .is_some_and(|resets_at_ms| resets_at_ms <= now)

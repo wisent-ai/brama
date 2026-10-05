@@ -102,8 +102,8 @@ pub(in crate::core::server) async fn attribute_admin_subscription_pool(
 }
 
 /// One maintenance pass of this serving process, the work it used to run on
-/// its own timers: read every plan usage report that has aged out, renew every
-/// grant inside its expiry window, and take a fresh readiness reading. The host's
+/// its own timers: read every plan usage report that is due, renew every
+/// grant whose stated expiry has passed, and take a fresh readiness reading. The host's
 /// Stado schedule decides how often; `brama maintain` is the caller. `ok` is
 /// false when any step failed, and each failure is in the body with its error.
 pub(in crate::core::server) async fn maintain_admin(

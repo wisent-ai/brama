@@ -30,7 +30,7 @@
 </tbody></table>
 <p>A scheduled pass, for example: <code>stado schedule create --pinned-host &lt;gateway host&gt; --cron '* * * * *' 'brama maintain --gateway-consumer &lt;consumer&gt; --bearer-role &lt;console bearer role&gt;'</code>.</p>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
-<p>The pass reads every plan usage report that has aged past its freshness window, renews every grant expiring within <code>BRAMA_CREDENTIAL_REFRESH_SKEW_SECS</code>, and takes a fresh readiness reading for <code>/readyz</code>. Lines read:</p>
+<p>The pass reads every plan usage report that is due (no reading, a reset window, a reading naming no reset, or a failed last read), renews every grant whose stated expiry has passed, and takes a fresh readiness reading for <code>/readyz</code>. Lines read:</p>
 <pre><code class="language-text">plan usage: &lt;N&gt; subscription(s), &lt;N&gt; read
   failed &lt;subscription&gt; (&lt;provider&gt;): &lt;error envelope&gt;
 credentials: &lt;N&gt; subscription(s), &lt;N&gt; refreshed, &lt;N&gt; refused, &lt;N&gt; sign-in check(s) scheduled

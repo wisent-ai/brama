@@ -90,7 +90,7 @@ path and the files on disk, see
 </tr>
 <tr>
 <td>Agent</td>
-<td>HMAC-SHA256 trio over the exact raw body, ±300 s; bearer-bound, signed, and path agents must agree (<a href="/docs/concepts/entitlement">concepts/entitlement</a>)</td>
+<td>HMAC-SHA256 trio over the exact raw body, each signature accepted once and never one signed before the newest accepted; bearer-bound, signed, and path agents must agree (<a href="/docs/concepts/entitlement">concepts/entitlement</a>)</td>
 </tr>
 <tr>
 <td>Admin</td>

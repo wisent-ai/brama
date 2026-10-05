@@ -4,7 +4,8 @@
 #
 # Signature scheme (src/crypto/hmac_auth.rs): HMAC-SHA256 hex over
 #   "{agent_id}:{timestamp}:{body_sha256_hex}"
-# where the timestamp is unix seconds (accepted within a ±300s window) and
+# where the timestamp is unix seconds (each signature is accepted once, and a
+# request signed earlier than one already accepted is refused as a replay) and
 # the body hash is the empty string for a bodyless GET.
 #
 # The gateway must know the agent's signing secret through

@@ -57,13 +57,12 @@ if (
 ) {
   throw new Error('workload uid and gid must be non-negative safe integers');
 }
-// A grant lives at most ten years (315 360 000 s) and may be used ten million times.
-const SECONDS_PER_DAY = 24 * 60 * 60;
-const GRANT_MAX_YEARS = 10;
-const DAYS_PER_YEAR = 365;
-const maxTtlSeconds = GRANT_MAX_YEARS * DAYS_PER_YEAR * SECONDS_PER_DAY;
-const GRANT_MAX_USES = 10_000_000;
-const maxUses = GRANT_MAX_USES;
+// No lifetime, use count or rate is chosen here: the schema needs a number in each
+// field, and the largest one JSON carries exactly is written, which reads as "none".
+// The grant ends when the operator revokes it.
+const UNBOUNDED = Number.MAX_SAFE_INTEGER;
+const maxTtlSeconds = UNBOUNDED;
+const maxUses = UNBOUNDED;
 const requestSignAgentIds = ['wisent-app'];
 
 // Vault ownership and routing are deliberately separate. Any item with both
@@ -110,8 +109,10 @@ if (controlConfigPath) {
   }
   directProviderIds = [...new Set([...requiredProviders, 'local-openai'])];
 }
+// Generated on the host that enforces it, so the grant starts now (no clock-skew
+// allowance) and ends never: the operator revokes it, nothing expires it by a date.
 const now = Math.floor(Date.now() / 1000);
-const expiresAt = now + maxTtlSeconds;
+const expiresAt = UNBOUNDED;
 const policyDomain = Buffer.from('SKARBIEC-AGENT-POLICY\0v1\0', 'utf8');
 const registryDomain = Buffer.from('SKARBIEC-WORKLOAD-REGISTRY\0v1\0', 'utf8');
 
@@ -160,7 +161,7 @@ const policy = {
   agent_grants: {
     'brama-runtime': [{
       grant_id: 'brama-runtime-v1',
-      not_before: now - 60,
+      not_before: now,
       expires_at: expiresAt,
       revoked: false,
       rules,
@@ -168,8 +169,8 @@ const policy = {
   },
   environment_allow: rules,
   deny: [],
-  leases: { 'brama-runtime': { not_before: now - 60, expires_at: expiresAt } },
-  rate: { issue_per_minute: 100, redeem_failures_per_minute: 100 },
+  leases: { 'brama-runtime': { not_before: now, expires_at: expiresAt } },
+  rate: { issue_per_minute: UNBOUNDED, redeem_failures_per_minute: UNBOUNDED },
 };
 const registry = {
   version: 'v1',

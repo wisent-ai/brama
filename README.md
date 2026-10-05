@@ -305,13 +305,10 @@ operator paths. Runnable, risk-labeled workflows are indexed in
 - **How fresh a plan window is:** `usage_source` names which statement the
   newest window is -- the provider's own usage report, the headers of real
   traffic, or an operator's probe -- and is `null` when there is no window to
-  attribute. `stale` is true once the newest reading has aged past the freshness
-  window (`BRAMA_PLAN_USAGE_TTL_SECS`, default 300). A stale reading is still
-  served, because a number that says when it was taken is information and an
-  empty plan is not; a reading older than the retention window
-  (`BRAMA_PLAN_USAGE_RETENTION_SECS`, default 86400) stops being served, because
-  a fraction of a five-hour window that has since reset several times describes
-  nothing.
+  attribute. `stale` is true when the newest usage report failed or a served
+  window's own reset instant has passed. Every recorded reading is served,
+  because a number that says when it was taken is information and an empty plan
+  is not; a newer reading replaces it.
 - **What an empty `limits` array means:** one of four states, and the newest
   check is what tells them apart. Windows present: render them, aged by the
   newest `recorded_at_ms`, and say "as of" only when `stale` is false. Empty with
@@ -767,15 +764,12 @@ recorded and the discarded attempt stays `in_progress` forever on the Echo side.
   `GET /coding/v1/usages` on `api.kimi.com` (a `usage` object and a `limits`
   array of limit/used/remaining counts with their windows). Every other provider
   publishes nothing, and that absence is recorded as the provider's own answer
-  rather than left as an unexplained blank. Each subscription's report is read at
-  most once per `BRAMA_PLAN_USAGE_TTL_SECS` (default 300), spread by up to a
-  quarter either way from the subscription's own id so a fan-out of accounts on
-  one host never becomes one burst against a provider that rate-limits usage
-  reads per address, and single-flighted per subscription. The sweep that notices
-  aged-out rows runs every `BRAMA_PLAN_USAGE_SWEEP_SECS` (default 60, `0`
-  disables it) and is logged under `plan_usage_*`. A failed read never blanks a
-  row: the last good reading is kept, served with `stale` true, and dropped only
-  once it is older than `BRAMA_PLAN_USAGE_RETENTION_SECS` (default 86400).
+  rather than left as an unexplained blank. A subscription's report is read on
+  a `brama maintain` pass when it has no reading, a reading whose window has
+  reset, a reading that names no reset, or a failed last read; how often passes
+  run is the host's Stado schedule. Reads are single-flighted per subscription
+  and logged under `plan_usage_*`. A failed read never blanks a row: the last
+  good reading is kept and served with `stale` true until a newer one replaces it.
 - **Routing by what the plans have left:** the readings above are not only for
   reading. A selector orders its candidate routes by the freest usable
   subscription behind each one, and an explicit route orders its bounded
@@ -810,12 +804,12 @@ recorded and the discarded attempt stays `in_progress` forever on the Echo side.
   is what the block exists to prevent. The probe rotates to no other credential,
   retires nothing, and is logged under its own `usage_probe_*` events so it is
   never mistaken for a caller's request.
-- **Refreshing ahead of expiry:** an access token is replaced before it dies
-  rather than when a request trips over it. Every
-  `BRAMA_CREDENTIAL_REFRESH_INTERVAL_SECS` seconds (default 60, `0` disables it)
-  the gateway refreshes every active subscription credential that expires within
-  `BRAMA_CREDENTIAL_REFRESH_SKEW_SECS` (default 300), single-flighted per
-  subscription so a slow refresh is never started twice. Refreshing costs no plan
+- **Refreshing expired grants between requests:** each `brama maintain` pass,
+  run on the host's Stado schedule, refreshes every active subscription
+  credential whose stated expiry has passed, single-flighted per subscription so
+  a slow refresh is never started twice. A token is used until its stated
+  expiry; a request the provider rejects forces a refresh on the request path.
+  Refreshing costs no plan
   quota: a token endpoint is not a metered endpoint. A refusal is classified. A
   definitive one -- `invalid_grant`, `invalid_token`, a revoked or unauthorized
   refresh token, or a 401/403 that is not a transport failure -- is recorded as

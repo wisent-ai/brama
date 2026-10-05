@@ -1,4 +1,4 @@
-//! One pass that reads every plan reading that has aged out.
+//! One pass that reads every plan reading that is due.
 //!
 //! Nothing here talks to a provider directly: this is the rule that a
 //! subscription two agents share is still one account with one plan and is
@@ -16,7 +16,7 @@ use super::refresh;
 use crate::gateway::broker;
 use crate::subscription_dispatch::usage;
 
-/// Read every active subscription whose report has aged past its own window,
+/// Read every active subscription whose reading is due ([`crate::subscription_dispatch::usage::plan_usage_due`]),
 /// and report each read that failed with its error envelope.
 pub(crate) async fn sweep() -> Value {
     let mut seen = BTreeSet::new();

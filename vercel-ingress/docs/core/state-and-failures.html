@@ -38,7 +38,7 @@ precede it, and the resource ceilings that hold under load.</p>
 <tr><td>Public model metadata</td><td>models.dev</td><td>memory and replaceable <code>/tmp</code> cache</td><td>A stale or partial catalogue is visible in health output and is never credential authority</td></tr>
 <tr><td>Performance telemetry</td><td>Brama process</td><td>bounded map and replaceable <code>/tmp</code> file</td><td>Diagnostic only; never business authority</td></tr>
 <tr><td>Donated-subscription metadata</td><td>Brama overlay</td><td>owner-only atomic JSON rewrite</td><td>The credential itself stays in entitlements authority</td></tr>
-<tr><td>Plan usage, its source, and the newest check verdict</td><td>The provider's own usage report, plus the answer headers of real traffic</td><td>owner-only atomic ledger holding each reading's instant</td><td>Refreshed by the free usage report sweep and by traffic; the last good reading is served while stale and dropped past <code>BRAMA_PLAN_USAGE_RETENTION_SECS</code>; a ledger that cannot be parsed yields no readings, and the next sweep rewrites it</td></tr>
+<tr><td>Plan usage, its source, and the newest check verdict</td><td>The provider's own usage report, plus the answer headers of real traffic</td><td>owner-only atomic ledger holding each reading's instant</td><td>Refreshed by the free usage report sweep and by traffic; the last good reading is served, marked stale after a failed read or an elapsed reset, until a newer one replaces it; a ledger that cannot be parsed yields no readings, and the next sweep rewrites it</td></tr>
 <tr><td>Operator credential refresh</td><td>Brama journal</td><td>Append-only <code>subscription_refresh</code> record naming provider, reason, verdict and how many grants were tried</td><td>Audit only; never consulted by routing, and never holds credential material</td></tr>
 </tbody>
 </table>
@@ -129,10 +129,10 @@ attempt count the envelope reports. The full code list, with examples, is in
 <li>the perf registry keeps one entry per route that was ever served;</li>
 <li>catalogue and subscription caches have explicit TTLs;</li>
 <li>the provider usage report pass spends no plan quota: one read per active
-  subscription per its own cache window
-  (<code>BRAMA_PLAN_USAGE_TTL_SECS</code>, spread by up to a quarter either way),
-  single-flighted per subscription, no retry inside a pass, and it runs only
-  when <code>brama maintain</code> asks; a host with no schedule for it reads none;</li>
+  subscription that has no reading, a reset window, a reading naming no reset or
+  a failed last read, single-flighted per subscription, no retry inside a pass,
+  and it runs only when <code>brama maintain</code> asks; a host with no schedule for it
+  reads none;</li>
 <li>the completion probe is bounded to what an operator asks for: one attempt
   against one named subscription per request to
   <code>POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe</code>, no retry, no
