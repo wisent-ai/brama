@@ -52,10 +52,10 @@ pub(in crate::gateway::broker) async fn refresh_subscription_credential_inner(
             IMPACT_CREDENTIAL_PERSIST,
             format!(
                 "this grant was borrowed from {harness}, which refreshes its own copy; Brama does \
-                 not rotate it, and nothing brings {harness}'s grant over any more. Sign the \
-                 account in: `brama subscription sign-in {provider} --subscription-id \
-                 {subscription_id}` through Weles, or `brama subscription sign-in-manual \
-                 {provider} --subscription-id {subscription_id}` by hand"
+                 not rotate it, and nothing brings {harness}'s grant over any more. The renewal \
+                 sweep signs the account in through Weles on its own; when it cannot, \
+                 `brama subscription list` names what blocks it under sign_in_blocked, and a \
+                 Google prompt it raises is approved on the account owner's phone"
             ),
         )
         .with_context("subscription", subscription_id)

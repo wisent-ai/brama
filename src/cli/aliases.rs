@@ -153,10 +153,11 @@ pub(crate) async fn report(args: AliasesArgs) {
             if pool.live == 0 {
                 println!(
                     "every request for a selector alias is refused with \
-                     subscription_reauthorization_required until one account is signed in: \
-                     `brama subscription sign-in` through Weles, or \
-                     `brama subscription sign-in-manual` in your own browser. \
-                     `brama subscription list` says why each member is not live."
+                     subscription_reauthorization_required until one account is signed in. The \
+                     gateway's renewal sweep signs accounts in through Weles on its own; \
+                     `brama subscription list` names what blocks each member under \
+                     sign_in_blocked, and a Google prompt the sign-in raises is approved on the \
+                     account owner's phone."
                 );
             }
         }
