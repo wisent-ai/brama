@@ -66,7 +66,7 @@
         "stage/bin/launcher/policy/control-policy.sh": "bin/launcher/policy/control-policy.sh",
         "stage/bin/launcher/policy/router-identities.sh": "bin/launcher/policy/router-identities.sh",
         "stage/bin/launcher/policy/subscription-catalog.sh": "bin/launcher/policy/subscription-catalog.sh",
-        "stage/libexec/generate-skarbiec-config.mjs": "libexec/generate-skarbiec-config.mjs",
+        "stage/libexec": "libexec",
         "stage/etc/brama-skarbiec/recipient-public-keys.asc": "etc/brama-skarbiec/recipient-public-keys.asc",
         "stage/LICENSE": "LICENSE"
       },
@@ -110,7 +110,7 @@
         "stage/bin/launcher/policy/control-policy.sh": "bin/launcher/policy/control-policy.sh",
         "stage/bin/launcher/policy/router-identities.sh": "bin/launcher/policy/router-identities.sh",
         "stage/bin/launcher/policy/subscription-catalog.sh": "bin/launcher/policy/subscription-catalog.sh",
-        "stage/libexec/generate-skarbiec-config.mjs": "libexec/generate-skarbiec-config.mjs",
+        "stage/libexec": "libexec",
         "stage/etc/brama-skarbiec/recipient-public-keys.asc": "etc/brama-skarbiec/recipient-public-keys.asc",
         "stage/LICENSE": "LICENSE"
       },
@@ -154,6 +154,7 @@
     "state_schema": 1,
     "minimum_stado_version": "0.6.1",
     "rollback_compatible_with": [
+      "0.4.52",
       "0.4.51",
       "0.4.50",
       "0.4.49",
