@@ -350,6 +350,12 @@ fn register() -> Result<Value, String> {
                 .arg("--workload-public-key-file")
                 .arg(&key_file)
                 .arg("--replace-capabilities")
+                // Skarbiec 0.4.15 refuses a grant that does not state its
+                // lifetime ("grant issue requires --ttl-seconds <N> ... or
+                // --until-revoked"). Brama's runtime grant has none of its
+                // own: it lives until revoked, which is now said, where an
+                // unstated lifetime made every boot of 0.4.53 fail here.
+                .arg("--until-revoked")
                 .envs(&settings)
                 .output()
         });
