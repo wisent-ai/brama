@@ -623,12 +623,17 @@ Weles admitted the sign-in of lukasz@example.com with login claude-example-sso
 Weles run 3f0c… started on <weles host> at 2026-10-06T18:10:02Z
 2026-10-06T18:10:04Z stage google_email
 2026-10-06T18:10:11Z stage google_2fa_check
-WAITING FOR THE OPERATOR since 2026-10-06T18:10:12Z: Approve the Google sign-in for lukasz@example.com on your phone. Choose 42 if the phone asks you to match the number. (account lukasz@example.com, request 9b1e…, paged; `weles operator-requests show 9b1e…`)
+WAITING FOR THE OPERATOR since 2026-10-06T18:10:12Z: Approve the Google sign-in for lukasz@example.com on your phone. Choose 42 if the phone asks you to match the number. (account lukasz@example.com, request 9b1e…, paged). Approved and nothing moved, or no prompt arrived? `weles operator-requests answer 9b1e… --approved | --not-received | --cancel` (or Weles Desktop > Approvals)
 ```
 
-`WAITING FOR THE OPERATOR` means the run stands still until that person acts;
-`NOT paged` in it means no alert channel took the request, so nobody was told
-but this line. The verdict records every stage the run reached and the operator
+`WAITING FOR THE OPERATOR` means the run stands still until Google's page moves
+or the operator answers the request; `NOT paged` in it means no alert channel
+took the request, so nobody was told but this line. Approving on the phone
+needs no answer: Weles sees Google move on. `--not-received` makes Weles press
+Google's "Resend it" (or end the run saying Google offers none), `--approved`
+while Google still shows the prompt records what Google shows, and `--cancel`
+ends the run. The verdict records every stage the run reached and the operator
+request it waited on.
 request it waited on. When Weles stops answering before its result, the
 verdict is `failed` with `weles_execution_unconfirmed` and names the run, its
 host and its last stage, never a bare transport error. Brama Desktop shows the

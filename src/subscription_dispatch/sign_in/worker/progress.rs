@@ -187,8 +187,11 @@ pub fn sentence(event: &Value) -> Option<String> {
                     .unwrap_or("unreported")
                     .to_owned()
             };
+            // The run waits until Google's page moves or the operator answers;
+            // the line says how to answer, because a prompt that never
+            // arrived otherwise leaves both sides waiting.
             Some(format!(
-                "WAITING FOR THE OPERATOR since {}: {} (account {}, request {}, {}; `weles operator-requests show {}`)",
+                "WAITING FOR THE OPERATOR since {}: {} (account {}, request {}, {}). Approved and nothing moved, or no prompt arrived? `weles operator-requests answer {} --approved | --not-received | --cancel` (or Weles Desktop > Approvals)",
                 field("opened_at"),
                 field("instruction"),
                 field("account"),
