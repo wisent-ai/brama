@@ -633,7 +633,6 @@ needs no answer: Weles sees Google move on. `--not-received` makes Weles press
 Google's "Resend it" (or end the run saying Google offers none), `--approved`
 while Google still shows the prompt records what Google shows, and `--cancel`
 ends the run. The verdict records every stage the run reached and the operator
-request it waited on.
 request it waited on. When Weles stops answering before its result, the
 verdict is `failed` with `weles_execution_unconfirmed` and names the run, its
 host and its last stage, never a bare transport error. Brama Desktop shows the
