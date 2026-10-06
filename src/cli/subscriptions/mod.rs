@@ -36,7 +36,12 @@ pub(crate) struct SubscriptionsArgs {
     #[arg(long, conflicts_with = "apply")]
     gateway_consumer: Option<String>,
     /// Read the console's bearer from the vault item playing this role (its `token` field) instead of from stdin
-    #[arg(long, value_name = "ROLE", conflicts_with = "apply", requires = "destination")]
+    #[arg(
+        long,
+        value_name = "ROLE",
+        conflicts_with = "apply",
+        requires = "destination"
+    )]
     bearer_role: Option<String>,
 }
 

@@ -110,9 +110,8 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
     // The secret stays in this process: never printed, never in argv.
     let signing = match (&args.agent, &args.signing_role) {
         (Some(agent), Some(coordinate)) => {
-            let secret = vault_field(&router, &settings, coordinate).map_err(|error| {
-                format!("cannot read {coordinate} to sign as {agent}: {error}")
-            })?;
+            let secret = vault_field(&router, &settings, coordinate)
+                .map_err(|error| format!("cannot read {coordinate} to sign as {agent}: {error}"))?;
             Some((agent.clone(), secret))
         }
         _ => None,
@@ -195,11 +194,7 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
             let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
                 .map_err(|error| error.to_string())?;
             mac.update(
-                format!(
-                    "{agent}:{stamp}:{}",
-                    hex::encode(Sha256::digest(&body))
-                )
-                .as_bytes(),
+                format!("{agent}:{stamp}:{}", hex::encode(Sha256::digest(&body))).as_bytes(),
             );
             request = request
                 .header("x-agent-id", agent.as_str())

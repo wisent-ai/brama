@@ -70,7 +70,15 @@ pub(crate) async fn bearer_from_role(role: &str) -> Result<Zeroizing<String>, St
             "--bearer-role names the role the console's bearer item plays, and `{role}` is not one"
         ));
     }
-    let bearer = stado(&["credentials", "get", "--role", role, "--field", BEARER_FIELD]).await?;
+    let bearer = stado(&[
+        "credentials",
+        "get",
+        "--role",
+        role,
+        "--field",
+        BEARER_FIELD,
+    ])
+    .await?;
     if bearer.trim().is_empty() {
         return Err(format!(
             "the item playing role {role} holds no value in its {BEARER_FIELD} field"

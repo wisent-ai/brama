@@ -132,8 +132,9 @@ async fn sign_in_selected_subscription(
         reason: reason.to_string(),
         progress: Some(std::sync::Arc::new(move |event: &Value| {
             let mut event = event.clone();
-            event["sentence"] =
-                json!(crate::subscription_dispatch::sign_in::progress_sentence(&event));
+            event["sentence"] = json!(crate::subscription_dispatch::sign_in::progress_sentence(
+                &event
+            ));
             // A Desktop that went away does not stop the sign-in.
             let _ = progress_events.send(event);
         })),

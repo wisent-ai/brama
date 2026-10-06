@@ -18,7 +18,9 @@ pub(super) async fn print_reachability(layout: &Layout) {
     let mut targets = Vec::new();
     match layout.settings.get("PORT") {
         Some(port) => targets.push(format!("http://127.0.0.1:{port}/health")),
-        None => say!("  service.env names no PORT; only the address the gateway announced is probed"),
+        None => {
+            say!("  service.env names no PORT; only the address the gateway announced is probed")
+        }
     }
     let log = std::fs::read(&layout.log)
         .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())

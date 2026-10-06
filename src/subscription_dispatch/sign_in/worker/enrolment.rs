@@ -101,10 +101,16 @@ pub async fn enrol_authenticator(
     let claimed = status == HTTP_OK
         && answer.get("ok").and_then(Value::as_bool) == Some(true)
         && echoed == Some(resolved.login_item.as_str())
-        && answer.get("subscription_id").and_then(Value::as_str) == Some(resolved.subscription_id.as_str())
-        && answer.get("account_revision").and_then(Value::as_str) == Some(resolved.account_revision.as_str())
-        && answer.get("source_revision").and_then(Value::as_str) == Some(resolved.source_revision.as_str())
-        && answer.get("run_id").and_then(Value::as_str).is_some_and(|run| !run.is_empty());
+        && answer.get("subscription_id").and_then(Value::as_str)
+            == Some(resolved.subscription_id.as_str())
+        && answer.get("account_revision").and_then(Value::as_str)
+            == Some(resolved.account_revision.as_str())
+        && answer.get("source_revision").and_then(Value::as_str)
+            == Some(resolved.source_revision.as_str())
+        && answer
+            .get("run_id")
+            .and_then(Value::as_str)
+            .is_some_and(|run| !run.is_empty());
     let seed_present = crate::gateway::broker::login_seed_present(&resolved.login_item)
         .map_err(SignInError::Dependency)?;
     let detail = if claimed && seed_present {

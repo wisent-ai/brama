@@ -274,8 +274,14 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
         }
     };
     let refusal = trajectory::refusal(&answer, status, &resolved.login_item);
-    identity["second_factor"] = answer.get_mut("second_factor").map(Value::take).unwrap_or(Value::Null);
-    identity["run_id"] = answer.get_mut("run_id").map(Value::take).unwrap_or(Value::Null);
+    identity["second_factor"] = answer
+        .get_mut("second_factor")
+        .map(Value::take)
+        .unwrap_or(Value::Null);
+    identity["run_id"] = answer
+        .get_mut("run_id")
+        .map(Value::take)
+        .unwrap_or(Value::Null);
     if let Some(detail) = refusal {
         let mut failure = answer.get("failure").filter(|value| value.is_object()).cloned().unwrap_or_else(|| json!({
             "code": answer.get("error").and_then(Value::as_str).unwrap_or("authentication_failed"),

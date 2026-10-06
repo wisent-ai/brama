@@ -91,26 +91,34 @@ fn automatic_sign_in_view(entry: &SubscriptionEntry) -> Value {
 fn second_factor_view(entry: &SubscriptionEntry) -> Value {
     let failure = crate::subscription_dispatch::sign_in::observed_failure(&entry.id);
     let latest = crate::journal::latest_subscription_sign_in(&entry.id);
-    let observation = latest.as_ref().and_then(|attempt| attempt.get("second_factor"));
-    let method = observation.and_then(|value| value.get("method")).and_then(Value::as_str);
+    let observation = latest
+        .as_ref()
+        .and_then(|attempt| attempt.get("second_factor"));
+    let method = observation
+        .and_then(|value| value.get("method"))
+        .and_then(Value::as_str);
     let required = observation
         .and_then(|value| value.get("required"))
         .and_then(Value::as_bool)
         .or_else(|| {
-            failure.as_ref().filter(|failure| failure.code() == "google_2fa_material_missing")
+            failure
+                .as_ref()
+                .filter(|failure| failure.code() == "google_2fa_material_missing")
                 .map(|_| true)
         });
     // A refusal carries the whole browser trajectory behind it, which is
     // evidence for reading a failed run and noise in a one-line answer: its
     // first line says what the provider asked for, and it is quoted whole.
-    let sentence = |detail: String| -> String {
-        detail.lines().next().unwrap_or_default().to_owned()
-    };
+    let sentence =
+        |detail: String| -> String { detail.lines().next().unwrap_or_default().to_owned() };
     // The login a sign-in resolved is the one that would answer the
     // challenge; an item that declares none still signs in through whatever
     // Weles resolved for it, and the seed lives on that row.
     let login = entry.login_item.as_deref().or_else(|| {
-        latest.as_ref().and_then(|attempt| attempt.get("login_item")).and_then(Value::as_str)
+        latest
+            .as_ref()
+            .and_then(|attempt| attempt.get("login_item"))
+            .and_then(Value::as_str)
     });
     json!({
         "required": required,
@@ -138,7 +146,12 @@ pub(super) fn annotate_second_factor(
         Some(login) => match seeds.get_or_init(crate::gateway::broker::login_seed_states) {
             Ok(states) => match states.get(login) {
                 Some(state) => (json!(state), Value::Null),
-                None => (Value::Null, json!(format!("totp-seed-state returned no row for resolved login {login}"))),
+                None => (
+                    Value::Null,
+                    json!(format!(
+                        "totp-seed-state returned no row for resolved login {login}"
+                    )),
+                ),
             },
             Err(detail) => (Value::Null, json!(detail)),
         },

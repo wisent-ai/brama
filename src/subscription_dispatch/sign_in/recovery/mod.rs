@@ -23,19 +23,38 @@ pub(super) async fn execute(options: &SignInOptions) -> Result<Value, SignInErro
     let account = identity["account"].take();
     identity["account_ref"] = account;
     identity["http_status"] = Value::Null;
-    let subscription = identity.get("subscription_id").and_then(Value::as_str)
+    let subscription = identity
+        .get("subscription_id")
+        .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| SignInError::Dependency("the missing-seed refusal names no subscription".into()))?;
-    let login = identity.get("login_item").and_then(Value::as_str)
+        .ok_or_else(|| {
+            SignInError::Dependency("the missing-seed refusal names no subscription".into())
+        })?;
+    let login = identity
+        .get("login_item")
+        .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| SignInError::Dependency("the missing-seed refusal names no login item".into()))?;
-    let provider = weles_provider(&options.provider)
-        .ok_or_else(|| SignInError::Dependency("the subscription has no supported authenticator enrolment".into()))?;
-    let enrolment = match enrol_authenticator(&options.provider, provider, subscription, Some(login)).await {
+        .ok_or_else(|| {
+            SignInError::Dependency("the missing-seed refusal names no login item".into())
+        })?;
+    let provider = weles_provider(&options.provider).ok_or_else(|| {
+        SignInError::Dependency("the subscription has no supported authenticator enrolment".into())
+    })?;
+    let enrolment = match enrol_authenticator(
+        &options.provider,
+        provider,
+        subscription,
+        Some(login),
+    )
+    .await
+    {
         Ok(enrolment) => enrolment,
         Err(error) => {
             return Ok(verdict(
-                options, &identity, FAILED, error.to_string(),
+                options,
+                &identity,
+                FAILED,
+                error.to_string(),
                 json!({
                     "code": "authenticator_enrolment_failed", "stage": "authenticator_enrolment",
                     "browser_started": null, "retryable": false,
@@ -47,7 +66,10 @@ pub(super) async fn execute(options: &SignInOptions) -> Result<Value, SignInErro
     };
     if !enrolment.ok() {
         return Ok(verdict(
-            options, &identity, FAILED, enrolment.detail,
+            options,
+            &identity,
+            FAILED,
+            enrolment.detail,
             json!({
                 "code": "authenticator_enrolment_unconfirmed", "stage": "authenticator_enrolment",
                 "run_id": enrolment.run_id, "seed_present": enrolment.seed_present,
