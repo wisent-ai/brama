@@ -253,6 +253,12 @@ fn deregister() -> Result<Value, String> {
     Ok(json!({ "registry": registry_path.display().to_string(), "revoked": revoked_agents }))
 }
 
+/// The runtime grant's stated lifetime: the largest integer JSON carries
+/// exactly (`Number.MAX_SAFE_INTEGER`), the value Brama's Skarbiec policy
+/// writes for "no lifetime chosen", because Skarbiec requires an acquire grant
+/// to state one.
+const RUNTIME_GRANT_TTL_SECONDS: u64 = (1 << 53) - 1;
+
 fn register() -> Result<Value, String> {
     let Installation {
         home,
@@ -351,11 +357,16 @@ fn register() -> Result<Value, String> {
                 .arg(&key_file)
                 .arg("--replace-capabilities")
                 // Skarbiec 0.4.15 refuses a grant that does not state its
-                // lifetime ("grant issue requires --ttl-seconds <N> ... or
-                // --until-revoked"). Brama's runtime grant has none of its
-                // own: it lives until revoked, which is now said, where an
-                // unstated lifetime made every boot of 0.4.53 fail here.
-                .arg("--until-revoked")
+                // lifetime, and an acquire grant may not be `--until-revoked`
+                // ("an acquire grant lends its lifetime to every bearer it
+                // mints; state --ttl-seconds"): 0.4.53 failed every boot on
+                // the first refusal, 0.4.54 on the second. Brama chooses no
+                // lifetime for its runtime grant; its Skarbiec policy
+                // (libexec/generate-skarbiec-config.mjs) writes the largest
+                // integer JSON carries exactly, which reads as none, and the
+                // grant states the same.
+                .arg("--ttl-seconds")
+                .arg(RUNTIME_GRANT_TTL_SECONDS.to_string())
                 .envs(&settings)
                 .output()
         });
