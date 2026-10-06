@@ -12,6 +12,7 @@ use serde_json::{json, Value};
 use verdict::{verdict, FAILED, SIGNED_IN};
 use worker::api::{worker_api_base, worker_api_token};
 pub use worker::enrolment::{enrol_authenticator, Enrolment};
+pub use worker::progress::{sentence as progress_sentence, Progress};
 
 pub struct SignInOptions {
     pub provider: String,
@@ -19,6 +20,9 @@ pub struct SignInOptions {
     pub login_item: Option<String>,
     pub subscription_id: Option<String>,
     pub reason: String,
+    /// Receives each event Weles reports while the sign-in runs, so the
+    /// caller can say what the run is doing and whom it waits for.
+    pub progress: Option<Progress>,
 }
 
 pub fn weles_provider(provider: &str) -> Option<&'static str> {
@@ -221,20 +225,52 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
     };
     let status = response.status().as_u16();
     identity["http_status"] = json!(status);
-    let mut answer: Value = match response.json().await {
-        Ok(answer) => answer,
-        Err(error) => {
-            return Ok(verdict(
-                options,
-                &identity,
-                FAILED,
-                format!(
-                    "Weles HTTP {status} returned an unreadable authentication result: {error}"
-                ),
-                json!({"code": "authentication_response_invalid", "stage": "weles_response",
-                "http_status": status, "browser_started": null, "retryable": false}),
-                Value::Null,
-            ))
+    let streamed = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.starts_with(worker::progress::PROGRESS_CONTENT_TYPE));
+    let mut answer: Value = if streamed {
+        match worker::progress::read(response, options.progress.as_ref()).await {
+            Ok(observed) => {
+                observed.record(&mut identity);
+                observed.result.unwrap_or(Value::Null)
+            }
+            Err(stopped) => {
+                let (observed, detail) = *stopped;
+                observed.record(&mut identity);
+                return Ok(verdict(
+                    options,
+                    &identity,
+                    FAILED,
+                    format!(
+                        "{detail}; {}. {}",
+                        observed.whereabouts(),
+                        endpoint.whereabouts()
+                    ),
+                    json!({"code": "weles_execution_unconfirmed",
+                        "stage": observed.last_stage().unwrap_or("weles_response"),
+                        "run_id": observed.run_id, "browser_started": null, "retryable": false}),
+                    Value::Null,
+                ));
+            }
+        }
+    } else {
+        match response.json().await {
+            Ok(answer) => answer,
+            Err(error) => {
+                return Ok(verdict(
+                    options,
+                    &identity,
+                    FAILED,
+                    format!(
+                        "Weles HTTP {status} returned an unreadable authentication result: {error}"
+                    ),
+                    json!({"code": "authentication_response_invalid", "stage": "weles_response",
+                    "http_status": status, "browser_started": null, "retryable": false}),
+                    Value::Null,
+                ))
+            }
         }
     };
     let refusal = trajectory::refusal(&answer, status, &resolved.login_item);

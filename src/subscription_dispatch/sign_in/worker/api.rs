@@ -26,8 +26,10 @@ pub(crate) struct WelesEndpoint {
 
 impl WelesEndpoint {
     /// What to say about this endpoint when a call to it fails: the host
-    /// behind the forward, how stale the placement reading is, and the read
-    /// that shows that host's own log.
+    /// behind the forward and how stale the placement reading is. It names
+    /// no log command: the Weles API is not a unit Stado's `service logs`
+    /// manages, and a sentence pointing at one sent the reader to a refusal.
+    /// The run's own stages are in the verdict.
     pub fn whereabouts(&self) -> String {
         let Some(host) = self.placed_on.as_deref().filter(|host| !host.is_empty()) else {
             return format!(
@@ -41,13 +43,9 @@ impl WelesEndpoint {
             .observed
             .as_deref()
             .filter(|observed| !observed.is_empty())
-            .map(|observed| format!(", last observed {observed}"))
+            .map(|observed| format!(", placement last observed {observed}"))
             .unwrap_or_default();
-        format!(
-            "{} is a forward to weles-api on {host}{freshness}; read that service's own log with \
-             `stado service logs weles-api --host {host}`",
-            self.url
-        )
+        format!("{} is a forward to Weles on {host}{freshness}", self.url)
     }
 }
 

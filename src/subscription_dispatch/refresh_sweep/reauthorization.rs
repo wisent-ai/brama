@@ -52,11 +52,23 @@ pub(super) fn schedule_sign_in(subscription_id: String, provider: String) -> boo
         let _claim = claim;
         let _serial = SIGN_IN_SERIAL.lock().await;
         let reason = "automatic OAuth credential renewal".to_owned();
+        let logged_subscription = subscription_id.clone();
         let options = sign_in::SignInOptions {
             provider: provider.clone(),
             login_item: None,
             subscription_id: Some(subscription_id.clone()),
             reason: reason.clone(),
+            // The gateway's log says where an automatic sign-in is while it
+            // runs, and whose hand it waits for, not only how it ended.
+            progress: Some(std::sync::Arc::new(move |event: &serde_json::Value| {
+                if let Some(sentence) = sign_in::progress_sentence(event) {
+                    info!(
+                        event = "credential_sign_in_progress",
+                        subscription = %logged_subscription,
+                        %sentence
+                    );
+                }
+            })),
         };
         match tokio::spawn(sign_in::sign_in_provider(options)).await {
             Ok(Ok(verdict)) => {
@@ -107,4 +119,3 @@ pub(super) fn schedule_sign_in(subscription_id: String, provider: String) -> boo
     });
     true
 }
-

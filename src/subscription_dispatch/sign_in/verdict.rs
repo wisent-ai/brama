@@ -24,6 +24,8 @@ pub(super) fn verdict(
         "http_status": identity.get("http_status"),
         "second_factor": identity.get("second_factor"),
         "run_id": identity.get("run_id"),
+        "stages": identity.get("stages"),
+        "operator_request": identity.get("operator_request"),
         "reason": options.reason,
         "result": result,
         "detail": detail,

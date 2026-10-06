@@ -4,3 +4,4 @@
 pub(super) mod account;
 pub(super) mod api;
 pub(crate) mod enrolment;
+pub mod progress;

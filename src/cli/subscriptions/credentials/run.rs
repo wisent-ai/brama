@@ -65,6 +65,17 @@ pub(crate) async fn run(command: SubscriptionCommand) {
                 login_item,
                 subscription_id,
                 reason,
+                // A browser sign-in has no clock that ends it: every step
+                // Weles reports, and above all a wait for the operator, is
+                // printed as it happens, so the command never waits in
+                // silence. stderr, because stdout carries the verdict.
+                progress: Some(std::sync::Arc::new(|event: &serde_json::Value| {
+                    if let Some(sentence) =
+                        brama::subscription_dispatch::sign_in::progress_sentence(event)
+                    {
+                        eprintln!("{sentence}");
+                    }
+                })),
             },
         )
         .await

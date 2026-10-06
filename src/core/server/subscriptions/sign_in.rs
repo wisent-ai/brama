@@ -9,11 +9,13 @@
 
 pub(in crate::core::server) mod manual;
 
+use axum::body::Body;
 use axum::extract::{Extension, Path};
-use axum::http::StatusCode;
+use axum::http::{header, StatusCode};
+use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::core::server::administration::require_brama_desktop;
 use crate::core::server::admission::identity::{valid_agent_id, ModelClientIdentity};
@@ -33,7 +35,7 @@ pub(in crate::core::server) async fn sign_in_account_subscription(
     Extension(client_identity): Extension<ModelClientIdentity>,
     Path(subscription_id): Path<String>,
     Json(request): Json<SignInSubscriptionRequest>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Response, ApiError> {
     let agent_id = account_agent_id(&client_identity)?;
     sign_in_selected_subscription(Some(&agent_id), &subscription_id, request).await
 }
@@ -42,7 +44,7 @@ pub(in crate::core::server) async fn sign_in_admin_subscription(
     Extension(client_identity): Extension<ModelClientIdentity>,
     Path((agent_id, subscription_id)): Path<(String, String)>,
     Json(request): Json<SignInSubscriptionRequest>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Response, ApiError> {
     require_brama_desktop(&client_identity)?;
     if !valid_agent_id(&agent_id) {
         return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
@@ -53,7 +55,7 @@ pub(in crate::core::server) async fn sign_in_admin_subscription(
 pub(in crate::core::server) async fn sign_in_admin_pool_subscription(
     Extension(client_identity): Extension<ModelClientIdentity>,
     Json(mut request): Json<SignInSubscriptionRequest>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Response, ApiError> {
     require_brama_desktop(&client_identity)?;
     let subscription_id = request
         .subscription_id
@@ -63,11 +65,19 @@ pub(in crate::core::server) async fn sign_in_admin_pool_subscription(
     sign_in_selected_subscription(None, &subscription_id, request).await
 }
 
+/// A refusal of the request itself is an ordinary error status. An admitted
+/// sign-in answers `application/x-ndjson`, one JSON object per line, while it
+/// runs: every event Weles reports (`admitted`, `started`, `stage`,
+/// `operator_request`), each with the `sentence` the CLI prints for it, and
+/// last either `verdict` (the recorded sign-in verdict) or `refused` (the
+/// status and error the sign-in stopped on before Weles ran it). A browser
+/// sign-in has no clock that ends it; this is how Desktop says what it waits
+/// for instead of "Signing in" until it ends.
 async fn sign_in_selected_subscription(
     agent_id: Option<&str>,
     subscription_id: &str,
     request: SignInSubscriptionRequest,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Response, ApiError> {
     let reason = request
         .reason
         .as_deref()
@@ -113,25 +123,50 @@ async fn sign_in_selected_subscription(
             ));
         }
     }
-    crate::subscription_dispatch::sign_in::sign_in_provider(
-        crate::subscription_dispatch::sign_in::SignInOptions {
-            provider: entry.provider,
-            subscription_id: Some(entry.id),
-            login_item: request.login_item.or(entry.login_item),
-            reason: reason.to_string(),
-        },
-    )
-    .await
-    .map(Json)
-    // A missing declaration is this deployment's own configuration, not a bad
-    // gateway upstream: Desktop reads the status apart from the sentence, so
-    // the two must not both say `502`.
-    .map_err(|error| {
-        let status = if error.blocked().is_some() {
-            StatusCode::CONFLICT
-        } else {
-            StatusCode::BAD_GATEWAY
+    let (events, received) = tokio::sync::mpsc::unbounded_channel::<Value>();
+    let progress_events = events.clone();
+    let options = crate::subscription_dispatch::sign_in::SignInOptions {
+        provider: entry.provider,
+        subscription_id: Some(entry.id),
+        login_item: request.login_item.or(entry.login_item),
+        reason: reason.to_string(),
+        progress: Some(std::sync::Arc::new(move |event: &Value| {
+            let mut event = event.clone();
+            event["sentence"] =
+                json!(crate::subscription_dispatch::sign_in::progress_sentence(&event));
+            // A Desktop that went away does not stop the sign-in.
+            let _ = progress_events.send(event);
+        })),
+    };
+    tokio::spawn(async move {
+        let last = match crate::subscription_dispatch::sign_in::sign_in_provider(options).await {
+            Ok(verdict) => json!({"event": "verdict", "verdict": verdict}),
+            // A missing declaration is this deployment's own configuration,
+            // not a bad gateway upstream: Desktop reads the status apart from
+            // the sentence, so the two must not both say `502`.
+            Err(error) => {
+                let status = if error.blocked().is_some() {
+                    StatusCode::CONFLICT
+                } else {
+                    StatusCode::BAD_GATEWAY
+                };
+                json!({"event": "refused", "status": status.as_u16(), "error": error.to_string()})
+            }
         };
-        api_error(status, &error.to_string())
-    })
+        let _ = events.send(last);
+    });
+    let lines = futures_util::stream::unfold(received, |mut received| async move {
+        let event = received.recv().await?;
+        Some((
+            Ok::<_, std::convert::Infallible>(format!("{event}\n")),
+            received,
+        ))
+    });
+    Ok((
+        [(header::CONTENT_TYPE, SIGN_IN_PROGRESS_CONTENT_TYPE)],
+        Body::from_stream(lines),
+    )
+        .into_response())
 }
+
+const SIGN_IN_PROGRESS_CONTENT_TYPE: &str = "application/x-ndjson";

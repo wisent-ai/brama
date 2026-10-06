@@ -64,6 +64,7 @@ pub(super) async fn execute(options: &SignInOptions) -> Result<Value, SignInErro
         subscription_id: Some(subscription.to_owned()),
         login_item: Some(login.to_owned()),
         reason: options.reason.clone(),
+        progress: options.progress.clone(),
     };
     // Deliberately call the one-attempt operation, not this recovery wrapper:
     // another missing-seed refusal must not enrol a second authenticator.
