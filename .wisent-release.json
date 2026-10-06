@@ -9,19 +9,22 @@
   },
   "inputs": {
     "skarbiec": {
-      "uri": "stado://sources/skarbiec/7328e1320fb0605b00f7742116a47142894fcc155373ffb4d9545361621d4c18/source.tar.gz",
-      "sha256": "7328e1320fb0605b00f7742116a47142894fcc155373ffb4d9545361621d4c18",
-      "mount": "skarbiec"
+      "uri": "stado://sources/brama/dependencies/skarbiec/sha256/59f6b4963a0b22b8e88132554894fc95eb5cf7598df349b0ea735f2727211178/source.tar.gz",
+      "sha256": "59f6b4963a0b22b8e88132554894fc95eb5cf7598df349b0ea735f2727211178",
+      "mount": "skarbiec",
+      "extract": true
     },
-    "echo_web": {
-      "uri": "stado://sources/brama/24cbce71163fa7b5fba185183c49caf099d6fc59781b062e4c005f05621c231d/source.tar.gz",
-      "sha256": "24cbce71163fa7b5fba185183c49caf099d6fc59781b062e4c005f05621c231d",
-      "mount": "echo-web"
+    "wisent-errors": {
+      "uri": "stado://sources/brama/dependencies/wisent-errors/sha256/4c8556166486a92e1cfd6c3d75a48478f2c65fa749cfd5bab4e46a2ebd61c3bc/source.tar.gz",
+      "sha256": "4c8556166486a92e1cfd6c3d75a48478f2c65fa749cfd5bab4e46a2ebd61c3bc",
+      "mount": "wisent-errors",
+      "extract": true
     },
-    "wisent_errors": {
-      "uri": "stado://sources/brama/ec954af07e12b1a6efc8bcced98881f520cb582df378e1300fa50133c5a96aca/source.tar.gz",
-      "sha256": "ec954af07e12b1a6efc8bcced98881f520cb582df378e1300fa50133c5a96aca",
-      "mount": "wisent-errors"
+    "echo-web": {
+      "uri": "stado://sources/brama/dependencies/echo-web/sha256/e2239374bb7285f225dc5d09b0ff7cad2ecc365ac54ee2e24609833591ca777e/source.tar.gz",
+      "sha256": "e2239374bb7285f225dc5d09b0ff7cad2ecc365ac54ee2e24609833591ca777e",
+      "mount": "echo-web",
+      "extract": true
     }
   },
   "platforms": {
@@ -29,7 +32,12 @@
       "quality": [
         {
           "name": "fmt",
-          "argv": ["cargo", "fmt", "--", "--check"]
+          "argv": [
+            "cargo",
+            "fmt",
+            "--",
+            "--check"
+          ]
         },
         {
           "name": "brama-release-quality",
@@ -68,7 +76,12 @@
       "quality": [
         {
           "name": "fmt",
-          "argv": ["cargo", "fmt", "--", "--check"]
+          "argv": [
+            "cargo",
+            "fmt",
+            "--",
+            "--check"
+          ]
         },
         {
           "name": "brama-release-quality",

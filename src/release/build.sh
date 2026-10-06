@@ -4,7 +4,11 @@ source_dir=${WISENT_SOURCE_DIR:?WISENT_SOURCE_DIR is required}
 output_dir=${WISENT_OUTPUT_DIR:?WISENT_OUTPUT_DIR is required}
 platform=${WISENT_PLATFORM:?WISENT_PLATFORM is required}
 version=${WISENT_VERSION:?WISENT_VERSION is required}
-skarbiec_source=${WISENT_INPUT_SKARBIEC_DIR:-"$source_dir/../skarbiec"}
+# `stado release catalog pin-input --name <name>` archives under `<name>/`
+# and the worker extracts it into WISENT_INPUT_<NAME>_DIR, so each pinned
+# repository is WISENT_INPUT_<NAME>_DIR/<name>.
+skarbiec_source=${WISENT_INPUT_SKARBIEC_DIR:+"$WISENT_INPUT_SKARBIEC_DIR/skarbiec"}
+skarbiec_source=${skarbiec_source:-"$source_dir/../skarbiec"}
 
 if ! command -v cargo >/dev/null; then
   PATH="$HOME/.cargo/bin:$PATH"
@@ -65,8 +69,8 @@ mkdir -p "$build_root" "$cargo_root/brama" "$cargo_root/skarbiec" \
 cargo_overrides=()
 build_source="$source_dir"
 if [[ -n "${WISENT_INPUTS_DIR:-}" ]]; then
-  echo_web_source=${WISENT_INPUT_ECHO_WEB_DIR:?release manifest must supply echo_web}
-  wisent_errors_source=${WISENT_INPUT_WISENT_ERRORS_DIR:?release manifest must supply wisent_errors}
+  echo_web_source="${WISENT_INPUT_ECHO_WEB_DIR:?release manifest must supply echo-web}/echo-web"
+  wisent_errors_source="${WISENT_INPUT_WISENT_ERRORS_DIR:?release manifest must supply wisent-errors}/wisent-errors"
   build_source="$build_root/source"
   "$source_dir/src/release/prepare_inputs.sh" "$source_dir" "$build_source" \
     "wisent-onboarding-client=$echo_web_source/crates/onboarding-client" \
