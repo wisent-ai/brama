@@ -88,15 +88,20 @@ fn stops_a_new_attempt(
     // wedges the subscription: one `IncompleteMessage` on POST /reauth, and
     // every later sign-in - the sweep's and the operator's - replays that
     // verdict instead of running, while the account revision it is keyed to
-    // has no reason to change. An
-    // unconfirmed result waits for the cooldown like any other retry.
+    // has no reason to change. Nor does the cooldown hold it: Weles admits
+    // a sign-in of the same account revision into the run already under way
+    // and answers it with everything that run has reported, so asking again
+    // reattaches to the browser that is still waiting (a laptop's forward
+    // restarting under a 5-minute Google prompt was enough to lose it)
+    // instead of starting another challenge.
     let unknown_effect = matches!(
         code,
         Some("weles_execution_unconfirmed" | "authentication_response_invalid")
     );
     same_account
         && failed
-        && ((rejected && !unknown_effect && (credential_rejected || same_executor))
+        && !unknown_effect
+        && ((rejected && (credential_rejected || same_executor))
             || (cooling_down && same_executor))
 }
 

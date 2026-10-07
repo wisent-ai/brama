@@ -155,13 +155,8 @@ fn env_or(key: &str, default: &str) -> String {
 ///
 /// The launcher exports it at every service start, read from
 /// `brama-weles-reauth` through the vault. An operator running
-/// `brama subscription sign-in` has no launcher, and until this read existed
-/// that command answered `BRAMA_WELES_REAUTH_TOKEN is unavailable` and
-/// stopped — the one repair the gateway itself names for a grant the provider
-/// will not refresh again (`invalid_grant`) could be performed only by the
-/// service, never by the person holding the refusal. The same item, read the
-/// same way, through the same vault program every other credential operation
-/// runs.
+/// `brama subscription sign-in` has no launcher, so the command reads the
+/// same role itself.
 pub(crate) fn worker_api_token() -> Result<String, String> {
     let declared = std::env::var("BRAMA_WELES_REAUTH_TOKEN")
         .unwrap_or_default()
@@ -178,96 +173,57 @@ pub(crate) fn worker_api_token() -> Result<String, String> {
 /// renaming or replacing the item changes nothing here.
 const REAUTH_ROLE: &str = "brama-weles-reauth";
 
-/// One row of the vault's bare `list`.
-#[derive(serde::Deserialize)]
-struct ListedItem {
-    #[serde(default)]
-    id: String,
-    #[serde(default)]
-    tags: Vec<String>,
-    #[serde(default)]
-    deleted: bool,
-}
-
-/// The id of the one live item that plays [`REAUTH_ROLE`]. No item in the
-/// role, or several, is refused with the role, so a vault whose item lost its
-/// tag is told apart from one holding two.
-fn reauth_item(program: &str) -> Result<String, String> {
-    let tag = format!("stado:role:{REAUTH_ROLE}");
-    let output = std::process::Command::new(program)
-        .arg("list")
-        .output()
-        .map_err(|error| {
-            format!(
-                "cannot list the vault to find role {REAUTH_ROLE}: {error} (running {program}; \
-                 declare another with ENTITLEMENTS_ROUTER_BIN or SKARBIEC_BIN, or export \
-                 BRAMA_WELES_REAUTH_TOKEN)"
-            )
-        })?;
-    if !output.status.success() {
-        return Err(format!(
-            "cannot list the vault to find role {REAUTH_ROLE}: {program} exited {}: {}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr).trim()
-        ));
-    }
-    let items: Vec<ListedItem> = serde_json::from_slice(&output.stdout)
-        .map_err(|error| format!("the vault listing is not a list of items: {error}"))?;
-    let holders: Vec<String> = items
-        .into_iter()
-        .filter(|item| !item.deleted && item.tags.iter().any(|each| each == &tag))
-        .map(|item| item.id)
-        .collect();
-    match holders.as_slice() {
-        [one] => Ok(one.clone()),
-        [] => Err(format!(
-            "no vault item carries {tag}; tag the item that holds the Weles sign-in worker's \
-             bearer with it, or export BRAMA_WELES_REAUTH_TOKEN"
-        )),
-        several => Err(format!(
-            "{} vault items carry {tag}; exactly one item may play role {REAUTH_ROLE}",
-            several.len()
-        )),
-    }
-}
-
-/// The `token` field of the item that plays [`REAUTH_ROLE`], read from the
-/// vault this machine carries.
+/// The `token` field of the item that plays [`REAUTH_ROLE`], read through
+/// Stado, which resolves the vault this machine's credential reads use.
+///
+/// The read used to run this machine's own Skarbiec program against its own
+/// vault file. On a workstation that reads the fleet vault remotely that
+/// file is a retired copy, so `brama subscription sign-in` on the laptop
+/// stopped at "no vault item carries stado:role:brama-weles-reauth" while
+/// the fleet vault's item carried the tag. `stado credentials get --role`
+/// answers from the vault Stado selects: the owner vault on its host, the
+/// fleet vault over its route elsewhere.
 ///
 /// Blocking rather than the gateway's bounded async read, because this runs
 /// once per sign-in, before any HTTP exchange, and both callers are already
 /// waiting on a child process for the length of a browser login.
 fn vault_reauth_token() -> Result<String, String> {
-    let program = crate::gateway::broker::entitlements_router_bin();
-    let item = reauth_item(&program)?;
-    let output = std::process::Command::new(&program)
-        .args(["get", item.as_str()])
+    let stado = std::env::var("BRAMA_STADO_BIN")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+            std::path::PathBuf::from(home)
+                .join(".stado")
+                .join("bin")
+                .join("stado")
+        });
+    let output = std::process::Command::new(&stado)
+        .args(["credentials", "get", "--role", REAUTH_ROLE, "--field", "token"])
         .output()
-        .map_err(|error| format!("cannot read role {REAUTH_ROLE} ({item}): {error}"))?;
+        .map_err(|error| {
+            format!(
+                "cannot read role {REAUTH_ROLE} through {}: {error} (declare another Stado with \
+                 BRAMA_STADO_BIN, or export BRAMA_WELES_REAUTH_TOKEN)",
+                stado.display()
+            )
+        })?;
     if !output.status.success() {
+        let said: String = String::from_utf8_lossy(&output.stderr)
+            .lines()
+            .find(|line| line.starts_with("Error:"))
+            .unwrap_or_default()
+            .to_string();
         return Err(format!(
-            "cannot read role {REAUTH_ROLE} ({item}): {program} exited {}: {}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr).trim()
+            "cannot read role {REAUTH_ROLE} through {}: {} {said}",
+            stado.display(),
+            output.status
         ));
     }
-    let payload: serde_json::Value = serde_json::from_slice(&output.stdout).map_err(|error| {
-        format!("role {REAUTH_ROLE} ({item}) did not answer a Skarbiec item: {error}")
-    })?;
-    if payload.get("schema").and_then(serde_json::Value::as_str) != Some("skarbiec.item.v2") {
-        return Err(format!(
-            "role {REAUTH_ROLE} ({item}) did not return a Skarbiec v2 item"
-        ));
-    }
-    let token = payload
-        .get("fields")
-        .and_then(|fields| fields.get("token"))
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or_default()
-        .trim()
-        .to_string();
+    let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if token.is_empty() {
-        return Err(format!("role {REAUTH_ROLE} ({item}) has an empty token"));
+        return Err(format!("role {REAUTH_ROLE} has an empty token"));
     }
     Ok(token)
 }
