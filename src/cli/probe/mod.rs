@@ -47,8 +47,6 @@ pub(crate) struct ProbeArgs {
     json: bool,
 }
 
-/// The loopback port the gateway listens on when service.env names none.
-const DEFAULT_PORT: &str = "8080";
 /// What the gateway logs when it binds, followed by the address.
 const ANNOUNCEMENT: &str = "Starting brama server on ";
 
@@ -67,15 +65,17 @@ fn vault_field(
     role_field_in(Path::new(router), settings, role, field)
 }
 
-/// Loopback first, then the address the last boot announced; plain HTTP is
-/// refused off loopback and the log may name an older bind, so neither alone
-/// is reliable.
+/// The port service.env declares, on loopback, then the address the last boot
+/// announced; plain HTTP is refused off loopback and the log may name an older
+/// bind, so neither alone is reliable. The launcher refuses to start without
+/// `PORT`, so no port is assumed here either: without one, only the announced
+/// address is tried, as `brama diagnose` does.
 fn candidates(settings: &BTreeMap<String, String>, home: &Path) -> Vec<String> {
-    let port = settings
+    let mut candidates: Vec<String> = settings
         .get("PORT")
-        .cloned()
-        .unwrap_or_else(|| DEFAULT_PORT.to_string());
-    let mut candidates = vec![format!("127.0.0.1:{port}")];
+        .map(|port| format!("127.0.0.1:{port}"))
+        .into_iter()
+        .collect();
     let log = std::fs::read(
         home.join(".stado/logs")
             .join(format!("{}.log", super::diagnose::SERVICE_LABEL)),
@@ -174,7 +174,10 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
             ),
         }
     }
-    let base = base.ok_or("no candidate address served /health")?;
+    let base = base.ok_or(
+        "no candidate address served /health: service.env names no PORT and the gateway \
+         announced no address, or none answered (each tried address is listed above)",
+    )?;
     let requested = aliases.len();
     for alias in aliases {
         let body = serde_json::to_vec(
