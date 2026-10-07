@@ -201,9 +201,10 @@ pub fn sentence(event: &Value) -> Option<String> {
             };
             // The run waits until Google's page moves or the operator answers;
             // the line says how to answer, because a prompt that never
-            // arrived otherwise leaves both sides waiting.
+            // arrived otherwise leaves both sides waiting. Weles answers a
+            // waiting run by its run id, the one this event carries.
             Some(format!(
-                "WAITING FOR THE OPERATOR since {}: {} (account {}, request {}, {}). Approved and nothing moved, or no prompt arrived? `weles operator-requests answer {} --approved | --not-received | --cancel` (or Weles Desktop > Approvals)",
+                "WAITING FOR THE OPERATOR since {}: {} (account {}, request {}, {}). Approved and nothing moved, or no prompt arrived? `weles runs answer {run} --approved | --not-received`; to stop waiting, `weles runs cancel {run} --detail <why>` (or Weles Desktop > Running)",
                 field("opened_at"),
                 field("instruction"),
                 field("account"),
@@ -213,7 +214,7 @@ pub fn sentence(event: &Value) -> Option<String> {
                 } else {
                     "NOT paged: no alert channel took it"
                 },
-                field("id")
+                run = text("run_id"),
             ))
         }
         _ => None,
