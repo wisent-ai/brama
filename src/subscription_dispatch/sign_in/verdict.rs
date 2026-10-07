@@ -94,15 +94,16 @@ fn stops_a_new_attempt(
     // reattaches to the browser that is still waiting (a laptop's forward
     // restarting under a 5-minute Google prompt was enough to lose it)
     // instead of starting another challenge.
+    // The operator ended the run (`weles runs cancel`): the provider was not
+    // asked anything that could be held against the account.
     let unknown_effect = matches!(
         code,
-        Some("weles_execution_unconfirmed" | "authentication_response_invalid")
+        Some("weles_execution_unconfirmed" | "authentication_response_invalid" | "run_cancelled")
     );
     same_account
         && failed
         && !unknown_effect
-        && ((rejected && (credential_rejected || same_executor))
-            || (cooling_down && same_executor))
+        && ((rejected && (credential_rejected || same_executor)) || (cooling_down && same_executor))
 }
 
 pub(super) fn observed_failure(id: &str) -> Option<Blocked> {

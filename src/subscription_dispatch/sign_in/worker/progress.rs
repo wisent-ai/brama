@@ -34,7 +34,9 @@ pub(crate) struct Observed {
 }
 
 impl Observed {
-    /// Where the run was when it stopped reporting, in one clause.
+    /// Where the run was when it stopped reporting, in one clause, and how to
+    /// see what it is doing or end it: a sign-in Weles still runs keeps the
+    /// account, and the next sign-in of it joins that run.
     pub fn whereabouts(&self) -> String {
         let run = self.run_id.as_deref().unwrap_or("not yet started");
         let host = self
@@ -59,7 +61,17 @@ impl Observed {
             .and_then(|request| request.get("instruction").and_then(Value::as_str))
             .map(|instruction| format!("; it was waiting for the operator: {instruction}"))
             .unwrap_or_default();
-        format!("run {run}{host}, {stage}{waiting}")
+        let commands = self
+            .run_id
+            .as_deref()
+            .map(|run| {
+                format!(
+                    "; `weles runs show {run}` prints what it last wrote, \
+                     `weles runs cancel {run} --detail <why>` ends it"
+                )
+            })
+            .unwrap_or_default();
+        format!("run {run}{host}, {stage}{waiting}{commands}")
     }
 
     /// The last stage reached, for a failure's `stage`.

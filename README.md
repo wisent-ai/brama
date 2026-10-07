@@ -635,7 +635,13 @@ while Google still shows the prompt records what Google shows, and `--cancel`
 ends the run. The verdict records every stage the run reached and the operator
 request it waited on. When Weles stops answering before its result, the
 verdict is `failed` with `weles_execution_unconfirmed` and names the run, its
-host and its last stage, never a bare transport error. Brama Desktop shows the
+host and its last stage, never a bare transport error, with the two commands
+that follow it up: `weles runs show <run>` prints what the run last wrote and
+`weles runs cancel <run> --detail <why>` ends it. Neither verdict holds the
+next sign-in: Weles admits a sign-in of the same account into the run already
+under way and replays its events, so asking again reattaches to it, and a run
+the operator cancelled (`run_cancelled`) leaves the account to a new run.
+Brama Desktop shows the
 same lines while its sign-in runs (the gateway's sign-in routes answer them as
 `application/x-ndjson`, ending in `verdict` or `refused`), and the gateway's
 automatic sign-in logs them as `credential_sign_in_progress`.
@@ -651,7 +657,11 @@ runtime identity). A role no item plays, or plays twice, is refused at start
 with the role and its tag. `brama launcher role-field --router ROUTER ROLE
 FIELD` prints one field of the item playing ROLE.
 Brama receives `BRAMA_WELES_REAUTH_TOKEN` and presents it only to `POST /reauth`; Weles
-receives the same field and accepts it only on that route. At every start the
+receives the same field and accepts it only on that route. An operator's
+`brama subscription sign-in` on a workstation, where no launcher ran, reads
+the same role through `stado credentials get --role brama-weles-reauth --field
+token` (`BRAMA_STADO_BIN` names another `stado`), so it uses the vault Stado
+resolves for that machine and never a local copy. At every start the
 Brama launcher reads `agent_skarbiec_url` from the host's fleet Stado config
 while retaining the dedicated `brama-service` identity; a stale endpoint in an
 older service-specific config therefore cannot disconnect Brama from the

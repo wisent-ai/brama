@@ -200,7 +200,14 @@ fn vault_reauth_token() -> Result<String, String> {
                 .join("stado")
         });
     let output = std::process::Command::new(&stado)
-        .args(["credentials", "get", "--role", REAUTH_ROLE, "--field", "token"])
+        .args([
+            "credentials",
+            "get",
+            "--role",
+            REAUTH_ROLE,
+            "--field",
+            "token",
+        ])
         .output()
         .map_err(|error| {
             format!(
