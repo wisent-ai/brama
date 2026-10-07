@@ -105,11 +105,7 @@ pub(crate) async fn worker_api_base() -> Result<WelesEndpoint, String> {
             )
         })?;
     if !output.status.success() {
-        let detail: String = String::from_utf8_lossy(&output.stderr)
-            .trim()
-            .chars()
-            .take(500)
-            .collect();
+        let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(format!(
             "Stado could not resolve weles-admission: {}",
             if detail.is_empty() {

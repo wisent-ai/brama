@@ -38,11 +38,7 @@ async fn stado(arguments: &[&str]) -> Result<Zeroizing<String>, String> {
         .await
         .map_err(|error| format!("`{}` could not be run: {error}", binary.display()))?;
     if !output.status.success() {
-        let said: String = String::from_utf8_lossy(&output.stderr)
-            .trim()
-            .chars()
-            .take(300)
-            .collect();
+        let said = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(format!(
             "`{} {}` refused: {said}",
             binary.display(),

@@ -93,11 +93,7 @@ async fn read_placement() -> Placement {
     let output = match output {
         Ok(output) if output.status.success() => output,
         Ok(output) => {
-            let said: String = String::from_utf8_lossy(&output.stderr)
-                .trim()
-                .chars()
-                .take(300)
-                .collect();
+            let said = String::from_utf8_lossy(&output.stderr).trim().to_string();
             return Placement {
                 placed_on: None,
                 this_host: None,
