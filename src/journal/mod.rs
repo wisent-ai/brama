@@ -10,14 +10,21 @@ use std::sync::LazyLock;
 
 use serde_json::{json, Value};
 
-fn journal_path() -> PathBuf {
+/// Brama's own state directory on this host: `$BRAMA_STATE_DIR`, or
+/// `$HOME/.brama`. The journal, the agent replay record and the model
+/// catalog copy all live here, never in a shared temporary directory.
+pub(crate) fn state_dir() -> PathBuf {
     if let Ok(dir) = std::env::var("BRAMA_STATE_DIR") {
         if !dir.trim().is_empty() {
-            return PathBuf::from(dir.trim()).join("journal.jsonl");
+            return PathBuf::from(dir.trim());
         }
     }
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".brama").join("journal.jsonl")
+    PathBuf::from(home).join(".brama")
+}
+
+fn journal_path() -> PathBuf {
+    state_dir().join("journal.jsonl")
 }
 
 static PATH: LazyLock<PathBuf> = LazyLock::new(journal_path);

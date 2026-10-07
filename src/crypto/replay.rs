@@ -23,15 +23,7 @@ struct Accepted {
 }
 
 fn record_path() -> PathBuf {
-    let base = std::env::var("BRAMA_STATE_DIR")
-        .ok()
-        .map(|dir| dir.trim().to_string())
-        .filter(|dir| !dir.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".to_string())).join(".brama")
-        });
-    base.join("agent-replay.json")
+    crate::journal::state_dir().join("agent-replay.json")
 }
 
 static GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));

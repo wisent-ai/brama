@@ -9,7 +9,10 @@ use std::path::PathBuf;
 use std::sync::LazyLock;
 
 const DEFAULT_CATALOG_URL: &str = "https://models.dev/api.json";
-const DEFAULT_CACHE_PATH: &str = "/tmp/brama-models-dev-cache.json";
+/// The catalog copy's file name inside Brama's state directory
+/// (`journal::state_dir`); `/tmp` is shared by every program on the host and
+/// is not where a product keeps its state.
+const CACHE_FILE: &str = "models-dev-cache.json";
 
 fn catalog_url() -> Result<reqwest::Url, String> {
     let raw = std::env::var("BRAMA_MODEL_CATALOG_URL")
@@ -62,7 +65,7 @@ pub(super) async fn read_live_catalog() -> Result<String, String> {
 fn cache_path() -> PathBuf {
     std::env::var("BRAMA_MODEL_CATALOG_CACHE")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from(DEFAULT_CACHE_PATH))
+        .unwrap_or_else(|_| crate::journal::state_dir().join(CACHE_FILE))
 }
 
 pub(super) async fn read_cache() -> Result<String, String> {
@@ -73,11 +76,16 @@ pub(super) async fn read_cache() -> Result<String, String> {
 
 pub(super) async fn write_cache(raw: &str) -> Result<(), String> {
     let path = cache_path();
+    if let Some(parent) = path.parent() {
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
+    }
     let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
     tokio::fs::write(&temporary, raw)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| format!("cannot write {}: {error}", temporary.display()))?;
     tokio::fs::rename(&temporary, &path)
         .await
-        .map_err(|error| error.to_string())
+        .map_err(|error| format!("cannot move {} to {}: {error}", temporary.display(), path.display()))
 }
