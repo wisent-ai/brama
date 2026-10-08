@@ -1,5 +1,5 @@
-//! The manual sign-in as Brama Desktop asks for it: two steps, because the
-//! browser is the operator's and the gateway is not on the operator's machine.
+//! The sign-in `by: "hand"` as Brama Desktop asks for it: two steps, because
+//! the browser is the operator's and the gateway is not on the operator's machine.
 //!
 //! `begin` draws the PKCE verifier and hands back the page to open; the
 //! verifier stays here, keyed by a sign-in id, until the operator pastes the
@@ -33,13 +33,6 @@ struct Pending {
 }
 
 static PENDING: LazyLock<Mutex<HashMap<String, Pending>>> = LazyLock::new(Default::default);
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(in crate::core::server) struct BeginRequest {
-    subscription_id: String,
-    reason: String,
-}
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -81,14 +74,14 @@ async fn active_account(
     Ok(entry)
 }
 
-/// `POST /v1/admin/subscription-pool/sign-in-manual`: the page to open.
-pub(in crate::core::server) async fn begin_admin_manual_sign_in(
-    Extension(client_identity): Extension<ModelClientIdentity>,
-    Json(request): Json<BeginRequest>,
+/// `POST /v1/admin/subscription-pool/sign-in` with `"by": "hand"`: the page to
+/// open. The caller has admitted the console and refused a Weles login item.
+pub(in crate::core::server) async fn begin_hand_sign_in(
+    subscription_id: &str,
+    reason: &str,
 ) -> Result<Json<Value>, ApiError> {
-    require_brama_desktop(&client_identity)?;
-    let reason = request.reason.trim();
-    let entry = active_account(&request.subscription_id, reason).await?;
+    let reason = reason.trim();
+    let entry = active_account(subscription_id, reason).await?;
     let authorization = manual::begin(&entry.provider, &entry.id)
         .map_err(|detail| api_error(StatusCode::CONFLICT, &detail))?;
     let sign_in_id = authorization.state.clone();
@@ -111,7 +104,7 @@ pub(in crate::core::server) async fn begin_admin_manual_sign_in(
     })))
 }
 
-/// `POST /v1/admin/subscription-pool/sign-in-manual/:sign_in_id`: the paste.
+/// `POST /v1/admin/subscription-pool/sign-in/:sign_in_id`: the paste.
 pub(in crate::core::server) async fn complete_admin_manual_sign_in(
     Extension(client_identity): Extension<ModelClientIdentity>,
     Path(sign_in_id): Path<String>,

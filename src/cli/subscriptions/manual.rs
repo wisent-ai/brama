@@ -102,8 +102,8 @@ fn paste(url: &str) -> Result<Zeroizing<String>, String> {
     Ok(pasted)
 }
 
-/// Both steps on the gateway: `POST /v1/admin/subscription-pool/sign-in-manual`
-/// for the page, then the paste to `…/sign-in-manual/:sign_in_id`.
+/// Both steps on the gateway: `POST /v1/admin/subscription-pool/sign-in` with
+/// `"by": "hand"` for the page, then the paste to `…/sign-in/:sign_in_id`.
 async fn sign_in_on_gateway(
     provider: &str,
     subscription_id: &str,
@@ -127,9 +127,9 @@ async fn sign_in_on_gateway(
         .map_err(|error| format!("gateway client: {error}"))?;
     let begun = post(
         &client,
-        &format!("{origin}/v1/admin/subscription-pool/sign-in-manual"),
+        &format!("{origin}/v1/admin/subscription-pool/sign-in"),
         bearer.trim(),
-        &json!({"subscription_id": subscription_id, "reason": reason}),
+        &json!({"subscription_id": subscription_id, "reason": reason, "by": "hand"}),
         "begin the sign-in",
     )
     .await?;
@@ -155,7 +155,7 @@ async fn sign_in_on_gateway(
     }
     post(
         &client,
-        &format!("{origin}/v1/admin/subscription-pool/sign-in-manual/{sign_in_id}"),
+        &format!("{origin}/v1/admin/subscription-pool/sign-in/{sign_in_id}"),
         bearer.trim(),
         &json!({"code": code}),
         "complete the sign-in",

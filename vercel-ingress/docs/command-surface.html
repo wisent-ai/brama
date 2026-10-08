@@ -101,16 +101,15 @@ answer by the caller's proven identity, which is where ownership already lives
 same change: their routes, their handlers, their tests, the desktop calls that reached
 them and their paragraphs on this site. A signed agent, an account holder and this
 installation's own console get one answer narrowed by who they are.</p>
-<p><strong>Credential repair (12).</strong>
-<code>brama subscription refresh</code>; <code>brama subscription sign-in</code> (one verb since
-<code>sign-in-manual</code> became its <code>--by hand</code>); <code>brama subscription held</code>; <code>brama subscription import</code>; <code>brama subscription sync</code>;
+<p><strong>Credential repair (11).</strong>
+<code>brama subscription refresh</code>; <code>brama subscription sign-in</code> (one verb
+and one route since <code>sign-in-manual</code> became its <code>--by hand</code> and the
+route's <code>"by": "hand"</code>); <code>brama subscription held</code>; <code>brama subscription import</code>; <code>brama subscription sync</code>;
 <code>POST /v1/account/subscription-sign-in/:subscription_id</code>;
 <code>POST /v1/admin/subscription-sign-in/:agent_id/:subscription_id</code>;
 <code>POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe</code>;
 <code>POST /v1/admin/subscription-pool/sign-in</code>;
-<code>POST /v1/admin/subscription-pool/sign-in-manual</code>;
-<code>POST /v1/admin/subscription-pool/sign-in-manual/:sign_in_id</code>;
-<code>POST /v1/admin/subscription-pool/grant</code>;
+<code>POST /v1/admin/subscription-pool/sign-in/:sign_in_id</code>;
 <code>POST /v1/admin/subscription-pool/refresh</code>. Each of these was added because
 one incident needed one repair, and each requires the operator to already know which
 repair applies. The ledger records why a credential is unusable —

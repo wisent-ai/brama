@@ -31,6 +31,25 @@ pub(in crate::core::server) struct SignInSubscriptionRequest {
     login_item: Option<String>,
 }
 
+/// Who logs the account in, stated by every pool sign-in: Weles drives its
+/// sign-in row, or the operator logs in in their own browser and pastes the
+/// code back to `/v1/admin/subscription-pool/sign-in/:sign_in_id`.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(in crate::core::server) enum SignInMethod {
+    Weles,
+    Hand,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(in crate::core::server) struct PoolSignInRequest {
+    subscription_id: Option<String>,
+    reason: Option<String>,
+    login_item: Option<String>,
+    by: SignInMethod,
+}
+
 pub(in crate::core::server) async fn sign_in_account_subscription(
     Extension(client_identity): Extension<ModelClientIdentity>,
     Path(subscription_id): Path<String>,
@@ -52,17 +71,46 @@ pub(in crate::core::server) async fn sign_in_admin_subscription(
     sign_in_selected_subscription(Some(&agent_id), &subscription_id, request).await
 }
 
+/// `POST /v1/admin/subscription-pool/sign-in`: one operation, two methods.
+/// `"by": "weles"` streams the Weles sign-in like the other two routes;
+/// `"by": "hand"` answers the page to open and the `sign_in_id` the paste
+/// completes. A body without `by` is refused by serde: nothing is assumed.
 pub(in crate::core::server) async fn sign_in_admin_pool_subscription(
     Extension(client_identity): Extension<ModelClientIdentity>,
-    Json(mut request): Json<SignInSubscriptionRequest>,
+    Json(request): Json<PoolSignInRequest>,
 ) -> Result<Response, ApiError> {
     require_brama_desktop(&client_identity)?;
     let subscription_id = request
         .subscription_id
-        .take()
         .filter(|id| !id.trim().is_empty())
         .ok_or_else(|| api_error(StatusCode::BAD_REQUEST, "a subscription id is required"))?;
-    sign_in_selected_subscription(None, &subscription_id, request).await
+    match request.by {
+        SignInMethod::Weles => {
+            let weles = SignInSubscriptionRequest {
+                subscription_id: None,
+                reason: request.reason,
+                login_item: request.login_item,
+            };
+            sign_in_selected_subscription(None, &subscription_id, weles).await
+        }
+        SignInMethod::Hand => {
+            if let Some(login_item) = request.login_item {
+                return Err(api_error(
+                    StatusCode::BAD_REQUEST,
+                    &format!("login_item {login_item} names a Weles sign-in row, and by hand signs in through the operator's own browser; drop it or sign in by weles"),
+                ));
+            }
+            let reason = request.reason.ok_or_else(|| {
+                api_error(
+                    StatusCode::BAD_REQUEST,
+                    "--reason must say why this sign-in is being run",
+                )
+            })?;
+            manual::begin_hand_sign_in(&subscription_id, &reason)
+                .await
+                .map(IntoResponse::into_response)
+        }
+    }
 }
 
 /// A refusal of the request itself is an ordinary error status. An admitted

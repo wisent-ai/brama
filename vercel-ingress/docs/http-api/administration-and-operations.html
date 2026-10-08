@@ -167,23 +167,28 @@ console asked for it; no timer reaches any of them.</p>
   signs in one subscription owned by the administered agent. It requires a nonempty
   <code>reason</code> and accepts <code>login_item</code>.</li>
 <li><strong>POST <code>/v1/admin/subscription-pool/sign-in</code></strong> signs in the
-  selected pooled account through Weles. It requires a nonempty <code>reason</code> and
-  <code>subscription_id</code>, and accepts <code>login_item</code>. Both sign-in paths verify current ownership, refuse a
-  retired or mismapped account, derive the provider from the selected subscription, and
-  return the native <code>signed_in</code> or <code>failed</code> verdict with its actual
-  detail.</li>
-<li><strong>POST <code>/v1/admin/subscription-pool/sign-in-manual</code></strong> begins a
-  manual Claude sign-in for the selected pooled account without Weles: it takes
-  <code>{"subscription_id", "reason"}</code>, verifies the account is active and not
-  retired, draws the PKCE verifier and state, keeps them in the gateway, and answers
-  <code>{"sign_in_id", "provider", "subscription_id", "url"}</code>. The
+  selected pooled account. The body states the method in <code>by</code>, every time:
+  <code>"weles"</code> or <code>"hand"</code>; a body without it is refused, nothing is
+  assumed. Both methods require a nonempty <code>reason</code> and
+  <code>subscription_id</code>.
+  <ul>
+  <li><code>"by": "weles"</code> accepts <code>login_item</code> and signs in through Weles.
+  Both Weles sign-in paths verify current ownership, refuse a retired or mismapped account,
+  derive the provider from the selected subscription, and return the native
+  <code>signed_in</code> or <code>failed</code> verdict with its actual detail.</li>
+  <li><code>"by": "hand"</code> begins a manual Claude sign-in without Weles: it verifies the
+  account is active and not retired, draws the PKCE verifier and state, keeps them in the
+  gateway, and answers <code>{"sign_in_id", "provider", "subscription_id", "url"}</code>. The
   <code>url</code> is the provider's authorize page as <code>omp auth-broker login anthropic</code>
   opens it; the operator opens it in their own browser. Refusals: <code>400</code> for a blank
-  reason or id, <code>404 subscription not found</code>, <code>409</code> for a retired account
-  or a provider without a manual flow (<code>a manual sign-in is defined for claude-code;
-  `codex` is not it</code>). An open sign-in stays open until it is completed or a new one is
-  begun for the same account, which replaces it; nothing expires on a clock.</li>
-<li><strong>POST <code>/v1/admin/subscription-pool/sign-in-manual/:sign_in_id</code></strong>
+  reason or id, or a <code>login_item</code> (<code>login_item &lt;id&gt; names a Weles sign-in row,
+  and by hand signs in through the operator's own browser; drop it or sign in by weles</code>),
+  <code>404 subscription not found</code>, <code>409</code> for a retired account or a provider
+  without a manual flow (<code>a manual sign-in is defined for claude-code; `codex` is not
+  it</code>). An open sign-in stays open until it is completed or a new one is begun for the
+  same account, which replaces it; nothing expires on a clock.</li>
+  </ul></li>
+<li><strong>POST <code>/v1/admin/subscription-pool/sign-in/:sign_in_id</code></strong>
   completes it with <code>{"code"}</code>: the <code>code#state</code> the page showed or the
   whole redirect URL. The gateway checks the state against the one it drew, exchanges the
   code at the provider's token endpoint, stores the grant as the subscription's credential

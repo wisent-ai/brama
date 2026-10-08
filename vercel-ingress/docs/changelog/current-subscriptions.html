@@ -276,7 +276,9 @@ returns the page and keeps the PKCE verifier in the gateway under a
 <code>sign_in_id</code> for 900 seconds; <code>POST /v1/admin/subscription-pool/sign-in-manual/:sign_in_id</code>
 takes the paste and ends in the same exchange, store and proving refresh
 (<a href="/docs/http-api/administration-and-operations#administered-subscriptions">HTTP API</a>).
-Both are <code>brama-desktop</code> only.</p>
+Both are <code>brama-desktop</code> only. They have since become
+<code>POST /v1/admin/subscription-pool/sign-in</code> with <code>"by": "hand"</code> and
+<code>…/sign-in/:sign_in_id</code>.</p>
 <p>A pool whose every Claude subscription holds no credential — Skarbiec items carrying a
 document with no grant — while the only working account is signed into the harness on the
 operator's laptop, and every sign-in Brama offers goes through Weles, which needs a login row

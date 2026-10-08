@@ -41,8 +41,7 @@ use crate::core::server::subscriptions::probe::{
     refresh_admin_subscription_pool,
 };
 use crate::core::server::subscriptions::sign_in::manual::{
-    begin_admin_manual_sign_in, complete_admin_manual_sign_in, disown_admin_grant,
-    reinstate_admin_grant,
+    complete_admin_manual_sign_in, disown_admin_grant, reinstate_admin_grant,
 };
 use crate::core::server::subscriptions::sign_in::{
     sign_in_account_subscription, sign_in_admin_pool_subscription, sign_in_admin_subscription,
@@ -145,11 +144,7 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
             post(sign_in_admin_pool_subscription),
         )
         .route(
-            "/v1/admin/subscription-pool/sign-in-manual",
-            post(begin_admin_manual_sign_in),
-        )
-        .route(
-            "/v1/admin/subscription-pool/sign-in-manual/:sign_in_id",
+            "/v1/admin/subscription-pool/sign-in/:sign_in_id",
             post(complete_admin_manual_sign_in),
         )
         .route(
