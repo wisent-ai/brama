@@ -7,9 +7,6 @@ use axum::http::StatusCode;
 use crate::core::server::admission::identity::ModelClientIdentity;
 use crate::core::server::refusal::{api_error, ApiError};
 
-/// A Weles login item name is at most 160 bytes.
-const MAX_LOGIN_ITEM_BYTES: usize = 160;
-
 pub(in crate::core::server) fn account_agent_id(
     identity: &ModelClientIdentity,
 ) -> Result<String, ApiError> {
@@ -65,14 +62,13 @@ pub(super) fn donation_login_item(value: Option<&str>) -> Result<Option<String>,
     };
     let value = value.trim();
     if value.is_empty()
-        || value.len() > MAX_LOGIN_ITEM_BYTES
         || !value.chars().all(|character| {
             character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
         })
     {
         return Err(api_error(
             StatusCode::BAD_REQUEST,
-            "login_item must contain 1..160 ASCII letters, digits, hyphens, underscores or dots",
+            "login_item must be ASCII letters, digits, hyphens, underscores or dots",
         ));
     }
     Ok(Some(value.to_owned()))

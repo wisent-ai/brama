@@ -25,9 +25,6 @@ use zeroize::{Zeroize, Zeroizing};
 use purpose::{is_lower_hex_64, valid_resource};
 use workload_key::read_owner_key;
 
-/// A workload identifier is at most 128 bytes.
-const MAX_WORKLOAD_ID_BYTES: usize = 128;
-
 // The names the rest of the crate already uses, re-exported one by one so
 // every existing path keeps working and nothing else travels with them.
 pub use purpose::{CapabilityError, Purpose, TARGET};
@@ -35,8 +32,6 @@ pub use secret::Secret;
 
 pub const WIRE_VERSION: &str = "skarbiec.redeem.v1";
 const PROOF_DOMAIN: &[u8] = b"SKARBIEC-WORKLOAD-PROOF\0v1\0";
-const MAX_CONTROL_LINE: usize = 4096;
-const MAX_SECRET_BYTES: usize = 64 * 1024;
 
 /// An opaque broker handle plus the tuple Brama expects it to represent.
 ///
@@ -121,7 +116,7 @@ impl CapabilityClient {
             .ok_or(CapabilityError::InvalidConfiguration)?;
         let workload_id = std::env::var("SKARBIEC_WORKLOAD_ID")
             .ok()
-            .filter(|value| !value.is_empty() && value.len() <= MAX_WORKLOAD_ID_BYTES)
+            .filter(|value| !value.is_empty())
             .ok_or(CapabilityError::InvalidConfiguration)?;
         let key_path = std::env::var_os("SKARBIEC_WORKLOAD_SIGNING_KEY_FILE")
             .map(PathBuf::from)
@@ -135,10 +130,7 @@ impl CapabilityClient {
         workload_id: String,
         signing_key_file: &Path,
     ) -> Result<Self, CapabilityError> {
-        if !socket.is_absolute()
-            || workload_id.is_empty()
-            || workload_id.len() > MAX_WORKLOAD_ID_BYTES
-        {
+        if !socket.is_absolute() || workload_id.is_empty() {
             return Err(CapabilityError::InvalidConfiguration);
         }
         let signing_key = read_owner_key(signing_key_file)?;
@@ -222,7 +214,8 @@ impl CapabilityClient {
         }
         let length = control
             .secret_len
-            .filter(|length| *length > 0 && *length <= MAX_SECRET_BYTES)
+            .and_then(std::num::NonZeroUsize::new)
+            .map(std::num::NonZeroUsize::get)
             .ok_or(CapabilityError::RedemptionDenied)?;
         let mut secret = Zeroizing::new(vec![0_u8; length]);
         if stream.read_exact(&mut secret).is_err() {
@@ -270,7 +263,7 @@ fn read_control_line(stream: &mut UnixStream) -> Result<Vec<u8>, CapabilityError
     loop {
         match stream.read(&mut byte) {
             Ok(1) if byte[0] == b'\n' => return Ok(line),
-            Ok(1) if line.len() < MAX_CONTROL_LINE => line.push(byte[0]),
+            Ok(1) => line.push(byte[0]),
             _ => return Err(CapabilityError::RedemptionDenied),
         }
     }

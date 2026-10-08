@@ -29,7 +29,7 @@ the exchange.</p>
 trusted final-use boundary.</p>
 <h3 id="identity-and-data">Identity and data<a class="headerlink" href="#identity-and-data" title="Link to this section">&para;</a></h3>
 <p>Brama signs <code>skarbiec.redeem.v1</code> with its owner-protected workload
-key. It accepts one bounded control line and at most 64 KiB of secret bytes
+key. It reads one control line and exactly the secret length that line states,
 followed by EOF. Capability IDs are lowercase 64-character hexadecimal handles;
 local tuple validation prevents accidental use at another seam, while the
 broker remains authoritative.</p>
