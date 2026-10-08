@@ -89,6 +89,7 @@ pub(crate) async fn report(args: AliasesArgs) {
         super::print_json(&serde_json::json!({
             "source": report.source,
             "aliases": report.aliases,
+            "last_answers": report.last_answers,
             "unserviceable": unserviceable,
             "subscription_pool": pool.as_ref().map(|pool| serde_json::json!({
                 "live": pool.live,
@@ -118,6 +119,15 @@ pub(crate) async fn report(args: AliasesArgs) {
             );
             if let Some(reason) = &alias.reason {
                 println!("{:<32} {}", "", reason);
+            }
+            if let Some(last) = report.last_answers.get(&alias.alias) {
+                match (&last.refusal, &last.message) {
+                    (Some(code), Some(message)) => {
+                        println!("    last answer since {}: refused {code}: {message}", last.at)
+                    }
+                    (Some(code), None) => println!("    last answer since {}: refused {code}", last.at),
+                    (None, _) => println!("    last answer since {}: answered", last.at),
+                }
             }
         }
         println!(

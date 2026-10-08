@@ -19,16 +19,32 @@ pub struct AliasReportSource {
     pub routes_file: Option<PathBuf>,
 }
 
-/// Every declared alias with its state, plus the sources the answer came from.
+/// Every declared alias with its state, plus the sources the answer came from
+/// and the newest answer each alias got from what it routes to.
 #[derive(Clone, Debug, Serialize)]
 pub struct AliasReport {
     pub source: AliasReportSource,
     pub aliases: Vec<AliasDiagnosis>,
+    /// The gateway's record of each alias's newest answer: a route that is
+    /// declared and credentialed can still be refused by its provider.
+    pub last_answers: std::collections::BTreeMap<String, crate::journal::answers::LastAnswer>,
 }
 
 impl AliasReport {
+    /// Aliases that cannot be served: by declaration or credential, or because
+    /// the newest answer their route gave was a refusal.
     pub fn unserviceable(&self) -> usize {
-        self.aliases.iter().filter(|alias| !alias.serving()).count()
+        self.aliases
+            .iter()
+            .filter(|alias| !alias.serving() || self.refused(&alias.alias))
+            .count()
+    }
+
+    /// Whether `alias`'s newest recorded answer was a refusal.
+    pub fn refused(&self, alias: &str) -> bool {
+        self.last_answers
+            .get(alias)
+            .is_some_and(|last| !last.answered)
     }
 }
 
@@ -55,6 +71,7 @@ pub fn alias_report() -> Result<AliasReport, std::io::Error> {
     Ok(AliasReport {
         source,
         aliases: diagnoses,
+        last_answers: crate::journal::answers::last_answers()?,
     })
 }
 

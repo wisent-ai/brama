@@ -10,6 +10,8 @@ use std::sync::LazyLock;
 
 use serde_json::{json, Value};
 
+pub mod answers;
+
 /// Brama's own state directory on this host: `$BRAMA_STATE_DIR`, or
 /// `$HOME/.brama`. The journal, the agent replay record and the model
 /// catalog copy all live here, never in a shared temporary directory.

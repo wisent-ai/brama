@@ -40,6 +40,10 @@ pub(super) fn tally_and_log_buffered(
         TOTAL_FAILURES.fetch_add(1, Ordering::Relaxed);
     }
     let failure_contract = response_contract(resp);
+    crate::journal::answers::record(
+        requested_model,
+        failure_contract.map(|contract| (contract.code, resp.error.as_deref())),
+    );
     // `error_code` below is Brama's own contract code, unchanged, because log
     // pipelines read it. `envelope` is the fleet's reading of the same failure.
     let failure_envelope = resp
@@ -102,6 +106,7 @@ pub(super) fn log_stream_commit(
 ) {
     TOTAL_REQUESTS.fetch_add(1, Ordering::Relaxed);
     TOTAL_PROVIDER_ATTEMPTS.fetch_add(u64::from(routed.attempts), Ordering::Relaxed);
+    crate::journal::answers::record(requested_model, None);
     info!(
         event = "routing_complete",
         request_id = %meta.request_id,
