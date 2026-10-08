@@ -20,11 +20,14 @@
       <article class="doc"><h1 id="brama-routes-set"><code>brama routes set</code><a class="headerlink" href="#brama-routes-set" title="Link to this section">&para;</a></h1>
 <p>Declare where one alias points. The destination is validated against what that alias promises and committed to the route registry through the same staging file, validation and rename <code>PUT /v1/admin/routes</code> performs, so the running gateway serves it on the next request without a restart.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama routes set &lt;ALIAS&gt; &lt;DESTINATION&gt; [--file &lt;FILE&gt;] [--json]</code></pre>
+<pre><code class="language-console">brama routes set &lt;ALIAS&gt; &lt;DESTINATION&gt; [--file &lt;FILE&gt; | --gateway &lt;ORIGIN&gt; | --gateway-consumer &lt;NAME&gt;] [--bearer-role &lt;ROLE&gt;] [--json]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>&lt;ALIAS&gt;</code></td><td>required</td><td>The name a caller asks for, such as <code>decision-model</code>. Lowercase letters, digits, <code>-</code>, <code>_</code>, <code>.</code> and <code>/</code>.</td></tr>
 <tr><td><code>&lt;DESTINATION&gt;</code></td><td>required</td><td>A canonical <code>provider/model</code> route, a deployment name from the registry, or <code>best</code> to delegate to subscription dispatch.</td></tr>
 <tr><td><code>--file &lt;FILE&gt;</code></td><td>optional; <code>BRAMA_INFERENCE_ROUTES_FILE</code>, then <code>~/.config/brama/inference-routes.json</code></td><td>The registry to write. The same destination the service, <code>brama adopt</code> and <code>PUT /v1/admin/routes</code> use.</td></tr>
+<tr><td><code>--gateway-consumer &lt;NAME&gt;</code></td><td>optional; not with <code>--file</code></td><td>Send the change to the gateway that serves the aliases, found through Stado’s service directory as this consumer. It goes through <code>PUT /v1/admin/routes</code>, so the serving process validates the route against what it can serve and writes its own registry. Use it from any machine other than the gateway’s host: a local write there lands in a file no serving process reads.</td></tr>
+<tr><td><code>--gateway &lt;ORIGIN&gt;</code></td><td>optional; not with <code>--file</code> or <code>--gateway-consumer</code></td><td>The same, with the gateway’s origin named directly.</td></tr>
+<tr><td><code>--bearer-role &lt;ROLE&gt;</code></td><td>optional with a gateway</td><td>The vault role whose item’s <code>token</code> field is the console’s bearer; without it the bearer is read from stdin.</td></tr>
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print one object instead of human-readable lines.</td></tr>
 </tbody></table>
 <h2 id="why-it-exists">Why it exists<a class="headerlink" href="#why-it-exists" title="Link to this section">&para;</a></h2>
@@ -38,12 +41,15 @@ registry: ~/.config/brama/inference-routes.json
 change: decision-model -&gt; openrouter/openai/gpt-4o-mini
 best-decision-model              best
 decision-model                   openrouter/openai/gpt-4o-mini</code></pre>
-<p>The report names the registry, the change it committed, how many routes the document now holds, and one line per alias with the single destination behind it. With <code>--json</code> the answer is <code>{&quot;registry&quot;, &quot;change&quot;, &quot;document&quot;}</code>, whose <code>document</code> is the registry as it now stands on disk. Exit code is 0 on success.</p>
+<p>The report names the registry, the change it committed, how many routes the document now holds, and one line per alias with the single destination behind it. With <code>--json</code> the answer is <code>{&quot;registry&quot;, &quot;change&quot;, &quot;document&quot;}</code>, whose <code>document</code> is the registry as it now stands on disk. With a gateway named the report starts with <code>gateway: &lt;origin&gt;</code> and lists the routes the gateway answered; <code>--json</code> gives <code>{&quot;gateway&quot;, &quot;change&quot;, &quot;routes&quot;}</code>. Exit code is 0 on success.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <table><thead><tr><th>Sentence</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>route alias `&lt;alias&gt;` is invalid: an alias is lowercase letters, digits, `-`, `_`, `.` and `/`</code></td><td>The name is not one a caller could present.</td></tr>
 <tr><td><code>alias `decision-model` cannot carry `best`: it is not a shape this alias promises</code></td><td>The destination cannot keep the promise the alias name makes.</td></tr>
 <tr><td><code>route update error: &lt;reason&gt;</code></td><td>The registry could not be read or replaced: the file's own sentence about ownership, mode, a symlink, a repeated destination, or a deployment with no safe endpoint. The file is left as it was.</td></tr>
+<tr><td><code>the gateway refused to point &lt;alias&gt; at &lt;destination&gt;: &lt;status&gt;: &lt;its whole answer&gt;</code></td><td>The serving gateway refused the change: <code>invalid route alias</code>, <code>route is unsupported or unavailable</code> (it cannot serve that destination), <code>runtime route registry is not configured</code>, or a bearer that is not the console’s.</td></tr>
+<tr><td><code>the gateway at &lt;url&gt; did not answer: &lt;cause&gt;</code> / <code>…is not JSON…</code></td><td>The gateway could not be reached or answered something else.</td></tr>
+<tr><td><code>--bearer-role is for a gateway; name one</code></td><td>A bearer role was given without <code>--gateway</code> or <code>--gateway-consumer</code>.</td></tr>
 </tbody></table>
 <p>Every refusal exits 1 and prints on standard error.</p>
 <p>See <a href="/docs/cli/routes/rm"><code>brama routes rm</code></a>, <a href="/docs/configuration/route-registry">the route registry</a>, or <a href="/docs/cli">the CLI tree</a>.</p></article>

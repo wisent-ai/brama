@@ -60,8 +60,8 @@ from the installed build.</p>
 <li><a href="/docs/cli/maintain"><code>brama maintain (--gateway &lt;URL&gt; | --gateway-consumer &lt;CONSUMER&gt;) [--bearer-role &lt;ROLE&gt;] [--json]</code></a> — ask the serving gateway for one maintenance pass: aged plan usage reads, grant renewal and a fresh readiness reading; exits 1 when any step failed.</li>
 <li><a href="/docs/cli/routes/migrate"><code>brama routes &lt;COMMAND&gt;</code></a> — act on this gateway's inference-route registry.
   <ul>
-  <li><a href="/docs/cli/routes/set"><code>brama routes set &lt;ALIAS&gt; &lt;DESTINATION&gt; [--file &lt;FILE&gt;] [--json]</code></a> — declare where one alias points, validated against the shape that alias promises and committed with the same atomic owner-only replacement <code>PUT /v1/admin/routes</code> performs.</li>
-  <li><a href="/docs/cli/routes/rm"><code>brama routes rm &lt;ALIAS&gt; [--file &lt;FILE&gt;] [--json]</code></a> — remove one alias from the registry through the same write.</li>
+  <li><a href="/docs/cli/routes/set"><code>brama routes set &lt;ALIAS&gt; &lt;DESTINATION&gt; [--file &lt;FILE&gt; | --gateway &lt;ORIGIN&gt; | --gateway-consumer &lt;NAME&gt;] [--bearer-role &lt;ROLE&gt;] [--json]</code></a> — declare where one alias points, validated against the shape that alias promises and committed with the same atomic owner-only replacement <code>PUT /v1/admin/routes</code> performs; with a gateway named, the serving gateway takes the change through that route.</li>
+  <li><a href="/docs/cli/routes/rm"><code>brama routes rm &lt;ALIAS&gt; [--file &lt;FILE&gt; | --gateway &lt;ORIGIN&gt; | --gateway-consumer &lt;NAME&gt;] [--bearer-role &lt;ROLE&gt;] [--json]</code></a> — remove one alias from the registry through the same write, here or on the gateway named.</li>
   <li><a href="/docs/cli/routes/migrate"><code>brama routes migrate [--file &lt;FILE&gt;] [--json]</code></a> — rewrite the route registry into the current document shape: keep the known top-level fields, validate, and commit with the same atomic owner-only replacement every other registry write uses. Idempotent.</li>
   </ul>
 </li>

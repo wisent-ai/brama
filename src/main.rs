@@ -150,7 +150,7 @@ async fn main() {
         Commands::Speak(args) => cli::media::speak(args).await,
         Commands::Music(args) => cli::media::music(args).await,
         Commands::Voices { command } => cli::media::voices(command).await,
-        Commands::Routes { command } => cli::aliases::routes(command),
+        Commands::Routes { command } => cli::aliases::routes(command).await,
         Commands::Subscription { command } => cli::subscriptions::credentials::run(command).await,
         Commands::CollectTaskQuality(args) => cli::diagnostics::collect_task_quality(args).await,
         Commands::Workload { command } => cli::workload::run(command),

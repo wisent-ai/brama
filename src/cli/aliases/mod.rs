@@ -1,10 +1,16 @@
 //! `brama aliases` and `brama routes`: what this gateway declares it can
-//! serve, and the route registry those declarations are read from.
+//! serve, and the route registry those declarations are read from, here or
+//! on the gateway that serves them.
+
+mod pool;
+mod remote;
 
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
 use serde_json::Value;
+
+use pool::pool_count;
 
 #[derive(Args)]
 pub(crate) struct AliasesArgs {
@@ -27,7 +33,7 @@ pub(crate) enum RoutesCommand {
         #[arg(long, default_value_t = false)]
         json: bool,
     },
-    /// Declare where one alias points, in this gateway's route registry
+    /// Declare where one alias points, in this gateway's route registry or on the gateway named
     Set {
         /// The alias a caller names, such as `decision-model`
         alias: String,
@@ -37,50 +43,25 @@ pub(crate) enum RoutesCommand {
         /// Route registry to write; defaults to BRAMA_INFERENCE_ROUTES_FILE or ~/.config/brama/inference-routes.json
         #[arg(long, value_name = "FILE")]
         file: Option<PathBuf>,
+        #[command(flatten)]
+        gateway: remote::GatewayArgs,
         /// Print the committed registry as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,
     },
-    /// Remove one alias from this gateway's route registry
+    /// Remove one alias from this gateway's route registry or from the gateway named
     Rm {
         /// The alias to remove
         alias: String,
         /// Route registry to write; defaults to BRAMA_INFERENCE_ROUTES_FILE or ~/.config/brama/inference-routes.json
         #[arg(long, value_name = "FILE")]
         file: Option<PathBuf>,
+        #[command(flatten)]
+        gateway: remote::GatewayArgs,
         /// Print the committed registry as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,
     },
-}
-
-/// What the pool holds, for the aliases this gateway cannot check on its own.
-///
-/// `serving` for a subscription selector means the selector is declared. It
-/// says nothing about a credential: `best serving best` can be printed while
-/// every request for `best` is refused with
-/// `subscription_reauthorization_required`, because the pool holds no live
-/// member. The pool's own count stands beside it.
-struct PoolCount {
-    live: usize,
-    members: usize,
-}
-
-async fn pool_count() -> PoolCount {
-    let scope = brama::subscription_dispatch::pool::PoolScope::Deployment;
-    let report = brama::subscription_dispatch::pool::report(&scope).await;
-    let rows: &[Value] = report
-        .get("subscriptions")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default();
-    PoolCount {
-        live: rows
-            .iter()
-            .filter(|row| row.get("state").and_then(Value::as_str) == Some("live"))
-            .count(),
-        members: rows.len(),
-    }
 }
 
 pub(crate) async fn report(args: AliasesArgs) {
@@ -167,16 +148,32 @@ pub(crate) async fn report(args: AliasesArgs) {
     }
 }
 
-pub(crate) fn routes(command: RoutesCommand) {
-    match command {
-        RoutesCommand::Migrate { file, json } => migrate(file, json),
+pub(crate) async fn routes(command: RoutesCommand) {
+    let applied = match command {
+        RoutesCommand::Migrate { file, json } => return migrate(file, json),
         RoutesCommand::Set {
             alias,
             destination,
             file,
+            gateway,
             json,
-        } => set(alias, destination, file, json),
-        RoutesCommand::Rm { alias, file, json } => remove(alias, file, json),
+        } => match gateway.destination() {
+            Some(target) => remote::apply(target, remote::Change::Set { alias, destination }, json).await,
+            None => return set(alias, destination, file, json),
+        },
+        RoutesCommand::Rm {
+            alias,
+            file,
+            gateway,
+            json,
+        } => match gateway.destination() {
+            Some(target) => remote::apply(target, remote::Change::Remove { alias }, json).await,
+            None => return remove(alias, file, json),
+        },
+    };
+    if let Err(error) = applied {
+        eprintln!("{error}");
+        std::process::exit(1);
     }
 }
 
