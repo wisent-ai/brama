@@ -82,7 +82,8 @@ pub(crate) async fn sign_in(
     let request = manual::begin(provider, subscription_id)?;
     let pasted = paste(&request.url)?;
     let verdict = manual::complete(request, &pasted, reason).await?;
-    serde_json::to_value(&verdict).map_err(|error| format!("the verdict did not serialize: {error}"))
+    serde_json::to_value(&verdict)
+        .map_err(|error| format!("the verdict did not serialize: {error}"))
 }
 
 /// Print the page to open and read the one pasted line.
@@ -179,12 +180,13 @@ async fn post(
         .await
         .map_err(|error| format!("the gateway at {url} did not answer: {error}"))?;
     let status = response.status();
-    let answer: Value = response
-        .json()
-        .await
-        .map_err(|error| format!("the gateway's answer to {action} ({status}) is not JSON: {error}"))?;
+    let answer: Value = response.json().await.map_err(|error| {
+        format!("the gateway's answer to {action} ({status}) is not JSON: {error}")
+    })?;
     if !status.is_success() {
-        return Err(format!("the gateway refused to {action}: {status}: {answer}"));
+        return Err(format!(
+            "the gateway refused to {action}: {status}: {answer}"
+        ));
     }
     Ok(answer)
 }

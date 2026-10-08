@@ -31,7 +31,8 @@ impl GatewayArgs {
     /// file. A bearer role alone is a destination too, so its refusal (no
     /// gateway named) is said instead of the role being ignored.
     pub(super) fn destination(self) -> Option<Destination> {
-        let named = self.gateway.is_some() || self.gateway_consumer.is_some() || self.bearer_role.is_some();
+        let named =
+            self.gateway.is_some() || self.gateway_consumer.is_some() || self.bearer_role.is_some();
         named.then_some(Destination {
             gateway: self.gateway,
             gateway_consumer: self.gateway_consumer,
@@ -49,7 +50,11 @@ pub(super) enum Change {
 /// Send `change` to the gateway `destination` names and print its answer the
 /// way the local commands print theirs, or say why it was refused: the
 /// gateway's status and whole answer.
-pub(super) async fn apply(destination: Destination, change: Change, json: bool) -> Result<(), String> {
+pub(super) async fn apply(
+    destination: Destination,
+    change: Change,
+    json: bool,
+) -> Result<(), String> {
     let (origin, answer) = send(destination, &change).await?;
     let line = match &change {
         Change::Set { alias, destination } => format!("{alias} -> {destination}"),
@@ -65,7 +70,12 @@ pub(super) async fn apply(destination: Destination, change: Change, json: bool) 
     }
     println!("gateway: {origin}");
     println!("change: {line}");
-    for (alias, destination) in answer.get("routes").and_then(Value::as_object).into_iter().flatten() {
+    for (alias, destination) in answer
+        .get("routes")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+    {
         match destination.as_str() {
             Some(text) => println!("{alias:<32} {text}"),
             None => println!("{alias:<32} {destination}"),
@@ -99,12 +109,13 @@ async fn send(destination: Destination, change: &Change) -> Result<(String, Valu
         .await
         .map_err(|error| format!("the gateway at {url} did not answer: {error}"))?;
     let status = response.status();
-    let answer: Value = response
-        .json()
-        .await
-        .map_err(|error| format!("the gateway's answer to {action} ({status}) is not JSON: {error}"))?;
+    let answer: Value = response.json().await.map_err(|error| {
+        format!("the gateway's answer to {action} ({status}) is not JSON: {error}")
+    })?;
     if !status.is_success() {
-        return Err(format!("the gateway refused to {action}: {status}: {answer}"));
+        return Err(format!(
+            "the gateway refused to {action}: {status}: {answer}"
+        ));
     }
     Ok((origin, answer))
 }

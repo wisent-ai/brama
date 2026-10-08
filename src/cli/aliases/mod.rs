@@ -158,7 +158,9 @@ pub(crate) async fn routes(command: RoutesCommand) {
             gateway,
             json,
         } => match gateway.destination() {
-            Some(target) => remote::apply(target, remote::Change::Set { alias, destination }, json).await,
+            Some(target) => {
+                remote::apply(target, remote::Change::Set { alias, destination }, json).await
+            }
             None => return set(alias, destination, file, json),
         },
         RoutesCommand::Rm {
