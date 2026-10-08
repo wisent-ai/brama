@@ -234,6 +234,7 @@ pub(super) async fn route_model_call(
         selected_model,
         started,
     };
+    let admission = crate::journal::concurrency::admit(requested_model);
     let dispatched = dispatch::dispatch(
         DispatchPlan {
             client_identity,
@@ -252,7 +253,25 @@ pub(super) async fn route_model_call(
         &meta.selected_model,
     )
     .await;
+    admission.settle(settled(&dispatched));
     Ok((dispatched, meta))
+}
+
+/// How a dispatched call ended, as the concurrency measurement reads it: a
+/// provider's rate limit or no free pool credential is a capacity refusal.
+fn settled(dispatched: &DispatchedCall) -> crate::journal::concurrency::Settled {
+    use crate::journal::concurrency::Settled;
+    use crate::types::{GatewayRefusal, ProviderRefusal};
+    match dispatched {
+        DispatchedCall::Committed(_) => Settled::Answered,
+        DispatchedCall::Buffered(resp) => match crate::core::server::refusal::classed::failure_class(resp) {
+            None => Settled::Answered,
+            Some(ProviderRefusal::RateLimited | ProviderRefusal::Gateway(GatewayRefusal::SubscriptionUnavailable)) => {
+                Settled::RefusedForCapacity
+            }
+            Some(_) => Settled::Other,
+        },
+    }
 }
 
 fn uuid_v4() -> String {

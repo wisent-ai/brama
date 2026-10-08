@@ -28,6 +28,7 @@ pub(in crate::core::server) async fn list_aliases(
     Extension(aliases): Extension<ModelAliases>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let last_answers = crate::journal::answers::current();
+    let concurrency = crate::journal::concurrency::current();
     let report = aliases
         .declared()
         .iter()
@@ -41,6 +42,7 @@ pub(in crate::core::server) async fn list_aliases(
                 "required": MODEL_ALIASES.contains(&alias.as_str()),
                 "authorized": client_identity.authorizes_model(alias),
                 "last_answer": last_answers.get(alias.as_str()),
+                "concurrency": concurrency.get(alias.as_str()),
             })
         })
         .collect::<Vec<_>>();

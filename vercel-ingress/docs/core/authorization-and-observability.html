@@ -69,7 +69,7 @@ document reads like this:</p>
 document, keeps only the three known top-level fields, validates the result and
 commits it with the same atomic owner-only replacement the admin endpoints use.
 It is idempotent and prints the document it committed. <code>GET /v1/aliases</code> then
-reports each row as <code>{&quot;alias&quot;,&quot;state&quot;,&quot;route&quot;,&quot;reason&quot;,&quot;required&quot;,&quot;authorized&quot;,&quot;last_answer&quot;}</code>,
+reports each row as <code>{&quot;alias&quot;,&quot;state&quot;,&quot;route&quot;,&quot;reason&quot;,&quot;required&quot;,&quot;authorized&quot;,&quot;last_answer&quot;,&quot;concurrency&quot;}</code>,
 and <code>brama aliases</code> prints the alias, its state and its route.</p>
 <h2 id="authorization-and-secrets">Authorization and secrets<a class="headerlink" href="#authorization-and-secrets" title="Link to this section">&para;</a></h2>
 <p>Authorization is enforced at ingress and mutation boundaries. One valid bearer
