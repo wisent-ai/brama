@@ -119,9 +119,22 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             provider,
             subscription_id,
             reason,
+            gateway,
+            gateway_consumer,
+            bearer_role,
             json,
         } => manual::finish(
-            manual::sign_in(&provider, &subscription_id, &reason).await,
+            manual::sign_in(
+                &provider,
+                &subscription_id,
+                &reason,
+                remote::Destination {
+                    gateway,
+                    gateway_consumer,
+                    bearer_role,
+                },
+            )
+            .await,
             json,
         ),
         SubscriptionCommand::Attribute {

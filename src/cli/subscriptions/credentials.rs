@@ -73,8 +73,11 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long, default_value_t = false)]
         json: bool,
     },
-    /// Sign one account in by hand: open the printed URL in your own browser, log in, and paste the code it shows on stdin; a provider without a manual flow is refused by name
-    #[command(name = "sign-in-manual")]
+    /// Sign one account in by hand: open the printed URL in your own browser, log in, and paste the code it shows on stdin; here, or on the gateway that serves the pool so the grant lands in its vault; a provider without a manual flow is refused by name
+    #[command(
+        name = "sign-in-manual",
+        group(ArgGroup::new("destination").args(["gateway", "gateway_consumer"]).requires("bearer_role"))
+    )]
     SignInManual {
         /// The provider whose account should be signed in; one without a manual flow is refused by name
         provider: String,
@@ -84,6 +87,15 @@ pub(crate) enum SubscriptionCommand {
         /// Why this sign-in is being run; recorded in the journal beside the verdict
         #[arg(long)]
         reason: String,
+        /// The gateway that serves the pool: it draws the page, takes the paste and stores the grant in its own vault
+        #[arg(long)]
+        gateway: Option<String>,
+        /// Resolve the gateway through Stado's service directory as this consumer
+        #[arg(long)]
+        gateway_consumer: Option<String>,
+        /// Read the console's bearer from the vault item playing this role (its `token` field); required with a gateway, since stdin carries the pasted code
+        #[arg(long, value_name = "ROLE", requires = "destination")]
+        bearer_role: Option<String>,
         /// Print the verdict as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,
