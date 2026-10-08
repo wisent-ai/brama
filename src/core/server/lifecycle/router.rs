@@ -53,14 +53,34 @@ use crate::core::server::telemetry::stats::get_stats;
 use crate::core::server::typed::{embeddings, moderations};
 
 pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Router {
+    // No route that carries a prompt keeps axum's built-in 2 MB body limit, a
+    // size nobody stated: a long prompt is the routed model's to accept or to
+    // refuse as context_length_exceeded, which reaches the caller classed and
+    // naming the model. Kept, the limit answered a long judge request 413
+    // 'Failed to buffer the request body' from the gateway itself (72169b4c).
     let protected = Router::new()
-        .route("/v1/chat/completions", post(chat_completions))
+        .route(
+            "/v1/chat/completions",
+            post(chat_completions).layer(DefaultBodyLimit::disable()),
+        )
         // The two first-party formats callers already speak. Same routing
         // decision, same identities, same bounded attempts as the line above.
-        .route("/v1/messages", post(anthropic_messages))
-        .route("/v1/responses", post(openai_responses))
-        .route("/v1/embeddings", post(embeddings))
-        .route("/v1/moderations", post(moderations))
+        .route(
+            "/v1/messages",
+            post(anthropic_messages).layer(DefaultBodyLimit::disable()),
+        )
+        .route(
+            "/v1/responses",
+            post(openai_responses).layer(DefaultBodyLimit::disable()),
+        )
+        .route(
+            "/v1/embeddings",
+            post(embeddings).layer(DefaultBodyLimit::disable()),
+        )
+        .route(
+            "/v1/moderations",
+            post(moderations).layer(DefaultBodyLimit::disable()),
+        )
         // The two generation shapes that are not text. An image is one
         // answer; a video is a job, read back from the third route with the
         // same model name that started it.
@@ -87,7 +107,10 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
         .route("/v1/videos/:video_id", get(video_status))
         // The one endpoint that answers instead of generating: typed
         // questions in, one typed answer each out.
-        .route("/v1/decisions", post(decisions))
+        .route(
+            "/v1/decisions",
+            post(decisions).layer(DefaultBodyLimit::disable()),
+        )
         .route("/v1/models", get(list_models))
         .route("/v1/aliases", get(list_aliases))
         .route("/v1/categories", get(list_categories))

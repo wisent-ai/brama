@@ -73,10 +73,16 @@ is refused instead of being ignored — see
 <a href="/docs/http-api/discovery-and-subscriptions">discovery and subscriptions</a> for the
 two cases, <code>agent_id</code> on a pool write and any field at all on plan usage.</p>
 <h2 id="shared-request-limits">Shared request limits<a class="headerlink" href="#shared-request-limits" title="Link to this section">&para;</a></h2>
-<p>Two limits hold for every request the gateway admits.</p>
+<p>Three limits hold for every request the gateway admits.</p>
 <ul>
 <li>A request has no deadline of its own: its one attempt runs until the provider answers
   or refuses, and that answer or refusal is what the caller receives.</li>
+<li>A request has no size of its own: the routes that carry a prompt or media —
+  <code>/v1/chat/completions</code>, <code>/v1/messages</code>, <code>/v1/responses</code>,
+  <code>/v1/decisions</code>, <code>/v1/embeddings</code>, <code>/v1/moderations</code> and
+  the image and voice routes — read the whole body, and a prompt longer than the routed
+  model accepts is refused by the provider as <code>context_length_exceeded</code>, naming
+  the model.</li>
 <li>Unknown request fields are refused with the deserializer's own sentence, naming the
   field it did not expect and listing the fields it did. The bodies on every page in this
   family are therefore exhaustive.</li>
