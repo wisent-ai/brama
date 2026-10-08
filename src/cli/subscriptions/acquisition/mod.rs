@@ -137,6 +137,9 @@ pub(crate) async fn hand_over(provider: &str, harness: Harness, json: bool) {
     if json {
         crate::cli::print_json(&verdict);
     } else {
+        if let Some(detail) = verdict["detail"].as_str() {
+            println!("{detail}");
+        }
         for row in verdict["accounts"].as_array().into_iter().flatten() {
             println!("{} {} {}", row["result"], row["account"], row["detail"]);
         }
