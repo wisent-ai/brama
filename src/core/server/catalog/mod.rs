@@ -54,10 +54,14 @@ pub(in crate::core::server) async fn list_aliases(
             entry["state"] != ALIAS_SERVING || entry["last_answer"]["answered"] == Value::Bool(false)
         })
         .count();
+    // A selector such as `best` is asked for by name without being a declared
+    // alias, so every name the gateway has measured is published beside the
+    // rows.
     Ok(Json(json!({
         "object": "list",
         "aliases": report,
         "unserviceable": unserviceable,
+        "measured_concurrency": concurrency,
     })))
 }
 

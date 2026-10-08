@@ -83,7 +83,9 @@ answered, lowered by a capacity refusal (<code>provider_rate_limited</code> or
 the alias has answered once; <code>refused_beside</code> is that count at the newest capacity
 refusal, absent when there was none; <code>in_flight</code> is the calls unanswered now. A
 consumer that fans calls out to one alias reads its allowance here instead of being given a
-worker count.
+worker count. The listing's top-level <code>measured_concurrency</code> carries the same record
+for every name the gateway has been asked for, keyed by that name, including selectors such as
+<code>best</code> that are not declared aliases.
 <code>last_answer</code> is the newest answer the alias got from what it routes to, or
 <code>null</code> before its first request: <code>{"answered", "refusal", "message", "at"}</code>,
 where <code>refusal</code> is the contract code (<code>provider_quota_exhausted</code>, …) and
