@@ -614,8 +614,8 @@ zero usage; read each window's observation and reset times.</p>
   because its first call writes the reading that corrects the placement.</li>
 <li><strong>One agent, one account, for the length of a window:</strong> the credential that
   served an agent is remembered per provider and tried first on that agent's
-  next request, until the tightest window it reported resets (five hours when
-  the provider named no reset, capped at a day). Two things depend on it: a
+  next request, until the tightest window it reported resets, or, when the
+  provider named no reset, until another account serves the agent. Two things depend on it: a
   provider's prompt cache lives behind one account, so scattering an agent's
   turns across a pool throws the cache away, and one conversation's spend
   belongs in one account's ledger rather than smeared across every account the

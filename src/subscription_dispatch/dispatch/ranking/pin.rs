@@ -22,18 +22,11 @@ use crate::subscription_dispatch::usage;
 /// and a restart simply shuffles once.
 struct Pin {
     credential_id: String,
-    expires_at_ms: i64,
+    /// The tightest window's reset the provider reported; `None` when no
+    /// served reading names one, and then the pin holds until another
+    /// account serves this agent, which re-pins it there.
+    expires_at_ms: Option<i64>,
 }
-
-/// How long a pin survives when the credential's own windows name no reset.
-///
-/// Five hours matches the shortest plan window any provider on this fleet
-/// publishes, so the stand-in cannot outlive the thing it approximates. The
-/// cap exists because a provider's reset instant is trusted only within a
-/// day: past that, an error in one header would hold an agent on one account
-/// for longer than any real window lasts.
-const DEFAULT_PIN_MS: i64 = 5 * 60 * 60 * 1_000;
-const MAX_PIN_MS: i64 = 24 * 60 * 60 * 1_000;
 
 static PINS: LazyLock<Mutex<HashMap<(String, String), Pin>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -51,7 +44,7 @@ fn pinned_credential(agent_id: &str, provider: &str) -> Option<String> {
     let key = (agent_id.to_string(), provider.to_string());
     let mut pins = PINS.lock().ok()?;
     let pin = pins.get(&key)?;
-    if pin.expires_at_ms <= now_ms() {
+    if pin.expires_at_ms.is_some_and(|expires_at_ms| expires_at_ms <= now_ms()) {
         pins.remove(&key);
         return None;
     }
@@ -59,16 +52,13 @@ fn pinned_credential(agent_id: &str, provider: &str) -> Option<String> {
 }
 
 /// Pin this agent to the credential that just served it, until that
-/// credential's tightest window says otherwise.
+/// credential's tightest window resets as the provider reported it.
 pub(in crate::subscription_dispatch::dispatch) fn pin_credential(
     agent_id: &str,
     provider: &str,
     credential_id: &str,
 ) {
-    let now = now_ms();
-    let expires_at_ms = usage::next_reset_ms(credential_id)
-        .unwrap_or_else(|| now.saturating_add(DEFAULT_PIN_MS))
-        .min(now.saturating_add(MAX_PIN_MS));
+    let expires_at_ms = usage::next_reset_ms(credential_id);
     if let Ok(mut pins) = PINS.lock() {
         pins.insert(
             (agent_id.to_string(), provider.to_string()),

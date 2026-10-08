@@ -118,9 +118,8 @@ pub fn plan_windows(usage: Option<&SubscriptionUsage>) -> PlanWindows {
 /// The earliest future reset instant across this subscription's served windows.
 ///
 /// A pin on this credential should die with its tightest window, and this is
-/// that window's end. `None` means no served reading names a future reset, so
-/// the caller falls back to its own default rather than treating the pin as
-/// immortal.
+/// that window's end. `None` means no served reading names a future reset;
+/// the pin then holds until another account serves the agent.
 pub fn next_reset_ms(subscription_id: &str) -> Option<i64> {
     let entry = usage_for(subscription_id)?;
     let windows = plan_windows(Some(&entry));
