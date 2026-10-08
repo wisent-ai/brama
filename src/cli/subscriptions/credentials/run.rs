@@ -8,7 +8,7 @@ use super::super::text;
 use super::super::verdicts::enrolment::enrol_authenticator;
 use super::super::verdicts::{print_refresh, print_sign_in};
 use super::super::{manual, membership, remote};
-use super::{SignInBy, SubscriptionCommand};
+use super::{AuthenticatorCommand, SignInBy, SubscriptionCommand};
 
 pub(crate) async fn run(command: SubscriptionCommand) {
     match command {
@@ -109,12 +109,15 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             }
             sign_in_through_weles(provider, login_item, subscription_id, reason, json).await
         }
-        SubscriptionCommand::EnrolAuthenticator {
-            provider,
-            subscription_id,
-            reason,
-            login_item,
-            json,
+        SubscriptionCommand::Authenticator {
+            command:
+                AuthenticatorCommand::Enrol {
+                    provider,
+                    subscription_id,
+                    reason,
+                    login_item,
+                    json,
+                },
         } => {
             enrol_authenticator(
                 &provider,
@@ -124,6 +127,11 @@ pub(crate) async fn run(command: SubscriptionCommand) {
                 json,
             )
             .await
+        }
+        SubscriptionCommand::Authenticator {
+            command: AuthenticatorCommand::List { provider, json },
+        } => {
+            membership::second_factor(provider.as_deref(), json).await;
         }
         SubscriptionCommand::Attribute {
             provider,
@@ -142,9 +150,6 @@ pub(crate) async fn run(command: SubscriptionCommand) {
                 json,
             )
             .await;
-        }
-        SubscriptionCommand::SecondFactor { provider, json } => {
-            membership::second_factor(provider.as_deref(), json).await;
         }
         SubscriptionCommand::Reinstate {
             subscription_id,

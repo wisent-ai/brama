@@ -33,6 +33,9 @@ release coordinate yet and do not concern the subscription pool:</p>
   <code>sign-in-manual</code> is gone: signing an account in by hand is <code>sign-in --by hand</code>, with the same flags, paste on stdin and gateway options.
   The routes follow: <code>POST /v1/admin/subscription-pool/sign-in</code> requires <code>"by": "weles"|"hand"</code>, the paste goes to
   <code>…/sign-in/:sign_in_id</code>, and <code>…/sign-in-manual[/:sign_in_id]</code> no longer exist; Brama Desktop sends the method on both of its sign-in actions;</li>
+<li><a href="/docs/cli/subscription/authenticator/list"><code>brama subscription authenticator list</code></a> and
+  <a href="/docs/cli/subscription/authenticator/enrol"><code>authenticator enrol</code></a> replace <code>second-factor</code> and
+  <code>enrol-authenticator</code>: one object, the authenticator behind each account's second factor, with the verbs that read and create it; inputs, output and refusals are unchanged;</li>
 <li>a Claude Code grant travels in Claude Code's own shape - user agent, beta list, billing attestation and sentence - which is the only shape Anthropic honours it in for the newest models;</li>
 <li>an omitted <code>temperature</code> is omitted on the wire too, instead of an invented 0.7 the newest Claude models refuse;</li>
 <li><a href="/docs/cli/subscription/import"><code>brama subscription import</code></a> takes a grant any harness on the machine - omp, Claude Code, Codex CLI, Kimi Code -

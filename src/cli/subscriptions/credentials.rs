@@ -84,23 +84,12 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long, default_value_t = false)]
         json: bool,
     },
-    /// Enrol an authenticator for the login behind one subscription, so every later sign-in answers the provider's second factor by itself
-    #[command(name = "enrol-authenticator")]
-    EnrolAuthenticator {
-        /// The provider whose account needs a seed: claude-code, codex or kimi
-        provider: String,
-        /// Exact Brama subscription whose login gains the authenticator
-        #[arg(long)]
-        subscription_id: String,
-        /// Why this enrolment is being run; recorded beside the verdict
-        #[arg(long)]
-        reason: String,
-        /// Exact Skarbiec login item, when the subscription names more than one
-        #[arg(long)]
-        login_item: Option<String>,
-        /// Print the verdict as JSON instead of lines
-        #[arg(long, default_value_t = false)]
-        json: bool,
+    /// The authenticator that answers each account's second factor: list
+    /// what every account needs and holds, or enrol one for a subscription's
+    /// login
+    Authenticator {
+        #[command(subcommand)]
+        command: AuthenticatorCommand,
     },
     /// Record which account each pool member of one provider belongs to, read from the member's own grant, here or on the gateway that holds the vault
     #[command(group(ArgGroup::new("destination").args(["gateway", "gateway_consumer"])))]
@@ -117,16 +106,6 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long, value_name = "ROLE", requires = "destination")]
         bearer_role: Option<String>,
         /// Print the verdict as JSON instead of lines
-        #[arg(long, default_value_t = false)]
-        json: bool,
-    },
-    /// Report which accounts need a second factor to be signed in, and which of them hold the secret that answers one
-    #[command(name = "second-factor")]
-    SecondFactor {
-        /// Narrow the report to one provider; without it every provider is reported
-        #[arg(long)]
-        provider: Option<String>,
-        /// Print the report as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,
     },
@@ -177,6 +156,36 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long, value_name = "ROLE", requires = "destination")]
         bearer_role: Option<String>,
         /// Print `{subscription_id, detail}` as JSON instead of a line
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub(crate) enum AuthenticatorCommand {
+    /// List which accounts need a second factor to be signed in, and which of them hold the secret that answers one
+    List {
+        /// Narrow the list to one provider; without it every provider is listed
+        #[arg(long)]
+        provider: Option<String>,
+        /// Print the list as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
+    /// Enrol an authenticator for the login behind one subscription, so every later sign-in answers the provider's second factor by itself
+    Enrol {
+        /// The provider whose account needs a seed: claude-code, codex or kimi
+        provider: String,
+        /// Exact Brama subscription whose login gains the authenticator
+        #[arg(long)]
+        subscription_id: String,
+        /// Why this enrolment is being run; recorded beside the verdict
+        #[arg(long)]
+        reason: String,
+        /// Exact Skarbiec login item, when the subscription names more than one
+        #[arg(long)]
+        login_item: Option<String>,
+        /// Print the verdict as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,
     },

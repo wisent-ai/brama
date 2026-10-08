@@ -122,8 +122,8 @@
       "destination": "/docs/cli/subscription/sign-in.html"
     },
     {
-      "source": "/docs/cli/subscription/enrol-authenticator",
-      "destination": "/docs/cli/subscription/enrol-authenticator.html"
+      "source": "/docs/cli/subscription/authenticator/enrol",
+      "destination": "/docs/cli/subscription/authenticator/enrol.html"
     },
     {
       "source": "/docs/cli/subscription/attribute",
@@ -178,8 +178,8 @@
       "destination": "/docs/cli/audio/voices.html"
     },
     {
-      "source": "/docs/cli/subscription/second-factor",
-      "destination": "/docs/cli/subscription/accounts/second-factor.html"
+      "source": "/docs/cli/subscription/authenticator/list",
+      "destination": "/docs/cli/subscription/authenticator/list.html"
     },
     {
       "source": "/docs/providers",
