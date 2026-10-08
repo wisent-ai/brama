@@ -52,14 +52,15 @@ pub fn last_answers() -> Result<BTreeMap<String, LastAnswer>, std::io::Error> {
 
 /// The gateway's copy, read once; an unreadable record is replaced by the
 /// next write, and said so.
-static LAST: LazyLock<Mutex<BTreeMap<String, LastAnswer>>> =
-    LazyLock::new(|| match last_answers() {
+static LAST: LazyLock<Mutex<BTreeMap<String, LastAnswer>>> = LazyLock::new(|| {
+    match last_answers() {
         Ok(known) => Mutex::new(known),
         Err(error) => {
             tracing::warn!(event = "alias_answers_unreadable", %error, "the alias answer record is rewritten from this process's answers");
             Mutex::new(BTreeMap::new())
         }
-    });
+    }
+});
 
 /// Record what `alias` was just answered: `None` for a generation, else the
 /// refusal's contract code and sentence. Writes only when the alias's answer

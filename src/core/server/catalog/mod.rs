@@ -51,7 +51,8 @@ pub(in crate::core::server) async fn list_aliases(
     let unserviceable = report
         .iter()
         .filter(|entry| {
-            entry["state"] != ALIAS_SERVING || entry["last_answer"]["answered"] == Value::Bool(false)
+            entry["state"] != ALIAS_SERVING
+                || entry["last_answer"]["answered"] == Value::Bool(false)
         })
         .count();
     // A selector such as `best` is asked for by name without being a declared

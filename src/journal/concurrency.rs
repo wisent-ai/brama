@@ -74,9 +74,16 @@ pub struct Admission {
 pub fn admit(alias: &str) -> Admission {
     let call = Arc::new(());
     if let Ok(mut routes) = ROUTES.lock() {
-        routes.entry(alias.to_string()).or_default().calls.push(Arc::downgrade(&call));
+        routes
+            .entry(alias.to_string())
+            .or_default()
+            .calls
+            .push(Arc::downgrade(&call));
     }
-    Admission { alias: alias.to_string(), call }
+    Admission {
+        alias: alias.to_string(),
+        call,
+    }
 }
 
 impl Admission {
@@ -93,7 +100,11 @@ impl Admission {
         let beside = route.in_flight();
         match how {
             Settled::Answered => {
-                route.carried = Some(route.carried.map_or(with_this_one, |carried| carried.max(with_this_one)));
+                route.carried = Some(
+                    route
+                        .carried
+                        .map_or(with_this_one, |carried| carried.max(with_this_one)),
+                );
             }
             Settled::RefusedForCapacity => {
                 route.refused_beside = Some(beside);

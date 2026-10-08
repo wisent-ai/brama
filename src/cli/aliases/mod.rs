@@ -123,9 +123,14 @@ pub(crate) async fn report(args: AliasesArgs) {
             if let Some(last) = report.last_answers.get(&alias.alias) {
                 match (&last.refusal, &last.message) {
                     (Some(code), Some(message)) => {
-                        println!("    last answer since {}: refused {code}: {message}", last.at)
+                        println!(
+                            "    last answer since {}: refused {code}: {message}",
+                            last.at
+                        )
                     }
-                    (Some(code), None) => println!("    last answer since {}: refused {code}", last.at),
+                    (Some(code), None) => {
+                        println!("    last answer since {}: refused {code}", last.at)
+                    }
                     (None, _) => println!("    last answer since {}: answered", last.at),
                 }
             }
