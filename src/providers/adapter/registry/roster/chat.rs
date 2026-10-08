@@ -56,14 +56,22 @@ pub(super) const ANTHROPIC: ProviderDescriptor = ProviderDescriptor {
     static_models: &["claude-haiku-4-5", "claude-opus-4-6", "claude-sonnet-4-6"],
 };
 
-pub(super) const OPENROUTER: ProviderDescriptor = openai_chat(
-    "openrouter",
-    "OpenRouter",
-    "https://openrouter.ai/api",
-    "/v1/models",
-    "/v1/chat/completions",
-    &[],
-);
+/// OpenRouter answers chat on the OpenAI wire and pictures on its own Image
+/// API, `POST /api/v1/images`
+/// (https://openrouter.ai/docs/guides/overview/multimodal/image-generation),
+/// which takes reference images as `input_references`.
+pub(super) const OPENROUTER: ProviderDescriptor = ProviderDescriptor {
+    image_path: "/v1/images",
+    media_wire: MediaWire::OpenRouter,
+    ..openai_chat(
+        "openrouter",
+        "OpenRouter",
+        "https://openrouter.ai/api",
+        "/v1/models",
+        "/v1/chat/completions",
+        &[],
+    )
+};
 
 pub(super) const MISTRAL: ProviderDescriptor = openai_chat(
     "mistral",

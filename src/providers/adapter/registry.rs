@@ -69,6 +69,10 @@ pub enum MediaWire {
     /// Gemini: images from `generateContent`, with input images carried as
     /// inline data and the picture answered as inline data.
     Gemini,
+    /// OpenRouter's Image API: `POST /api/v1/images` in the OpenAI image
+    /// shape (`data[].b64_json`), with input images carried as
+    /// `input_references` image-URL parts instead of an `image` field.
+    OpenRouter,
 }
 
 #[derive(Clone, Copy, Debug)]

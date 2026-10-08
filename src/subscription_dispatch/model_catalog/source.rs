@@ -85,7 +85,11 @@ pub(super) async fn write_cache(raw: &str) -> Result<(), String> {
     tokio::fs::write(&temporary, raw)
         .await
         .map_err(|error| format!("cannot write {}: {error}", temporary.display()))?;
-    tokio::fs::rename(&temporary, &path)
-        .await
-        .map_err(|error| format!("cannot move {} to {}: {error}", temporary.display(), path.display()))
+    tokio::fs::rename(&temporary, &path).await.map_err(|error| {
+        format!(
+            "cannot move {} to {}: {error}",
+            temporary.display(),
+            path.display()
+        )
+    })
 }

@@ -51,7 +51,7 @@
 <p>The deployment does, through its own provider <a href="/docs/concepts/capability">capability</a>. No subscription in the pool carries an image, video or voice quota, so there is nothing for <code>best</code> to delegate to: a media alias whose route is <code>best</code> fails the shape check at startup and at <code>PUT /v1/admin/routes</code>. Media is the deployment's spend and appears on the deployment's bill.</p>
 
 <h2 id="which-providers">Which providers<a class="headerlink" href="#which-providers" title="Link to this section">&para;</a></h2>
-<p>A provider serves a media shape only where its vendor documents that endpoint. OpenAI-shaped vendors are spoken as they are; ElevenLabs, MiniMax and Gemini each have their own adapter that translates the request and the answer. Every other shape is declared with an empty path and refused by name.</p>
+<p>A provider serves a media shape only where its vendor documents that endpoint. OpenAI-shaped vendors are spoken as they are; ElevenLabs, MiniMax and Gemini each have their own adapter that translates the request and the answer, and OpenRouter's image API is the OpenAI shape with input images sent as its <code>input_references</code> (<code>data:</code> URLs only; a <code>mask</code> is refused with <code>invalid_request: route `…` takes no `mask`</code>). Every other shape is declared with an empty path and refused by name.</p>
 <table><thead><tr><th>Provider</th><th>Image</th><th>Video</th><th>Voice</th><th>Music</th><th>Voice library</th></tr></thead><tbody>
 <tr><td><code>openai</code></td><td><code>/v1/images/generations</code>; edits on <code>/v1/images/edits</code></td><td><code>/v1/videos</code> and <code>/v1/videos/{id}</code></td><td><code>/v1/audio/speech</code></td><td>—</td><td>—</td></tr>
 <tr><td><code>xai</code></td><td><code>/v1/images/generations</code></td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
@@ -60,6 +60,7 @@
 <tr><td><code>groq</code></td><td>—</td><td>—</td><td><code>/v1/audio/speech</code></td><td>—</td><td>—</td></tr>
 <tr><td><code>byteplus</code> (Seedream)</td><td><code>/images/generations</code></td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
 <tr><td><code>gemini</code></td><td><code>/v1beta/models/{model}:generateContent</code></td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td><code>openrouter</code></td><td><code>/api/v1/images</code>, input images as <code>input_references</code></td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
 <tr><td><code>elevenlabs</code></td><td>—</td><td>—</td><td><code>/v1/text-to-speech/{voice}</code></td><td>—</td><td><code>/v1/voices</code>, <code>/v1/voices/add</code></td></tr>
 <tr><td><code>minimax</code></td><td>—</td><td>—</td><td><code>/v1/t2a_v2</code></td><td><code>/v1/music_generation</code></td><td>—</td></tr>
 </tbody></table>

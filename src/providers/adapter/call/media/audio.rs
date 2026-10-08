@@ -54,7 +54,9 @@ pub async fn dispatch_speech(
     let foreign: &[&[&str]] = match descriptor.media_wire {
         MediaWire::ElevenLabs => &[MINIMAX_ONLY],
         MediaWire::MiniMax => &[ELEVENLABS_ONLY],
-        MediaWire::OpenAi | MediaWire::Gemini => &[ELEVENLABS_ONLY, MINIMAX_ONLY],
+        MediaWire::OpenAi | MediaWire::Gemini | MediaWire::OpenRouter => {
+            &[ELEVENLABS_ONLY, MINIMAX_ONLY]
+        }
     };
     if let Some(option) = foreign
         .iter()
@@ -79,7 +81,7 @@ pub async fn dispatch_speech(
     match descriptor.media_wire {
         MediaWire::ElevenLabs => return elevenlabs::speak(&call, payload).await,
         MediaWire::MiniMax => return minimax::speak(&call, payload).await,
-        MediaWire::OpenAi | MediaWire::Gemini => {}
+        MediaWire::OpenAi | MediaWire::Gemini | MediaWire::OpenRouter => {}
     }
     payload.insert("model".to_string(), Value::String(model_id.clone()));
     let response = call
@@ -118,7 +120,7 @@ pub async fn dispatch_music(
     };
     match descriptor.media_wire {
         MediaWire::MiniMax => minimax::compose(&call, payload).await,
-        MediaWire::OpenAi | MediaWire::ElevenLabs | MediaWire::Gemini => {
+        MediaWire::OpenAi | MediaWire::ElevenLabs | MediaWire::Gemini | MediaWire::OpenRouter => {
             Err(no_adapter(route_id, "music"))
         }
     }
@@ -139,7 +141,7 @@ pub async fn dispatch_voices(route_id: &str, item: &str, secret: &str) -> Result
     };
     match descriptor.media_wire {
         MediaWire::ElevenLabs => elevenlabs::voices(&call).await,
-        MediaWire::OpenAi | MediaWire::MiniMax | MediaWire::Gemini => {
+        MediaWire::OpenAi | MediaWire::MiniMax | MediaWire::Gemini | MediaWire::OpenRouter => {
             Err(no_adapter(route_id, "voice library"))
         }
     }
@@ -167,7 +169,7 @@ pub async fn dispatch_voice_clone(
     };
     match descriptor.media_wire {
         MediaWire::ElevenLabs => elevenlabs::clone_voice(&call, name, description, samples).await,
-        MediaWire::OpenAi | MediaWire::MiniMax | MediaWire::Gemini => {
+        MediaWire::OpenAi | MediaWire::MiniMax | MediaWire::Gemini | MediaWire::OpenRouter => {
             Err(no_adapter(route_id, "voice library"))
         }
     }
@@ -193,7 +195,7 @@ pub async fn dispatch_voice_delete(
     };
     match descriptor.media_wire {
         MediaWire::ElevenLabs => elevenlabs::delete_voice(&call, voice_id).await,
-        MediaWire::OpenAi | MediaWire::MiniMax | MediaWire::Gemini => {
+        MediaWire::OpenAi | MediaWire::MiniMax | MediaWire::Gemini | MediaWire::OpenRouter => {
             Err(no_adapter(route_id, "voice library"))
         }
     }

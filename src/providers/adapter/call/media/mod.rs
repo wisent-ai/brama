@@ -11,7 +11,8 @@
 //!
 //! A provider whose media contract is not OpenAI-shaped is spoken by its own
 //! adapter ([`elevenlabs`], [`minimax`], [`gemini`]), chosen by the
-//! declaration's `media_wire`.
+//! declaration's `media_wire`; OpenRouter's image API is the OpenAI shape
+//! with its reference images renamed ([`openrouter_request`]).
 
 mod audio;
 mod edit;
@@ -20,7 +21,7 @@ mod form;
 mod gemini;
 mod minimax;
 
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 
 use super::super::registry::{endpoint, supports_image_route, supports_video_route, MediaWire};
 use super::credential::authorize_provider;
@@ -66,6 +67,10 @@ pub async fn dispatch_image(
             return edit::edit_image(&call, payload).await;
         }
         return gemini::generate_image(&call, payload).await;
+    }
+    if descriptor.media_wire == MediaWire::OpenRouter {
+        let payload = openrouter_request(route_id, payload)?;
+        return generate(route_id, descriptor.image_path, payload, item, secret).await;
     }
     generate(route_id, descriptor.image_path, payload, item, secret).await
 }
@@ -142,6 +147,51 @@ async fn generate(
     .await
     .map_err(|error| transport_refusal(&error))?;
     answered(route_id, response).await
+}
+
+/// The generation request OpenRouter's image API reads
+/// (https://openrouter.ai/docs/guides/overview/multimodal/image-generation),
+/// from the one Brama was given: reference images travel as
+/// `input_references` image-URL parts rather than in `image`. They are passed
+/// on as the `data:` URLs they arrived as; an address is refused, because
+/// Brama hands a provider bytes and never an address to visit. OpenRouter
+/// documents no mask, so a masked edit is refused naming the field.
+fn openrouter_request(
+    route_id: &str,
+    mut payload: Map<String, Value>,
+) -> Result<Map<String, Value>, Refusal> {
+    if payload.contains_key("mask") {
+        return Err(Refusal::gateway(
+            GatewayRefusal::InvalidRequest,
+            format!(
+                "invalid_request: route `{route_id}` takes no `mask`: OpenRouter's image API documents no masked edit"
+            ),
+        ));
+    }
+    let Some(images) = payload.remove("image") else {
+        return Ok(payload);
+    };
+    let images = match images {
+        Value::Array(images) => images,
+        image => vec![image],
+    };
+    let mut references = Vec::with_capacity(images.len());
+    for image in images {
+        let url = image
+            .as_str()
+            .filter(|url| url.starts_with("data:image/"))
+            .ok_or_else(|| {
+                Refusal::gateway(
+                    GatewayRefusal::InvalidRequest,
+                    format!(
+                        "invalid_request: route `{route_id}` reads each `image` as a data:image/... URL; Brama hands a provider bytes, never an address"
+                    ),
+                )
+            })?;
+        references.push(json!({"type": "image_url", "image_url": {"url": url}}));
+    }
+    payload.insert("input_references".to_string(), Value::Array(references));
+    Ok(payload)
 }
 
 /// One provider answer, refused or handed back with the route the caller
