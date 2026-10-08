@@ -47,6 +47,7 @@ detail: someone@example.com's grant from the code the operator pasted is stored 
 <ul>
 <li>Another provider: <code>a manual sign-in is defined for claude-code; `&lt;provider&gt;` is not it</code>. No page is printed.</li>
 <li>Empty reason: <code>--reason must say why this sign-in is being run</code>. No page is printed.</li>
+<li>A host that holds no vault of its own (Stado routes it to the vault owner, and Skarbiec refuses the leftover copy on it): <code>no sign-in was started: the grant could not be stored on this host (&lt;Skarbiec's sentence&gt;); run `brama subscription sign-in-manual` on the host the gateway serves from</code>. No page is printed, so nobody logs in for a grant the gateway would never read; run the command on the gateway's own host.</li>
 <li>Empty paste: <code>nothing was pasted</code>.</li>
 <li>A paste that is neither <code>code#state</code> nor a URL with both: <code>paste the `code#state` the page shows, or the whole redirect URL</code>.</li>
 <li>A paste from another sign-in or a stale page: <code>the pasted state is not the one this sign-in started with; open the URL again and paste what that page shows</code>.</li>

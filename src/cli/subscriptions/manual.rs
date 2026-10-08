@@ -44,6 +44,17 @@ pub(crate) async fn sign_in(
     if reason.trim().is_empty() {
         return Err("--reason must say why this sign-in is being run".into());
     }
+    // The grant is stored in the vault this host's Skarbiec holds, so a host
+    // that holds none (Skarbiec refuses its leftover copy) is refused here,
+    // before the operator logs in for a grant the gateway would never read.
+    brama::gateway::broker::subscription_account(subscription_id, provider)
+        .await
+        .map_err(|said| {
+            format!(
+                "no sign-in was started: the grant could not be stored on this host ({said}); \
+                 run `brama subscription sign-in-manual` on the host the gateway serves from"
+            )
+        })?;
     let request = manual::begin(provider, subscription_id)?;
     eprintln!("Open this page in your own browser and log in:");
     eprintln!();
