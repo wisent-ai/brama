@@ -45,10 +45,18 @@ impl RankedWalk {
         self.emptied.iter().any(|seen| seen == provider)
     }
 
-    /// Record one refused candidate: its cost, its reason, and -- when the
-    /// refusal was the provider's whole pool rather than this one route -- the
-    /// fact that the rest of that provider's routes need not be asked.
-    fn refused(&mut self, model: &str, provider: &str, response: &ModelResponse, emptied: bool) {
+    /// Record one refused candidate: its cost, its reason, how long asking it
+    /// took, and -- when the refusal was the provider's whole pool rather
+    /// than this one route -- the fact that the rest of that provider's
+    /// routes need not be asked.
+    fn refused(
+        &mut self,
+        model: &str,
+        provider: &str,
+        response: &ModelResponse,
+        emptied: bool,
+        elapsed_ms: u128,
+    ) {
         self.attempts = self.attempts.saturating_add(response.attempts);
         let reason = response.error.as_deref().unwrap_or("failed");
         self.classes.push(
@@ -62,6 +70,7 @@ impl RankedWalk {
             provider,
             pool_emptied = emptied,
             attempts = response.attempts,
+            elapsed_ms,
             reason,
             "ranked selector walked past a refused candidate"
         );
@@ -153,13 +162,20 @@ pub(super) async fn dispatch_ranked_models(
         }
         let mut candidate = request.clone();
         candidate.model = model.clone();
+        let asking = std::time::Instant::now();
         let attempt = attempt_subscription(provider, agent_id, &candidate).await;
         match attempt.opened {
             Ok(mut served) => {
                 served.attempts = walk.attempts.saturating_add(served.attempts);
                 return served;
             }
-            Err(response) => walk.refused(&model, provider, &response, attempt.pool_emptied),
+            Err(response) => walk.refused(
+                &model,
+                provider,
+                &response,
+                attempt.pool_emptied,
+                asking.elapsed().as_millis(),
+            ),
         }
     }
     walk.into_failure(request, failure_context)
@@ -187,13 +203,20 @@ pub(super) async fn dispatch_ranked_models_stream(
         }
         let mut candidate = request.clone();
         candidate.model = model.clone();
+        let asking = std::time::Instant::now();
         let attempt = attempt_subscription_stream(provider, agent_id, &candidate).await;
         match attempt.opened {
             Ok(mut routed) => {
                 routed.attempts = routed.attempts.saturating_add(walk.attempts);
                 return Ok(routed);
             }
-            Err(response) => walk.refused(&model, provider, &response, attempt.pool_emptied),
+            Err(response) => walk.refused(
+                &model,
+                provider,
+                &response,
+                attempt.pool_emptied,
+                asking.elapsed().as_millis(),
+            ),
         }
     }
     Err(walk.into_failure(request, failure_context))

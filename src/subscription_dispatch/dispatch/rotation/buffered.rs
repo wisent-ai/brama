@@ -38,10 +38,18 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
     agent_id: &str,
     request: &ModelRequest,
 ) -> RouteAttempt<ModelResponse> {
+    let reading = std::time::Instant::now();
     let rows = match ordered_candidate_rows(provider, agent_id, request).await {
         Ok(rows) => rows,
         Err(refusal) => return RouteAttempt::pool_empty(refusal),
     };
+    info!(
+        event = "credential_pool_read",
+        provider,
+        candidates = rows.len(),
+        read_ms = reading.elapsed().as_millis(),
+        "bounded credential pool read for one request"
+    );
 
     let mut provider_attempts: u32 = 0;
     // The newest credential-boundary refusal is the operation that finally
@@ -99,14 +107,30 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
             );
             continue;
         }
-        let token = match broker::subscription_credential(credential_id, provider).await {
-            Ok(token) => token,
+        // How long the vault took to hand this credential over (or refuse
+        // it): a pool read once per request, through a slow vault, is where a
+        // selector's minutes go, and only this measurement shows it.
+        let redeeming = std::time::Instant::now();
+        let redeemed = broker::subscription_credential(credential_id, provider).await;
+        let redeem_ms = redeeming.elapsed().as_millis();
+        let token = match redeemed {
+            Ok(token) => {
+                info!(
+                    event = "credential_redeemed",
+                    provider,
+                    credential_index = index,
+                    redeem_ms,
+                    "bounded credential handed over by the vault"
+                );
+                token
+            }
             Err(refused) => {
                 saw_unredeemable_credential = true;
                 warn!(
                     event = "credential_unavailable",
                     provider,
                     credential_index = index,
+                    redeem_ms,
                     envelope = %refused.to_json(),
                     "{}",
                     refused.render()
