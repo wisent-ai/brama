@@ -360,6 +360,10 @@
     {
       "source": "/docs/changelog/:slug",
       "destination": "/docs/changelog/:slug.html"
+    },
+    {
+      "source": "/:path((?!docs(?:/|$)).*)",
+      "destination": "/api/gateway?__brama_path=/:path"
     }
   ]
 }

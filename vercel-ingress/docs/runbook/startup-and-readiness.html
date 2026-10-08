@@ -26,6 +26,19 @@ product actually prints and names the repair. The error vocabulary itself is
 in <a href="/docs/errors">errors</a>; the rest of the runbook is at
 <a href="/docs/runbook">runbook</a>.</p>
 
+<h2 id="public-address">brama.wisent.com forwards to the declared gateway origin</h2>
+<p><code>https://brama.wisent.com</code> is Brama's public address. The Vercel project behind it
+serves <code>/docs</code> and forwards every other path to the origin in its
+<code>BRAMA_GATEWAY_ORIGIN</code> environment variable: the public HTTPS origin of Brama's
+declared public origin, which <code>stado web origin declare brama --target &lt;host&gt;
+--hostname &lt;public name&gt; --upstream http://127.0.0.1:8080 --path /v1</code> declares,
+<code>stado web origin converge brama</code> publishes and <code>stado web origin url /v1</code>
+prints. Without the variable every forwarded path answers <code>503</code> with code
+<code>gateway_origin_undeclared</code> naming it; an origin the function cannot reach answers
+<code>502</code> <code>gateway_unreachable</code> with the transport error. Before this forwarder
+came back, the same calls answered Vercel's own <code>404 NOT_FOUND</code> page, which callers
+reported as <code>Brama request failed (404)</code>.</p>
+
 <h2 id="public-endpoint-and-ci-checkout">The public endpoint fails while CI waits for a key<a class="headerlink" href="#public-endpoint-and-ci-checkout" title="Link to this section">&para;</a></h2>
 <p>The <code>funnel-keepalive</code> workflow publishes Brama's origin from Stado's
 service directory every five minutes. Its checked-in
