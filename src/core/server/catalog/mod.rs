@@ -27,6 +27,7 @@ pub(in crate::core::server) async fn list_aliases(
     Extension(client_identity): Extension<ModelClientIdentity>,
     Extension(aliases): Extension<ModelAliases>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    let last_answers = crate::journal::answers::current();
     let report = aliases
         .declared()
         .iter()
@@ -39,12 +40,17 @@ pub(in crate::core::server) async fn list_aliases(
                 "reason": diagnosis.reason,
                 "required": MODEL_ALIASES.contains(&alias.as_str()),
                 "authorized": client_identity.authorizes_model(alias),
+                "last_answer": last_answers.get(alias.as_str()),
             })
         })
         .collect::<Vec<_>>();
+    // A route its provider refuses cannot be served either, whatever its
+    // declaration says.
     let unserviceable = report
         .iter()
-        .filter(|entry| entry["state"] != ALIAS_SERVING)
+        .filter(|entry| {
+            entry["state"] != ALIAS_SERVING || entry["last_answer"]["answered"] == Value::Bool(false)
+        })
         .count();
     Ok(Json(json!({
         "object": "list",

@@ -100,3 +100,12 @@ fn write(answers: &BTreeMap<String, LastAnswer>) -> Result<(), std::io::Error> {
     std::fs::write(&staged, serde_json::to_vec_pretty(answers)?)?;
     std::fs::rename(&staged, &path)
 }
+
+/// The running gateway's own copy of every alias's newest answer, for the
+/// HTTP view: the same record `brama aliases` reads from the file.
+pub fn current() -> BTreeMap<String, LastAnswer> {
+    match LAST.lock() {
+        Ok(last) => last.clone(),
+        Err(poisoned) => poisoned.into_inner().clone(),
+    }
+}

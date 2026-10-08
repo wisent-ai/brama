@@ -73,7 +73,13 @@ Captured shape:</p>
    &quot;required&quot;:false,&quot;authorized&quot;:true}]}
 </code></pre>
 <p>A row is exactly
-<code>{"alias", "state", "route", "reason", "required", "authorized"}</code>.
+<code>{"alias", "state", "route", "reason", "required", "authorized", "last_answer"}</code>.
+<code>last_answer</code> is the newest answer the alias got from what it routes to, or
+<code>null</code> before its first request: <code>{"answered", "refusal", "message", "at"}</code>,
+where <code>refusal</code> is the contract code (<code>provider_quota_exhausted</code>, …) and
+<code>message</code> the provider's sentence when it did not answer, and <code>at</code> is when
+that answer was first seen. A declared, credentialed route whose provider refuses (an account
+without credits) has <code>answered</code> false and counts in <code>unserviceable</code>.
 <code>route</code> is the single destination the registry maps the alias to, so a row
 states one route and never a list. <code>state</code> is one of <code>serving</code>,
 <code>no_route</code>, <code>capability_absent</code> or <code>routes_file_invalid</code>;
