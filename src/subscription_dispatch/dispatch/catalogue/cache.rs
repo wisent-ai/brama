@@ -1,9 +1,9 @@
 //! What discovery has already learned about a credential's models, how long
-//! that answer stands, and why it refused when it did.
+//! the operator declared that answer stands, and why it refused when it did.
 
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crate::providers::adapter as provider_registry;
 use crate::types::Refusal;
@@ -13,16 +13,29 @@ pub(super) struct CachedRegistryModels {
     pub(super) models: Vec<provider_registry::RegistryModel>,
 }
 
-pub(super) const MODEL_CACHE_TTL: Duration = Duration::from_secs(300);
+/// The age, in whole seconds, at which a credential's discovered models are
+/// read again. Unset, every catalog call discovers: no age is assumed.
+const MODEL_AGE_ENV: &str = "BRAMA_MODEL_DISCOVERY_AGE_SECONDS";
+
+/// Whether models discovered at `fetched` may still be served.
+pub(super) fn models_fresh(fetched: Instant) -> bool {
+    crate::types::still_fresh(MODEL_AGE_ENV, fetched)
+}
 
 pub(super) static REGISTRY_MODEL_CACHE: LazyLock<Mutex<HashMap<String, CachedRegistryModels>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// Discovery failures are cached briefly too: without it every catalog call
-/// re-pays full provider timeouts for credentials that are stale anyway. The
-/// refusal keeps its class, so a request answered from the cache is answered
-/// as the first one was.
-pub(super) const MODEL_FAILURE_CACHE_TTL: Duration = Duration::from_secs(60);
+/// A discovery refusal may be held too, so a catalog call does not wait on a
+/// provider for a credential that is stale anyway — for the age the operator
+/// declares, and not at all when none is. The refusal keeps its class, so a
+/// request answered from the cache is answered as the first one was.
+const FAILURE_AGE_ENV: &str = "BRAMA_MODEL_DISCOVERY_FAILURE_AGE_SECONDS";
+
+/// Whether a discovery refusal recorded at `fetched` may still be served.
+pub(super) fn failure_fresh(fetched: Instant) -> bool {
+    crate::types::still_fresh(FAILURE_AGE_ENV, fetched)
+}
+
 pub(super) static REGISTRY_MODEL_FAILURE_CACHE: LazyLock<
     Mutex<HashMap<String, (Instant, Refusal)>>,
 > = LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -36,7 +49,7 @@ pub(super) fn cached_subscription_models(
     REGISTRY_MODEL_CACHE.lock().ok().and_then(|cache| {
         cache
             .get(key)
-            .filter(|item| item.fetched.elapsed() < MODEL_CACHE_TTL)
+            .filter(|item| models_fresh(item.fetched))
             .map(|item| item.models.clone())
     })
 }
@@ -82,7 +95,7 @@ pub fn discovery_failure(provider: &str, subscription_id: &str) -> Option<String
         .lock()
         .ok()?
         .get(&key)
-        .filter(|(fetched, _)| fetched.elapsed() < MODEL_FAILURE_CACHE_TTL)
+        .filter(|(fetched, _)| failure_fresh(*fetched))
         .map(|(_, refused)| refused.message.clone())
 }
 
@@ -93,7 +106,7 @@ pub(super) fn cached_registry_models() -> Vec<provider_registry::RegistryModel> 
     };
     cache
         .values()
-        .filter(|item| item.fetched.elapsed() < MODEL_CACHE_TTL)
+        .filter(|item| models_fresh(item.fetched))
         .flat_map(|item| item.models.clone())
         .collect()
 }

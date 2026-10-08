@@ -9,7 +9,7 @@ use crate::providers::adapter as provider_registry;
 use crate::types::{GatewayRefusal, Refusal};
 
 use super::cache::{
-    cached_registry_models, CachedRegistryModels, MODEL_CACHE_TTL, MODEL_FAILURE_CACHE_TTL,
+    cached_registry_models, failure_fresh, models_fresh, CachedRegistryModels,
     REGISTRY_MODEL_CACHE, REGISTRY_MODEL_FAILURE_CACHE,
 };
 use super::subscription_models::discover_subscription_models;
@@ -89,7 +89,7 @@ async fn discover_direct_provider_models() -> Vec<provider_registry::RegistryMod
         if let Some(models) = REGISTRY_MODEL_CACHE.lock().ok().and_then(|cache| {
             cache
                 .get(&cache_key)
-                .filter(|item| item.fetched.elapsed() < MODEL_CACHE_TTL)
+                .filter(|item| models_fresh(item.fetched))
                 .map(|item| item.models.clone())
         }) {
             discovered.extend(models);
@@ -101,7 +101,7 @@ async fn discover_direct_provider_models() -> Vec<provider_registry::RegistryMod
             .and_then(|cache| {
                 cache
                     .get(&cache_key)
-                    .filter(|(fetched, _)| fetched.elapsed() < MODEL_FAILURE_CACHE_TTL)
+                    .filter(|(fetched, _)| failure_fresh(*fetched))
                     .cloned()
             })
             .is_some()

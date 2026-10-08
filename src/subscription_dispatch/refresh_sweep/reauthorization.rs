@@ -21,21 +21,20 @@ use crate::subscription_dispatch::sign_in;
 
 use super::claim::InFlight;
 
+/// The age, in whole seconds, before a second browser sign-in may be driven
+/// for one stored credential. Unset, nothing but the verdict gate and the
+/// host's declared `brama maintain` schedule paces sign-ins.
 const SIGN_IN_COOLDOWN_ENV: &str = "BRAMA_CREDENTIAL_SIGN_IN_COOLDOWN_SECS";
-const DEFAULT_SIGN_IN_COOLDOWN_SECS: u64 = 30 * 60;
 
 /// Only one remote browser sign-in may own Weles at a time. OAuth refreshes
 /// remain per-subscription and continue while this lock is held.
 static SIGN_IN_SERIAL: LazyLock<tokio::sync::Mutex<()>> =
     LazyLock::new(|| tokio::sync::Mutex::new(()));
 
-pub(crate) fn sign_in_cooldown() -> Duration {
-    let seconds = std::env::var(SIGN_IN_COOLDOWN_ENV)
-        .ok()
-        .and_then(|value| value.trim().parse::<u64>().ok())
-        .filter(|seconds| *seconds > 0)
-        .unwrap_or(DEFAULT_SIGN_IN_COOLDOWN_SECS);
-    Duration::from_secs(seconds)
+/// The declared cooldown, `None` when unset, refused by name when it is not
+/// a whole number of seconds.
+pub(crate) fn sign_in_cooldown() -> Result<Option<Duration>, String> {
+    crate::types::declared_age(SIGN_IN_COOLDOWN_ENV)
 }
 
 /// Start one account sign-in without making the refresh sweep wait for a

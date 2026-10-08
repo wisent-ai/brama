@@ -48,10 +48,16 @@ pub(super) fn unchanged_failed_attempt(
         previous.get("account_revision").and_then(Value::as_str) == Some(account_revision);
     let same_executor =
         previous.get("source_revision").and_then(Value::as_str) == Some(executor_revision);
-    let cooling_down = !crate::journal::subscription_sign_in_due(
-        id,
-        crate::subscription_dispatch::refresh_sweep::sign_in_cooldown(),
-    );
+    // A cooldown that cannot be read stops new sign-ins and says why, rather
+    // than driving a browser under a pacing nobody declared.
+    let cooling_down = match crate::subscription_dispatch::refresh_sweep::sign_in_cooldown() {
+        Ok(Some(cooldown)) => !crate::journal::subscription_sign_in_due(id, cooldown),
+        Ok(None) => false,
+        Err(refusal) => {
+            tracing::warn!(subscription = %id, "{refusal}");
+            true
+        }
+    };
     stops_a_new_attempt(&previous, same_account, same_executor, cooling_down).then_some(previous)
 }
 

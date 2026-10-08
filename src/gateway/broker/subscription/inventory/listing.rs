@@ -3,7 +3,7 @@
 //! sees, and each row completed with the account it was recorded against.
 
 use std::sync::{LazyLock, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use tracing::warn;
 
@@ -20,11 +20,14 @@ type LiveSubscriptionsCache = Mutex<Option<(Instant, Vec<SubscriptionEntry>)>>;
 static LIVE_SUBSCRIPTIONS_CACHE: LazyLock<LiveSubscriptionsCache> =
     LazyLock::new(|| Mutex::new(None));
 
-const LIVE_SUBSCRIPTIONS_CACHE_TTL: Duration = Duration::from_secs(60);
+/// The age, in whole seconds, at which a stored listing is read again. Unset,
+/// every caller reads the vault: no age is assumed.
+const LISTING_AGE_ENV: &str = "BRAMA_SUBSCRIPTION_LISTING_AGE_SECONDS";
 
-/// Resolve the pool from the vault, serving a fresh cached listing unless
-/// `bypass_cache` is set (used when a lookup failed and the caller wants to
-/// re-check the vault instead of trusting a stale entry).
+/// Resolve the pool from the vault, serving a stored listing within the
+/// declared [`LISTING_AGE_ENV`] unless `bypass_cache` is set (used when a
+/// lookup failed and the caller wants to re-check the vault instead of
+/// trusting a stale entry).
 pub(super) async fn live_subscriptions(
     broker: &str,
     bypass_cache: bool,
@@ -32,7 +35,7 @@ pub(super) async fn live_subscriptions(
     if !bypass_cache {
         if let Ok(cache) = LIVE_SUBSCRIPTIONS_CACHE.lock() {
             if let Some((fetched_at, entries)) = cache.as_ref() {
-                if fetched_at.elapsed() < LIVE_SUBSCRIPTIONS_CACHE_TTL {
+                if crate::types::still_fresh(LISTING_AGE_ENV, *fetched_at) {
                     return Ok(entries.clone());
                 }
             }

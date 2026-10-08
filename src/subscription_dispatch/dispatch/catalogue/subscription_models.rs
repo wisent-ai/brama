@@ -12,7 +12,7 @@ use crate::types::{GatewayRefusal, ProviderRefusal, Refusal};
 
 use super::super::refusal::envelope::{credential_refusal_class, failure_detail};
 use super::cache::{
-    cached_subscription_models, lock_discovery, CachedRegistryModels, MODEL_FAILURE_CACHE_TTL,
+    cached_subscription_models, failure_fresh, lock_discovery, CachedRegistryModels,
     REGISTRY_MODEL_CACHE, REGISTRY_MODEL_FAILURE_CACHE,
 };
 
@@ -82,7 +82,7 @@ pub(super) async fn discover_subscription_models(
             let recent_failure = REGISTRY_MODEL_FAILURE_CACHE.lock().ok().and_then(|cache| {
                 cache
                     .get(&cache_key)
-                    .filter(|(fetched, _)| fetched.elapsed() < MODEL_FAILURE_CACHE_TTL)
+                    .filter(|(fetched, _)| failure_fresh(*fetched))
                     .map(|(_, refused)| refused.clone())
             });
             if let Some(refused) = recent_failure {

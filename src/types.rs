@@ -236,5 +236,7 @@ impl ModelResponse {
     }
 }
 
+mod declared_age;
 mod refusal;
+pub use declared_age::{declared_age, still_fresh};
 pub use refusal::{GatewayRefusal, ProviderRefusal, Refusal};

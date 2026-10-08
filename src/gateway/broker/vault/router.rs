@@ -170,39 +170,60 @@ pub(in crate::gateway::broker) async fn child_output(
     }
 }
 
-/// The resident memory past which a vault child is not reading a vault.
-/// Decrypting and printing the whole fleet vault peaks just under 1 GiB; a
-/// router child that had run for over a day under this gateway held 3 GiB
-/// while the control host refused all work for memory pressure.
-const CHILD_RESIDENT_CEILING_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+/// The resident memory, in bytes, past which a vault child is ended, when the
+/// operator declares one. A router child that had run for over a day under
+/// this gateway once held 3 GiB while the control host refused all work for
+/// memory pressure; the ceiling that fits a host is that host's to declare.
+const RESIDENT_CEILING_ENV: &str = "BRAMA_VAULT_CHILD_RESIDENT_CEILING_BYTES";
 
-/// How often a running vault child's footprint is read.
-const FOOTPRINT_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+/// How often, in whole seconds, a running vault child's footprint is read
+/// against [`RESIDENT_CEILING_ENV`]. Required once a ceiling is declared.
+const FOOTPRINT_CHECK_ENV: &str = "BRAMA_VAULT_CHILD_FOOTPRINT_CHECK_SECONDS";
 
-/// How long a vault command may run before the gateway's log names it. A
-/// router child had been running for a day before anyone saw it, and the
-/// host's process table showed only the executable, never which operation it
-/// was; one line naming operation, pid and footprint makes that attributable.
-const LONG_RUNNING_NOTICE: std::time::Duration = std::time::Duration::from_secs(60);
+/// The declared ceiling and the cadence it is read at, or `None` when no
+/// ceiling is declared; a ceiling without a cadence is refused by name.
+fn declared_ceiling() -> Result<Option<(u64, std::time::Duration)>, String> {
+    let Ok(value) = std::env::var(RESIDENT_CEILING_ENV) else {
+        return Ok(None);
+    };
+    let ceiling = value.trim().parse::<u64>().map_err(|_| {
+        format!("{RESIDENT_CEILING_ENV} must be a whole number of bytes; it is {value:?}")
+    })?;
+    let cadence = crate::types::declared_age(FOOTPRINT_CHECK_ENV)?.ok_or_else(|| {
+        format!("{RESIDENT_CEILING_ENV} is declared, so {FOOTPRINT_CHECK_ENV} must say how often it is read")
+    })?;
+    if cadence.is_zero() {
+        return Err(format!("{FOOTPRINT_CHECK_ENV} must be at least one second"));
+    }
+    Ok(Some((ceiling, cadence)))
+}
 
-/// Wait for `child` to exit and collect its output, ending it once its
-/// resident memory passes [`CHILD_RESIDENT_CEILING_BYTES`]. The refusal
-/// names the operation, the pid and the measured footprint, so the stalled
-/// command is on record instead of a host that runs out of memory.
+/// Wait for `child` to exit and collect its output. The log names the
+/// operation and pid when the child starts and ends, so a command that never
+/// ends is attributable from the log without any assumed duration. When the
+/// operator declares a resident ceiling, the child is ended once it passes
+/// it, and the refusal names the operation, the pid and the measured
+/// footprint.
 pub(in crate::gateway::broker) async fn wait_within_footprint(
     child: tokio::process::Child,
     operation: &str,
 ) -> Result<std::process::Output, String> {
     let pid = child.id();
-    let started = std::time::Instant::now();
-    let mut noticed = false;
+    let ceiling = declared_ceiling().map_err(|refusal| format!("{operation}: {refusal}"))?;
+    tracing::info!(operation, pid, "vault child started");
     let output = child.wait_with_output();
     tokio::pin!(output);
+    let Some((ceiling, cadence)) = ceiling else {
+        let finished = output.await;
+        tracing::info!(operation, pid, "vault child ended");
+        return finished.map_err(|error| format!("{operation}: wait for the vault child: {error}"));
+    };
     let mut system = sysinfo::System::new();
-    let mut checks = tokio::time::interval(FOOTPRINT_CHECK_INTERVAL);
+    let mut checks = tokio::time::interval(cadence);
     loop {
         tokio::select! {
             finished = &mut output => {
+                tracing::info!(operation, pid, "vault child ended");
                 return finished.map_err(|error| format!("{operation}: wait for the vault child: {error}"));
             }
             _ = checks.tick() => {
@@ -210,22 +231,12 @@ pub(in crate::gateway::broker) async fn wait_within_footprint(
                 if !system.refresh_process(pid) {
                     continue;
                 }
-                let resident = system.process(pid).map_or(0, sysinfo::Process::memory);
-                if !noticed && started.elapsed() >= LONG_RUNNING_NOTICE {
-                    noticed = true;
-                    tracing::warn!(
-                        operation,
-                        pid = pid.as_u32(),
-                        resident_bytes = resident,
-                        elapsed_seconds = started.elapsed().as_secs(),
-                        "vault child still running"
-                    );
-                }
-                if resident > CHILD_RESIDENT_CEILING_BYTES {
+                let Some(resident) = system.process(pid).map(sysinfo::Process::memory) else { continue };
+                if resident > ceiling {
                     // Dropping the pinned wait kills the child (kill_on_drop).
                     return Err(format!(
                         "{operation}: vault child pid {pid} held {resident} bytes resident, over the \
-                         {CHILD_RESIDENT_CEILING_BYTES}-byte ceiling for one vault command; ended it"
+                         {ceiling}-byte ceiling {RESIDENT_CEILING_ENV} declares; ended it"
                     ));
                 }
             }

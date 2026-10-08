@@ -51,7 +51,7 @@ static LOAD_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 /// cache after taking it, so the fetch that already happened is the one they
 /// all get.
 pub async fn snapshot() -> Result<Arc<CatalogSnapshot>, String> {
-    let ttl = catalog_ttl()?;
+    let ttl = crate::types::declared_age(TTL_ENV)?;
     if let Some(fresh) = cached_within(ttl).await {
         return Ok(fresh);
     }
@@ -93,15 +93,4 @@ async fn cached_within(ttl: Option<Duration>) -> Option<Arc<CatalogSnapshot>> {
 
 fn fresh(cached: &CachedSnapshot, ttl: Option<Duration>) -> bool {
     ttl.is_none_or(|ttl| cached.loaded_at.elapsed() < ttl)
-}
-
-fn catalog_ttl() -> Result<Option<Duration>, String> {
-    match std::env::var(TTL_ENV) {
-        Err(_) => Ok(None),
-        Ok(value) => value
-            .trim()
-            .parse()
-            .map(|seconds| Some(Duration::from_secs(seconds)))
-            .map_err(|_| format!("{TTL_ENV} must be a whole number of seconds; it is {value:?}")),
-    }
 }

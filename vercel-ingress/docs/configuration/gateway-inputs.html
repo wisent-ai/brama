@@ -65,12 +65,16 @@
           <tr><td><code>BRAMA_PERF_PATH</code></td><td><code>/tmp/brama-perf.json</code></td><td>replaceable process telemetry</td></tr>
         </tbody></table>
 
-        <h2 id="timers-and-freshness">Sign-in pacing<a class="headerlink" href="#timers-and-freshness" title="Link to this section">&para;</a></h2>
+        <h2 id="timers-and-freshness">Sign-in pacing and freshness<a class="headerlink" href="#timers-and-freshness" title="Link to this section">&para;</a></h2>
         <p>Plan readings stay current until the window they describe resets, and a
         credential is refreshed once its stated expiry has passed; neither has a
         configurable window.</p>
         <table><thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
-          <tr><td><code>BRAMA_CREDENTIAL_SIGN_IN_COOLDOWN_SECS</code></td><td><code>1800</code></td><td>how long the gateway waits before driving a second sign-in for the same stored credential</td></tr>
+          <tr><td><code>BRAMA_CREDENTIAL_SIGN_IN_COOLDOWN_SECS</code></td><td>unset: no cooldown; a failed sign-in is not repeated until the account or Weles revision changes, and the host's <code>brama maintain</code> schedule paces the rest</td><td>whole seconds the gateway waits before driving a second sign-in for the same stored credential; a value that is not a whole number stops new sign-ins and the log says <code>BRAMA_CREDENTIAL_SIGN_IN_COOLDOWN_SECS must be a whole number of seconds; it is "&lt;value&gt;"</code></td></tr>
+          <tr><td><code>BRAMA_SUBSCRIPTION_LISTING_AGE_SECONDS</code></td><td>unset: every caller reads the vault's pool listing</td><td>whole seconds a successful pool listing is served before the vault is read again</td></tr>
+          <tr><td><code>BRAMA_MODEL_DISCOVERY_AGE_SECONDS</code></td><td>unset: every catalog call discovers a credential's models</td><td>whole seconds a credential's discovered models are served before discovery runs again</td></tr>
+          <tr><td><code>BRAMA_MODEL_DISCOVERY_FAILURE_AGE_SECONDS</code></td><td>unset: a refused discovery is tried again on the next call</td><td>whole seconds a discovery refusal is answered from memory, with its class, instead of asking the provider again</td></tr>
+          <tr><td><code>BRAMA_VAULT_CHILD_RESIDENT_CEILING_BYTES</code>, <code>BRAMA_VAULT_CHILD_FOOTPRINT_CHECK_SECONDS</code></td><td>unset: a vault child runs until it ends</td><td>resident bytes past which a vault command is ended, and how often its footprint is read; the ceiling without the cadence refuses the command by naming the missing variable. The log names every vault child's operation and pid when it starts and when it ends.</td></tr>
         </tbody></table>
         <p>The gateway keeps no timer: usage reports, token refreshes and the
         readiness reading are each taken by one <code>brama maintain</code> pass, which
@@ -79,12 +83,15 @@
         explicit admin probe route. Signing an account in is not configurable and not
         an operator action: when a provider refuses a grant, or the stored document is
         not a credential at all, the gateway asks Weles to sign that account in.
-        Weles drives the browser on its own host; nothing opens one here. The variable
-        above sets how often that may happen for one credential and does not turn it
-        off. A sign-in runs until Weles reports how it ended.</p>
-        <p>These windows govern how fresh a reading is, not how long a request may
+        Weles drives the browser on its own host; nothing opens one here.
+        <code>BRAMA_CREDENTIAL_SIGN_IN_COOLDOWN_SECS</code> sets how often that may
+        happen for one credential and does not turn it off. A sign-in runs until Weles
+        reports how it ended.</p>
+        <p>These ages govern how fresh a reading is, not how long a request may
         run: a completion and a sign-in each run until the provider or Weles answers,
-        and a failure is reported with the error it ended on.</p>
+        and a failure is reported with the error it ended on. A value that is not a
+        whole number is reported by its variable's name; a stored reading is never
+        served under an age nobody declared.</p>
 
         <h2 id="catalog-and-providers">Catalog and providers<a class="headerlink" href="#catalog-and-providers" title="Link to this section">&para;</a></h2>
         <table><thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
