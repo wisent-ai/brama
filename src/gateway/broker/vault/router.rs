@@ -210,12 +210,12 @@ pub(in crate::gateway::broker) async fn wait_within_footprint(
 ) -> Result<std::process::Output, String> {
     let pid = child.id();
     let ceiling = declared_ceiling().map_err(|refusal| format!("{operation}: {refusal}"))?;
-    tracing::info!(operation, pid, "vault child started");
+    tracing::info!(operation, pid = ?pid, "vault child started");
     let output = child.wait_with_output();
     tokio::pin!(output);
     let Some((ceiling, cadence)) = ceiling else {
         let finished = output.await;
-        tracing::info!(operation, pid, "vault child ended");
+        tracing::info!(operation, pid = ?pid, "vault child ended");
         return finished.map_err(|error| format!("{operation}: wait for the vault child: {error}"));
     };
     let mut system = sysinfo::System::new();
@@ -223,7 +223,7 @@ pub(in crate::gateway::broker) async fn wait_within_footprint(
     loop {
         tokio::select! {
             finished = &mut output => {
-                tracing::info!(operation, pid, "vault child ended");
+                tracing::info!(operation, pid = ?pid, "vault child ended");
                 return finished.map_err(|error| format!("{operation}: wait for the vault child: {error}"));
             }
             _ = checks.tick() => {
