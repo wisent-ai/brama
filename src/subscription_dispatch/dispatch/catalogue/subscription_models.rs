@@ -19,8 +19,19 @@ use super::cache::{
 pub async fn registry_models_for_agent(
     agent_id: &str,
 ) -> Result<Vec<provider_registry::RegistryModel>, Refusal> {
-    let entries = broker::list_subscriptions(agent_id)
-        .await
+    // The list comes from the vault's broker; its cost is logged beside the
+    // discovery's own, so a selector request whose minutes go before any
+    // provider is asked shows which of the two spent them.
+    let listing = Instant::now();
+    let listed = broker::list_subscriptions(agent_id).await;
+    info!(
+        event = "subscriptions_listed",
+        agent_id,
+        subscriptions = listed.len(),
+        list_ms = listing.elapsed().as_millis(),
+        "an agent's subscriptions listed by the broker"
+    );
+    let entries = listed
         .into_iter()
         .filter(|entry| entry.status == "active" && !crate::journal::is_retired(&entry.id))
         .collect::<Vec<_>>();

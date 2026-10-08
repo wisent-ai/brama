@@ -46,10 +46,17 @@ pub async fn dispatch_best_subscription(
     raw_body: &[u8],
     preferred: Option<&str>,
 ) -> ModelResponse {
+    let authenticating = std::time::Instant::now();
     let agent_id = match authenticate_agent(headers, raw_body).await {
         Ok(agent_id) => agent_id,
         Err(e) => return unauthenticated(request, e),
     };
+    tracing::info!(
+        event = "selector_caller_authenticated",
+        agent_id = %agent_id,
+        auth_ms = authenticating.elapsed().as_millis(),
+        "best selector's caller authenticated"
+    );
     dispatch_best_subscription_for_agent(&agent_id, request, preferred).await
 }
 
