@@ -447,7 +447,7 @@ same secret-free pool states. Refresh one provider through
 `{"provider":"codex","reason":"<operator reason>"}`, or through
 `brama subscription refresh codex --reason '<operator reason>'`. Repair a
 provider-disowned Claude Code, Codex, or Kimi grant with
-`brama subscription sign-in <provider> --reason '<operator reason>'`; Brama
+`brama subscription sign-in <provider> --by weles --reason '<operator reason>'`; Brama
 calls Weles's real `/reauth` trajectory, confirms the exact account row, then
 refreshes the grant. Brama Desktop exposes these operations under
 **Subscription Pool**. A non-empty reason is required, the result is appended
@@ -597,20 +597,37 @@ bearer from the vault item that plays the role, read with
 the gateway's own sentence. A missing or stale provider usage report is not
 zero usage; read each window's observation and reset times.
 
-### `brama subscription sign-in <provider> --reason <text>`
+### `brama subscription sign-in <provider> --by weles|hand --reason <text>`
 
-Repairs a provider-disowned `claude-code`, `codex`, or `kimi` grant by running
-the provider's real login trajectory through Weles. Before any browser opens,
+Repairs a provider-disowned `claude-code`, `codex`, or `kimi` grant. `--by` is
+required and names who logs in. `--by weles` runs the provider's real login
+trajectory through Weles. Before any browser opens,
 Brama reads Weles's health contract, resolves the named `login_item` or the one
 Weles explicitly declares primary, and verifies an automatically selected row
 belongs to the exact subscription being repaired. Success requires Weles to
 echo that row and the exact subscription refresh to answer `refreshed`.
 
 ```bash
-brama subscription sign-in codex \
+brama subscription sign-in codex --by weles \
   --login-item codex-wisent-google-sso \
   --reason 'provider disowned the stored grant' \
   --json
+```
+
+`--by hand` signs one `claude-code` subscription in through the operator's own
+browser: Brama prints the provider's authorize page, reads the pasted
+`code#state` (or the whole redirect URL) on stdin, stores the grant and proves
+it with one minimal completion. `--subscription-id` is required;
+`--gateway-consumer <name>` or `--gateway <origin>` with `--bearer-role <role>`
+runs the same two steps on the serving gateway, so a workstation without its
+own vault can sign a pool member in. `--login-item` belongs to `--by weles`
+and the gateway flags to `--by hand`; a contradicting flag is a usage error.
+
+```bash
+brama subscription sign-in claude-code --by hand \
+  --subscription-id <id> \
+  --reason 'the account a person can log into' \
+  --gateway-consumer <consumer> --bearer-role <role>
 ```
 
 A browser sign-in has no clock that ends it: it runs until the provider's pages

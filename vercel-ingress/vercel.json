@@ -122,10 +122,6 @@
       "destination": "/docs/cli/subscription/sign-in.html"
     },
     {
-      "source": "/docs/cli/subscription/sign-in-manual",
-      "destination": "/docs/cli/subscription/sign-in-manual.html"
-    },
-    {
       "source": "/docs/cli/subscription/enrol-authenticator",
       "destination": "/docs/cli/subscription/enrol-authenticator.html"
     },

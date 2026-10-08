@@ -188,7 +188,7 @@ console asked for it; no timer reaches any of them.</p>
   whole redirect URL. The gateway checks the state against the one it drew, exchanges the
   code at the provider's token endpoint, stores the grant as the subscription's credential
   and proves it with one minimal completion, answering the same <code>signed_in</code> or
-  <code>failed</code> verdict as <a href="/docs/cli/subscription/sign-in-manual">the CLI</a>.
+  <code>failed</code> verdict as <a href="/docs/cli/subscription/sign-in#by-hand">the CLI's sign-in --by hand</a>.
   The sign-in is spent by the first paste, whatever it comes to: <code>404 no manual sign-in
   with that id is open</code> afterwards, <code>409</code> with the exact sentence for a paste
   that is empty, unreadable or carries another sign-in's state.</li>

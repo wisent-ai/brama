@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>brama subscription sign-in — Brama CLI Docs</title>
-  <meta name="description" content="Drive one exact Weles sign-in row and prove the resulting Brama credential refresh.">
+  <meta name="description" content="Sign one subscription account into Brama, through Weles or by hand in your own browser, and prove the resulting credential.">
   <link rel="canonical" href="https://brama.wisent.com/docs/cli/subscription/sign-in">
   <link rel="stylesheet" href="/docs/assets/site.css">
 </head>
@@ -19,24 +19,31 @@
     <main>
       <p class="source-note">Brama CLI command reference</p>
       <article class="doc"><h1 id="brama-subscription-sign-in"><code>brama subscription sign-in</code><a class="headerlink" href="#brama-subscription-sign-in" title="Link to this section">&para;</a></h1>
-<p>Ask Weles to sign one provider account in, then prove the repair by running Brama’s refresh path.</p>
+<p>Sign one provider account in and prove the repair. Who logs in is stated every time with <code>--by</code>: <code>weles</code> asks Weles to drive the account’s sign-in row and proves the result with Brama’s refresh path; <code>hand</code> prints the provider’s authorize page for you to open in your own browser, reads the code it shows on stdin, stores the grant and proves it with one minimal completion. One operation with two methods is one verb; nothing is assumed when <code>--by</code> is left out.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama subscription sign-in &lt;PROVIDER&gt; --reason &lt;REASON&gt; [--subscription-id &lt;ID&gt;] [--login-item &lt;LOGIN_ITEM&gt;] [--json]</code></pre>
+<pre><code class="language-console">brama subscription sign-in &lt;PROVIDER&gt; --by weles --reason &lt;REASON&gt; [--subscription-id &lt;ID&gt;] [--login-item &lt;LOGIN_ITEM&gt;] [--json]
+brama subscription sign-in &lt;PROVIDER&gt; --by hand --subscription-id &lt;ID&gt; --reason &lt;REASON&gt; [--gateway-consumer &lt;CONSUMER&gt; | --gateway &lt;URL&gt;] [--bearer-role &lt;ROLE&gt;] [--json]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
-<tr><td><code>&lt;PROVIDER&gt;</code></td><td>required</td><td>One of <code>codex</code>, <code>claude-code</code>, or <code>kimi</code>.</td></tr>
-<tr><td><code>--reason &lt;REASON&gt;</code></td><td>required</td><td>Nonempty audit reason recorded with sign-in and refresh verdicts.</td></tr>
-<tr><td><code>--subscription-id &lt;ID&gt;</code></td><td>optional only when exactly one active subscription matches</td><td>The Skarbiec subscription to authenticate. Automatic renewal always supplies it.</td></tr>
-<tr><td><code>--login-item &lt;LOGIN_ITEM&gt;</code></td><td>optional</td><td>An exact Skarbiec login reference. Otherwise the identity and login method are resolved from Skarbiec; no Weles account registration is required.</td></tr>
-<tr><td><code>--json</code></td><td>optional; off</td><td>Print JSON instead of labeled lines.</td></tr>
+<tr><td><code>&lt;PROVIDER&gt;</code></td><td>required</td><td>One of <code>codex</code>, <code>claude-code</code>, or <code>kimi</code>. <code>--by hand</code> has a manual flow for <code>claude-code</code> only; the others are refused by name.</td></tr>
+<tr><td><code>--by weles|hand</code></td><td>required; no default</td><td>Who logs the account in: Weles through its sign-in row, or you in your own browser.</td></tr>
+<tr><td><code>--reason &lt;REASON&gt;</code></td><td>required</td><td>Nonempty audit reason recorded with the sign-in verdict.</td></tr>
+<tr><td><code>--subscription-id &lt;ID&gt;</code></td><td><code>--by hand</code>: required. <code>--by weles</code>: optional only when exactly one active subscription matches</td><td>The exact Brama subscription whose grant is replaced and proved. Automatic renewal always supplies it.</td></tr>
+<tr><td><code>--login-item &lt;LOGIN_ITEM&gt;</code></td><td><code>--by weles</code> only; optional</td><td>An exact Skarbiec login reference. Otherwise the identity and login method are resolved from Skarbiec; no Weles account registration is required.</td></tr>
+<tr><td><code>--gateway-consumer &lt;CONSUMER&gt;</code></td><td><code>--by hand</code> only; optional</td><td>Sign in on the gateway that serves the pool, found through Stado’s service directory as this consumer. The gateway draws the page, keeps the verifier, takes the paste and stores the grant in its own vault. Use it on a host that holds no vault of its own, such as a workstation.</td></tr>
+<tr><td><code>--gateway &lt;URL&gt;</code></td><td><code>--by hand</code> only; optional; not with <code>--gateway-consumer</code></td><td>The same, with the gateway’s origin named directly.</td></tr>
+<tr><td><code>--bearer-role &lt;ROLE&gt;</code></td><td>required with a gateway</td><td>The vault role whose item’s <code>token</code> field is the console’s bearer; it cannot come from stdin, which carries the pasted code.</td></tr>
+<tr><td>stdin</td><td><code>--by hand</code>: required</td><td>One line: the <code>code#state</code> text or the whole redirect URL the page shows. The code is a credential, so it is never accepted as an argument.</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td>Print the verdict as JSON instead of labeled lines.</td></tr>
 </tbody></table>
-<h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
+<h2 id="by-weles">By Weles<a class="headerlink" href="#by-weles" title="Link to this section">&para;</a></h2>
+<h3 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h3>
 <p>Brama calls Weles's authenticated <code>POST /reauth/resolve</code> to resolve the exact Skarbiec identity without opening a browser. It passes <code>account_revision</code> to <code>POST /reauth</code>, checks the response and refreshes the persisted credential. The saved verdict includes the subscription, login reference, account and software revisions, Weles <code>run_id</code> and observed <code>second_factor</code>. A failure also retains its stage and HTTP status. The CLI, Desktop and automatic renewal share this implementation; automatic renewal does not require a separate sign-in command.</p>
 <p>Brama Desktop's explicit <strong>Sign in</strong> action targets the selected account through <code>POST /v1/admin/subscription-pool/sign-in</code>, <code>POST /v1/admin/subscription-sign-in/:agent_id/:subscription_id</code>, or <code>POST /v1/account/subscription-sign-in/:subscription_id</code>. The body names a nonempty <code>reason</code> and optional <code>login_item</code>; the pool route additionally requires <code>subscription_id</code>. Brama verifies ownership and derives the provider from that subscription. The sign-in runs until Weles reports how it ended. The app does not launch a local browser, and neither listing nor refreshing usage invokes this action.</p>
-<h2 id="second-factor">Second-factor challenges<a class="headerlink" href="#second-factor" title="Link to this section">&para;</a></h2>
+<h3 id="second-factor">Second-factor challenges<a class="headerlink" href="#second-factor" title="Link to this section">&para;</a></h3>
 <p>Weles answers an offered authenticator challenge with the stored seed. Without a seed, it selects an offered Google phone approval and waits for Google's result. The run then waits for a person: <code>weles runs list</code> and <code>weles runs show &lt;run&gt;</code> show what it asked for (<a href="https://weles.wisent.com/docs/waiting-for-a-person">Runs waiting for a person</a>), as does Weles Desktop's <strong>Running</strong> screen on the managed worker. Approve it on the account owner's phone; nothing else is needed when Google moves on. When the prompt never arrived or nothing moved after approving, <code>weles runs answer &lt;run&gt; --not-received | --approved</code> tells the run; <code>weles runs cancel &lt;run&gt; --detail &lt;why&gt;</code> ends the wait.</p>
 <p>Only the structured <code>google_2fa_material_missing</code> refusal starts authenticator enrolment. Brama binds that attempt to the same resolved subscription and login, confirms the Weles run and Skarbiec seed readback, then signs that account in again and refreshes its credential. A failed enrolment remains a failed sign-in, with its actual cause; Brama does not loop or silently replace an existing authenticator.</p>
 <p>In Brama Desktop, select an account and open <strong>Second factor</strong> to see the observed challenge, method, stored seed state and seed-read error. <code>required: false</code> means Google did not ask during that observed sign-in, not that the account has disabled two-factor authentication. A sign-in without challenge evidence remains unobserved.</p>
-<h2 id="refusals">Exact refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
+<h3 id="refusals">Exact refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h3>
 <ul>
 <li>Unsupported provider: <code>Weles does not support subscription authentication for &lt;provider&gt;</code>.</li>
 <li>Empty reason: <code>--reason must say why this sign-in is being run</code>.</li>
@@ -47,6 +54,31 @@
 <li>Enrolment preserves <code>authenticator_replacement_requires_consent</code>, <code>setup_confirmation_unobserved</code> and vault-read errors. A failed <code>totp-seed-state</code> operation is not evidence that a seed is missing.</li>
 </ul>
 <p>An unconfirmed Weles response or a refresh that obtains nothing returns a <code>failed</code> verdict and exits 1; Brama never guesses between accounts.</p>
+<h2 id="by-hand">By hand<a class="headerlink" href="#by-hand" title="Link to this section">&para;</a></h2>
+<p>No Weles host, worker credential or Skarbiec login row is involved. For <code>claude-code</code> the flow is the one <code>omp auth-broker login anthropic</code> runs, so the stored grant is the kind the automatic refresh keeps alive.</p>
+<ol>
+<li>Brama draws a PKCE verifier and a state and prints the provider’s authorize page. Nothing has been contacted yet.</li>
+<li>You open it in your own browser, sign into the account you want in the pool and approve; paste the <code>code#state</code> the page shows, or the whole redirect URL.</li>
+<li>Brama checks the state is the one it drew, exchanges the code at the provider’s token endpoint and stores the grant as the subscription’s credential.</li>
+<li>Brama spends one minimal completion on the stored grant: a probe, not a refresh, so a grant shared with another holder is not rotated out from under it.</li>
+</ol>
+<p>The verdict lists the provider, subscription, account, <code>result</code> and <code>detail</code>; <code>--json</code> prints the same fields as one object, and the exit status is zero only for <code>result: signed_in</code>. Without a gateway the command runs where Brama runs, because that is where the grant is stored. With <code>--gateway-consumer</code> (or <code>--gateway</code>) and <code>--bearer-role</code> the serving gateway does the two steps through <code>POST /v1/admin/subscription-pool/sign-in-manual</code> and <code>…/sign-in-manual/:sign_in_id</code> (<a href="/docs/http-api/administration-and-operations#administered-subscriptions">HTTP API</a>), as Brama Desktop’s <strong>Sign in by hand</strong> does.</p>
+<h3 id="by-hand-refusals">Exact refusals<a class="headerlink" href="#by-hand-refusals" title="Link to this section">&para;</a></h3>
+<ul>
+<li>Another provider: <code>a manual sign-in is defined for claude-code; `&lt;provider&gt;` is not it</code>. No page is printed.</li>
+<li>A host that holds no vault of its own, run without a gateway: <code>no sign-in was started: the grant could not be stored on this host (&lt;Skarbiec's sentence&gt;); name the gateway that serves the pool with --gateway-consumer &lt;CONSUMER&gt; --bearer-role &lt;ROLE&gt; (or --gateway &lt;URL&gt; --bearer-role &lt;ROLE&gt;) so it stores the grant in its own vault</code>.</li>
+<li>The gateway refusing either step: <code>the gateway refused to begin the sign-in: &lt;status&gt;: &lt;its whole answer&gt;</code> or <code>the gateway refused to complete the sign-in: …</code>; a gateway that holds the subscription under another provider: <code>no sign-in was started: the gateway holds &lt;id&gt; as a &lt;provider&gt; subscription, not &lt;PROVIDER&gt;</code>.</li>
+<li>The paste: <code>nothing was pasted</code>; <code>paste the `code#state` the page shows, or the whole redirect URL</code>; <code>the pasted state is not the one this sign-in started with; open the URL again and paste what that page shows</code>.</li>
+<li>The provider: <code>the provider refused the code with HTTP &lt;status&gt;: &lt;body&gt;</code>; <code>the provider's answer carries no refresh token; Brama cannot keep a grant it cannot renew</code>; <code>the grant from the code the operator pasted is stored, but the provider would not serve it: &lt;the provider's sentence&gt;</code>.</li>
+</ul>
+<h2 id="usage-refusals">Flags that contradict the method<a class="headerlink" href="#usage-refusals" title="Link to this section">&para;</a></h2>
+<ul>
+<li><code>--by hand</code> with <code>--login-item</code>: <code>--login-item &lt;LOGIN_ITEM&gt; names a Weles sign-in row, and --by hand signs in through your own browser; drop it or sign in --by weles</code>.</li>
+<li><code>--by hand</code> without <code>--subscription-id</code>: <code>--by hand replaces one subscription's grant; name it with --subscription-id</code>.</li>
+<li><code>--by weles</code> with a gateway or <code>--bearer-role</code>: <code>--gateway, --gateway-consumer and --bearer-role carry a sign-in --by hand to the serving gateway; --by weles runs on the host that reaches Weles, so drop them or sign in --by hand</code>.</li>
+<li>No <code>--by</code>, a gateway without <code>--bearer-role</code>, or <code>--bearer-role</code> without a gateway: clap refuses the arguments.</li>
+</ul>
+<p>These are usage errors, refused before anything is contacted, with clap’s usage exit status.</p>
 <p>See <a href="/docs/cli/subscription">the command group</a> or <a href="/docs/cli">the CLI tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>

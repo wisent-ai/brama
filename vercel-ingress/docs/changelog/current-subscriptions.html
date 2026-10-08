@@ -261,7 +261,7 @@ access token both sides hold and rotates nothing. The sweep rotates the grant la
 as the access token nears its end, and the harness's copy goes stale then - which the
 <a href="/docs/cli/subscription/import#after-the-import">import page</a> says plainly.</p>
 <h2 id="unreleased-manual-sign-in">Unreleased: a Claude account is signed in by hand, without Weles<a class="headerlink" href="#unreleased-manual-sign-in" title="Link to this section">&para;</a></h2>
-<p><a href="/docs/cli/subscription/sign-in-manual"><code>brama subscription sign-in-manual claude-code --subscription-id &lt;id&gt; --reason &lt;why&gt;</code></a>
+<p><code>brama subscription sign-in-manual claude-code --subscription-id &lt;id&gt; --reason &lt;why&gt;</code> (since replaced by <a href="/docs/cli/subscription/sign-in#by-hand"><code>sign-in --by hand</code></a>)
 prints the provider's authorize page, waits for the code the operator pastes
 after logging in with their own browser, exchanges it at the provider's token
 endpoint, stores the grant as that subscription's credential in the shape the

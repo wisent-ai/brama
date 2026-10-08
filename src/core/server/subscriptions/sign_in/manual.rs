@@ -142,8 +142,8 @@ pub(in crate::core::server) async fn complete_admin_manual_sign_in(
 // one OAuth pair per sign-in and revokes it when a second holder refreshes,
 // so every adopted grant costs its first holder its session, the operator's
 // own included. A gateway signs itself in:
-// `subscription sign-in` through Weles on its own host, or
-// `subscription sign-in-manual`, which runs the provider's OAuth flow here
+// `subscription sign-in --by weles` through Weles on its own host, or
+// `subscription sign-in --by hand`, which runs the provider's OAuth flow here
 // and mints a pair that belongs to this gateway.
 
 /// `POST /v1/admin/subscription-pool/disown`: the console takes back a grant

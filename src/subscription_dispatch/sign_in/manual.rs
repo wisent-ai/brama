@@ -12,7 +12,7 @@
 //! all. A gateway signs itself in.
 //!
 //! Weles drives this same flow headlessly on the gateway's own host
-//! (`subscription sign-in`); this module is the path a person can run from a
+//! (`subscription sign-in --by weles`); this module is `--by hand`, the path a person can run from a
 //! terminal, and the one Weles's exchange ends in.
 
 mod exchange;

@@ -34,9 +34,10 @@ Skarbiec vault at the coordinate <code>provider:claude-code:&lt;subscription&gt;
 proof a sign-in worked is never the login&#x27;s own exit status — it is the vault bundle
 standing at a higher revision than before, and a refresh that now answers
 <code>refreshed</code>.</p>
-<p>Three callers drive that sign-in: <code>brama subscription sign-in claude-code --reason
+<p>Four callers drive that sign-in: <code>brama subscription sign-in claude-code --by weles --reason
 &quot;&lt;why&gt;&quot;</code> on the host Weles runs on
-(<a href="/docs/cli#brama-subscription-sign-in-provider-reason-text-json">cli</a>), the renewal
+(<a href="/docs/cli/subscription/sign-in#by-weles">cli</a>), <code>--by hand</code> through a person's own browser and a pasted code
+(<a href="/docs/cli/subscription/sign-in#by-hand">cli</a>), the renewal
 loop that watches the pool for authentication refusals and signs the mapped account in
 without a human, and Brama Desktop. A grant can also arrive without any sign-in on this
 fleet at all: a signed donation through <code>POST /v1/subscription-pool</code> banks a

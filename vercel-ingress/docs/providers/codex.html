@@ -34,9 +34,9 @@ API, drives its stored sign-in row for the account, and writes the minted grant 
 Skarbiec vault at <code>provider:codex:&lt;subscription&gt;</code>. The proof is never the
 login&#x27;s exit status — it is the vault bundle at a higher revision and a refresh that
 now answers <code>refreshed</code>.</p>
-<p>Three callers drive it: <code>brama subscription sign-in codex --reason
+<p>Three callers drive it: <code>brama subscription sign-in codex --by weles --reason
 &quot;&lt;why&gt;&quot;</code> on the host Weles runs on
-(<a href="/docs/cli#brama-subscription-sign-in-provider-reason-text-json">cli</a>), the renewal
+(<a href="/docs/cli/subscription/sign-in#by-weles">cli</a>), the renewal
 loop that signs refused accounts back in without a human, and Brama Desktop. A signed
 donation through <code>POST /v1/subscription-pool</code> banks a grant minted elsewhere
 (<a href="/docs/examples/operations/manage-subscriptions">donation</a>).</p>

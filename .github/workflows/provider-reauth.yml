@@ -60,5 +60,5 @@ jobs:
             printf '%s\n' "${{ matrix.provider }} subscription refreshed without a sign-in"
             exit 0
           fi
-          "$launcher" subscription sign-in "${{ matrix.provider }}" \
+          "$launcher" subscription sign-in "${{ matrix.provider }}" --by weles \
             --reason "$reason; refresh required a real sign-in" --json
