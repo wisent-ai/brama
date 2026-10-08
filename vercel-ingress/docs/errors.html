@@ -108,7 +108,7 @@ diagnostic, not the machine contract.</p>
 <tr>
 <td style="text-align: right;">502</td>
 <td><code>decision_contract_violated</code></td>
-<td>a <a href="/docs/concepts/decision">decision</a> was answered outside the schema the caller declared: a label the question never named, a missing one, or no probability mass at all. <code>details</code> carry <code>alias</code> and <code>route</code></td>
+<td>a <a href="/docs/concepts/decision">decision</a> was answered outside the schema the caller declared: a label the question never named (read without surrounding whitespace), one label named twice, or no probability mass at all. <code>details</code> carry <code>alias</code> and <code>route</code></td>
 <td>Point the alias at a route that can keep the contract; waiting does not reach it</td>
 </tr>
 <tr>

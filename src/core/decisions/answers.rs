@@ -126,13 +126,26 @@ fn distribution(
     answered: &Map<String, Value>,
 ) -> Result<Vec<(String, f64)>, String> {
     let labels = question.labels();
-    for label in answered.keys() {
-        if !labels.contains(label) {
+    // A text model writes a label the way its tokenizer spells it, often with
+    // the space that precedes a word (` acknowledgement`). The label it names is
+    // the declared one all the same, so keys are read without surrounding
+    // whitespace; a key that is still not declared is refused, and so are two
+    // keys that name one label, because which mass the model meant is unknown.
+    let mut named = Map::with_capacity(answered.len());
+    for (written, value) in answered {
+        let label = written.trim();
+        if !labels.iter().any(|declared| declared == label) {
             return Err(format!(
-                "answer for question `{key}` names label `{label}`, which this question does not declare"
+                "answer for question `{key}` names label `{written}`, which this question does not declare"
+            ));
+        }
+        if named.insert(label.to_string(), value.clone()).is_some() {
+            return Err(format!(
+                "answer for question `{key}` names label `{label}` more than once"
             ));
         }
     }
+    let answered = &named;
     let mut mass = Vec::with_capacity(labels.len());
     let mut total = 0.0;
     for label in &labels {

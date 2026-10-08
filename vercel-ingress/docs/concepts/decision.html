@@ -109,10 +109,12 @@ sum to one, and its confidence that mass;</li>
 normalized distribution, with the rubric as its legend.</li>
 </ul>
 <p>The model is never asked to assert the choice or the score, only the
-numbers, so it cannot contradict its own distribution. An answer naming a
-label the question did not declare, omitting one, or carrying no
-probability mass at all is refused <code>decision_contract_violated</code> rather than
-repaired.</p>
+numbers, so it cannot contradict its own distribution. A label is read without
+the whitespace around it, because a text model writes a label the way its
+tokenizer spells it (<code>" acknowledgement"</code>), and a label the model leaves
+out carries no mass. An answer naming a label the question did not declare,
+naming one label twice, or carrying no probability mass at all is refused
+<code>decision_contract_violated</code> rather than repaired.</p>
 <h2 id="the-two-aliases">The two aliases<a class="headerlink" href="#the-two-aliases" title="Link to this section">&para;</a></h2>
 <p><code>model</code> accepts exactly two names, for the same reason the embeddings
 endpoint accepts exactly one: the name is the caller's promise of a typed
