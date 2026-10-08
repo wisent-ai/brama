@@ -57,7 +57,7 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
     // size nobody stated: a long prompt is the routed model's to accept or to
     // refuse as context_length_exceeded, which reaches the caller classed and
     // naming the model. Kept, the limit answered a long judge request 413
-    // 'Failed to buffer the request body' from the gateway itself (72169b4c).
+    // 'Failed to buffer the request body' from the gateway itself.
     let protected = Router::new()
         .route(
             "/v1/chat/completions",

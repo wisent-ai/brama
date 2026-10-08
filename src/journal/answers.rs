@@ -3,7 +3,7 @@
 //! `brama aliases` and `stado inference route show` compared declarations
 //! and credential presence only, so an alias whose provider refused every
 //! request (an OpenRouter or OpenAI account without credits) read as serving
-//! for days while every caller was refused (f78995c7). The gateway already
+//! for days while every caller was refused. The gateway already
 //! classes each answer; this keeps the newest one per alias in
 //! `$BRAMA_STATE_DIR/alias-answers.json`, written only when an alias's answer
 //! changes (answered to refused, or one refusal class to another), so a
