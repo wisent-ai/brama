@@ -103,6 +103,16 @@ fn print_report(report: &Value) {
             count("/credentials/sign_in_checks_scheduled")
         ),
     }
+    for verdict in report["acquisition"]["verdicts"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        println!(
+            "acquisition: {} {} ({}): {}",
+            verdict["provider"], verdict["result"], verdict["code"], verdict["detail"]
+        );
+    }
     println!(
         "readiness: ready={} {}",
         count("/readiness/ready"),

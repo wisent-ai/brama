@@ -16,7 +16,7 @@ use super::call::outcome::refusal::{provider_refusal, transport_refusal};
 use super::call::outcome::response_body::response_text;
 use super::registry::{provider, provider_base_url, ProviderDescriptor};
 use crate::types::{LimitReading, Refusal};
-use endpoint::{plan_usage_endpoint, PlanUsageEndpoint};
+use endpoint::{plan_tier_endpoint, plan_usage_endpoint, PlanUsageEndpoint};
 use headers::observed_at_ms;
 use report::plan_usage_readings;
 
@@ -233,4 +233,59 @@ pub async fn read_plan_usage(provider_id: &str, item: &str, secret: &str) -> Pla
             &format!("usage response schema is invalid: {error}"),
         ),
     }
+}
+
+/// The plan tier the provider says this credential's account holds, read
+/// from its own profile with one bounded GET that spends no quota.
+///
+/// `Err` carries the endpoint, the vault item, the HTTP status when one came
+/// back and the provider's own words, so a refusal names what to repair. A
+/// provider that states no plan tier is refused by name rather than answered
+/// with a guess.
+pub async fn read_plan_tier(provider_id: &str, item: &str, secret: &str) -> Result<String, String> {
+    let endpoint = plan_tier_endpoint(provider_id)
+        .ok_or_else(|| format!("provider `{provider_id}` states no plan tier Brama can read"))?;
+    let descriptor = provider(provider_id)
+        .ok_or_else(|| format!("provider `{provider_id}` is not registered"))?;
+    let url = plan_usage_url(descriptor, endpoint)?;
+    let key = credential_key(item, secret)
+        .map_err(|message| format!("profile GET `{url}` for credential `{item}`: {message}"))?;
+    let client = control_client()
+        .map_err(|message| format!("provider client configuration failed: {message}"))?;
+    let builder = client.get(&url).header("accept", "application/json");
+    let response = authorize_provider(builder, descriptor, &key, secret)
+        .send()
+        .await
+        .map_err(|error| {
+            format!(
+                "profile GET `{url}` for credential `{item}` failed before an HTTP response: {}",
+                transport_refusal(&error).message
+            )
+        })?;
+    let (status, _plan, text) = response_text(response).await.map_err(|refused| {
+        format!(
+            "profile GET `{url}` for credential `{item}`: {}",
+            refused.message
+        )
+    })?;
+    if !status.is_success() {
+        let (kind, detail) = provider_refusal(status, &text);
+        return Err(format!(
+            "{kind}: profile GET `{url}` for credential `{item}` returned HTTP {}: {detail}",
+            status.as_u16()
+        ));
+    }
+    let body = serde_json::from_str::<Value>(&text).map_err(|error| {
+        format!("profile GET `{url}` for credential `{item}` is not valid JSON: {error}")
+    })?;
+    body.pointer("/organization/rate_limit_tier")
+        .and_then(Value::as_str)
+        .filter(|tier| !tier.trim().is_empty())
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            format!(
+                "profile GET `{url}` for credential `{item}` answered without \
+                 organization.rate_limit_tier: {body}"
+            )
+        })
 }

@@ -138,6 +138,14 @@
       "destination": "/docs/cli/subscription/disown.html"
     },
     {
+      "source": "/docs/cli/subscription/acquire",
+      "destination": "/docs/cli/subscription/acquire.html"
+    },
+    {
+      "source": "/docs/cli/subscription/hand-over",
+      "destination": "/docs/cli/subscription/hand-over.html"
+    },
+    {
       "source": "/docs/cli/collect-task-quality",
       "destination": "/docs/cli/collect-task-quality.html"
     },

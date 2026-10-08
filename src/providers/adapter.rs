@@ -37,7 +37,7 @@ pub use call::media::{
 };
 pub use call::typed_capability::{dispatch_decision, dispatch_openai_typed};
 pub use plan::probe::plan_probe_route;
-pub use plan::{publishes_plan_usage, read_plan_usage, PlanUsage};
+pub use plan::{publishes_plan_usage, read_plan_tier, read_plan_usage, PlanUsage};
 pub use registry::{
     kind_from_output, native_decision_route, provider, provider_endpoint, provider_id_from_route,
     providers, route, supports_chat_route, supports_decision_route, supports_embedding_route,

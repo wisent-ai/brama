@@ -64,3 +64,22 @@ pub(super) fn plan_usage_endpoint(provider_id: &str) -> Option<&'static PlanUsag
         .iter()
         .find(|endpoint| endpoint.provider_id == provider_id)
 }
+
+/// Where a provider states which plan a credential's account holds.
+///
+/// Anthropic's OAuth profile names the account's plan tier in
+/// `organization.rate_limit_tier`, the value Claude Code stores beside its
+/// grant as `rateLimitTier`. An acquisition buys the plan the pool's own
+/// accounts hold, so this read is what answers "which plan" instead of a plan
+/// chosen in code. Other providers publish no such statement here.
+const PLAN_TIER_ENDPOINTS: &[PlanUsageEndpoint] = &[PlanUsageEndpoint {
+    provider_id: "claude-code",
+    url: "https://api.anthropic.com/api/oauth/profile",
+    shape: PlanUsageShape::AnthropicOauth,
+}];
+
+pub(super) fn plan_tier_endpoint(provider_id: &str) -> Option<&'static PlanUsageEndpoint> {
+    PLAN_TIER_ENDPOINTS
+        .iter()
+        .find(|endpoint| endpoint.provider_id == provider_id)
+}

@@ -7,6 +7,7 @@
 //! authenticated through Stado, and every member says who refreshes its
 //! grant.
 
+mod acquisition;
 pub(crate) mod credentials;
 mod manual;
 mod membership;

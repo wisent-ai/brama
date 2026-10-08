@@ -181,6 +181,25 @@ pub fn subscription_sign_in_due(subscription_id: &str, cooldown: std::time::Dura
     chrono::Utc::now().timestamp_millis().saturating_sub(at_ms) >= cooldown_ms
 }
 
+/// Retain one account acquisition: the accounts counted, the plan read, the
+/// Weles run and its stages, and how it ended. Written when the purchase is
+/// requested (`requested`) and again when it ends, so a purchase whose answer
+/// never came back is still on record as asked for.
+pub fn record_subscription_acquisition(outcome: &Value) {
+    let mut record = outcome.clone();
+    record["kind"] = json!("subscription_acquisition");
+    record["at"] = json!(now());
+    record["at_ms"] = json!(chrono::Utc::now().timestamp_millis());
+    append(record);
+}
+
+/// The newest acquisition record for one provider, of any result.
+pub fn latest_subscription_acquisition(provider: &str) -> Option<Value> {
+    read_all().into_iter().rev().find(|record| {
+        field(record, "kind") == "subscription_acquisition" && field(record, "provider") == provider
+    })
+}
+
 /// Append one task-quality observation.
 #[allow(clippy::too_many_arguments)]
 pub fn record_check(

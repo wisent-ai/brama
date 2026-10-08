@@ -37,8 +37,8 @@ use crate::core::server::media::{
 };
 use crate::core::server::readiness::{health, readyz};
 use crate::core::server::subscriptions::probe::{
-    attribute_admin_subscription_pool, maintain_admin, probe_admin_subscription,
-    refresh_admin_subscription_pool,
+    acquire_admin_subscription, attribute_admin_subscription_pool, maintain_admin,
+    probe_admin_subscription, refresh_admin_subscription_pool,
 };
 use crate::core::server::subscriptions::sign_in::manual::{
     complete_admin_manual_sign_in, disown_admin_grant, reinstate_admin_grant,
@@ -185,6 +185,10 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
         .route(
             "/v1/admin/subscription-pool/attribute",
             post(attribute_admin_subscription_pool),
+        )
+        .route(
+            "/v1/admin/subscription-pool/acquire",
+            post(acquire_admin_subscription),
         )
         .route("/v1/admin/maintain", post(maintain_admin))
         .layer(Extension(aliases))

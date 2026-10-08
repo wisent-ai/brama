@@ -7,7 +7,7 @@ use serde_json::Value;
 use super::super::text;
 use super::super::verdicts::enrolment::enrol_authenticator;
 use super::super::verdicts::{print_refresh, print_sign_in};
-use super::super::{manual, membership, remote};
+use super::super::{acquisition, manual, membership, remote};
 use super::{AuthenticatorCommand, SignInBy, SubscriptionCommand};
 
 pub(crate) async fn run(command: SubscriptionCommand) {
@@ -191,6 +191,26 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             )
             .await;
         }
+        SubscriptionCommand::Acquire {
+            provider,
+            reason,
+            gateway,
+            gateway_consumer,
+            bearer_role,
+            json,
+        } => {
+            let destination = remote::Destination {
+                gateway,
+                gateway_consumer,
+                bearer_role,
+            };
+            acquisition::acquire(destination, &provider, &reason, json).await;
+        }
+        SubscriptionCommand::HandOver {
+            provider,
+            harness,
+            json,
+        } => acquisition::hand_over(&provider, harness, json).await,
     }
 }
 

@@ -2,6 +2,6 @@
 //! it, and how one account is resolved through it.
 
 pub(super) mod account;
-pub(super) mod api;
+pub(crate) mod api;
 pub(crate) mod enrolment;
 pub mod progress;

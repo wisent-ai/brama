@@ -19,6 +19,12 @@ pub(crate) enum SignInBy {
     Hand,
 }
 
+/// A coding-agent harness a bought account can be handed to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub(crate) enum Harness {
+    Omp,
+}
+
 #[derive(Subcommand)]
 pub(crate) enum SubscriptionCommand {
     /// Report the subscription pool this gateway routes over: every member,
@@ -156,6 +162,49 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long, value_name = "ROLE", requires = "destination")]
         bearer_role: Option<String>,
         /// Print `{subscription_id, detail}` as JSON instead of a line
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
+    /// Buy one new account of this provider when every account in the pool
+    /// has spent its plan and the pool holds fewer accounts than the
+    /// operator allows: Weles creates and pays for it on the plan the pool's
+    /// accounts hold, Brama proves its grant; here or on the gateway that
+    /// holds the vault
+    #[command(
+        name = "acquire",
+        group(ArgGroup::new("destination").args(["gateway", "gateway_consumer"]))
+    )]
+    Acquire {
+        /// The provider to buy an account of (`claude-code`)
+        provider: String,
+        /// Why an account is being bought; recorded in the journal beside the verdict
+        #[arg(long, value_parser = NonEmptyStringValueParser::new())]
+        reason: String,
+        /// The gateway holding the pool; the console's bearer is read from stdin
+        #[arg(long)]
+        gateway: Option<String>,
+        /// Resolve the gateway through Stado's service directory as this consumer
+        #[arg(long)]
+        gateway_consumer: Option<String>,
+        /// Read the console's bearer from the vault item playing this role (its `token` field) instead of from stdin
+        #[arg(long, value_name = "ROLE", requires = "destination")]
+        bearer_role: Option<String>,
+        /// Print the verdict as JSON instead of lines
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
+    /// Sign every bought account into a coding-agent harness on this
+    /// machine: each harness grant Weles stored for an acquired account that
+    /// this harness does not hold yet is imported through the harness's own
+    /// credential import, then marked as handed over in the vault
+    #[command(name = "hand-over")]
+    HandOver {
+        /// The provider whose bought accounts are handed over (`claude-code`)
+        provider: String,
+        /// The harness to sign in (`omp`)
+        #[arg(long, value_enum)]
+        harness: Harness,
+        /// Print the verdict as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,
     },

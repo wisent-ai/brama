@@ -155,7 +155,8 @@ account is the subscription item's own <code>account_ref</code>, or else its
 <a href="/docs/cli/subscription/accounts/attribute"><code>brama subscription attribute</code></a>
 writes from the member's own grant; Weles then signs in through the login row
 whose username is that address and which declares a <code>login_method</code>
-(<code>google_sso</code> or <code>email_password</code>). An optional existing
+(<code>google_sso</code>, <code>email_password</code>, or <code>email_code</code> for an
+account an acquisition bought, whose sign-in code Weles reads from its inbound mailbox). An optional existing
 login reference may identify the item, but no additional
 <code>brama:login:</code> tag is required to make an account eligible.</p>
 <p>Weles performs OAuth without launching provider CLIs or copying their local
@@ -172,6 +173,19 @@ resolved again automatically. Readiness exposes these same observations under
 <code>automatic_sign_in.blocked</code>; unknown host placement is
 <code>null</code>, not a claim that the host is correct.
 See the <a href="/docs/runbook/credentials-and-subscriptions">credentials runbook</a>.</p>
+<h2 id="acquisition">Acquisition<a class="headerlink" href="#acquisition" title="Link to this section">&para;</a></h2>
+<p>When every <code>claude-code</code> account in the pool has spent its plan and the
+pool holds fewer accounts than the operator allows (<code>claude_code_accounts_max</code>
+in <code>src/subscription_dispatch/acquire/numeric-provenance.json</code>, with his words),
+a <code>brama maintain</code> pass has Weles buy one on the plan tier the pool's accounts
+hold, records it as <code>claude-code-acquired-&lt;UTC time&gt;</code> and proves its grant.
+Each account's plan is read fresh from the provider at that moment; an account whose
+plan cannot be read stops the purchase instead of counting as spent. After an
+automatic purchase that failed, passes buy nothing until an operator runs
+<a href="/docs/cli/subscription/acquire"><code>brama subscription acquire</code></a>.
+<a href="/docs/cli/subscription/hand-over"><code>brama subscription hand-over</code></a>
+then signs the account into a harness on the operator's machine through that
+harness's own login, so no grant is shared.</p>
 <h2 id="donation-and-retirement">Donation and retirement<a class="headerlink" href="#donation-and-retirement" title="Link to this section">&para;</a></h2>
 <p><code>POST /v1/subscription-pool</code> (and the account/admin variants) banks a
 credential onto the coordinate the operator's routes table already names for

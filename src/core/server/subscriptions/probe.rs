@@ -27,6 +27,37 @@ pub(in crate::core::server) struct AttributeSubscriptionPoolRequest {
     provider: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(in crate::core::server) struct AcquireSubscriptionRequest {
+    provider: String,
+    reason: String,
+}
+
+/// Buy one account of a provider when every pool account has spent its plan
+/// and the pool holds fewer accounts than the operator allows, run by the
+/// serving process because it holds the vault, the ledger and the journal.
+/// A refusal or a failed purchase is still a 200: the verdict is the report
+/// the operator came for, and `result` says how it ended. A request that
+/// cannot be decided (an unknown provider, no reason) is a 400.
+pub(in crate::core::server) async fn acquire_admin_subscription(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Json(request): Json<AcquireSubscriptionRequest>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    crate::subscription_dispatch::acquire::acquire_account(
+        crate::subscription_dispatch::acquire::AcquireOptions {
+            provider: request.provider,
+            reason: request.reason,
+            trigger: crate::subscription_dispatch::acquire::Trigger::Operator,
+            progress: None,
+        },
+    )
+    .await
+    .map(Json)
+    .map_err(|message| api_error(StatusCode::BAD_REQUEST, &message))
+}
+
 /// Spend one minimal completion against one subscription, because an operator
 /// asked whether the provider will actually serve it.
 ///
@@ -103,15 +134,18 @@ pub(in crate::core::server) async fn attribute_admin_subscription_pool(
 
 /// One maintenance pass of this serving process, the work it used to run on
 /// its own timers: read every plan usage report that is due, renew every
-/// grant whose stated expiry has passed, and take a fresh readiness reading. The host's
-/// Stado schedule decides how often; `brama maintain` is the caller. `ok` is
-/// false when any step failed, and each failure is in the body with its error.
+/// grant whose stated expiry has passed, decide whether a spent pool needs a
+/// new account (and start buying it), and take a fresh readiness reading. The
+/// host's Stado schedule decides how often; `brama maintain` is the caller.
+/// `ok` is false when any step failed, and each failure is in the body with
+/// its error; an acquisition refusal is a decision, not a failure.
 pub(in crate::core::server) async fn maintain_admin(
     Extension(client_identity): Extension<ModelClientIdentity>,
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
     let plan_usage = crate::subscription_dispatch::plan_usage::sweep().await;
     let credentials = crate::subscription_dispatch::refresh_sweep::sweep().await;
+    let acquisition = crate::subscription_dispatch::acquire::maintenance_pass().await;
     let readiness = crate::core::server::readiness::recompute().await;
     let usage_failed = plan_usage
         .get("failed")
@@ -127,6 +161,7 @@ pub(in crate::core::server) async fn maintain_admin(
             Ok(report) => report,
             Err(error) => json!({"error": error}),
         },
+        "acquisition": acquisition,
         "readiness": readiness,
     })))
 }
