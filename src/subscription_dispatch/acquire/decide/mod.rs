@@ -111,13 +111,15 @@ pub(super) async fn decide(options: &AcquireOptions) -> Result<Shortage, Box<Val
             json!({"cap": cap, "accounts": accounts, "standings": standings}),
         ));
     }
-    let plan_tier = plan::pool_tier(provider, &members).await.map_err(|detail| {
-        refuse(
-            "plan_unstated",
-            detail,
-            json!({"cap": cap, "accounts": accounts, "standings": standings}),
-        )
-    })?;
+    let plan_tier = plan::pool_tier(provider, &members)
+        .await
+        .map_err(|detail| {
+            refuse(
+                "plan_unstated",
+                detail,
+                json!({"cap": cap, "accounts": accounts, "standings": standings}),
+            )
+        })?;
     Ok(Shortage {
         cap,
         accounts,

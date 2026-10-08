@@ -44,7 +44,10 @@ fn pinned_credential(agent_id: &str, provider: &str) -> Option<String> {
     let key = (agent_id.to_string(), provider.to_string());
     let mut pins = PINS.lock().ok()?;
     let pin = pins.get(&key)?;
-    if pin.expires_at_ms.is_some_and(|expires_at_ms| expires_at_ms <= now_ms()) {
+    if pin
+        .expires_at_ms
+        .is_some_and(|expires_at_ms| expires_at_ms <= now_ms())
+    {
         pins.remove(&key);
         return None;
     }

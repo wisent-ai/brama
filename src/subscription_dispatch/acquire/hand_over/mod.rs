@@ -46,7 +46,9 @@ pub async fn hand_over(
     };
     let members = crate::gateway::broker::list_all_subscriptions()
         .await
-        .map_err(|error| format!("the Skarbiec subscription inventory could not be read: {error}"))?;
+        .map_err(|error| {
+            format!("the Skarbiec subscription inventory could not be read: {error}")
+        })?;
     let mut rows = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
     for member in members
@@ -60,9 +62,11 @@ pub async fn hand_over(
             .filter(|account| !account.is_empty())
             .map(str::to_lowercase)
         else {
-            rows.push(json!({"subscription_id": member.id, "result": "unattributed",
+            rows.push(
+                json!({"subscription_id": member.id, "result": "unattributed",
                 "detail": "the member declares no account in brama:account:, so which harness \
-                    account it is cannot be read; `brama subscription attribute` records it"}));
+                    account it is cannot be read; `brama subscription attribute` records it"}),
+            );
             continue;
         };
         if !seen.insert(account.clone()) {
@@ -72,7 +76,17 @@ pub async fn hand_over(
             rows.push(json!({"subscription_id": member.id, "account": account, "result": "held"}));
             continue;
         }
-        rows.push(sign_in(provider, harness, harness_provider, &member.id, &account, progress).await);
+        rows.push(
+            sign_in(
+                provider,
+                harness,
+                harness_provider,
+                &member.id,
+                &account,
+                progress,
+            )
+            .await,
+        );
     }
     let Some(after) = harness::held_accounts(harness, harness_provider).await? else {
         return Err(format!(
@@ -82,7 +96,9 @@ pub async fn hand_over(
     };
     for row in &mut rows {
         if row["result"] == json!("handed_over") {
-            let listed = row["account"].as_str().is_some_and(|account| after.contains(account));
+            let listed = row["account"]
+                .as_str()
+                .is_some_and(|account| after.contains(account));
             if !listed {
                 row["result"] = json!("failed");
                 row["detail"] = json!(format!(
@@ -121,19 +137,20 @@ async fn sign_in(
         Ok(login) => login,
         Err(detail) => return failed(detail),
     };
-    let exchange = match weles::authorize(provider, subscription_id, &login.authorize_url, progress)
-        .await
-    {
-        Ok(exchange) => exchange,
-        Err(detail) => return failed(detail),
-    };
+    let exchange =
+        match weles::authorize(provider, subscription_id, &login.authorize_url, progress).await {
+            Ok(exchange) => exchange,
+            Err(detail) => return failed(detail),
+        };
     if let Some(detail) = exchange.transport_failure {
         return failed(detail);
     }
     let Some(answer) = exchange.answer else {
         return failed("Weles answered the authorization without a result".to_string());
     };
-    let Some(redirect) = answer["redirect_url"].as_str().filter(|_| answer["ok"] == json!(true))
+    let Some(redirect) = answer["redirect_url"]
+        .as_str()
+        .filter(|_| answer["ok"] == json!(true))
     else {
         return failed(format!(
             "Weles did not complete the authorization as {account}: {}",

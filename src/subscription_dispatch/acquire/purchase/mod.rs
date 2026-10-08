@@ -48,7 +48,13 @@ pub(super) async fn buy(options: &AcquireOptions, shortage: Shortage) -> Value {
     verdict["weles"] = purchase.observed;
     verdict["weles_http_status"] = json!(purchase.http_status);
     if let Some(detail) = purchase.transport_failure {
-        return finish(verdict, FAILED, "weles_execution_unconfirmed", detail, Value::Null);
+        return finish(
+            verdict,
+            FAILED,
+            "weles_execution_unconfirmed",
+            detail,
+            Value::Null,
+        );
     }
     let Some(answer) = purchase.answer else {
         return finish(
@@ -59,7 +65,13 @@ pub(super) async fn buy(options: &AcquireOptions, shortage: Shortage) -> Value {
             Value::Null,
         );
     };
-    for field in ["account", "subscription_item", "login_item", "paid", "run_id"] {
+    for field in [
+        "account",
+        "subscription_item",
+        "login_item",
+        "paid",
+        "run_id",
+    ] {
         verdict[field] = answer[field].clone();
     }
     if answer["ok"].as_bool() != Some(true) {
@@ -75,22 +87,22 @@ pub(super) async fn buy(options: &AcquireOptions, shortage: Shortage) -> Value {
         verdict["failure"] = failure;
         return finish(verdict, FAILED, &code, detail, Value::Null);
     }
-    let refresh = match pool::refresh_subscription(provider, &subscription_id, &options.reason).await
-    {
-        Ok(refresh) => refresh,
-        Err(detail) => {
-            return finish(
-                verdict,
-                FAILED,
-                "acquired_grant_unproven",
-                format!(
+    let refresh =
+        match pool::refresh_subscription(provider, &subscription_id, &options.reason).await {
+            Ok(refresh) => refresh,
+            Err(detail) => {
+                return finish(
+                    verdict,
+                    FAILED,
+                    "acquired_grant_unproven",
+                    format!(
                     "Weles bought the account and stored its grant, but Brama could not refresh \
                      it: {detail}"
                 ),
-                Value::Null,
-            )
-        }
-    };
+                    Value::Null,
+                )
+            }
+        };
     if refresh["result"].as_str() != Some("refreshed") {
         let detail = format!(
             "Weles bought the account and stored its grant, but Brama's refresh did not prove \

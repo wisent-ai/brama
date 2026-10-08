@@ -109,10 +109,16 @@ impl Login {
             .kill_on_drop(true)
             .spawn()
             .map_err(|error| {
-                format!("`{} login {harness_provider}` did not start: {error}", harness.name())
+                format!(
+                    "`{} login {harness_provider}` did not start: {error}",
+                    harness.name()
+                )
             })?;
         let stdout = child.stdout.take().ok_or_else(|| {
-            format!("`{} login {harness_provider}` gave no stdout", harness.name())
+            format!(
+                "`{} login {harness_provider}` gave no stdout",
+                harness.name()
+            )
         })?;
         let mut lines = BufReader::new(stdout).lines();
         let mut transcript = Vec::new();

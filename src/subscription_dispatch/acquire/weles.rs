@@ -44,8 +44,9 @@ pub(super) async fn purchase(
     reason: &str,
     progress_sink: Option<&Progress>,
 ) -> Result<Exchange, String> {
-    let weles_provider = weles_provider(provider)
-        .ok_or_else(|| format!("Weles buys claude-code accounts; `{provider}` is not one of them"))?;
+    let weles_provider = weles_provider(provider).ok_or_else(|| {
+        format!("Weles buys claude-code accounts; `{provider}` is not one of them")
+    })?;
     exchange(
         "/subscriptions/acquire",
         json!({

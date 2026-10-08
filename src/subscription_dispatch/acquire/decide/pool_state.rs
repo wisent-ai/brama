@@ -57,9 +57,9 @@ pub(super) enum Standing {
 
 /// Every non-retired member of `provider`'s pool, as the vault lists it.
 pub(super) async fn members(provider: &str) -> Result<Vec<Member>, String> {
-    let entries = broker::list_all_subscriptions()
-        .await
-        .map_err(|error| format!("the Skarbiec subscription inventory could not be read: {error}"))?;
+    let entries = broker::list_all_subscriptions().await.map_err(|error| {
+        format!("the Skarbiec subscription inventory could not be read: {error}")
+    })?;
     Ok(entries
         .into_iter()
         .filter(|entry| entry.provider == provider && !crate::journal::is_retired(&entry.id))
@@ -130,7 +130,10 @@ pub(super) async fn standing(member: &Member, provider: &str) -> Standing {
         .collect();
     if !spent.is_empty() {
         return Standing::Spent {
-            until_ms: spent.iter().filter_map(|reading| reading.resets_at_ms).max(),
+            until_ms: spent
+                .iter()
+                .filter_map(|reading| reading.resets_at_ms)
+                .max(),
         };
     }
     Standing::Available {
