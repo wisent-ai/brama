@@ -111,8 +111,21 @@ pub async fn enrol_authenticator(
             .get("run_id")
             .and_then(Value::as_str)
             .is_some_and(|run| !run.is_empty());
-    let seed_present = crate::gateway::broker::login_seed_present(&resolved.login_item)
-        .map_err(SignInError::Dependency)?;
+    // The seed check reads the vault this machine runs Skarbiec against. On
+    // a workstation that read fails ("this machine holds no Skarbiec vault"),
+    // and failing the whole command on it threw away Weles's answer: a
+    // 21-minute enrolment ended with neither its run id nor its outcome. The
+    // read's failure is now reported beside what Weles said.
+    let (seed_present, unread) = match crate::gateway::broker::login_seed_present(&resolved.login_item) {
+        Ok(present) => (present, String::new()),
+        Err(error) => (
+            false,
+            format!(
+                "; Weles run {run_id}; whether Skarbiec holds the seed was not confirmed here ({error}); ask the vault owner: stado credentials seed-freshness --host <vault owner> --login-item {}",
+                resolved.login_item
+            ),
+        ),
+    };
     let detail = if claimed && seed_present {
         format!(
             "Weles confirmed authenticator enrolment for {} and Skarbiec holds its seed; later {provider} sign-ins can answer authenticator challenges",
@@ -140,6 +153,7 @@ pub async fn enrol_authenticator(
             }
         )
     };
+    let detail = detail + &unread;
     Ok(Enrolment {
         subscription_id: resolved.subscription_id,
         login_item: resolved.login_item,
