@@ -1,15 +1,16 @@
 #!/bin/sh
-# Publish this host's loopback Brama as the public origin that vercel.json
-# rewrites to, and report what is actually being served.
+# Publish this host's loopback Brama as the public origin brama.wisent.com
+# forwards to, and report what is actually being served.
 #
 #   stado host install-helper <target> vercel-ingress/publish-origin-host.sh brama-publish-origin.sh
 #   stado host run-helper <target> brama-publish-origin.sh
 #
-# Why this exists: vercel.json rewrites brama.wisent.com to this host's
-# Tailscale hostname, which is public only while Tailscale Funnel terminates
-# TLS for it. When the funnel goes down (a power cut will do it), Vercel
-# answers every Brama request with ROUTER_EXTERNAL_TARGET_HANDSHAKE_ERROR and
-# X-Vercel-Error: DNS_HOSTNAME_EMPTY, and every model call in the fleet fails.
+# Why this exists: brama.wisent.com forwards every path outside /docs to the
+# origin in its Vercel project's BRAMA_GATEWAY_ORIGIN (api/gateway.mjs), which
+# is this host's Tailscale hostname, public only while Tailscale Funnel
+# terminates TLS for it. When the funnel goes down (a power cut will do it),
+# the forwarder answers 502 gateway_unreachable with the transport error and
+# every model call from outside the tailnet fails.
 # Re-serving is idempotent: an already-correct funnel is left alone.
 set -eu
 
