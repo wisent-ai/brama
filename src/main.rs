@@ -6,7 +6,7 @@ use cli::adoption::AdoptArgs;
 use cli::aliases::{AliasesArgs, RoutesCommand};
 use cli::catalogue::{CatalogueCommand, ModelsArgs};
 use cli::decisions::DecideArgs;
-use cli::diagnostics::{CollectTaskQualityArgs, TestArgs};
+use cli::diagnostics::{TasksCommand, TestArgs};
 use cli::launcher::LauncherCommand;
 use cli::maintain::MaintainArgs;
 use cli::media::{ImageArgs, MusicArgs, SpeakArgs, VideoCommand, VoicesCommand};
@@ -89,8 +89,12 @@ enum Commands {
         #[command(subcommand)]
         command: SubscriptionCommand,
     },
-    /// Collect deterministic task-quality checks for active provider routes
-    CollectTaskQuality(CollectTaskQualityArgs),
+    /// Measure a named task's routes, and read back the checks `task:<KEY>`
+    /// selection serves from
+    Tasks {
+        #[command(subcommand)]
+        command: TasksCommand,
+    },
     /// Act on this installation's workload identity in the vault
     Workload {
         #[command(subcommand)]
@@ -152,7 +156,7 @@ async fn main() {
         Commands::Voices { command } => cli::media::voices(command).await,
         Commands::Routes { command } => cli::aliases::routes(command).await,
         Commands::Subscription { command } => cli::subscriptions::credentials::run(command).await,
-        Commands::CollectTaskQuality(args) => cli::diagnostics::collect_task_quality(args).await,
+        Commands::Tasks { command } => cli::diagnostics::tasks(command).await,
         Commands::Workload { command } => cli::workload::run(command),
         Commands::Launcher { command } => cli::launcher::run(command),
         Commands::Probe(args) => cli::probe::run(args).await,

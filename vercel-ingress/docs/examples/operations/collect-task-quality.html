@@ -36,16 +36,19 @@
 <p>This command refuses to call the provider unless <code>--allow-provider-cost</code> is present. Expected output is a normalized response or actionable provider/auth failure; provider content is not predicted here.</p>
 <h2 id="bounded-quality-collection">Bounded quality collection<a class="headerlink" href="#bounded-quality-collection" title="Link to this section">&para;</a></h2>
 <p>First run without persistence; this still contacts providers and costs quota:</p>
-<pre><code class="language-bash">brama collect-task-quality \
+<pre><code class="language-bash">brama tasks measure smoke-exact \
   --agent-id wisent-app \
-  --task smoke-exact \
   --prompt 'Reply with the single word ready.' \
   --expected-exact ready \
-  --max-models 3 \
+  --max-models &lt;N&gt; \
   --allow-provider-cost
 </code></pre>
 <p>Expected JSON includes <code>task</code>, <code>maxModels</code>, <code>rows</code>, and <code>bestModel</code>. Every row includes route, status, score, latency, attempts, and success.</p>
-<p>Only after reviewing that output and obtaining separate state-mutation approval, repeat with <code>--persist</code>. Persisted observations change future <code>task:smoke-exact</code> ranking.</p>
+<p>Only after reviewing that output and obtaining separate state-mutation approval, repeat with <code>--persist</code>. Persisted observations change future <code>task:smoke-exact</code> ranking. Read back what selection will use:</p>
+<pre><code class="language-bash">brama tasks show smoke-exact --agent-id wisent-app
+brama tasks list --agent-id wisent-app
+</code></pre>
+<p><code>show</code> prints every recorded check for the task and refuses a task with none; <code>list</code> prints each task the agent has checks for, with their count and newest time.</p>
 <h2 id="failure-and-recovery">Failure and recovery<a class="headerlink" href="#failure-and-recovery" title="Link to this section">&para;</a></h2>
 <p>Missing cost acknowledgment fails before provider execution. Empty task/prompt, conflicting expectations, or zero model count is <code>invalid_request</code>. Provider/dependency failures remain bounded by the selected model cap and per-request attempt cap. Do not broaden the cap to hide failures; repair capability, ownership, route, or provider state.</p>
 <h2 id="cleanup">Cleanup<a class="headerlink" href="#cleanup" title="Link to this section">&para;</a></h2>

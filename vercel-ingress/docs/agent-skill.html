@@ -48,7 +48,8 @@ brama test --model &lt;route&gt; --agent-id &lt;id&gt; --allow-provider-cost # e
 brama detect                         # local hardware; no provider or credential
 brama subscription list [--json]    # pool state per credential; reads nothing but the ledger
 brama subscription refresh &lt;provider&gt; --reason &lt;text&gt; # rotate that provider's grants now
-brama collect-task-quality --allow-provider-cost … # bounded billable collection
+brama tasks measure &lt;KEY&gt; --allow-provider-cost … # bounded billable collection
+brama tasks show &lt;KEY&gt; --agent-id &lt;ID&gt; # checks task:&lt;KEY&gt; selection reads
 brama mcp                            # read-only stdio MCP server
 </code></pre>
 <h2 id="mcp">MCP<a class="headerlink" href="#mcp" title="Link to this section">&para;</a></h2>
@@ -66,7 +67,7 @@ exposed tool is:</p>
   local-inference runtime.</li>
 </ul>
 <p>The token-spending path — <code>/v1/chat/completions</code> and the <code>test</code> inference — and
-the collecting/persisting <code>collect-task-quality</code> command are deliberately not
+the collecting/persisting <code>tasks measure</code> command are deliberately not
 exposed over MCP. They cost money or change stored evidence, so they stay in the
 CLI and HTTP server, off the agent surface.</p>
 <p>The HTTP envelope is fail closed: every non-health route requires the exact

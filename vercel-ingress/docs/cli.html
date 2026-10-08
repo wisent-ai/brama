@@ -78,7 +78,7 @@ from the installed build.</p>
   <li><a href="/docs/cli/subscription/second-factor"><code>brama subscription second-factor [--provider &lt;PROVIDER&gt;] [--json]</code></a> — report which accounts need a second factor and which hold the secret that answers one.</li>
   </ul>
 </li>
-<li><a href="/docs/cli/collect-task-quality"><code>brama collect-task-quality --agent-id &lt;ID&gt; --task &lt;KEY&gt; --prompt &lt;TEXT&gt; --max-models &lt;N&gt; [--expected-exact &lt;TEXT&gt;] [--expected-contains &lt;TEXT&gt;] [--persist] --allow-provider-cost</code></a> — collect deterministic task-quality evidence.</li>
+<li><a href="/docs/cli/tasks"><code>brama tasks measure &lt;KEY&gt; --agent-id &lt;ID&gt; --prompt &lt;TEXT&gt; --max-models &lt;N&gt; [--expected-exact &lt;TEXT&gt;] [--expected-contains &lt;TEXT&gt;] [--persist] --allow-provider-cost</code>, <code>brama tasks show &lt;KEY&gt; --agent-id &lt;ID&gt;</code>, <code>brama tasks list --agent-id &lt;ID&gt;</code></a> — measure a named task and read back the checks <code>task:&lt;KEY&gt;</code> selection uses.</li>
 <li><a href="/docs/cli/help"><code>brama help [COMMAND]...</code></a> — print root or command-specific help.</li>
 </ul>
 <h2 id="safety-boundaries">Safety boundaries<a class="headerlink" href="#safety-boundaries" title="Link to this section">&para;</a></h2>
@@ -89,7 +89,7 @@ selection; it never reads credential material or calls a provider.
 <code>routes migrate</code> reads and rewrites one registry file and contacts no
 provider.
 <code>test</code>, <code>probe</code>, the provider-requesting part of <code>onboard</code>, and
-<code>collect-task-quality</code> require <code>--allow-provider-cost</code>.
+<code>tasks measure</code> require <code>--allow-provider-cost</code>.
 <code>subscription refresh</code> and <code>subscription sign-in</code> require
 <code>--reason</code> and journal their verdicts. Each linked command page states its
 exact inputs, output and state effect, and relevant refusal text.</p></article>

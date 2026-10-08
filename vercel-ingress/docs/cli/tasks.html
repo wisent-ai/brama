@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>brama collect-task-quality — Brama CLI Docs</title>
-  <meta name="description" content="Collect deterministic quality evidence across active Brama subscription routes.">
-  <link rel="canonical" href="https://brama.wisent.com/docs/cli/collect-task-quality">
+  <title>brama tasks — Brama CLI Docs</title>
+  <meta name="description" content="Measure a named task across active Brama subscription routes and read back the checks task selection uses.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/cli/tasks">
   <link rel="stylesheet" href="/docs/assets/site.css">
 </head>
 <body>
@@ -18,32 +18,36 @@
     <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a class="active" aria-current="page" href="/docs/cli">CLI</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/decision">Decision</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use an agent-owned subscription selector</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
     <main>
       <p class="source-note">Brama CLI command reference</p>
-      <article class="doc"><h1 id="brama-collect-task-quality"><code>brama collect-task-quality</code><a class="headerlink" href="#brama-collect-task-quality" title="Link to this section">&para;</a></h1>
-<p>Send one deterministic check to each selected active stateless provider route so later <code>task:&lt;task&gt;</code> selection has quality evidence.</p>
-<h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama collect-task-quality --agent-id &lt;ID&gt; --task &lt;KEY&gt; --prompt &lt;TEXT&gt; --max-models &lt;N&gt; [--expected-exact &lt;TEXT&gt;] [--expected-contains &lt;TEXT&gt;] [--persist] [--json] --allow-provider-cost</code></pre>
+      <article class="doc"><h1 id="brama-tasks"><code>brama tasks</code><a class="headerlink" href="#brama-tasks" title="Link to this section">&para;</a></h1>
+<p>A named task is what a caller selects as <code>model="task:&lt;KEY&gt;"</code>: Brama serves it from the active route with the best recorded checks. <code>measure</code> sends one deterministic check to each selected route and, with <code>--persist</code>, records what each answered; <code>show</code> and <code>list</code> read back those records from the same journal selection reads.</p>
+<h2 id="measure">brama tasks measure<a class="headerlink" href="#measure" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">brama tasks measure &lt;KEY&gt; --agent-id &lt;ID&gt; --prompt &lt;TEXT&gt; --max-models &lt;N&gt; [--expected-exact &lt;TEXT&gt;] [--expected-contains &lt;TEXT&gt;] [--persist] [--json] --allow-provider-cost</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>&lt;KEY&gt;</code></td><td>required, nonempty</td><td>Key later selected as <code>task:&lt;KEY&gt;</code>.</td></tr>
 <tr><td><code>--agent-id &lt;ID&gt;</code></td><td>required</td><td>Agent whose subscription routes are checked.</td></tr>
-<tr><td><code>--task &lt;KEY&gt;</code></td><td>required, nonempty</td><td>Key later selected as <code>task:&lt;task&gt;</code>.</td></tr>
 <tr><td><code>--prompt &lt;TEXT&gt;</code></td><td>required, nonempty</td><td>Prompt sent to every selected route.</td></tr>
-<tr><td><code>--expected-exact &lt;TEXT&gt;</code></td><td>one expectation required</td><td>Score 1 only for an exact response.</td></tr>
-<tr><td><code>--expected-contains &lt;TEXT&gt;</code></td><td>one expectation required</td><td>Score 1 when the response contains the text.</td></tr>
-<tr><td><code>--persist</code></td><td>optional; off</td><td>Write check rows for later task selection.</td></tr>
-<tr><td><code>--max-models &lt;N&gt;</code></td><td>required</td><td>How many active models to check, at least one; each is one billable request. No count is assumed, and a call without it exits 2.</td></tr>
+<tr><td><code>--expected-exact &lt;TEXT&gt;</code></td><td>one expectation required</td><td>Full score only for an exact response.</td></tr>
+<tr><td><code>--expected-contains &lt;TEXT&gt;</code></td><td>one expectation required</td><td>Full score when the response contains the text.</td></tr>
+<tr><td><code>--persist</code></td><td>optional; off</td><td>Record each check, so <code>task:&lt;KEY&gt;</code> selection reads it.</td></tr>
+<tr><td><code>--max-models &lt;N&gt;</code></td><td>required</td><td>How many active models to check; each is one billable request. No count is assumed.</td></tr>
 <tr><td><code>--allow-provider-cost</code></td><td>required by runtime; off</td><td>Acknowledge all billable requests.</td></tr>
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print the report as one JSON document instead of <code>key: value</code> lines.</td></tr>
 </tbody></table>
-<h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
-<p>The command prints its report — <code>agentId</code>, task, persistence flag, bounds, per-model checks, and best-model results — as <code>key: value</code> lines, or as one JSON document with <code>--json</code>. Each selected model receives one provider request through the agent subscription path. With <code>--persist</code>, check rows are added to task-quality state; otherwise no quality rows are written.</p>
+<p>The report holds <code>agentId</code>, task, persistence flag, bounds, per-model checks and the best model. Without <code>--persist</code> nothing is recorded.</p>
+<h2 id="show">brama tasks show<a class="headerlink" href="#show" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">brama tasks show &lt;KEY&gt; --agent-id &lt;ID&gt; [--json]</code></pre>
+<p>Prints <code>agent_id</code>, <code>task</code> and <code>checks</code>: every check recorded for that task, as the journal holds it. Reads only; sends nothing to a provider.</p>
+<h2 id="list">brama tasks list<a class="headerlink" href="#list" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">brama tasks list --agent-id &lt;ID&gt; [--json]</code></pre>
+<p>Prints <code>agent_id</code> and <code>tasks</code>: each task the agent has recorded checks for, with <code>checks</code> (how many) and <code>newest</code> (when the latest was taken). Reads only.</p>
 <h2 id="refusals">Exact refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <ul>
-<li><code>refusing billable task-quality collection without explicit cost acknowledgement</code></li>
-<li><code>max_models must be at least one</code></li>
-<li><code>task is required</code></li>
-<li><code>prompt is required</code></li>
-<li><code>expected_exact or expected_contains is required</code></li>
+<li><code>refusing billable task-quality collection without explicit --allow-provider-cost</code> — <code>measure</code> without the acknowledgement; exits 2 before any provider request.</li>
+<li><code>max_models must be at least one</code>, <code>task is required</code>, <code>prompt is required</code>, <code>expected_exact or expected_contains is required</code> — <code>measure</code> input refusals.</li>
+<li><code>no checks are recorded for task &lt;KEY&gt; of agent &lt;ID&gt;; `brama tasks measure &lt;KEY&gt; --agent-id &lt;ID&gt; --persist …` records them</code> — <code>show</code> of a task nobody measured; selection refuses that task too.</li>
+<li><code>the journal holds a check without its task or time: &lt;record&gt;</code> — <code>list</code> met a malformed journal record; the record is printed whole.</li>
 </ul>
-<p>Each refusal prints to stderr and exits 1; Clap separately refuses omitted CLI-required flags before the handler runs.</p>
+<p>Except where stated, each refusal prints to stderr and exits 1; Clap separately refuses omitted required flags before the handler runs.</p>
 <p>See <a href="/docs/concepts/entitlement#selectors">task selectors</a> or <a href="/docs/cli">the CLI tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>

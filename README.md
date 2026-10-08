@@ -344,7 +344,7 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   endpoints return identifiers, usage and status only; subscription credentials
   remain write-only.
 - **CLI:** `serve`, `version`, `detect`, `onboard`, `onboard --reset`, `test`,
-  `subscriptions list`, `subscription refresh`, `collect-task-quality`, and
+  `subscriptions list`, `subscription refresh`, `tasks measure|show|list`, and
   `mcp`. Billable commands require an explicit cost acknowledgement, and
   commands that mutate state require an explicit `--reason`.
 - **MCP:** read-only stdio JSON-RPC exposing `brama_detect` only. Model execution,
