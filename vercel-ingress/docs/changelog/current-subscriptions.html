@@ -203,7 +203,7 @@ when it has, so the pool follows the harness instead of dying behind it.</p>
 <p>The accounts below were added by hand, one <code>import</code> at a time, and the operator's
 answer was that this is the opposite of how it should work: the pool has to see every account
 the machine holds without a person naming it.
-<a href="/docs/cli/subscription/sync"><code>brama subscription sync --reason &lt;why&gt; [--gateway &lt;origin&gt;]</code></a>
+<a href="/docs/changelog/released-0-4-4x"><code>brama subscription sync --reason &lt;why&gt; [--gateway &lt;origin&gt;]</code></a> (since removed)
 lists what every harness holds, derives one stable member id per account
 (<code>brama-sub-held-&lt;provider&gt;-&lt;account&gt;</code>), leaves every id the pool already
 holds to Brama's own refresh, and imports the rest through the same path <code>import</code>
@@ -229,9 +229,9 @@ refresh path cannot renew. The first import through the deployed gateway then an
 before the pool is. Four harnesses sign
 accounts in on an operator's machine - <code>omp</code>, Claude Code, Codex CLI, Kimi
 Code - and each keeps the grant its own way.
-<a href="/docs/cli/subscription/import"><code>brama subscription held</code></a> lists what
+<a href="/docs/changelog/released-0-4-4x"><code>brama subscription held</code></a> (since removed) lists what
 every one of them holds, never the grants;
-<a href="/docs/cli/subscription/import"><code>brama subscription import &lt;provider&gt; --from &lt;harness&gt; --subscription-id &lt;id&gt; --reason &lt;why&gt;</code></a>
+<a href="/docs/changelog/released-0-4-4x"><code>brama subscription import &lt;provider&gt; --from &lt;harness&gt; --subscription-id &lt;id&gt; --reason &lt;why&gt;</code></a> (since removed)
 reads that harness's own store read-only, rewrites the grant into the document the
 refresh path reads for <code>claude-code</code>, <code>codex</code> or <code>kimi</code>,
 refuses one it could not renew before storing anything, stores it as the

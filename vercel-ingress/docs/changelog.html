@@ -38,7 +38,7 @@ release coordinate yet and do not concern the subscription pool:</p>
   <code>enrol-authenticator</code>: one object, the authenticator behind each account's second factor, with the verbs that read and create it; inputs, output and refusals are unchanged;</li>
 <li>a Claude Code grant travels in Claude Code's own shape - user agent, beta list, billing attestation and sentence - which is the only shape Anthropic honours it in for the newest models;</li>
 <li>an omitted <code>temperature</code> is omitted on the wire too, instead of an invented 0.7 the newest Claude models refuse;</li>
-<li><a href="/docs/cli/subscription/import"><code>brama subscription import</code></a> takes a grant any harness on the machine - omp, Claude Code, Codex CLI, Kimi Code -
+<li><code>brama subscription import</code> (since removed with <code>held</code> and <code>sync</code>, <a href="/docs/changelog/released-0-4-4x">0.4.4x</a>) takes a grant any harness on the machine - omp, Claude Code, Codex CLI, Kimi Code -
   already holds, and every grant that reaches Brama without Weles is proved by a probe;</li>
 <li><code>brama subscription sign-in-manual</code> (now <a href="/docs/cli/subscription/sign-in#by-hand"><code>sign-in --by hand</code></a>) signs a Claude
   account in through the operator's own browser and a pasted code, without Weles;</li>
