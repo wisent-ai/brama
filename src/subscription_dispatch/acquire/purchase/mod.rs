@@ -76,13 +76,23 @@ pub(super) async fn buy(options: &AcquireOptions, shortage: Shortage) -> Value {
     }
     if answer["ok"].as_bool() != Some(true) {
         let failure = answer["failure"].clone();
-        let code = match failure["code"].as_str() {
-            Some(code) => code.to_owned(),
-            None => "purchase_failed".to_string(),
+        // A Weles that answers `not_found` for the purchase has no purchase
+        // route at all: the release serving this gateway predates it, which
+        // no retry or account changes.
+        let route_absent = purchase.http_status == Some(reqwest::StatusCode::NOT_FOUND.as_u16());
+        let code = match (failure["code"].as_str(), route_absent) {
+            (Some(code), _) => code.to_owned(),
+            (None, true) => "weles_purchase_route_absent".to_string(),
+            (None, false) => "purchase_failed".to_string(),
         };
-        let detail = match failure["message"].as_str() {
-            Some(message) => message.to_owned(),
-            None => format!("Weles refused the purchase: {answer}"),
+        let detail = match (failure["message"].as_str(), route_absent) {
+            (Some(message), _) => message.to_owned(),
+            (None, true) => format!(
+                "the Weles serving this gateway answered HTTP 404 for its purchase route, so it \
+                 predates account purchase; release weles-worker with POST /subscriptions/acquire \
+                 to that host ({answer})"
+            ),
+            (None, false) => format!("Weles refused the purchase: {answer}"),
         };
         verdict["failure"] = failure;
         return finish(verdict, FAILED, &code, detail, Value::Null);
