@@ -21,9 +21,6 @@ use crate::types::{ModelResponse, ProviderRefusal};
 
 use super::{now_ms, read_ledger, with_ledger, CredentialState, UsageSource};
 
-const DEFAULT_BLOCK_MS: i64 = 15 * 60 * 1_000;
-const MAX_BLOCK_MS: i64 = 7 * 24 * 60 * 60 * 1_000;
-
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Measured {
     #[serde(default)]
@@ -130,11 +127,11 @@ pub fn record_call_from(
     });
 }
 
-/// Mark a subscription unusable until an instant.
+/// Mark a subscription unusable until the instant its provider named.
 ///
-/// The provider's own reset time is preferred over any local guess; the default
-/// is used only when the answer carried no reset at all, and it is bounded so a
-/// malformed header cannot retire a credential for a year.
+/// The provider's own reset time is the only source of that instant. An
+/// answer that names no reset records no block: the next request asks the
+/// account again and its refusal answers that request the same way.
 pub fn record_block(subscription_id: &str, provider: &str, reason: &str, response: &ModelResponse) {
     let now = now_ms();
     let from_provider = response
@@ -144,9 +141,14 @@ pub fn record_block(subscription_id: &str, provider: &str, reason: &str, respons
         .filter_map(|reading| reading.resets_at_ms)
         .filter(|resets| *resets > now)
         .min();
-    let until = from_provider
-        .unwrap_or(now.saturating_add(DEFAULT_BLOCK_MS))
-        .min(now.saturating_add(MAX_BLOCK_MS));
+    let Some(until) = from_provider else {
+        tracing::info!(
+            subscription = %subscription_id,
+            provider = %provider,
+            "the provider named no reset for this refusal, so no block is recorded"
+        );
+        return;
+    };
     // The block carries the class the provider's refusal was read as: a spent
     // paid balance and a full rate window are both recorded here, and the
     // next request must answer each the way this one did. The sentence stays

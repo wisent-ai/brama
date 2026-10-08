@@ -127,11 +127,12 @@ returns <code>ok: false</code>, including on HTTP 200. CLI exits non-zero;
 Desktop shows each failed operation beside retained stale data. If Brama
 itself cannot answer, the client reports the connection or decoding failure.</p>
 <h2 id="blocks">Blocks<a class="headerlink" href="#blocks" title="Link to this section">&para;</a></h2>
-<p>A rate-limited provider answer records a block: 15 minutes by default,
-capped at 7 days when the provider states a longer reset, and 30 minutes for
-a credential awaiting re-authorization (<code>src/subscription_dispatch/usage.rs</code>).
+<p>A rate-limited provider answer records a block until the reset the provider
+named for the exhausted window; an answer that names no reset records no block,
+and the next request asks the account again. A credential awaiting
+re-authorization is blocked for 30 minutes (<code>src/subscription_dispatch/usage/</code>).
 A blocked credential is skipped by ordering, refused by the probe (<code>409</code>),
-and the block stands until its own expiry.</p>
+and the block stands until its own expiry or the account's next successful answer.</p>
 <h2 id="credential-lifecycle">Credential lifecycle<a class="headerlink" href="#credential-lifecycle" title="Link to this section">&para;</a></h2>
 <p>OAuth subscription credentials (<code>claude-code</code>, <code>codex</code>, <code>kimi</code> — token
 endpoints in <code>src/gateway/oauth_refresh.rs</code>) are refreshed once their stated
