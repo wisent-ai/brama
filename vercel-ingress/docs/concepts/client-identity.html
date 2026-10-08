@@ -80,10 +80,10 @@ one of two disjoint identity kinds:</p>
     accepts only its matching user, organization, and typed
     <code>owner</code>/<code>admin</code>/<code>member</code> role.</li>
 </ol>
-<p>Successful workload identities are cached for five seconds by bearer SHA-256
-digest. Successful human identities are cached by bearer digest plus verified
-organization ID, so switching organizations cannot reuse a prior request's
-context. The raw bearer is never logged (<code>src/core/server.rs</code>).</p>
+<p>A bearer outside the boot table is put to its authority on every request:
+nothing remembers a resolved workload or human identity, so a revocation holds
+from the next request and switching organizations always authorizes the
+requested one. The raw bearer is never logged (<code>src/core/server/admission/authority/mod.rs</code>).</p>
 <h2 id="special-identities">Special identities<a class="headerlink" href="#special-identities" title="Link to this section">&para;</a></h2>
 <p>Two <code>client_id</code> values are special in code:</p>
 <ul>

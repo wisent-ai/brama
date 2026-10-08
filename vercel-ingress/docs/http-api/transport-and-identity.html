@@ -42,8 +42,8 @@ The token is compared in constant time against the identities in
 <code>BRAMA_MODEL_ROUTER_CLIENT_IDENTITIES</code>. A bearer that is not in that table is
 resolved against Skarbiec, the authority that issued it, and, for account-scoped routes,
 against Wisent Identity. When an authority cannot answer, the request is refused rather
-than admitted, and a resolved verdict is cached for five seconds so that a revocation
-takes effect without restarting the gateway.</p>
+than admitted, and every request asks again, so a revocation takes effect on the next
+request without restarting the gateway.</p>
 <p>A model-scoped bearer — one carrying <code>allowed_models</code> — may reach the five
 inference paths, <code>/v1/models</code>, the subscription pool and plan usage; the
 allowlist itself is then enforced per request, further in. Every other path, including

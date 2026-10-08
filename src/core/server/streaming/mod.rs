@@ -8,7 +8,7 @@ pub(in crate::core::server) mod chunks;
 mod pump;
 
 use std::sync::atomic::Ordering;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use axum::response::{IntoResponse, Response};
 
@@ -23,22 +23,15 @@ pub(in crate::core::server) fn epoch_seconds() -> u64 {
 
 /// Wrap one encoder in the SSE response every streaming format shares.
 ///
-/// The keep-alive comment is what stops an idle proxy from closing a stream
-/// that is legitimately silent while the model thinks; it is a comment frame,
-/// so no client parses it as content.
+/// A frame is sent when the provider produces one; the gateway adds no frames
+/// of its own on a clock nobody declared.
 pub(in crate::core::server) fn sse_response<S>(stream: S) -> Response
 where
     S: futures_core::Stream<Item = Result<axum::response::sse::Event, std::convert::Infallible>>
         + Send
         + 'static,
 {
-    axum::response::sse::Sse::new(stream)
-        .keep_alive(
-            axum::response::sse::KeepAlive::new()
-                .interval(Duration::from_secs(15))
-                .text("keep-alive"),
-        )
-        .into_response()
+    axum::response::sse::Sse::new(stream).into_response()
 }
 
 /// The closure a wire encoder reports its stream's end through.
