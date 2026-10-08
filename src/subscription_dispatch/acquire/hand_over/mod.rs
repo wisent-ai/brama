@@ -44,36 +44,31 @@ pub async fn hand_over(
             "accounts": [],
         }));
     };
-    let members = crate::gateway::broker::list_all_subscriptions()
-        .await
-        .map_err(|error| {
-            format!("the Skarbiec subscription inventory could not be read: {error}")
-        })?;
+    // The pool's accounts as Weles resolves them from the vault it signs
+    // them in from: the machine the harness runs on holds no vault of its
+    // own, and the account each row names is the one Weles will complete the
+    // harness's authorization as. A subscription that does not resolve is
+    // reported with Weles's own refusal.
+    let listed = weles::accounts(provider).await?;
     let mut rows = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
-    for member in members
-        .iter()
-        .filter(|entry| entry.provider == provider && !crate::journal::is_retired(&entry.id))
-    {
-        let Some(account) = member
-            .account
-            .as_deref()
-            .map(str::trim)
-            .filter(|account| !account.is_empty())
-            .map(str::to_lowercase)
-        else {
-            rows.push(
-                json!({"subscription_id": member.id, "result": "unattributed",
-                "detail": "the member declares no account in brama:account:, so which harness \
-                    account it is cannot be read; `brama subscription attribute` records it"}),
-            );
+    for member in listed["accounts"].as_array().into_iter().flatten() {
+        let (Some(subscription_id), Some(account)) = (
+            member["subscription_id"].as_str(),
+            member["account"].as_str(),
+        ) else {
+            rows.push(json!({"result": "unresolved", "detail": format!(
+                "Weles listed an account row without a subscription id or account: {member}")}));
             continue;
         };
-        if !seen.insert(account.clone()) {
+        let account = account.trim().to_lowercase();
+        if crate::journal::is_retired(subscription_id) || !seen.insert(account.clone()) {
             continue;
         }
         if held.contains(&account) {
-            rows.push(json!({"subscription_id": member.id, "account": account, "result": "held"}));
+            rows.push(
+                json!({"subscription_id": subscription_id, "account": account, "result": "held"}),
+            );
             continue;
         }
         rows.push(
@@ -81,7 +76,7 @@ pub async fn hand_over(
                 provider,
                 harness,
                 harness_provider,
-                &member.id,
+                subscription_id,
                 &account,
                 progress,
             )
@@ -118,6 +113,9 @@ pub async fn hand_over(
         "ok": ok,
         "installed": true,
         "accounts": rows,
+        // Pool subscriptions of any provider Weles could not resolve to an
+        // account, each with its refusal: none of them can be handed over.
+        "unresolved": listed["errors"],
     }))
 }
 

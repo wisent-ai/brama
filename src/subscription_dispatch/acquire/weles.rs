@@ -83,6 +83,35 @@ pub(super) async fn authorize(
     .await
 }
 
+/// The accounts of `provider` the vault's subscriptions resolve to, as Weles
+/// resolves them: `{subscription_id, account, login_item}` rows and the
+/// subscriptions that did not resolve, with their refusals. A machine without
+/// a vault of its own reads the pool's accounts here.
+pub(super) async fn accounts(provider: &str) -> Result<Value, String> {
+    let weles_provider = weles_provider(provider).ok_or_else(|| {
+        format!("Weles lists claude-code accounts; `{provider}` is not one of them")
+    })?;
+    let exchange = exchange(
+        "/reauth/accounts",
+        json!({ "provider": weles_provider }),
+        None,
+    )
+    .await?;
+    if let Some(detail) = exchange.transport_failure {
+        return Err(detail);
+    }
+    let answer = exchange
+        .answer
+        .ok_or_else(|| "Weles answered the account listing without a body".to_string())?;
+    if !answer["accounts"].is_array() {
+        return Err(format!(
+            "Weles refused the account listing (HTTP {:?}): {answer}",
+            exchange.http_status
+        ));
+    }
+    Ok(answer)
+}
+
 async fn exchange(
     path: &str,
     body: Value,
