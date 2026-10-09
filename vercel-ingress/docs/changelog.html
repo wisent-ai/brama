@@ -29,6 +29,8 @@ replaced it.</p>
 <p><a href="/docs/changelog/current">Unreleased changes</a> holds the entries that are committed but carry no published
 release coordinate yet and do not concern the subscription pool:</p>
 <ul>
+<li>a <a href="/docs/concepts/decision">decision</a> served by a chat route carries its answer's JSON Schema, sent on the OpenAI chat wire as a strict
+  <code>response_format</code> named <code>decision</code>, so a route that decodes under it cannot write one question's label under another; the answer is still checked against what the caller declared;</li>
 <li><a href="/docs/cli/subscription/sign-in"><code>brama subscription sign-in</code></a> takes <code>--by weles|hand</code>, stated every time, and
   <code>sign-in-manual</code> is gone: signing an account in by hand is <code>sign-in --by hand</code>, with the same flags, paste on stdin and gateway options.
   The routes follow: <code>POST /v1/admin/subscription-pool/sign-in</code> requires <code>"by": "weles"|"hand"</code>, the paste goes to
