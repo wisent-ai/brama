@@ -18,7 +18,7 @@ use super::call::outcome::retry::send_once_more_if_unsent;
 use super::dialect::anthropic_messages::{
     anthropic_messages, anthropic_tool_choice, anthropic_tools, model_response_from_anthropic,
 };
-use super::dialect::openai_chat::{model_response_from_openai, openai_messages};
+use super::dialect::openai_chat::{model_response_from_openai, openai_messages, response_format};
 use super::dialect::tool_schema::normalized_tools_value;
 use super::plan::headers::{limit_readings, with_limits};
 use super::registry::{known_max_output_tokens, valid_model_id, valid_provider_id};
@@ -113,6 +113,9 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
             }
             if let Some(choice) = &request.tool_choice {
                 body.insert("tool_choice".into(), choice.clone());
+            }
+            if let Some(schema) = &request.response_schema {
+                body.insert("response_format".into(), response_format(schema));
             }
             (
                 catalog_endpoint(&base_url, "/chat/completions"),

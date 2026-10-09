@@ -88,6 +88,7 @@ pub(in crate::core::server) async fn chat_completions(
         tools: req.tools,
         tool_choice: req.tool_choice,
         billing_target: req.billing_target,
+        response_schema: None,
     };
     let (dispatched, meta) = match route_model_call(
         &client_identity,

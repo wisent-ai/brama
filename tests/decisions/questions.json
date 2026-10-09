@@ -1,0 +1,20 @@
+{
+  "kind": {
+    "type": "choice",
+    "instructions": "What is this message to the work the agent is doing?",
+    "criteria": {
+      "task": "It asks for work of its own.",
+      "question": "It asks the agent something and wants an answer, not work.",
+      "acknowledgement": "It accepts work the agent reported as done.",
+      "remark": "It comments without asking for anything."
+    }
+  },
+  "frustration": {
+    "type": "choice",
+    "instructions": "Does the message show that the person is frustrated with the agent?",
+    "criteria": {
+      "frustrated": "The message shows frustration with the agent or its work.",
+      "calm": "The message shows no frustration with the agent."
+    }
+  }
+}

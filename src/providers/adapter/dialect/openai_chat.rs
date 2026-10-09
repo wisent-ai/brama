@@ -2,7 +2,17 @@
 
 use serde_json::{json, Value};
 
-use crate::types::{ModelRequest, ModelResponse, ToolCall};
+use crate::types::{ModelRequest, ModelResponse, ResponseSchema, ToolCall};
+
+/// The chat wire's `response_format` for an answer schema. Strict, so a
+/// provider that decodes under the schema — OpenAI, and vLLM through its
+/// guided decoding — cannot write a key or a label outside it.
+pub(in crate::providers::adapter) fn response_format(schema: &ResponseSchema) -> Value {
+    json!({
+        "type": "json_schema",
+        "json_schema": { "name": schema.name, "strict": true, "schema": schema.schema },
+    })
+}
 
 pub(in crate::providers::adapter) fn openai_messages(request: &ModelRequest) -> Vec<Value> {
     let mut messages =

@@ -122,6 +122,14 @@ pub struct BillingTarget {
     pub subscription_id: String,
 }
 
+/// A JSON Schema an answer must keep, under the name a provider's structured
+/// output asks for.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResponseSchema {
+    pub name: String,
+    pub schema: serde_json::Value,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelRequest {
     pub messages: Vec<Message>,
@@ -145,6 +153,12 @@ pub struct ModelRequest {
     pub tool_choice: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub billing_target: Option<BillingTarget>,
+    /// The shape the answer must keep, for a provider whose wire can hold its
+    /// decoding to one. A decision sets it, so a text model cannot write a
+    /// label its question never declared; a wire that has no such setting
+    /// sends the request without it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub response_schema: Option<ResponseSchema>,
 }
 
 /// One window of a subscription's plan, as the provider itself reported it on

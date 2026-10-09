@@ -143,6 +143,7 @@ pub async fn run_first_use(
         tools: None,
         tool_choice: None,
         billing_target: None,
+        response_schema: None,
     };
     let direct_provider = provider_id_from_route(&request.model)
         .is_some_and(crate::gateway::broker::provider_capability_configured);

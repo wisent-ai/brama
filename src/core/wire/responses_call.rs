@@ -202,6 +202,7 @@ pub fn responses_request(body: &[u8]) -> Result<InboundCall, String> {
             tools,
             tool_choice,
             billing_target: None,
+            response_schema: None,
         },
         stream: raw
             .get("stream")

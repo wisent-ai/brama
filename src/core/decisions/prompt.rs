@@ -6,12 +6,21 @@
 //! [`super::answers`]. The choice, the score and the confidence are therefore
 //! Brama's arithmetic over the model's distribution, never a second thing the
 //! model was asked to assert and could contradict.
+//!
+//! The shape of that distribution travels with the request as its answer
+//! schema ([`answer_schema`]): every question a required key whose value
+//! holds exactly that question's labels. A wire that holds decoding to a
+//! schema then cannot write a label of another question under this one,
+//! which a prompt alone did not prevent on a small model.
 
-use serde_json::Value;
+use serde_json::{json, Map, Value};
 
-use crate::types::{Message, ModelRequest};
+use crate::types::{Message, ModelRequest, ResponseSchema};
 
 use super::question::{DecisionRequest, Question};
+
+/// The name the answer schema travels under; the wire requires one.
+const SCHEMA_NAME: &str = "decision";
 
 /// The instruction the chat engine sends, kept in one place because it is part
 /// of the contract: change it and every chat-served decision changes with it.
@@ -40,6 +49,30 @@ pub fn chat_request(request: &DecisionRequest, route: &str) -> ModelRequest {
         tools: None,
         tool_choice: None,
         billing_target: None,
+        response_schema: Some(answer_schema(request)),
+    }
+}
+
+/// The answer a decision asks for, as a JSON Schema: one object whose keys
+/// are exactly the question keys, each an object whose keys are exactly that
+/// question's labels, each a number.
+pub fn answer_schema(request: &DecisionRequest) -> ResponseSchema {
+    let mut properties = Map::with_capacity(request.questions.len());
+    for (key, question) in &request.questions {
+        let labels = question.labels();
+        let masses: Map<String, Value> = labels
+            .iter()
+            .map(|label| (label.clone(), json!({ "type": "number" })))
+            .collect();
+        properties.insert(
+            key.clone(),
+            json!({ "type": "object", "properties": masses, "required": labels, "additionalProperties": false }),
+        );
+    }
+    let keys: Vec<&String> = request.questions.iter().map(|(key, _)| key).collect();
+    ResponseSchema {
+        name: SCHEMA_NAME.to_string(),
+        schema: json!({ "type": "object", "properties": properties, "required": keys, "additionalProperties": false }),
     }
 }
 

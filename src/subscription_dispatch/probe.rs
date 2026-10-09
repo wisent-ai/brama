@@ -89,6 +89,7 @@ pub async fn probe_once(subscription_id: &str, provider: &str) -> Result<Probe, 
         // billing target: nothing about this request is billable work a caller
         // asked for.
         billing_target: None,
+        response_schema: None,
     };
     let response = probe_subscription_usage(subscription_id, provider, &request).await;
     let detail = response.error.as_deref();

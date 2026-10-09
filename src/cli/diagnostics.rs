@@ -154,6 +154,7 @@ pub(crate) async fn test_inference(args: TestArgs) {
         tools: None,
         tool_choice: None,
         billing_target: None,
+        response_schema: None,
     };
     let resp =
         brama::subscription_dispatch::dispatch_subscription_for_agent(&agent_id, &request).await;

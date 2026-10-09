@@ -11,7 +11,7 @@ use serde_json::{json, Map, Value};
 use super::registry::{known_max_output_tokens, ProviderDescriptor, WireProtocol};
 use crate::types::ModelRequest;
 use anthropic_messages::{anthropic_tool_choice, anthropic_tools};
-use openai_chat::openai_messages;
+use openai_chat::{openai_messages, response_format};
 use openai_responses::responses_payload;
 use tool_schema::normalized_tools_value;
 
@@ -63,6 +63,15 @@ pub(in crate::providers::adapter) fn chat_payload(
             }
             if let Some(choice) = &request.tool_choice {
                 body.insert("tool_choice".into(), choice.clone());
+            }
+            // kimi-for-coding's accepted field set is pinned, so the schema is
+            // not sent there; Brama still refuses an answer outside it.
+            if let Some(schema) = request
+                .response_schema
+                .as_ref()
+                .filter(|_| descriptor.id != "kimi")
+            {
+                body.insert("response_format".into(), response_format(schema));
             }
             Value::Object(body)
         }
