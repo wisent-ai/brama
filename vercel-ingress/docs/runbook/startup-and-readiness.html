@@ -122,6 +122,7 @@ models. It may contact a provider and incur cost. Unlike service admission,
 this diagnostic waits for the discovery operation it was asked to perform.</p>
 
 <h2 id="readyz-answers-503"><code>/readyz</code> answers 503<a class="headerlink" href="#readyz-answers-503" title="Link to this section">&para;</a></h2>
+<p>A readiness probe for one subscription reads that member's recorded credential and quota refusal before requesting its grant. Its diagnostic names the selected subscription and the retained cause, including the recorded quota reopening time when present. It does not claim that every other account failed because this member is unavailable, and a refused credential is not redeemed merely to repeat its recorded refusal.</p>
 <p><code>reason</code> is one of five sentences (<code>src/core/server.rs:2343-2355</code>), each
 naming a different repair:</p>
 <table>

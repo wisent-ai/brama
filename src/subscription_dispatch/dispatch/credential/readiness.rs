@@ -8,9 +8,7 @@ use crate::providers::adapter as provider_registry;
 use crate::subscription_dispatch::usage;
 
 use super::super::refusal::envelope::failure_detail;
-use super::super::refusal::pool_empty::{
-    auth_rejected_summary, bounded_unavailable_summary, no_active_credential_summary,
-};
+use super::super::refusal::pool_empty::no_active_credential_summary;
 
 /// Perform, for one subscription, the act a health check cannot infer: redeem
 /// its credential and answer in the request path's vocabulary.
@@ -32,18 +30,8 @@ pub async fn probe_subscription_redemption(
     if crate::journal::is_retired(subscription_id) {
         return Err(no_active_credential_summary(provider));
     }
-    // Checked before redeeming, in the request path's own order: a blocked
-    // credential is skipped there without a provider call, so a readiness probe
-    // that redeemed it anyway would report a working credential the router
-    // refuses to use. An authorization block is named as one, for the same
-    // reason the request path names it: `/readyz` is the deploy check, and
-    // "wait" and "sign in again" are different instructions to whoever reads it.
-    if usage::is_blocked(subscription_id) {
-        return Err(if usage::needs_reauthorization(subscription_id) {
-            auth_rejected_summary(provider)
-        } else {
-            bounded_unavailable_summary(provider)
-        });
+    if let Some(refusal) = usage::standing_refusal(subscription_id) {
+        return Err(format!("subscription {subscription_id}: {refusal}"));
     }
     match broker::subscription_credential(subscription_id, provider).await {
         Ok(credential) => {
