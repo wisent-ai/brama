@@ -12,6 +12,8 @@ mod native_harness;
 mod pending_discovery;
 #[path = "discovery/sign_in.rs"]
 mod remote_sign_in;
+#[path = "resets/refusal.rs"]
+mod reset_report_refusal;
 #[path = "resets/retired.rs"]
 mod retired_reset;
 
