@@ -181,7 +181,8 @@ fn discovered_harness_account_persists_once_with_its_observed_plan() {
         "harness usage refused: {}",
         String::from_utf8_lossy(&observed.stderr)
     );
-    let document: Value = serde_json::from_slice(&observed.stdout).expect("real harness usage JSON");
+    let document: Value =
+        serde_json::from_slice(&observed.stdout).expect("real harness usage JSON");
     let reports = document["reports"].as_array().expect("harness reports");
     let observed_account = reports
         .iter()
@@ -205,7 +206,9 @@ fn discovered_harness_account_persists_once_with_its_observed_plan() {
     let discovered: Value =
         serde_json::from_slice(&discovery.stdout).expect("discovery report JSON");
     assert_eq!(discovered["ok"], true, "{discovered}");
-    let rows = discovered["accounts"].as_array().expect("discovered accounts");
+    let rows = discovered["accounts"]
+        .as_array()
+        .expect("discovered accounts");
     let row = rows
         .iter()
         .find(|row| {
@@ -238,7 +241,10 @@ fn discovered_harness_account_persists_once_with_its_observed_plan() {
     );
     let after = run.member(id, false);
     assert_eq!(after["discovery"]["discovered_at_ms"], discovered_at);
-    assert_eq!(after["discovery"]["account"], persisted["discovery"]["account"]);
+    assert_eq!(
+        after["discovery"]["account"],
+        persisted["discovery"]["account"]
+    );
     let listed = run.command(&["subscription", "list"]);
     assert!(listed.status.success());
     let pool: Value = serde_json::from_slice(&listed.stdout).expect("pool JSON");
@@ -253,7 +259,10 @@ fn discovered_harness_account_persists_once_with_its_observed_plan() {
                     .as_str()
                     .is_some_and(|email| email.eq_ignore_ascii_case(&account))
         });
-    assert_eq!(matches.next().expect("persisted discovered member")["id"], id);
+    assert_eq!(
+        matches.next().expect("persisted discovered member")["id"],
+        id
+    );
     assert!(matches.next().is_none(), "discovery duplicated the account");
     run.report["result"] = json!("passed");
     run.save();

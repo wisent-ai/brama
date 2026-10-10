@@ -98,6 +98,8 @@ pub async fn run(
             let confirmed = response["ok"].as_bool() == Some(true);
             outcome.state = if confirmed {
                 ResetState::Redeemed
+            } else if response["not_applied"].as_bool() == Some(true) {
+                ResetState::Refused
             } else {
                 ResetState::Unconfirmed
             };

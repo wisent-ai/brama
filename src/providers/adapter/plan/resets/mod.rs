@@ -111,5 +111,8 @@ pub async fn redeem(
         .ok_or_else(|| {
             format!("provider reset response lacks {result_field}; redemption is unconfirmed")
         })?;
-    Ok(json!({"ok": result == "reset", "code": result, "provider_result": answer}))
+    let not_applied = matches!(declared.protocol, ResetProtocol::CodexWham)
+        && matches!(result, "nothing_to_reset" | "no_credit");
+    Ok(json!({"ok": result == "reset", "code": result,
+        "not_applied": not_applied, "provider_result": answer}))
 }

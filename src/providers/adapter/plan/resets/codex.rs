@@ -41,7 +41,7 @@ pub(super) fn parse(body: Value, observed_at_ms: i64) -> Result<ResetOffer, Stri
             remaining_count: u64::from(credit.status.as_deref() != Some("redeemed")),
             consumption_observable: credit.status.is_some(),
             usable,
-            requires_limit: true,
+            requires_limit: false,
             expires_at_ms,
             clears: Vec::new(),
         });
