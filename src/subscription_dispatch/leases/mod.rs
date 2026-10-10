@@ -187,60 +187,7 @@ pub async fn take(request: &Request) -> Result<Taken, Refused> {
         .map_err(|error| Refused::Unavailable {
             detail: format!("the Skarbiec subscription inventory could not be read: {error}"),
         })?;
-    let live = register::live().map_err(|detail| Refused::Unavailable { detail })?;
-    if let Some(standing) = live
-        .iter()
-        .find(|lease| lease.session_id == session_id && lease.provider == provider)
-    {
-        let on_subscription: Vec<Lease> = live
-            .iter()
-            .filter(|lease| lease.subscription_id == standing.subscription_id)
-            .cloned()
-            .collect();
-        return Ok(Taken {
-            lease: standing.clone(),
-            live_on_subscription: count(&on_subscription),
-            limit,
-            new: false,
-        });
-    }
-    let Members {
-        mut usable,
-        refused,
-    } = members(&entries, provider, &live);
-    if usable.is_empty() {
-        return Err(Refused::NoUsableMember {
-            provider: provider.to_string(),
-            members: refused,
-        });
-    }
-    usable.sort_by(fewest_then_freshest);
-    let Some((chosen, carried)) = usable.iter().find(|(_, live)| count(live) < limit) else {
-        return Err(Refused::PoolFull {
-            provider: provider.to_string(),
-            limit,
-            members: usable
-                .iter()
-                .map(|(entry, live)| member_row(entry, live))
-                .collect(),
-        });
-    };
-    let lease = register::take(
-        provider,
-        &chosen.id,
-        chosen.account.as_deref(),
-        session_id,
-        holder,
-    )
-    .map_err(|detail| Refused::Unavailable { detail })?;
-    let mut now_carried = carried.clone();
-    now_carried.push(lease.clone());
-    Ok(Taken {
-        lease,
-        live_on_subscription: count(&now_carried),
-        limit,
-        new: true,
-    })
+    register::take(provider, session_id, holder, &entries, limit)
 }
 
 /// End the lease `lease_id`, or every live lease of `session_id`: the

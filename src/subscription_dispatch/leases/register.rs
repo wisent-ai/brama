@@ -117,29 +117,85 @@ pub fn live() -> Result<Vec<Lease>, String> {
     Ok(load()?.leases.into_iter().filter(Lease::is_live).collect())
 }
 
-/// Record one lease. The id is the lease's own: the session and the instant
-/// it was taken at, so two leases of one session on two providers differ.
+/// Select and persist admission against one locked view of the live register.
 pub(super) fn take(
     provider: &str,
-    subscription_id: &str,
-    account: Option<&str>,
     session_id: &str,
     holder: &str,
-) -> Result<Lease, String> {
-    locked(|register| {
-        let taken_at_ms = now_ms()?;
-        let lease = Lease {
-            id: format!("{session_id}@{provider}@{taken_at_ms}"),
-            provider: provider.to_string(),
-            subscription_id: subscription_id.to_string(),
-            account: account.map(str::to_string),
-            session_id: session_id.to_string(),
-            holder: holder.to_string(),
-            taken_at_ms,
-            released_at_ms: None,
-        };
-        register.leases.push(lease.clone());
-        Ok(lease)
+    entries: &[crate::gateway::broker::SubscriptionEntry],
+    limit: u64,
+) -> Result<super::Taken, super::Refused> {
+    use super::{count, fewest_then_freshest, member_row, members, Members, Refused, Taken};
+
+    let unavailable = |detail| Refused::Unavailable { detail };
+    let _guard = LOCK
+        .lock()
+        .map_err(|error| unavailable(format!("the lease register lock is poisoned: {error}")))?;
+    let mut register = load().map_err(unavailable)?;
+    register.leases.retain(Lease::is_live);
+    if let Some(standing) = register
+        .leases
+        .iter()
+        .find(|lease| lease.session_id == session_id && lease.provider == provider)
+    {
+        let live_on_subscription = register
+            .leases
+            .iter()
+            .filter(|lease| lease.subscription_id == standing.subscription_id)
+            .count();
+        return Ok(Taken {
+            lease: standing.clone(),
+            live_on_subscription: u64::try_from(live_on_subscription)
+                .expect("a lease count fits in u64"),
+            limit,
+            new: false,
+        });
+    }
+    let Members {
+        mut usable,
+        refused,
+    } = members(entries, provider, &register.leases);
+    if usable.is_empty() {
+        return Err(Refused::NoUsableMember {
+            provider: provider.to_owned(),
+            members: refused,
+        });
+    }
+    usable.sort_by(fewest_then_freshest);
+    let Some((chosen, _)) = usable.iter().find(|(_, live)| count(live) < limit) else {
+        return Err(Refused::PoolFull {
+            provider: provider.to_owned(),
+            limit,
+            members: usable
+                .iter()
+                .map(|(entry, live)| member_row(entry, live))
+                .collect(),
+        });
+    };
+    let taken_at_ms = now_ms().map_err(unavailable)?;
+    let lease = Lease {
+        id: format!("{session_id}@{provider}@{taken_at_ms}"),
+        provider: provider.to_owned(),
+        subscription_id: chosen.id.clone(),
+        account: chosen.account.clone(),
+        session_id: session_id.to_owned(),
+        holder: holder.to_owned(),
+        taken_at_ms,
+        released_at_ms: None,
+    };
+    register.leases.push(lease.clone());
+    let live_on_subscription = register
+        .leases
+        .iter()
+        .filter(|held| held.subscription_id == lease.subscription_id)
+        .count();
+    persist(&register).map_err(unavailable)?;
+    Ok(Taken {
+        lease,
+        live_on_subscription: u64::try_from(live_on_subscription)
+            .expect("a lease count fits in u64"),
+        limit,
+        new: true,
     })
 }
 

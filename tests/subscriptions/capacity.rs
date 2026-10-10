@@ -2,6 +2,8 @@
 //! Journeys require BRAMA, CONSUMER, BEARER_ROLE and GATEWAY_SOURCE_REVISION.
 //! Reset reporting additionally requires MEMBER and EXPECTED_CREDITS.
 //! Discovery requires EXPECTED_ACCOUNT, EXPECTED_HARNESS_PROVIDER and EXPECTED_PROVIDER.
+#[path = "leases/concurrency.rs"]
+mod concurrent_leases;
 #[path = "discovery/receipt.rs"]
 mod historical_receipt;
 #[path = "discovery/capability.rs"]
