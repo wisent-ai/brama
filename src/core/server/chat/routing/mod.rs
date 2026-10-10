@@ -25,7 +25,7 @@ use crate::core::server::subscriptions::account::account_agent_for_route;
 use crate::subscription_dispatch::{
     is_subscription_model, provider_requires_caller_identity, RoutedStream,
 };
-use crate::types::{ModelRequest, ModelResponse};
+use crate::types::{BillingTarget, ModelRequest, ModelResponse};
 
 use super::request::{
     is_any_subscription_selector, is_any_vision_capable_subscription_selector,
@@ -38,6 +38,48 @@ use dispatch::DispatchPlan;
 pub(super) enum DispatchedCall {
     Buffered(ModelResponse),
     Committed(RoutedStream),
+}
+
+/// The header a session on a leased subscription sends with every request.
+pub(crate) const SUBSCRIPTION_HEADER: &str = "x-brama-subscription";
+/// The account the leased member declares, when it declares one.
+pub(crate) const ACCOUNT_HEADER: &str = "x-brama-account";
+
+/// The billing target the request headers name, `None` when they name none,
+/// refused by name when the header is not `<provider>:<subscription_id>`.
+/// The account is the member's declared one, or its id when it declares
+/// none, as the rotation counts members.
+fn leased_target(headers: &HeaderMap) -> Result<Option<BillingTarget>, String> {
+    let Some(named) = headers.get(SUBSCRIPTION_HEADER) else {
+        return Ok(None);
+    };
+    let named = named.to_str().map_err(|_| {
+        format!("{SUBSCRIPTION_HEADER} is not text; it names <provider>:<subscription_id>")
+    })?;
+    let (provider, subscription) = named
+        .split_once(':')
+        .map(|(provider, subscription)| (provider.trim(), subscription.trim()))
+        .filter(|(provider, subscription)| !provider.is_empty() && !subscription.is_empty())
+        .ok_or_else(|| {
+            format!("{SUBSCRIPTION_HEADER} is {named:?}; it names <provider>:<subscription_id>")
+        })?;
+    let account = match headers.get(ACCOUNT_HEADER) {
+        Some(account) => account
+            .to_str()
+            .map_err(|_| format!("{ACCOUNT_HEADER} is not text; it names the member's account"))?
+            .trim()
+            .to_string(),
+        None => String::new(),
+    };
+    Ok(Some(BillingTarget {
+        provider_id: provider.to_string(),
+        account_id: if account.is_empty() {
+            subscription.to_string()
+        } else {
+            account
+        },
+        subscription_id: subscription.to_string(),
+    }))
 }
 
 /// What the routing decision produced besides the call itself, so every
@@ -84,6 +126,15 @@ pub(super) async fn route_model_call(
         return Err(api_error(StatusCode::FORBIDDEN, "forbidden").into_response());
     }
     let task_subscription = task_subscription_selector(requested_model);
+    // A session that runs on a leased subscription names it on every request
+    // in one header, whatever wire it speaks, so the body is never edited:
+    // `X-Brama-Subscription: <provider>:<subscription_id>` and, when the
+    // member declares one, `X-Brama-Account: <address>`. The header is the
+    // request's billing target unless the body named its own.
+    if request.billing_target.is_none() {
+        request.billing_target = leased_target(headers)
+            .map_err(|message| api_error(StatusCode::BAD_REQUEST, &message).into_response())?;
+    }
     // A decision alias promises a typed answer, which this endpoint cannot
     // produce whatever is behind it. Saying so by name beats the generic
     // "not a canonical route or selector" this fell through to, which told a
