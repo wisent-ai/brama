@@ -8,6 +8,8 @@ mod historical_receipt;
 mod metadata_capability;
 #[path = "discovery/claude.rs"]
 mod native_harness;
+#[path = "discovery/pending.rs"]
+mod pending_discovery;
 #[path = "discovery/sign_in.rs"]
 mod remote_sign_in;
 #[path = "resets/retired.rs"]

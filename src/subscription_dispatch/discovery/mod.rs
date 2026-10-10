@@ -2,6 +2,7 @@
 
 mod enroll;
 pub mod harness;
+mod pending;
 mod receipts;
 pub use enroll::enroll;
 

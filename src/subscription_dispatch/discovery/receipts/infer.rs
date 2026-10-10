@@ -86,13 +86,15 @@ pub async fn accounts(message: &Value, source: &str) -> Result<Vec<AccountObserv
                 ))
             })?
             .timestamp_millis();
+        let observed_at_ms = chrono::Utc::now().timestamp_millis();
         accounts.push(AccountObservation {
             provider: account.provider,
             account: account.account.to_lowercase(),
             plan: account.plan,
             source: source.to_owned(),
-            observed_at_ms: chrono::Utc::now().timestamp_millis(),
+            observed_at_ms,
             fact_at_ms,
+            discovered_at_ms: observed_at_ms,
         });
     }
     Ok(accounts)

@@ -6,8 +6,27 @@ use crate::subscription_dispatch::usage;
 use serde_json::{json, Value};
 
 pub async fn enroll(mut report: DiscoveryReport) -> Value {
+    let mut pending = match super::pending::Pending::open() {
+        Ok(mut pending) => match pending.retain(&report.accounts) {
+            Ok(()) => pending,
+            Err(error) => {
+                report.errors.push(error);
+                return json!({"ok": false, "accounts": [], "observations": report.accounts, "errors": report.errors});
+            }
+        },
+        Err(error) => {
+            report.errors.push(error);
+            return json!({"ok": false, "accounts": [], "observations": report.accounts, "errors": report.errors});
+        }
+    };
     let receipts = super::receipts::collect().await;
-    report.accounts.extend(receipts.accounts);
+    if let Err(error) = pending.retain(&receipts.accounts) {
+        report.accounts.extend(receipts.accounts);
+        report.errors.extend(receipts.errors);
+        report.errors.push(error);
+        return json!({"ok": false, "accounts": [], "observations": report.accounts, "errors": report.errors});
+    }
+    report.accounts = pending.accounts.clone();
     report.errors.extend(receipts.errors);
     let members = match broker::list_all_subscriptions().await {
         Ok(members) => members,
@@ -19,6 +38,7 @@ pub async fn enroll(mut report: DiscoveryReport) -> Value {
         }
     };
     let mut enrolled = std::collections::BTreeMap::<String, Value>::new();
+    let prior_errors = report.errors.len();
     for observation in report.accounts {
         if let Err(error) = super::provider_account(&observation.provider, &observation.account) {
             report.errors.push(error);
@@ -111,6 +131,11 @@ pub async fn enroll(mut report: DiscoveryReport) -> Value {
                 "registered": error.is_none(), "error": error,
             }),
         );
+    }
+    if report.errors.len() == prior_errors {
+        if let Err(error) = pending.reconciled() {
+            report.errors.push(error);
+        }
     }
     json!({"ok": report.errors.is_empty(), "accounts": enrolled.into_values().collect::<Vec<_>>(), "errors": report.errors})
 }

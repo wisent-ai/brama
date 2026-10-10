@@ -42,9 +42,9 @@ impl Cache {
         let entries = entries
             .into_iter()
             .filter(|(_, accounts)| {
-                accounts
-                    .iter()
-                    .all(|account| account["fact_at_ms"].is_i64())
+                accounts.iter().all(|account| {
+                    account["fact_at_ms"].is_i64() && account["discovered_at_ms"].is_i64()
+                })
             })
             .map(|(source, accounts)| {
                 let accounts = accounts

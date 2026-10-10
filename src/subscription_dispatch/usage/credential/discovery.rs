@@ -56,7 +56,7 @@ pub fn record_discovered_account(
             plan: observation.plan.clone(),
             plan_at_ms: observation.plan.as_ref().map(|_| observation.fact_at_ms),
             sources: Vec::new(),
-            discovered_at_ms: observation.observed_at_ms,
+            discovered_at_ms: observation.discovered_at_ms,
             observed_at_ms: observation.observed_at_ms,
             registration_error: None,
         });
@@ -71,6 +71,9 @@ pub fn record_discovered_account(
             discovered.plan = observation.plan.clone();
             discovered.plan_at_ms = Some(observation.fact_at_ms);
         }
+        discovered.discovered_at_ms = discovered
+            .discovered_at_ms
+            .min(observation.discovered_at_ms);
         discovered.observed_at_ms = discovered.observed_at_ms.max(observation.observed_at_ms);
         entry.updated_at_ms = Some(now_ms());
         if needs_grant && entry.credential.is_none() {
