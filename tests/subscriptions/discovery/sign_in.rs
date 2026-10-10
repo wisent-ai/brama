@@ -5,11 +5,27 @@ use serde_json::{json, Value};
 #[test]
 #[ignore = "Requires the selected account's independent Weles login on a dedicated host"]
 fn remote_weles_sign_in_proves_the_selected_member() {
+    prove_selected_member(false);
+}
+
+#[test]
+#[ignore = "Requires a real Claude account whose independent Weles sign-in presents a captcha"]
+fn claude_captcha_sign_in_finishes_with_a_live_grant() {
+    prove_selected_member(true);
+}
+
+fn prove_selected_member(require_captcha: bool) {
     let mut run = Run::new();
     let member = required("MEMBER");
     let account = required("EXPECTED_ACCOUNT");
     let before = run.member(&member, false);
     let provider = before["provider"].as_str().expect("member provider");
+    if require_captcha {
+        assert_eq!(
+            provider, "claude-code",
+            "captcha qualification requires a Claude member"
+        );
+    }
     assert!(before["account"]
         .as_str()
         .expect("selected account")
@@ -61,6 +77,16 @@ fn remote_weles_sign_in_proves_the_selected_member() {
     assert_eq!(verdict["result"], "signed_in");
     assert_eq!(verdict["provider"], provider);
     assert_eq!(verdict["subscription_id"], member);
+    if require_captcha {
+        assert!(
+            verdict["stages"]
+                .as_array()
+                .expect("observed Weles stages")
+                .iter()
+                .any(|stage| stage["stage"] == "claude_captcha_answer"),
+            "the provider did not present the captcha path; this run does not qualify it"
+        );
+    }
     let run_id = verdict["run_id"]
         .as_str()
         .expect("Weles authentication run");
