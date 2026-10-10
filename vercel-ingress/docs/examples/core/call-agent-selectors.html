@@ -21,7 +21,7 @@
       <article class="doc"><h1 id="use-an-agent-owned-subscription-selector">Use an agent-owned subscription selector<a class="headerlink" href="#use-an-agent-owned-subscription-selector" title="Link to this section">&para;</a></h1>
 <p><strong>Goal:</strong> sign one exact request and let Brama use only subscriptions delegated to that agent within bounded attempts.</p>
 <p><strong>Status:</strong> written against the <code>0.1.0</code> contract and not re-verified against the newest published release.</p>
-<p><strong>Risk:</strong> credentialed, provider-facing, and billable. <code>any</code> and <code>task:</code> may perform up to six provider calls. Explicit human approval must name agent, account, selector/route, prompt class, output limit, and spend.</p>
+<p><strong>Risk:</strong> credentialed, provider-facing, and billable. Subscription routing can walk the full finite eligible credential pool; there is no fixed six-call ceiling. An explicit <code>billingTarget</code> restricts the request to its selected subscription. Explicit human approval must name agent, account, selector/route, prompt class, output limit, and spend.</p>
 <p><strong>Environment:</strong> approved HTTPS or authenticated loopback; Python standard library for local signature construction.</p>
 <p><strong>Preconditions:</strong> bearer loaded into <code>BRAMA_BEARER</code>; exact <code>AGENT_ID</code>; its request-sign secret materialized by the approved consumer in owner-only <code>AGENT_SECRET_FILE</code>; active delegated subscriptions.</p>
 <p><strong>Inputs:</strong> exact JSON bytes in <code>request.json</code>. Reformatting after signing invalidates the signature.</p>
