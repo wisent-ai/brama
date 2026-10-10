@@ -63,11 +63,11 @@
 </tr>
 </tbody>
 </table>
-<p><code>attempts</code> counts the outbound provider calls consumed. Selectors walk their ordered model candidates and try at most two eligible credentials per route, as specified by the <a href="/docs/core/state-and-failures">core request contract</a>. Brama does not stop the HTTP request because of elapsed time. Caller retries are separate requests, not evidence that the earlier request failed or did no work.</p>
+<p><code>attempts</code> counts the outbound provider calls consumed. Selectors walk their ordered model candidates and each route's finite eligible credential list, as specified by the <a href="/docs/core/state-and-failures">core request contract</a>. Recorded blocks spend no provider attempt but retain their causes in the final refusal. Brama does not stop the HTTP request because of elapsed time. Caller retries are separate requests, not evidence that the earlier request failed or did no work.</p>
 <h2 id="recovery">Recovery<a class="headerlink" href="#recovery" title="Link to this section">&para;</a></h2>
 <ol>
 <li>Check <code>/health</code> for build identity only and <code>/stats</code> for redacted counters/limits; neither probes dependencies.</li>
-<li>For attempt count zero, repair broker/catalog/capability configuration rather than provider quota.</li>
+<li>For attempt count zero, inspect the reported cause: discovery or credential failures require their named repair, while a recorded quota block can refuse without a new provider call.</li>
 <li>For rate limit or retryable outage, honor provider backoff and perform at most one owner-approved replay after state changes.</li>
 <li>For timeout, determine whether the provider may still have completed before replaying; never replay an ambiguous mutation/tool call automatically.</li>
 <li>For permanent auth rejection, allow retirement workflow to remove that credential from future dispatch, then provision or rotate through the owning capability system.</li>

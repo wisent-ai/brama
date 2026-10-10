@@ -120,7 +120,7 @@ a second route.</p>
 <li><code>subscriptionId</code> must resolve to an active non-retired resource owned by the
   signed agent.</li>
 </ul>
-<p>An explicit subscription route tries at most two eligible credentials on that
+<p>An explicit subscription route walks every eligible credential on that
 one route, ordered by what their plans have left: the maximum used fraction the
 provider itself reported across that credential's current windows, freest
 first, read from the ledger and costing no provider call. A window whose reset
@@ -128,7 +128,7 @@ instant has passed counts as empty; a credential with no reading counts as
 free. The agent's pinned credential, when it has one that is eligible and not
 reporting a full window, is tried first within that same bound. A credential is
 redeemed immediately before each provider call. Authentication, quota, and
-rate-limit failures may rotate to the second credential; other provider
+rate-limit failures may rotate to the next eligible credential; other provider
 failures return immediately, because replay could duplicate cost or tool
 effects. Rotation stays inside the named route &mdash; it never changes which
 route serves the request.</p>
