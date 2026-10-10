@@ -142,9 +142,12 @@ impl RankedWalk {
 fn unreached(agent_id: &str, walked: &[String]) -> Vec<String> {
     let entries = match crate::gateway::broker::routing_subscriptions(agent_id) {
         Ok(entries) => entries,
-        Err(error) => return vec![format!(
-            "the subscription inventory could not be read to name the members not tried: {error}"
-        )],
+        Err(error) => {
+            let message = format!(
+                "the subscription inventory could not be read to name the members not tried: {error}"
+            );
+            return vec![message];
+        }
     };
     entries
         .into_iter()
