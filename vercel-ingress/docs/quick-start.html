@@ -92,6 +92,29 @@ repair this.
 <code>brama serve --local-credentials-stdin</code>, passing a provider-to-credential
 JSON object once over standard input; the credentials live only in zeroizing
 process memory.</p>
+<p>The desktop runtime requests an operating-system-assigned port and reads the
+bound address from its own child's startup output. Its health check reports the
+actual <code>GET</code> endpoint and transport error, non-success HTTP status and
+body, JSON decoding error, or unexpected <code>build.product</code>. Desktop
+shows that cause as its startup error. A successful health check establishes
+process identity, not working provider credentials or a completed model
+request.</p>
+<p>The desktop repository's <code>tests/local-runtime</code> qualification runs
+the real Brama executable through the same local runtime controller. Configure
+<code>BRAMA_RUNTIME_BIN</code>, its independently selected
+<code>BRAMA_TEST_RUNTIME_SOURCE_REVISION</code>,
+<code>BRAMA_TEST_DESKTOP_SOURCE_REVISION</code>, and an unused
+<code>BRAMA_DESKTOP_STATE_DIR</code> below that checkout's <code>.build</code>.
+Run <code>swift test --filter LocalRuntimeHealth</code>. The journey observes
+the bound endpoint and build identity, stops only its own isolated child, and
+checks that the closed listener reports the failed health operation.
+<code>BRAMA_TEST_HEALTH_REFUSALS</code> names a JSON array of actual unhealthy
+service origins and their independently observed causes, with fields
+<code>origin</code> and <code>observedCause</code>. Use real HTTP-status,
+malformed-JSON and wrong-product observations; the journey creates no substitute
+HTTP server. Reports and health responses remain under
+<code>.build/real-tests/local-runtime</code>. These checks do not qualify
+native graphical rendering, provider readiness or inference.</p>
 <h2 id="verify-liveness-then-readiness">Verify liveness, then readiness<a class="headerlink" href="#verify-liveness-then-readiness" title="Link to this section">&para;</a></h2>
 <pre><code class="language-console">$ curl -s http://127.0.0.1:8080/health
 {&quot;build&quot;:{...,&quot;version&quot;:&quot;0.2.38&quot;},&quot;dependencies&quot;:&quot;not_probed&quot;,&quot;status&quot;:&quot;ok&quot;}
