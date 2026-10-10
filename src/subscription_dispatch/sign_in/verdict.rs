@@ -61,6 +61,32 @@ pub(super) fn unchanged_failed_attempt(
     stops_a_new_attempt(&previous, same_account, same_executor, cooling_down).then_some(previous)
 }
 
+/// The recorded verdict handed back in place of a run, saying so: `replayed`
+/// is set, `replay_of_at` names the instant the recorded attempt completed,
+/// and `detail` opens with why no browser was driven, so a reader of the
+/// lines or the JSON never takes an old failure for this call's result.
+/// Every verdict the journal records carries `at` and `detail`; one that
+/// lacks either is reported as such rather than dressed up.
+pub(super) fn replayed(mut previous: Value, account_revision: &str) -> Value {
+    let recorded_at = match previous.get("at").and_then(Value::as_str) {
+        Some(at) => at.to_owned(),
+        None => "an instant the journal record does not carry".to_owned(),
+    };
+    let detail = match previous.get("detail").and_then(Value::as_str) {
+        Some(detail) => detail.to_owned(),
+        None => "the journal record carries no detail".to_owned(),
+    };
+    previous["replayed"] = json!(true);
+    previous["replay_of_at"] = json!(recorded_at);
+    previous["detail"] = json!(format!(
+        "not run: the failed attempt recorded at {recorded_at} stands, because the account \
+         (revision {account_revision}) and the sign-in executor are unchanged since it and \
+         the provider's refusal was final; change the login row or wait out the sign-in \
+         cooldown to run again. That attempt: {detail}"
+    ));
+    previous
+}
+
 /// Whether a recorded attempt stands in the way of running another one.
 ///
 /// Split out of the lookup above so the rule is readable and testable without

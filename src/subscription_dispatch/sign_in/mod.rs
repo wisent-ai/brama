@@ -188,12 +188,15 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
     .await?;
     // The safety stop is bound to the actual account data read from Skarbiec,
     // not merely to the existence of any past attempt or to a missing tag.
+    // The verdict handed back is the recorded one, said so: a caller that read
+    // a two-day-old failure as this run's answer went looking for a browser
+    // that never opened.
     if let Some(previous) = verdict::unchanged_failed_attempt(
         &id,
         &resolved.account_revision,
         &resolved.source_revision,
     ) {
-        return Ok(previous);
+        return Ok(verdict::replayed(previous, &resolved.account_revision));
     }
     let mut identity = serde_json::to_value(&resolved).expect("resolved account serializes");
     identity["started_at_ms"] = json!(chrono::Utc::now().timestamp_millis());
