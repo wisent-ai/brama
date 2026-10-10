@@ -59,9 +59,14 @@ pub async fn second_factor_report(provider: Option<&str>) -> Result<Value, Strin
         }
         let mut row = super::account::subscription_view(&entry);
         super::account::annotate_second_factor(&mut row, &seeds);
-        let account = identity(&row)
-            .map(str::to_owned)
-            .unwrap_or_else(|| entry.id.clone());
+        let account = identity(&row).ok_or_else(|| {
+            format!(
+                "cannot report authenticator accounts: subscription {} of provider {} \
+                 has no recorded account; run brama subscription attribute {} on the \
+                 gateway that owns its grant",
+                entry.id, entry.provider, entry.provider
+            )
+        })?;
         let login = row
             .pointer("/second_factor/login_item")
             .and_then(Value::as_str)

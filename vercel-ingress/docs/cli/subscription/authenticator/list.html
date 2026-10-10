@@ -34,6 +34,7 @@
 <p>The command reads the pool and vault metadata, prints no secret and writes nothing. A failed seed inspection reports the actual operation and error. In pool responses, an unavailable seed observation is null with <code>seed_error</code>; Brama Desktop displays it in the selected account's <strong>Second factor</strong> section rather than showing an absent seed.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <p>A pool or vault read that fails prints its own sentence on standard error and exits 1. An unknown argument exits 2.</p>
+<p>An active member without a recorded account refuses the report rather than being counted under its member ID. The error names the subscription and provider, and directs you to <code>brama subscription attribute &lt;provider&gt;</code> on the gateway that owns its grant. Both text and JSON modes exit 1 without printing account totals. A member label is never evidence of its account identity.</p>
 <p><a href="/docs/cli/subscription">Back to <code>brama subscription</code></a> or <a href="/docs/cli">the CLI tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>
