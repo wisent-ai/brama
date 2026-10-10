@@ -44,14 +44,31 @@ pub async fn enroll(mut report: DiscoveryReport) -> Value {
             report.errors.push(error);
             continue;
         }
-        let existing = members.iter().find(|member| {
+        let mut existing = None;
+        let mut retired_match = None;
+        for member in members.iter().filter(|member| {
             member.provider == observation.provider
                 && member
                     .account
                     .as_deref()
                     .is_some_and(|account| account.eq_ignore_ascii_case(&observation.account))
-                && !crate::journal::is_retired(&member.id)
-        });
+        }) {
+            if crate::journal::is_retired(&member.id) {
+                retired_match = Some(member);
+            } else {
+                existing = Some(member);
+                break;
+            }
+        }
+        if existing.is_none() {
+            if let Some(retired) = retired_match {
+                report.errors.push(format!(
+                    "{}: account {} for provider {} was retired by its owner; discovery cannot register it under another member",
+                    retired.id, observation.account, observation.provider
+                ));
+                continue;
+            }
+        }
         let id = match existing {
             Some(member) => member.id.clone(),
             None => format!(

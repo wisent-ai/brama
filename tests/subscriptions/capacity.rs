@@ -14,6 +14,8 @@ mod pending_discovery;
 mod remote_sign_in;
 #[path = "resets/refusal.rs"]
 mod reset_report_refusal;
+#[path = "discovery/retired.rs"]
+mod retired_discovery;
 #[path = "resets/retired.rs"]
 mod retired_reset;
 mod support;
