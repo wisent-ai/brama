@@ -18,6 +18,11 @@ pub async fn run(
     if reason.trim().is_empty() {
         return Err("--reason must state why this subscription reset is requested".into());
     }
+    if crate::journal::is_retired(member) {
+        return Err(format!(
+            "subscription {member}: retired by its owner; no reset was sent"
+        ));
+    }
     let _lock = journal::lock(member)?;
     let members = broker::list_all_subscriptions().await?;
     let selected = members

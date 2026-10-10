@@ -8,6 +8,8 @@ mod historical_receipt;
 mod native_harness;
 #[path = "discovery/sign_in.rs"]
 mod remote_sign_in;
+#[path = "resets/retired.rs"]
+mod retired_reset;
 
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
