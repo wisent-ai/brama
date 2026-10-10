@@ -198,6 +198,7 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
         ));
     Router::new()
         .route("/health", get(health))
+        .route("/healthz", get(health))
         .route("/readyz", get(readyz))
         .merge(protected)
         .layer(middleware::from_fn(require_secure_transport))

@@ -88,7 +88,8 @@ pub(in crate::subscription_dispatch::dispatch) async fn task_quality_models(
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| b.2.cmp(&a.2))
     });
-    let subscriptions = broker::list_subscriptions(agent_id).await;
+    let subscriptions = broker::routing_subscriptions(agent_id)
+        .map_err(|error| Refusal::gateway(GatewayRefusal::DependencyUnavailable, error))?;
     let mut ordered = Vec::new();
     let mut idx = 0;
     while idx < scored.len() {

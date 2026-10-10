@@ -160,7 +160,23 @@ pub(crate) async fn test_inference(args: TestArgs) {
     // `best` is the selector the HTTP edge walks for a signed agent, not a
     // route: the same walk here, so what the gateway would answer this agent
     // can be read from the command line without a listener.
-    let resp = if request.model == brama::core::server::BEST_ALIAS {
+    let prepared = brama::subscription_dispatch::dispatch::prepare_routing(
+        &agent_id,
+        request.model == brama::core::server::BEST_ALIAS,
+    )
+    .await;
+    let resp = if let Err(error) = prepared {
+        brama::types::ModelResponse::from_refusal(
+            &request.model,
+            brama::types::Refusal::new(
+                error.class,
+                format!(
+                    "route {}: no live subscription; discovery failed: {}",
+                    request.model, error.message
+                ),
+            ),
+        )
+    } else if request.model == brama::core::server::BEST_ALIAS {
         brama::subscription_dispatch::dispatch_best_subscription_for_agent(
             &agent_id, &request, None,
         )

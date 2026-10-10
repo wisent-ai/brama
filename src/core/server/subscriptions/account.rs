@@ -19,18 +19,28 @@ pub(in crate::core::server) fn account_agent_id(
 pub(in crate::core::server) async fn account_agent_for_route(
     identity: &ModelClientIdentity,
     route: &str,
-) -> Option<String> {
-    let agent_id = account_agent_id(identity).ok()?;
-    let provider = crate::providers::adapter::provider_id_from_route(route)?;
-    crate::gateway::broker::list_subscriptions(&agent_id)
-        .await
+) -> Result<Option<String>, ApiError> {
+    let Some(context) = identity.human_context() else {
+        return Ok(None);
+    };
+    let agent_id = format!("user-{}", context.user_id.simple());
+    let Some(provider) = crate::providers::adapter::provider_id_from_route(route) else {
+        return Ok(None);
+    };
+    let entries = crate::gateway::broker::routing_subscriptions(&agent_id).map_err(|error| {
+        api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            &format!("route {route}: no live subscription; discovery failed: {error}"),
+        )
+    })?;
+    Ok(entries
         .into_iter()
         .any(|entry| {
             entry.provider.eq_ignore_ascii_case(provider)
                 && entry.status == "active"
                 && !crate::journal::is_retired(&entry.id)
         })
-        .then_some(agent_id)
+        .then_some(agent_id))
 }
 
 pub(in crate::core::server) async fn account_credential_provider(

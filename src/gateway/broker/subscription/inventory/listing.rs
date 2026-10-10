@@ -138,7 +138,8 @@ pub(super) async fn list_subscriptions_result(
                 "internal routing will use the trusted catalog if one is available"
             );
             match configured_subscriptions() {
-                Some(Ok(configured)) => Ok(configured),
+                Some(Ok(configured)) if !configured.is_empty() => Ok(configured),
+                Some(Ok(_)) => Err(live_error),
                 Some(Err(catalog_error)) => Err(format!(
                     "{live_error}; trusted subscription catalog is invalid: {catalog_error}"
                 )),

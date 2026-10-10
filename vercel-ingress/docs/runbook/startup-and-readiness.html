@@ -100,6 +100,26 @@ evidence is <code>/readyz</code>
 (<a href="/docs/architecture/request-path-and-state#health-versus-readyz">architecture</a>). Point deploy
 checks and uptime monitors at <code>/readyz</code>; treat a monitor on <code>/health</code>
 as a monitor of the process, nothing more.</p>
+<p><code>/healthz</code> is the same process-only check as <code>/health</code>.
+Neither waits for subscription inventory, credential redemption or provider model
+discovery. A healthy response does not establish that any route can serve.</p>
+<h2 id="no-live-subscription">A route has no live subscription</h2>
+<p>A request does not join subscription or model discovery. It reads the last
+completed background observation. If none has completed, it refuses with
+<code>route &lt;r&gt;: no live subscription; discovery failed: &lt;cause&gt;</code>,
+naming the operation still pending. If discovery failed, the refusal retains
+the failed operation and its reported cause, including a vault that cannot be
+opened. An empty trusted subscription catalog does not erase that failure.</p>
+<p>Restore the named dependency before replaying the request. Later traffic
+starts another background observation while the previous failure remains
+visible; concurrent requests do not each start their own discovery. A failed
+discovery is not a provider generation timeout, and an already dispatched
+generation still follows the provider transport contract.</p>
+<p><code>brama test --model &lt;route&gt; --agent-id &lt;agent&gt;
+--allow-provider-cost --json</code> is an explicit live diagnostic: it discovers
+inventory before dispatch, and the <code>best</code> selector also discovers
+models. It may contact a provider and incur cost. Unlike service admission,
+this diagnostic waits for the discovery operation it was asked to perform.</p>
 
 <h2 id="readyz-answers-503"><code>/readyz</code> answers 503<a class="headerlink" href="#readyz-answers-503" title="Link to this section">&para;</a></h2>
 <p><code>reason</code> is one of five sentences (<code>src/core/server.rs:2343-2355</code>), each

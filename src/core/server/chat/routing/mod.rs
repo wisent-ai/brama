@@ -77,7 +77,9 @@ pub(super) async fn route_model_call(
     let any_subscription = is_any_subscription_selector(requested_model);
     let any_vision_capable_subscription =
         is_any_vision_capable_subscription_selector(requested_model);
-    let account_agent = account_agent_for_route(client_identity, requested_model).await;
+    let account_agent = account_agent_for_route(client_identity, requested_model)
+        .await
+        .map_err(IntoResponse::into_response)?;
     if !client_identity.authorizes_model(requested_model) && account_agent.is_none() {
         return Err(api_error(StatusCode::FORBIDDEN, "forbidden").into_response());
     }

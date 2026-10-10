@@ -29,15 +29,25 @@ pub(super) async fn ordered_candidate_rows(
     agent_id: &str,
     request: &ModelRequest,
 ) -> Result<Vec<broker::SubscriptionEntry>, ModelResponse> {
-    let mut rows = eligible_subscription_entries(
-        broker::list_subscriptions(agent_id).await,
-        provider,
-        request.billing_target.as_ref(),
-    )
-    .map_err(|error| {
-        // The billing target the caller named does not fit this route.
-        ModelResponse::refused(&request.model, GatewayRefusal::InvalidRequest, error)
+    let entries = broker::routing_subscriptions(agent_id).map_err(|error| {
+        refuse(
+            request,
+            POINT_CREDENTIAL_SELECTION,
+            GatewayRefusal::DependencyUnavailable,
+            format!(
+                "route {}: no live subscription; discovery failed: {error}",
+                request.model
+            ),
+            None,
+        )
     })?;
+    let mut rows =
+        eligible_subscription_entries(entries, provider, request.billing_target.as_ref()).map_err(
+            |error| {
+                // The billing target the caller named does not fit this route.
+                ModelResponse::refused(&request.model, GatewayRefusal::InvalidRequest, error)
+            },
+        )?;
     if rows.is_empty() {
         // Not capacity. This agent holds no account this call could be billed
         // to at all, or the one it named is inactive, and no wait repairs
@@ -53,7 +63,7 @@ pub(super) async fn ordered_candidate_rows(
             POINT_CREDENTIAL_SELECTION,
             GatewayRefusal::CredentialUnauthorized,
             request.billing_target.as_ref().map_or_else(
-                || no_active_credential_summary(provider),
+                || format!("route {}: no live subscription; {}", request.model, no_active_credential_summary(provider)),
                 |target| {
                     format!(
                         "selected credential '{}' is not active for provider '{provider}' and agent",

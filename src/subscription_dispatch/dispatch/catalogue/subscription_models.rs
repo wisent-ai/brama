@@ -19,11 +19,11 @@ use super::cache::{
 pub async fn registry_models_for_agent(
     agent_id: &str,
 ) -> Result<Vec<provider_registry::RegistryModel>, Refusal> {
-    // The list comes from the vault's broker; its cost is logged beside the
-    // discovery's own, so a selector request whose minutes go before any
-    // provider is asked shows which of the two spent them.
+    // Routing reads observed inventory. A vault refresh runs outside the
+    // request, and its pending or failed state is a refusal, not a held call.
     let listing = Instant::now();
-    let listed = broker::list_subscriptions(agent_id).await;
+    let listed = broker::routing_subscriptions(agent_id)
+        .map_err(|error| Refusal::gateway(GatewayRefusal::DependencyUnavailable, error))?;
     info!(
         event = "subscriptions_listed",
         agent_id,
@@ -35,7 +35,23 @@ pub async fn registry_models_for_agent(
         .into_iter()
         .filter(|entry| entry.status == "active" && !crate::journal::is_retired(&entry.id))
         .collect::<Vec<_>>();
-    discover_subscription_models(entries).await
+    super::cache::routing::models(entries)
+}
+
+/// A standalone diagnostic explicitly discovers before dispatch; service
+/// requests instead read the background snapshot and never join that work.
+pub async fn prepare_routing(agent_id: &str, discover_models: bool) -> Result<(), Refusal> {
+    let entries = broker::refresh_routing_subscriptions(agent_id)
+        .await
+        .map_err(|error| Refusal::gateway(GatewayRefusal::DependencyUnavailable, error))?;
+    if !discover_models {
+        return Ok(());
+    }
+    let entries = entries
+        .into_iter()
+        .filter(|entry| entry.status == "active" && !crate::journal::is_retired(&entry.id))
+        .collect();
+    super::cache::routing::refresh(entries).await.map(|_| ())
 }
 
 pub(super) async fn discover_subscription_models(

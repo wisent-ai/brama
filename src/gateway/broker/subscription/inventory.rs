@@ -189,5 +189,7 @@ pub async fn list_recoverable_subscriptions() -> Vec<SubscriptionEntry> {
 }
 
 mod listing;
+mod routing;
+pub use routing::{refresh_routing_subscriptions, routing_subscriptions};
 
 use listing::{list_subscriptions_result, live_subscriptions, with_recorded_accounts};

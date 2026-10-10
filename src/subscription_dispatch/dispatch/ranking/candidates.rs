@@ -30,10 +30,19 @@ pub(in crate::subscription_dispatch::dispatch) async fn best_subscription_models
         })
     });
     let mut models = if needs_image {
-        active_vision_capable_models_for_agent(agent_id).await?
+        active_vision_capable_models_for_agent(agent_id).await
     } else {
-        active_supported_models_for_agent(agent_id).await?
-    };
+        active_supported_models_for_agent(agent_id).await
+    }
+    .map_err(|error| {
+        Refusal::new(
+            error.class,
+            format!(
+                "route {}: no live subscription; discovery failed: {}",
+                request.model, error.message
+            ),
+        )
+    })?;
     if let Some(position) =
         preferred.and_then(|preferred| models.iter().position(|model| model == preferred))
     {

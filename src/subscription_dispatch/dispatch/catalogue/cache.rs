@@ -8,6 +8,8 @@ use std::time::Instant;
 use crate::providers::adapter as provider_registry;
 use crate::types::Refusal;
 
+pub(super) mod routing;
+
 pub(super) struct CachedRegistryModels {
     pub(super) fetched: Instant,
     pub(super) models: Vec<provider_registry::RegistryModel>,

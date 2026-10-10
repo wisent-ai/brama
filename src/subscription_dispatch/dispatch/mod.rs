@@ -35,7 +35,7 @@ pub use catalogue::route::{
     is_subscription_model, is_subscription_provider, provider_requires_caller_identity,
     SUBSCRIPTION_PROVIDERS,
 };
-pub use catalogue::subscription_models::registry_models_for_agent;
+pub use catalogue::subscription_models::{prepare_routing, registry_models_for_agent};
 pub use credential::readiness::probe_subscription_redemption;
 pub use credential::usage_probe::probe_subscription_usage;
 pub use direct_route::{

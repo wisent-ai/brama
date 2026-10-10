@@ -91,7 +91,8 @@ pub(super) async fn order_models_by_plan(
     agent_id: &str,
     models: &mut [String],
 ) -> Result<(), Refusal> {
-    let subscriptions = broker::list_subscriptions(agent_id).await;
+    let subscriptions = broker::routing_subscriptions(agent_id)
+        .map_err(|error| Refusal::gateway(GatewayRefusal::DependencyUnavailable, error))?;
     models.sort_by(|left, right| {
         route_plan_key(&subscriptions, left)
             .partial_cmp(&route_plan_key(&subscriptions, right))
