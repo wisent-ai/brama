@@ -59,9 +59,9 @@ run no-session subscription lease take "$PROVIDER" --session-id "" --holder real
 run no-name subscription lease release "${at_gateway[@]}" --json
 [ "$outcome" = refused ] || fail "a release naming nothing was accepted"
 says no-name "required" "a release names the lease or the session"
-run no-member subscription lease take "no-such-provider" --session-id "$SESSION" --holder real-test "${at_gateway[@]}" --json
-[ "$outcome" = refused ] || fail "a lease on a provider with no member was accepted"
-says no-member "no_usable_member" "a provider with no usable member is refused by name"
+run undeclared-provider subscription lease take "no-such-provider" --session-id "$SESSION" --holder real-test "${at_gateway[@]}" --json
+[ "$outcome" = refused ] || fail "a lease on an undeclared provider was accepted"
+says undeclared-provider "limit_unstated" "an undeclared provider is refused before inventory admission"
 
 # --- one lease, taken once ---
 run take subscription lease take "$PROVIDER" --session-id "$SESSION" --holder real-test "${at_gateway[@]}" --json
