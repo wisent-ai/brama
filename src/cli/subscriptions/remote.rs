@@ -277,7 +277,7 @@ pub(crate) async fn attribute(
 
 /// Ask the serving gateway for one maintenance pass and return its report.
 pub(crate) async fn maintain(gateway: &str, bearer: &str) -> Result<Value, String> {
-    let discovery = brama::subscription_dispatch::discovery::harness::omp().await;
+    let discovery = brama::subscription_dispatch::discovery::harness::collect().await;
     let request = client()?
         .post(format!(
             "{}/v1/admin/maintain",

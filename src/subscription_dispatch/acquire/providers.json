@@ -6,6 +6,10 @@
       "accounts_max": "claude_code_accounts_max",
       "sessions_per_subscription_max": "sessions_per_subscription_max",
       "harnesses": {
+        "claude": {
+          "providerWhy": "Claude Code exposes its signed-in subscription identity through claude auth status without exporting its grant.",
+          "provider": "anthropic"
+        },
         "omp": {
           "providerWhy": "omp names Anthropic's subscription accounts `anthropic` (omp login anthropic, omp usage accounts).",
           "provider": "anthropic",

@@ -146,7 +146,7 @@ pub(in crate::core::server) async fn maintain_admin(
     require_brama_desktop(&client_identity)?;
     let observed = match supplied {
         Some(Json(report)) => report,
-        None => crate::subscription_dispatch::discovery::harness::omp().await,
+        None => crate::subscription_dispatch::discovery::harness::collect().await,
     };
     let discovery = crate::subscription_dispatch::discovery::enroll(observed).await;
     let plan_usage = crate::subscription_dispatch::plan_usage::sweep().await;

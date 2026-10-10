@@ -44,7 +44,7 @@ pub(crate) async fn run(args: DiscoveryArgs) {
 
 async fn execute(destination: Destination) -> Result<Value, String> {
     let (gateway, bearer) = destination.resolve_reading_stdin().await?;
-    let report = brama::subscription_dispatch::discovery::harness::omp().await;
+    let report = brama::subscription_dispatch::discovery::harness::collect().await;
     let Some(gateway) = gateway else {
         return Ok(brama::subscription_dispatch::discovery::discover(report).await);
     };

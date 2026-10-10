@@ -2,6 +2,9 @@
 //! Both journeys require BRAMA, CONSUMER and BEARER_ROLE.
 //! Reset reporting additionally requires MEMBER and EXPECTED_CREDITS.
 //! Discovery requires EXPECTED_ACCOUNT, EXPECTED_HARNESS_PROVIDER and EXPECTED_PROVIDER.
+#[path = "discovery/claude.rs"]
+mod native_harness;
+
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{

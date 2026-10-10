@@ -18,14 +18,23 @@ pub struct DiscoveryReport {
     pub errors: Vec<String>,
 }
 
-/// Read the supported public interface. Authentication remains inside the harness.
-pub async fn omp() -> DiscoveryReport {
-    let mut report = match command(&["usage", "accounts", "--json"]).await {
-        Ok(document) => parse_accounts(&document),
+/// Read installed harnesses through their public metadata interfaces.
+pub async fn collect() -> DiscoveryReport {
+    let mut report = omp().await;
+    let claude = claude().await;
+    report.accounts.extend(claude.accounts);
+    report.errors.extend(claude.errors);
+    report
+}
+
+async fn omp() -> DiscoveryReport {
+    let mut report = match command("omp", &["usage", "accounts", "--json"]).await {
+        Ok(Some(document)) => parse_accounts(&document),
+        Ok(None) => return DiscoveryReport::default(),
         Err(error) => refused(error),
     };
-    match command(&["usage", "--json"]).await {
-        Ok(document) => {
+    match command("omp", &["usage", "--json"]).await {
+        Ok(Some(document)) => {
             let usage = parse_usage(
                 &document,
                 "omp usage --json",
@@ -34,27 +43,76 @@ pub async fn omp() -> DiscoveryReport {
             report.accounts.extend(usage.accounts);
             report.errors.extend(usage.errors);
         }
+        Ok(None) => report
+            .errors
+            .push("omp disappeared before its usage report was read".into()),
         Err(error) => report.errors.push(error),
     }
     report
 }
 
-async fn command(arguments: &[&str]) -> Result<Value, String> {
-    let operation = format!("omp {}", arguments.join(" "));
-    let mut command = tokio::process::Command::new("omp");
-    command.args(arguments).kill_on_drop(true);
-    let output = stado_wait::output_async(&mut command)
-        .await
-        .map_err(|error| format!("{operation}: {error}"))?;
+async fn command(program: &str, arguments: &[&str]) -> Result<Option<Value>, String> {
+    let operation = format!("{program} {}", arguments.join(" "));
+    let mut command = tokio::process::Command::new(program);
+    command
+        .args(arguments)
+        .stdin(std::process::Stdio::null())
+        .kill_on_drop(true);
+    let output = match stado_wait::output_async(&mut command).await {
+        Ok(output) => output,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("{operation}: {error}")),
+    };
     if !output.status.success() {
         return Err(format!(
-            "{operation} exited {}: {}",
+            "{operation} exited {}: stdout: {}; stderr: {}",
             output.status,
+            String::from_utf8_lossy(&output.stdout).trim(),
             String::from_utf8_lossy(&output.stderr).trim()
         ));
     }
     serde_json::from_slice(&output.stdout)
+        .map(Some)
         .map_err(|error| format!("{operation}: invalid JSON: {error}"))
+}
+
+async fn claude() -> DiscoveryReport {
+    let source = "claude auth status";
+    let document = match command("claude", &["auth", "status"]).await {
+        Ok(Some(document)) => document,
+        Ok(None) => return DiscoveryReport::default(),
+        Err(error) => return refused(error),
+    };
+    if document["loggedIn"].as_bool() != Some(true)
+        || document["authMethod"].as_str() != Some("claude.ai")
+    {
+        return refused(format!(
+            "{source}: no signed-in subscription identity; loggedIn={}, authMethod={}",
+            document["loggedIn"], document["authMethod"]
+        ));
+    }
+    let Some(account) = document["email"].as_str() else {
+        return refused(format!(
+            "{source}: the signed-in subscription has no account email"
+        ));
+    };
+    let provider = match super::provider_for_harness("claude", "anthropic") {
+        Ok(provider) => provider,
+        Err(error) => return refused(format!("{source}: {error}")),
+    };
+    if let Err(error) = super::provider_account(provider, account) {
+        return refused(format!("{source}: {error}"));
+    }
+    DiscoveryReport {
+        accounts: vec![AccountObservation {
+            provider: provider.to_owned(),
+            account: account.to_lowercase(),
+            plan: document["subscriptionType"].as_str().map(str::to_owned),
+            source: source.to_owned(),
+            observed_at_ms: chrono::Utc::now().timestamp_millis(),
+        }],
+        errors: Vec::new(),
+    }
 }
 
 fn parse_accounts(document: &Value) -> DiscoveryReport {
