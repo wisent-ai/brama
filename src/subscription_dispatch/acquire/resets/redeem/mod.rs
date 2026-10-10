@@ -82,15 +82,34 @@ pub async fn run(
         detail: Some(trigger.into()),
         at_ms: chrono::Utc::now().timestamp_millis(),
     };
-    persist(&outcome)?;
     let item = broker::subscription_resource(provider, member);
-    let response = crate::providers::adapter::redeem_reset_credit(
+    let prepared = crate::providers::adapter::prepare_reset_redemption(
         provider,
         &item,
         secret,
         declared,
         credit,
         &outcome.request_id,
+    )
+    .await;
+    let prepared = match prepared {
+        Ok(prepared) => prepared,
+        Err(error) => {
+            outcome.state = ResetState::Refused;
+            outcome.detail = Some(format!("reset was not sent: {error}"));
+            outcome.at_ms = chrono::Utc::now().timestamp_millis();
+            persist(&outcome)?;
+            return Err(format!(
+                "subscription {member}: reset was not sent: {error}"
+            ));
+        }
+    };
+    persist(&outcome)?;
+    let response = stado_wait::until(
+        stado_wait::Kind::Network,
+        "send journaled subscription reset",
+        member,
+        prepared.send(),
     )
     .await;
     match response {

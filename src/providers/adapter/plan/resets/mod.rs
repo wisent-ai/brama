@@ -51,15 +51,15 @@ pub async fn read(
     }
 }
 
-/// One request, never a mutation retry. The caller durably records its request id first.
-pub async fn redeem(
+/// Complete all read-only and local validation before a caller journals mutation intent.
+pub async fn prepare_redemption(
     provider: &str,
     item: &str,
     secret: &str,
     declared: &ResetDeclaration,
     credit: &ResetCredit,
     request_id: &str,
-) -> Result<Value, String> {
+) -> Result<PreparedRedemption, String> {
     let (path, payload, result_field) = match declared.protocol {
         ResetProtocol::CodexWham => (
             declared.redemption_path.clone(),
@@ -104,15 +104,40 @@ pub async fn redeem(
             )
         }
     };
-    let answer = request(provider, item, secret, &path, Some(&payload)).await?;
-    let result = answer
-        .get(result_field)
-        .and_then(Value::as_str)
-        .ok_or_else(|| {
-            format!("provider reset response lacks {result_field}; redemption is unconfirmed")
-        })?;
-    let not_applied = matches!(declared.protocol, ResetProtocol::CodexWham)
-        && matches!(result, "nothing_to_reset" | "no_credit");
-    Ok(json!({"ok": result == "reset", "code": result,
+    let request = request::prepare(provider, item, secret, &path, Some(&payload))?;
+    Ok(PreparedRedemption {
+        request,
+        result_field,
+        protocol: declared.protocol,
+    })
+}
+
+pub struct PreparedRedemption {
+    request: request::PreparedRequest,
+    result_field: &'static str,
+    protocol: ResetProtocol,
+}
+
+impl PreparedRedemption {
+    /// Send the already validated mutation exactly once, after intent is durable.
+    pub async fn send(self) -> Result<Value, String> {
+        let result_field = self.result_field;
+        let answer = stado_wait::until(
+            stado_wait::Kind::Network,
+            "redeem saved provider reset",
+            "provider capacity endpoint",
+            self.request.send(),
+        )
+        .await?;
+        let result = answer
+            .get(result_field)
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                format!("provider reset response lacks {result_field}; redemption is unconfirmed")
+            })?;
+        let not_applied = matches!(self.protocol, ResetProtocol::CodexWham)
+            && matches!(result, "nothing_to_reset" | "no_credit");
+        Ok(json!({"ok": result == "reset", "code": result,
         "not_applied": not_applied, "provider_result": answer}))
+    }
 }
