@@ -52,6 +52,11 @@ serve is refused before any provider is contacted, with the <code>503</code>
   actual discovery cause. A discovery failure is not replaced by
   <code>max_tokens: Field required</code>. An explicitly supplied
   <code>max_tokens</code> does not require this limit lookup.</li>
+<li>Subscription output limits are indexed by provider and model when discovery is
+  published. A request reads one immutable publication, including its discovery
+  outcome; it neither scans the full model inventory nor joins provider discovery.
+  Inventory copying and replacement cleanup happen outside the publication lock.
+  Repeated entries keep the first advertised limit, including an absent limit.</li>
 <li><code>temperature</code> reaches the provider only when the request states one; an
   omitted temperature is omitted on the wire too, so the provider applies its own default.
   A gateway that invents a temperature for every request without one gets Claude's

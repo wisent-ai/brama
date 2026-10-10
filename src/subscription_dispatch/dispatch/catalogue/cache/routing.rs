@@ -2,7 +2,8 @@
 //! A background pass publishes models or its actual refusal for the next request.
 
 use std::borrow::Cow;
-use std::sync::{LazyLock, Mutex};
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock, Mutex};
 
 use crate::gateway::broker::SubscriptionEntry;
 use crate::providers::adapter::{known_max_output_tokens, route, RegistryModel};
@@ -12,9 +13,14 @@ use super::super::subscription_models::discover_subscription_models;
 
 type DiscoveryResult = Result<Vec<RegistryModel>, Refusal>;
 
+struct Published {
+    result: DiscoveryResult,
+    output_limits: HashMap<String, HashMap<String, Option<u64>>>,
+}
+
 #[derive(Default)]
 struct Snapshot {
-    result: Option<DiscoveryResult>,
+    published: Option<Arc<Published>>,
     refreshing: bool,
 }
 
@@ -35,20 +41,21 @@ pub(in crate::subscription_dispatch::dispatch::catalogue) fn models(
             format!("model discovery state is unavailable: {error}"),
         )
     })?;
-    let result = match &snapshot.result {
-        Some(result) => result.clone(),
-        None => Err(Refusal::gateway(
-            GatewayRefusal::DependencyUnavailable,
-            "subscription model discovery has not completed; operation: discover native provider models",
-        )),
-    };
+    let published = snapshot.published.clone();
     if !snapshot.refreshing {
         snapshot.refreshing = true;
         tokio::spawn(async move {
             let _ = refresh(entries).await;
         });
     }
-    result
+    drop(snapshot);
+    match published {
+        Some(published) => published.result.clone(),
+        None => Err(Refusal::gateway(
+            GatewayRefusal::DependencyUnavailable,
+            "subscription model discovery has not completed; operation: discover native provider models",
+        )),
+    }
 }
 
 pub(in crate::subscription_dispatch::dispatch::catalogue) async fn refresh(
@@ -58,14 +65,30 @@ pub(in crate::subscription_dispatch::dispatch::catalogue) async fn refresh(
     if let Err(refusal) = &result {
         tracing::warn!(event = "routing_model_discovery_failed", error = %refusal.message, "routing refuses without waiting for a provider");
     }
+    let mut output_limits = HashMap::<String, HashMap<String, Option<u64>>>::new();
+    if let Ok(models) = &result {
+        for model in models {
+            output_limits
+                .entry(model.provider_id.clone())
+                .or_default()
+                .entry(model.model_id.clone())
+                .or_insert(model.max_output_tokens);
+        }
+    }
+    let published = Arc::new(Published {
+        result: result.clone(),
+        output_limits,
+    });
     let mut snapshot = SNAPSHOT.lock().map_err(|error| {
         Refusal::gateway(
             GatewayRefusal::DependencyUnavailable,
             format!("routing model state could not publish discovery: {error}"),
         )
     })?;
-    snapshot.result = Some(result.clone());
+    let previous = snapshot.published.replace(published);
     snapshot.refreshing = false;
+    drop(snapshot);
+    drop(previous);
     result
 }
 
@@ -118,22 +141,29 @@ fn discovered_max_output_tokens(provider_id: &str, model_id: &str) -> Result<Opt
     let snapshot = SNAPSHOT.lock().map_err(|error| {
         format!("routing model state is unreadable while sizing {provider_id}/{model_id}: {error}")
     })?;
-    let models = match &snapshot.result {
-        Some(Ok(models)) => models,
-        Some(Err(refusal)) => {
-            return Err(format!(
-                "cannot size {provider_id}/{model_id}: model discovery failed ({:?}): {}",
-                refusal.class, refusal.message
-            ));
-        }
+    let published = snapshot.published.clone();
+    drop(snapshot);
+    let published = match published {
+        Some(published) => published,
         None => {
             return Err(format!(
                 "cannot size {provider_id}/{model_id}: subscription model discovery has not completed; operation: discover native provider models"
             ));
         }
     };
-    Ok(models
-        .iter()
-        .find(|model| model.provider_id == provider_id && model.model_id == model_id)
-        .and_then(|model| model.max_output_tokens))
+    match &published.result {
+        Ok(_) => {}
+        Err(refusal) => {
+            return Err(format!(
+                "cannot size {provider_id}/{model_id}: model discovery failed ({:?}): {}",
+                refusal.class, refusal.message
+            ));
+        }
+    };
+    Ok(published
+        .output_limits
+        .get(provider_id)
+        .and_then(|models| models.get(model_id))
+        .copied()
+        .flatten())
 }
