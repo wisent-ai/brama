@@ -1,5 +1,5 @@
 //! Real gateway/provider reports; this flow never consumes a reset.
-//! Both journeys require BRAMA, CONSUMER and BEARER_ROLE.
+//! Journeys require BRAMA, CONSUMER, BEARER_ROLE and GATEWAY_SOURCE_REVISION.
 //! Reset reporting additionally requires MEMBER and EXPECTED_CREDITS.
 //! Discovery requires EXPECTED_ACCOUNT, EXPECTED_HARNESS_PROVIDER and EXPECTED_PROVIDER.
 #[path = "discovery/receipt.rs"]
@@ -16,119 +16,11 @@ mod remote_sign_in;
 mod reset_report_refusal;
 #[path = "resets/retired.rs"]
 mod retired_reset;
+mod support;
 
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
-use std::{
-    path::PathBuf,
-    process::{Command, Output, Stdio},
-};
-
-struct Run {
-    binary: String,
-    directory: PathBuf,
-    report: Value,
-    destination: Vec<String>,
-}
-
-impl Run {
-    fn new() -> Self {
-        let binary = required("BRAMA");
-        let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("target/real-tests/subscriptions")
-            .join(uuid::Uuid::new_v4().to_string());
-        std::fs::create_dir_all(&directory).expect("create retained run directory");
-        let mut command = Command::new("git");
-        command
-            .args(["rev-parse", "HEAD"])
-            .current_dir(env!("CARGO_MANIFEST_DIR"));
-        let revision = stado_wait::output(&mut command).expect("read source revision");
-        assert!(revision.status.success());
-        let bytes = std::fs::read(&binary).expect("read tested binary for checksum");
-        let checksum = hex::encode(Sha256::digest(bytes));
-        let report = json!({"source_revision": String::from_utf8_lossy(&revision.stdout).trim(),
-            "binary": binary, "binary_sha256": checksum, "commands": []});
-        Self {
-            binary,
-            directory,
-            report,
-            destination: vec![
-                "--gateway-consumer".into(),
-                required("CONSUMER"),
-                "--bearer-role".into(),
-                required("BEARER_ROLE"),
-                "--json".into(),
-            ],
-        }
-    }
-
-    fn command(&mut self, arguments: &[&str]) -> Output {
-        let arguments: Vec<_> = arguments
-            .iter()
-            .map(|arg| (*arg).to_owned())
-            .chain(self.destination.iter().cloned())
-            .collect();
-        let mut command = Command::new(&self.binary);
-        command.args(&arguments).stdin(Stdio::null());
-        let output = stado_wait::output(&mut command).expect("execute real Brama command");
-        self.report["commands"].as_array_mut().unwrap().push(json!({
-            "command": self.binary, "arguments": arguments, "exit_status": output.status.code(),
-            "stdout": String::from_utf8_lossy(&output.stdout), "stderr": String::from_utf8_lossy(&output.stderr),
-        }));
-        self.save();
-        output
-    }
-
-    fn save(&self) {
-        std::fs::write(
-            self.directory.join("report.json"),
-            serde_json::to_vec_pretty(&self.report).unwrap(),
-        )
-        .expect("retain real execution evidence");
-    }
-
-    fn member(&mut self, id: &str, refresh: bool) -> Value {
-        let output = if refresh {
-            self.command(&["subscription", "list", "--refresh-usage"])
-        } else {
-            self.command(&["subscription", "list"])
-        };
-        assert!(
-            output.status.success(),
-            "subscription list refused: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let report: Value = serde_json::from_slice(&output.stdout).expect("real pool report JSON");
-        let build = report["build"].clone();
-        let revision = build["source_revision"]
-            .as_str()
-            .expect("responding gateway must identify its source revision");
-        assert_eq!(
-            revision,
-            required("GATEWAY_SOURCE_REVISION"),
-            "the answering gateway does not run the selected qualification revision"
-        );
-        self.report["gateway_build"] = build;
-        self.save();
-        let mut rows = report["subscriptions"]
-            .as_array()
-            .expect("pool subscriptions")
-            .iter()
-            .filter(|row| row["id"] == id);
-        let row = rows.next().expect("selected real member exists").clone();
-        assert!(rows.next().is_none(), "member identity is not unique");
-        row
-    }
-}
-
-fn required(key: &str) -> String {
-    match std::env::var(key) {
-        Ok(value) => value,
-        Err(error) => {
-            panic!("{key} is required in the test environment for the real capacity flow: {error}")
-        }
-    }
-}
+use std::process::{Command, Stdio};
+use support::{required, Run};
 
 #[test]
 #[ignore = "Requires a real gateway, independent Brama grant and observed provider credit count"]
