@@ -116,7 +116,11 @@ impl RankedWalk {
     /// attempts that were really made.
     fn into_failure(self, agent_id: &str, request: &ModelRequest, context: &str) -> ModelResponse {
         let unreached = unreached(agent_id, &self.candidates);
-        let named = self.refusals.into_iter().chain(unreached).collect::<Vec<_>>();
+        let named = self
+            .refusals
+            .into_iter()
+            .chain(unreached)
+            .collect::<Vec<_>>();
         let message = if named.is_empty() {
             context.to_owned()
         } else {
@@ -138,22 +142,26 @@ impl RankedWalk {
 fn unreached(agent_id: &str, walked: &[String]) -> Vec<String> {
     let entries = match crate::gateway::broker::routing_subscriptions(agent_id) {
         Ok(entries) => entries,
-        Err(error) => {
-            return vec![format!(
-                "the subscription inventory could not be read to name the members not tried: {error}"
-            )]
-        }
+        Err(error) => return vec![format!(
+            "the subscription inventory could not be read to name the members not tried: {error}"
+        )],
     };
     entries
         .into_iter()
-        .filter(|entry| !walked.iter().any(|provider| provider == entry.provider.trim()))
+        .filter(|entry| {
+            !walked
+                .iter()
+                .any(|provider| provider == entry.provider.trim())
+        })
         .map(|entry| {
             let provider = entry.provider.trim();
             let cause = if entry.status != "active" {
                 format!("its status is {}", entry.status)
             } else if crate::journal::is_retired(&entry.id) {
                 "it is retired".to_owned()
-            } else if let Some(refused) = crate::subscription_dispatch::usage::standing_refusal(&entry.id) {
+            } else if let Some(refused) =
+                crate::subscription_dispatch::usage::standing_refusal(&entry.id)
+            {
                 format!("the ledger refuses it: {}", refused.message)
             } else if let Some(failure) = discovery_failure(provider, &entry.id) {
                 format!("its model discovery was refused: {failure}")
