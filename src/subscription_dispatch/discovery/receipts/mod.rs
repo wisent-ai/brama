@@ -83,7 +83,8 @@ async fn read(report: &mut DiscoveryReport) -> Result<(), String> {
                         report.accounts.extend(accounts.iter().cloned());
                         cache.store(source, accounts)?;
                     }
-                    Err(error) => report.errors.push(error),
+                    Err(infer::Failure::Message(error)) => report.errors.push(error),
+                    Err(infer::Failure::Route(error)) => return Err(error),
                 }
             }
         }
