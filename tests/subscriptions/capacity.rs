@@ -20,6 +20,8 @@ mod pending_discovery;
 mod reconciliation_refusal;
 #[path = "discovery/sign_in.rs"]
 mod remote_sign_in;
+#[path = "resets/policy.rs"]
+mod reset_policy;
 #[path = "resets/refusal.rs"]
 mod reset_report_refusal;
 #[path = "discovery/retired.rs"]

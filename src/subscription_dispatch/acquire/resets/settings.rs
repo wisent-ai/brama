@@ -34,18 +34,51 @@ fn path() -> PathBuf {
     crate::journal::state_dir().join("reset-policy.json")
 }
 
+fn lock(provider: &str) -> Result<std::fs::File, String> {
+    let file = path().with_extension("lock");
+    if let Some(parent) = file.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "create saved-reset policy directory {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .read(true)
+        .open(&file)
+        .map_err(|error| {
+            format!(
+                "open saved-reset policy lock {} for {provider}: {error}",
+                file.display()
+            )
+        })?;
+    lock.try_lock().map_err(|error| {
+        format!(
+            "saved-reset policy mutation for {provider} cannot acquire exclusive lock {}: {error}",
+            file.display()
+        )
+    })?;
+    Ok(lock)
+}
+
 /// Every provider's stated policy; none when nothing was ever stated.
 pub fn all() -> Result<BTreeMap<String, ResetPolicy>, String> {
     let file = path();
     match std::fs::read(&file) {
         Ok(bytes) => serde_json::from_slice(&bytes).map_err(|error| {
             format!(
-                "the saved-reset policy in {} cannot be read: {error}; Brama writes it whole, so it was changed by hand: state each provider's policy again with `brama subscription reset-policy set`",
+                "decode saved-reset policy {}: {error}; the existing policy was not replaced",
                 file.display()
             )
         }),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(BTreeMap::new()),
-        Err(error) => Err(format!("the saved-reset policy in {} cannot be read: {error}", file.display())),
+        Err(error) => Err(format!(
+            "the saved-reset policy in {} cannot be read: {error}",
+            file.display()
+        )),
     }
 }
 
@@ -60,14 +93,6 @@ pub fn for_provider(provider: &str) -> Result<ResetPolicy, String> {
 
 fn write(policies: &BTreeMap<String, ResetPolicy>) -> Result<(), String> {
     let file = path();
-    if let Some(parent) = file.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| {
-            format!(
-                "the saved-reset policy cannot be written: create {}: {error}",
-                parent.display()
-            )
-        })?;
-    }
     let staged = file.with_extension("json.next");
     let bytes = serde_json::to_vec_pretty(policies)
         .map_err(|error| format!("the saved-reset policy cannot be encoded: {error}"))?;
@@ -95,6 +120,7 @@ pub fn set(provider: &str, policy: ResetPolicy) -> Result<ResetPolicy, String> {
     if policy.reason.trim().is_empty() {
         return Err("--reason must say why this saved-reset policy is stated".into());
     }
+    let _lock = lock(provider)?;
     let mut policies = all()?;
     policies.insert(provider.to_string(), policy.clone());
     write(&policies)?;
@@ -104,6 +130,7 @@ pub fn set(provider: &str, policy: ResetPolicy) -> Result<ResetPolicy, String> {
 /// Remove `provider`'s policy, so it is no longer redeemed automatically;
 /// answers the policy removed.
 pub fn clear(provider: &str) -> Result<ResetPolicy, String> {
+    let _lock = lock(provider)?;
     let mut policies = all()?;
     let removed = policies.remove(provider).ok_or_else(|| {
         format!("no saved-reset policy is stated for {provider}; `brama subscription reset-policy show` lists every stated one")
