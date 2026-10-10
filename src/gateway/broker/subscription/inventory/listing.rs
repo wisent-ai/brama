@@ -20,25 +20,45 @@ type LiveSubscriptionsCache = Mutex<Option<(Instant, Vec<SubscriptionEntry>)>>;
 static LIVE_SUBSCRIPTIONS_CACHE: LazyLock<LiveSubscriptionsCache> =
     LazyLock::new(|| Mutex::new(None));
 
+/// One listing at a time. Every caller queued behind the one reading the
+/// vault takes that reading when it lands instead of starting its own child
+/// process: a burst of requests costs one vault read, not one per request.
+static LISTING_IN_FLIGHT: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// The age, in whole seconds, at which a stored listing is read again. Unset,
 /// every caller reads the vault: no age is assumed.
 const LISTING_AGE_ENV: &str = "BRAMA_SUBSCRIPTION_LISTING_AGE_SECONDS";
 
+/// The stored listing a caller who began at `since` may take: one within the
+/// declared [`LISTING_AGE_ENV`], or one produced after the caller began
+/// waiting — the reading the holder of [`LISTING_IN_FLIGHT`] made for everyone
+/// queued behind it, newer than their own requests, so serving it assumes no
+/// age at all.
+fn stored_listing(since: Instant) -> Option<Vec<SubscriptionEntry>> {
+    let cache = LIVE_SUBSCRIPTIONS_CACHE.lock().ok()?;
+    let (fetched_at, entries) = cache.as_ref()?;
+    (crate::types::still_fresh(LISTING_AGE_ENV, *fetched_at) || *fetched_at >= since)
+        .then(|| entries.clone())
+}
+
 /// Resolve the pool from the vault, serving a stored listing within the
-/// declared [`LISTING_AGE_ENV`] unless `bypass_cache` is set (used when a
-/// lookup failed and the caller wants to re-check the vault instead of
-/// trusting a stale entry).
+/// declared [`LISTING_AGE_ENV`] or one made while this caller waited, unless
+/// `bypass_cache` is set (used when a lookup failed and the caller wants to
+/// re-check the vault instead of trusting a stale entry).
 pub(super) async fn live_subscriptions(
     broker: &str,
     bypass_cache: bool,
 ) -> Result<Vec<SubscriptionEntry>, String> {
+    let since = Instant::now();
     if !bypass_cache {
-        if let Ok(cache) = LIVE_SUBSCRIPTIONS_CACHE.lock() {
-            if let Some((fetched_at, entries)) = cache.as_ref() {
-                if crate::types::still_fresh(LISTING_AGE_ENV, *fetched_at) {
-                    return Ok(entries.clone());
-                }
-            }
+        if let Some(entries) = stored_listing(since) {
+            return Ok(entries);
+        }
+    }
+    let _reading = LISTING_IN_FLIGHT.lock().await;
+    if !bypass_cache {
+        if let Some(entries) = stored_listing(since) {
+            return Ok(entries);
         }
     }
     let entries = list_subscriptions_live(broker).await?;

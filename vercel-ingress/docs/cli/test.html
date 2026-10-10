@@ -19,11 +19,11 @@
     <main>
       <p class="source-note">Brama CLI command reference</p>
       <article class="doc"><h1 id="brama-test"><code>brama test</code><a class="headerlink" href="#brama-test" title="Link to this section">&para;</a></h1>
-<p>Run one test inference through the named agent’s subscription credential, not the deployment’s direct provider capability.</p>
+<p>Run one test inference through the named agent’s subscription credential, not the deployment’s direct provider capability: a canonical route, or <code>best</code>, the selector the gateway walks for that agent, so what the gateway would answer the agent can be read without a listener.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
 <pre><code class="language-console">brama test (-m &lt;ROUTE&gt;|--model &lt;ROUTE&gt;) --agent-id &lt;ID&gt; [--json] --allow-provider-cost</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
-<tr><td><code>-m, --model &lt;ROUTE&gt;</code></td><td>required</td><td>Canonical route to test. There is no built-in route; without it the command exits 2.</td></tr>
+<tr><td><code>-m, --model &lt;ROUTE&gt;</code></td><td>required</td><td>Canonical route to test, or <code>best</code>: the ranked walk over the agent's subscriptions the HTTP edge runs for <code>model: "best"</code>, with no preferred route. There is no built-in route; without it the command exits 2.</td></tr>
 <tr><td><code>--agent-id &lt;ID&gt;</code></td><td>required</td><td>Agent whose provider credential is used. There is no built-in agent; without it the command exits 2.</td></tr>
 <tr><td><code>--allow-provider-cost</code></td><td>required</td><td>Acknowledge the billable provider request. Without it the command exits 2 before any request.</td></tr>
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print the answer as one JSON document instead of <code>key: value</code> lines.</td></tr>
@@ -32,7 +32,7 @@
 <p>Success prints <code>model</code>, <code>response</code>, <code>input_tokens</code>, <code>output_tokens</code>, <code>latency_ms</code> and <code>cost_usd</code> as <code>key: value</code> lines, or as one JSON document with <code>--json</code>, then exits 0. It performs one billable request and may update normal subscription usage state; it does not print credentials.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <pre><code class="language-text">refusing billable inference without explicit --allow-provider-cost</code></pre>
-<p>That refusal is a usage error and exits 2 before a request. A dispatch failure prints <code>Error: &lt;dispatch reason&gt;</code> (for example, <code>Error: no active 'openai' credential for agent</code>) and exits 1.</p>
+<p>That refusal is a usage error and exits 2 before a request. A dispatch refusal prints <code>Error [&lt;code&gt;, attempts &lt;n&gt;]: &lt;dispatch reason&gt;</code> and exits 1, where <code>&lt;code&gt;</code> is the stable client code the HTTP edge would answer with (<a href="/docs/errors">errors</a>) and <code>&lt;n&gt;</code> the provider attempts the walk made; with <code>--json</code> the same refusal is first printed to standard output as one document with <code>model</code>, <code>code</code>, <code>attempts</code> and <code>error</code>. For example: <code>Error [credential_unauthorized, attempts 0]: no active 'openai' credential for agent</code>, or, for <code>best</code> over a pool the ledger refuses entirely, <code>Error [subscription_reauthorization_required, attempts 0]: no working subscription model for signed agent; every subscription is refused by the ledger before any is read: …</code>.</p>
 <p><a href="/docs/cli">Back to the complete CLI command tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>

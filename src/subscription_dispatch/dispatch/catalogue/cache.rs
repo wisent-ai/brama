@@ -43,14 +43,33 @@ pub(super) static REGISTRY_MODEL_FAILURE_CACHE: LazyLock<
 type DiscoveryLocks = Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>;
 static DISCOVERY_LOCKS: LazyLock<DiscoveryLocks> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
-pub(super) fn cached_subscription_models(
+/// The models discovered for `key` that a caller who began at `since` may
+/// take: a reading within the declared age, or one produced after the caller
+/// began waiting. The second is what coalescing means — the holder of the
+/// discovery lock read for everyone queued behind it, and handing those
+/// callers an answer newer than their own request assumes no age at all.
+/// Without it, an undeclared age sent every queued caller to the vault and
+/// the provider in turn, and a burst of requests became a queue of hours.
+pub(super) fn cached_subscription_models_since(
     key: &str,
+    since: Instant,
 ) -> Option<Vec<provider_registry::RegistryModel>> {
     REGISTRY_MODEL_CACHE.lock().ok().and_then(|cache| {
         cache
             .get(key)
-            .filter(|item| models_fresh(item.fetched))
+            .filter(|item| models_fresh(item.fetched) || item.fetched >= since)
             .map(|item| item.models.clone())
+    })
+}
+
+/// The refusal discovery recorded for `key` that a caller who began at `since`
+/// may take, on the same terms as [`cached_subscription_models_since`].
+pub(super) fn cached_discovery_refusal_since(key: &str, since: Instant) -> Option<Refusal> {
+    REGISTRY_MODEL_FAILURE_CACHE.lock().ok().and_then(|cache| {
+        cache
+            .get(key)
+            .filter(|(fetched, _)| failure_fresh(*fetched) || *fetched >= since)
+            .map(|(_, refused)| refused.clone())
     })
 }
 

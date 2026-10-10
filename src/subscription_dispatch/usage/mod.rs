@@ -34,14 +34,17 @@
 //! `ledger_file`. What a call cost the account, and until when a rate limit
 //! forbids the next one, lives in `spend`. The provider's own windows and how
 //! current they are live in `plan_window`. The two checks Brama runs on purpose
-//! live in `check`, and where a grant stands with its provider lives in
-//! `credential`.
+//! live in `check`, where a grant stands with its provider lives in
+//! `credential`, and the one verdict the request path reads before it spends
+//! anything on a member — the state and the block together — lives in
+//! `standing`.
 
 mod check;
 mod credential;
 mod ledger_file;
 mod plan_window;
 mod spend;
+mod standing;
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
@@ -73,6 +76,7 @@ pub use self::spend::{
     blocked_until_ms, is_blocked, is_quota_exhausted, record_block, record_call, record_call_from,
     Block, Measured,
 };
+pub use self::standing::standing_refusal;
 
 static LEDGER: Mutex<Option<LedgerState>> = Mutex::new(None);
 

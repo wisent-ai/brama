@@ -13,7 +13,8 @@ use brama::{detect_compute_resources, Message, ModelRequest};
 
 #[derive(Args)]
 pub(crate) struct TestArgs {
-    /// Canonical provider/model route to test; required, no built-in route
+    /// Canonical provider/model route to test, or `best`, the selector the
+    /// gateway walks for the agent; required, no built-in route
     #[arg(short, long)]
     model: String,
     /// Jeden agent/client id whose provider credential should be used; required
@@ -156,8 +157,17 @@ pub(crate) async fn test_inference(args: TestArgs) {
         billing_target: None,
         response_schema: None,
     };
-    let resp =
-        brama::subscription_dispatch::dispatch_subscription_for_agent(&agent_id, &request).await;
+    // `best` is the selector the HTTP edge walks for a signed agent, not a
+    // route: the same walk here, so what the gateway would answer this agent
+    // can be read from the command line without a listener.
+    let resp = if request.model == brama::core::server::BEST_ALIAS {
+        brama::subscription_dispatch::dispatch_best_subscription_for_agent(
+            &agent_id, &request, None,
+        )
+        .await
+    } else {
+        brama::subscription_dispatch::dispatch_subscription_for_agent(&agent_id, &request).await
+    };
     if resp.success {
         let answer = serde_json::json!({
             "model": resp.model,
@@ -169,7 +179,26 @@ pub(crate) async fn test_inference(args: TestArgs) {
         });
         super::print_answer(&answer, json);
     } else {
-        eprintln!("Error: {}", resp.error.unwrap_or_default());
+        // The refusal as the HTTP edge would answer it: its stable code from
+        // the class it was built with, the attempts it cost, and its sentence.
+        let reason = match resp.error.as_deref() {
+            Some(reason) => reason.to_string(),
+            None => "the dispatch refused without a sentence".to_string(),
+        };
+        let code = match resp.failure_kind {
+            Some(class) => class.contract_kind(),
+            None => "unclassified",
+        };
+        if json {
+            let refused = serde_json::json!({
+                "model": resp.model,
+                "code": code,
+                "attempts": resp.attempts,
+                "error": reason,
+            });
+            super::print_answer(&refused, json);
+        }
+        eprintln!("Error [{code}, attempts {}]: {reason}", resp.attempts);
         std::process::exit(1);
     }
 }

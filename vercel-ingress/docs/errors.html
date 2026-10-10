@@ -165,6 +165,17 @@ A walk over several candidates is answered with the most telling class it
 met: a spent balance, then a rate window or a quota block a wait reaches,
 then an authorization failure, and otherwise
 <code>429 subscription_unavailable</code>.</p>
+<p>A selector request (<code>best</code>, <code>any</code>, <code>task:&lt;name&gt;</code>)
+whose every listed member the ledger already refuses is refused before any
+vault child or provider is asked, with the message
+<code>every subscription is refused by the ledger before any is read: &lt;member&gt;: &lt;reason&gt;; …</code>
+and <code>attempts: 0</code>. The reason per member is the ledger's own: <code>awaiting sign-in: &lt;the provider's refusal&gt;</code>
+for a grant the provider disowned or an operator retired (<code>503 subscription_reauthorization_required</code>),
+<code>paid balance spent, recorded until &lt;UTC instant&gt;: &lt;the provider's refusal&gt;</code>
+(<code>502 provider_quota_exhausted</code>, not retryable) and <code>rate limited, the block lifts at &lt;UTC instant&gt;: &lt;the provider's refusal&gt;</code>
+(<code>429 provider_rate_limited</code>, retryable); the class answered is the most telling one among the members, in the
+walk's own precedence. A member the ledger does not refuse is read and discovered; when that read fails the message
+begins <code>could not discover native provider models:</code> instead.</p>
 <h2 id="the-operator-envelope">The operator envelope<a class="headerlink" href="#the-operator-envelope" title="Link to this section">&para;</a></h2>
 <p><code>src/core/failure.rs</code> is the one place Brama's own vocabulary becomes the
 fleet's, using the <code>wisent-errors</code> crate for everything derivable and
