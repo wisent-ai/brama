@@ -3,7 +3,11 @@
 //! enrolling the authenticator that makes every later sign-in unattended, or
 //! giving a pool member back.
 
+mod authenticator;
+use authenticator::AuthenticatorCommand;
+mod refresh;
 mod run;
+mod weles;
 
 use clap::builder::NonEmptyStringValueParser;
 use clap::{ArgGroup, Subcommand, ValueEnum};
@@ -75,19 +79,19 @@ pub(crate) enum SubscriptionCommand {
         /// `--by weles`: the exact Weles sign-in row to drive; without it the single row Weles holds for the provider is used, and two or more are never guessed between
         #[arg(long)]
         login_item: Option<String>,
-        /// Exact Brama subscription whose grant must be replaced and proved; required `--by hand`
+        /// Exact subscription whose grant is replaced; required by hand or on a remote gateway
         #[arg(long)]
         subscription_id: Option<String>,
         /// Why this sign-in is being run; recorded in the journal beside the verdict
         #[arg(long)]
         reason: String,
-        /// `--by hand`: the gateway that serves the pool; it draws the page, takes the paste and stores the grant in its own vault
+        /// The serving gateway; it stores the grant and runs the selected sign-in method
         #[arg(long)]
         gateway: Option<String>,
-        /// `--by hand`: resolve the gateway through Stado's service directory as this consumer
+        /// Resolve the serving gateway through Stado as this consumer
         #[arg(long)]
         gateway_consumer: Option<String>,
-        /// `--by hand` with a gateway: read the console's bearer from the vault item playing this role (its `token` field), since stdin carries the pasted code
+        /// Read the gateway console bearer by vault role, never as a command argument
         #[arg(long, value_name = "ROLE", requires = "destination")]
         bearer_role: Option<String>,
         /// Print the verdict as JSON instead of lines
@@ -283,36 +287,6 @@ pub(crate) enum LeaseCommand {
         #[arg(long, value_name = "ROLE")]
         bearer_role: Option<String>,
         /// Print the leases as JSON instead of lines
-        #[arg(long, default_value_t = false)]
-        json: bool,
-    },
-}
-
-#[derive(Subcommand)]
-pub(crate) enum AuthenticatorCommand {
-    /// List which accounts need a second factor to be signed in, and which of them hold the secret that answers one
-    List {
-        /// Narrow the list to one provider; without it every provider is listed
-        #[arg(long)]
-        provider: Option<String>,
-        /// Print the list as JSON instead of lines
-        #[arg(long, default_value_t = false)]
-        json: bool,
-    },
-    /// Enrol an authenticator for the login behind one subscription, so every later sign-in answers the provider's second factor by itself
-    Enrol {
-        /// The provider whose account needs a seed: claude-code, codex or kimi
-        provider: String,
-        /// Exact Brama subscription whose login gains the authenticator
-        #[arg(long)]
-        subscription_id: String,
-        /// Why this enrolment is being run; recorded beside the verdict
-        #[arg(long)]
-        reason: String,
-        /// Exact Skarbiec login item, when the subscription names more than one
-        #[arg(long)]
-        login_item: Option<String>,
-        /// Print the verdict as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,
     },
