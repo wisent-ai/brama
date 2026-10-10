@@ -5,18 +5,24 @@
 # standing lease back, the pool report and the lease list carry the counts,
 # and a release ends it. Then the refusals the gateway makes before any lease
 # is written: a lease that names no session, a release that names nothing, a
-# provider the pool holds no usable member of. Nothing is bought: the test
-# never fills a subscription to the operator's limit. Every command, its
-# outcome and its answer go to the run's report.txt.
+# provider the pool holds no usable member of. Last, a full pool: sessions
+# are leased on FULL_PROVIDER until the gateway refuses the next one
+# `pool_full`, with every usable subscription carrying the operator's limit,
+# and releasing them frees the pool again. FULL_PROVIDER is a provider the
+# declaration names no purchase cap for, so the acquisition the full pool
+# starts is refused `account_cap_undeclared` and nothing is bought. Every
+# command, its outcome and its answer go to the run's report.txt.
 #
 # Usage: BRAMA=target/release/brama CONSUMER=<directory consumer> BEARER_ROLE=<console bearer role> \
-#   PROVIDER=<provider with a usable member> tests/subscriptions/leases.sh
+#   PROVIDER=<provider with a usable member> FULL_PROVIDER=<declared provider without a purchase cap> \
+#   tests/subscriptions/leases.sh
 set -eu
 cd "$(dirname "$0")/../.."
 BIN=${BRAMA:?set BRAMA to the brama binary under test, e.g. BRAMA=target/release/brama}
 CONSUMER=${CONSUMER:?set CONSUMER to the Stado directory consumer that resolves the gateway}
 BEARER_ROLE=${BEARER_ROLE:?set BEARER_ROLE to the role of the console bearer item}
 PROVIDER=${PROVIDER:?set PROVIDER to a provider whose pool holds a usable member}
+FULL_PROVIDER=${FULL_PROVIDER:?set FULL_PROVIDER to a declared provider with usable members and no purchase cap, e.g. codex}
 RUN="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 ROOT="$PWD/target/real-tests/subscriptions/leases-$RUN"
 REPORT="$ROOT/report.txt"
@@ -95,6 +101,37 @@ run released-again subscription lease release --session-id "$SESSION" "${at_gate
 run list-after subscription lease list "${at_gateway[@]}" --json
 jq -e --arg id "$lease" '.leases[] | select(.id == $id)' "$ROOT/list-after.json" >/dev/null &&
   fail "the released lease $lease is still listed"
+
+# --- a full pool refuses the next session, and releases free it ---
+FULL="$ROOT/full-sessions.txt"
+: >"$FULL"
+release_full() {
+  while read -r held; do
+    run "release-$held" subscription lease release --session-id "$held" "${at_gateway[@]}" --json
+  done <"$FULL"
+  : >"$FULL"
+}
+trap release_full EXIT
+while :; do
+  next="real-test-full-$RUN-$(uuidgen | tr 'A-Z' 'a-z')"
+  run "$next" subscription lease take "$FULL_PROVIDER" --session-id "$next" --holder real-test "${at_gateway[@]}" --json
+  [ "$outcome" = accepted ] || break
+  echo "$next" >>"$FULL"
+done
+[ -s "$FULL" ] || fail "no lease could be taken on $FULL_PROVIDER: $(cat "$ROOT/$next.stderr")"
+says "$next" "pool_full" "the session after the pool filled is refused pool_full"
+says "$next" "account_cap_undeclared" "the acquisition the full pool started bought nothing for an uncapped provider"
+run list-full subscription lease list "${at_gateway[@]}" --json
+limit=$(jq -r --arg p "$FULL_PROVIDER" '.limits[$p]' "$ROOT/list-full.json")
+jq -e --arg p "$FULL_PROVIDER" --argjson limit "$limit" \
+  '[.leases[] | select(.provider == $p) | .subscription_id] | group_by(.) | all(length >= $limit)' \
+  "$ROOT/list-full.json" >/dev/null || fail "a $FULL_PROVIDER subscription carries fewer than $limit sessions while the pool refused one"
+echo "ok: $(wc -l <"$FULL") sessions filled every usable $FULL_PROVIDER subscription to $limit" >>"$REPORT"
+release_full
+trap - EXIT
+run after-full subscription lease take "$FULL_PROVIDER" --session-id "$next" --holder real-test "${at_gateway[@]}" --json
+[ "$outcome" = accepted ] || fail "the pool still refused a session after the full sessions were released: $(cat "$ROOT/after-full.stderr")"
+run release-after subscription lease release --session-id "$next" "${at_gateway[@]}" --json
 
 touch "$ROOT/passed"
 echo "PASS" >>"$REPORT"
