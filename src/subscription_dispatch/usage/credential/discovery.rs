@@ -15,6 +15,32 @@ pub struct DiscoveredAccount {
     pub registration_error: Option<String>,
 }
 
+/// A failed sign-in check is not a completed browser attempt or a cooldown.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct SignInCheckFailure {
+    pub code: String,
+    pub detail: String,
+    pub at_ms: i64,
+}
+
+pub fn record_sign_in_check(
+    id: &str,
+    provider: &str,
+    failure: Option<(&str, &str)>,
+) -> Result<(), String> {
+    let (_, result) = write_ledger(|ledger| {
+        let entry = ledger.subscriptions.entry(id.to_owned()).or_default();
+        entry.provider = provider.to_owned();
+        entry.sign_in_check_failure = failure.map(|(code, detail)| SignInCheckFailure {
+            code: code.to_owned(),
+            detail: detail.to_owned(),
+            at_ms: now_ms(),
+        });
+        entry.updated_at_ms = Some(now_ms());
+    });
+    result
+}
+
 pub fn record_discovered_account(
     id: &str,
     observation: &AccountObservation,

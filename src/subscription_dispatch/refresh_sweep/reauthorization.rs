@@ -71,6 +71,7 @@ pub(super) fn schedule_sign_in(subscription_id: String, provider: String) -> boo
         };
         match tokio::spawn(sign_in::sign_in_provider(options)).await {
             Ok(Ok(verdict)) => {
+                record_check(&subscription_id, &provider, None);
                 info!(
                     event = "credential_sign_in_finished",
                     subscription = %subscription_id,
@@ -87,6 +88,15 @@ pub(super) fn schedule_sign_in(subscription_id: String, provider: String) -> boo
             // no account.
             Ok(Err(error)) => {
                 let blocked = error.blocked();
+                let code = match &error {
+                    sign_in::SignInError::Blocked(cause) => cause.code(),
+                    sign_in::SignInError::Dependency(_) => "sign_in_dependency_failed",
+                };
+                record_check(
+                    &subscription_id,
+                    &provider,
+                    Some((code, &error.to_string())),
+                );
                 warn!(
                     event = if blocked.is_some() {
                         "credential_sign_in_blocked"
@@ -107,6 +117,11 @@ pub(super) fn schedule_sign_in(subscription_id: String, provider: String) -> boo
             // suppressing renewal for the full account cooldown.
             Err(error) => {
                 let detail = format!("automatic sign-in task failed: {error}");
+                record_check(
+                    &subscription_id,
+                    &provider,
+                    Some(("sign_in_task_failed", &detail)),
+                );
                 warn!(
                     event = "credential_sign_in_panicked",
                     subscription = %subscription_id,
@@ -117,4 +132,18 @@ pub(super) fn schedule_sign_in(subscription_id: String, provider: String) -> boo
         }
     });
     true
+}
+
+fn record_check(member: &str, provider: &str, failure: Option<(&str, &str)>) {
+    if let Err(error) =
+        crate::subscription_dispatch::usage::record_sign_in_check(member, provider, failure)
+    {
+        warn!(
+            event = "credential_sign_in_check_persist_failed",
+            subscription = member,
+            %provider,
+            %error,
+            "Could not retain the automatic sign-in check result"
+        );
+    }
 }

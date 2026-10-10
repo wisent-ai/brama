@@ -113,6 +113,30 @@ fn stops_a_new_attempt(
 }
 
 pub(super) fn observed_failure(id: &str) -> Option<Blocked> {
+    let current = crate::subscription_dispatch::usage::usage_for(id);
+    if let Some(check) = current
+        .as_ref()
+        .and_then(|entry| entry.sign_in_check_failure.as_ref())
+    {
+        let active_after_check = current
+            .as_ref()
+            .and_then(|entry| entry.credential.as_ref())
+            .is_some_and(|credential| {
+                credential.state == crate::subscription_dispatch::usage::CredentialState::Active
+                    && credential.recorded_at_ms >= check.at_ms
+            });
+        let completed_after_check = crate::journal::latest_subscription_sign_in(id)
+            .and_then(|attempt| attempt.get("at_ms").and_then(Value::as_i64))
+            .is_some_and(|at| at >= check.at_ms);
+        if !active_after_check && !completed_after_check {
+            return Some(Blocked::Operation {
+                code: check.code.clone(),
+                stage: "automatic_sign_in_check".into(),
+                detail: check.detail.clone(),
+                status: None,
+            });
+        }
+    }
     let previous = crate::journal::latest_subscription_sign_in(id)?;
     if previous.get("result").and_then(Value::as_str) != Some(FAILED) {
         return None;
@@ -121,7 +145,6 @@ pub(super) fn observed_failure(id: &str) -> Option<Blocked> {
         .get("started_at_ms")
         .or_else(|| previous.get("at_ms"))
         .and_then(Value::as_i64);
-    let current = crate::subscription_dispatch::usage::usage_for(id);
     if let (Some(began), Some(credential)) = (
         began,
         current.as_ref().and_then(|usage| usage.credential.as_ref()),

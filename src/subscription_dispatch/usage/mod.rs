@@ -78,7 +78,8 @@ pub use self::spend::{
 };
 pub use self::standing::standing_refusal;
 pub use credential::discovery::{
-    record_discovered_account, record_registration, DiscoveredAccount,
+    record_discovered_account, record_registration, record_sign_in_check, DiscoveredAccount,
+    SignInCheckFailure,
 };
 pub use credential::resets::{record_reset_offer, record_reset_redemption, record_reset_unblocked};
 
@@ -151,6 +152,8 @@ pub struct SubscriptionUsage {
     pub credential: Option<Credential>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub discovery: Option<DiscoveredAccount>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sign_in_check_failure: Option<SignInCheckFailure>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resets: Option<crate::subscription_dispatch::acquire::resets::model::ResetObservation>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
