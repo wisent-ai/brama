@@ -13,12 +13,7 @@ use super::{AcquireOptions, ACQUIRED, FAILED, REQUESTED};
 
 pub(super) async fn buy(options: &AcquireOptions, shortage: Shortage) -> Value {
     let provider = options.provider.as_str();
-    // Lowercase digits only: the routing coordinate slugs the id to
-    // lowercase, and the vault tag must name the same id.
-    let subscription_id = format!(
-        "{provider}-acquired-{}",
-        chrono::Utc::now().format("%Y%m%d%H%M%S")
-    );
+    let request_id = uuid::Uuid::new_v4().to_string();
     let mut verdict = json!({
         "provider": provider,
         "reason": options.reason,
@@ -29,7 +24,7 @@ pub(super) async fn buy(options: &AcquireOptions, shortage: Shortage) -> Value {
         "accounts": shortage.accounts,
         "standings": shortage.standings,
         "plan_tier": shortage.plan_tier,
-        "subscription_id": subscription_id,
+        "request_id": request_id,
     });
     let mut requested = verdict.clone();
     requested["result"] = json!(REQUESTED);
@@ -37,7 +32,7 @@ pub(super) async fn buy(options: &AcquireOptions, shortage: Shortage) -> Value {
     crate::journal::record_subscription_acquisition(&requested);
     let purchase = match weles::purchase(
         provider,
-        &subscription_id,
+        &request_id,
         &shortage.plan_tier,
         &options.reason,
         options.progress.as_ref(),
@@ -69,6 +64,7 @@ pub(super) async fn buy(options: &AcquireOptions, shortage: Shortage) -> Value {
     };
     for field in [
         "account",
+        "subscription_id",
         "subscription_item",
         "login_item",
         "paid",
@@ -98,6 +94,32 @@ pub(super) async fn buy(options: &AcquireOptions, shortage: Shortage) -> Value {
         };
         verdict["failure"] = failure;
         return finish(verdict, FAILED, &code, detail, Value::Null);
+    }
+    let Some(account) = answer["account"].as_str() else {
+        return finish(
+            verdict,
+            FAILED,
+            "acquired_account_unidentified",
+            "Weles reported a purchase without its account address".into(),
+            Value::Null,
+        );
+    };
+    if let Err(detail) =
+        crate::subscription_dispatch::discovery::provider_account(provider, account)
+    {
+        return finish(
+            verdict,
+            FAILED,
+            "acquired_account_unidentified",
+            detail,
+            Value::Null,
+        );
+    }
+    let subscription_id = format!("{}-{}", provider, crate::gateway::broker::slug(account));
+    if answer["subscription_id"].as_str() != Some(subscription_id.as_str()) {
+        return finish(verdict, FAILED, "acquired_member_mismatch",
+            format!("Weles did not bank the purchased account under its provider-and-address member {subscription_id}"),
+            Value::Null);
     }
     let refresh =
         match pool::refresh_subscription(provider, &subscription_id, &options.reason).await {

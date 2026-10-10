@@ -5,6 +5,7 @@ pub(in crate::providers::adapter) mod endpoint;
 pub(in crate::providers::adapter) mod headers;
 pub(in crate::providers::adapter) mod probe;
 mod report;
+pub mod resets;
 mod window;
 
 use serde_json::Value;

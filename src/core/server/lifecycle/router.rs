@@ -40,8 +40,9 @@ use crate::core::server::subscriptions::leases::{
     list_leases, release_lease, release_leases, take_lease,
 };
 use crate::core::server::subscriptions::probe::{
-    acquire_admin_subscription, attribute_admin_subscription_pool, maintain_admin,
-    probe_admin_subscription, refresh_admin_subscription_pool,
+    acquire_admin_subscription, attribute_admin_subscription_pool,
+    discover_admin_subscription_pool, maintain_admin, probe_admin_subscription,
+    refresh_admin_subscription_pool, reset_admin_subscription,
 };
 use crate::core::server::subscriptions::sign_in::manual::{
     complete_admin_manual_sign_in, disown_admin_grant, reinstate_admin_grant,
@@ -199,6 +200,14 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
         .route(
             "/v1/admin/subscription-pool/attribute",
             post(attribute_admin_subscription_pool),
+        )
+        .route(
+            "/v1/admin/subscription-pool/discover",
+            post(discover_admin_subscription_pool),
+        )
+        .route(
+            "/v1/admin/subscription-pool/reset",
+            post(reset_admin_subscription),
         )
         .route(
             "/v1/admin/subscription-pool/acquire",

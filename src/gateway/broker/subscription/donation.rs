@@ -134,6 +134,7 @@ async fn donated_credential_tags(
     provider: &str,
     subscription_id: &str,
     login_item: Option<&str>,
+    account: Option<&str>,
 ) -> Result<Vec<String>, DonationRefusal> {
     let stdout = raw_listing(
         &entitlements_router_bin(),
@@ -157,15 +158,17 @@ async fn donated_credential_tags(
     if !tags.contains(&agent_tag) {
         tags.push(agent_tag);
     }
-    // A donated credential arrives with the login row it was minted through
-    // and nothing that states the account; the account is whatever the item
-    // already records, which this write preserves rather than replaces.
+    // Renewals preserve the persisted identity; a new bank supplies its account.
     let recorded = super::super::vault::existing_item_account(item_id)
         .await
         .map_err(DonationRefusal::Unwritable)?;
-    let mut tags =
-        subscription_tags_for_write(&tags, provider, subscription_id, recorded.as_deref())
-            .map_err(DonationRefusal::MappingConflict)?;
+    let mut tags = subscription_tags_for_write(
+        &tags,
+        provider,
+        subscription_id,
+        account.or(recorded.as_deref()),
+    )
+    .map_err(DonationRefusal::MappingConflict)?;
     if let Some(login_item) = login_item {
         let declared = tags
             .iter()
@@ -218,8 +221,8 @@ impl DonationRefusal {
 /// it, so the donation was inert by construction.
 ///
 /// A donation is refused unless the document reduces to a bearer, because this
-/// write lands on the one coordinate a provider's `-primary` subscription is
-/// read from and there is no second copy. A sign-in trajectory that writes
+/// write lands on the selected subscription's only credential coordinate.
+/// A sign-in trajectory that writes
 /// its own browser context options document (`deviceScaleFactor`,
 /// `extraHTTPHeaders`, `recordHar`, `recordVideo`, `viewport`) onto that
 /// coordinate leaves a heavily used account refused by the
@@ -235,6 +238,7 @@ pub async fn put_donated_credential(
     subscription_id: &str,
     api_key: &str,
     login_item: Option<&str>,
+    account: Option<&str>,
 ) -> Result<(), DonationRefusal> {
     let item_id = format!("provider:{provider}:{subscription_id}");
     // The bearer is derived only to prove one can be, and dropped unread.
@@ -248,13 +252,28 @@ pub async fn put_donated_credential(
         );
         return Err(DonationRefusal::Unusable(detail));
     }
+    let grant_account = crate::gateway::oauth_refresh::stated_account_text(api_key, provider);
+    if let (Some(stated), Some(granted)) = (account, grant_account.as_deref()) {
+        if !stated.eq_ignore_ascii_case(granted) {
+            return Err(DonationRefusal::MappingConflict(
+                "the donated grant names a different account than the selected subscription".into(),
+            ));
+        }
+    }
+    let account = grant_account.as_deref().or(account);
     if local_provider_credentials_enabled() {
         put_local_subscription_credential(&item_id, api_key.as_bytes())
             .map_err(DonationRefusal::Unwritable)?;
     } else {
-        let tags =
-            donated_credential_tags(&item_id, agent_id, provider, subscription_id, login_item)
-                .await?;
+        let tags = donated_credential_tags(
+            &item_id,
+            agent_id,
+            provider,
+            subscription_id,
+            login_item,
+            account,
+        )
+        .await?;
         put_credential(&item_id, api_key.as_bytes(), Some(&tags), None)
             .await
             .map_err(DonationRefusal::Unwritable)?;

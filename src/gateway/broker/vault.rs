@@ -20,6 +20,7 @@ mod seeds;
 // resolves to more of this seam than its caller needs.
 pub(super) use capability::{issue_capability, PROVIDER_PURPOSE, REQUEST_SIGN_PURPOSE};
 pub(super) use grant::credential_by_grant;
+pub(super) use item::register_discovered_account;
 pub(super) use item::{existing_item_account, existing_item_tags, put_credential, VaultListItem};
 /// The vault program itself is named crate-wide: the sign-in path reads
 /// `brama-weles-reauth` through the same program every credential operation

@@ -30,6 +30,7 @@ mod decide;
 pub mod declaration;
 pub mod hand_over;
 mod purchase;
+pub mod resets;
 mod weles;
 
 use std::sync::LazyLock;

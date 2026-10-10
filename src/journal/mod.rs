@@ -12,6 +12,7 @@ use serde_json::{json, Value};
 
 pub mod answers;
 pub mod concurrency;
+pub mod resets;
 
 /// Brama's own state directory on this host: `$BRAMA_STATE_DIR`, or
 /// `$HOME/.brama`. The journal, the agent replay record and the model

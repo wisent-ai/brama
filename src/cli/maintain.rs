@@ -69,6 +69,25 @@ async fn pass(destination: Destination) -> Result<Value, String> {
 
 fn print_report(report: &Value) {
     let count = |pointer: &str| report.pointer(pointer).cloned().unwrap_or(Value::Null);
+    if let Some(accounts) = report
+        .pointer("/discovery/accounts")
+        .and_then(Value::as_array)
+    {
+        for account in accounts {
+            println!(
+                "account discovery: {} {} registered={} source={}",
+                account["provider"], account["account"], account["registered"], account["source"]
+            );
+        }
+    }
+    if let Some(errors) = report
+        .pointer("/discovery/errors")
+        .and_then(Value::as_array)
+    {
+        for error in errors {
+            println!("account discovery failed: {error}");
+        }
+    }
     println!(
         "plan usage: {} subscription(s), {} read",
         count("/plan_usage/subscriptions"),
@@ -102,6 +121,20 @@ fn print_report(report: &Value) {
             count("/credentials/refused"),
             count("/credentials/sign_in_checks_scheduled")
         ),
+    }
+    if let Some(error) = report.pointer("/resets/error") {
+        println!("saved reset maintenance failed: {error}");
+    }
+    if let Some(members) = report.pointer("/resets/members").and_then(Value::as_array) {
+        for member in members {
+            println!(
+                "saved reset: {} ({}) {}",
+                member["member"], member["provider"], member
+            );
+        }
+    }
+    if let Some(detail) = report.pointer("/acquisition/detail") {
+        println!("acquisition: {detail}");
     }
     for verdict in report["acquisition"]["verdicts"]
         .as_array()

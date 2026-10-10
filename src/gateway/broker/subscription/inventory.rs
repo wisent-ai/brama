@@ -168,9 +168,8 @@ pub async fn list_unroutable_accounts() -> Vec<UnroutableAccount> {
 
 /// Incomplete Brama credential metadata that still identifies an exact
 /// subscription. These entries are renewal candidates, not routable entries:
-/// Weles must prove the declared primary maps to the same subscription id, and
-/// the resulting donation adds the missing routing tags before any agent sees
-/// it.
+/// Weles must prove the declared account maps to the same subscription id;
+/// banking the independent grant adds the routing tags before dispatch.
 pub async fn list_recoverable_subscriptions() -> Vec<SubscriptionEntry> {
     list_unroutable_accounts()
         .await

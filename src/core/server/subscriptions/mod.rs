@@ -42,6 +42,7 @@ struct SubscriptionPoolWrite {
     api_key: Option<String>,
     login_item: Option<String>,
     subscription_id: Option<String>,
+    account: Option<String>,
 }
 
 /// Which pool one caller may be answered about, from what that caller proved.
@@ -178,6 +179,7 @@ pub(super) async fn apply_pool_write(
                     api_key: request.api_key,
                     login_item: request.login_item,
                     subscription_id: request.subscription_id,
+                    account: request.account,
                 },
             )
             .await

@@ -24,9 +24,14 @@ the product workflow; they are not captured execution results.</p>
 <h2 id="read">Read the recorded state</h2>
 <pre><code class="language-console">brama subscription list --json</code></pre>
 <p>The response includes <code>ok</code>, <code>observed_at_ms</code>,
-<code>errors</code>, and <code>providers</code>. Each account carries its identity,
-credential state, actual plan windows, observation/reset times, and latest
-<code>usage_check</code>. A live credential alone is not proof of current usage.</p>
+<code>errors</code>, <code>accounts</code> and <code>subscriptions</code>. Each member carries its identity,
+credential state, actual plan windows, observation/reset times and latest
+usage reading. A live credential alone is not proof of current usage.</p>
+<h2 id="discover">Find accounts you already own</h2>
+<pre><code class="language-console">brama subscription discover --gateway-consumer &lt;consumer&gt; --bearer-role &lt;console bearer role&gt; --json</code></pre>
+<p>Run this where your coding harness knows your accounts. Brama reads public account metadata and the gateway checks synchronized receipts through Skrzynka. Each discovered account retains its provider, address, plan when reported, source and observation time. It enters the pool without copying a harness grant; Weles must obtain Brama's independent grant for that exact account.</p>
+<p>Desktop's <strong>Discover accounts</strong> action shows the same report. A missing grant, failed mailbox read or unavailable discovery source remains visible with its cause. Member names do not assign rank: capacity and availability decide which member can serve.</p>
+<p>After <strong>Refresh usage</strong>, inspect the selected member's saved reset count, expiry and eligibility. Refreshing reads credits without consuming them. Use the member's reset action with a reason, or <code>brama subscription reset &lt;provider&gt; --member &lt;id&gt; --reason &lt;why&gt;</code> with the same gateway options. See <a href="/docs/cli/subscription#reset">reset eligibility, automatic policy and uncertain outcomes</a> before using saved capacity.</p>
 <h2 id="refresher">Read the pool of the gateway that serves, and who refreshes each grant</h2>
 <pre><code class="language-console">brama subscription list --gateway-consumer &lt;consumer&gt; --bearer-role &lt;console bearer role&gt;</code></pre>
 <p>Run on the machine whose harnesses hold the grants, this reads the pool of the

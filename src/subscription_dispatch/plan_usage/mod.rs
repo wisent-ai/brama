@@ -88,6 +88,13 @@ async fn refresh_once(subscription_id: &str, provider: &str) -> RefreshResult {
         PlanUsage::Report(readings) => {
             let windows = readings.len();
             usage::record_plan_usage(subscription_id, provider, &readings)?;
+            if crate::subscription_dispatch::acquire::declaration::provider(provider)
+                .is_ok_and(|declared| declared.resets.is_some())
+            {
+                crate::subscription_dispatch::acquire::resets::refresh(subscription_id, provider)
+                    .await
+                    .map_err(|detail| provider_failure(subscription_id, provider, detail))?;
+            }
             info!(
                 event = "plan_usage_recorded",
                 subscription = %subscription_id,

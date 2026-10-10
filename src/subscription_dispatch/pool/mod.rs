@@ -201,7 +201,10 @@ pub(crate) async fn inventory(scope: &PoolScope) -> (Vec<SubscriptionEntry>, Vec
                     provider: named(&recorded.provider),
                     label: None,
                     login_item: None,
-                    account: None,
+                    account: recorded
+                        .discovery
+                        .as_ref()
+                        .map(|account| account.account.clone()),
                 });
         }
     }

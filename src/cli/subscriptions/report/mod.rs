@@ -101,6 +101,54 @@ pub(super) fn print_pool(report: &Value) {
         if let Some(expires_at) = text(row, "expires_at") {
             println!("    expires_at: {expires_at}");
         }
+        if let Some(discovery) = row.get("discovery").filter(|value| value.is_object()) {
+            println!(
+                "    discovered account: {} plan={} first_seen={} sources={}",
+                discovery["account"],
+                discovery["plan"],
+                discovery["discovered_at_ms"],
+                discovery["sources"]
+            );
+            if let Some(error) = discovery.get("registration_error").and_then(Value::as_str) {
+                println!("    account registration failed: {error}");
+            }
+        }
+        if let Some(resets) = row.get("resets").filter(|value| value.is_object()) {
+            if let Some(error) = text(resets, "error") {
+                println!("    saved resets report failed: {error}");
+            }
+            if let Some(offer) = resets.get("offer").filter(|value| value.is_object()) {
+                println!(
+                    "    saved resets: {} observed_at={}",
+                    offer["available_count"],
+                    instant(offer.get("observed_at_ms"))
+                );
+                if let Some(credits) = offer.get("credits").and_then(Value::as_array) {
+                    for credit in credits {
+                        println!(
+                            "      {} program={} remaining={} usable={} expires={}",
+                            credit["id"],
+                            credit["program"],
+                            credit["remaining_count"],
+                            credit["usable"],
+                            instant(credit.get("expires_at_ms"))
+                        );
+                    }
+                }
+            }
+        }
+        if let Some(redemption) = row
+            .get("reset_redemption")
+            .filter(|value| value.is_object())
+        {
+            println!(
+                "    last reset: {} request={} reason={} detail={}",
+                redemption["state"],
+                redemption["request_id"],
+                redemption["reason"],
+                redemption["detail"]
+            );
+        }
         // Who rotates this grant. A grant borrowed from a harness on the
         // operator's machine is that harness's to refresh: Brama rotating it
         // too revokes the refresh token the harness holds, and the operator

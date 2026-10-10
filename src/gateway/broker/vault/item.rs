@@ -7,6 +7,8 @@
 //! disagree if they lived apart.
 
 use serde::Deserialize;
+mod discovery;
+pub(in crate::gateway::broker) use discovery::register as register_discovered_account;
 
 use super::router::{entitlements_router_bin, raw_listing, router_output, router_refusal};
 

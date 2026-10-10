@@ -77,6 +77,10 @@ pub use self::spend::{
     Block, Measured,
 };
 pub use self::standing::standing_refusal;
+pub use credential::discovery::{
+    record_discovered_account, record_registration, DiscoveredAccount,
+};
+pub use credential::resets::{record_reset_offer, record_reset_redemption, record_reset_unblocked};
 
 static LEDGER: Mutex<Option<LedgerState>> = Mutex::new(None);
 
@@ -145,6 +149,13 @@ pub struct SubscriptionUsage {
     /// a rate limit that never clears.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credential: Option<Credential>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discovery: Option<DiscoveredAccount>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resets: Option<crate::subscription_dispatch::acquire::resets::model::ResetObservation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reset_redemption:
+        Option<crate::subscription_dispatch::acquire::resets::model::ResetRedemption>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

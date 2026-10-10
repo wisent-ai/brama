@@ -30,6 +30,10 @@ pub(crate) enum SubscriptionCommand {
     /// Report the subscription pool this gateway routes over: every member,
     /// its state, its usage window and its failure
     List(super::SubscriptionsArgs),
+    /// Discover operator accounts without importing harness grants; enroll metadata for independent Weles sign-in
+    Discover(super::discovery::DiscoveryArgs),
+    /// Redeem a saved provider reset for the selected member and journal the reason
+    Reset(super::resets::ResetArgs),
     /// Refresh this provider's subscription credentials now, here or on the
     /// gateway that holds them
     #[command(group(ArgGroup::new("destination").args(["gateway", "gateway_consumer"])))]

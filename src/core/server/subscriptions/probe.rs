@@ -141,22 +141,42 @@ pub(in crate::core::server) async fn attribute_admin_subscription_pool(
 /// its error; an acquisition refusal is a decision, not a failure.
 pub(in crate::core::server) async fn maintain_admin(
     Extension(client_identity): Extension<ModelClientIdentity>,
+    supplied: Option<Json<crate::subscription_dispatch::discovery::harness::DiscoveryReport>>,
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
+    let observed = match supplied {
+        Some(Json(report)) => report,
+        None => crate::subscription_dispatch::discovery::harness::omp().await,
+    };
+    let discovery = crate::subscription_dispatch::discovery::enroll(observed).await;
     let plan_usage = crate::subscription_dispatch::plan_usage::sweep().await;
     let credentials = crate::subscription_dispatch::refresh_sweep::sweep().await;
-    let acquisition = crate::subscription_dispatch::acquire::maintenance_pass().await;
+    let resets = crate::subscription_dispatch::acquire::resets::maintenance::run().await;
+    let acquisition = if discovery["ok"].as_bool() == Some(true)
+        && resets["ok"].as_bool() == Some(true)
+    {
+        crate::subscription_dispatch::acquire::maintenance_pass().await
+    } else {
+        json!({"verdicts": [], "result": "refused",
+            "detail": "account discovery or saved-capacity maintenance is incomplete; no account was purchased"})
+    };
     let readiness = crate::core::server::readiness::recompute().await;
     let usage_failed = plan_usage
         .get("failed")
         .and_then(Value::as_array)
         .is_some_and(|failed| !failed.is_empty());
     let ready = readiness.get("ready").and_then(Value::as_bool) == Some(true);
-    let ok = !usage_failed && credentials.is_ok() && ready;
+    let ok = discovery["ok"].as_bool() == Some(true)
+        && resets["ok"].as_bool() == Some(true)
+        && !usage_failed
+        && credentials.is_ok()
+        && ready;
     crate::core::server::readiness::record_maintenance(ok);
     Ok(Json(json!({
         "ok": ok,
+        "discovery": discovery,
         "plan_usage": plan_usage,
+        "resets": resets,
         "credentials": match credentials {
             Ok(report) => report,
             Err(error) => json!({"error": error}),
@@ -164,4 +184,39 @@ pub(in crate::core::server) async fn maintain_admin(
         "acquisition": acquisition,
         "readiness": readiness,
     })))
+}
+
+/// Register independently observed account metadata; sign-in stays with Weles.
+pub(in crate::core::server) async fn discover_admin_subscription_pool(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Json(report): Json<crate::subscription_dispatch::discovery::harness::DiscoveryReport>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    Ok(Json(
+        crate::subscription_dispatch::discovery::discover(report).await,
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(in crate::core::server) struct ResetSubscriptionRequest {
+    provider: String,
+    member: String,
+    reason: String,
+}
+
+pub(in crate::core::server) async fn reset_admin_subscription(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Json(request): Json<ResetSubscriptionRequest>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    crate::subscription_dispatch::acquire::resets::redeem::run(
+        &request.provider,
+        &request.member,
+        &request.reason,
+        false,
+    )
+    .await
+    .map(Json)
+    .map_err(|error| api_error(StatusCode::CONFLICT, &error))
 }

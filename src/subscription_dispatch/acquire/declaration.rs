@@ -34,6 +34,7 @@ pub struct ProviderDeclaration {
     pub sessions_per_subscription_max: String,
     /// The harnesses the provider's accounts are handed over to, by name.
     pub harnesses: BTreeMap<String, HarnessDeclaration>,
+    pub resets: Option<super::resets::declaration::ResetDeclaration>,
 }
 
 #[derive(Deserialize)]
@@ -89,7 +90,7 @@ pub fn harness(provider: &str, harness: &str) -> Result<&'static HarnessDeclarat
 }
 
 /// One of the operator's numbers, by the name a declaration gives it.
-fn stated(name: &str) -> Result<u64, String> {
+pub(super) fn stated(name: &str) -> Result<u64, String> {
     STATED
         .get(name)
         .and_then(|entry| entry.get("value"))

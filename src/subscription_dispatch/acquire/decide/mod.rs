@@ -2,7 +2,7 @@
 //! of the decision, and the refusal that names the one that stopped it.
 
 mod plan;
-mod pool_state;
+pub(super) mod pool_state;
 
 use serde_json::{json, Value};
 
@@ -73,6 +73,30 @@ pub(super) async fn decide(options: &AcquireOptions) -> Result<Shortage, Box<Val
     let mut standings = Vec::new();
     let mut stops = Vec::new();
     for member in &members {
+        if super::declaration::provider(provider).is_ok_and(|declared| declared.resets.is_some()) {
+            let reset = super::resets::redeem::run(
+                provider,
+                &member.id,
+                "use eligible saved capacity before buying another account",
+                true,
+            )
+            .await
+            .map_err(|detail| {
+                refuse(
+                    "saved_capacity_unconfirmed",
+                    format!(
+                        "{}: {detail}; no account is bought while saved capacity is unconfirmed",
+                        member.id
+                    ),
+                    json!({"member": member.id}),
+                )
+            })?;
+            if reset["ok"].as_bool() != Some(true) {
+                return Err(refuse("saved_capacity_unconfirmed",
+                    format!("{}: saved-capacity maintenance did not confirm its outcome; no account is bought", member.id),
+                    json!({"member": member.id, "reset": reset})));
+            }
+        }
         let row = match pool_state::standing(member, provider).await {
             Standing::Spent { until_ms } => {
                 spent.push(member.id.clone());

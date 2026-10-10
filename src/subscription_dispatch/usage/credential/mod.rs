@@ -14,8 +14,10 @@
 //! alone can tell a renewal sweep before anything reads the vault lives in
 //! `refresh_hint`.
 
+pub mod discovery;
 mod refresh_hint;
 mod refusal;
+pub mod resets;
 
 use serde::{Deserialize, Serialize};
 

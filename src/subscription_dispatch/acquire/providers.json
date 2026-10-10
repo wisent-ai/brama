@@ -17,6 +17,16 @@
     "codex": {
       "weles_provider": "codex",
       "sessions_per_subscription_max": "sessions_per_subscription_max",
+      "resets": {
+        "protocol": "codex_wham",
+        "listing_path": "/backend-api/wham/rate-limit-reset-credits",
+        "usage_path": "/backend-api/wham/usage",
+        "redemption_path": "/backend-api/wham/rate-limit-reset-credits/consume",
+        "auto_redeem": true,
+        "keep_credits": "codex_reset_keep_credits",
+        "min_blocked_minutes": "codex_reset_min_blocked_minutes",
+        "salvage_horizon_hours": "codex_reset_salvage_horizon_hours"
+      },
       "harnesses": {
         "omp": {
           "providerWhy": "The public usage report identifies Codex subscriptions as openai-codex.",

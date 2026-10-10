@@ -9,10 +9,12 @@
 
 mod acquisition;
 pub(crate) mod credentials;
+mod discovery;
 mod leases;
 mod manual;
 mod membership;
 pub(crate) mod remote;
+mod resets;
 pub(crate) mod unattended;
 pub(crate) mod verdicts;
 

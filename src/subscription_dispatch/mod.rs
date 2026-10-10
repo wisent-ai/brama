@@ -1,4 +1,5 @@
 pub mod acquire;
+pub mod discovery;
 pub mod dispatch;
 pub mod leases;
 pub mod model_catalog;

@@ -80,6 +80,16 @@ pub fn subscription_resource(provider: &str, subscription_id: &str) -> String {
     format!("provider:{}:{}", slug(provider), slug(subscription_id))
 }
 
+/// Register account metadata only; an independent sign-in must supply its grant.
+pub async fn register_discovered_account(
+    provider: &str,
+    id: &str,
+    account: &str,
+    metadata: &serde_json::Value,
+) -> Result<(), String> {
+    vault::register_discovered_account(provider, id, account, metadata).await
+}
+
 fn capability_map(name: &str) -> Option<HashMap<String, String>> {
     let encoded = std::env::var(name).ok()?;
     let parsed: HashMap<String, String> = serde_json::from_str(&encoded).ok()?;

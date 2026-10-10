@@ -254,7 +254,10 @@ pub(super) async fn refresh(
 /// UTF-8, not JSON, or states no address yields nothing, and its member stays
 /// unattributed.
 pub(super) fn stated_account(secret: &Secret, provider: &str) -> Option<String> {
-    let raw = secret.expose_utf8().ok()?;
+    stated_account_text(secret.expose_utf8().ok()?, provider)
+}
+
+pub(super) fn stated_account_text(raw: &str, provider: &str) -> Option<String> {
     let mut blob: Value = serde_json::from_str(raw).ok()?;
     let stated = principal::credential_account(&blob, provider);
     zeroize_json_strings(&mut blob);

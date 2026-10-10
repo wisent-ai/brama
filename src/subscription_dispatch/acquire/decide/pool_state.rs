@@ -88,7 +88,7 @@ pub(super) fn accounts(members: &[Member]) -> BTreeSet<AccountKey> {
 
 /// Whether a window is at its whole limit: a reading is a fraction of the
 /// provider's own limit, so the whole limit is one.
-fn at_limit(used_fraction: f64) -> bool {
+pub(in crate::subscription_dispatch::acquire) fn at_limit(used_fraction: f64) -> bool {
     used_fraction >= 1.0 // https://brama.wisent.com/docs/concepts/subscription
 }
 

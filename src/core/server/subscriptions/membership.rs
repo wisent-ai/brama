@@ -19,6 +19,7 @@ pub(super) struct DonateSubscriptionRequest {
     pub(super) api_key: Option<String>,
     pub(super) login_item: Option<String>,
     pub(super) subscription_id: Option<String>,
+    pub(super) account: Option<String>,
 }
 
 pub(super) async fn create_subscription(
@@ -44,48 +45,58 @@ pub(super) async fn create_subscription(
             "api_key must not be empty",
         ));
     }
-    // `claude-code` is the routing provider id, while the stable subscription
-    // ids shipped before that normalization use `claude`. Keep the persisted
-    // identity stable so renewal replaces the existing account instead of
-    // creating an unreachable second primary.
-    let subscription_provider = if provider == "claude-code" {
-        "claude"
-    } else {
-        provider.as_str()
-    };
-    let mut subscription_id = format!(
-        "brama-sub-{}-{}-primary",
-        crate::gateway::broker::slug(&agent_id),
-        crate::gateway::broker::slug(subscription_provider)
-    );
-    if let Some(requested_id) = request
+    let account = request
+        .account
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let subscription_id = if let Some(requested_id) = request
         .subscription_id
         .as_deref()
         .map(str::trim)
         .filter(|id| !id.is_empty())
     {
-        if requested_id != subscription_id {
-            let owned = crate::gateway::broker::discover_subscriptions(&agent_id)
-                .await
-                .map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?
-                .into_iter()
-                .find(|entry| entry.id == requested_id)
-                .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "subscription not found"))?;
-            if owned.provider != provider {
+        let owned = crate::gateway::broker::discover_subscriptions(&agent_id)
+            .await
+            .map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?
+            .into_iter()
+            .find(|entry| entry.id == requested_id)
+            .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "subscription not found"))?;
+        if owned.provider != provider {
+            return Err(api_error(
+                StatusCode::CONFLICT,
+                "selected subscription belongs to a different provider",
+            ));
+        }
+        if let (Some(expected), Some(stated)) = (owned.account.as_deref(), account) {
+            if !expected.eq_ignore_ascii_case(stated) {
                 return Err(api_error(
                     StatusCode::CONFLICT,
-                    "selected subscription belongs to a different provider",
+                    "selected subscription belongs to a different account",
                 ));
             }
-            subscription_id = requested_id.to_owned();
         }
-    }
+        requested_id.to_owned()
+    } else {
+        let account = account.ok_or_else(|| {
+            api_error(
+                StatusCode::BAD_REQUEST,
+                "account email address is required when adding a subscription",
+            )
+        })?;
+        format!(
+            "{}-{}",
+            crate::gateway::broker::slug(&provider),
+            crate::gateway::broker::slug(&account.to_lowercase())
+        )
+    };
     crate::gateway::broker::put_donated_credential(
         &agent_id,
         &provider,
         &subscription_id,
         api_key,
         login_item.as_deref(),
+        account,
     )
     .await
     .map_err(|refusal| match refusal {
@@ -114,6 +125,7 @@ pub(super) async fn create_subscription(
             "agent_id": agent_id,
             "status": "active",
             "label": request.label,
+            "account": account,
             "login_item": login_item,
         }
     })))

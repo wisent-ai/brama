@@ -34,6 +34,9 @@ pub(super) fn subscription_row(
         "label": entry.label,
         "login_item": entry.login_item,
         "account": entry.account,
+        "discovery": recorded.and_then(|usage| usage.discovery.as_ref()),
+        "resets": recorded.and_then(|usage| usage.resets.as_ref()),
+        "reset_redemption": recorded.and_then(|usage| usage.reset_redemption.as_ref()),
         // Said plainly, because a retired member and a member whose grant the
         // provider refused both read `burnt`, and only one of them is
         // repaired by putting it back in the rotation.

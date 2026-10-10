@@ -277,13 +277,15 @@ pub(crate) async fn attribute(
 
 /// Ask the serving gateway for one maintenance pass and return its report.
 pub(crate) async fn maintain(gateway: &str, bearer: &str) -> Result<Value, String> {
-    let response = client()?
+    let discovery = brama::subscription_dispatch::discovery::harness::omp().await;
+    let request = client()?
         .post(format!(
             "{}/v1/admin/maintain",
             gateway.trim_end_matches('/')
         ))
         .bearer_auth(bearer)
-        .send()
+        .json(&discovery);
+    let response = stado_wait::http::request(request)
         .await
         .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
     let status = response.status().as_u16();
