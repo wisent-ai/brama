@@ -77,6 +77,13 @@ pub async fn enroll(mut report: DiscoveryReport) -> Value {
                 broker::slug(&observation.account)
             ),
         };
+        if existing.is_none() && members.iter().any(|member| member.id == id) {
+            report.errors.push(format!(
+                "{id}: account {} for provider {} conflicts with an existing subscription coordinate; discovery cannot change its ledger identity",
+                observation.account, observation.provider
+            ));
+            continue;
+        }
         if let Some(recorded) = usage::usage_for(&id).and_then(|entry| entry.discovery) {
             if !recorded.account.eq_ignore_ascii_case(&observation.account) {
                 report.errors.push(format!(

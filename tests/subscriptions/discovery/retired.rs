@@ -74,3 +74,56 @@ fn rediscovery_cannot_register_a_retired_account_under_another_name() {
     run.report["result"] = json!("passed");
     run.save();
 }
+
+#[test]
+#[ignore = "Requires an isolated real gateway with an occupied discovery coordinate and a harness reporting a different actual account"]
+fn discovery_coordinate_collision_preserves_existing_member() {
+    let mut run = Run::new();
+    let member = required("COLLISION_MEMBER");
+    let account = required("EXPECTED_ACCOUNT");
+    let provider = required("EXPECTED_PROVIDER");
+    let before = run.member(&member, false);
+    assert!(
+        before["discovery"].is_null(),
+        "member already has discovery metadata"
+    );
+    assert_eq!(before["retired"], false);
+    assert!(
+        before["provider"] != provider
+            || before["account"]
+                .as_str()
+                .is_none_or(|existing| !existing.eq_ignore_ascii_case(&account)),
+        "the selected coordinate already belongs to the discovered account"
+    );
+    let discovered = run.command(&["subscription", "discover"]);
+    assert!(
+        !discovered.status.success(),
+        "coordinate collision was admitted"
+    );
+    let report: Value = serde_json::from_slice(&discovered.stdout).expect("discovery refusal JSON");
+    assert!(report["errors"]
+        .as_array()
+        .expect("discovery errors")
+        .iter()
+        .filter_map(Value::as_str)
+        .any(|error| error.contains(&member)
+            && error.contains(&account)
+            && error.contains(&provider)
+            && error.contains("conflicts with an existing subscription coordinate")));
+    let after = run.member(&member, false);
+    for field in [
+        "provider",
+        "account",
+        "discovery",
+        "credential",
+        "sign_in",
+        "retired",
+    ] {
+        assert_eq!(
+            after[field], before[field],
+            "discovery changed existing member {field}"
+        );
+    }
+    run.report["result"] = json!("passed");
+    run.save();
+}
