@@ -1,5 +1,7 @@
 //! Real gateway/provider reports; this flow never consumes a reset.
-//! Requires BRAMA, CONSUMER, BEARER_ROLE, MEMBER and EXPECTED_CREDITS.
+//! Both journeys require BRAMA, CONSUMER and BEARER_ROLE.
+//! Reset reporting additionally requires MEMBER and EXPECTED_CREDITS.
+//! Discovery requires EXPECTED_ACCOUNT, EXPECTED_HARNESS_PROVIDER and EXPECTED_PROVIDER.
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
@@ -153,6 +155,106 @@ fn saved_reset_report_persists_without_consumption() {
     );
     let after = run.member(&member, false);
     assert_eq!(after["reset_redemption"], before["reset_redemption"]);
+    run.report["result"] = json!("passed");
+    run.save();
+}
+
+#[test]
+#[ignore = "Requires real harness accounts, gateway discovery dependencies and independent sign-in"]
+fn discovered_harness_account_persists_once_with_its_observed_plan() {
+    let mut run = Run::new();
+    let account = required("EXPECTED_ACCOUNT");
+    let harness_provider = required("EXPECTED_HARNESS_PROVIDER");
+    let provider = required("EXPECTED_PROVIDER");
+    let mut command = Command::new("omp");
+    command.args(["usage", "--json"]).stdin(Stdio::null());
+    let observed = stado_wait::output(&mut command).expect("read real harness usage");
+    run.report["harness_observation"] = json!({
+        "command": ["omp", "usage", "--json"],
+        "exit_status": observed.status.code(),
+        "stdout": String::from_utf8_lossy(&observed.stdout),
+        "stderr": String::from_utf8_lossy(&observed.stderr),
+    });
+    run.save();
+    assert!(
+        observed.status.success(),
+        "harness usage refused: {}",
+        String::from_utf8_lossy(&observed.stderr)
+    );
+    let document: Value = serde_json::from_slice(&observed.stdout).expect("real harness usage JSON");
+    let reports = document["reports"].as_array().expect("harness reports");
+    let observed_account = reports
+        .iter()
+        .find(|row| {
+            row["provider"] == harness_provider
+                && row["metadata"]["email"]
+                    .as_str()
+                    .is_some_and(|email| email.eq_ignore_ascii_case(&account))
+        })
+        .expect("the selected account must actually be present in the harness");
+    let plan = observed_account["metadata"]["planType"]
+        .as_str()
+        .expect("the selected real report must identify its plan");
+    let discovery = run.command(&["subscription", "discover"]);
+    assert!(
+        discovery.status.success(),
+        "discovery refused: {} {}",
+        String::from_utf8_lossy(&discovery.stdout),
+        String::from_utf8_lossy(&discovery.stderr)
+    );
+    let discovered: Value =
+        serde_json::from_slice(&discovery.stdout).expect("discovery report JSON");
+    assert_eq!(discovered["ok"], true, "{discovered}");
+    let rows = discovered["accounts"].as_array().expect("discovered accounts");
+    let row = rows
+        .iter()
+        .find(|row| {
+            row["provider"] == provider
+                && row["account"]
+                    .as_str()
+                    .is_some_and(|email| email.eq_ignore_ascii_case(&account))
+        })
+        .expect("selected observed account is enrolled");
+    assert_eq!(row["registered"], true, "{row}");
+    let id = row["id"].as_str().expect("registered member id");
+    let persisted = run.member(id, false);
+    assert_eq!(persisted["provider"], provider);
+    assert_eq!(persisted["discovery"]["account"], account.to_lowercase());
+    assert_eq!(persisted["discovery"]["plan"], plan);
+    assert!(persisted["discovery"]["sources"]
+        .as_array()
+        .expect("retained discovery sources")
+        .iter()
+        .any(|source| source == "omp usage --json"));
+    let discovered_at = persisted["discovery"]["discovered_at_ms"]
+        .as_i64()
+        .expect("first discovery time");
+    let repeated = run.command(&["subscription", "discover"]);
+    assert!(
+        repeated.status.success(),
+        "repeated discovery refused: {} {}",
+        String::from_utf8_lossy(&repeated.stdout),
+        String::from_utf8_lossy(&repeated.stderr)
+    );
+    let after = run.member(id, false);
+    assert_eq!(after["discovery"]["discovered_at_ms"], discovered_at);
+    assert_eq!(after["discovery"]["account"], persisted["discovery"]["account"]);
+    let listed = run.command(&["subscription", "list"]);
+    assert!(listed.status.success());
+    let pool: Value = serde_json::from_slice(&listed.stdout).expect("pool JSON");
+    let mut matches = pool["subscriptions"]
+        .as_array()
+        .expect("pool subscriptions")
+        .iter()
+        .filter(|member| {
+            member["provider"] == provider
+                && member["retired"] != true
+                && member["account"]
+                    .as_str()
+                    .is_some_and(|email| email.eq_ignore_ascii_case(&account))
+        });
+    assert_eq!(matches.next().expect("persisted discovered member")["id"], id);
+    assert!(matches.next().is_none(), "discovery duplicated the account");
     run.report["result"] = json!("passed");
     run.save();
 }
