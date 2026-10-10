@@ -42,13 +42,14 @@ pub(in crate::subscription_dispatch::dispatch::catalogue) fn models(
         )
     })?;
     let published = snapshot.published.clone();
-    if !snapshot.refreshing {
-        snapshot.refreshing = true;
+    let refresh_needed = !snapshot.refreshing;
+    snapshot.refreshing = true;
+    drop(snapshot);
+    if refresh_needed {
         tokio::spawn(async move {
             let _ = refresh(entries).await;
         });
     }
-    drop(snapshot);
     match published {
         Some(published) => published.result.clone(),
         None => Err(Refusal::gateway(
