@@ -191,7 +191,7 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
         &resolved.account_revision,
         &resolved.source_revision,
     ) {
-        return Ok(verdict::replayed(previous, &resolved.account_revision));
+        return verdict::replayed(previous, &resolved.account_revision, &id);
     }
     let mut identity = serde_json::to_value(&resolved).expect("resolved account serializes");
     identity["started_at_ms"] = json!(chrono::Utc::now().timestamp_millis());

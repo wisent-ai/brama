@@ -149,3 +149,59 @@ fn remote_weles_sign_in_replays_a_final_failure_and_says_so() {
     run.report["result"] = json!("passed");
     run.save();
 }
+
+#[test]
+#[ignore = "Requires a gateway whose INVALID_REPLAY_MEMBER has an incomplete retained final failure"]
+fn remote_weles_sign_in_refuses_an_incomplete_record_without_rerunning() {
+    let mut run = Run::new();
+    let member = required("INVALID_REPLAY_MEMBER");
+    let before = run.member(&member, false);
+    let provider = before["provider"].as_str().expect("member provider");
+    let recorded = &before["sign_in"];
+    assert_eq!(recorded["result"], "failed");
+    assert_eq!(recorded["failure"]["retryable"], false);
+    let invalid_field = if recorded["at"]
+        .as_str()
+        .is_none_or(|value| value.trim().is_empty())
+    {
+        "at"
+    } else {
+        assert!(
+            recorded["detail"]
+                .as_str()
+                .is_none_or(|value| value.trim().is_empty()),
+            "the selected retained record has no missing replay evidence"
+        );
+        "detail"
+    };
+    let result = run.command(&[
+        "subscription",
+        "sign-in",
+        provider,
+        "--by",
+        "weles",
+        "--subscription-id",
+        &member,
+        "--reason",
+        "real gateway sign-in test: incomplete journal evidence must refuse replay",
+    ]);
+    assert!(
+        !result.status.success(),
+        "invalid replay evidence was accepted"
+    );
+    let refusal = format!(
+        "{}{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(refusal.contains(&format!(
+        "cannot replay sign-in for subscription {member}: recorded {invalid_field} is missing, empty or not a string"
+    )));
+    let after = run.member(&member, false);
+    assert_eq!(
+        after["sign_in"], *recorded,
+        "a new attempt replaced the invalid record"
+    );
+    run.report["result"] = json!("passed");
+    run.save();
+}

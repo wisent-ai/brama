@@ -65,17 +65,24 @@ pub(super) fn unchanged_failed_attempt(
 /// is set, `replay_of_at` names the instant the recorded attempt completed,
 /// and `detail` opens with why no browser was driven, so a reader of the
 /// lines or the JSON never takes an old failure for this call's result.
-/// Every verdict the journal records carries `at` and `detail`; one that
-/// lacks either is reported as such rather than dressed up.
-pub(super) fn replayed(mut previous: Value, account_revision: &str) -> Value {
-    let recorded_at = match previous.get("at").and_then(Value::as_str) {
-        Some(at) => at.to_owned(),
-        None => "an instant the journal record does not carry".to_owned(),
+/// An incomplete journal record refuses replay without starting a new run.
+pub(super) fn replayed(
+    mut previous: Value,
+    account_revision: &str,
+    subscription_id: &str,
+) -> Result<Value, super::SignInError> {
+    let required = |field: &str| {
+        previous
+            .get(field)
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .map(str::to_owned)
+            .ok_or_else(|| super::SignInError::Dependency(format!(
+                "cannot replay sign-in for subscription {subscription_id}: recorded {field} is missing, empty or not a string; no browser was started"
+            )))
     };
-    let detail = match previous.get("detail").and_then(Value::as_str) {
-        Some(detail) => detail.to_owned(),
-        None => "the journal record carries no detail".to_owned(),
-    };
+    let recorded_at = required("at")?;
+    let detail = required("detail")?;
     previous["replayed"] = json!(true);
     previous["replay_of_at"] = json!(recorded_at);
     previous["detail"] = json!(format!(
@@ -84,7 +91,7 @@ pub(super) fn replayed(mut previous: Value, account_revision: &str) -> Value {
          the provider's refusal was final; change the login row or wait out the sign-in \
          cooldown to run again. That attempt: {detail}"
     ));
-    previous
+    Ok(previous)
 }
 
 /// Whether a recorded attempt stands in the way of running another one.
