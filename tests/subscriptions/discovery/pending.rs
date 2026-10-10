@@ -48,6 +48,12 @@ fn retained_account_facts_reconcile_after_inventory_recovery() {
         })
         .expect("retained account was enrolled");
     let member = run.member(reconciled["id"].as_str().expect("exact member id"), false);
+    assert_eq!(reconciled["plan"], member["discovery"]["plan"]);
+    assert_eq!(reconciled["plan_at_ms"], member["discovery"]["plan_at_ms"]);
+    assert_eq!(
+        reconciled["discovered_at_ms"],
+        member["discovery"]["discovered_at_ms"]
+    );
     assert_eq!(member["discovery"]["account"], retained["account"]);
     assert!(member["discovery"]["sources"]
         .as_array()
