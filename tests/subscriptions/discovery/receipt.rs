@@ -78,6 +78,18 @@ fn historical_purchase_does_not_replace_current_reported_plan() {
         "selected receipt was not interpreted as this account's purchase"
     );
     assert_eq!(persisted["discovery"]["plan"], plan);
+    let enrolled = answer["accounts"]
+        .as_array()
+        .expect("reported discovered accounts")
+        .iter()
+        .find(|row| row["id"] == member)
+        .expect("receipt member is included in the discovery response");
+    assert_eq!(enrolled["plan"], persisted["discovery"]["plan"]);
+    assert_eq!(enrolled["plan_at_ms"], persisted["discovery"]["plan_at_ms"]);
+    assert_eq!(
+        enrolled["discovered_at_ms"],
+        persisted["discovery"]["discovered_at_ms"]
+    );
     assert!(
         persisted["discovery"]["plan_at_ms"]
             .as_i64()

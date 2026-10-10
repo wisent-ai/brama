@@ -82,14 +82,6 @@ pub async fn enroll(mut report: DiscoveryReport) -> Value {
             continue;
         }
         if let Some(previous) = enrolled.get_mut(&id) {
-            if observation.plan.is_some()
-                && previous["plan_at_ms"]
-                    .as_i64()
-                    .is_none_or(|at| observation.fact_at_ms >= at)
-            {
-                previous["plan"] = json!(observation.plan);
-                previous["plan_at_ms"] = json!(observation.fact_at_ms);
-            }
             if previous["observed_at_ms"]
                 .as_i64()
                 .is_none_or(|at| observation.observed_at_ms >= at)
@@ -125,12 +117,23 @@ pub async fn enroll(mut report: DiscoveryReport) -> Value {
             id.clone(),
             json!({
                 "id": id, "provider": observation.provider, "account": observation.account,
-                "plan": observation.plan, "source": observation.source,
+                "source": observation.source,
                 "observed_at_ms": observation.observed_at_ms,
-                "plan_at_ms": observation.plan.as_ref().map(|_| observation.fact_at_ms),
                 "registered": error.is_none(), "error": error,
             }),
         );
+    }
+    for (id, row) in &mut enrolled {
+        match usage::usage_for(id).and_then(|entry| entry.discovery) {
+            Some(discovery) => {
+                row["plan"] = json!(discovery.plan);
+                row["plan_at_ms"] = json!(discovery.plan_at_ms);
+                row["discovered_at_ms"] = json!(discovery.discovered_at_ms);
+            }
+            None => report.errors.push(format!(
+                "read persisted discovery result {id}: account metadata is absent"
+            )),
+        }
     }
     if report.errors.len() == prior_errors {
         if let Err(error) = pending.reconciled() {
