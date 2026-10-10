@@ -71,10 +71,12 @@ build_source="$source_dir"
 if [[ -n "${WISENT_INPUTS_DIR:-}" ]]; then
   echo_web_source="${WISENT_INPUT_ECHO_WEB_DIR:?release manifest must supply echo-web}/echo-web"
   wisent_errors_source="${WISENT_INPUT_WISENT_ERRORS_DIR:?release manifest must supply wisent-errors}/wisent-errors"
+  stado_wait_source="${WISENT_INPUT_STADO_WAIT_DIR:?release manifest must supply stado-wait}/stado-wait"
   build_source="$build_root/source"
   "$source_dir/src/release/prepare_inputs.sh" "$source_dir" "$build_source" \
     "wisent-onboarding-client=$echo_web_source/crates/onboarding-client" \
-    "wisent-errors=$wisent_errors_source/rust"
+    "wisent-errors=$wisent_errors_source/rust" \
+    "stado-wait=$stado_wait_source/stado-rs/wait"
   cargo_overrides=(--config "$build_source/release-inputs.toml")
 fi
 

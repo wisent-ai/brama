@@ -73,6 +73,7 @@ pub(crate) fn document(
         .collect();
     let observed_at_ms = now_ms();
     let seed_states = std::cell::OnceCell::new();
+    let leases = crate::subscription_dispatch::leases::counts();
     // One row shape for every audience. The rows an agent may see are fewer
     // than the operator's, and that is the whole of the difference: a console
     // and an agent reading the same account read the same fields about it,
@@ -112,6 +113,12 @@ pub(crate) fn document(
             });
             row["expires_at"] = expires_at(recorded.as_ref());
             row["last_redeem_error"] = last_redeem_error(recorded.as_ref(), observed_at_ms);
+            // The sessions the member carries, from the lease register; an
+            // unreadable register is a failure of this report, named once.
+            row["live_sessions"] = match &leases {
+                Ok(counts) => json!(counts.get(&entry.id).copied()),
+                Err(_) => Value::Null,
+            };
             row
         })
         .collect::<Vec<_>>();
@@ -122,6 +129,17 @@ pub(crate) fn document(
                 Code::Config,
                 "subscription usage history",
                 detail,
+            )
+            .with_context("attempted_at_ms", observed_at_ms.to_string()),
+        ));
+    }
+    if let Err(detail) = &leases {
+        errors.push(failure_json(
+            &failure::envelope(
+                "brama.subscriptions.leases",
+                Code::Config,
+                "subscription lease register",
+                detail.clone(),
             )
             .with_context("attempted_at_ms", observed_at_ms.to_string()),
         ));

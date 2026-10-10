@@ -4,6 +4,7 @@
 //! audience.
 
 pub(in crate::core::server) mod account;
+pub(in crate::core::server) mod leases;
 mod membership;
 pub(in crate::core::server) mod probe;
 pub(in crate::core::server) mod sign_in;
@@ -57,7 +58,7 @@ struct SubscriptionPoolWrite {
 /// body is the strongest statement available, and ignoring a broken one to
 /// serve the request on a weaker credential is how a mis-signed mutation gets
 /// through.
-async fn subscription_pool_scope(
+pub(super) async fn subscription_pool_scope(
     identity: &ModelClientIdentity,
     headers: &HeaderMap,
     body: &[u8],

@@ -77,6 +77,7 @@ pub(in crate::core::server) fn has_caller_auth_headers(headers: &HeaderMap) -> b
 /// agent-scoped write, and narrows the answer to what that identity owns.
 fn is_subscription_capability_path(path: &str) -> bool {
     matches!(path, "/v1/subscription-pool" | "/v1/plan-usage")
+        || path.starts_with("/v1/subscription-pool/leases")
 }
 
 pub(in crate::core::server) async fn require_model_bearer(

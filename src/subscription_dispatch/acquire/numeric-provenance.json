@@ -2,5 +2,9 @@
   "claude_code_accounts_max": {
     "value": 5,
     "user_said": "okej to maksymalnie niech to bedzie 5 kont na claude code"
+  },
+  "sessions_per_subscription_max": {
+    "value": 5,
+    "user_said": "izolacja: 5 workerow dzieli subskrypcje, nie wiecej"
   }
 }

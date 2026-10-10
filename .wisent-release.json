@@ -25,6 +25,12 @@
       "sha256": "e2239374bb7285f225dc5d09b0ff7cad2ecc365ac54ee2e24609833591ca777e",
       "mount": "echo-web",
       "extract": true
+    },
+    "stado-wait": {
+      "uri": "stado://sources/brama/dependencies/stado-wait/sha256/dadf69ad41d5eb602caff8639a78daf9b9aa2f24c7e874fb43785ea8e0f17b59/source.tar.gz",
+      "sha256": "dadf69ad41d5eb602caff8639a78daf9b9aa2f24c7e874fb43785ea8e0f17b59",
+      "mount": "stado-wait",
+      "extract": true
     }
   },
   "platforms": {

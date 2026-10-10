@@ -33,14 +33,14 @@ pub(super) async fn decide(options: &AcquireOptions) -> Result<Shortage, Box<Val
             json!({}),
         ));
     };
-    if options.trigger == Trigger::Maintenance {
+    if options.trigger != Trigger::Operator {
         if let Some(previous) = unresolved_attempt(provider) {
             return Err(refuse(
                 "previous_acquisition_unresolved",
                 format!(
                     "the last acquisition of a {provider} account (at {}) ended {}: {}; a \
-                     maintenance pass buys nothing until `brama subscription acquire {provider} \
-                     --reason <why>` is run again",
+                     maintenance pass or a full pool of sessions buys nothing until `brama \
+                     subscription acquire {provider} --reason <why>` is run again",
                     previous["at"], previous["result"], previous["detail"]
                 ),
                 json!({"previous": previous}),
@@ -101,7 +101,25 @@ pub(super) async fn decide(options: &AcquireOptions) -> Result<Shortage, Box<Val
         };
         standings.push(row);
     }
-    if !stops.is_empty() {
+    // A pool full of sessions is a shortage of accounts, not of plan: the
+    // operator's limit of sessions per subscription is reached on every
+    // usable member, and the standings are recorded for the verdict without
+    // stopping it. Every other trigger buys only for spent plans.
+    if options.trigger == Trigger::SessionsFull {
+        match super::super::leases::sessions_shortage(provider).await {
+            Ok(Some(_)) => {}
+            Ok(None) => {
+                return Err(refuse(
+                    "sessions_not_full",
+                    format!(
+                        "not every usable {provider} subscription carries the operator's limit of sessions, so none is bought"
+                    ),
+                    json!({"cap": cap, "accounts": accounts, "standings": standings}),
+                ))
+            }
+            Err(detail) => return Err(refuse("leases_unreadable", detail, json!({}))),
+        }
+    } else if !stops.is_empty() {
         return Err(refuse(
             "pool_not_spent",
             format!(

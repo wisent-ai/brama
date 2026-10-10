@@ -9,6 +9,7 @@
 
 mod acquisition;
 pub(crate) mod credentials;
+mod leases;
 mod manual;
 mod membership;
 pub(crate) mod remote;

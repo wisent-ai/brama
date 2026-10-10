@@ -36,6 +36,9 @@ use crate::core::server::media::{
     image_generations, video_generations, video_status,
 };
 use crate::core::server::readiness::{health, readyz};
+use crate::core::server::subscriptions::leases::{
+    list_leases, release_lease, release_leases, take_lease,
+};
 use crate::core::server::subscriptions::probe::{
     acquire_admin_subscription, attribute_admin_subscription_pool, maintain_admin,
     probe_admin_subscription, refresh_admin_subscription_pool,
@@ -126,6 +129,17 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
         // answer is narrowed by the same proof, in place of the four
         // per-audience refreshes that all read this one ledger.
         .route("/v1/plan-usage", post(read_plan_usage))
+        // Leases: which live session runs on which subscription. Taken by
+        // the program that starts a session, released when its terminal
+        // ends; read by the same proof as the pool.
+        .route(
+            "/v1/subscription-pool/leases",
+            get(list_leases).post(take_lease).delete(release_leases),
+        )
+        .route(
+            "/v1/subscription-pool/leases/:lease_id",
+            delete(release_lease),
+        )
         .route(
             "/v1/account/subscription-sign-in/:subscription_id",
             post(sign_in_account_subscription),

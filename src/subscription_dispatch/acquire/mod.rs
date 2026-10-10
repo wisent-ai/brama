@@ -39,11 +39,14 @@ pub const FAILED: &str = "failed";
 const REQUESTED: &str = "requested";
 
 /// Who asked for the acquisition. An operator's request runs even after a
-/// failed attempt; a maintenance pass does not.
+/// failed attempt; a maintenance pass does not. A lease refused because every
+/// usable subscription carries the operator's limit of sessions buys for
+/// that shortage: the plans are not spent, the accounts are.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Trigger {
     Operator,
     Maintenance,
+    SessionsFull,
 }
 
 impl Trigger {
@@ -51,6 +54,7 @@ impl Trigger {
         match self {
             Self::Operator => "operator",
             Self::Maintenance => "maintenance",
+            Self::SessionsFull => "sessions_full",
         }
     }
 }
@@ -81,6 +85,16 @@ pub fn accounts_cap(provider: &str) -> Option<u64> {
     let name = format!("{}_accounts_max", provider.replace('-', "_"));
     STATED
         .get(&name)
+        .and_then(|entry| entry.get("value"))
+        .and_then(Value::as_u64)
+}
+
+/// The most live sessions one subscription carries, as the operator stated
+/// it in `numeric-provenance.json` (`sessions_per_subscription_max`); none
+/// stated, none is shared out and no lease is given.
+pub fn sessions_cap() -> Option<u64> {
+    STATED
+        .get("sessions_per_subscription_max")
         .and_then(|entry| entry.get("value"))
         .and_then(Value::as_u64)
 }
