@@ -77,8 +77,14 @@ pub fn record_discovered_account(
             entry.credential = Some(Credential {
                 state: CredentialState::NeedsReauthorization,
                 cause: Some(
-                    "account discovered; an independent Brama sign-in has not supplied a grant"
-                        .into(),
+                    if crate::subscription_dispatch::sign_in::weles_provider(&observation.provider)
+                        .is_some()
+                    {
+                        "account discovered; an independent Brama sign-in has not supplied a grant"
+                            .into()
+                    } else {
+                        format!("account discovered; provider {} declares no Weles authorization capability, so no independent Brama grant was obtained", observation.provider)
+                    },
                 ),
                 recorded_at_ms: now_ms(),
                 ..Credential::default()

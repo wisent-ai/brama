@@ -38,6 +38,15 @@
         }
       }
     },
+    "zai": {
+      "sessions_per_subscription_max": "sessions_per_subscription_max",
+      "harnesses": {
+        "omp": {
+          "providerWhy": "The public Zai usage report exposes account email and its coding-plan tier without exporting the harness grant.",
+          "provider": "zai"
+        }
+      }
+    },
     "kimi": {
       "weles_provider": "kimi",
       "sessions_per_subscription_max": "sessions_per_subscription_max",

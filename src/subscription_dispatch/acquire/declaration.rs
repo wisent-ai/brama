@@ -26,8 +26,8 @@ pub struct HarnessDeclaration {
 /// Everything Brama reads about one provider.
 #[derive(Clone, Debug, Deserialize)]
 pub struct ProviderDeclaration {
-    /// The provider name Weles's purchase and authorization routes take.
-    pub weles_provider: String,
+    /// The declared Weles purchase and authorization capability, if available.
+    pub weles_provider: Option<String>,
     /// The name of the operator's account cap in numeric-provenance.json.
     pub accounts_max: Option<String>,
     /// The name of the operator's sessions-per-subscription limit there.

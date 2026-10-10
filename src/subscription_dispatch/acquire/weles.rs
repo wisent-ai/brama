@@ -28,7 +28,10 @@ pub(super) struct Exchange {
 
 /// The Weles provider name of a Brama provider, from its declaration.
 fn weles_provider(provider: &str) -> Result<&'static str, String> {
-    super::declaration::provider(provider).map(|declared| declared.weles_provider.as_str())
+    super::declaration::provider(provider)?
+        .weles_provider
+        .as_deref()
+        .ok_or_else(|| format!("provider {provider} declares no Weles account authorization or purchase capability"))
 }
 
 /// Ask Weles to buy one account, correlating the run by `request_id`.

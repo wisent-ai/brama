@@ -26,12 +26,10 @@ pub struct SignInOptions {
 }
 
 pub fn weles_provider(provider: &str) -> Option<&'static str> {
-    match provider.trim() {
-        "claude-code" => Some("claude"),
-        "codex" => Some("codex"),
-        "kimi" => Some("kimi"),
-        _ => None,
-    }
+    super::acquire::declaration::provider(provider.trim())
+        .ok()?
+        .weles_provider
+        .as_deref()
 }
 
 pub fn observed_failure(subscription_id: &str) -> Option<Blocked> {
@@ -63,7 +61,7 @@ pub fn automatic_sign_in_sentence(provider: &str) -> String {
         );
     }
     if weles_provider(provider).is_none() {
-        return format!("automatic sign-in: not available for '{provider}'; its credential is a key somebody has to replace");
+        return format!("automatic sign-in: provider '{provider}' declares no Weles authorization capability; no independent grant was obtained");
     }
     let states: Vec<String> = ids
         .into_iter()
@@ -129,11 +127,8 @@ pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, SignInErr
 
 async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
     let provider = weles_provider(&options.provider).ok_or_else(|| {
-        // Naming what Weles does sign in is the whole value of this refusal:
-        // an operator who typed the wrong provider needs the three that work,
-        // not a restatement of the word they typed.
         SignInError::Dependency(format!(
-            "Weles signs in claude-code, codex and kimi; `{}` is not one of them",
+            "provider '{}' declares no Weles authorization capability",
             options.provider
         ))
     })?;

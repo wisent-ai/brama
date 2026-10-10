@@ -4,6 +4,8 @@
 //! Discovery requires EXPECTED_ACCOUNT, EXPECTED_HARNESS_PROVIDER and EXPECTED_PROVIDER.
 #[path = "discovery/receipt.rs"]
 mod historical_receipt;
+#[path = "discovery/capability.rs"]
+mod metadata_capability;
 #[path = "discovery/claude.rs"]
 mod native_harness;
 #[path = "discovery/sign_in.rs"]
