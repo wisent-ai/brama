@@ -6,6 +6,7 @@ use tracing::{info, warn};
 use crate::core::failure::POINT_MODEL_SELECTION;
 use crate::types::{GatewayRefusal, ModelRequest, ModelResponse, ProviderRefusal};
 
+use super::super::catalogue::cache::discovery_failure;
 use super::super::catalogue::route::provider_for;
 use super::super::refusal::envelope::refuse_as;
 use super::super::rotation::buffered::attempt_subscription;
@@ -36,6 +37,8 @@ struct RankedWalk {
     refusals: Vec<String>,
     classes: Vec<ProviderRefusal>,
     emptied: Vec<String>,
+    /// Every provider at least one candidate route belonged to.
+    candidates: Vec<String>,
 }
 
 impl RankedWalk {
@@ -43,6 +46,13 @@ impl RankedWalk {
     /// everything it holds for this agent.
     fn already_emptied(&self, provider: &str) -> bool {
         self.emptied.iter().any(|seen| seen == provider)
+    }
+
+    /// Note that a route of `provider` was among the candidates.
+    fn candidate(&mut self, provider: &str) {
+        if !self.candidates.iter().any(|seen| seen == provider) {
+            self.candidates.push(provider.to_owned());
+        }
     }
 
     /// Record one refused candidate: its cost, its reason, how long asking it
@@ -100,19 +110,59 @@ impl RankedWalk {
     }
 
     /// The refusal an exhausted candidate list answers with: every provider
-    /// that was walked past, each with the reason it gave, and the number of
-    /// provider attempts that were really made.
-    fn into_failure(self, request: &ModelRequest, context: &str) -> ModelResponse {
-        let message = if self.refusals.is_empty() {
+    /// that was walked past, each with the reason it gave, every member the
+    /// walk never reached because no route of its provider was a candidate,
+    /// each with the reason the pool records, and the number of provider
+    /// attempts that were really made.
+    fn into_failure(self, agent_id: &str, request: &ModelRequest, context: &str) -> ModelResponse {
+        let unreached = unreached(agent_id, &self.candidates);
+        let named = self.refusals.into_iter().chain(unreached).collect::<Vec<_>>();
+        let message = if named.is_empty() {
             context.to_owned()
         } else {
-            format!("{context}; {}", self.refusals.join(", "))
+            format!("{context}; {}", named.join(", "))
         };
         let class = walked_class(&self.classes);
         let mut failure = refuse_as(request, POINT_MODEL_SELECTION, class, message, None);
         failure.attempts = self.attempts;
         failure
     }
+}
+
+/// The members of the routing pool whose provider had no candidate route, each
+/// with why it was not one: its recorded status, its retirement, the ledger's
+/// standing refusal, the last model discovery's refusal, or a discovery that
+/// published no model for it. An exhausted walk used to name only the
+/// providers it walked, so a pool holding accounts of another provider read
+/// as if those accounts had never existed.
+fn unreached(agent_id: &str, walked: &[String]) -> Vec<String> {
+    let entries = match crate::gateway::broker::routing_subscriptions(agent_id) {
+        Ok(entries) => entries,
+        Err(error) => {
+            return vec![format!(
+                "the subscription inventory could not be read to name the members not tried: {error}"
+            )]
+        }
+    };
+    entries
+        .into_iter()
+        .filter(|entry| !walked.iter().any(|provider| provider == entry.provider.trim()))
+        .map(|entry| {
+            let provider = entry.provider.trim();
+            let cause = if entry.status != "active" {
+                format!("its status is {}", entry.status)
+            } else if crate::journal::is_retired(&entry.id) {
+                "it is retired".to_owned()
+            } else if let Some(refused) = crate::subscription_dispatch::usage::standing_refusal(&entry.id) {
+                format!("the ledger refuses it: {}", refused.message)
+            } else if let Some(failure) = discovery_failure(provider, &entry.id) {
+                format!("its model discovery was refused: {failure}")
+            } else {
+                "its model discovery published no model".to_owned()
+            };
+            format!("{} ({provider}) not tried: {cause}", entry.id)
+        })
+        .collect()
 }
 
 /// The class an exhausted walk is answered with, from the classes its
@@ -156,6 +206,7 @@ pub(super) async fn dispatch_ranked_models(
                 .push(format!("{model} refused (unknown provider/model route)"));
             continue;
         };
+        walk.candidate(provider);
         if walk.already_emptied(provider) {
             walk.skipped(&model, provider);
             continue;
@@ -178,7 +229,7 @@ pub(super) async fn dispatch_ranked_models(
             ),
         }
     }
-    walk.into_failure(request, failure_context)
+    walk.into_failure(agent_id, request, failure_context)
 }
 
 /// The streaming counterpart of [`dispatch_ranked_models`]: the first model
@@ -197,6 +248,7 @@ pub(super) async fn dispatch_ranked_models_stream(
                 .push(format!("{model} refused (unknown provider/model route)"));
             continue;
         };
+        walk.candidate(provider);
         if walk.already_emptied(provider) {
             walk.skipped(&model, provider);
             continue;
@@ -219,5 +271,5 @@ pub(super) async fn dispatch_ranked_models_stream(
             ),
         }
     }
-    Err(walk.into_failure(request, failure_context))
+    Err(walk.into_failure(agent_id, request, failure_context))
 }
