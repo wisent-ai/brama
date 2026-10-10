@@ -97,7 +97,7 @@ pub async fn list_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
 /// the trusted boot catalog or a donated overlay.
 pub async fn list_all_subscriptions() -> Result<Vec<SubscriptionEntry>, String> {
     let stdout = raw_listing(&entitlements_router_bin(), "list all subscriptions").await?;
-    Ok(with_recorded_accounts(parse_live_subscriptions(&stdout)?).await)
+    with_recorded_accounts(parse_live_subscriptions(&stdout)?).await
 }
 
 /// Subscriptions the vault holds, completely tagged, that this process was

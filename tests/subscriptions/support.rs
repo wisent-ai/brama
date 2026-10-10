@@ -46,15 +46,23 @@ impl Run {
                 "--json".into(),
             ],
         };
-        run.pool(false);
+        run.snapshot_pool();
         run
     }
 
     pub(super) fn command(&mut self, arguments: &[&str]) -> Output {
+        self.invoke(arguments, true)
+    }
+
+    pub(super) fn standalone(&mut self, arguments: &[&str]) -> Output {
+        self.invoke(arguments, false)
+    }
+
+    fn invoke(&mut self, arguments: &[&str], remote: bool) -> Output {
         let arguments: Vec<_> = arguments
             .iter()
             .map(|arg| (*arg).to_owned())
-            .chain(self.destination.iter().cloned())
+            .chain(self.destination.iter().filter(|_| remote).cloned())
             .collect();
         let mut command = Command::new(&self.binary);
         command.args(&arguments).stdin(Stdio::null());
@@ -67,6 +75,23 @@ impl Run {
         output
     }
 
+    pub(super) fn vault_snapshot(&mut self, label: &str) -> Value {
+        let binary = required("SKARBIEC_BIN");
+        let mut command = Command::new(&binary);
+        command.arg("list").stdin(Stdio::null());
+        let output = stado_wait::output(&mut command).expect("execute real vault inventory");
+        self.report[label] = json!({"command": binary, "arguments": ["list"],
+            "exit_status": output.status.code(), "stdout": String::from_utf8_lossy(&output.stdout),
+            "stderr": String::from_utf8_lossy(&output.stderr)});
+        self.save();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        serde_json::from_slice(&output.stdout).expect("real vault inventory JSON")
+    }
+
     pub(super) fn save(&self) {
         std::fs::write(
             self.directory.join("report.json"),
@@ -75,18 +100,34 @@ impl Run {
         .expect("retain real execution evidence");
     }
 
-    fn pool(&mut self, refresh: bool) -> Value {
+    pub(super) fn pool(&mut self, refresh: bool) -> Value {
+        self.pool_result(refresh, Some(true))
+    }
+
+    pub(super) fn snapshot_pool(&mut self) -> Value {
+        self.pool_result(false, None)
+    }
+
+    fn pool_result(&mut self, refresh: bool, expected_success: Option<bool>) -> Value {
         let output = if refresh {
             self.command(&["subscription", "list", "--refresh-usage"])
         } else {
             self.command(&["subscription", "list"])
         };
-        assert!(
-            output.status.success(),
-            "subscription list refused: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        if let Some(expected_success) = expected_success {
+            assert_eq!(
+                output.status.success(),
+                expected_success,
+                "unexpected subscription list outcome: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
         let report: Value = serde_json::from_slice(&output.stdout).expect("real pool report JSON");
+        assert_eq!(
+            report["ok"].as_bool(),
+            Some(output.status.success()),
+            "pool verdict and CLI exit status disagree"
+        );
         self.report["gateway_build"] = report["build"].clone();
         self.save();
         let revision = report["build"]["source_revision"]
@@ -100,7 +141,19 @@ impl Run {
     }
 
     pub(super) fn member(&mut self, id: &str, refresh: bool) -> Value {
-        let report = self.pool(refresh);
+        self.member_result(id, refresh, Some(true))
+    }
+
+    pub(super) fn refused_member(&mut self, id: &str) -> Value {
+        self.member_result(id, true, Some(false))
+    }
+
+    pub(super) fn snapshot_member(&mut self, id: &str) -> Value {
+        self.member_result(id, false, None)
+    }
+
+    fn member_result(&mut self, id: &str, refresh: bool, expected_success: Option<bool>) -> Value {
+        let report = self.pool_result(refresh, expected_success);
         let mut rows = report["subscriptions"]
             .as_array()
             .expect("pool subscriptions")

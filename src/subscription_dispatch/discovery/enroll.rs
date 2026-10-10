@@ -5,7 +5,10 @@ use crate::gateway::broker;
 use crate::subscription_dispatch::usage;
 use serde_json::{json, Value};
 
+static ENROLLMENT: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 pub async fn enroll(mut report: DiscoveryReport) -> Value {
+    let _enrollment = ENROLLMENT.lock().await;
     let mut pending = match super::pending::Pending::open() {
         Ok(mut pending) => match pending.retain(&report.accounts) {
             Ok(()) => pending,
@@ -28,7 +31,7 @@ pub async fn enroll(mut report: DiscoveryReport) -> Value {
     }
     report.accounts = pending.accounts.clone();
     report.errors.extend(receipts.errors);
-    let members = match broker::list_all_subscriptions().await {
+    let mut members = match broker::list_all_subscriptions().await {
         Ok(members) => members,
         Err(error) => {
             report.errors.push(format!(
@@ -36,6 +39,17 @@ pub async fn enroll(mut report: DiscoveryReport) -> Value {
             ));
             return json!({"ok": false, "accounts": [], "observations": report.accounts, "errors": report.errors});
         }
+    };
+    let removed = if report.errors.is_empty() && !report.accounts.is_empty() {
+        match super::reconciliation::reconcile(&mut members).await {
+            Ok(removed) => removed,
+            Err(error) => {
+                report.errors.push(error);
+                return json!({"ok": false, "reconciliation_failed": true, "accounts": [], "observations": report.accounts, "errors": report.errors});
+            }
+        }
+    } else {
+        Vec::new()
     };
     let mut enrolled = std::collections::BTreeMap::<String, Value>::new();
     let prior_errors = report.errors.len();
@@ -92,7 +106,7 @@ pub async fn enroll(mut report: DiscoveryReport) -> Value {
                 continue;
             }
         }
-        if crate::journal::is_retired(&id) {
+        if crate::journal::is_retired(&id) && !crate::journal::membership_was_removed(&id) {
             report.errors.push(format!(
                 "{id}: retired by its owner; discovery cannot reinstate it"
             ));
@@ -127,6 +141,14 @@ pub async fn enroll(mut report: DiscoveryReport) -> Value {
             Ok(())
         };
         let error = registration.err();
+        if error.is_none() && crate::journal::membership_was_removed(&id) {
+            crate::journal::reinstate(&id);
+            if crate::journal::is_retired(&id) {
+                report.errors.push(format!(
+                    "subscription {id}: replacement membership remains retired after registration"
+                ));
+            }
+        }
         if let Some(error) = &error {
             report
                 .errors
@@ -164,5 +186,5 @@ pub async fn enroll(mut report: DiscoveryReport) -> Value {
             report.errors.push(error);
         }
     }
-    json!({"ok": report.errors.is_empty(), "accounts": enrolled.into_values().collect::<Vec<_>>(), "errors": report.errors})
+    json!({"ok": report.errors.is_empty(), "accounts": enrolled.into_values().collect::<Vec<_>>(), "removed": removed, "errors": report.errors})
 }

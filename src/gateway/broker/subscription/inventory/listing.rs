@@ -83,17 +83,20 @@ pub(super) async fn live_subscriptions(
 /// console, the pool document and the router.
 pub(super) async fn with_recorded_accounts(
     mut entries: Vec<SubscriptionEntry>,
-) -> Vec<SubscriptionEntry> {
+) -> Result<Vec<SubscriptionEntry>, String> {
     for entry in &mut entries {
         if entry.account.is_some() {
             continue;
         }
         let item = format!("provider:{}:{}", slug(&entry.provider), slug(&entry.id));
-        if let Ok(recorded) = existing_item_account(&item).await {
-            entry.account = recorded;
-        }
+        entry.account = existing_item_account(&item).await.map_err(|error| {
+            format!(
+                "read account identity for subscription {} from {item}: {error}",
+                entry.id
+            )
+        })?;
     }
-    entries
+    Ok(entries)
 }
 
 /// Shell the entitlements router's bare `list`, which returns a JSON array of
@@ -103,7 +106,7 @@ pub(super) async fn list_subscriptions_live(
     broker: &str,
 ) -> Result<Vec<SubscriptionEntry>, String> {
     let stdout = raw_listing(broker, "list subscriptions").await?;
-    Ok(with_recorded_accounts(parse_live_subscriptions(&stdout)?).await)
+    with_recorded_accounts(parse_live_subscriptions(&stdout)?).await
 }
 
 pub(super) async fn list_subscriptions_result(

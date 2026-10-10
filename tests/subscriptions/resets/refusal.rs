@@ -15,7 +15,7 @@ fn failed_reset_report_retains_last_offer_and_persists_actual_cause() {
         !expected.trim().is_empty(),
         "a specific observed refusal is required"
     );
-    let before = run.member(&member, false);
+    let before = run.snapshot_member(&member);
     let offer = before["resets"]["offer"]
         .as_object()
         .expect("the real member must already have a provider-observed reset offer");
@@ -26,7 +26,7 @@ fn failed_reset_report_retains_last_offer_and_persists_actual_cause() {
         .as_i64()
         .expect("previous real report attempt");
 
-    let fresh = run.member(&member, true);
+    let fresh = run.refused_member(&member);
     let cause = fresh["resets"]["error"]
         .as_str()
         .expect("the actual reset endpoint must refuse; a healthy report is not this journey");
@@ -45,7 +45,7 @@ fn failed_reset_report_retains_last_offer_and_persists_actual_cause() {
     assert_eq!(fresh["resets"]["offer"], before["resets"]["offer"]);
     assert_eq!(fresh["reset_redemption"], before["reset_redemption"]);
 
-    let persisted = run.member(&member, false);
+    let persisted = run.snapshot_member(&member);
     assert_eq!(persisted["resets"], fresh["resets"]);
     assert_eq!(persisted["reset_redemption"], before["reset_redemption"]);
     run.report["result"] = json!("passed");

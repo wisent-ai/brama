@@ -76,6 +76,26 @@ pub fn retire(item_id: &str) {
     append(json!({"kind": "retire", "id": item_id, "at": now()}));
 }
 
+/// Retain why obsolete membership was removed without retiring its account.
+pub fn remove_membership(item_id: &str) {
+    append(json!({"kind": "membership_removed", "id": item_id, "at": now()}));
+}
+
+/// Only reconciliation tombstones can be replaced by later account discovery.
+pub fn membership_was_removed(item_id: &str) -> bool {
+    read_all()
+        .iter()
+        .rev()
+        .filter(|record| field(record, "id") == item_id)
+        .find(|record| {
+            matches!(
+                field(record, "kind"),
+                "retire" | "reinstate" | "membership_removed"
+            )
+        })
+        .is_some_and(|record| field(record, "kind") == "membership_removed")
+}
+
 /// Take one retirement back, because this deployment uses that account
 /// after all.
 ///
@@ -99,7 +119,7 @@ pub fn is_retired(item_id: &str) -> bool {
         .iter()
         .filter(|record| field(record, "id") == item_id)
         .filter_map(|record| match field(record, "kind") {
-            "retire" => Some(true),
+            "retire" | "membership_removed" => Some(true),
             "reinstate" => Some(false),
             _ => None,
         })

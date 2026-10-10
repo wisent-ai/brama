@@ -9,8 +9,12 @@
 use serde::Deserialize;
 mod discovery;
 pub(in crate::gateway::broker) use discovery::register as register_discovered_account;
+pub(in crate::gateway::broker) use discovery::remove as remove_subscription_item;
 
 use super::router::{entitlements_router_bin, raw_listing, router_output, router_refusal};
+
+// Serialize metadata registration, grant publication and membership removal.
+static MUTATIONS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// One vault item row from the entitlements router's bare `list` command.
 #[derive(Debug, Deserialize)]
@@ -89,6 +93,16 @@ pub(in crate::gateway::broker) async fn put_credential(
     use std::process::Stdio;
     use tokio::io::AsyncWriteExt;
 
+    let _mutation = MUTATIONS.lock().await;
+    if let Some(id) = tags
+        .into_iter()
+        .flatten()
+        .find_map(|tag| tag.strip_prefix("brama:id:"))
+    {
+        if crate::journal::membership_was_removed(id) {
+            return Err(format!("credential publication refused: subscription {id} was removed during reconciliation"));
+        }
+    }
     let stdout = raw_listing(&entitlements_router_bin(), "inspect credential target").await?;
     let items: Vec<VaultListItem> = serde_json::from_slice(&stdout)
         .map_err(|error| format!("decode credential target inventory: {error}"))?;

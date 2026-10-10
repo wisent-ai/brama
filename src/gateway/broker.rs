@@ -50,9 +50,9 @@ pub use subscription::{
     list_unroutable_accounts, owned_subscriptions, policy_unnamed_subscriptions,
     put_donated_credential, put_subscription_credential, put_subscription_credential_for_account,
     record_subscription_account, refresh_routing_subscriptions, refresh_subscription_credential,
-    refresh_subscription_credential_ahead, routing_subscriptions, subscription_account,
-    subscription_tags_for_write, supports_oauth_refresh, DonationRefusal, RefreshAhead,
-    SubscriptionEntry, UnroutableAccount,
+    refresh_subscription_credential_ahead, remove_subscription_item, routing_subscriptions,
+    subscription_account, subscription_tags_for_write, supports_oauth_refresh, DonationRefusal,
+    RefreshAhead, SubscriptionEntry, UnroutableAccount,
 };
 
 /// Fold an identifier into the stable resource alphabet used by deployment

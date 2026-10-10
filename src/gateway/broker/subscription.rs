@@ -42,3 +42,12 @@ pub use tags::{record_subscription_account, subscription_tags_for_write};
 // subscription ids, and the rotation the redemption path forces.
 pub(super) use account::configured_subscription_ids;
 pub(super) use renewal::refresh_subscription_credential_inner;
+
+/// Remove a member's vault items, never its shared provider login.
+pub async fn remove_subscription_item(
+    provider: &str,
+    id: &str,
+    account: Option<&str>,
+) -> Result<(), String> {
+    super::vault::remove_subscription_item(provider, id, account).await
+}

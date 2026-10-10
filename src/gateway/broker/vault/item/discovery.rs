@@ -12,6 +12,7 @@ pub(in crate::gateway::broker) async fn register(
     account: &str,
     metadata: &Value,
 ) -> Result<(), String> {
+    let _mutation = super::MUTATIONS.lock().await;
     let item = crate::gateway::broker::subscription_resource(provider, id);
     let listing = raw_listing(
         &entitlements_router_bin(),
@@ -81,4 +82,72 @@ pub(in crate::gateway::broker) async fn register(
             "Skarbiec did not persist the discovered account identity on {item}"
         )),
     }
+}
+
+/// Remove only this member's tagged vault items, never its provider login.
+pub(in crate::gateway::broker) async fn remove(
+    provider: &str,
+    id: &str,
+    expected_account: Option<&str>,
+) -> Result<(), String> {
+    let _mutation = super::MUTATIONS.lock().await;
+    let listing = raw_listing(&entitlements_router_bin(), "inspect obsolete subscription").await?;
+    let rows: Vec<VaultListItem> = serde_json::from_slice(&listing)
+        .map_err(|error| format!("decode obsolete subscription inventory: {error}"))?;
+    let member_tag = format!("brama:id:{id}");
+    let provider_tag = format!("brama:provider:{provider}");
+    for row in rows
+        .iter()
+        .filter(|row| !row.deleted && row.tags.contains(&member_tag))
+    {
+        if !row.tags.iter().any(|tag| tag == "brama:subscription") {
+            return Err(format!(
+                "refuse subscription removal {id}: vault item {} is not a subscription item",
+                row.id
+            ));
+        }
+        if !row.tags.contains(&provider_tag) {
+            return Err(format!(
+                "refuse subscription removal {id}: vault item {} has a different provider",
+                row.id
+            ));
+        }
+        let tagged = row
+            .tags
+            .iter()
+            .find_map(|tag| tag.strip_prefix("brama:account:"));
+        let recorded = super::existing_item_account(&row.id).await?;
+        let current = recorded.as_deref().or(tagged);
+        let unchanged = match (current, expected_account) {
+            (None, None) => true,
+            (Some(current), Some(expected)) => current.eq_ignore_ascii_case(expected),
+            _ => false,
+        };
+        if !unchanged {
+            return Err(format!(
+                "refuse subscription removal {id}: account identity changed on {}",
+                row.id
+            ));
+        }
+        let output =
+            super::super::router::router_output("remove obsolete subscription item", |command| {
+                command.arg("delete").arg(&row.id);
+            })
+            .await?;
+        if !output.status.success() {
+            return Err(router_refusal("remove obsolete subscription item", &output));
+        }
+    }
+    let listing = raw_listing(&entitlements_router_bin(), "verify subscription removal").await?;
+    let remaining: Vec<VaultListItem> = serde_json::from_slice(&listing)
+        .map_err(|error| format!("decode subscription removal verification: {error}"))?;
+    if remaining
+        .iter()
+        .any(|row| !row.deleted && row.tags.contains(&member_tag))
+    {
+        return Err(format!(
+            "subscription {id}: vault item remains after removal"
+        ));
+    }
+    Ok(())
 }

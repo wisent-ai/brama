@@ -4,6 +4,7 @@ mod enroll;
 pub mod harness;
 mod pending;
 mod receipts;
+mod reconciliation;
 pub use enroll::enroll;
 
 use crate::subscription_dispatch::acquire::declaration;
@@ -47,6 +48,9 @@ pub fn provider_account(provider: &str, account: &str) -> Result<(), String> {
 /// Enrollment and independent-grant renewal share the same local and remote path.
 pub async fn discover(report: harness::DiscoveryReport) -> serde_json::Value {
     let mut answer = enroll(report).await;
+    if answer["reconciliation_failed"].as_bool() == Some(true) {
+        return answer;
+    }
     answer["credentials"] = match super::refresh_sweep::sweep().await {
         Ok(report) => report,
         Err(error) => {

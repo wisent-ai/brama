@@ -261,3 +261,11 @@ pub fn usage_for(subscription_id: &str) -> Option<SubscriptionUsage> {
 pub fn recorded_subscriptions() -> BTreeMap<String, SubscriptionUsage> {
     read_ledger(|ledger| ledger.subscriptions.clone())
 }
+
+/// Remove obsolete membership only after its vault removal has been confirmed.
+pub fn remove_subscription(id: &str) -> Result<(), String> {
+    let (_, error) = write_ledger(|ledger| {
+        ledger.subscriptions.remove(id);
+    });
+    error
+}

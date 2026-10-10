@@ -2,16 +2,22 @@
 //! Journeys require BRAMA, CONSUMER, BEARER_ROLE and GATEWAY_SOURCE_REVISION.
 //! Reset reporting additionally requires MEMBER and EXPECTED_CREDITS.
 //! Discovery requires EXPECTED_ACCOUNT, EXPECTED_HARNESS_PROVIDER and EXPECTED_PROVIDER.
+#[path = "identity/authenticator.rs"]
+mod authenticator_identity;
 #[path = "leases/concurrency.rs"]
 mod concurrent_leases;
 #[path = "discovery/receipt.rs"]
 mod historical_receipt;
+#[path = "discovery/reconciliation/real.rs"]
+mod membership_reconciliation;
 #[path = "discovery/capability.rs"]
 mod metadata_capability;
 #[path = "discovery/claude.rs"]
 mod native_harness;
 #[path = "discovery/pending.rs"]
 mod pending_discovery;
+#[path = "discovery/reconciliation/refusal.rs"]
+mod reconciliation_refusal;
 #[path = "discovery/sign_in.rs"]
 mod remote_sign_in;
 #[path = "resets/refusal.rs"]
