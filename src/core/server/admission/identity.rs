@@ -44,6 +44,27 @@ impl ModelClientIdentity {
             .is_none_or(|models| models.contains(model))
     }
 
+    /// The refusal of `model` to this client: who asked, which model, and
+    /// the models its credential is scoped to.
+    pub(in crate::core::server) fn model_refusal(&self, model: &str) -> String {
+        let mut allowed: Vec<&str> = self
+            .allowed_models
+            .iter()
+            .flatten()
+            .map(String::as_str)
+            .collect();
+        allowed.sort_unstable();
+        format!(
+            "client {} may not use model {model}: its credential is scoped to {}",
+            self.client_id,
+            if allowed.is_empty() {
+                "no model".to_string()
+            } else {
+                allowed.join(", ")
+            }
+        )
+    }
+
     pub(in crate::core::server) fn agent_id(&self) -> Option<&str> {
         match &self.kind {
             ModelClientKind::Workload { agent_id } => agent_id.as_deref(),

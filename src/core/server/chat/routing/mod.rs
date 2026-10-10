@@ -123,7 +123,11 @@ pub(super) async fn route_model_call(
         .await
         .map_err(IntoResponse::into_response)?;
     if !client_identity.authorizes_model(requested_model) && account_agent.is_none() {
-        return Err(api_error(StatusCode::FORBIDDEN, "forbidden").into_response());
+        return Err(api_error(
+            StatusCode::FORBIDDEN,
+            &client_identity.model_refusal(requested_model),
+        )
+        .into_response());
     }
     let task_subscription = task_subscription_selector(requested_model);
     // A session that runs on a leased subscription names it on every request

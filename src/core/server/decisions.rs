@@ -51,7 +51,10 @@ pub(in crate::core::server) async fn decisions(
         ));
     }
     if !client_identity.authorizes_model(&request.model) {
-        return Err(api_error(StatusCode::FORBIDDEN, "forbidden"));
+        return Err(api_error(
+            StatusCode::FORBIDDEN,
+            &client_identity.model_refusal(&request.model),
+        ));
     }
     let Some(route) = aliases.decision_route(&request.model) else {
         let diagnosis = aliases.diagnose(&request.model);

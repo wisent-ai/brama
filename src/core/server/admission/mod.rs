@@ -101,7 +101,11 @@ pub(in crate::core::server) async fn require_model_bearer(
                 .into_response()
             }
             Err(IdentityResolutionError::Forbidden) => {
-                return api_error(StatusCode::FORBIDDEN, "forbidden").into_response()
+                return api_error(
+                    StatusCode::FORBIDDEN,
+                    "the Wisent organization authority does not admit this signed-in user to the organization the X-Wisent-Organization-ID header names",
+                )
+                .into_response()
             }
             Err(IdentityResolutionError::Unauthorized) => {
                 warn!(
@@ -158,14 +162,23 @@ pub(in crate::core::server) async fn require_model_bearer(
             event = "model_scoped_bearer_path_refused",
             "a model-scoped credential may not reach this path"
         );
-        return api_error(StatusCode::FORBIDDEN, "forbidden").into_response();
+        let refusal = format!(
+            "client {} holds a model-scoped credential, which this gateway does not admit to {}: it reaches inference, discovery and subscription capability paths only",
+            identity.client_id,
+            request.uri().path()
+        );
+        return api_error(StatusCode::FORBIDDEN, &refusal).into_response();
     }
     if let Some(agent_id) = identity.agent_id() {
         if has_caller_auth_headers(request.headers())
             && !exact_agent_header(request.headers(), agent_id)
         {
             warn!(client_id = %identity.client_id, agent_id, "bearer identity does not match signed agent");
-            return api_error(StatusCode::FORBIDDEN, "forbidden").into_response();
+            let refusal = format!(
+                "client {} is bound to agent {agent_id}, but the request is signed as another agent",
+                identity.client_id
+            );
+            return api_error(StatusCode::FORBIDDEN, &refusal).into_response();
         }
     }
     if let Some(context) = identity.human_context().cloned() {
@@ -203,12 +216,22 @@ pub(in crate::core::server) async fn authorize_caller(
             warn!(%reason, event = "caller_auth_rejected", "agent authentication refused");
             api_error(StatusCode::UNAUTHORIZED, "unauthorized")
         })?;
-    if client_identity
+    if let Some(bound) = client_identity
         .agent_id()
-        .is_some_and(|bound| bound != caller.as_str())
-        || target_agent_id.is_some_and(|target| target != caller.as_str())
+        .filter(|bound| *bound != caller.as_str())
     {
-        return Err(api_error(StatusCode::FORBIDDEN, "forbidden"));
+        return Err(api_error(
+            StatusCode::FORBIDDEN,
+            &format!(
+                "the request is signed as agent {caller}, but its bearer is bound to agent {bound}"
+            ),
+        ));
+    }
+    if let Some(target) = target_agent_id.filter(|target| *target != caller.as_str()) {
+        return Err(api_error(
+            StatusCode::FORBIDDEN,
+            &format!("agent {caller} signed a request for agent {target}'s resources; an agent acts only for itself"),
+        ));
     }
     Ok(caller)
 }

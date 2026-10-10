@@ -223,7 +223,10 @@ fn library_route(
     produces: &str,
 ) -> Result<String, ApiError> {
     if !client_identity.authorizes_model(requested) {
-        return Err(api_error(StatusCode::FORBIDDEN, "forbidden"));
+        return Err(api_error(
+            StatusCode::FORBIDDEN,
+            &client_identity.model_refusal(requested),
+        ));
     }
     let route = if requested == VOICE_ALIAS {
         aliases.voice_route(requested).ok_or_else(|| {

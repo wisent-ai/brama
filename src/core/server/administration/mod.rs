@@ -25,7 +25,13 @@ pub(in crate::core::server) fn require_brama_desktop(
     if identity.client_id == BRAMA_DESKTOP_CLIENT_ID && identity.allowed_models.is_none() {
         Ok(())
     } else {
-        Err(api_error(StatusCode::FORBIDDEN, "forbidden"))
+        Err(api_error(
+            StatusCode::FORBIDDEN,
+            &format!(
+                "client {} is not the Brama Desktop console with an unrestricted bearer, the only caller this request admits without an agent signature or a signed-in Wisent user",
+                identity.client_id
+            ),
+        ))
     }
 }
 

@@ -202,7 +202,10 @@ async fn media_route(
     shape: Shape,
 ) -> Result<String, ApiError> {
     if !client_identity.authorizes_model(requested) {
-        return Err(api_error(StatusCode::FORBIDDEN, "forbidden"));
+        return Err(api_error(
+            StatusCode::FORBIDDEN,
+            &client_identity.model_refusal(requested),
+        ));
     }
     if requested == shape.alias() {
         let resolved = match shape {

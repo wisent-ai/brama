@@ -10,9 +10,15 @@ use crate::core::server::refusal::{api_error, ApiError};
 pub(in crate::core::server) fn account_agent_id(
     identity: &ModelClientIdentity,
 ) -> Result<String, ApiError> {
-    let context = identity
-        .human_context()
-        .ok_or_else(|| api_error(StatusCode::FORBIDDEN, "forbidden"))?;
+    let context = identity.human_context().ok_or_else(|| {
+        api_error(
+            StatusCode::FORBIDDEN,
+            &format!(
+                "client {} carries no signed-in Wisent user, and this request is answered only for one",
+                identity.client_id
+            ),
+        )
+    })?;
     Ok(format!("user-{}", context.user_id.simple()))
 }
 
