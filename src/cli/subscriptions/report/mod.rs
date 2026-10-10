@@ -68,6 +68,12 @@ pub(super) fn print_accounts(accounts: Option<&Value>) {
 
 /// The same subscription report as the desktop, including partial failures.
 pub(super) fn print_pool(report: &Value) {
+    if let Some(build) = report.get("build") {
+        println!(
+            "pool reporter: {} source={} platform={} built_at={}",
+            build["version"], build["source_revision"], build["platform"], build["built_at"]
+        );
+    }
     let rows: &[Value] = report
         .get("subscriptions")
         .and_then(Value::as_array)

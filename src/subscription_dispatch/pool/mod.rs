@@ -147,6 +147,7 @@ pub(crate) fn document(
     let ok = errors.is_empty();
     json!({
         "ok": ok,
+        "build": crate::build_info::current(),
         "observed_at_ms": observed_at_ms,
         "scope": scope.named(),
         "errors": errors,

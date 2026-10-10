@@ -99,6 +99,17 @@ impl Run {
             String::from_utf8_lossy(&output.stderr)
         );
         let report: Value = serde_json::from_slice(&output.stdout).expect("real pool report JSON");
+        let build = report["build"].clone();
+        let revision = build["source_revision"]
+            .as_str()
+            .expect("responding gateway must identify its source revision");
+        assert_eq!(
+            revision,
+            required("GATEWAY_SOURCE_REVISION"),
+            "the answering gateway does not run the selected qualification revision"
+        );
+        self.report["gateway_build"] = build;
+        self.save();
         let mut rows = report["subscriptions"]
             .as_array()
             .expect("pool subscriptions")
