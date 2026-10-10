@@ -11,28 +11,31 @@ use pool_state::Standing;
 
 /// What the decision found when it chose to buy.
 pub(super) struct Shortage {
+    /// Which shortage it is: `spent` (every account spent its plan),
+    /// `sessions_full` (every usable subscription carries the operator's
+    /// limit of sessions) or `unusable` (no account can serve at all).
+    pub kind: &'static str,
+    /// The shortage as a sentence, with its counts.
+    pub why: String,
     pub cap: u64,
     pub accounts: Vec<String>,
     pub standings: Vec<Value>,
     pub plan_tier: String,
 }
 
-/// Read the cap, the accounts, each account's plan and the plan tier.
-/// `Err` is the refusal that stopped the purchase.
+/// Read the cap, the accounts, each account's plan, the leases and the plan
+/// tier. `Err` is the refusal that stopped the purchase.
 pub(super) async fn decide(options: &AcquireOptions) -> Result<Shortage, Box<Value>> {
     let provider = options.provider.as_str();
     let refuse =
         |code: &str, detail: String, facts: Value| Box::new(refusal(options, code, detail, facts));
-    let Some(cap) = super::accounts_cap(provider) else {
-        return Err(refuse(
+    let cap = super::declaration::accounts_cap(provider).map_err(|detail| {
+        refuse(
             "account_cap_undeclared",
-            format!(
-                "the operator declared no cap on {provider} accounts in Brama's \
-                 numeric-provenance.json, so none is bought"
-            ),
+            format!("{detail}, so none is bought"),
             json!({}),
-        ));
-    };
+        )
+    })?;
     if options.trigger != Trigger::Operator {
         if let Some(previous) = unresolved_attempt(provider) {
             return Err(refuse(
@@ -66,22 +69,15 @@ pub(super) async fn decide(options: &AcquireOptions) -> Result<Shortage, Box<Val
             json!({"cap": cap, "accounts": accounts}),
         ));
     }
-    if members.is_empty() {
-        return Err(refuse(
-            "pool_empty",
-            format!(
-                "the pool holds no {provider} account, so no account can have spent its plan; an \
-                 acquisition adds to a pool whose accounts are all spent"
-            ),
-            json!({"cap": cap, "accounts": accounts}),
-        ));
-    }
+    let mut spent = Vec::new();
     let mut standings = Vec::new();
     let mut stops = Vec::new();
     for member in &members {
         let row = match pool_state::standing(member, provider).await {
-            Standing::Spent { until_ms } => json!({"id": member.id, "account": member.account,
-                "standing": "spent", "until_ms": until_ms}),
+            Standing::Spent { until_ms } => {
+                spent.push(member.id.clone());
+                json!({"id": member.id, "account": member.account, "standing": "spent", "until_ms": until_ms})
+            }
             Standing::Available { used_fraction } => {
                 stops.push(match used_fraction {
                     Some(fraction) => format!(
@@ -93,28 +89,33 @@ pub(super) async fn decide(options: &AcquireOptions) -> Result<Shortage, Box<Val
                 json!({"id": member.id, "account": member.account, "standing": "available",
                     "used_fraction": used_fraction})
             }
-            Standing::Unread { detail } => {
-                stops.push(format!("{} cannot be read: {detail}", member.id));
-                json!({"id": member.id, "account": member.account, "standing": "unread",
-                    "detail": detail})
-            }
+            Standing::Unread { detail } => json!({"id": member.id, "account": member.account,
+                "standing": "unread", "detail": detail}),
         };
         standings.push(row);
     }
+    let facts = || json!({"cap": cap, "accounts": accounts, "standings": standings});
     // A pool full of sessions is a shortage of accounts, not of plan: the
     // operator's limit of sessions per subscription is reached on every
     // usable member, and the standings are recorded for the verdict without
-    // stopping it. Every other trigger buys only for spent plans.
-    if options.trigger == Trigger::SessionsFull {
+    // stopping it. Every other trigger buys when no account has plan left:
+    // each has spent it, or cannot be used at all (unread, or no account).
+    let (kind, why) = if options.trigger == Trigger::SessionsFull {
         match super::super::leases::sessions_shortage(provider).await {
-            Ok(Some(_)) => {}
+            Ok(Some(full)) => (
+                "sessions_full",
+                format!(
+                    "every usable {provider} subscription carries {} sessions, the operator's limit",
+                    full["limit"]
+                ),
+            ),
             Ok(None) => {
                 return Err(refuse(
                     "sessions_not_full",
                     format!(
                         "not every usable {provider} subscription carries the operator's limit of sessions, so none is bought"
                     ),
-                    json!({"cap": cap, "accounts": accounts, "standings": standings}),
+                    facts(),
                 ))
             }
             Err(detail) => return Err(refuse("leases_unreadable", detail, json!({}))),
@@ -126,19 +127,32 @@ pub(super) async fn decide(options: &AcquireOptions) -> Result<Shortage, Box<Val
                 "not every {provider} account has spent its plan, so none is bought: {}",
                 stops.join("; ")
             ),
-            json!({"cap": cap, "accounts": accounts, "standings": standings}),
+            facts(),
         ));
-    }
+    } else if !members.is_empty() && spent.len() == members.len() {
+        (
+            "spent",
+            format!(
+                "every one of the {} {provider} accounts has spent its plan",
+                members.len()
+            ),
+        )
+    } else {
+        (
+            "unusable",
+            format!(
+                "no {provider} account can serve: of {} accounts, {} spent and the rest cannot be read",
+                members.len(),
+                spent.len()
+            ),
+        )
+    };
     let plan_tier = plan::pool_tier(provider, &members)
         .await
-        .map_err(|detail| {
-            refuse(
-                "plan_unstated",
-                detail,
-                json!({"cap": cap, "accounts": accounts, "standings": standings}),
-            )
-        })?;
+        .map_err(|detail| refuse("plan_unstated", detail, facts()))?;
     Ok(Shortage {
+        kind,
+        why,
         cap,
         accounts,
         standings,

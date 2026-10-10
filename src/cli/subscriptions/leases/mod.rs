@@ -23,7 +23,8 @@ struct Released {
 
 #[derive(Deserialize)]
 struct Listed {
-    limit: Option<u64>,
+    limits: BTreeMap<String, u64>,
+    unstated: BTreeMap<String, String>,
     leases: Vec<Lease>,
     counts: BTreeMap<String, u64>,
 }
@@ -197,9 +198,11 @@ pub(crate) async fn list(destination: remote::Destination, json: bool) {
         return;
     }
     let listed: Listed = answered(listed, "lease list");
-    match listed.limit {
-        Some(limit) => println!("limit per subscription: {limit}"),
-        None => println!("limit per subscription: none stated, so no lease is given"),
+    for (provider, limit) in &listed.limits {
+        println!("{provider}: at most {limit} sessions per subscription");
+    }
+    for (provider, refusal) in &listed.unstated {
+        println!("{provider}: no lease is given: {refusal}");
     }
     for lease in &listed.leases {
         print_lease(lease);

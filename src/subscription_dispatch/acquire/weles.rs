@@ -26,13 +26,9 @@ pub(super) struct Exchange {
     pub transport_failure: Option<String>,
 }
 
-/// The Weles provider name for a Brama provider, for the providers Weles
-/// can buy an account of and authorize a harness for.
-pub(super) fn weles_provider(provider: &str) -> Option<&'static str> {
-    match provider {
-        "claude-code" => Some("claude"),
-        _ => None,
-    }
+/// The Weles provider name of a Brama provider, from its declaration.
+fn weles_provider(provider: &str) -> Result<&'static str, String> {
+    super::declaration::provider(provider).map(|declared| declared.weles_provider.as_str())
 }
 
 /// Ask Weles to buy one account of `provider` on `plan_tier`, stored as
@@ -44,9 +40,7 @@ pub(super) async fn purchase(
     reason: &str,
     progress_sink: Option<&Progress>,
 ) -> Result<Exchange, String> {
-    let weles_provider = weles_provider(provider).ok_or_else(|| {
-        format!("Weles buys claude-code accounts; `{provider}` is not one of them")
-    })?;
+    let weles_provider = weles_provider(provider)?;
     exchange(
         "/subscriptions/acquire",
         json!({
@@ -68,9 +62,7 @@ pub(super) async fn authorize(
     authorize_url: &str,
     progress_sink: Option<&Progress>,
 ) -> Result<Exchange, String> {
-    let weles_provider = weles_provider(provider).ok_or_else(|| {
-        format!("Weles authorizes claude-code harnesses; `{provider}` is not one of them")
-    })?;
+    let weles_provider = weles_provider(provider)?;
     exchange(
         "/reauth/authorize",
         json!({
@@ -88,9 +80,7 @@ pub(super) async fn authorize(
 /// subscriptions that did not resolve, with their refusals. A machine without
 /// a vault of its own reads the pool's accounts here.
 pub(super) async fn accounts(provider: &str) -> Result<Value, String> {
-    let weles_provider = weles_provider(provider).ok_or_else(|| {
-        format!("Weles lists claude-code accounts; `{provider}` is not one of them")
-    })?;
+    let weles_provider = weles_provider(provider)?;
     let exchange = exchange(
         "/reauth/accounts",
         json!({ "provider": weles_provider }),

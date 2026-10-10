@@ -24,16 +24,7 @@ pub async fn hand_over(
     harness: Harness,
     progress: Option<&Progress>,
 ) -> Result<Value, String> {
-    let harness_provider = harness.provider_id(provider).ok_or_else(|| {
-        format!(
-            "{} has no account of Brama's provider `{provider}` to sign in; claude-code is \
-             handed to omp as anthropic",
-            harness.name()
-        )
-    })?;
-    weles::weles_provider(provider).ok_or_else(|| {
-        format!("Weles authorizes claude-code harnesses; `{provider}` is not one of them")
-    })?;
+    let harness_provider = harness.provider_id(provider)?;
     let Some(held) = harness::held_accounts(harness, harness_provider).await? else {
         return Ok(json!({
             "provider": provider,

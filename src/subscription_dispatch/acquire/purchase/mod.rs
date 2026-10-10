@@ -23,6 +23,8 @@ pub(super) async fn buy(options: &AcquireOptions, shortage: Shortage) -> Value {
         "provider": provider,
         "reason": options.reason,
         "trigger": options.trigger.name(),
+        "shortage": shortage.kind,
+        "why": shortage.why,
         "cap": shortage.cap,
         "accounts": shortage.accounts,
         "standings": shortage.standings,

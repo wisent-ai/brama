@@ -1,23 +1,33 @@
-//! Buying a new subscription account when every account in the pool has
-//! spent its plan, up to the number of accounts the operator allows.
+//! Buying a new subscription account when the pool cannot serve, up to the
+//! number of accounts the operator allows.
+//!
+//! Every provider is described once, in `providers.json` (`declaration`):
+//! the Weles provider whose purchase trajectory buys an account, the names of
+//! the operator's account cap and sessions-per-subscription limit in
+//! `numeric-provenance.json`, and how each harness takes the provider's
+//! accounts. Nothing else here names a provider; a provider without a
+//! declaration, or a declaration missing a piece, is refused by that piece.
 //!
 //! An acquisition is decided on read facts only (`decide`): the accounts the
 //! vault lists for the provider, each one's plan read fresh from the
-//! provider, and the operator's cap from `numeric-provenance.json` beside
-//! this file. It buys only when every account is spent and the pool holds
-//! fewer accounts than the cap; every other outcome is a refusal that names
-//! the account or the number that stopped it. The plan bought is the plan the
-//! pool's accounts hold, as the provider states it.
+//! provider, the leases its subscriptions carry and the operator's cap. It
+//! buys for one of three shortages — every account has spent its plan, every
+//! usable subscription carries the operator's limit of sessions, or no
+//! account can be used at all — while the pool holds fewer accounts than the
+//! cap; every other outcome is a refusal that names the account or the
+//! number that stopped it. The plan bought is the plan the pool's accounts
+//! hold, as the provider states it.
 //!
 //! Weles does the purchase, Brama proves the new grant with a refresh exactly
 //! as a sign-in is proved (`buy`), and every attempt is journaled when it is
 //! requested and when it ends. A `brama maintain` pass runs the same
-//! decision; after an automatic attempt that failed or never answered, the
-//! pass stops buying until an operator runs the acquisition again, because
-//! each attempt can spend money and the same failure repeated every pass
-//! would spend it again.
+//! decision for every declared provider; after an automatic attempt that
+//! failed or never answered, the pass stops buying until an operator runs the
+//! acquisition again, because each attempt can spend money and the same
+//! failure repeated every pass would spend it again.
 
 mod decide;
+pub mod declaration;
 pub mod hand_over;
 mod purchase;
 mod weles;
@@ -72,41 +82,10 @@ pub struct AcquireOptions {
 static IN_FLIGHT: LazyLock<std::sync::Arc<tokio::sync::Mutex<()>>> =
     LazyLock::new(|| std::sync::Arc::new(tokio::sync::Mutex::new(())));
 
-/// The operator's declared numbers, with his words.
-static STATED: LazyLock<Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("numeric-provenance.json"))
-        .expect("numeric-provenance.json beside the acquisition module is valid JSON")
-});
-
-/// The most accounts of `provider` the operator allows, by its name in
-/// `numeric-provenance.json`; a provider he stated no cap for has none, and
-/// nothing is bought for it.
-pub fn accounts_cap(provider: &str) -> Option<u64> {
-    let name = format!("{}_accounts_max", provider.replace('-', "_"));
-    STATED
-        .get(&name)
-        .and_then(|entry| entry.get("value"))
-        .and_then(Value::as_u64)
-}
-
-/// The most live sessions one subscription carries, as the operator stated
-/// it in `numeric-provenance.json` (`sessions_per_subscription_max`); none
-/// stated, none is shared out and no lease is given.
-pub fn sessions_cap() -> Option<u64> {
-    STATED
-        .get("sessions_per_subscription_max")
-        .and_then(|entry| entry.get("value"))
-        .and_then(Value::as_u64)
-}
-
-/// The providers an acquisition can run for: Weles buys their accounts and
-/// the operator declared a cap for them.
+/// Every declared provider, in name order: the providers a maintenance pass
+/// decides for.
 pub fn acquirable_providers() -> Vec<&'static str> {
-    ["claude-code"]
-        .into_iter()
-        .filter(|provider| weles::weles_provider(provider).is_some())
-        .filter(|provider| accounts_cap(provider).is_some())
-        .collect()
+    declaration::declared_providers()
 }
 
 /// Decide, and when every condition holds, buy one account and prove it.
@@ -143,7 +122,7 @@ pub async fn maintenance_pass() -> Value {
     for provider in acquirable_providers() {
         let options = AcquireOptions {
             provider: provider.to_owned(),
-            reason: format!("every {provider} account in the pool has spent its plan"),
+            reason: format!("no {provider} account in the pool can serve: each has spent its plan or cannot be used"),
             trigger: Trigger::Maintenance,
             progress: Some(std::sync::Arc::new(move |event: &Value| {
                 if let Some(sentence) =
@@ -168,12 +147,11 @@ pub async fn maintenance_pass() -> Value {
                 verdicts.push(json!({
                     "provider": provider, "result": "started", "code": "purchase_started",
                     "detail": format!(
-                        "every one of the {} {provider} accounts has spent its plan and the \
-                         operator allows {}; Weles is buying one on plan {}, and the verdict is \
-                         journaled and logged when it ends",
-                        shortage.accounts.len(), shortage.cap, shortage.plan_tier
+                        "{}, and the operator allows {}; Weles is buying one on plan {}, and the \
+                         verdict is journaled and logged when it ends",
+                        shortage.why, shortage.cap, shortage.plan_tier
                     ),
-                    "trigger": options.trigger.name(),
+                    "trigger": options.trigger.name(), "shortage": shortage.kind,
                     "cap": shortage.cap, "accounts": shortage.accounts,
                     "standings": shortage.standings, "plan_tier": shortage.plan_tier,
                 }));
@@ -198,12 +176,7 @@ pub async fn maintenance_pass() -> Value {
 }
 
 fn validate(options: &AcquireOptions) -> Result<(), String> {
-    if weles::weles_provider(&options.provider).is_none() {
-        return Err(format!(
-            "Weles buys claude-code accounts; `{}` is not one of them",
-            options.provider
-        ));
-    }
+    declaration::provider(&options.provider)?;
     if options.reason.trim().is_empty() {
         return Err("--reason must say why an account is being bought".to_string());
     }

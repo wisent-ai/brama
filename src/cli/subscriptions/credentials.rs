@@ -175,7 +175,7 @@ pub(crate) enum SubscriptionCommand {
         group(ArgGroup::new("destination").args(["gateway", "gateway_consumer"]))
     )]
     Acquire {
-        /// The provider to buy an account of (`claude-code`)
+        /// The provider to buy an account of: one src/subscription_dispatch/acquire/providers.json declares
         provider: String,
         /// Why an account is being bought; recorded in the journal beside the verdict
         #[arg(long, value_parser = NonEmptyStringValueParser::new())]
@@ -199,7 +199,7 @@ pub(crate) enum SubscriptionCommand {
     /// credential import, then marked as handed over in the vault
     #[command(name = "hand-over")]
     HandOver {
-        /// The provider whose bought accounts are handed over (`claude-code`)
+        /// The provider whose bought accounts are handed over: one providers.json declares for the harness
         provider: String,
         /// The harness to sign in (`omp`)
         #[arg(long, value_enum)]

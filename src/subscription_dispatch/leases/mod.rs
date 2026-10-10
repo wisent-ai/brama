@@ -35,9 +35,9 @@ pub use register::{live, Lease};
 pub enum Refused {
     /// The caller named no provider, no session or no holder.
     Incomplete { detail: String },
-    /// The operator declared no session limit for this provider, so nothing
-    /// can be shared out.
-    LimitUnstated { provider: String },
+    /// The provider has no declaration, or its declaration names no session
+    /// limit the operator stated, so nothing can be shared out.
+    LimitUnstated { detail: String },
     /// The pool holds no usable member of this provider: each is named with
     /// what the ledger holds against it.
     NoUsableMember {
@@ -59,9 +59,7 @@ impl Refused {
     pub fn detail(&self) -> String {
         match self {
             Self::Incomplete { detail } => detail.clone(),
-            Self::LimitUnstated { provider } => format!(
-                "the operator declared no sessions_per_subscription_max for {provider} in Brama's numeric-provenance.json, so no lease can be shared out"
-            ),
+            Self::LimitUnstated { detail } => format!("{detail}, so no lease can be shared out"),
             Self::NoUsableMember { provider, members } => format!(
                 "the pool holds no usable {provider} member: {}",
                 members
@@ -182,11 +180,8 @@ pub async fn take(request: &Request) -> Result<Taken, Refused> {
             detail: "a lease names its provider, the session_id that will run on it and the holder (the program that started the session)".to_string(),
         });
     }
-    let Some(limit) = crate::subscription_dispatch::acquire::sessions_cap() else {
-        return Err(Refused::LimitUnstated {
-            provider: provider.to_string(),
-        });
-    };
+    let limit = crate::subscription_dispatch::acquire::declaration::sessions_cap(provider)
+        .map_err(|detail| Refused::LimitUnstated { detail })?;
     let entries = broker::list_all_subscriptions()
         .await
         .map_err(|error| Refused::Unavailable {
@@ -275,9 +270,7 @@ pub fn counts() -> Result<BTreeMap<String, u64>, String> {
 /// Whether every usable member of `provider` carries the operator's limit:
 /// the shortage an acquisition buys for. `Ok(None)` when it is not.
 pub async fn sessions_shortage(provider: &str) -> Result<Option<Value>, String> {
-    let Some(limit) = crate::subscription_dispatch::acquire::sessions_cap() else {
-        return Ok(None);
-    };
+    let limit = crate::subscription_dispatch::acquire::declaration::sessions_cap(provider)?;
     let entries = broker::list_all_subscriptions().await.map_err(|error| {
         format!("the Skarbiec subscription inventory could not be read: {error}")
     })?;

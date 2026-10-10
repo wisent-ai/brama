@@ -24,10 +24,10 @@
 <pre><code class="language-console">brama subscription lease list (--gateway &lt;ORIGIN&gt; | --gateway-consumer &lt;NAME&gt;) [--bearer-role &lt;ROLE&gt;] [--json]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>--gateway &lt;ORIGIN&gt;</code> or <code>--gateway-consumer &lt;NAME&gt;</code></td><td>one required</td><td>The gateway that holds the pool (<code>GET /v1/subscription-pool/leases</code>). The console bearer is read from stdin, or from the vault item playing <code>--bearer-role</code>.</td></tr>
-<tr><td><code>--json</code></td><td>optional; off</td><td>Print <code>{limit, leases: [lease...], counts: {subscription_id: n}}</code> instead of lines.</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td>Print <code>{limits: {provider: n}, unstated: {provider: refusal}, leases: [lease...], counts: {subscription_id: n}}</code> instead of lines.</td></tr>
 </tbody></table>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
-<p><code>limit per subscription: &lt;n&gt;</code> (or <code>none stated, so no lease is given</code>), one line per live lease, then <code>&lt;subscription&gt; carries &lt;n&gt;</code> per subscription with a lease. Nothing is written.</p>
+<p><code>&lt;provider&gt;: at most &lt;n&gt; sessions per subscription</code> for each provider <code>src/subscription_dispatch/acquire/providers.json</code> declares with a stated limit, <code>&lt;provider&gt;: no lease is given: &lt;refusal&gt;</code> for each whose limit is not stated, one line per live lease, then <code>&lt;subscription&gt; carries &lt;n&gt;</code> per subscription with a lease. Nothing is written.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <p>A gateway refusal exits 1 and prints its error document: <code>503</code> with the cause when the register cannot be read. Without a gateway: <code>a lease lives on the gateway that holds the pool: name --gateway or --gateway-consumer</code>.</p>
 <p>The real test is <code>tests/subscriptions/leases.sh</code>. See <a href="/docs/cli/subscription">the command group</a> or <a href="/docs/cli">the CLI tree</a>.</p></article>

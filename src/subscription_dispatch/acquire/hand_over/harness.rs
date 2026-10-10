@@ -28,12 +28,12 @@ impl Harness {
         }
     }
 
-    /// The harness's own id for a Brama provider.
-    pub(super) fn provider_id(self, provider: &str) -> Option<&'static str> {
-        match (self, provider) {
-            (Self::Omp, "claude-code") => Some("anthropic"),
-            _ => None,
-        }
+    /// The harness's own id for a Brama provider, from the provider's
+    /// declaration; a provider not declared for this harness is refused by
+    /// what is missing.
+    pub(super) fn provider_id(self, provider: &str) -> Result<&'static str, String> {
+        super::super::declaration::harness(provider, self.name())
+            .map(|declared| declared.provider.as_str())
     }
 }
 

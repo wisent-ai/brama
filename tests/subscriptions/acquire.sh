@@ -3,13 +3,16 @@
 # built `brama` against the serving gateway, Weles and the provider. It is
 # billable when the pool is spent: then the gateway buys a real account.
 #
-# First the refusals Brama makes before asking anyone: a provider Weles does
-# not buy. Then one acquisition on the gateway. Its verdict is checked against
-# the state it names: `acquired` must leave a new member in the pool that the
-# hand-over then signs into omp and `omp usage accounts` lists; `refused` must
-# name the account or number that stopped it (an account with plan left or
-# unread, or the cap with every account counted). Last, the hand-over itself:
-# every pool account must end held by omp or named as failed with its reason.
+# First the refusals Brama makes before asking anyone: a provider
+# providers.json does not declare, named with the providers it does, and a
+# hand-over to a harness the declaration names no mapping for. Then one
+# acquisition on the gateway. Its verdict is checked against the state it
+# names: `acquired` must leave a new member in the pool that the hand-over
+# then signs into omp and `omp usage accounts` lists, and say which shortage
+# it bought for (spent, sessions_full or unusable); `refused` must name the
+# account or number that stopped it (an account with plan left, or the cap
+# with every account counted). Last, the hand-over itself: every pool account
+# must end held by omp or named as failed with its reason.
 # Every command, its outcome and its answer go to the run's report.txt.
 #
 # Usage: BRAMA=target/release/brama CONSUMER=<directory consumer> BEARER_ROLE=<console bearer role> \
@@ -43,10 +46,21 @@ field() {
   jq -r "$2" "$ROOT/$1.json"
 }
 
-run other-provider subscription acquire codex --reason "real test: refused provider" --json
-[ "$outcome" = refused ] || fail "an acquisition of codex was accepted"
-grep -q "Weles buys claude-code accounts" "$ROOT/other-provider.stderr" ||
-  fail "the codex refusal did not name the provider Weles buys"
+run undeclared subscription acquire nonexistent-provider --reason "real test: refused provider" --json
+[ "$outcome" = refused ] || fail "an acquisition of an undeclared provider was accepted"
+grep -q "providers.json declares no subscription provider \`nonexistent-provider\`; it declares claude-code" "$ROOT/undeclared.stderr" ||
+  fail "the refusal did not name the missing declaration and the declared providers"
+
+run uncapped subscription acquire codex --reason "real test: a provider declared without a purchase cap" --json
+[ "$outcome" = refused ] || fail "an acquisition of a provider without a declared cap was accepted"
+[ "$(field uncapped .code)" = account_cap_undeclared ] || fail "the uncapped refusal is not account_cap_undeclared"
+field uncapped .detail | grep -q "has not authorized account purchases for codex" ||
+  fail "the uncapped refusal did not say no purchase is authorized for codex"
+
+run other-harness subscription hand-over nonexistent-provider --harness omp --json
+[ "$outcome" = refused ] || fail "a hand-over of an undeclared provider was accepted"
+grep -q "declares no subscription provider \`nonexistent-provider\`" "$ROOT/other-harness.stderr" ||
+  fail "the hand-over refusal did not name the missing declaration"
 
 run acquire subscription acquire claude-code --gateway-consumer "$CONSUMER" --bearer-role "$BEARER_ROLE" \
   --reason "real test of automatic account acquisition" --json
@@ -58,6 +72,8 @@ case "$result" in
     [ "$outcome" = accepted ] || fail "an acquired verdict exited unsuccessfully"
     id=$(field acquire .subscription_id)
     account=$(field acquire .account)
+    shortage=$(field acquire .shortage)
+    case "$shortage" in spent | sessions_full | unusable) ;; *) fail "the acquisition named no shortage: $shortage" ;; esac
     run list subscription list --gateway-consumer "$CONSUMER" --bearer-role "$BEARER_ROLE" --json
     jq -e --arg id "$id" '[.. | objects | select(.subscription_id? == $id or .id? == $id)] | any' \
       "$ROOT/list.json" >/dev/null || fail "the bought member $id is not in the gateway's pool"
@@ -66,8 +82,8 @@ case "$result" in
     [ "$outcome" = refused ] || fail "a refused verdict exited successfully"
     case "$code" in
       pool_not_spent)
-        jq -e '[.standings[] | select(.standing != "spent")] | any' "$ROOT/acquire.json" >/dev/null ||
-          fail "pool_not_spent named no account with plan left or unread"
+        jq -e '[.standings[] | select(.standing == "available")] | any' "$ROOT/acquire.json" >/dev/null ||
+          fail "pool_not_spent named no account with plan left"
         ;;
       account_cap_reached)
         jq -e '(.accounts | length) >= .cap' "$ROOT/acquire.json" >/dev/null ||

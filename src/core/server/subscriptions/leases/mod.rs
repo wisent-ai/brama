@@ -10,12 +10,16 @@ use serde_json::{json, Value};
 
 use crate::core::server::admission::identity::ModelClientIdentity;
 use crate::core::server::refusal::{api_error, api_error_with_details, ApiError};
-use crate::subscription_dispatch::acquire::{acquire_account, AcquireOptions, Trigger};
+use crate::subscription_dispatch::acquire::{
+    acquire_account, declaration, AcquireOptions, Trigger,
+};
 use crate::subscription_dispatch::leases;
 
 use super::subscription_pool_scope;
 
-/// Every live lease, with the sessions each subscription carries.
+/// Every live lease, with the sessions each subscription carries and each
+/// declared provider's limit: `limits` holds the stated ones, `unstated`
+/// the refusal of each provider whose declaration states none.
 pub(in crate::core::server) async fn list_leases(
     Extension(client_identity): Extension<ModelClientIdentity>,
     headers: HeaderMap,
@@ -25,8 +29,17 @@ pub(in crate::core::server) async fn list_leases(
         leases::live().map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?;
     let counts =
         leases::counts().map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?;
+    let mut limits = serde_json::Map::new();
+    let mut unstated = serde_json::Map::new();
+    for provider in declaration::declared_providers() {
+        match declaration::sessions_cap(provider) {
+            Ok(limit) => limits.insert(provider.to_string(), json!(limit)),
+            Err(detail) => unstated.insert(provider.to_string(), json!(detail)),
+        };
+    }
     Ok(Json(json!({
-        "limit": crate::subscription_dispatch::acquire::sessions_cap(),
+        "limits": limits,
+        "unstated": unstated,
         "leases": live,
         "counts": counts,
     })))

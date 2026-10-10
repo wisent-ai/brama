@@ -1,0 +1,38 @@
+{
+  "why": "One declaration per subscription provider is everything Brama needs to buy, prove, hand over and lease its accounts: the Weles provider whose declared purchase trajectory buys one, the names in numeric-provenance.json of the operator's account cap and of how many sessions may share one subscription, and for each coding-agent harness the harness's own name for the provider and the model a session on that provider starts on. A provider absent here, or missing any of these, is refused by the missing piece; nothing else in Brama names a provider.",
+  "providers": {
+    "claude-code": {
+      "weles_provider": "claude",
+      "accounts_max": "claude_code_accounts_max",
+      "sessions_per_subscription_max": "sessions_per_subscription_max",
+      "harnesses": {
+        "omp": {
+          "providerWhy": "omp names Anthropic's subscription accounts `anthropic` (omp login anthropic, omp usage accounts).",
+          "provider": "anthropic",
+          "modelWhy": "omp resolves `--model anthropic/opus` by fuzzy match to the newest Opus its catalog lists, the model the coding-agent sessions on claude-code subscriptions run on.",
+          "model": "anthropic/opus"
+        }
+      }
+    },
+    "codex": {
+      "weles_provider": "codex",
+      "sessions_per_subscription_max": "sessions_per_subscription_max",
+      "harnesses": {
+        "omp": {
+          "providerWhy": "The public usage report identifies Codex subscriptions as openai-codex.",
+          "provider": "openai-codex"
+        }
+      }
+    },
+    "kimi": {
+      "weles_provider": "kimi",
+      "sessions_per_subscription_max": "sessions_per_subscription_max",
+      "harnesses": {
+        "omp": {
+          "providerWhy": "The public usage report identifies Kimi subscriptions as kimi-code.",
+          "provider": "kimi-code"
+        }
+      }
+    }
+  }
+}
