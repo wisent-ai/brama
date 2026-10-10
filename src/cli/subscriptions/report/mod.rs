@@ -115,6 +115,10 @@ pub(super) fn print_pool(report: &Value) {
             }
         }
         if let Some(resets) = row.get("resets").filter(|value| value.is_object()) {
+            println!(
+                "    saved resets checked: {}",
+                instant(resets.get("attempted_at_ms"))
+            );
             if let Some(error) = text(resets, "error") {
                 println!("    saved resets report failed: {error}");
             }
@@ -124,6 +128,9 @@ pub(super) fn print_pool(report: &Value) {
                     offer["available_count"],
                     instant(offer.get("observed_at_ms"))
                 );
+                if let Some(reason) = text(offer, "reason") {
+                    println!("    saved resets eligibility: {reason}");
+                }
                 if let Some(credits) = offer.get("credits").and_then(Value::as_array) {
                     for credit in credits {
                         println!(
