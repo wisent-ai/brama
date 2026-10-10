@@ -46,8 +46,18 @@ fn saved_reset_report_persists_without_consumption() {
         .as_i64()
         .expect("recorded read attempt");
     assert!(observed <= attempted);
+    if let Some(previous) = before["resets"]["attempted_at_ms"].as_i64() {
+        assert!(
+            attempted > previous,
+            "remote usage refresh returned the previous reset observation"
+        );
+    }
     let persisted = run.member(&member, false);
     assert_eq!(&persisted["resets"]["offer"], offer);
+    assert_eq!(
+        persisted["resets"]["attempted_at_ms"], fresh["resets"]["attempted_at_ms"],
+        "remote reset report attempt was not retained on the serving gateway"
+    );
     assert_eq!(persisted["reset_redemption"], before["reset_redemption"]);
     let provider = fresh["provider"].as_str().expect("member provider");
     let missing = run.command(&["subscription", "reset", provider, "--member", &member]);

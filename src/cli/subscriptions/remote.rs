@@ -1,9 +1,9 @@
 //! Reading and administering the pool of a gateway that runs somewhere else.
 //!
 //! The gateway an operator asks about is usually not this process: it runs on
-//! the fleet's host and this is a workstation. Reading its pool, and giving
-//! back a member it should not hold, are the two things that may cross
-//! machines, because neither hands a credential to anybody. Handing a grant
+//! the fleet's host and this is a workstation. Pool reads, usage refreshes and
+//! membership operations run on that gateway without handing credentials
+//! to the workstation. Handing a grant
 //! over is not a capability of this product: a provider issues one OAuth pair
 //! per sign-in and revokes it when a second holder refreshes, so a gateway
 //! signs itself in rather than taking a pair from a machine already using it.
@@ -12,6 +12,8 @@ use serde_json::{json, Value};
 use zeroize::Zeroizing;
 
 use super::unattended;
+
+pub(crate) mod pool;
 
 const HTTP_SUCCESS: std::ops::Range<u16> = 200..300;
 
@@ -78,31 +80,6 @@ fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .build()
         .map_err(|error| format!("gateway client: {error}"))
-}
-
-/// One gateway's pool, as it reports it.
-pub(crate) async fn pool_report(gateway: &str, bearer: &str) -> Result<Value, String> {
-    let response = client()?
-        .get(format!(
-            "{}/v1/subscription-pool",
-            gateway.trim_end_matches('/')
-        ))
-        .bearer_auth(bearer)
-        .send()
-        .await
-        .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
-    let status = response.status().as_u16();
-    let body: Value = response
-        .json()
-        .await
-        .map_err(|error| format!("the gateway's pool report is not JSON: {error}"))?;
-    if !HTTP_SUCCESS.contains(&status) {
-        return Err(format!(
-            "the gateway refused the pool report with HTTP {status}: {}",
-            refusal(&body)
-        ));
-    }
-    Ok(body)
 }
 
 /// Give one member back: the gateway retires it and forgets its credential.

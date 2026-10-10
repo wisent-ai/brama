@@ -115,15 +115,8 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
 /// Read one gateway's own pool report and print it exactly as the local one
 /// is printed.
 ///
-/// Usage reports are the gateway's to fetch, so `--refresh-usage` is refused
-/// here by name rather than answered with a report that did not do it.
+/// Usage refresh runs on the selected gateway through its plan-usage capability.
 async fn remote_report(destination: remote::Destination, refresh_usage: bool, json: bool) {
-    if refresh_usage {
-        eprintln!(
-            "--refresh-usage reads providers from the gateway that holds the credentials; run it there, or read this gateway's recorded pool without it"
-        );
-        std::process::exit(1);
-    }
     let mut stdin_bearer = zeroize::Zeroizing::new(String::new());
     if destination.bearer_role.is_none() {
         if let Err(error) = std::io::Read::read_to_string(&mut std::io::stdin(), &mut stdin_bearer)
@@ -143,7 +136,7 @@ async fn remote_report(destination: remote::Destination, refresh_usage: bool, js
         eprintln!("name --gateway or --gateway-consumer to read another gateway's pool");
         std::process::exit(1);
     };
-    let report = match remote::pool_report(&origin, bearer.trim()).await {
+    let report = match remote::pool::report(&origin, bearer.trim(), refresh_usage).await {
         Ok(report) => report,
         Err(error) => {
             eprintln!("{error}");

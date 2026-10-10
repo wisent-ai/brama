@@ -66,7 +66,7 @@ async fn on_gateway(gateway: &str, bearer: &str, options: &SignInOptions) -> Res
         stado_wait::Kind::Network,
         "read selected subscription before sign-in",
         gateway,
-        remote::pool_report(gateway, bearer),
+        remote::pool::report(gateway, bearer, false),
     )
     .await?;
     let rows = pool["subscriptions"]
