@@ -18,7 +18,7 @@ use super::super::credential::auth_failure::{
 use super::super::ranking::pin::pin_credential;
 use super::super::refusal::envelope::remember_failure;
 use super::super::routed_stream::{spawn_stream_recorder, RoutedStream};
-use super::roster::{max_credential_attempts, ordered_candidate_rows};
+use super::roster::ordered_candidate_rows;
 use super::verdict::{emptied_pool_refusal, PoolObservations};
 use super::RouteAttempt;
 
@@ -56,7 +56,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
     // get two different answers.
     let mut earliest_block_lifts: Option<i64> = None;
     let mut rate_limit_failure = None;
-    for (index, entry) in rows.iter().take(max_credential_attempts()).enumerate() {
+    for (index, entry) in rows.iter().enumerate() {
         let credential_id = &entry.id;
         if usage::is_blocked(credential_id) {
             let reauthorization = usage::needs_reauthorization(credential_id);

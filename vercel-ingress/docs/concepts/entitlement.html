@@ -85,11 +85,11 @@ subscription.</p>
 <a href="/docs/core/state-and-failures">core request contract</a>:</p>
 <ul>
 <li>a direct route: one attempt;</li>
-<li>an explicit subscription route: at most <strong>2</strong> eligible credentials
-  (<code>max_credential_attempts</code>);</li>
-<li>a selector walks its ordered model candidates, trying at most two eligible
-  credentials per route; a refusal that never reached a provider spends no
-  provider attempt;</li>
+<li>an explicit subscription route walks its finite eligible credential list
+  until a provider serves the request or a non-rotatable refusal stops it;</li>
+<li>a selector walks its ordered model candidates and each route's eligible
+  credentials; a recorded block spends no provider attempt, but contributes
+  its actual cause to the final refusal;</li>
 <li>a provider whose whole pool emptied is skipped for its remaining
   candidates and named once, not twice;</li>
 <li>elapsed time alone does not stop a request.</li>

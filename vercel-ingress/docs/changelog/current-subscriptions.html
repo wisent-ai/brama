@@ -151,20 +151,14 @@ the one the login item lacks — on this fleet, an authenticator seed, which
 <code>stado credentials seed-freshness</code> reports as <code>seed_field_empty</code> for every Claude,
 Codex and Kimi login. 0.4.28.</p>
 
-<h2 id="unreleased-blocked-rows-last">Unreleased: a live account behind burnt ones is still tried<a class="headerlink" href="#unreleased-blocked-rows-last" title="Link to this section">&para;</a></h2>
-<p>The walk takes at most two credentials per route, and took the first two rows of the
-ordered list before skipping the blocked ones among them. A burnt subscription has no plan
-reading, and no reading sorts as the freest plan, so a pool could hold live Claude accounts
-behind burnt ones while every <code>best</code> call for
-<code>oko</code> spent both attempts on burnt rows, walked nothing, and was refused
-<code>all bounded 'claude-code' credentials were rejected by the provider; re-authorization
-required</code> with <code>attempts: 0</code> — the live accounts were never asked, and the
-operator's question was why Brama does not rotate across the accounts it holds. A credential
-inside a recorded block is now ordered after every live row, so the attempts are spent on rows
-that can be asked; the blocked rows stay in the list, after the live ones, so a pool with nothing
-but blocks still reports the block it is inside. <code>tests/routing/blocked_rows_last_contract</code>
-drives the real gateway over a real vault: two accounts burn on the first request, a third is
-banked, and the next request has to reach it. 0.4.26.</p>
+<h2 id="unreleased-blocked-rows-last">Unreleased: traverse every eligible subscription<a class="headerlink" href="#unreleased-blocked-rows-last" title="Link to this section">&para;</a></h2>
+<p>Buffered and streaming requests no longer stop at a fixed prefix of the
+eligible credential list. Unblocked accounts remain first; every skipped
+blocked account contributes its recorded refusal and reset to the exhausted
+pool result. A rate-limited account later in the list is therefore not hidden
+behind earlier authorization failures. Explicit billing targets still select
+only the named credential. Rotation stops after a successful response, a
+non-rotatable provider refusal or the first committed stream byte.</p>
 
 <h2 id="unreleased-interim-readiness">Unreleased: a gateway that has obtained one direct credential says so before the subscription sweep ends<a class="headerlink" href="#unreleased-interim-readiness" title="Link to this section">&para;</a></h2>
 <p>The readiness sweep has two halves: one capability per direct provider, then every

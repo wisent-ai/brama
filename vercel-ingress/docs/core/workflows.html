@@ -146,8 +146,9 @@ order, within the bounds below.</p>
 <h3 id="any"><code>any</code><a class="headerlink" href="#any" title="Link to this section">&para;</a></h3>
 <p>Select active agent-owned stateless routes, order them by the freest usable
 subscription behind each route, randomize exact ties, and try every model
-candidate in that order. Each candidate may try at most two credentials; the
-routes of a provider whose whole pool refused are skipped unasked.</p>
+candidate in that order. Each candidate walks its eligible credentials until
+served or refused without rotation; routes of a provider whose whole pool
+refused are skipped unasked.</p>
 <h3 id="any-vision-capable"><code>any-vision-capable</code><a class="headerlink" href="#any-vision-capable" title="Link to this section">&para;</a></h3>
 <p>Apply the <code>any</code> contract after filtering to catalog models whose input
 modalities include <code>image</code>.</p>

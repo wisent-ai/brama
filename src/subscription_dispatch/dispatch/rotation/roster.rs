@@ -11,10 +11,6 @@ use super::super::ranking::pin::apply_pin;
 use super::super::refusal::envelope::refuse;
 use super::super::refusal::pool_empty::no_active_credential_summary;
 
-pub(super) fn max_credential_attempts() -> usize {
-    2
-}
-
 /// The accounts one route may rotate across, already ordered.
 ///
 /// The buffered and streaming paths reach this list identically, and the
@@ -77,8 +73,8 @@ pub(super) async fn ordered_candidate_rows(
 
     // Freest plan first, the ledger's own numbers rather than list order; the
     // agent's pinned credential then leads unless its window says it is full.
-    // Both are reorderings of the same bounded list -- the attempt cap is
-    // untouched, and an explicit billing target has one row to reorder.
+    // Both reorder the same eligible list; an explicit billing target has
+    // only its selected row to reorder.
     rows.sort_by(|left, right| {
         usage::used_fraction(&left.id)
             .unwrap_or(0.0)
@@ -86,17 +82,8 @@ pub(super) async fn ordered_candidate_rows(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     apply_pin(&mut rows, agent_id, provider);
-    // A credential inside a recorded block is walked last. The walk takes the
-    // first `max_credential_attempts` rows and skips the blocked ones among
-    // them without asking a provider, so a blocked row at the front spends
-    // an attempt a live row could have used. A burnt subscription has no
-    // plan reading, and no reading sorts as the freest plan: with live
-    // accounts behind burnt ones, every `best` call takes the burnt rows,
-    // walks nothing, and is refused `all bounded credentials were rejected
-    // by the provider; re-authorization required` with `attempts: 0` while
-    // the live accounts are never tried. The blocked rows stay in the list, after
-    // the live ones, so a pool with nothing but blocks still reports the
-    // block it is inside.
+    // Walk unblocked accounts first, retaining every blocked account so the
+    // final refusal reflects the whole eligible pool, not a fixed prefix.
     let (live, blocked): (Vec<_>, Vec<_>) = rows
         .into_iter()
         .partition(|row| !usage::is_blocked(&row.id));
