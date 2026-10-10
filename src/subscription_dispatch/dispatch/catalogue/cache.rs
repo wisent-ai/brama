@@ -8,7 +8,7 @@ use std::time::Instant;
 use crate::providers::adapter as provider_registry;
 use crate::types::Refusal;
 
-pub(super) mod routing;
+pub(in crate::subscription_dispatch::dispatch) mod routing;
 
 pub(super) struct CachedRegistryModels {
     pub(super) fetched: Instant,

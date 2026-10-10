@@ -41,10 +41,17 @@ serve is refused before any provider is contacted, with the <code>503</code>
   (both captured).</li>
 <li><code>max_tokens</code> reaches the provider only when the request states one, and a
   stated zero is refused with <code>max_tokens must be at least one when it is set</code>.
-  An omitted value is omitted on the wire, so the model's own output limit applies; on
-  the Anthropic Messages wire, which requires the field, Brama sends the model's known
-  limit, and a model whose limit it does not know answers with the provider's own
-  refusal.</li>
+  An omitted value is omitted on wires that do not require it. On the Anthropic
+  Messages wire, Brama sends the model's known output limit: the embedded
+  model metadata, or, on a subscription route, the provider-advertised limit in
+  the published discovery inventory when the embedded table has no entry. No
+  numeric substitute is invented.
+  A successful listing without a limit leaves the provider's refusal visible.
+  Discovery that has not completed, a failed discovery, or unreadable routing
+  state instead refuses before dispatch, naming the provider/model and the
+  actual discovery cause. A discovery failure is not replaced by
+  <code>max_tokens: Field required</code>. An explicitly supplied
+  <code>max_tokens</code> does not require this limit lookup.</li>
 <li><code>temperature</code> reaches the provider only when the request states one; an
   omitted temperature is omitted on the wire too, so the provider applies its own default.
   A gateway that invents a temperature for every request without one gets Claude's
@@ -53,6 +60,14 @@ serve is refused before any provider is contacted, with the <code>503</code>
   greater than two, with <code>temperature must be finite and between zero and 2</code>.</li>
 <li>An empty conversation is refused with <code>messages must not be empty</code>.</li>
 </ul>
+<p>The real subscription qualification is <code>tests/subscriptions/unlisted_output_limit.sh</code>,
+with <code>BRAMA</code> naming the binary, <code>AGENT</code> the paying agent and
+<code>MODEL</code> a provider/model absent from the embedded catalog. Before any provider
+request, it requires a readable catalog, the provider's array and a successful boolean
+absence result. Missing tooling, unreadable or malformed metadata cannot count as an
+unlisted model. The journey then checks the cost-acknowledgement refusal and the actual
+provider answer, retaining commands, exit statuses and complete output under
+<code>target/real-tests/subscriptions</code>. An admission failure is not a provider test.</p>
 <h3 id="post-v1chatcompletions"><code>POST /v1/chat/completions</code><a class="headerlink" href="#post-v1chatcompletions" title="Link to this section">&para;</a></h3>
 <p>Accepts exactly <code>model</code>, <code>messages</code>, <code>max_tokens</code>,
 <code>temperature</code>, <code>tools</code>, <code>tool_choice</code>,

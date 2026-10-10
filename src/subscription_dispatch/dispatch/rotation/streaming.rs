@@ -12,6 +12,7 @@ use crate::subscription_dispatch::usage;
 use crate::types::ModelRequest;
 use wisent_errors::Failure;
 
+use super::super::catalogue::cache::routing::sized_request;
 use super::super::credential::auth_failure::{
     exhausted_credential, mark_credential_revoked, refused_credential,
 };
@@ -27,6 +28,11 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
     agent_id: &str,
     request: &ModelRequest,
 ) -> RouteAttempt<RoutedStream> {
+    let sized = match sized_request(request) {
+        Ok(sized) => sized,
+        Err(refusal) => return RouteAttempt::refused(refusal),
+    };
+    let request: &ModelRequest = &sized;
     let reading = Instant::now();
     let rows = match ordered_candidate_rows(provider, agent_id, request).await {
         Ok(rows) => rows,

@@ -48,6 +48,7 @@ pub use registry::{
 };
 
 pub(crate) use call::credential::credential_key;
+pub(crate) use registry::known_max_output_tokens;
 pub(crate) use registry::provider_requires_credential;
 
 pub use catalog::discovery::discover_models;

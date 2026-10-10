@@ -18,9 +18,8 @@ pub(in crate::providers::adapter) use address::{
 };
 pub(in crate::providers::adapter) use advertised_model::model_from_value;
 pub use facets::{kind_from_output, ModelKind};
-pub(in crate::providers::adapter) use known_limits::{
-    apply_omp_model_metadata, known_max_output_tokens,
-};
+pub(in crate::providers::adapter) use known_limits::apply_omp_model_metadata;
+pub(crate) use known_limits::known_max_output_tokens;
 pub use route::{
     native_decision_route, provider_id_from_route, route, supports_chat_route,
     supports_decision_route, supports_embedding_route, supports_image_route,
@@ -39,6 +38,14 @@ pub enum WireProtocol {
     /// answers out. It carries no messages and returns no text, so nothing on
     /// the chat path may reach it.
     TypeSafeSystemOne,
+}
+
+impl WireProtocol {
+    /// Whether a chat request on this wire is refused without an answer
+    /// length: Anthropic Messages requires `max_tokens`, the others omit it.
+    pub fn requires_output_limit(self) -> bool {
+        self == WireProtocol::AnthropicMessages
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

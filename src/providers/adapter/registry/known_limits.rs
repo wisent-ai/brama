@@ -91,11 +91,9 @@ pub(in crate::providers::adapter) fn apply_omp_model_metadata(
 /// The output limit this build knows for `model_id` on `provider_id`, if any.
 /// A wire that requires an answer length is given the model's own limit when
 /// the caller set none; an unknown model is sent without one and the
-/// provider's refusal comes back as its error.
-pub(in crate::providers::adapter) fn known_max_output_tokens(
-    provider_id: &str,
-    model_id: &str,
-) -> Option<u64> {
+/// provider's refusal comes back as its error, unless the route that chose it
+/// sized the request from the provider's own listing first.
+pub(crate) fn known_max_output_tokens(provider_id: &str, model_id: &str) -> Option<u64> {
     OMP_METADATA
         .get(provider_id)?
         .get(model_id)
