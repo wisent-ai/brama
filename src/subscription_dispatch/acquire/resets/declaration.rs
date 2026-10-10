@@ -1,4 +1,5 @@
-//! Each provider declares its reset protocol and the operator's policy keys.
+//! Each provider declares its reset protocol; when Brama may redeem by
+//! itself is the operator's stated policy (`settings.rs`), not a declaration.
 
 use serde::Deserialize;
 
@@ -17,8 +18,4 @@ pub struct ResetDeclaration {
     pub alternate_listing_path: Option<String>,
     pub profile_path: Option<String>,
     pub redemption_path: String,
-    pub auto_redeem: bool,
-    pub keep_credits: Option<String>,
-    pub min_blocked_minutes: Option<String>,
-    pub salvage_horizon_hours: Option<String>,
 }

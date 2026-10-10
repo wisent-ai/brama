@@ -1,6 +1,6 @@
-//! Choose a usable reset from a fresh provider offer and the declared policy.
+//! Choose a usable reset from a fresh provider offer and the operator's
+//! stated policy.
 
-use super::declaration::ResetDeclaration;
 use super::model::{ResetCredit, ResetOffer};
 use crate::subscription_dispatch::{plan_usage, usage};
 
@@ -49,20 +49,15 @@ pub async fn blocked_until(member: &str, provider: &str) -> Result<Option<i64>, 
     Ok(latest)
 }
 
-fn number(key: Option<&str>, field: &str) -> Result<u64, String> {
-    let key = key.ok_or_else(|| format!("reset policy does not declare {field}"))?;
-    super::super::declaration::stated(key)
-}
-
+/// The credit to redeem from `offer`: for a reset the operator asked for, the
+/// one expiring first; automatically, only under the policy he stated for
+/// `provider` (`settings.rs`), refused by name when he stated none.
 pub fn choose<'a>(
+    provider: &str,
     offer: &'a ResetOffer,
-    declared: &ResetDeclaration,
     blocked_until_ms: Option<i64>,
     automatic: bool,
 ) -> Result<Option<(&'a ResetCredit, &'static str)>, String> {
-    if automatic && !declared.auto_redeem {
-        return Ok(None);
-    }
     let now = chrono::Utc::now().timestamp_millis();
     let mut credits: Vec<_> = offer
         .credits
@@ -78,21 +73,17 @@ pub fn choose<'a>(
     if !automatic {
         return Ok(credits.first().map(|credit| (*credit, "operator")));
     }
-    let keep = number(declared.keep_credits.as_deref(), "keep_credits")?;
-    let minutes = i64::try_from(number(
-        declared.min_blocked_minutes.as_deref(),
-        "min_blocked_minutes",
-    )?)
-    .map_err(|error| format!("reset blocked-minute declaration: {error}"))?;
-    let hours = i64::try_from(number(
-        declared.salvage_horizon_hours.as_deref(),
-        "salvage_horizon_hours",
-    )?)
-    .map_err(|error| format!("reset salvage-hour declaration: {error}"))?;
-    let minimum = chrono::TimeDelta::try_minutes(minutes)
-        .ok_or_else(|| "reset blocked-minute declaration exceeds supported duration".to_owned())?;
+    let stated = super::settings::for_provider(provider)?;
+    let keep = stated.keep_credits;
+    let minutes = i64::try_from(stated.min_blocked_minutes)
+        .map_err(|error| format!("{provider}'s stated blocked minutes: {error}"))?;
+    let hours = i64::try_from(stated.salvage_horizon_hours)
+        .map_err(|error| format!("{provider}'s stated salvage hours: {error}"))?;
+    let minimum = chrono::TimeDelta::try_minutes(minutes).ok_or_else(|| {
+        format!("{provider}'s stated blocked minutes exceed a supported duration")
+    })?;
     let salvage = chrono::TimeDelta::try_hours(hours)
-        .ok_or_else(|| "reset salvage-hour declaration exceeds supported duration".to_owned())?;
+        .ok_or_else(|| format!("{provider}'s stated salvage hours exceed a supported duration"))?;
     for credit in credits {
         if credit
             .expires_at_ms

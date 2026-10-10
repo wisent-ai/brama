@@ -5,6 +5,7 @@ pub mod maintenance;
 pub mod model;
 mod policy;
 pub mod redeem;
+pub mod settings;
 
 use crate::gateway::broker;
 use crate::providers::adapter;

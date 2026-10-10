@@ -63,7 +63,7 @@ pub async fn run(
         }
     }
     let blocked_until = policy::blocked_until(member, provider).await?;
-    let Some((credit, trigger)) = policy::choose(&offer, declared, blocked_until, automatic)?
+    let Some((credit, trigger)) = policy::choose(provider, &offer, blocked_until, automatic)?
     else {
         return Ok(
             json!({"ok": automatic, "result": "refused", "provider": provider, "member": member,

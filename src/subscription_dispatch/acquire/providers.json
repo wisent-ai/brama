@@ -25,11 +25,7 @@
         "protocol": "codex_wham",
         "listing_path": "/backend-api/wham/rate-limit-reset-credits",
         "usage_path": "/backend-api/wham/usage",
-        "redemption_path": "/backend-api/wham/rate-limit-reset-credits/consume",
-        "auto_redeem": true,
-        "keep_credits": "codex_reset_keep_credits",
-        "min_blocked_minutes": "codex_reset_min_blocked_minutes",
-        "salvage_horizon_hours": "codex_reset_salvage_horizon_hours"
+        "redemption_path": "/backend-api/wham/rate-limit-reset-credits/consume"
       },
       "harnesses": {
         "omp": {

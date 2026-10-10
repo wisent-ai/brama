@@ -220,3 +220,55 @@ pub(in crate::core::server) async fn reset_admin_subscription(
     .map(Json)
     .map_err(|error| api_error(StatusCode::CONFLICT, &error))
 }
+
+/// One change to, or reading of, the operator's saved-reset policy.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
+pub(in crate::core::server) enum ResetPolicyRequest {
+    Show,
+    Set {
+        provider: String,
+        keep_credits: u64,
+        min_blocked_minutes: u64,
+        salvage_horizon_hours: u64,
+        reason: String,
+    },
+    Clear {
+        provider: String,
+    },
+}
+
+/// The operator's saved-reset policy on the gateway that holds the pool, as
+/// `brama subscription reset-policy` and Brama Desktop state and read it.
+pub(in crate::core::server) async fn reset_policy_admin(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Json(request): Json<ResetPolicyRequest>,
+) -> Result<Json<Value>, ApiError> {
+    use crate::subscription_dispatch::acquire::resets::settings;
+    require_brama_desktop(&client_identity)?;
+    let answer = match request {
+        ResetPolicyRequest::Show => settings::all().map(|policies| json!({ "policies": policies })),
+        ResetPolicyRequest::Set {
+            provider,
+            keep_credits,
+            min_blocked_minutes,
+            salvage_horizon_hours,
+            reason,
+        } => {
+            let policy = settings::ResetPolicy {
+                keep_credits,
+                min_blocked_minutes,
+                salvage_horizon_hours,
+                reason,
+                stated_at: chrono::Utc::now().to_rfc3339(),
+            };
+            settings::set(&provider, policy)
+                .map(|policy| json!({ "provider": provider, "policy": policy }))
+        }
+        ResetPolicyRequest::Clear { provider } => settings::clear(&provider)
+            .map(|policy| json!({ "provider": provider, "cleared": policy })),
+    };
+    answer
+        .map(Json)
+        .map_err(|error| api_error(StatusCode::CONFLICT, &error))
+}

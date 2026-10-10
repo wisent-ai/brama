@@ -1,4 +1,6 @@
 //! Read saved capacity on each maintenance pass before deciding to pay for more.
+//! A provider the operator stated a saved-reset policy for is redeemed under
+//! it; every other provider's offers are only observed.
 
 use crate::gateway::broker;
 use serde_json::{json, Value};
@@ -6,6 +8,10 @@ use serde_json::{json, Value};
 pub async fn run() -> Value {
     let members = match broker::list_all_subscriptions().await {
         Ok(members) => members,
+        Err(error) => return json!({"ok": false, "error": error, "members": []}),
+    };
+    let stated = match super::settings::all() {
+        Ok(stated) => stated,
         Err(error) => return json!({"ok": false, "error": error, "members": []}),
     };
     let mut results = Vec::new();
@@ -18,10 +24,10 @@ pub async fn run() -> Value {
             Ok(provider) => provider,
             Err(_) => continue,
         };
-        let Some(policy) = &declared.resets else {
+        if declared.resets.is_none() {
             continue;
-        };
-        let result = if policy.auto_redeem {
+        }
+        let result = if stated.contains_key(&member.provider) {
             super::redeem::run(
                 &member.provider,
                 &member.id,
