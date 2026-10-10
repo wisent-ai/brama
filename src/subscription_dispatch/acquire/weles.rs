@@ -31,11 +31,11 @@ fn weles_provider(provider: &str) -> Result<&'static str, String> {
     super::declaration::provider(provider).map(|declared| declared.weles_provider.as_str())
 }
 
-/// Ask Weles to buy one account of `provider` on `plan_tier`, stored as
-/// `subscription_id`.
+/// Ask Weles to buy one account, correlating the run by `request_id`.
+/// The response names the permanent member derived from provider and account.
 pub(super) async fn purchase(
     provider: &str,
-    subscription_id: &str,
+    request_id: &str,
     plan_tier: &str,
     reason: &str,
     progress_sink: Option<&Progress>,
@@ -45,7 +45,7 @@ pub(super) async fn purchase(
         "/subscriptions/acquire",
         json!({
             "provider": weles_provider,
-            "subscription_id": subscription_id,
+            "subscription_id": request_id,
             "plan_tier": plan_tier,
             "reason": reason,
         }),
