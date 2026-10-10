@@ -42,7 +42,7 @@ pub(super) fn subscription_row(
         // repaired by putting it back in the rotation.
         "retired": retired(&entry.id, recorded),
         "sign_in": crate::journal::latest_subscription_sign_in(&entry.id),
-        "automatic_sign_in": automatic_sign_in_view(entry),
+        "automatic_sign_in": automatic_sign_in_view(entry, recorded),
         "limits": windows.limits,
         "measured": recorded.map(|usage| &usage.measured),
         "block": recorded.and_then(|usage| usage.block.as_ref()),
@@ -58,7 +58,10 @@ pub(super) fn subscription_row(
 
 /// Display observations from the authentication run. A missing optional tag
 /// says nothing about whether Skarbiec can resolve the account.
-fn automatic_sign_in_view(entry: &SubscriptionEntry) -> Value {
+fn automatic_sign_in_view(
+    entry: &SubscriptionEntry,
+    recorded: Option<&SubscriptionUsage>,
+) -> Value {
     let applies = crate::subscription_dispatch::sign_in::weles_provider(&entry.provider).is_some()
         && entry.status == "active"
         && !crate::journal::is_retired(&entry.id);
@@ -73,6 +76,8 @@ fn automatic_sign_in_view(entry: &SubscriptionEntry) -> Value {
             else if latest.is_some() { "succeeded" } else { "not_observed" },
         "blocked_by": failure.as_ref().map(|failure| failure.code()),
         "detail": failure.as_ref().map(|failure| failure.detail()),
+        "failure": failure.as_ref().map(|failure| failure.to_json()),
+        "last_check_failure": recorded.and_then(|usage| usage.sign_in_check_failure.as_ref()),
         "last_attempt": latest,
     })
 }
