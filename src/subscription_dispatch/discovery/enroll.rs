@@ -62,13 +62,18 @@ pub async fn enroll(mut report: DiscoveryReport) -> Value {
             continue;
         }
         if let Some(previous) = enrolled.get_mut(&id) {
+            if observation.plan.is_some()
+                && previous["plan_at_ms"]
+                    .as_i64()
+                    .is_none_or(|at| observation.fact_at_ms >= at)
+            {
+                previous["plan"] = json!(observation.plan);
+                previous["plan_at_ms"] = json!(observation.fact_at_ms);
+            }
             if previous["observed_at_ms"]
                 .as_i64()
                 .is_none_or(|at| observation.observed_at_ms >= at)
             {
-                if observation.plan.is_some() {
-                    previous["plan"] = json!(observation.plan);
-                }
                 previous["source"] = json!(observation.source);
                 previous["observed_at_ms"] = json!(observation.observed_at_ms);
             }
@@ -102,6 +107,7 @@ pub async fn enroll(mut report: DiscoveryReport) -> Value {
                 "id": id, "provider": observation.provider, "account": observation.account,
                 "plan": observation.plan, "source": observation.source,
                 "observed_at_ms": observation.observed_at_ms,
+                "plan_at_ms": observation.plan.as_ref().map(|_| observation.fact_at_ms),
                 "registered": error.is_none(), "error": error,
             }),
         );

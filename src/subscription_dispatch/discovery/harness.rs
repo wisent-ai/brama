@@ -10,6 +10,7 @@ pub struct AccountObservation {
     pub plan: Option<String>,
     pub source: String,
     pub observed_at_ms: i64,
+    pub fact_at_ms: i64,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -110,6 +111,7 @@ async fn claude() -> DiscoveryReport {
             plan: document["subscriptionType"].as_str().map(str::to_owned),
             source: source.to_owned(),
             observed_at_ms: chrono::Utc::now().timestamp_millis(),
+            fact_at_ms: chrono::Utc::now().timestamp_millis(),
         }],
         errors: Vec::new(),
     }
@@ -146,6 +148,7 @@ fn parse_accounts(document: &Value) -> DiscoveryReport {
                 plan: None,
                 source: source.to_owned(),
                 observed_at_ms: chrono::Utc::now().timestamp_millis(),
+                fact_at_ms: chrono::Utc::now().timestamp_millis(),
             })
         })();
         match parsed {
@@ -204,6 +207,7 @@ pub fn parse_usage(document: &Value, source: &str, observed_at_ms: i64) -> Disco
             plan,
             source: source.to_owned(),
             observed_at_ms,
+            fact_at_ms: observed_at_ms,
         });
     }
     result

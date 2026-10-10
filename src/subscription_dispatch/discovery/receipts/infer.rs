@@ -74,12 +74,25 @@ pub async fn accounts(message: &Value, source: &str) -> Result<Vec<AccountObserv
                 "{source}: receipt extraction did not provide a verbatim account-address quote"
             )));
         }
+        let sent_at = message["sent_at"].as_str().ok_or_else(|| {
+            Failure::Message(format!(
+                "{source}: purchase receipt has no sent_at; its plan date is unconfirmed"
+            ))
+        })?;
+        let fact_at_ms = chrono::DateTime::parse_from_rfc3339(sent_at)
+            .map_err(|error| {
+                Failure::Message(format!(
+                    "{source}: invalid purchase receipt sent_at: {error}"
+                ))
+            })?
+            .timestamp_millis();
         accounts.push(AccountObservation {
             provider: account.provider,
             account: account.account.to_lowercase(),
             plan: account.plan,
             source: source.to_owned(),
             observed_at_ms: chrono::Utc::now().timestamp_millis(),
+            fact_at_ms,
         });
     }
     Ok(accounts)

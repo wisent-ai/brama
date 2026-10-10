@@ -103,9 +103,10 @@ pub(super) fn print_pool(report: &Value) {
         }
         if let Some(discovery) = row.get("discovery").filter(|value| value.is_object()) {
             println!(
-                "    discovered account: {} plan={} first_seen={} sources={}",
+                "    discovered account: {} plan={} plan_at={} first_seen={} sources={}",
                 discovery["account"],
                 discovery["plan"],
+                discovery["plan_at_ms"],
                 discovery["discovered_at_ms"],
                 discovery["sources"]
             );

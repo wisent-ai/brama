@@ -24,7 +24,7 @@ impl Cache {
             format!("receipt discovery already running or lock unavailable: {error}")
         })?;
         let path = directory.join("receipts.json");
-        let entries = match std::fs::read(&path) {
+        let entries: BTreeMap<String, Vec<serde_json::Value>> = match std::fs::read(&path) {
             Ok(bytes) => serde_json::from_slice(&bytes).map_err(|error| {
                 format!(
                     "decode retained receipt discovery {}: {error}",
@@ -39,6 +39,22 @@ impl Cache {
                 ))
             }
         };
+        let entries = entries
+            .into_iter()
+            .filter(|(_, accounts)| {
+                accounts
+                    .iter()
+                    .all(|account| account["fact_at_ms"].is_i64())
+            })
+            .map(|(source, accounts)| {
+                let accounts = accounts
+                    .into_iter()
+                    .map(serde_json::from_value)
+                    .collect::<Result<Vec<AccountObservation>, _>>()
+                    .map_err(|error| format!("decode retained receipt {source}: {error}"))?;
+                Ok((source, accounts))
+            })
+            .collect::<Result<BTreeMap<_, _>, String>>()?;
         Ok(Self {
             path,
             entries,

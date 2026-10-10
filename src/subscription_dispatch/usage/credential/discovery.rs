@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 pub struct DiscoveredAccount {
     pub account: String,
     pub plan: Option<String>,
+    #[serde(default)]
+    pub plan_at_ms: Option<i64>,
     pub sources: Vec<String>,
     pub discovered_at_ms: i64,
     pub observed_at_ms: i64,
@@ -52,6 +54,7 @@ pub fn record_discovered_account(
         let discovered = entry.discovery.get_or_insert_with(|| DiscoveredAccount {
             account: observation.account.clone(),
             plan: observation.plan.clone(),
+            plan_at_ms: observation.plan.as_ref().map(|_| observation.fact_at_ms),
             sources: Vec::new(),
             discovered_at_ms: observation.observed_at_ms,
             observed_at_ms: observation.observed_at_ms,
@@ -60,12 +63,15 @@ pub fn record_discovered_account(
         if !discovered.sources.contains(&observation.source) {
             discovered.sources.push(observation.source.clone());
         }
-        if observation.observed_at_ms >= discovered.observed_at_ms {
-            if observation.plan.is_some() {
-                discovered.plan = observation.plan.clone();
-            }
-            discovered.observed_at_ms = observation.observed_at_ms;
+        if observation.plan.is_some()
+            && discovered
+                .plan_at_ms
+                .is_none_or(|at| observation.fact_at_ms >= at)
+        {
+            discovered.plan = observation.plan.clone();
+            discovered.plan_at_ms = Some(observation.fact_at_ms);
         }
+        discovered.observed_at_ms = discovered.observed_at_ms.max(observation.observed_at_ms);
         entry.updated_at_ms = Some(now_ms());
         if needs_grant && entry.credential.is_none() {
             entry.credential = Some(Credential {
