@@ -12,23 +12,23 @@ use crate::subscription_dispatch::usage;
 use model::ResetOffer;
 
 pub async fn refresh(member: &str, provider: &str) -> Result<ResetOffer, String> {
-    let declared = super::declaration::provider(provider)?
-        .resets
-        .as_ref()
-        .ok_or_else(|| format!("provider {provider} declares no saved-reset report"))?;
-    if crate::journal::is_retired(member) {
-        return Err(format!(
-            "subscription {member} is retired; its grant is not used"
-        ));
-    }
-    if usage::usage_for(member)
-        .and_then(|entry| entry.credential)
-        .and_then(|credential| credential.borrowed_from)
-        .is_some()
-    {
-        return Err(format!("subscription {member} carries a harness-owned grant; reset operations require Brama's own sign-in"));
-    }
     let outcome = async {
+        let declared = super::declaration::provider(provider)?
+            .resets
+            .as_ref()
+            .ok_or_else(|| format!("provider {provider} declares no saved-reset report"))?;
+        if crate::journal::is_retired(member) {
+            return Err(format!(
+                "subscription {member} is retired; its grant is not used"
+            ));
+        }
+        if usage::usage_for(member)
+            .and_then(|entry| entry.credential)
+            .and_then(|credential| credential.borrowed_from)
+            .is_some()
+        {
+            return Err(format!("subscription {member} carries a harness-owned grant; reset operations require Brama's own sign-in"));
+        }
         let credential = broker::subscription_credential(member, provider)
             .await
             .map_err(|error| error.to_json())?;
