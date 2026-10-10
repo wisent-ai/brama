@@ -93,11 +93,7 @@ token.</p>
 <h3 id="http-429-provider_rate_limited-or-subscription_unavailable">HTTP 429 <code>provider_rate_limited</code> or <code>subscription_unavailable</code><a class="headerlink" href="#http-429-provider_rate_limited-or-subscription_unavailable" title="Link to this section">&para;</a></h3>
 <p><strong>Observed:</strong> the route's provider or subscription refused the attempt, and that
 refusal reached the caller.</p>
-<p><strong>Action:</strong> inspect protected stats and structured routing logs, then either wait
-for the window to reopen, repair the intended subscription, or have an operator
-point the alias at an authorized billing target with
-<code>PUT /v1/admin/routes</code>. Brama does not pick another account for you. Do not
-retry indefinitely.</p>
+<p><strong>Action:</strong> inspect <code>brama subscription list</code> and the routing refusal for the unavailable members and the recorded window reopening time. Requests without an explicit billing target can use any eligible free member of the same provider pool; member names confer no rank. An explicit billing target remains restricted to that member, and exhausting the pool does not authorize a different route or provider. Repair the named grant or capacity cause rather than retrying an unchanged refusal indefinitely.</p>
 <h3 id="http-503-dependency_unavailable">HTTP 503 <code>dependency_unavailable</code><a class="headerlink" href="#http-503-dependency_unavailable" title="Link to this section">&para;</a></h3>
 <p><strong>Observed:</strong> Skarbiec, the entitlements router, the catalog, or the configured
 provider is unavailable, and the request is refused with the dependency named.</p>
