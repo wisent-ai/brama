@@ -128,21 +128,19 @@ fn remote_weles_sign_in_replays_a_final_failure_and_says_so() {
         &member,
         "--reason",
         "real gateway sign-in test: a final failure is replayed, not rerun",
-        "--json",
     ]);
+    assert!(
+        !result.status.success(),
+        "a replayed final sign-in failure must retain a failing command status"
+    );
     let verdict: Value = serde_json::from_slice(&result.stdout).expect("sign-in verdict JSON");
     assert_eq!(verdict["replayed"], true);
     assert_eq!(verdict["replay_of_at"], recorded_at);
     assert_eq!(verdict["at"], recorded_at);
-    assert!(verdict["detail"]
-        .as_str()
-        .expect("detail")
-        .starts_with("not run: the failed attempt recorded at "));
-    assert!(verdict["detail"].as_str().expect("detail").ends_with(
-        before["sign_in"]["detail"]
-            .as_str()
-            .expect("recorded detail")
-    ));
+    assert_eq!(verdict["result"], "failed");
+    assert_eq!(verdict["provider"], provider);
+    assert_eq!(verdict["subscription_id"], member);
+    assert_eq!(verdict["failure"], before["sign_in"]["failure"]);
     let after = run.member(&member, false);
     assert_eq!(
         after["sign_in"], before["sign_in"],
