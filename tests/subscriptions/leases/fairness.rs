@@ -36,6 +36,8 @@ fn new_sessions_use_each_idle_member_before_reusing_one() {
         declaration.accounts_max.is_none(),
         "qualification requires a provider without authorized purchases"
     );
+    let limit = brama::subscription_dispatch::acquire::declaration::sessions_cap(&provider)
+        .expect("operator-stated sessions per subscription");
     let declared = required("LEASE_MEMBERS");
     let expected: BTreeSet<_> = declared.split_whitespace().map(str::to_owned).collect();
     let mut distinct = expected.iter();
@@ -76,83 +78,141 @@ fn new_sessions_use_each_idle_member_before_reusing_one() {
             .any(|lease| lease["provider"] == provider),
         "fixture provider already carries sessions"
     );
-    let mut selected = BTreeSet::new();
-    for _ in &expected {
-        let id = format!("lease-distribution-{}", uuid::Uuid::new_v4());
-        sessions.ids.push(id.clone());
-        let output = sessions.run.command(&[
-            "subscription",
-            "lease",
-            "take",
-            &provider,
-            "--session-id",
-            &id,
-            "--holder",
-            "real-lease-distribution",
-        ]);
-        assert!(
-            output.status.success(),
-            "lease refused: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let answer: Value = serde_json::from_slice(&output.stdout).expect("lease admission");
-        assert_eq!(answer["new"], true);
-        assert_eq!(answer["lease"]["session_id"], id);
-        assert_eq!(answer["lease"]["provider"], provider);
-        let member = answer["lease"]["subscription_id"]
-            .as_str()
-            .expect("selected member");
-        assert!(
-            expected.contains(member),
-            "lease escaped the isolated fixture"
-        );
-        assert!(
-            selected.insert(member.to_owned()),
-            "reused a member while another was idle"
-        );
-        let repeated = sessions.run.command(&[
-            "subscription",
-            "lease",
-            "take",
-            &provider,
-            "--session-id",
-            &id,
-            "--holder",
-            "real-lease-distribution",
-        ]);
-        assert!(repeated.status.success(), "standing session lookup refused");
-        let repeated: Value =
-            serde_json::from_slice(&repeated.stdout).expect("standing session admission");
-        assert_eq!(repeated["new"], false);
-        assert_eq!(
-            repeated["lease"], answer["lease"],
-            "tie selection must not move a standing session to another account"
-        );
-        assert_eq!(
-            repeated["live_on_subscription"], answer["live_on_subscription"],
-            "standing session lookup must not consume another capacity slot"
-        );
-        let listed = sessions.run.command(&["subscription", "lease", "list"]);
-        assert!(listed.status.success(), "persisted lease list refused");
-        let listed: Value =
-            serde_json::from_slice(&listed.stdout).expect("persisted lease inventory");
-        let mut matching = listed["leases"]
-            .as_array()
-            .expect("persisted leases")
-            .iter()
-            .filter(|lease| lease["session_id"] == id && lease["provider"] == provider);
-        assert_eq!(
-            matching.next().expect("lease not persisted"),
-            &answer["lease"]
-        );
-        assert!(
-            matching.next().is_none(),
-            "duplicate persisted session lease"
-        );
-        let pooled = sessions.run.member(member, false);
-        assert_eq!(pooled["live_sessions"], answer["live_on_subscription"]);
+    for _ in std::iter::repeat_n(
+        (),
+        usize::try_from(limit).expect("fixture capacity fits usize"),
+    ) {
+        let mut selected = BTreeSet::new();
+        for _ in &expected {
+            let id = format!("lease-distribution-{}", uuid::Uuid::new_v4());
+            sessions.ids.push(id.clone());
+            let output = sessions.run.command(&[
+                "subscription",
+                "lease",
+                "take",
+                &provider,
+                "--session-id",
+                &id,
+                "--holder",
+                "real-lease-distribution",
+            ]);
+            assert!(
+                output.status.success(),
+                "lease refused: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let answer: Value = serde_json::from_slice(&output.stdout).expect("lease admission");
+            assert_eq!(answer["new"], true);
+            assert_eq!(answer["lease"]["session_id"], id);
+            assert_eq!(answer["lease"]["provider"], provider);
+            assert_eq!(answer["limit"], limit);
+            assert!(answer["live_on_subscription"].as_u64().expect("live count") <= limit);
+            let member = answer["lease"]["subscription_id"]
+                .as_str()
+                .expect("selected member");
+            assert!(
+                expected.contains(member),
+                "lease escaped the isolated fixture"
+            );
+            assert!(
+                selected.insert(member.to_owned()),
+                "reused a member while another carried fewer sessions"
+            );
+            let repeated = sessions.run.command(&[
+                "subscription",
+                "lease",
+                "take",
+                &provider,
+                "--session-id",
+                &id,
+                "--holder",
+                "real-lease-distribution",
+            ]);
+            assert!(repeated.status.success(), "standing session lookup refused");
+            let repeated: Value =
+                serde_json::from_slice(&repeated.stdout).expect("standing session admission");
+            assert_eq!(repeated["new"], false);
+            assert_eq!(
+                repeated["lease"], answer["lease"],
+                "tie selection must not move a standing session to another account"
+            );
+            assert_eq!(
+                repeated["live_on_subscription"], answer["live_on_subscription"],
+                "standing session lookup must not consume another capacity slot"
+            );
+            let listed = sessions.run.command(&["subscription", "lease", "list"]);
+            assert!(listed.status.success(), "persisted lease list refused");
+            let listed: Value =
+                serde_json::from_slice(&listed.stdout).expect("persisted lease inventory");
+            let mut matching = listed["leases"]
+                .as_array()
+                .expect("persisted leases")
+                .iter()
+                .filter(|lease| lease["session_id"] == id && lease["provider"] == provider);
+            assert_eq!(
+                matching.next().expect("lease not persisted"),
+                &answer["lease"]
+            );
+            assert!(
+                matching.next().is_none(),
+                "duplicate persisted session lease"
+            );
+            let pooled = sessions.run.member(member, false);
+            assert_eq!(pooled["live_sessions"], answer["live_on_subscription"]);
+            let persisted_count = listed["leases"]
+                .as_array()
+                .expect("persisted leases")
+                .iter()
+                .filter(|lease| lease["subscription_id"] == member)
+                .count();
+            assert_eq!(answer["live_on_subscription"], persisted_count);
+        }
+        assert_eq!(selected, expected);
     }
-    assert_eq!(selected, expected);
+    let full = sessions.run.command(&["subscription", "lease", "list"]);
+    assert!(full.status.success(), "saturated lease list refused");
+    let full: Value = serde_json::from_slice(&full.stdout).expect("saturated lease inventory");
+    for member in &expected {
+        let count = full["leases"]
+            .as_array()
+            .expect("saturated leases")
+            .iter()
+            .filter(|lease| lease["subscription_id"] == *member)
+            .count();
+        assert_eq!(
+            u64::try_from(count).expect("persisted count fits u64"),
+            limit
+        );
+    }
+    let overflow_id = format!("lease-overflow-{}", uuid::Uuid::new_v4());
+    sessions.ids.push(overflow_id.clone());
+    let overflow = sessions.run.command(&[
+        "subscription",
+        "lease",
+        "take",
+        &provider,
+        "--session-id",
+        &overflow_id,
+        "--holder",
+        "real-lease-distribution",
+    ]);
+    assert!(
+        !overflow.status.success(),
+        "full pool admitted an extra worker"
+    );
+    assert!(
+        String::from_utf8_lossy(&overflow.stderr).contains("pool_full"),
+        "overflow must refuse for capacity, not an unrelated dependency: {}",
+        String::from_utf8_lossy(&overflow.stderr)
+    );
+    let refused = sessions.run.command(&["subscription", "lease", "list"]);
+    assert!(refused.status.success(), "post-refusal lease list refused");
+    let refused: Value =
+        serde_json::from_slice(&refused.stdout).expect("post-refusal lease inventory");
+    assert_eq!(
+        refused["leases"], full["leases"],
+        "overflow changed persisted leases"
+    );
     for id in &sessions.ids {
         let output =
             sessions

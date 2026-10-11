@@ -46,14 +46,16 @@ of <code>LEASE_PROVIDER</code>, in addition to those shared inputs. Use an
 isolated pool with multiple usable members and no existing provider leases.
 The provider must have no authorized account-purchase cap, and the gateway
 revision must equal the qualification source revision: an unexpected shortage
-must not buy an account. The journey takes a fresh session for each fixture
-member and rejects any reused member while another remains idle, repeats each
-standing session admission to verify that neither its account nor its capacity
-count changes, verifies persisted leases and reported counts, then releases only
-its own sessions and checks their absence. It makes no inference request. This
-proves least-loaded lease distribution and standing-session identity, not a
-statistical guarantee about randomized tie selection or a claim that the journey
-has been executed.</p>
+must not buy an account. The journey fills every member to the declared
+sessions-per-subscription limit in balanced rounds: no member is reused in a
+round while another carries fewer sessions. It repeats each standing-session
+admission to verify unchanged account and capacity, compares returned counts
+with persisted leases, then requests one more session. That request must refuse
+with <code>pool_full</code> and leave the complete persisted lease list unchanged.
+Finally it releases only its own sessions and verifies their absence. It makes
+no inference request. This qualifies least-loaded distribution, standing-session
+identity and the capacity boundary, not statistical randomness. The command
+below runs the journey; its presence is not an execution result.</p>
 <pre><code class="language-console">cargo test --test subscription-capacity lease_distribution -- --ignored --nocapture</code></pre>
 <p>The real test is <code>tests/subscriptions/leases.sh</code>. See <a href="/docs/cli/subscription">the command group</a> or <a href="/docs/cli">the CLI tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
