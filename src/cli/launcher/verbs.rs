@@ -79,8 +79,17 @@ fn shell_calls(text: &str) -> Vec<Vec<String>> {
         .collect()
 }
 
+/// The command line `brama launcher` sends the router for an item.
+const GET_CALL: &str = "get";
+/// The command line `brama workload` sends the router to issue a grant.
+const GRANT_ISSUE_CALL: &str = "grant issue";
+
 /// The router command paths `brama launcher` and `brama workload` invoke.
-const OWN_CALLS: [&[&str]; 2] = [&["get"], &["grant", "issue"]];
+fn own_calls() -> Vec<Vec<String>> {
+    let words =
+        |call: &str| -> Vec<String> { call.split_whitespace().map(str::to_string).collect() };
+    vec![words(GET_CALL), words(GRANT_ISSUE_CALL)]
+}
 
 fn inventory(router: &Path, args: &[&str], vault: &Path) -> Result<Value, String> {
     let output = Command::new(router)
@@ -116,28 +125,40 @@ fn strings(value: Option<&Value>) -> Vec<String> {
         .collect()
 }
 
-/// The launcher and every stage file beside it that `sh` sources.
-fn family(launcher: &Path) -> Vec<PathBuf> {
-    fn walk(directory: &Path, into: &mut Vec<PathBuf>) {
-        let Ok(entries) = std::fs::read_dir(directory) else {
-            return;
+/// The launcher and every stage file beside it that `sh` sources. An absent
+/// stage directory holds none; one that cannot be listed, or an entry that
+/// cannot be read, refuses - it used to be skipped, so the check passed the
+/// launcher against fewer calls than it makes.
+fn family(launcher: &Path) -> Result<Vec<PathBuf>, String> {
+    fn walk(directory: &Path, into: &mut Vec<PathBuf>) -> Result<(), String> {
+        let entries = match std::fs::read_dir(directory) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(format!("cannot list {}: {error}", directory.display())),
         };
-        let mut paths: Vec<PathBuf> = entries.flatten().map(|entry| entry.path()).collect();
+        let mut paths = Vec::new();
+        for entry in entries {
+            let entry = entry.map_err(|error| {
+                format!("cannot read an entry of {}: {error}", directory.display())
+            })?;
+            paths.push(entry.path());
+        }
         paths.sort();
         for path in paths {
             if path.is_dir() {
-                walk(&path, into);
+                walk(&path, into)?;
             } else if path.extension().is_some_and(|ext| ext == "sh") {
                 into.push(path);
             }
         }
+        Ok(())
     }
     let mut files = vec![launcher.to_path_buf()];
     walk(
         &launcher.parent().unwrap_or(Path::new(".")).join("launcher"),
         &mut files,
-    );
-    files
+    )?;
+    Ok(files)
 }
 
 pub(super) fn check(router: &Path, launcher: &Path) -> Result<(), String> {
@@ -171,11 +192,8 @@ pub(super) fn check(router: &Path, launcher: &Path) -> Result<(), String> {
                 .map(|command| first(command, 2)),
         );
     }
-    let mut calls: Vec<Vec<String>> = OWN_CALLS
-        .iter()
-        .map(|call| call.iter().map(|word| word.to_string()).collect())
-        .collect();
-    for path in family(launcher) {
+    let mut calls: Vec<Vec<String>> = own_calls();
+    for path in family(launcher)? {
         let text = std::fs::read(&path)
             .map_err(|error| format!("{}: {error}", path.display()))
             .and_then(|bytes| {
