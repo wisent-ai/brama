@@ -45,7 +45,16 @@ pub(in crate::subscription_dispatch::dispatch) fn shuffle_within_equal<T, K: Par
         let run: &mut [T] = &mut items[start..end];
         if run.len() > 1 {
             for i in (1..run.len()).rev() {
-                let j = (random_u64()? as usize) % (i + 1);
+                let bound = (i + 1) as u64;
+                // Discard the incomplete residue cycle so every index has
+                // exactly the same number of accepted random values.
+                let threshold = bound.wrapping_neg() % bound;
+                let j = loop {
+                    let value = random_u64()?;
+                    if value >= threshold {
+                        break (value % bound) as usize;
+                    }
+                };
                 run.swap(i, j);
             }
         }
