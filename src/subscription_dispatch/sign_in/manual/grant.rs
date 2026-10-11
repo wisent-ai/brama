@@ -16,15 +16,12 @@ use crate::subscription_dispatch::probe::probe_once;
 pub enum Origin {
     /// The provider issued it for a code the operator pasted.
     PastedCode,
-    /// A console handed it over as it was.
-    Console,
 }
 
 impl Origin {
     fn sentence(self) -> String {
         match self {
             Origin::PastedCode => "the code the operator pasted".to_owned(),
-            Origin::Console => "the console".to_owned(),
         }
     }
 }
@@ -57,10 +54,8 @@ pub async fn store(
     provider: &str,
     subscription_id: &str,
     document: &str,
-    origin: Origin,
     account: Option<&str>,
 ) -> Result<(), String> {
-    let _ = origin;
     let parsed: Value = serde_json::from_str(document)
         .map_err(|error| format!("the grant is not a JSON document: {error}"))?;
     if parsed.get(BORROWED_FROM).is_some() {
@@ -169,14 +164,7 @@ pub async fn adopt(
             detail: format!("{who}'s grant from {source} is the one the pool already holds, under {who}'s name; nothing was stored or proved"),
         });
     }
-    store(
-        provider,
-        subscription_id,
-        &document,
-        origin,
-        account.as_deref(),
-    )
-    .await?;
+    store(provider, subscription_id, &document, account.as_deref()).await?;
     // The ledger remembers the refusal that disowned the old grant, and the
     // request path leaves a disowned grant alone until a sign-in replaces it.
     // This is that sign-in.
