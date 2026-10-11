@@ -65,22 +65,24 @@ impl PreparedRequest {
             format!("{operation} {url} for {item} failed before a provider response: {error}")
         })?;
         let status = response.status();
-        let answer: Value = stado_wait::until(
+        let body = stado_wait::until(
             stado_wait::Kind::Network,
-            format!("decode reset {operation} HTTP {status}"),
+            format!("read reset {operation} HTTP {status}"),
             url.to_string(),
-            response.json(),
+            response.text(),
         )
         .await
         .map_err(|error| {
-            format!("{operation} {url} for {item} HTTP {status}: invalid JSON: {error}")
+            format!("{operation} {url} for {item} HTTP {status}: reading response: {error}")
         })?;
         if !status.is_success() {
             return Err(format!(
-                "{operation} {url} for {item} HTTP {status}: {answer}"
+                "{operation} {url} for {item} HTTP {status}: {body}"
             ));
         }
-        Ok(answer)
+        serde_json::from_str(&body).map_err(|error| {
+            format!("{operation} {url} for {item} HTTP {status}: invalid JSON: {error}")
+        })
     }
 }
 

@@ -11,6 +11,8 @@ fn failed_reset_report_retains_last_offer_and_persists_actual_cause() {
     let mut run = Run::new();
     let member = required("RESET_REFUSAL_MEMBER");
     let expected = required("EXPECTED_RESET_REFUSAL");
+    let endpoint = required("EXPECTED_RESET_REFUSAL_ENDPOINT");
+    let status = required("EXPECTED_RESET_REFUSAL_HTTP_STATUS");
     assert!(
         !expected.trim().is_empty(),
         "a specific observed refusal is required"
@@ -30,6 +32,14 @@ fn failed_reset_report_retains_last_offer_and_persists_actual_cause() {
     let cause = fresh["resets"]["error"]
         .as_str()
         .expect("the actual reset endpoint must refuse; a healthy report is not this journey");
+    assert!(
+        cause.contains(&format!("GET {endpoint}")),
+        "reset refusal lost the failed operation: {cause}"
+    );
+    assert!(
+        cause.contains(&format!("HTTP {status}")),
+        "reset refusal lost the observed HTTP status: {cause}"
+    );
     assert!(
         cause.contains(&expected),
         "unexpected reset refusal: {cause}"
