@@ -57,8 +57,15 @@ pub(super) fn print_units(layout: &Layout) -> Option<PathBuf> {
         PathBuf::from("/Library/LaunchDaemons"),
         layout.home.join("Library/LaunchAgents"),
     ] {
-        let Ok(entries) = std::fs::read_dir(&location) else {
-            continue;
+        // A directory that is not there holds no unit; one that cannot be
+        // listed may hold the unit that runs Brama, so the diagnosis says so.
+        let entries = match std::fs::read_dir(&location) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                say!("  {}: cannot be listed: {error}", location.display());
+                continue;
+            }
         };
         let mut paths: Vec<PathBuf> = entries
             .flatten()
