@@ -6,7 +6,11 @@
 //! different file each time. So this opens all of them, in the order the
 //! launcher does, and prints what each says beside what it has to agree with:
 //!
-//! 1. the units that start Brama, and the release state that actually serves;
+//! 0. `unreadable inputs`, only when service.env or the release state could
+//!    not be read: each with its cause, so a later section that finds no
+//!    setting or no release record is not taken for a host without one;
+//! 1. the units that start Brama (a plist that cannot be read is named with
+//!    plutil's cause), and the release state that actually serves;
 //! 2. every installed generation: completeness, router verbs, and whether the
 //!    trust registry describes that exact installation;
 //! 3. the service env beside the supervisor-owned runtime coordinates;
@@ -61,16 +65,33 @@ pub(super) struct Layout {
     /// The unit's one log: Stado writes a unit's stdout and stderr to
     /// `~/.stado/logs/<unit>.log`.
     log: PathBuf,
+    /// Inputs that could not be read (service.env missing or unreadable, a
+    /// release state present but unreadable), with their causes: printed
+    /// before every section, so a section that finds no setting or no release
+    /// record is not read as the host having none.
+    unreadable: Vec<String>,
 }
 
 impl Layout {
     fn read() -> Result<Self, String> {
         let home = super::workload::home()?;
-        let settings = service_settings(&home).unwrap_or_default();
-        let release_state = std::fs::read(home.join(".stado/release-state/brama.json"))
-            .ok()
-            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-            .unwrap_or(Value::Null);
+        let mut unreadable = Vec::new();
+        let settings = match service_settings(&home) {
+            Ok(settings) => settings,
+            Err(cause) => {
+                unreadable.push(format!("service settings {cause}"));
+                BTreeMap::new()
+            }
+        };
+        let state_path = home.join(".stado/release-state/brama.json");
+        let release_state = match read_json(&state_path) {
+            Ok(Some(state)) => state,
+            Ok(None) => Value::Null,
+            Err(cause) => {
+                unreadable.push(format!("release state {} {cause}", state_path.display()));
+                Value::Null
+            }
+        };
         Ok(Layout {
             services: home.join(".stado/services/brama"),
             log: home
@@ -79,6 +100,7 @@ impl Layout {
             home,
             settings,
             release_state,
+            unreadable,
         })
     }
 
@@ -141,6 +163,12 @@ pub(crate) async fn run(json: bool) {
     }
     match Layout::read() {
         Ok(layout) => {
+            if !layout.unreadable.is_empty() {
+                emit(format!(
+                    "=== unreadable inputs\n{}",
+                    layout.unreadable.join("\n")
+                ));
+            }
             let resolved = installation::print_units(&layout);
             installation::print_generations(&layout, resolved.as_deref());
             let config_dir = installation::print_service_env(&layout, resolved.as_deref());

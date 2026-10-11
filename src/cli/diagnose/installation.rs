@@ -27,18 +27,21 @@ const RUNNABLE_FILES: [&str; 3] = [
     "bin/start-with-skarbiec",
 ];
 
-/// A launchd plist as JSON, through the system's own converter.
-fn plist(path: &Path) -> Option<Value> {
-    let output = Command::new("/usr/bin/plutil")
-        .args(["-convert", "json", "-o", "-"])
-        .arg(path)
-        .output()
-        .ok()?;
-    output
-        .status
-        .success()
-        .then(|| serde_json::from_slice(&output.stdout).ok())
-        .flatten()
+/// A launchd plist as JSON, through the system's own converter; why it
+/// could not be converted otherwise.
+fn plist(path: &Path) -> Result<Value, String> {
+    let mut command = Command::new("/usr/bin/plutil");
+    command.args(["-convert", "json", "-o", "-"]).arg(path);
+    let output = stado_wait::output(&mut command)
+        .map_err(|error| format!("plutil could not be run: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "plutil refused it ({}): {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    serde_json::from_slice(&output.stdout).map_err(|error| format!("plutil's JSON: {error}"))
 }
 
 /// The units that start Brama; returns where `current` resolves.
@@ -74,8 +77,13 @@ pub(super) fn print_units(layout: &Layout) -> Option<PathBuf> {
             .collect();
         paths.sort();
         for path in paths {
-            let Some(document) = plist(&path) else {
-                continue;
+            // A unit that cannot be read may be the one that runs Brama.
+            let document = match plist(&path) {
+                Ok(document) => document,
+                Err(cause) => {
+                    say!("  {}: cannot be read: {cause}", path.display());
+                    continue;
+                }
             };
             let label = document.get("Label").and_then(Value::as_str).unwrap_or("");
             let arguments: Vec<&str> = document
