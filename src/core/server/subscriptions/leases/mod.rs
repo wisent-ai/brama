@@ -17,6 +17,9 @@ use crate::subscription_dispatch::leases;
 
 use super::subscription_pool_scope;
 
+mod refused;
+pub(in crate::core::server) use refused::report_refused;
+
 /// The live leases the caller may see, with the sessions each subscription
 /// carries and each declared provider's limit: `limits` holds the stated
 /// ones, `unstated` the refusal of each provider whose declaration states

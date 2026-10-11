@@ -74,7 +74,7 @@ pub use self::plan_window::{
 };
 pub use self::spend::{
     blocked_until_ms, is_blocked, is_quota_exhausted, record_block, record_call, record_call_from,
-    Block, Measured,
+    record_reported_block, Block, Measured,
 };
 pub use self::standing::standing_refusal;
 pub use credential::discovery::{

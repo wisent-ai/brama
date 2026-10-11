@@ -182,6 +182,38 @@ pub fn record_block(subscription_id: &str, provider: &str, reason: &str, respons
     });
 }
 
+/// Mark a subscription unusable until `until_ms`, the instant the provider
+/// named to a harness that holds its own sign-in on a leased member (OMP
+/// talks to the provider directly, so the refusal never passed through this
+/// gateway). Recorded as a full rate window, like a refusal the gateway read
+/// itself; a later successful answer clears it the same way.
+pub fn record_reported_block(subscription_id: &str, provider: &str, reason: &str, until_ms: i64) {
+    let now = now_ms();
+    let blocked = failure::envelope(
+        POINT_CREDENTIAL_BLOCK,
+        failure::code_for("provider_rate_limited"),
+        IMPACT_CREDENTIAL_BLOCK,
+        reason,
+    )
+    .with_context("subscription", subscription_id)
+    .with_context("provider", provider);
+    with_ledger(|ledger| {
+        let entry = ledger
+            .subscriptions
+            .entry(subscription_id.to_string())
+            .or_default();
+        entry.provider = provider.to_string();
+        entry.updated_at_ms = Some(now);
+        entry.block = Some(Block {
+            blocked_until_ms: until_ms,
+            reason: reason.to_string(),
+            recorded_at_ms: now,
+            envelope: Some(blocked.to_json()),
+            quota_exhausted: false,
+        });
+    });
+}
+
 /// Whether this subscription is inside a recorded block right now.
 pub fn is_blocked(subscription_id: &str) -> bool {
     let now = now_ms();

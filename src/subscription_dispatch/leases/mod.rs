@@ -17,6 +17,7 @@
 //! member carrying the fewest, and a pool whose every usable member is at
 //! that number refuses the lease and is the shortage an acquisition buys for.
 
+pub mod refused;
 mod register;
 
 use std::collections::BTreeMap;

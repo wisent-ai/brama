@@ -37,7 +37,7 @@ use crate::core::server::media::{
 };
 use crate::core::server::readiness::{health, readyz};
 use crate::core::server::subscriptions::leases::{
-    list_leases, release_lease, release_leases, take_lease,
+    list_leases, release_lease, release_leases, report_refused, take_lease,
 };
 use crate::core::server::subscriptions::probe::{
     acquire_admin_subscription, attribute_admin_subscription_pool,
@@ -137,6 +137,9 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
             "/v1/subscription-pool/leases",
             get(list_leases).post(take_lease).delete(release_leases),
         )
+        // A holder whose harness keeps its own sign-in reports the provider's
+        // refusal of the member it leased, so the next lease avoids it.
+        .route("/v1/subscription-pool/leases/refused", post(report_refused))
         .route(
             "/v1/subscription-pool/leases/:lease_id",
             delete(release_lease),
