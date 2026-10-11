@@ -175,18 +175,22 @@ pub(super) fn persist(ledger: &Ledger) -> Result<(), String> {
         file.sync_all()
     })();
     if let Err(error) = written {
-        let _ = fs::remove_file(&staging);
-        return Err(format!(
-            "cannot write subscription usage ledger staging file `{}`: {error}",
-            staging.display()
+        return Err(crate::core::staging::failed_with(
+            format!(
+                "cannot write subscription usage ledger staging file `{}`: {error}",
+                staging.display()
+            ),
+            &staging,
         ));
     }
     if let Err(error) = fs::rename(&staging, &path) {
-        let _ = fs::remove_file(&staging);
-        return Err(format!(
-            "cannot replace subscription usage ledger `{}` from `{}`: {error}",
-            path.display(),
-            staging.display()
+        return Err(crate::core::staging::failed_with(
+            format!(
+                "cannot replace subscription usage ledger `{}` from `{}`: {error}",
+                path.display(),
+                staging.display()
+            ),
+            &staging,
         ));
     }
     Ok(())

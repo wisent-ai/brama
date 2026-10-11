@@ -179,8 +179,5 @@ pub(super) fn write_registry(path: &Path, value: &Value) -> Result<(), String> {
             .map_err(|error| format!("cannot commit inference routes: {error}"))?;
         Ok(())
     })();
-    if result.is_err() {
-        let _ = std::fs::remove_file(&staging);
-    }
-    result
+    result.map_err(|error| crate::core::staging::failed_with(error, &staging))
 }

@@ -394,7 +394,13 @@ fn register() -> Result<Value, String> {
                 .envs(&settings)
                 .output()
         });
-        let _ = std::fs::remove_file(&key_file);
+        // The next agent writes the same file with `create_new`; one left
+        // behind would refuse it as existing instead of by this cause.
+        if let Some(left) = brama::core::staging::remove(&key_file) {
+            return Err(format!(
+                "the workload public key file for {agent} could not be removed after grant issue: {left}"
+            ));
+        }
         let minted =
             minted.map_err(|error| format!("grant issue for {agent} could not run: {error}"))?;
         let stdout = String::from_utf8_lossy(&minted.stdout);
