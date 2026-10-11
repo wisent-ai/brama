@@ -8,6 +8,8 @@ mod authenticator_identity;
 mod borrowed_grant;
 #[path = "leases/concurrency.rs"]
 mod concurrent_leases;
+#[path = "identity/decoding.rs"]
+mod credential_decoding;
 #[path = "discovery/receipt.rs"]
 mod historical_receipt;
 #[path = "leases/fairness.rs"]

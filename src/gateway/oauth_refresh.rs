@@ -202,11 +202,18 @@ pub(super) async fn refresh(
     // it and the provider was never asked.
     let config = oauth_provider(provider)
         .ok_or_else(|| refresh_failure(Code::Config, "provider does not support OAuth refresh"))?;
-    let raw = secret
-        .expose_utf8()
-        .map_err(|_| refresh_failure(Code::Config, "OAuth credential is not UTF-8"))?;
-    let mut blob: Value = serde_json::from_str(raw)
-        .map_err(|_| refresh_failure(Code::Config, "OAuth credential is not JSON"))?;
+    let raw = secret.expose_utf8().map_err(|error| {
+        refresh_failure(
+            Code::Config,
+            format!("read stored OAuth credential for `{provider}` as UTF-8: {error}"),
+        )
+    })?;
+    let mut blob: Value = serde_json::from_str(raw).map_err(|error| {
+        refresh_failure(
+            Code::Config,
+            format!("parse stored OAuth credential for `{provider}` as JSON: {error}"),
+        )
+    })?;
     if !blob.is_object() {
         zeroize_json_strings(&mut blob);
         return Err(refresh_failure(Code::Config, refusal::NOT_AN_OBJECT));
@@ -226,10 +233,10 @@ pub(super) async fn refresh(
                 "OAuth credential shape mismatch",
             ));
         }
-        let fresh = Zeroizing::new(serde_json::to_vec(&blob).map_err(|_| {
+        let fresh = Zeroizing::new(serde_json::to_vec(&blob).map_err(|error| {
             refresh_failure(
                 Code::Config,
-                "refreshed OAuth credential is not serializable",
+                format!("serialize refreshed OAuth credential for `{provider}`: {error}"),
             )
         })?);
         if fresh.is_empty() {
