@@ -1,0 +1,6 @@
+# Brama depends on private wisent-ai repositories by git (echo-web among them).
+# Cargo's built-in git transport carries no credentials, so a fetch of one
+# answers "failed to authenticate" wherever the tree is checked or built from
+# a fresh copy; the git program carries the credentials the checkout itself uses.
+[net]
+git-fetch-with-cli = true
