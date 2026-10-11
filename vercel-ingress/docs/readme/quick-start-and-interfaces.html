@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quick start and interfaces — Brama Docs</title>
+  <meta name="description" content="Install a published Brama release and run its first harmless command, then the HTTP, CLI and MCP surfaces Brama offers and the contract each keeps.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/readme/quick-start-and-interfaces">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>README</h2><a href="/docs/readme">Overview</a><a href="/docs/readme/product">Product and use cases</a><a class="active" aria-current="page" href="/docs/readme/quick-start-and-interfaces">Quick start and interfaces</a><a href="/docs/readme/subscription-pool">Subscription pool</a><a href="/docs/readme/operations">Operational model</a></section></nav></aside>
+    <main>
+      <p class="source-note">Documentation topic: README.md</p>
+      <article class="doc"><h1 id="quick-start-and-interfaces">Quick start and interfaces<a class="headerlink" href="#quick-start-and-interfaces" title="Link to this section">&para;</a></h1>
+<h2 id="quick-start">Quick start<a class="headerlink" href="#quick-start" title="Link to this section">&para;</a></h2>
+<p>The normal path is the newest published release. <code>brama detect</code> is the safe first
+command either way: it reads local hardware, performs no provider request, reads
+no credential, creates no Brama state, and incurs no model cost.</p>
+<p>Install the archive for your platform and verify its published checksum before
+extracting it:</p>
+<pre><code class="language-bash"># List published releases and choose one. There is no `latest` production
+# contract, so the version is selected deliberately, never resolved for you.
+curl --fail --silent --proto '=https' --tlsv1.2 \
+  https://api.github.com/repos/wisent-ai/brama/releases | grep '&quot;tag_name&quot;'
+
+version=&lt;chosen SemVer, without the v prefix&gt;
+platform=darwin-arm64   # or linux-amd64
+base=&quot;https://github.com/wisent-ai/brama/releases/download/v${version}&quot;
+curl --fail --location --proto '=https' --tlsv1.2 --remote-name-all \
+  &quot;${base}/brama-v${version}-${platform}.tar.gz&quot; \
+  &quot;${base}/brama-v${version}-${platform}.tar.gz.sha256&quot;
+shasum -a 256 --check &quot;brama-v${version}-${platform}.tar.gz.sha256&quot;
+tar -xzf &quot;brama-v${version}-${platform}.tar.gz&quot;
+./bin/brama detect
+</code></pre>
+<p>Serving traffic takes more than the archive. Provision this installation's trust
+material once with <code>bin/provision-skarbiec-trust</code> — the archive ships no signing
+key and the launcher refuses to start until that material exists — then read
+<a href="/docs/onboarding"><code>ONBOARDING.md</code></a> before the first authenticated request.</p>
+<p>Maintainers working on unreleased source run the same command from a checkout,
+which needs Git and the Rust toolchain required by <code>Cargo.lock</code> (the production
+build uses the pinned builder in <code>Dockerfile</code>):</p>
+<pre><code class="language-bash">git clone https://github.com/wisent-ai/brama.git brama
+cd brama
+cargo run --locked -- detect
+</code></pre>
+<p>Expected output contains these fields with host-specific values:</p>
+<pre><code class="language-text">GPU Type: ...
+VRAM: ... GB
+RAM: ... GB
+CPU Cores: ...
+</code></pre>
+<p>Neither command starts a service. The checkout path may leave build output under
+<code>target/</code>; it is a local build cache, not product state. Continue with
+<a href="/docs/onboarding"><code>ONBOARDING.md</code></a> for the authenticated loopback and production
+operator paths. Runnable, risk-labeled workflows are indexed in
+<a href="/docs/examples"><code>examples/</code></a>.</p>
+<h2 id="primary-interfaces">Primary interfaces<a class="headerlink" href="#primary-interfaces" title="Link to this section">&para;</a></h2>
+<ul>
+<li><strong>HTTP inference:</strong> <code>POST /v1/chat/completions</code>, <code>/v1/messages</code>,
+  <code>/v1/responses</code>, <code>/v1/embeddings</code>, and <code>/v1/moderations</code> are the canonical
+  model-execution interfaces. The three chat formats share one routing
+  decision, one identity contract, and one attempt budget; they differ only in
+  the shape of the request and the answer.</li>
+<li><strong>Streaming:</strong> any of the three chat formats streams when the request asks
+  for it -- <code>"stream": true</code> on chat completions and Anthropic Messages,
+  <code>"stream": true</code> on Responses. The response is <code>text/event-stream</code> in the
+  caller's own dialect: <code>chat.completion.chunk</code> frames closed by
+  <code>data: [DONE]</code>, Anthropic <code>message_start</code>/<code>content_block_*</code>/<code>message_stop</code>
+  events, or <code>response.*</code> events closed by <code>response.completed</code>. A stream that
+  ends without its terminal event is a generation that was cut after it
+  committed; the caller holds an incomplete answer and Brama has already
+  stopped. Rotation across models and credentials happens only before the
+  first byte, so a committed stream is never silently re-run.</li>
+<li><strong>Account API keys and subscriptions:</strong> authenticated Wisent users use
+  <code>GET|POST /v1/account/subscriptions</code> and
+  <code>DELETE /v1/account/subscriptions/:subscription_id</code>. Brama derives the owner
+  from the verified Wisent session; the caller never supplies an account or
+  agent identifier. <code>POST</code> accepts an API key for any supported remote provider,
+  stores it through Skarbiec without returning it, and makes that account's
+  canonical <code>provider/model</code> routes available for buffered and streamed calls.</li>
+<li><strong>HTTP discovery:</strong> <code>GET /v1/models</code>; account discovery combines public
+  catalog metadata with models executable by that account's stored keys, while
+  signed agent discovery includes the shared subscription pool.</li>
+<li><strong>Subscription lifecycle:</strong> <code>GET</code>, <code>POST</code>, and <code>DELETE</code>
+  <code>/v1/subscriptions/:agent_id</code>; always bearer- and HMAC-protected. A <code>GET</code>
+  returns, per subscription, the plan windows the provider itself reported
+  (<code>limits</code>: <code>used_fraction</code>, <code>window_label</code>, <code>resets_at_ms</code>, and the
+  <code>recorded_at_ms</code> the reading was taken at), what Brama measured (<code>measured</code>:
+  requests, failures, input and output tokens, first and last use), any
+  rate-limit <code>block</code> in force, when the record last changed
+  (<code>observed_at_ms</code>), where the newest window came from and whether it is still
+  current (<code>usage_source</code>: <code>provider</code>, <code>traffic</code> or <code>probe</code>, and <code>stale</code>), the
+  newest proactive check (<code>probe</code>: <code>attempted_at_ms</code>, <code>ok</code>, <code>detail</code> when there
+  is something to explain, and <code>source</code> -- <code>usage_report</code> or <code>completion</code>), and
+  where the credential itself stands (<code>credential</code>: <code>state</code> -- <code>active</code>,
+  <code>needs_reauthorization</code> or <code>disabled</code> -- with <code>cause</code>, <code>recorded_at_ms</code>,
+  <code>expires_at_ms</code> and <code>refreshed_at_ms</code>; <code>null</code> while nothing has been recorded
+  about the grant). <code>credential.state</code> is what separates a subscription that is
+  quiet from one whose sign-in is overdue, and <code>cause</code> is the provider's own
+  sentence for the refusal.</li>
+<li><strong>How fresh a plan window is:</strong> <code>usage_source</code> names which statement the
+  newest window is -- the provider's own usage report, the headers of real
+  traffic, or an operator's probe -- and is <code>null</code> when there is no window to
+  attribute. <code>stale</code> is true when the newest usage report failed or a served
+  window's own reset instant has passed. Every recorded reading is served,
+  because a number that says when it was taken is information and an empty plan
+  is not; a newer reading replaces it.</li>
+<li><strong>What an empty <code>limits</code> array means:</strong> one of four states, and the newest
+  check is what tells them apart. Windows present: render them, aged by the
+  newest <code>recorded_at_ms</code>, and say "as of" only when <code>stale</code> is false. Empty with
+  <code>probe.ok</code> false: the credential or the provider refused, and <code>probe.detail</code> is
+  its own sentence. Empty with no <code>probe</code> and nothing measured: nothing has ever
+  gone through this subscription. Empty with <code>probe.ok</code> true: the provider
+  genuinely publishes no plan state, and <code>probe.detail</code> says so when the provider
+  publishes no usage report at all. Only the last of those may be shown as "no
+  plan window", and none of them is a zero.</li>
+<li><strong>Operations:</strong> public <code>GET /health</code> and <code>GET /readyz</code>; protected <code>GET /stats</code>.
+  <code>/health</code> is liveness only and says so in its body (<code>dependencies:
+  not_probed</code>): it answers <code>ok</code> from a gateway whose every credential
+  redemption is being refused. <code>/readyz</code> is the one that answers whether the
+  product works: it redeems one capability per configured provider and returns
+  <code>503</code> naming the providers that failed, with no secret in the body. Deploy
+  checks and uptime monitors should read <code>/readyz</code>; <code>/health</code> only proves the
+  process is running.</li>
+<li><strong>Error contract:</strong> a refused redemption is <code>503 authorization_error</code> with
+  code <code>credential_unauthorized</code> and <code>retryable: false</code>, never a <code>429
+  capacity_error</code>. Waiting does not repair an authorization id that does not
+  match, and classifying it as capacity sends the caller into retries and the
+  operator into the subscription catalogue.</li>
+<li><strong>Desktop control plane:</strong> <code>brama-desktop</code> alone may call
+  <code>GET /v1/admin/snapshot</code>, <code>PUT /v1/admin/routes</code>, the <code>GET</code>, <code>POST</code>, and
+  <code>DELETE</code> <code>/v1/admin/subscriptions/:agent_id</code> family, and
+  <code>POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe</code>, which is the
+  only endpoint in the product that deliberately spends plan quota. These
+  endpoints return identifiers, usage and status only; subscription credentials
+  remain write-only.</li>
+<li><strong>CLI:</strong> <code>serve</code>, <code>version</code>, <code>detect</code>, <code>test</code>, <code>subscriptions list</code>,
+  <code>subscription refresh</code>, <code>collect-task-quality</code>, and <code>mcp</code>. Billable commands
+  require an explicit cost acknowledgement, and commands that mutate state
+  require an explicit <code>--reason</code>.</li>
+<li><strong>MCP:</strong> read-only stdio JSON-RPC exposing <code>brama_detect</code> only. Model execution,
+  credential discovery, collection, and mutation are deliberately excluded.</li>
+</ul>
+<p>The complete state, error, retry, authorization, and resource contract is in
+<a href="/docs/core"><code>CORE.md</code></a>. Provider capability and lifecycle contracts are in
+<a href="/docs/integrations"><code>INTEGRATIONS.md</code></a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

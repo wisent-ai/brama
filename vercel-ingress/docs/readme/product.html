@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Product and use cases — Brama Docs</title>
+  <meta name="description" content="Who Brama is for, what it includes and deliberately excludes, the supported environments, the core use cases, and how a request travels through it.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/readme/product">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>README</h2><a href="/docs/readme">Overview</a><a class="active" aria-current="page" href="/docs/readme/product">Product and use cases</a><a href="/docs/readme/quick-start-and-interfaces">Quick start and interfaces</a><a href="/docs/readme/subscription-pool">Subscription pool</a><a href="/docs/readme/operations">Operational model</a></section></nav></aside>
+    <main>
+      <p class="source-note">Documentation topic: README.md</p>
+      <article class="doc"><h1 id="product-and-use-cases">Product and use cases<a class="headerlink" href="#product-and-use-cases" title="Link to this section">&para;</a></h1>
+<h2 id="problem-and-intended-users">Problem and intended users<a class="headerlink" href="#problem-and-intended-users" title="Link to this section">&para;</a></h2>
+<p>Wisent services need models from several providers without copying provider
+credentials into every caller, coupling callers to provider wire formats, or
+silently charging the wrong account. Direct provider integrations also duplicate
+model discovery, OAuth refresh, retry, error handling, and access policy.</p>
+<p>Brama serves four audiences:
+- <strong>Desktop users</strong> run a private Brama process on their own computer and add
+  their own provider credentials or subscriptions.
+- <strong>Wisent service developers</strong> use one OpenAI-compatible API and stable logical
+  aliases instead of provider credentials and provider-specific clients.
+- <strong>Jeden runtimes</strong> use an agent-bound HMAC identity to discover and spend only
+  subscriptions delegated to that exact agent.
+- <strong>Operators</strong> publish immutable runtimes, grant finite Skarbiec capabilities,
+  configure aliases and client allowlists, and diagnose routing without exposing
+  secret material.</p>
+<p>Brama is preferable to direct integrations when the required outcome is one
+least-privilege enforcement point with explicit billing ownership, bounded
+provider attempts, normalized errors, and auditable routing decisions.</p>
+<h2 id="product-boundaries">Product boundaries<a class="headerlink" href="#product-boundaries" title="Link to this section">&para;</a></h2>
+<h3 id="included">Included<a class="headerlink" href="#included" title="Link to this section">&para;</a></h3>
+<ul>
+<li>OpenAI-compatible chat completions, embeddings, moderations, and model catalog.</li>
+<li>Native Anthropic Messages and OpenAI Responses ingress on the same routing
+  decision, so a caller that speaks one of those two first-party formats needs
+  no shim in front of Brama.</li>
+<li>Server-sent event streaming on all three chat formats, with every retry
+  bounded to the time before the first caller byte.</li>
+<li>Canonical <code>provider/model</code> routing and deployment-owned logical aliases,
+  including <code>-best</code> for the strongest operator-approved subscription route.</li>
+<li>Agent-scoped selectors: <code>any</code>, <code>any-vision-capable</code>, and <code>task:&lt;task-name&gt;</code>.</li>
+<li>Direct provider capabilities owned by Brama and subscription capabilities
+  available through the shared vault pool.</li>
+<li>Final-use secret redemption through the local Skarbiec capability socket in
+  managed deployments, or a zeroizing in-memory credential map in standalone
+  desktop deployments.</li>
+<li>Bounded credential rotation for authentication, quota, and rate-limit failures.</li>
+<li>OAuth refresh for Claude Code, Codex, and Kimi subscription credentials.</li>
+<li>An append-only operational journal for retirement and task-quality evidence.</li>
+<li>Secret-free build identity, health, statistics, hardware detection, and a
+  read-only stdio MCP surface.</li>
+</ul>
+<h3 id="explicit-non-goals">Explicit non-goals<a class="headerlink" href="#explicit-non-goals" title="Link to this section">&para;</a></h3>
+<ul>
+<li>Running Claude Code, Codex, Kimi Code, OpenCode, or any other agent runtime.
+  Jeden is the agent runtime; Brama performs provider HTTP requests only.</li>
+<li>Starting or supervising a local inference engine. The deployment owner controls the
+  digest-pinned vLLM lifecycle; Brama reads its owner-only route snapshot and performs
+  authenticated OpenAI-compatible requests over the target's Tailscale address.</li>
+<li>Acting as a general secret store, identity provider, billing ledger, or system
+  of record for provider accounts.</li>
+<li>Inferring task intent from prompt text. <code>task:</code> uses previously recorded,
+  explicitly named quality evidence only.</li>
+<li>Silent fallback across products, agents, provider accounts, credentials, or
+  storage authorities.</li>
+<li>Owning production DNS, ingress, host registration, orchestration, or Skarbiec grants.</li>
+<li>Continuing a cut generation. Once a stream has committed, a provider failure
+  ends that stream; Brama never resumes it on another credential, because a
+  second attempt would double both the bill and the text.</li>
+</ul>
+<h3 id="supported-environments-and-current-capability">Supported environments and current capability<a class="headerlink" href="#supported-environments-and-current-capability" title="Link to this section">&para;</a></h3>
+<table>
+<thead>
+<tr><th>Capability</th><th>Environment</th><th>Current state</th></tr>
+</thead>
+<tbody>
+<tr><td><code>brama detect</code> and read-only MCP detection</td><td>macOS or Linux</td><td>Implemented</td></tr>
+<tr><td>OpenAI-compatible HTTP gateway</td><td>Linux service host; authenticated loopback is also supported</td><td>Implemented</td></tr>
+<tr><td>Direct API-provider routing</td><td>Provider capability configured in Skarbiec</td><td>Implemented</td></tr>
+<tr><td>Agent subscription routing</td><td>Jeden HMAC identity plus delegated capability</td><td>Implemented</td></tr>
+<tr><td>Claude Code donation endpoint</td><td>Authorized agent and entitlements router</td><td>Implemented</td></tr>
+<tr><td>Deployment-managed local inference routing</td><td>Linux GPU target over Tailscale</td><td>Implemented</td></tr>
+<tr><td>Outbound response streaming</td><td>Chat completions, Anthropic Messages, OpenAI Responses</td><td>Implemented</td></tr>
+<tr><td>Immutable public release</td><td>Canonical Stado channels for <code>linux-amd64</code> and <code>darwin-arm64</code></td><td>Implemented; <code>released-surface.json</code> names the newest recorded release</td></tr>
+<tr><td>Per-installation Skarbiec trust material</td><td>Operator-managed host</td><td>Implemented; <code>bin/provision-skarbiec-trust</code> generates it and the launcher refuses to start without it</td></tr>
+<tr><td>Declared 1.0 contract stability</td><td>—</td><td>Not yet declared</td></tr>
+</tbody>
+</table>
+<p>The current-state column is authoritative. Unavailable capability must not be
+advertised by the API, MCP server, examples, or release notes.</p>
+<h2 id="core-use-cases">Core use cases<a class="headerlink" href="#core-use-cases" title="Link to this section">&para;</a></h2>
+<h3 id="call-a-deployment-owned-model-alias">Call a deployment-owned model alias<a class="headerlink" href="#call-a-deployment-owned-model-alias" title="Link to this section">&para;</a></h3>
+<ul>
+<li><strong>Actor:</strong> an authenticated Wisent service.</li>
+<li><strong>Initial state:</strong> the service has its dedicated bearer and the alias maps to a
+  configured direct-provider route, optionally followed by ordered fallback
+  routes.</li>
+<li><strong>Outcome:</strong> Brama validates transport, identity, allowlist, and request limits;
+  invokes the primary, then each fallback only after a failed attempt, and
+  returns the first normalized success or the final normalized failure.</li>
+<li><strong>Safety boundary:</strong> no agent subscription is discovered or charged; every
+  fallback names an explicit provider capability.</li>
+</ul>
+<h3 id="use-an-exact-agent-subscription">Use an exact agent subscription<a class="headerlink" href="#use-an-exact-agent-subscription" title="Link to this section">&para;</a></h3>
+<ul>
+<li><strong>Actor:</strong> a Jeden runtime with a bearer bound to its <code>agent_id</code>.</li>
+<li><strong>Initial state:</strong> the agent signs the exact request body and owns an active
+  delegated provider capability.</li>
+<li><strong>Outcome:</strong> Brama redeems the selected credential at final use and returns the
+  normalized provider result.</li>
+<li><strong>Safety boundary:</strong> <code>billingTarget</code> must name the same provider and an active
+  non-retired subscription in the shared pool; provenance tags do not gate routing.</li>
+</ul>
+<h3 id="select-an-available-or-task-ranked-model">Select an available or task-ranked model<a class="headerlink" href="#select-an-available-or-task-ranked-model" title="Link to this section">&para;</a></h3>
+<ul>
+<li><strong>Actor:</strong> an authenticated Jeden runtime.</li>
+<li><strong>Initial state:</strong> the agent has active subscriptions; <code>task:</code> additionally
+  requires persisted quality observations for the named task.</li>
+<li><strong>Outcome:</strong> Brama chooses eligible candidates, applies the documented bounded
+  attempt policy, and stops at the first successful provider result.</li>
+<li><strong>Cost boundary:</strong> selectors may invoke more than one provider attempt; limits
+  are defined in <a href="/docs/core"><code>CORE.md</code></a>. They never retry without a finite bound.</li>
+</ul>
+<h3 id="operate-and-recover-the-gateway">Operate and recover the gateway<a class="headerlink" href="#operate-and-recover-the-gateway" title="Link to this section">&para;</a></h3>
+<ul>
+<li><strong>Actor:</strong> a Brama operator.</li>
+<li><strong>Initial state:</strong> an immutable runtime and its scoped Skarbiec grants are
+  available on the operator-managed Linux host.</li>
+<li><strong>Outcome:</strong> health and version output identify the build; structured routing
+  logs and protected stats explain bounded decisions without secret material.</li>
+<li><strong>Recovery boundary:</strong> rollback restores one immutable runtime coordinate and
+  compatible non-secret journal state as described in <a href="/docs/release"><code>RELEASE.md</code></a>.</li>
+</ul>
+<h2 id="how-brama-works">How Brama works<a class="headerlink" href="#how-brama-works" title="Link to this section">&para;</a></h2>
+<pre><code class="language-text">Wisent service / Jeden
+        │ HTTPS or authenticated loopback
+        │ dedicated bearer
+        │ optional exact-body agent HMAC
+        ▼
+     Axum ingress ── client binding + model allowlist + request limits
+        │
+        ├── logical alias ──────────────── direct provider capability
+        ├── canonical provider/model ──── direct or agent subscription
+        └── any / vision / task ───────── bounded candidate selection
+                                                │
+                                                ▼
+                            entitlements-router metadata discovery
+                                                │
+                                                ▼
+                         Skarbiec final-use capability redemption
+                                                │
+                                                ▼
+                                   provider protocol adapter
+                                                │
+                                                ▼
+                         normalized response, error, metrics, journal
+</code></pre>
+<p>Skarbiec is authoritative for secret capability redemption. The entitlements
+router is authoritative for live subscription resources. <code>-best</code> is an explicit
+deployment alias for <code>codex/gpt-5.3-codex-spark</code>; a caller still needs both an
+allowlisted bearer and the HMAC identity that owns the eligible subscription.
+It does not infer quality from prompt text or unlock a direct provider
+credential. Brama's journal stores only retirement markers and task-quality
+observations; provider credentials are forbidden. Public model metadata is read
+from models.dev and is never credential authority.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

@@ -366,6 +366,10 @@
       "destination": "/docs/changelog/:slug.html"
     },
     {
+      "source": "/docs/readme/:slug",
+      "destination": "/docs/readme/:slug.html"
+    },
+    {
       "source": "/:path((?!docs(?:/|$)).*)",
       "destination": "/api/gateway?__brama_path=/:path"
     }
