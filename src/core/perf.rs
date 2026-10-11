@@ -4,8 +4,10 @@
 //! the requested route id. `/v1/models` exposes them as an optional `perf`
 //! block per route and `/stats` reports how many models are tracked.
 //!
-//! Stats are best-effort persisted to a JSON file (atomic rewrite after each
-//! record) and reloaded on startup so a process restart keeps the numbers.
+//! Stats are persisted to a JSON file (atomic rewrite after each record) and
+//! reloaded on startup so a process restart keeps the numbers. A file that
+//! cannot be read, parsed or written is logged (`perf_stats_*` events) with
+//! its path and cause; serving never waits on it.
 //! The file lives on the service host's instance-local `/tmp`, so numbers are
 //! per process, never fleet-wide.
 
@@ -43,11 +45,26 @@ fn persist_path() -> String {
     std::env::var("BRAMA_PERF_PATH").unwrap_or_else(|_| "/tmp/brama-perf.json".into())
 }
 
+/// An absent file is a first start; one that cannot be read or does not parse
+/// is logged with the path and cause, so the next flush replacing it is seen
+/// instead of the numbers quietly starting over.
 fn load() -> HashMap<String, PerfStats> {
-    std::fs::read_to_string(persist_path())
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default()
+    let path = persist_path();
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return HashMap::new(),
+        Err(error) => {
+            tracing::warn!(event = "perf_stats_unreadable", %path, %error);
+            return HashMap::new();
+        }
+    };
+    match serde_json::from_str(&raw) {
+        Ok(stats) => stats,
+        Err(error) => {
+            tracing::warn!(event = "perf_stats_unparseable", %path, %error);
+            HashMap::new()
+        }
+    }
 }
 
 /// Record one successful dispatch for `model` (the requested route id).
@@ -62,6 +79,7 @@ pub fn record(model: &str, latency_ms: f64, output_tokens: u32) {
         0.0
     };
     let Ok(mut map) = REGISTRY.lock() else {
+        tracing::warn!(event = "perf_stats_lock_poisoned", %model);
         return;
     };
     let stats = map.entry(model.to_string()).or_default();
@@ -74,14 +92,24 @@ pub fn record(model: &str, latency_ms: f64, output_tokens: u32) {
 }
 
 /// Atomic write: serialize to a sibling temp file, then rename over the target.
+/// A step that fails is logged with the path and cause; the stats in memory
+/// stay and the next record tries again.
 fn flush(map: &HashMap<String, PerfStats>) {
     let path = persist_path();
     let tmp = format!("{path}.tmp");
-    let Ok(payload) = serde_json::to_vec(map) else {
-        return;
+    let payload = match serde_json::to_vec(map) {
+        Ok(payload) => payload,
+        Err(error) => {
+            tracing::warn!(event = "perf_stats_unserializable", %error);
+            return;
+        }
     };
-    if std::fs::write(&tmp, payload).is_ok() {
-        let _ = std::fs::rename(&tmp, &path);
+    if let Err(error) = std::fs::write(&tmp, payload) {
+        tracing::warn!(event = "perf_stats_unwritten", path = %tmp, %error);
+        return;
+    }
+    if let Err(error) = std::fs::rename(&tmp, &path) {
+        tracing::warn!(event = "perf_stats_unwritten", %path, %error);
     }
 }
 

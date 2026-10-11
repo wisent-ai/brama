@@ -108,7 +108,7 @@ and never a secret. Deploy gates and uptime monitors read <code>/readyz</code>.<
 </tr>
 <tr>
 <td><code>BRAMA_PERF_PATH</code> (<code>/tmp/brama-perf.json</code>)</td>
-<td>replaceable per-model latency/throughput telemetry</td>
+<td>replaceable per-model latency/throughput telemetry; a file that cannot be read, parsed or written is logged as a <code>perf_stats_*</code> warning with its path and cause</td>
 </tr>
 <tr>
 <td><code>BRAMA_MODEL_CATALOG_CACHE</code> (<code>$BRAMA_STATE_DIR/models-dev-cache.json</code>, state directory default <code>$HOME/.brama</code>)</td>
