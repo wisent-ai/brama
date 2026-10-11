@@ -30,7 +30,8 @@ pub(super) enum WorkloadAuthorityAnswer {
     Resolved(ModelClientIdentity),
     Rejected,
     NotConfigured,
-    Unavailable,
+    /// The authority could not answer, and the operation that failed.
+    Unavailable(String),
 }
 
 pub(super) enum WisentIdentityAnswer {
@@ -49,7 +50,11 @@ pub(super) async fn identity_from_authority(
     let organization_header = exact_organization_header(headers);
     let workload_unavailable = match skarbiec::ask_authority(bearer).await {
         WorkloadAuthorityAnswer::Resolved(identity) => return Ok(identity),
-        WorkloadAuthorityAnswer::Unavailable => true,
+        WorkloadAuthorityAnswer::Unavailable(cause) => {
+            // The client sees 503; the log keeps which call failed and why.
+            tracing::warn!(event = "workload_authority_unavailable", %cause);
+            true
+        }
         WorkloadAuthorityAnswer::Rejected | WorkloadAuthorityAnswer::NotConfigured => false,
     };
 

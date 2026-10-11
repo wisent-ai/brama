@@ -18,12 +18,23 @@ pub(super) async fn ask_authority(bearer: &str) -> WorkloadAuthorityAnswer {
     ) else {
         return WorkloadAuthorityAnswer::NotConfigured;
     };
-    let Ok(own) = std::fs::read_to_string(&token_file) else {
-        return WorkloadAuthorityAnswer::Unavailable;
+    let own = match std::fs::read_to_string(&token_file) {
+        Ok(own) => own,
+        Err(error) => {
+            return WorkloadAuthorityAnswer::Unavailable(format!(
+                "cannot read BRAMA_SKARBIEC_TOKEN_FILE {token_file}: {error}"
+            ))
+        }
     };
-    let Ok(client) = crate::providers::adapter::control_client() else {
-        return WorkloadAuthorityAnswer::Unavailable;
+    let client = match crate::providers::adapter::control_client() {
+        Ok(client) => client,
+        Err(error) => {
+            return WorkloadAuthorityAnswer::Unavailable(format!(
+                "cannot build the Skarbiec client: {error}"
+            ))
+        }
     };
+    let introspect = format!("{}/v1/tokens/introspect", base.trim_end_matches('/'));
     let response = match client
         .post(format!(
             "{}/v1/tokens/introspect",
@@ -36,23 +47,34 @@ pub(super) async fn ask_authority(bearer: &str) -> WorkloadAuthorityAnswer {
         .await
     {
         Ok(response) => response,
-        Err(_) => return WorkloadAuthorityAnswer::Unavailable,
+        Err(error) => {
+            return WorkloadAuthorityAnswer::Unavailable(format!("POST {introspect}: {error}"))
+        }
     };
     if response.status().is_server_error() || response.status() == StatusCode::TOO_MANY_REQUESTS {
-        return WorkloadAuthorityAnswer::Unavailable;
+        return WorkloadAuthorityAnswer::Unavailable(format!(
+            "POST {introspect} answered {}",
+            response.status()
+        ));
     }
     if !response.status().is_success() {
         return WorkloadAuthorityAnswer::Rejected;
     }
     let answer: Value = match response.json().await {
         Ok(answer) => answer,
-        Err(_) => return WorkloadAuthorityAnswer::Unavailable,
+        Err(error) => {
+            return WorkloadAuthorityAnswer::Unavailable(format!(
+                "POST {introspect} answered a body that is not JSON: {error}"
+            ))
+        }
     };
     if answer.get("active").and_then(Value::as_bool) != Some(true) {
         return WorkloadAuthorityAnswer::Rejected;
     }
     let Some(client_id) = answer.get("consumer").and_then(Value::as_str) else {
-        return WorkloadAuthorityAnswer::Unavailable;
+        return WorkloadAuthorityAnswer::Unavailable(format!(
+            "POST {introspect} answered an active token with no consumer"
+        ));
     };
     let agent_id = answer
         .get("audience")
@@ -60,7 +82,9 @@ pub(super) async fn ask_authority(bearer: &str) -> WorkloadAuthorityAnswer {
         .filter(|audience| valid_agent_id(audience))
         .map(str::to_string);
     let Some(capabilities) = answer.get("capabilities").and_then(Value::as_array) else {
-        return WorkloadAuthorityAnswer::Unavailable;
+        return WorkloadAuthorityAnswer::Unavailable(format!(
+            "POST {introspect} answered an active token with no capabilities array"
+        ));
     };
     let routes: HashSet<String> = capabilities
         .iter()
