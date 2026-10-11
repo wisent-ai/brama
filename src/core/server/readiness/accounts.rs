@@ -11,6 +11,7 @@ use super::ReadinessReport;
 pub(super) struct ServiceFacts {
     pub(super) providers: Vec<String>,
     pub(super) provider_inventory_error: Option<String>,
+    pub(super) signing_inventory_error: Option<String>,
     pub(super) checked: Vec<Value>,
     pub(super) denied: Vec<String>,
     pub(super) provider_available: bool,
@@ -34,6 +35,11 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
     if let Some(detail) = &facts.provider_inventory_error {
         inventory_errors.push(json!({
             "operation": "configured_provider_capabilities", "detail": detail,
+        }));
+    }
+    if let Some(detail) = &facts.signing_inventory_error {
+        inventory_errors.push(json!({
+            "operation": "configured_request_sign_agents", "detail": detail,
         }));
     }
     if facts.standalone {

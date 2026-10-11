@@ -22,7 +22,14 @@ pub(crate) async fn sweep() -> Value {
     let mut seen = BTreeSet::new();
     let mut read = 0_usize;
     let mut failed = Vec::new();
-    for agent in broker::configured_request_sign_agents() {
+    let agents = match broker::configured_request_sign_agents() {
+        Ok(agents) => agents,
+        Err(error) => {
+            failed.push(json!({"operation": "configured_request_sign_agents", "error": error}));
+            Vec::new()
+        }
+    };
+    for agent in agents {
         for entry in broker::list_subscriptions(&agent).await {
             if entry.status != "active" {
                 continue;

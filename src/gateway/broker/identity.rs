@@ -30,104 +30,88 @@ const CENTRAL_REQUEST_SIGN_AGENTS: &[&str] = &[
 /// check can ask what each of them could actually route. Readiness had no way
 /// to name an agent, which is why it could only report the direct-API providers
 /// and said nothing about the subscription-backed ones.
-pub fn configured_request_sign_agents() -> Vec<String> {
-    let mut agents: Vec<String> = capability_map(REQUEST_SIGN_CAPABILITIES_ENV)
-        .map(|map| map.into_keys().collect())
-        .unwrap_or_default();
+pub fn configured_request_sign_agents() -> Result<Vec<String>, String> {
+    let mut agents: Vec<String> = capability_map(REQUEST_SIGN_CAPABILITIES_ENV)?
+        .into_keys()
+        .collect();
+    let identities = capability_map(REQUEST_SIGN_IDENTITIES_ENV)?;
     for agent in CENTRAL_REQUEST_SIGN_AGENTS {
-        if capability_map(REQUEST_SIGN_IDENTITIES_ENV).is_some_and(|map| map.contains_key(*agent)) {
+        if identities.contains_key(*agent) {
             agents.push((*agent).to_string());
         }
     }
     agents.sort();
     agents.dedup();
-    agents
+    Ok(agents)
 }
 
 /// Resolve an agent-specific request-signing secret immediately before HMAC
 /// verification. Echo, legacy Content Platform, Oko, and Weles are strict
 /// central-item projections; they never substitute generated agent resources
 /// or another product.
-pub async fn get_agent_auth_secret(agent_id: &str) -> Option<Secret> {
+pub async fn get_agent_auth_secret(agent_id: &str) -> Result<Secret, String> {
     if CENTRAL_REQUEST_SIGN_AGENTS.contains(&agent_id) {
-        let secret = capability_map(REQUEST_SIGN_IDENTITIES_ENV)?.remove(agent_id)?;
-        return Some(Secret::from_bytes(secret.into_bytes()));
+        let secret = capability_map(REQUEST_SIGN_IDENTITIES_ENV)?.remove(agent_id)
+            .ok_or_else(|| format!("request-sign identity `{agent_id}` is absent from {REQUEST_SIGN_IDENTITIES_ENV}"))?;
+        if secret.is_empty() {
+            return Err(format!(
+                "request-sign identity `{agent_id}` in {REQUEST_SIGN_IDENTITIES_ENV} is empty"
+            ));
+        }
+        return Ok(Secret::from_bytes(secret.into_bytes()));
     }
 
     let resource = format!("agent:{}", slug(agent_id));
-    if let Some(capability_id) = configured_capability(REQUEST_SIGN_CAPABILITIES_ENV, agent_id) {
-        if let Ok(binding) = CapabilityRef::request_sign(&capability_id, &resource) {
-            if let Ok(secret) = client()?.redeem(&binding) {
-                return Some(secret);
+    let seed_refusal = if let Some(id) =
+        configured_capability(REQUEST_SIGN_CAPABILITIES_ENV, agent_id)?
+    {
+        let binding = CapabilityRef::request_sign(&id, &resource).map_err(|error| {
+            format!("validate configured request-sign binding for `{resource}`: {error}")
+        })?;
+        let broker = client()
+            .map_err(|error| format!("construct request-sign client for `{resource}`: {error}"))?;
+        match broker.redeem(&binding) {
+            Ok(secret) => return Ok(secret),
+            Err(error) => Some(format!(
+                "redeem configured request-sign capability for `{resource}`: {error}"
+            )),
+        }
+    } else {
+        None
+    };
+    // A seed can be spent or expired. Preserve its refusal while asking the
+    // existing exact-resource authority paths for a fresh credential.
+    let result = async {
+        let fresh = match issue_capability(REQUEST_SIGN_PURPOSE, &resource).await {
+            Ok(fresh) => fresh,
+            Err(refused) => {
+                return credential_by_grant(&resource)
+                    .await
+                    .map_err(|grant| grant.caused_by(refused).render());
             }
+        };
+        let binding = CapabilityRef::request_sign(&fresh, &resource).map_err(|error| {
+            format!("validate issued request-sign binding for `{resource}`: {error}")
+        })?;
+        let broker = client()
+            .map_err(|error| format!("construct request-sign client for `{resource}`: {error}"))?;
+        match broker.redeem(&binding) {
+            Ok(secret) => Ok(secret),
+            Err(error) => credential_by_grant(&resource).await.map_err(|refused| {
+                format!(
+                    "{}; redeem issued request-sign capability for `{resource}`: {error}",
+                    refused.render()
+                )
+            }),
         }
     }
-    // Same reasoning as a provider credential: an optional seed is short-lived
-    // by contract, so its refusal is steady state and a fresh capability is the
-    // answer, not an error. Managed launches do not pre-issue one.
-    // The provider path already says when the authority refuses; this one
-    // returned None in silence, and the caller sees only "no auth secret for
-    // agent" -- a sentence that fits a missing item, a refused issue and a
-    // denied redemption equally well.
-    let fresh = match issue_capability(REQUEST_SIGN_PURPOSE, &resource).await {
-        Ok(fresh) => fresh,
-        Err(refused) => {
-            warn!(
-                event = "request_sign_issue_failed",
-                agent_id,
-                %resource,
-                envelope = %refused.to_json(),
-                "the authority would not issue a request-sign capability; trying the read grant"
-            );
-            return match credential_by_grant(&resource).await {
-                Ok(secret) => Some(secret),
-                Err(grant_refusal) => {
-                    let refusal = grant_refusal.caused_by(refused);
-                    warn!(
-                        event = "request_sign_credential_unavailable",
-                        agent_id,
-                        envelope = %refusal.to_json(),
-                        "{}",
-                        refusal.render()
-                    );
-                    None
-                }
-            };
-        }
-    };
-    let binding = match CapabilityRef::request_sign(&fresh, &resource) {
-        Ok(binding) => binding,
-        Err(error) => {
-            warn!(
-                event = "request_sign_binding_invalid",
-                agent_id, %resource, %error,
-                "the issued capability does not bind to this resource"
-            );
-            return None;
-        }
-    };
-    match client()?.redeem(&binding) {
-        Ok(secret) => Some(secret),
-        Err(error) => {
-            warn!(
-                event = "request_sign_redeem_failed",
-                agent_id, %resource, %error,
-                "the authority issued a request-sign capability and refused to redeem it; \
-                 trying the read grant"
-            );
-            match credential_by_grant(&resource).await {
-                Ok(secret) => Some(secret),
-                Err(refusal) => {
-                    warn!(
-                        event = "request_sign_credential_unavailable",
-                        agent_id,
-                        envelope = %refusal.to_json(),
-                        "{}",
-                        refusal.render()
-                    );
-                    None
-                }
-            }
-        }
-    }
+    .await;
+    result.map_err(|error| {
+        let detail = match seed_refusal {
+            Some(seed) => format!("{error}; prior refusal: {seed}"),
+            None => error,
+        };
+        warn!(event = "request_sign_credential_unavailable", agent_id, %resource, %detail);
+        format!("resolve request-sign secret for `{agent_id}` at `{resource}`: {detail}")
+    })
 }

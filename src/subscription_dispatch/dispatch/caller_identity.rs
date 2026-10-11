@@ -24,9 +24,7 @@ pub(crate) async fn authenticate_agent(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    let secret = broker::get_agent_auth_secret(&agent_id)
-        .await
-        .ok_or_else(|| "no auth secret for agent".to_string())?;
+    let secret = broker::get_agent_auth_secret(&agent_id).await?;
 
     let headers_for_check = crypto::HmacHeaders {
         agent_id: &agent_id,

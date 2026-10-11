@@ -96,10 +96,13 @@ pub(super) async fn calculate_readiness(
     // cannot be routed to. Every active subscription is collected once,
     // whichever agents can see it.
     let standalone = crate::gateway::broker::local_provider_credentials_enabled();
-    let agents = if standalone {
-        Vec::new()
+    let (agents, signing_inventory_error) = if standalone {
+        (Vec::new(), None)
     } else {
-        crate::gateway::broker::configured_request_sign_agents()
+        match crate::gateway::broker::configured_request_sign_agents() {
+            Ok(agents) => (agents, None),
+            Err(error) => (Vec::new(), Some(error)),
+        }
     };
     let agent_results = join_all(agents.into_iter().map(|agent| async move {
         let subscriptions = crate::gateway::broker::list_subscriptions(&agent).await;
@@ -235,6 +238,7 @@ pub(super) async fn calculate_readiness(
     accounts::verdict(ServiceFacts {
         providers,
         provider_inventory_error,
+        signing_inventory_error,
         checked,
         denied,
         provider_available,

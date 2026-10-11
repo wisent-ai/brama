@@ -13,7 +13,7 @@ use std::sync::{LazyLock, RwLock};
 
 use super::standalone::{local_provider_credentials_enabled, local_provider_names};
 use super::subscription::configured_subscription_ids;
-use super::{capability_map, client, provider_resource};
+use super::{capability_map, provider_resource};
 use crate::capability::CapabilityRef;
 
 pub(super) const PROVIDER_CAPABILITIES_ENV: &str = "BRAMA_PROVIDER_CAPABILITY_IDS";
@@ -76,22 +76,18 @@ pub fn configured_provider_capabilities() -> Result<std::collections::HashSet<St
         return local_provider_names().map(|names| names.into_iter().collect());
     }
     let mut configured = configured_provider_grants()?;
-    if client().is_none() {
-        return Ok(configured);
-    }
     let subscription_ids = configured_subscription_ids()?;
-    if let Some(map) = capability_map(PROVIDER_CAPABILITIES_ENV) {
-        for (provider, capability_id) in map {
-            if subscription_ids.contains(&provider)
-                || crate::subscription_dispatch::dispatch::is_subscription_provider(&provider)
-            {
-                continue;
-            }
-            let resource = provider_resource(&provider);
-            if CapabilityRef::provider(&capability_id, &resource).is_ok() {
-                configured.insert(provider);
-            }
+    for (provider, capability_id) in capability_map(PROVIDER_CAPABILITIES_ENV)? {
+        if subscription_ids.contains(&provider)
+            || crate::subscription_dispatch::dispatch::is_subscription_provider(&provider)
+        {
+            continue;
         }
+        let resource = provider_resource(&provider);
+        CapabilityRef::provider(&capability_id, &resource).map_err(|error| {
+            format!("validate {PROVIDER_CAPABILITIES_ENV} binding for `{resource}`: {error}")
+        })?;
+        configured.insert(provider);
     }
     Ok(configured)
 }

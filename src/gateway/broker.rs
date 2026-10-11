@@ -14,6 +14,7 @@
 //! and `subscription` is everything about a paid account behind one call.
 
 mod binding;
+mod configuration;
 mod identity;
 mod standalone;
 mod subscription;
@@ -21,15 +22,14 @@ mod vault;
 
 pub(crate) use vault::{login_seed_present, login_seed_states};
 
-use std::collections::HashMap;
-
 use tracing::{info, warn};
 
-use crate::capability::{CapabilityClient, CapabilityRef, Secret};
+use crate::capability::{CapabilityRef, Secret};
 use crate::core::failure::{self, POINT_CREDENTIAL_REDEEM};
 use wisent_errors::{Code, Failure};
 
 use binding::PROVIDER_CAPABILITIES_ENV;
+use configuration::{capability_map, client, configured_capability};
 use standalone::{local_provider_credential, LOCAL_SUBSCRIPTION_CREDENTIALS};
 use subscription::refresh_subscription_credential_inner;
 use vault::{credential_by_grant, issue_capability, PROVIDER_PURPOSE};
@@ -90,22 +90,6 @@ pub async fn register_discovered_account(
     vault::register_discovered_account(provider, id, account, metadata).await
 }
 
-fn capability_map(name: &str) -> Option<HashMap<String, String>> {
-    let encoded = std::env::var(name).ok()?;
-    let parsed: HashMap<String, String> = serde_json::from_str(&encoded).ok()?;
-    if parsed.is_empty() {
-        return None;
-    }
-    Some(parsed)
-}
-
-fn configured_capability(name: &str, key: &str) -> Option<String> {
-    capability_map(name)?.remove(key)
-}
-
-fn client() -> Option<CapabilityClient> {
-    CapabilityClient::from_env().ok()
-}
 /// Redeem a direct provider API credential immediately before the HTTP call.
 ///
 /// Managed launches issue at final use because a short-lived, single-use id
@@ -122,11 +106,10 @@ pub async fn provider_credential(provider: &str) -> Result<Secret, Failure> {
         local_provider_credential(provider)
             .map_err(|detail| credential_failure(detail, &resource, Code::Config))
     } else {
-        obtain_credential(
-            &resource,
-            configured_capability(PROVIDER_CAPABILITIES_ENV, provider),
-        )
-        .await
+        match configured_capability(PROVIDER_CAPABILITIES_ENV, provider) {
+            Ok(seed) => obtain_credential(&resource, seed).await,
+            Err(detail) => Err(credential_failure(detail, &resource, Code::Config)),
+        }
     };
     result.map_err(|refused| {
         let refused = refused.with_context("provider", provider);
@@ -222,9 +205,9 @@ async fn redeem_provider_resource(capability_id: &str, resource: &str) -> Result
                 Code::Config,
             )
         })?;
-        let broker = client().ok_or_else(|| {
+        let broker = client().map_err(|error| {
             credential_failure(
-                "no capability broker client: SKARBIEC_CAP_SOCKET, SKARBIEC_WORKLOAD_ID, or the workload signing key is missing or unreadable",
+                format!("construct capability client: {error}"),
                 &owned_resource,
                 Code::Config,
             )
@@ -238,7 +221,13 @@ async fn redeem_provider_resource(capability_id: &str, resource: &str) -> Result
         })
     })
     .await
-    .map_err(|error| credential_failure(format!("credential redemption worker failed: {error}"), resource, Code::Unknown))?
+    .map_err(|error| {
+        credential_failure(
+            format!("credential redemption worker failed: {error}"),
+            resource,
+            Code::Unknown,
+        )
+    })?
 }
 
 pub async fn redeem_subscription_credential(
@@ -263,12 +252,13 @@ pub async fn redeem_subscription_credential(
         }
     }
 
-    obtain_credential(
-        &resource,
-        configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id),
-    )
-    .await
-    .map_err(|refused| {
+    let seed =
+        configured_capability(PROVIDER_CAPABILITIES_ENV, subscription_id).map_err(|detail| {
+            credential_failure(detail, &resource, Code::Config)
+                .with_context("subscription", subscription_id)
+                .with_context("provider", provider)
+        })?;
+    obtain_credential(&resource, seed).await.map_err(|refused| {
         refused
             .with_context("subscription", subscription_id)
             .with_context("provider", provider)

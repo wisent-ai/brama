@@ -71,3 +71,50 @@ fn capability_configuration_preserves_actual_refusal_or_redeems_expected_secret(
         _ => panic!("EXPECTED_CAPABILITY_OUTCOME must be configuration-refusal or redeemed"),
     }
 }
+
+#[tokio::test]
+#[ignore = "Requires an isolated real request-sign identity or capability authority; no simulated secret"]
+async fn request_sign_lookup_preserves_actual_refusal_or_expected_identity() {
+    let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("target/real-tests/request-sign-lookup")
+        .join(uuid::Uuid::new_v4().to_string());
+    std::fs::create_dir_all(&directory).expect("create evidence directory");
+    let mut evidence = Evidence {
+        path: directory.join("report.json"),
+        report: json!({"test_build": brama::build_info::current(),
+            "command": std::env::args().collect::<Vec<_>>()}),
+    };
+    assert_eq!(
+        evidence.report["test_build"]["source_revision"],
+        required("TEST_SOURCE_REVISION")
+    );
+    let agent = required("REQUEST_SIGN_AGENT");
+    let expected_success: bool = required("EXPECTED_SIGNING_SUCCESS")
+        .parse()
+        .expect("EXPECTED_SIGNING_SUCCESS is a boolean");
+    evidence.report["agent"] = json!(agent);
+    evidence.report["expected_success"] = json!(expected_success);
+    let result = brama::gateway::broker::get_agent_auth_secret(&agent).await;
+    if let Err(error) = &result {
+        evidence.report["refusal"] = json!(error);
+    }
+    if expected_success {
+        let secret = result.expect("resolve actual request-sign identity");
+        let observed = hex::encode(Sha256::digest(secret.expose()));
+        evidence.report["secret_sha256"] = json!(observed);
+        assert_eq!(
+            observed,
+            required("EXPECTED_SECRET_SHA256"),
+            "lookup resolved a different identity"
+        );
+    } else {
+        let cause = required("EXPECTED_SIGNING_CAUSE");
+        let resource = required("EXPECTED_SIGNING_RESOURCE");
+        let error = result.expect_err("real failing identity lookup must refuse");
+        assert!(error.contains(&cause), "lookup lost actual cause: {error}");
+        assert!(
+            error.contains(&resource),
+            "lookup lost failed resource: {error}"
+        );
+    }
+}
