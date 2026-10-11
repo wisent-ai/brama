@@ -100,6 +100,13 @@ pub fn at_limit(used_fraction: f64) -> bool {
 }
 
 /// Read one member's plan now and say where it stands.
+///
+/// A member whose grant awaits a sign-in cannot be asked of the provider; if
+/// the harness signed into its account relayed the provider's windows
+/// (`usage_source` harness), those are the account's own numbers and decide
+/// it, a rolled window counting as empty as everywhere else. Without them
+/// the member is unread, named with the sign-in cause, and stops the
+/// acquisition.
 pub(super) async fn standing(member: &Member, provider: &str) -> Standing {
     if let Some(until_ms) = usage::blocked_until_ms(&member.id) {
         return Standing::Spent {
@@ -107,6 +114,10 @@ pub(super) async fn standing(member: &Member, provider: &str) -> Standing {
         };
     }
     if let Some(cause) = usage::awaiting_sign_in_cause(&member.id) {
+        let relayed = usage::plan_windows(usage::usage_for(&member.id).as_ref());
+        if relayed.source == Some(usage::UsageSource::Harness) {
+            return from_windows(&relayed);
+        }
         return Standing::Unread {
             detail: format!("its grant awaits a sign-in: {cause}"),
         };
@@ -117,7 +128,14 @@ pub(super) async fn standing(member: &Member, provider: &str) -> Standing {
         };
     }
     let recorded = usage::usage_for(&member.id);
-    let windows = usage::plan_windows(recorded.as_ref());
+    from_windows(&usage::plan_windows(recorded.as_ref()))
+}
+
+/// Where a member stands by its served plan windows: unread when there are
+/// none, spent while one current window is at its limit (until the latest
+/// reset among the spent ones), available otherwise with its most spent
+/// current window's fraction.
+fn from_windows(windows: &usage::PlanWindows) -> Standing {
     if windows.limits.is_empty() {
         return Standing::Unread {
             detail: "the provider's usage report named no plan window".to_string(),
