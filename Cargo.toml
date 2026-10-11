@@ -21,6 +21,10 @@ path = "tests/subscriptions/capacity.rs"
 name = "workload-authority"
 path = "tests/authentication/authority.rs"
 
+[[test]]
+name = "subscription-overlay"
+path = "tests/subscriptions/overlay.rs"
+
 [dependencies]
 async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }

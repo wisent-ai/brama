@@ -61,13 +61,28 @@ pub(super) fn donated_subscriptions(owner: Option<&str>) -> Result<Vec<Subscript
 /// Read-modify-write the overlay file atomically (temp + rename, mode 0600).
 fn update_donated_items(update: impl FnOnce(&mut Vec<Value>)) -> Result<(), String> {
     let path = donated_subscriptions_path();
+    #[derive(serde::Deserialize)]
+    struct Overlay {
+        items: Vec<Value>,
+    }
     let mut items = match std::fs::read_to_string(&path) {
-        Ok(text) => serde_json::from_str::<Value>(&text)
-            .ok()
-            .and_then(|value| value.get("items").and_then(Value::as_array).cloned())
-            .ok_or_else(|| "donated subscriptions file is corrupt".to_string())?,
+        Ok(text) => {
+            serde_json::from_str::<Overlay>(&text)
+                .map_err(|error| {
+                    format!(
+                        "decode donated subscriptions file `{}`: {error}",
+                        path.display()
+                    )
+                })?
+                .items
+        }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
-        Err(error) => return Err(format!("read donated subscriptions file: {error}")),
+        Err(error) => {
+            return Err(format!(
+                "read donated subscriptions file `{}`: {error}",
+                path.display()
+            ))
+        }
     };
     update(&mut items);
     if let Some(parent) = path.parent() {
