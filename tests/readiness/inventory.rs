@@ -38,6 +38,12 @@ async fn inventory_read_failures_remain_visible_in_readiness() {
         report: json!({"test_build": brama::build_info::current(),
             "command": std::env::args().collect::<Vec<_>>()}),
     };
+    let test_revision = required("TEST_SOURCE_REVISION");
+    evidence.report["expected_test_source_revision"] = json!(test_revision);
+    assert_eq!(
+        evidence.report["test_build"]["source_revision"], test_revision,
+        "qualification binary must match its declared source revision"
+    );
     let endpoint = required("BRAMA_READINESS_URL");
     let revision = required("GATEWAY_SOURCE_REVISION");
     let expected_ready: bool = required("EXPECTED_READY")
@@ -70,7 +76,11 @@ async fn inventory_read_failures_remain_visible_in_readiness() {
     let response = response.expect("real readiness request refused");
     evidence.report["http_status"] = json!(response.status().as_u16());
     let actual_status = response.status();
-    let bytes = response.bytes().await.expect("read actual readiness body");
+    let bytes = response.bytes().await;
+    if let Err(error) = &bytes {
+        evidence.report["body_read_error"] = json!(error.to_string());
+    }
+    let bytes = bytes.expect("read actual readiness body");
     evidence.report["body"] = json!(String::from_utf8_lossy(&bytes));
     let body: Value = serde_json::from_slice(&bytes).expect("readiness JSON");
     assert_eq!(actual_status, status);
