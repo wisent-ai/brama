@@ -248,13 +248,15 @@ fn read_control_line(stream: &mut UnixStream) -> std::io::Result<Vec<u8>> {
     let mut byte = [0_u8; 1];
     loop {
         match stream.read(&mut byte)? {
-            0 => return Err(std::io::Error::new(
-                std::io::ErrorKind::UnexpectedEof,
-                format!(
+            0 => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    format!(
                     "authority closed response after {} control-line bytes before its terminator",
                     line.len()
                 ),
-            )),
+                ))
+            }
             _ if byte[0] == b'\n' => return Ok(line),
             _ => line.push(byte[0]),
         }
