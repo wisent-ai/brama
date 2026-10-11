@@ -59,13 +59,14 @@ pub(super) fn invalid_credential_failure(
     subscription_id: &str,
     provider: &str,
     item: &str,
+    error: crate::capability::CapabilityError,
 ) -> Failure {
     scoped_failure(
         POINT_CREDENTIAL_REDEEM,
         Code::Config,
         subscription_id,
         provider,
-        format!("subscription credential `{item}` is not valid UTF-8"),
+        format!("read subscription credential `{item}` as UTF-8: {error}"),
     )
 }
 

@@ -55,6 +55,6 @@ async fn member_tier(provider: &str, subscription_id: &str) -> Result<String, St
         .map_err(|failure| format!("its grant could not be read: {failure}"))?;
     let token = credential
         .expose_utf8()
-        .map_err(|_| format!("the grant in `{item}` is not UTF-8 text"))?;
+        .map_err(|error| format!("read the grant in `{item}` as UTF-8: {error}"))?;
     provider_registry::read_plan_tier(provider, &item, token).await
 }

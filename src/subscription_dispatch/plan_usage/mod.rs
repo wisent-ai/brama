@@ -65,7 +65,7 @@ async fn refresh_once(subscription_id: &str, provider: &str) -> RefreshResult {
     let credential = broker::subscription_credential(subscription_id, provider).await?;
     let token = credential
         .expose_utf8()
-        .map_err(|_| invalid_credential_failure(subscription_id, provider, &item))?;
+        .map_err(|error| invalid_credential_failure(subscription_id, provider, &item, error))?;
     let first = provider_registry::read_plan_usage(provider, &item, token).await;
     let outcome = match first {
         PlanUsage::Refused(detail)
@@ -76,8 +76,9 @@ async fn refresh_once(subscription_id: &str, provider: &str) -> RefreshResult {
             let fresh = broker::refresh_subscription_credential(subscription_id, provider)
                 .await
                 .map_err(|refused| refused.caused_by(rejected.clone()))?;
-            let fresh_token = fresh.expose_utf8().map_err(|_| {
-                invalid_credential_failure(subscription_id, provider, &item).caused_by(rejected)
+            let fresh_token = fresh.expose_utf8().map_err(|error| {
+                invalid_credential_failure(subscription_id, provider, &item, error)
+                    .caused_by(rejected)
             })?;
             provider_registry::read_plan_usage(provider, &item, fresh_token).await
         }

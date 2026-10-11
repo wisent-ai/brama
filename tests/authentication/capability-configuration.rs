@@ -67,6 +67,28 @@ fn capability_configuration_preserves_actual_refusal_or_redeems_expected_secret(
                 observed, expected,
                 "authority returned a different fixture credential"
             );
+            let expected_utf8 = required("EXPECTED_SECRET_UTF8")
+                .parse::<bool>()
+                .expect("EXPECTED_SECRET_UTF8 must be a boolean");
+            match secret.expose_utf8() {
+                Ok(_) => assert!(
+                    expected_utf8,
+                    "fixture was expected to contain invalid UTF-8"
+                ),
+                Err(error) => {
+                    let detail = error.to_string();
+                    evidence.report["decoding_refusal"] = json!(detail);
+                    assert!(!expected_utf8, "expected valid UTF-8: {detail}");
+                    assert!(
+                        matches!(error, brama::capability::CapabilityError::SecretEncoding(_)),
+                        "successful redemption was misclassified as authorization denial: {detail}"
+                    );
+                    assert!(
+                        detail.contains(&required("EXPECTED_DECODE_CAUSE")),
+                        "decoder lost actual cause: {detail}"
+                    );
+                }
+            }
         }
         _ => panic!("EXPECTED_CAPABILITY_OUTCOME must be configuration-refusal or redeemed"),
     }

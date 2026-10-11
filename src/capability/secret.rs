@@ -29,7 +29,7 @@ impl Secret {
     }
 
     pub fn expose_utf8(&self) -> Result<&str, CapabilityError> {
-        std::str::from_utf8(self.expose()).map_err(|_| CapabilityError::RedemptionDenied)
+        std::str::from_utf8(self.expose()).map_err(CapabilityError::SecretEncoding)
     }
 }
 

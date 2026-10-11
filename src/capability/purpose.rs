@@ -65,6 +65,8 @@ pub enum CapabilityError {
     InvalidConfiguration(String),
     #[error("capability redemption denied")]
     RedemptionDenied,
+    #[error("decode redeemed secret as UTF-8: {0}")]
+    SecretEncoding(#[source] std::str::Utf8Error),
     /// The authority's socket could not be reached, written or read; the io
     /// error says which. Not a denial: the authority never answered.
     #[error("capability authority unreachable: {0}")]
