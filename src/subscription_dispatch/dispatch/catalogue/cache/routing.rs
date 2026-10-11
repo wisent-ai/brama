@@ -81,6 +81,9 @@ pub(in crate::subscription_dispatch::dispatch::catalogue) async fn refresh(
         output_limits,
     });
     let mut snapshot = SNAPSHOT.lock().map_err(|error| {
+        // The pass runs detached and its result is dropped, so this log line
+        // is the only place a discovery that could not be published is seen.
+        tracing::warn!(event = "routing_model_discovery_unpublished", %error, "routing model discovery finished but could not be published");
         Refusal::gateway(
             GatewayRefusal::DependencyUnavailable,
             format!("routing model state could not publish discovery: {error}"),
