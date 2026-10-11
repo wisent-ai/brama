@@ -21,7 +21,7 @@ mod caller_identity;
 mod catalogue;
 mod credential;
 mod direct_route;
-mod ranking;
+pub(super) mod ranking;
 mod refusal;
 mod rotation;
 mod routed_stream;

@@ -30,7 +30,7 @@ fn random_u64() -> Result<u64, Refusal> {
 /// key derived from plan state says something true about the candidates; an
 /// equal key says nothing, and "nothing" is the only thing chance should
 /// decide.
-pub(in crate::subscription_dispatch::dispatch) fn shuffle_within_equal<T, K: PartialOrd>(
+pub(in crate::subscription_dispatch) fn shuffle_within_equal<T, K: PartialOrd>(
     items: &mut [T],
     key: impl Fn(&T) -> K,
 ) -> Result<(), Refusal> {

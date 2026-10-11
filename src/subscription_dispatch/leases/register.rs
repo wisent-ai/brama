@@ -7,6 +7,8 @@ use std::sync::{LazyLock, Mutex};
 
 use serde::{Deserialize, Serialize};
 
+use crate::subscription_dispatch::{dispatch::ranking::plan_order::shuffle_within_equal, usage};
+
 /// One session's claim on one subscription.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Lease {
@@ -162,7 +164,12 @@ pub(super) fn take(
         });
     }
     usable.sort_by(fewest_then_freshest);
-    let Some((chosen, _)) = usable.iter().find(|(_, live)| count(live) < limit) else {
+    let available = usable.partition_point(|(_, live)| count(live) < limit);
+    shuffle_within_equal(&mut usable[..available], |(entry, live)| {
+        (live.len(), usage::used_fraction(&entry.id))
+    })
+    .map_err(|error| unavailable(error.message))?;
+    let Some((chosen, _)) = usable[..available].first() else {
         return Err(Refused::PoolFull {
             provider: provider.to_owned(),
             limit,

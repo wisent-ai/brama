@@ -110,6 +110,28 @@ fn new_sessions_use_each_idle_member_before_reusing_one() {
             selected.insert(member.to_owned()),
             "reused a member while another was idle"
         );
+        let repeated = sessions.run.command(&[
+            "subscription",
+            "lease",
+            "take",
+            &provider,
+            "--session-id",
+            &id,
+            "--holder",
+            "real-lease-distribution",
+        ]);
+        assert!(repeated.status.success(), "standing session lookup refused");
+        let repeated: Value =
+            serde_json::from_slice(&repeated.stdout).expect("standing session admission");
+        assert_eq!(repeated["new"], false);
+        assert_eq!(
+            repeated["lease"], answer["lease"],
+            "tie selection must not move a standing session to another account"
+        );
+        assert_eq!(
+            repeated["live_on_subscription"], answer["live_on_subscription"],
+            "standing session lookup must not consume another capacity slot"
+        );
         let listed = sessions.run.command(&["subscription", "lease", "list"]);
         assert!(listed.status.success(), "persisted lease list refused");
         let listed: Value =

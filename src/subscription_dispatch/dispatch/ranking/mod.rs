@@ -9,5 +9,5 @@
 
 pub(super) mod candidates;
 pub(super) mod pin;
-pub(super) mod plan_order;
+pub(in crate::subscription_dispatch) mod plan_order;
 pub(super) mod task_quality;
