@@ -22,7 +22,9 @@ pub enum PoolScope {
 }
 
 impl PoolScope {
-    pub(super) fn agent(&self) -> Option<&str> {
+    /// The agent this scope is narrowed to, or none for the deployment
+    /// console. Lease handling reads it to keep one identity's leases its own.
+    pub fn agent(&self) -> Option<&str> {
         match self {
             Self::Deployment => None,
             Self::Agent(agent_id) => Some(agent_id),

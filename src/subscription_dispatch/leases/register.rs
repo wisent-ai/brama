@@ -20,6 +20,11 @@ pub struct Lease {
     pub session_id: String,
     /// The program that took the lease for the session (Oko, a desktop).
     pub holder: String,
+    /// The agent whose proven identity took the lease, or none when the
+    /// deployment console did. Only that agent, or the console, sees and
+    /// ends it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
     pub taken_at_ms: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub released_at_ms: Option<i64>,
@@ -29,6 +34,23 @@ impl Lease {
     fn is_live(&self) -> bool {
         self.released_at_ms.is_none()
     }
+
+    /// Whether `agent` may see and end this lease: the console (none) may
+    /// act on every lease, an agent only on the ones it took.
+    pub fn belongs_to(&self, agent: Option<&str>) -> bool {
+        agent.is_none_or(|agent| self.agent.as_deref() == Some(agent))
+    }
+}
+
+/// Why a release ended nothing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReleaseRefused {
+    /// The release named neither a lease nor a session.
+    Invalid(String),
+    /// The register could not be read or written.
+    Unavailable(String),
+    /// A named lease was taken by another identity; nothing was released.
+    Foreign(String),
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -120,10 +142,13 @@ pub fn live() -> Result<Vec<Lease>, String> {
 }
 
 /// Select and persist admission against one locked view of the live register.
+/// `agent` is the identity taking the lease (none for the console); a session
+/// gets back only a standing lease that identity took.
 pub(super) fn take(
     provider: &str,
     session_id: &str,
     holder: &str,
+    agent: Option<&str>,
     entries: &[crate::gateway::broker::SubscriptionEntry],
     limit: u64,
 ) -> Result<super::Taken, super::Refused> {
@@ -135,11 +160,9 @@ pub(super) fn take(
         .map_err(|error| unavailable(format!("the lease register lock is poisoned: {error}")))?;
     let mut register = load().map_err(unavailable)?;
     register.leases.retain(Lease::is_live);
-    if let Some(standing) = register
-        .leases
-        .iter()
-        .find(|lease| lease.session_id == session_id && lease.provider == provider)
-    {
+    if let Some(standing) = register.leases.iter().find(|lease| {
+        lease.session_id == session_id && lease.provider == provider && lease.belongs_to(agent)
+    }) {
         let live_on_subscription = register
             .leases
             .iter()
@@ -187,6 +210,7 @@ pub(super) fn take(
         account: chosen.account.clone(),
         session_id: session_id.to_owned(),
         holder: holder.to_owned(),
+        agent: agent.map(str::to_owned),
         taken_at_ms,
         released_at_ms: None,
     };
@@ -206,32 +230,56 @@ pub(super) fn take(
     })
 }
 
-/// Release by lease id, or every live lease of a session. The leases
-/// released are returned; none when nothing was live.
+/// Release by lease id, or every live lease of a session, as `agent` (none
+/// for the console). The leases released are returned; none when nothing was
+/// live. A named lease another identity took refuses the whole release, so
+/// one agent never ends a session that runs on another's behalf.
 pub(super) fn release(
     lease_id: Option<&str>,
     session_id: Option<&str>,
-) -> Result<Vec<Lease>, String> {
+    agent: Option<&str>,
+) -> Result<Vec<Lease>, ReleaseRefused> {
     let lease_id = lease_id.map(str::trim).filter(|id| !id.is_empty());
     let session_id = session_id.map(str::trim).filter(|id| !id.is_empty());
     if lease_id.is_none() && session_id.is_none() {
-        return Err("a release names the lease id or the session_id whose leases end".to_string());
+        return Err(ReleaseRefused::Invalid(
+            "a release names the lease id or the session_id whose leases end".to_string(),
+        ));
     }
-    locked(|register| {
+    let mut foreign: Vec<String> = Vec::new();
+    let released = locked(|register| {
         let released_at_ms = now_ms()?;
         let mut released = Vec::new();
         for lease in register.leases.iter_mut().filter(|lease| lease.is_live()) {
             let named = lease_id.is_some_and(|id| id == lease.id)
                 || session_id.is_some_and(|id| id == lease.session_id);
-            if named {
-                lease.released_at_ms = Some(released_at_ms);
-                released.push(lease.clone());
+            if !named {
+                continue;
             }
+            if !lease.belongs_to(agent) {
+                foreign.push(lease.id.clone());
+                continue;
+            }
+            lease.released_at_ms = Some(released_at_ms);
+            released.push(lease.clone());
+        }
+        if !foreign.is_empty() {
+            // Refused before anything is persisted: the register is left as
+            // it was read.
+            return Err(String::new());
         }
         // Released leases are history the pool document does not need;
         // the register keeps only what is live, and the journal of who ran
         // where is the holder's (Oko's sessions record).
         register.leases.retain(Lease::is_live);
         Ok(released)
-    })
+    });
+    // Only an agent can name a lease that is not its own; the console owns all.
+    if let (Some(caller), false) = (agent, foreign.is_empty()) {
+        return Err(ReleaseRefused::Foreign(format!(
+            "lease {} was taken by another identity; {caller} may end only the leases it took, and nothing was released",
+            foreign.join(", "),
+        )));
+    }
+    released.map_err(ReleaseRefused::Unavailable)
 }

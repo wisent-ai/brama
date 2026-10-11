@@ -27,7 +27,7 @@ use serde_json::{json, Value};
 use crate::gateway::broker;
 use crate::subscription_dispatch::usage;
 
-pub use register::{live, Lease};
+pub use register::{live, Lease, ReleaseRefused};
 
 /// Why no lease was given.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -173,9 +173,10 @@ fn fewest_then_freshest(
 
 /// Give `request.session_id` a lease on the usable member of its provider
 /// carrying the fewest sessions, or refuse with the member counts. A session
-/// that already holds a live lease on this provider gets that lease back:
-/// a harness restarted by its own runtime is the same session.
-pub async fn take(request: &Request) -> Result<Taken, Refused> {
+/// that already holds a live lease on this provider, taken by the same
+/// identity (`agent`, none for the console), gets that lease back: a harness
+/// restarted by its own runtime is the same session.
+pub async fn take(request: &Request, agent: Option<&str>) -> Result<Taken, Refused> {
     let provider = request.provider.trim();
     let session_id = request.session_id.trim();
     let holder = request.holder.trim();
@@ -191,15 +192,20 @@ pub async fn take(request: &Request) -> Result<Taken, Refused> {
         .map_err(|error| Refused::Unavailable {
             detail: format!("the Skarbiec subscription inventory could not be read: {error}"),
         })?;
-    register::take(provider, session_id, holder, &entries, limit)
+    register::take(provider, session_id, holder, agent, &entries, limit)
 }
 
-/// End the lease `lease_id`, or every live lease of `session_id`: the
-/// session's terminal ended, so its subscription carries one session fewer.
-/// Releasing what is not live is not an error: a release the caller repeats
-/// changes nothing and says so.
-pub fn release(lease_id: Option<&str>, session_id: Option<&str>) -> Result<Vec<Lease>, String> {
-    register::release(lease_id, session_id)
+/// End the lease `lease_id`, or every live lease of `session_id`, as `agent`
+/// (none for the console): the session's terminal ended, so its subscription
+/// carries one session fewer. Releasing what is not live is not an error: a
+/// release the caller repeats changes nothing and says so. A lease another
+/// identity took is refused, and nothing is released.
+pub fn release(
+    lease_id: Option<&str>,
+    session_id: Option<&str>,
+    agent: Option<&str>,
+) -> Result<Vec<Lease>, ReleaseRefused> {
+    register::release(lease_id, session_id, agent)
 }
 
 /// How many live sessions each subscription carries, for the pool document

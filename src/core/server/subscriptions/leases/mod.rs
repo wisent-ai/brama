@@ -17,16 +17,21 @@ use crate::subscription_dispatch::leases;
 
 use super::subscription_pool_scope;
 
-/// Every live lease, with the sessions each subscription carries and each
-/// declared provider's limit: `limits` holds the stated ones, `unstated`
-/// the refusal of each provider whose declaration states none.
+/// The live leases the caller may see, with the sessions each subscription
+/// carries and each declared provider's limit: `limits` holds the stated
+/// ones, `unstated` the refusal of each provider whose declaration states
+/// none. The console sees every lease; an agent sees only the leases it took.
+/// The counts are the pool's, as the pool document shows them to every caller.
 pub(in crate::core::server) async fn list_leases(
     Extension(client_identity): Extension<ModelClientIdentity>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, ApiError> {
-    subscription_pool_scope(&client_identity, &headers, &[]).await?;
-    let live =
-        leases::live().map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?;
+    let scope = subscription_pool_scope(&client_identity, &headers, &[]).await?;
+    let live: Vec<leases::Lease> = leases::live()
+        .map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?
+        .into_iter()
+        .filter(|lease| lease.belongs_to(scope.agent()))
+        .collect();
     let counts =
         leases::counts().map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?;
     let mut limits = serde_json::Map::new();
@@ -38,6 +43,7 @@ pub(in crate::core::server) async fn list_leases(
         };
     }
     Ok(Json(json!({
+        "scope": scope.named(),
         "limits": limits,
         "unstated": unstated,
         "leases": live,
@@ -55,7 +61,7 @@ pub(in crate::core::server) async fn take_lease(
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> Result<Json<Value>, ApiError> {
-    subscription_pool_scope(&client_identity, &headers, &body).await?;
+    let scope = subscription_pool_scope(&client_identity, &headers, &body).await?;
     let request: leases::Request = serde_json::from_slice(&body).map_err(|error| {
         api_error(
             StatusCode::BAD_REQUEST,
@@ -64,7 +70,7 @@ pub(in crate::core::server) async fn take_lease(
             ),
         )
     })?;
-    match leases::take(&request).await {
+    match leases::take(&request, scope.agent()).await {
         Ok(taken) => Ok(Json(serde_json::to_value(taken).map_err(|error| {
             api_error(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -126,32 +132,48 @@ pub(in crate::core::server) struct ReleaseRequest {
     session_id: Option<String>,
 }
 
-/// Release one lease by id, or every live lease of one session.
+/// Release one lease by id, or every live lease of one session. An agent ends
+/// only the leases it took: naming another identity's lease is refused `403`
+/// and nothing is released.
 pub(in crate::core::server) async fn release_leases(
     Extension(client_identity): Extension<ModelClientIdentity>,
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> Result<Json<Value>, ApiError> {
-    subscription_pool_scope(&client_identity, &headers, &body).await?;
+    let scope = subscription_pool_scope(&client_identity, &headers, &body).await?;
     let request: ReleaseRequest = serde_json::from_slice(&body).map_err(|error| {
         api_error(
             StatusCode::BAD_REQUEST,
             &format!("invalid release request: {error}; a release names lease_id or session_id"),
         )
     })?;
-    let released = leases::release(request.lease_id.as_deref(), request.session_id.as_deref())
-        .map_err(|detail| api_error(StatusCode::BAD_REQUEST, &detail))?;
+    let released = leases::release(
+        request.lease_id.as_deref(),
+        request.session_id.as_deref(),
+        scope.agent(),
+    )
+    .map_err(release_refusal)?;
     Ok(Json(json!({ "released": released })))
 }
 
-/// Release one lease named in the path.
+/// Release one lease named in the path, under the same rule.
 pub(in crate::core::server) async fn release_lease(
     Extension(client_identity): Extension<ModelClientIdentity>,
     headers: HeaderMap,
     Path(lease_id): Path<String>,
 ) -> Result<Json<Value>, ApiError> {
-    subscription_pool_scope(&client_identity, &headers, &[]).await?;
-    let released = leases::release(Some(&lease_id), None)
-        .map_err(|detail| api_error(StatusCode::BAD_REQUEST, &detail))?;
+    let scope = subscription_pool_scope(&client_identity, &headers, &[]).await?;
+    let released =
+        leases::release(Some(&lease_id), None, scope.agent()).map_err(release_refusal)?;
     Ok(Json(json!({ "released": released })))
+}
+
+fn release_refusal(refused: leases::ReleaseRefused) -> ApiError {
+    match refused {
+        leases::ReleaseRefused::Invalid(detail) => api_error(StatusCode::BAD_REQUEST, &detail),
+        leases::ReleaseRefused::Unavailable(detail) => {
+            api_error(StatusCode::SERVICE_UNAVAILABLE, &detail)
+        }
+        leases::ReleaseRefused::Foreign(detail) => api_error(StatusCode::FORBIDDEN, &detail),
+    }
 }
