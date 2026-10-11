@@ -1,4 +1,4 @@
-//! Real isolated gateway and real credential authority; no provider request.
+//! Real isolated gateway and credential authority; catalogue reads may start discovery.
 use super::{request, required, Evidence};
 use reqwest::{Client, Method, StatusCode};
 use serde_json::{json, Value};
