@@ -5,6 +5,7 @@
 
 mod authenticator;
 use authenticator::AuthenticatorCommand;
+mod lease;
 mod refresh;
 mod run;
 mod weles;

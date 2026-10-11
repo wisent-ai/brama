@@ -5,8 +5,8 @@
 use super::super::text;
 use super::super::verdicts::enrolment::enrol_authenticator;
 use super::super::verdicts::print_refresh;
-use super::super::{acquisition, leases, manual, membership, remote};
-use super::{AuthenticatorCommand, LeaseCommand, SignInBy, SubscriptionCommand};
+use super::super::{acquisition, manual, membership, remote};
+use super::{AuthenticatorCommand, SignInBy, SubscriptionCommand};
 
 pub(crate) async fn run(command: SubscriptionCommand) {
     match command {
@@ -241,66 +241,7 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             harness,
             json,
         } => acquisition::hand_over(&provider, harness, json).await,
-        SubscriptionCommand::Lease(command) => match command {
-            LeaseCommand::Take {
-                provider,
-                session_id,
-                holder,
-                gateway,
-                gateway_consumer,
-                bearer_role,
-                json,
-            } => {
-                leases::take(
-                    remote::Destination {
-                        gateway,
-                        gateway_consumer,
-                        bearer_role,
-                    },
-                    &provider,
-                    &session_id,
-                    &holder,
-                    json,
-                )
-                .await
-            }
-            LeaseCommand::Release {
-                lease_id,
-                session_id,
-                gateway,
-                gateway_consumer,
-                bearer_role,
-                json,
-            } => {
-                leases::release(
-                    remote::Destination {
-                        gateway,
-                        gateway_consumer,
-                        bearer_role,
-                    },
-                    lease_id.as_deref(),
-                    session_id.as_deref(),
-                    json,
-                )
-                .await
-            }
-            LeaseCommand::List {
-                gateway,
-                gateway_consumer,
-                bearer_role,
-                json,
-            } => {
-                leases::list(
-                    remote::Destination {
-                        gateway,
-                        gateway_consumer,
-                        bearer_role,
-                    },
-                    json,
-                )
-                .await
-            }
-        },
+        SubscriptionCommand::Lease(command) => super::lease::run(command).await,
     }
 }
 
