@@ -6,6 +6,7 @@
 //! `secret`, and reading this workload's own key lives in `workload_key` —
 //! three subjects that change for reasons of their own.
 
+mod configuration;
 mod purpose;
 mod secret;
 mod workload_key;
@@ -14,7 +15,7 @@ use std::fmt;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
@@ -23,7 +24,6 @@ use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
 
 use purpose::{is_lower_hex_64, valid_resource};
-use workload_key::read_owner_key;
 
 // The names the rest of the crate already uses, re-exported one by one so
 // every existing path keeps working and nothing else travels with them.
@@ -109,38 +109,6 @@ impl fmt::Debug for CapabilityClient {
 }
 
 impl CapabilityClient {
-    pub fn from_env() -> Result<Self, CapabilityError> {
-        let socket = std::env::var_os("SKARBIEC_CAP_SOCKET")
-            .map(PathBuf::from)
-            .filter(|path| path.is_absolute())
-            .ok_or(CapabilityError::InvalidConfiguration)?;
-        let workload_id = std::env::var("SKARBIEC_WORKLOAD_ID")
-            .ok()
-            .filter(|value| !value.is_empty())
-            .ok_or(CapabilityError::InvalidConfiguration)?;
-        let key_path = std::env::var_os("SKARBIEC_WORKLOAD_SIGNING_KEY_FILE")
-            .map(PathBuf::from)
-            .filter(|path| path.is_absolute())
-            .ok_or(CapabilityError::InvalidConfiguration)?;
-        Self::new(socket, workload_id, &key_path)
-    }
-
-    pub fn new(
-        socket: PathBuf,
-        workload_id: String,
-        signing_key_file: &Path,
-    ) -> Result<Self, CapabilityError> {
-        if !socket.is_absolute() || workload_id.is_empty() {
-            return Err(CapabilityError::InvalidConfiguration);
-        }
-        let signing_key = read_owner_key(signing_key_file)?;
-        Ok(Self {
-            socket,
-            workload_id,
-            signing_key,
-        })
-    }
-
     /// Redeem at the final-use boundary. Callers must not retain the returned
     /// plaintext beyond the immediately following provider/database/sign step.
     pub fn redeem(&self, capability: &CapabilityRef<'_>) -> Result<Secret, CapabilityError> {
@@ -158,7 +126,11 @@ impl CapabilityClient {
             .read(true)
             .open("/dev/urandom")
             .and_then(|mut source| source.read_exact(&mut nonce_bytes))
-            .map_err(|_| CapabilityError::InvalidConfiguration)?;
+            .map_err(|error| {
+                CapabilityError::InvalidConfiguration(format!(
+                    "read capability proof nonce from /dev/urandom: {error}"
+                ))
+            })?;
         let nonce = hex::encode(nonce_bytes);
         nonce_bytes.zeroize();
 

@@ -31,22 +31,49 @@ pub(super) fn read_owner_key(path: &Path) -> Result<SigningKey, CapabilityError>
         .read(true)
         .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
         .open(path)
-        .map_err(|error| CapabilityError::KeyUnreadable(format!("{}: {error}", path.display())))?;
-    let metadata = file
-        .metadata()
-        .map_err(|error| CapabilityError::KeyUnreadable(format!("{}: {error}", path.display())))?;
-    if !metadata.file_type().is_file()
-        || metadata.uid() != unsafe { libc::geteuid() }
-        || metadata.mode() & GROUP_OR_OTHER_ACCESS != 0
-        || metadata.len() == 0
-        || metadata.len() > MAX_KEY_BYTES
-    {
-        return Err(CapabilityError::InvalidConfiguration);
+        .map_err(|error| {
+            CapabilityError::KeyUnreadable(format!("open {}: {error}", path.display()))
+        })?;
+    let metadata = file.metadata().map_err(|error| {
+        CapabilityError::KeyUnreadable(format!("inspect {}: {error}", path.display()))
+    })?;
+    if !metadata.file_type().is_file() {
+        return Err(CapabilityError::InvalidConfiguration(format!(
+            "workload signing key {} is not a regular file",
+            path.display()
+        )));
+    }
+    let owner = unsafe { libc::geteuid() };
+    if metadata.uid() != owner {
+        return Err(CapabilityError::InvalidConfiguration(format!(
+            "workload signing key {} has owner {}; expected effective user {owner}",
+            path.display(),
+            metadata.uid()
+        )));
+    }
+    if metadata.mode() & GROUP_OR_OTHER_ACCESS != 0 {
+        return Err(CapabilityError::InvalidConfiguration(format!(
+            "workload signing key {} permits group or other access; observed mode {:o}",
+            path.display(),
+            metadata.mode()
+        )));
+    }
+    if metadata.len() == 0 || metadata.len() > MAX_KEY_BYTES {
+        return Err(CapabilityError::InvalidConfiguration(format!(
+            "workload signing key {} has invalid length {}; expected nonempty seed data at most {MAX_KEY_BYTES} bytes",
+            path.display(), metadata.len()
+        )));
     }
     let mut encoded = Zeroizing::new(Vec::with_capacity(metadata.len() as usize));
-    file.read_to_end(&mut encoded)
-        .map_err(|error| CapabilityError::KeyUnreadable(format!("{}: {error}", path.display())))?;
-    parse_signing_key(&encoded)
+    file.read_to_end(&mut encoded).map_err(|error| {
+        CapabilityError::KeyUnreadable(format!("read {}: {error}", path.display()))
+    })?;
+    parse_signing_key(&encoded).map_err(|error| {
+        CapabilityError::InvalidConfiguration(format!(
+            "decode workload signing key {}: {error}",
+            path.display()
+        ))
+    })
 }
 
 fn parse_signing_key(encoded: &[u8]) -> Result<SigningKey, CapabilityError> {
@@ -63,10 +90,14 @@ fn parse_signing_key(encoded: &[u8]) -> Result<SigningKey, CapabilityError> {
             .iter()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
     {
-        hex::decode_to_slice(trimmed, raw.as_mut_slice())
-            .map_err(|_| CapabilityError::InvalidConfiguration)?;
+        hex::decode_to_slice(trimmed, raw.as_mut_slice()).map_err(|error| {
+            CapabilityError::InvalidConfiguration(format!("decode hexadecimal seed: {error}"))
+        })?;
     } else {
-        return Err(CapabilityError::InvalidConfiguration);
+        return Err(CapabilityError::InvalidConfiguration(format!(
+            "seed must be {SEED_BYTES} raw bytes or {SEED_HEX_CHARS} lowercase hexadecimal characters; observed {} bytes",
+            trimmed.len()
+        )));
     }
     Ok(SigningKey::from_bytes(&raw))
 }

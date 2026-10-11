@@ -1,5 +1,7 @@
 //! Read-only qualification through the real CLI, gateway and workload authority.
 //! Run on an isolated fixture host with its actual gateway log readable locally.
+#[path = "capability-configuration.rs"]
+mod capability_configuration;
 #[path = "../subscriptions/support.rs"]
 mod support;
 

@@ -61,8 +61,8 @@ pub(super) fn is_lower_hex_64(value: &str) -> bool {
 pub enum CapabilityError {
     #[error("invalid capability binding")]
     InvalidBinding,
-    #[error("invalid capability client configuration")]
-    InvalidConfiguration,
+    #[error("invalid capability client configuration: {0}")]
+    InvalidConfiguration(String),
     #[error("capability redemption denied")]
     RedemptionDenied,
     /// The authority's socket could not be reached, written or read; the io
