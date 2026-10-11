@@ -14,7 +14,7 @@ use super::entitlements_router_bin;
 /// confirming an enrolment needs. One call answers for every login, because
 /// a reader that asks per member pays a full vault pass per member.
 pub fn login_seed_states() -> Result<std::collections::BTreeMap<String, String>, String> {
-    let program = entitlements_router_bin();
+    let program = entitlements_router_bin()?;
     let output = std::process::Command::new(&program)
         .arg("totp-seed-state")
         .output()

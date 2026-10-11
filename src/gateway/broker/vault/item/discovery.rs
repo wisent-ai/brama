@@ -15,7 +15,7 @@ pub(in crate::gateway::broker) async fn register(
     let _mutation = super::MUTATIONS.lock().await;
     let item = crate::gateway::broker::subscription_resource(provider, id);
     let listing = raw_listing(
-        &entitlements_router_bin(),
+        &entitlements_router_bin()?,
         "inspect discovered account target",
     )
     .await?;
@@ -37,7 +37,7 @@ pub(in crate::gateway::broker) async fn register(
     });
     let tags =
         crate::gateway::broker::subscription_tags_for_write(&[], provider, id, Some(account))?;
-    let mut command = tokio::process::Command::new(entitlements_router_bin());
+    let mut command = tokio::process::Command::new(entitlements_router_bin()?);
     command
         .args([
             "set-json",
@@ -91,7 +91,7 @@ pub(in crate::gateway::broker) async fn remove(
     expected_account: Option<&str>,
 ) -> Result<(), String> {
     let _mutation = super::MUTATIONS.lock().await;
-    let listing = raw_listing(&entitlements_router_bin(), "inspect obsolete subscription").await?;
+    let listing = raw_listing(&entitlements_router_bin()?, "inspect obsolete subscription").await?;
     let rows: Vec<VaultListItem> = serde_json::from_slice(&listing)
         .map_err(|error| format!("decode obsolete subscription inventory: {error}"))?;
     let member_tag = format!("brama:id:{id}");
@@ -138,7 +138,7 @@ pub(in crate::gateway::broker) async fn remove(
             return Err(router_refusal("remove obsolete subscription item", &output));
         }
     }
-    let listing = raw_listing(&entitlements_router_bin(), "verify subscription removal").await?;
+    let listing = raw_listing(&entitlements_router_bin()?, "verify subscription removal").await?;
     let remaining: Vec<VaultListItem> = serde_json::from_slice(&listing)
         .map_err(|error| format!("decode subscription removal verification: {error}"))?;
     if remaining

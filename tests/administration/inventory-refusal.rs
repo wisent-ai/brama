@@ -71,3 +71,31 @@ async fn provider_inventory_failure_is_not_reported_as_an_empty_pool() {
         }
     }
 }
+
+#[tokio::test]
+#[ignore = "Requires the actual vault environment with an invalid executable declaration"]
+async fn invalid_vault_declaration_is_not_an_empty_subscription_pool() {
+    let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("target/real-tests/vault-declaration")
+        .join(uuid::Uuid::new_v4().to_string());
+    std::fs::create_dir_all(&directory).expect("create evidence directory");
+    let mut evidence = Evidence {
+        path: directory.join("report.json"),
+        report: json!({"test_build": brama::build_info::current(),
+            "command": std::env::args().collect::<Vec<_>>()}),
+    };
+    assert_eq!(
+        evidence.report["test_build"]["source_revision"],
+        required("TEST_SOURCE_REVISION")
+    );
+    let declaration = required("EXPECTED_VAULT_DECLARATION");
+    let cause = required("EXPECTED_VAULT_DECLARATION_CAUSE");
+    let result = brama::gateway::broker::list_all_subscriptions().await;
+    let error = result.expect_err("invalid executable declaration must refuse discovery");
+    evidence.report["refusal"] = json!(error);
+    assert!(
+        error.contains(&declaration),
+        "refusal lost declaration: {error}"
+    );
+    assert!(error.contains(&cause), "refusal lost actual cause: {error}");
+}

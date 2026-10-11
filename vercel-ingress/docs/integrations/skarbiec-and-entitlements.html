@@ -44,20 +44,21 @@ as a refusal.</p>
 detection.</p>
 <h2 id="entitlements-router">Entitlements router<a class="headerlink" href="#entitlements-router" title="Link to this section">&para;</a></h2>
 <h3 id="outcome_1">Outcome<a class="headerlink" href="#outcome_1" title="Link to this section">&para;</a></h3>
-<p>Discover one agent's non-deleted subscription resources and persist an OAuth
-refresh or authorized donation without placing plaintext in Brama state.</p>
+<p>Discover the deployment's shared, non-deleted subscription pool and persist an OAuth
+refresh or authorized donation without placing plaintext in Brama state. Agent attribution records provenance; it does not restrict which caller may use a subscription.</p>
 <h3 id="data-and-reliability">Data and reliability<a class="headerlink" href="#data-and-reliability" title="Link to this section">&para;</a></h3>
 <ul>
 <li>live <code>list</code> output is validated as untrusted JSON;</li>
-<li>only resource tails beginning
-  <code>brama-sub-&lt;slugged-agent&gt;-</code> are eligible;</li>
-<li>successful live results are cached per agent for 60 seconds;</li>
+<li>membership follows the recorded subscription metadata, not an agent-name prefix;</li>
+<li>successful live results are shared between concurrent readers; their reusable age comes from <code>BRAMA_SUBSCRIPTION_LISTING_AGE_SECONDS</code>. Without that declaration, each caller reads the vault unless it was already waiting for the same successful read;</li>
 <li>when the live <code>list</code> call fails, the trusted startup metadata
   snapshot is the only other source Brama reads, and it is read as metadata
   only: it authorizes nothing on its own;</li>
 <li>credential writes pass secret bytes through child stdin;</li>
 <li>donation metadata uses an owner-only atomic file replacement.</li>
 </ul>
+<p>Vault executable selection checks <code>ENTITLEMENTS_ROUTER_BIN</code>, then <code>SKARBIEC_BIN</code>, then the existing executable-discovery locations. An explicitly empty or non-Unicode declaration is a configuration refusal naming the declaration and cause, not permission to choose a different executable. The refusal propagates through live pool discovery, authenticator inspection, route inspection and credential writes before launching a vault command. It does not become an empty pool or a successful write.</p>
+<p>Qualify an actual invalid declaration through Brama's inventory API with <code>cargo test --test credential-administration -- --ignored --exact inventory_refusal::invalid_vault_declaration_is_not_an_empty_subscription_pool</code>. Supply <code>TEST_SOURCE_REVISION</code>, the actual isolated vault environment, <code>EXPECTED_VAULT_DECLARATION</code> and independently observed <code>EXPECTED_VAULT_DECLARATION_CAUSE</code>. The journey retains the refusal under <code>target/real-tests/vault-declaration</code>; it creates no substitute vault and submits no provider request. Use an isolated fixture: if the declared failure is absent, the normal inventory API will read the real configured vault.</p>
 <h3 id="disable-and-removal">Disable and removal<a class="headerlink" href="#disable-and-removal" title="Link to this section">&para;</a></h3>
 <p>Stop new subscription selection, revoke router/vault access, preserve existing
 journal evidence, and remove only Brama-owned non-secret overlay state after

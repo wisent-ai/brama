@@ -112,7 +112,7 @@ pub(super) async fn list_subscriptions_live(
 pub(super) async fn list_subscriptions_result(
     agent_id: &str,
 ) -> Result<Vec<SubscriptionEntry>, String> {
-    let broker = entitlements_router_bin();
+    let broker = entitlements_router_bin()?;
     match live_subscriptions(&broker, false).await {
         Ok(mut live) => {
             match configured_subscriptions() {

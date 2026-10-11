@@ -144,7 +144,7 @@ static GRANT_ROUTED: LazyLock<RwLock<HashMap<String, bool>>> =
 /// One `route resolve` for one resource, run to its exit, reading only
 /// whether the vault answers a complete coordinate for it.
 fn resolve_grant_route(resource: &str) -> Result<bool, String> {
-    let binary = super::vault::entitlements_router_bin();
+    let binary = super::vault::entitlements_router_bin()?;
     let mut command = std::process::Command::new(&binary);
     command
         .arg("route")

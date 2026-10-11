@@ -48,12 +48,7 @@ explicit billing target remains restricted to its selected member. Blocked
 members remain behind unblocked members. If operating-system randomness cannot
 be read, selection refuses before provider dispatch and reports the failed
 operation and its actual OS error through the normal response diagnostics.</p>
-<p>Discovery shells the local entitlements router's <code>list</code> (binary from
-<code>ENTITLEMENTS_ROUTER_BIN</code>, default <code>entitlements-router</code>); a successful
-listing is cached for 60 seconds. User-facing discovery preserves process
-errors, exit status and stderr, malformed output and timeouts. A trusted
-startup catalog may support routing, but never hides a failed live lookup in
-the operator's report.</p>
+<p>Discovery shells the local entitlements router's <code>list</code>. Executable selection and invalid-declaration refusals follow the <a href="/docs/integrations/skarbiec-and-entitlements">Skarbiec integration contract</a>. Successful listings are shared by concurrent readers; subsequent reuse requires the age declared in <code>BRAMA_SUBSCRIPTION_LISTING_AGE_SECONDS</code>, not a built-in duration. User-facing discovery preserves process errors, exit status and stderr, and malformed output. A trusted startup catalog may support routing, but never hides a failed live lookup in the operator's report.</p>
 <p>An item that loses its <code>brama:subscription</code> mark keeps a working
 credential and stops existing for every listing — the one failure the
 deployment had no way to see, which is why <code>/readyz</code> reports such accounts

@@ -101,26 +101,31 @@ pub(in crate::gateway::broker) async fn raw_listing(
 /// names no program — `brama subscription sync` answers that for every
 /// grant the machine holds, while nothing that needs a working subscription
 /// can be served.
-pub(crate) fn entitlements_router_bin() -> String {
+pub(crate) fn entitlements_router_bin() -> Result<String, String> {
     for declaration in [ENTITLEMENTS_ROUTER_BIN_ENV, SKARBIEC_BIN_ENV] {
-        if let Some(value) = std::env::var(declaration)
-            .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty())
-        {
-            return value;
+        match std::env::var(declaration) {
+            Ok(value) if value.trim().is_empty() => {
+                return Err(format!("resolve vault executable: {declaration} is empty"));
+            }
+            Ok(value) => return Ok(value.trim().to_owned()),
+            Err(std::env::VarError::NotPresent) => {}
+            Err(error) => {
+                return Err(format!(
+                    "read vault executable declaration {declaration}: {error}"
+                ))
+            }
         }
     }
     if let Some(found) = VAULT_PROGRAM_NAMES.into_iter().find_map(on_path) {
-        return found;
+        return Ok(found);
     }
     if let Some(home) = std::env::var_os("HOME") {
         let installed = std::path::Path::new(&home).join(VAULT_HOME_RELATIVE);
         if is_executable_file(&installed) {
-            return installed.display().to_string();
+            return Ok(installed.display().to_string());
         }
     }
-    DEFAULT_ENTITLEMENTS_ROUTER_BIN.to_owned()
+    Ok(DEFAULT_ENTITLEMENTS_ROUTER_BIN.to_owned())
 }
 
 /// Is `path` a file this process could execute?
@@ -248,7 +253,7 @@ pub(in crate::gateway::broker) async fn router_output(
     operation: &str,
     configure: impl FnOnce(&mut tokio::process::Command),
 ) -> Result<std::process::Output, String> {
-    child_output(&entitlements_router_bin(), operation, configure).await
+    child_output(&entitlements_router_bin()?, operation, configure).await
 }
 
 pub(in crate::gateway::broker) fn router_refusal(

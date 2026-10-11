@@ -148,7 +148,7 @@ async fn donated_credential_tags(
     account: Option<&str>,
 ) -> Result<Vec<String>, DonationRefusal> {
     let stdout = raw_listing(
-        &entitlements_router_bin(),
+        &entitlements_router_bin().map_err(DonationRefusal::Unwritable)?,
         "list vault tags for donated credential",
     )
     .await

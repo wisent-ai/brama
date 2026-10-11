@@ -28,7 +28,7 @@ use super::donation::donated_subscriptions;
 /// internal routing only and cannot turn a failed user-facing read into success.
 /// `agent_id` names the caller for the log; the pool is the same for every one.
 pub async fn discover_subscriptions(agent_id: &str) -> Result<Vec<SubscriptionEntry>, String> {
-    let broker = entitlements_router_bin();
+    let broker = entitlements_router_bin()?;
     let mut entries = live_subscriptions(&broker, true).await?;
     for donated in donated_subscriptions(None)? {
         match entries.iter_mut().find(|entry| entry.id == donated.id) {
@@ -44,7 +44,7 @@ pub async fn discover_subscriptions(agent_id: &str) -> Result<Vec<SubscriptionEn
 /// and the overlay rows it wrote. This answers who may retire an account; it
 /// never narrows routing.
 pub async fn owned_subscriptions(agent_id: &str) -> Result<Vec<SubscriptionEntry>, String> {
-    let stdout = raw_listing(&entitlements_router_bin(), "list owned subscriptions").await?;
+    let stdout = raw_listing(&entitlements_router_bin()?, "list owned subscriptions").await?;
     let mut entries = parse_owned_subscriptions(&stdout, agent_id)?;
     for donated in donated_subscriptions(Some(agent_id))? {
         match entries.iter_mut().find(|entry| entry.id == donated.id) {
@@ -96,7 +96,7 @@ pub async fn list_subscriptions(agent_id: &str) -> Vec<SubscriptionEntry> {
 /// caller routes over. It stays a separate reader because it never consults
 /// the trusted boot catalog or a donated overlay.
 pub async fn list_all_subscriptions() -> Result<Vec<SubscriptionEntry>, String> {
-    let stdout = raw_listing(&entitlements_router_bin(), "list all subscriptions").await?;
+    let stdout = raw_listing(&entitlements_router_bin()?, "list all subscriptions").await?;
     with_recorded_accounts(parse_live_subscriptions(&stdout)?).await
 }
 
@@ -131,7 +131,7 @@ pub async fn policy_unnamed_subscriptions() -> Result<Vec<SubscriptionEntry>, St
 /// Metadata only; an unavailable census is an error, never an empty inventory.
 pub async fn list_unroutable_accounts() -> Result<Vec<UnroutableAccount>, String> {
     let stdout = raw_listing(
-        &entitlements_router_bin(),
+        &entitlements_router_bin()?,
         "list unroutable subscription accounts",
     )
     .await?;

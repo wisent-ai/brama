@@ -35,7 +35,7 @@ pub(in crate::gateway::broker) async fn existing_item_tags(
     item_id: &str,
 ) -> Result<Vec<String>, String> {
     let stdout = raw_listing(
-        &entitlements_router_bin(),
+        &entitlements_router_bin()?,
         "list vault tags for credential write",
     )
     .await?;
@@ -57,7 +57,7 @@ pub(in crate::gateway::broker) async fn existing_item_tags(
 pub(in crate::gateway::broker) async fn existing_item_account(
     item_id: &str,
 ) -> Result<Option<String>, String> {
-    let stdout = raw_listing(&entitlements_router_bin(), "inspect credential account").await?;
+    let stdout = raw_listing(&entitlements_router_bin()?, "inspect credential account").await?;
     let items: Vec<VaultListItem> = serde_json::from_slice(&stdout)
         .map_err(|error| format!("decode credential account inventory: {error}"))?;
     if !items.iter().any(|item| item.id == item_id && !item.deleted) {
@@ -105,7 +105,7 @@ pub(in crate::gateway::broker) async fn put_credential(
             return Err(format!("credential publication refused: subscription {id} was removed during reconciliation"));
         }
     }
-    let stdout = raw_listing(&entitlements_router_bin(), "inspect credential target").await?;
+    let stdout = raw_listing(&entitlements_router_bin()?, "inspect credential target").await?;
     let items: Vec<VaultListItem> = serde_json::from_slice(&stdout)
         .map_err(|error| format!("decode credential target inventory: {error}"))?;
     let mut document = if items.iter().any(|item| item.id == item_id && !item.deleted) {
@@ -144,7 +144,7 @@ pub(in crate::gateway::broker) async fn put_credential(
         .ok_or_else(|| format!("credential target {item_id} has no canonical kind"))?
         .to_owned();
     let document = document.to_string();
-    let mut command = tokio::process::Command::new(entitlements_router_bin());
+    let mut command = tokio::process::Command::new(entitlements_router_bin()?);
     command
         .kill_on_drop(true)
         .arg("set-json")
