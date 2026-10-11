@@ -8,7 +8,10 @@ use std::time::{Duration, Instant};
 /// it is not a whole number of seconds.
 pub fn declared_age(variable: &str) -> Result<Option<Duration>, String> {
     match std::env::var(variable) {
-        Err(_) => Ok(None),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(value)) => Err(format!(
+            "{variable} must be a whole number of seconds; it is not Unicode: {value:?}"
+        )),
         Ok(value) => value
             .trim()
             .parse()

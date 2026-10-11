@@ -24,9 +24,17 @@ pub async fn run() -> Value {
             // nothing is redeemed this pass and the cause is the answer.
             Err(error) => return json!({"ok": false, "error": error, "members": results}),
         }
+        // A member whose provider is not declared cannot be maintained; it is
+        // reported with the refusal, not passed over as if it had no resets.
         let declared = match super::super::declaration::provider(&member.provider) {
             Ok(provider) => provider,
-            Err(_) => continue,
+            Err(error) => {
+                ok = false;
+                results.push(
+                    json!({"member": member.id, "provider": member.provider, "error": error}),
+                );
+                continue;
+            }
         };
         if declared.resets.is_none() {
             continue;
