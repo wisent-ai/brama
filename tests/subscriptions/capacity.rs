@@ -1,5 +1,5 @@
 //! Real gateway/provider reports; this flow never consumes a reset.
-//! Journeys require BRAMA, CONSUMER, BEARER_ROLE and GATEWAY_SOURCE_REVISION.
+//! Journeys require BRAMA, CLI_SOURCE_REVISION, CONSUMER, BEARER_ROLE and GATEWAY_SOURCE_REVISION.
 //! Reset reporting additionally requires MEMBER and EXPECTED_CREDITS.
 //! Discovery requires EXPECTED_ACCOUNT, EXPECTED_HARNESS_PROVIDER and EXPECTED_PROVIDER.
 #[path = "identity/authenticator.rs"]

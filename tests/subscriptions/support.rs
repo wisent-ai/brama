@@ -18,6 +18,7 @@ impl Run {
     pub(super) fn new() -> Self {
         let binary = required("BRAMA");
         let gateway_revision = required("GATEWAY_SOURCE_REVISION");
+        let cli_revision = required("CLI_SOURCE_REVISION");
         let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("target/real-tests/subscriptions")
             .join(uuid::Uuid::new_v4().to_string());
@@ -32,7 +33,8 @@ impl Run {
         let checksum = hex::encode(Sha256::digest(bytes));
         let report = json!({"source_revision": String::from_utf8_lossy(&revision.stdout).trim(),
             "binary": binary, "binary_sha256": checksum, "commands": [],
-            "expected_gateway_source_revision": gateway_revision});
+            "expected_gateway_source_revision": gateway_revision,
+            "expected_cli_source_revision": cli_revision});
         let mut run = Self {
             binary,
             directory,
@@ -46,6 +48,22 @@ impl Run {
                 "--json".into(),
             ],
         };
+        let version = run.standalone(&["version"]);
+        assert!(
+            version.status.success(),
+            "CLI build identity refused: {}",
+            String::from_utf8_lossy(&version.stderr)
+        );
+        let identity: Value =
+            serde_json::from_slice(&version.stdout).expect("CLI build identity JSON");
+        run.report["cli_build"] = identity.clone();
+        run.save();
+        assert_eq!(identity["product"], "brama", "unexpected CLI product");
+        assert_eq!(
+            identity["source_revision"].as_str(),
+            Some(cli_revision.as_str()),
+            "tested CLI differs from the declared qualification revision"
+        );
         run.snapshot_pool();
         run
     }
