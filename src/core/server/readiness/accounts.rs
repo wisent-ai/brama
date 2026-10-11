@@ -10,6 +10,7 @@ use super::ReadinessReport;
 /// facts rather than a second sweep.
 pub(super) struct ServiceFacts {
     pub(super) providers: Vec<String>,
+    pub(super) provider_inventory_error: Option<String>,
     pub(super) checked: Vec<Value>,
     pub(super) denied: Vec<String>,
     pub(super) provider_available: bool,
@@ -30,6 +31,11 @@ pub(super) struct ServiceFacts {
 
 pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
     let mut inventory_errors = Vec::new();
+    if let Some(detail) = &facts.provider_inventory_error {
+        inventory_errors.push(json!({
+            "operation": "configured_provider_capabilities", "detail": detail,
+        }));
+    }
     if facts.standalone {
         if let Err(detail) = crate::gateway::broker::local_provider_names() {
             inventory_errors.push(json!({"operation": "local_provider_names", "detail": detail}));
@@ -203,7 +209,7 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
     } else if !blocked.is_empty() {
         "traffic can be served, but at least one account cannot be signed in by this gateway"
     } else if !inventory_errors.is_empty() {
-        "traffic can be served, but subscription inventory is incomplete"
+        "traffic can be served, but credential inventory is incomplete"
     } else {
         "every configured provider credential was obtained, every active subscription redeemed, and every active subscription account is routable"
     };
@@ -211,7 +217,7 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
         reason.to_owned()
     } else {
         format!(
-            "{reason}; subscription inventory could not be fully read: {}",
+            "{reason}; credential inventory could not be fully read: {}",
             inventory_errors
                 .iter()
                 .map(|error| format!(

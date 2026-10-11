@@ -24,34 +24,23 @@ pub(super) const PROVIDER_CAPABILITIES_ENV: &str = "BRAMA_PROVIDER_CAPABILITY_ID
 /// paths. The catalogue must describe both; otherwise it hides an alias that
 /// the request path can serve after a stale workload capability falls back to
 /// the still-valid grant.
-fn configured_provider_grants() -> std::collections::HashSet<String> {
+fn configured_provider_grants() -> Result<std::collections::HashSet<String>, String> {
     let Some(path) = std::env::var_os("SKARBIEC_CAPABILITY_ROUTES_FILE") else {
-        return std::collections::HashSet::new();
+        return Ok(std::collections::HashSet::new());
     };
-    // A declared table that cannot be read or parsed describes no provider,
-    // which hides every alias it routes; say which file and why, so
-    // `capability_absent` is not read as a provider nobody configured.
     let path = std::path::PathBuf::from(path);
-    let raw = match std::fs::read_to_string(&path) {
-        Ok(raw) => raw,
-        Err(error) => {
-            tracing::warn!(event = "grant_routes_unreadable", path = %path.display(), %error, "no provider is described by the grant routes table");
-            return std::collections::HashSet::new();
-        }
-    };
-    let table = match serde_json::from_str::<serde_json::Value>(&raw) {
-        Ok(table) => table,
-        Err(error) => {
-            tracing::warn!(event = "grant_routes_unparseable", path = %path.display(), %error, "no provider is described by the grant routes table");
-            return std::collections::HashSet::new();
-        }
-    };
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|error| format!("read grant routes {}: {error}", path.display()))?;
+    let table: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|error| format!("decode grant routes {}: {error}", path.display()))?;
     let routes = table.get("routes").unwrap_or(&table);
-    let Some(routes) = routes.as_object() else {
-        tracing::warn!(event = "grant_routes_not_an_object", path = %path.display(), "no provider is described by the grant routes table");
-        return std::collections::HashSet::new();
-    };
-    routes
+    let routes = routes.as_object().ok_or_else(|| {
+        format!(
+            "read grant routes {}: routes must be an object",
+            path.display()
+        )
+    })?;
+    Ok(routes
         .iter()
         .filter_map(|(resource, entry)| {
             let provider = resource.strip_prefix("provider:")?;
@@ -75,36 +64,22 @@ fn configured_provider_grants() -> std::collections::HashSet<String> {
             }
             Some(provider.to_owned())
         })
-        .collect()
+        .collect())
 }
 
 /// Resolve provider authentication once for an authenticated model catalogue.
 ///
 /// Parsing the capability map and grant routes once avoids rebuilding the
 /// workload client for every model in a catalogue with thousands of entries.
-pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
+pub fn configured_provider_capabilities() -> Result<std::collections::HashSet<String>, String> {
     if local_provider_credentials_enabled() {
-        return match local_provider_names() {
-            Ok(names) => names.into_iter().collect(),
-            Err(error) => {
-                tracing::warn!(event = "standalone_provider_inventory_unreadable", %error,
-                    "standalone provider discovery failed; managed credentials are not eligible");
-                std::collections::HashSet::new()
-            }
-        };
+        return local_provider_names().map(|names| names.into_iter().collect());
     }
-    let mut configured = configured_provider_grants();
+    let mut configured = configured_provider_grants()?;
     if client().is_none() {
-        return configured;
+        return Ok(configured);
     }
-    let subscription_ids = match configured_subscription_ids() {
-        Ok(ids) => ids,
-        Err(error) => {
-            tracing::warn!(event = "subscription_catalog_invalid", %error,
-                "provider capability map cannot be classified without the subscription catalog");
-            return configured;
-        }
-    };
+    let subscription_ids = configured_subscription_ids()?;
     if let Some(map) = capability_map(PROVIDER_CAPABILITIES_ENV) {
         for (provider, capability_id) in map {
             if subscription_ids.contains(&provider)
@@ -118,7 +93,7 @@ pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
             }
         }
     }
-    configured
+    Ok(configured)
 }
 
 /// Inspect configured credential routes without issuing a credential.
@@ -130,7 +105,7 @@ pub fn provider_capability_configured(provider: &str) -> Result<bool, String> {
     if local_provider_credentials_enabled() {
         return local_provider_names().map(|names| names.iter().any(|name| name == provider));
     }
-    if configured_provider_capabilities().contains(provider) {
+    if configured_provider_capabilities()?.contains(provider) {
         return Ok(true);
     }
     provider_grant_routed(provider)

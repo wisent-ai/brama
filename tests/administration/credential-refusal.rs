@@ -3,6 +3,8 @@ use reqwest::{Client, Method, StatusCode};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
+#[path = "inventory-refusal.rs"]
+mod inventory_refusal;
 #[path = "route-refusal.rs"]
 mod route_refusal;
 

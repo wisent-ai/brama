@@ -62,6 +62,7 @@ impl ReadinessReport {
         provider_available: bool,
         checked: Vec<Value>,
         denied: Vec<String>,
+        provider_inventory_error: Option<&str>,
     ) -> Self {
         Self {
             status: if provider_available {
@@ -84,7 +85,9 @@ impl ReadinessReport {
                 "subscriptions": [],
                 "unredeemable": [],
                 "unroutable_accounts": [],
-                "inventory_errors": [],
+                "inventory_errors": provider_inventory_error.map(|detail| json!({
+                    "operation": "configured_provider_capabilities", "detail": detail,
+                })).into_iter().collect::<Vec<_>>(),
                 "operator_action_required": false,
                 "build": crate::build_info::current(),
             }),

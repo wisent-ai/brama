@@ -32,7 +32,7 @@ use super::subscription_models::discover_subscription_models;
 pub async fn registry_models_for_console() -> Result<Vec<provider_registry::RegistryModel>, String>
 {
     let mut models = cached_registry_models();
-    spawn_console_discovery();
+    spawn_console_discovery(broker::configured_provider_capabilities()?);
     models.sort_by(|left, right| left.route_id.cmp(&right.route_id));
     models.dedup_by(|left, right| left.route_id == right.route_id);
     Ok(models)
@@ -42,7 +42,7 @@ pub async fn registry_models_for_console() -> Result<Vec<provider_registry::Regi
 /// seconds must not stack a provider sweep per click.
 static CONSOLE_DISCOVERY_RUNNING: AtomicBool = AtomicBool::new(false);
 
-fn spawn_console_discovery() {
+fn spawn_console_discovery(providers: std::collections::HashSet<String>) {
     if CONSOLE_DISCOVERY_RUNNING.swap(true, Ordering::SeqCst) {
         return;
     }
@@ -68,7 +68,7 @@ fn spawn_console_discovery() {
                 "no subscription published models for the console catalogue"
             );
         }
-        discover_direct_provider_models().await;
+        discover_direct_provider_models(providers).await;
         CONSOLE_DISCOVERY_RUNNING.store(false, Ordering::SeqCst);
     });
 }
@@ -82,9 +82,11 @@ fn spawn_console_discovery() {
 ///
 /// A provider that cannot be reached contributes nothing and says so in the
 /// log; it does not fail the catalogue for the others.
-async fn discover_direct_provider_models() -> Vec<provider_registry::RegistryModel> {
+async fn discover_direct_provider_models(
+    providers: std::collections::HashSet<String>,
+) -> Vec<provider_registry::RegistryModel> {
     let mut discovered = Vec::new();
-    for provider in broker::configured_provider_capabilities() {
+    for provider in providers {
         let cache_key = format!("{provider}:direct");
         if let Some(models) = REGISTRY_MODEL_CACHE.lock().ok().and_then(|cache| {
             cache

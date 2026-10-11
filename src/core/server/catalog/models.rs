@@ -17,7 +17,7 @@ use crate::core::inference_routes::categories::{categories_for, declared, Catego
 use crate::core::server::admission::identity::{ModelClientIdentity, BRAMA_DESKTOP_CLIENT_ID};
 use crate::core::server::admission::{authorize_caller, has_caller_auth_headers};
 use crate::core::server::aliases::table::ModelAliases;
-use crate::core::server::refusal::ApiError;
+use crate::core::server::refusal::{api_error, ApiError};
 use crate::core::server::subscriptions::account::account_agent_id;
 use crate::providers::adapter::RegistryModel;
 use crate::subscription_dispatch::registry_models_for_agent;
@@ -48,6 +48,7 @@ pub(in crate::core::server) async fn list_models(
     // account. Account availability comes only from that account's stored key.
     let configured_providers = if !account_catalog && catalog_agent.is_some() {
         crate::gateway::broker::configured_provider_capabilities()
+            .map_err(|error| api_error(axum::http::StatusCode::SERVICE_UNAVAILABLE, &error))?
     } else {
         HashSet::new()
     };
@@ -104,8 +105,10 @@ pub(in crate::core::server) async fn list_models(
                 }
             }
             Err(error) => {
-                degraded = true;
-                warn!(%error, "console provider model discovery failed");
+                return Err(api_error(
+                    axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                    &error,
+                ));
             }
         }
     }

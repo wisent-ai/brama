@@ -54,13 +54,15 @@ pub fn unroutable_reason(refusals: &[String]) -> String {
 pub(super) async fn calculate_readiness(
     publish_interim: impl Fn(ReadinessReport),
 ) -> ReadinessReport {
-    let providers: Vec<String> = {
-        let mut names: Vec<String> = crate::gateway::broker::configured_provider_capabilities()
-            .into_iter()
-            .collect();
-        names.sort();
-        names
-    };
+    let (providers, provider_inventory_error) =
+        match crate::gateway::broker::configured_provider_capabilities() {
+            Ok(names) => {
+                let mut names: Vec<String> = names.into_iter().collect();
+                names.sort();
+                (names, None)
+            }
+            Err(error) => (Vec::new(), Some(error)),
+        };
 
     let provider_results = join_all(providers.iter().map(|provider| async {
         let refusal = crate::gateway::broker::provider_credential(provider)
@@ -86,6 +88,7 @@ pub(super) async fn calculate_readiness(
         provider_available,
         checked.clone(),
         denied.clone(),
+        provider_inventory_error.as_deref(),
     ));
 
     // Obtaining a credential is only the first half. A subscription whose model
@@ -231,6 +234,7 @@ pub(super) async fn calculate_readiness(
 
     accounts::verdict(ServiceFacts {
         providers,
+        provider_inventory_error,
         checked,
         denied,
         provider_available,

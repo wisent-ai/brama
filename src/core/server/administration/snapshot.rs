@@ -32,7 +32,8 @@ pub(in crate::core::server) async fn admin_snapshot(
             "deployments": [],
         }),
     };
-    let configured = crate::gateway::broker::configured_provider_capabilities();
+    let configured = crate::gateway::broker::configured_provider_capabilities()
+        .map_err(|error| api_error(StatusCode::SERVICE_UNAVAILABLE, &error))?;
     let providers = crate::providers::adapter::providers()
         .iter()
         .map(|provider| {

@@ -3,9 +3,10 @@
 
 use std::sync::atomic::Ordering;
 
-use axum::response::IntoResponse;
+use crate::core::server::refusal::{api_error, ApiError};
+use axum::http::StatusCode;
 use axum::Json;
-use serde_json::json;
+use serde_json::{json, Value};
 
 use super::{
     STARTED_AT, TOTAL_FAILURES, TOTAL_INPUT_TOKENS, TOTAL_OUTPUT_TOKENS, TOTAL_PROVIDER_ATTEMPTS,
@@ -27,9 +28,10 @@ pub(in crate::core::server) fn wire_protocol_name(
     }
 }
 
-pub(in crate::core::server) async fn get_stats() -> impl IntoResponse {
+pub(in crate::core::server) async fn get_stats() -> Result<Json<Value>, ApiError> {
     let provider_descriptors = crate::providers::adapter::providers();
-    let configured = crate::gateway::broker::configured_provider_capabilities();
+    let configured = crate::gateway::broker::configured_provider_capabilities()
+        .map_err(|error| api_error(StatusCode::SERVICE_UNAVAILABLE, &error))?;
     let is_configured = |provider| {
         !crate::providers::adapter::provider_requires_credential(provider)
             || configured.contains(provider)
@@ -63,7 +65,7 @@ pub(in crate::core::server) async fn get_stats() -> impl IntoResponse {
         })
         .collect::<Vec<_>>();
 
-    Json(json!({
+    Ok(Json(json!({
         "build": crate::build_info::current(),
         "total_requests": TOTAL_REQUESTS.load(Ordering::Relaxed),
         "total_failures": TOTAL_FAILURES.load(Ordering::Relaxed),
@@ -80,5 +82,5 @@ pub(in crate::core::server) async fn get_stats() -> impl IntoResponse {
             "capabilityBroker": "final-use",
             "subscriptions": "lazy",
         },
-    }))
+    })))
 }

@@ -70,7 +70,7 @@ pub async fn preview_document(
     };
     inference_routes::validate_document(&destination_value)?;
 
-    let configured_providers = broker::configured_provider_capabilities();
+    let configured_providers = broker::configured_provider_capabilities()?;
     let acquisition = if broker::local_provider_credentials_enabled() {
         "standalone_runtime"
     } else {
