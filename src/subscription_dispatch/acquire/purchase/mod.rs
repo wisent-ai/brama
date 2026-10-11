@@ -106,6 +106,24 @@ pub(super) async fn buy(options: &AcquireOptions, shortage: Shortage) -> Value {
         verdict["failure"] = failure;
         return finish(verdict, FAILED, &code, detail, Value::Null);
     }
+    // The answer belongs to this request only when Weles echoes its
+    // correlation id as `request_id`; a Weles that does not echoes the id in
+    // `subscription_id` instead, in the member's place, and cannot name the
+    // member it banked.
+    if answer["request_id"].as_str() != Some(request_id.as_str()) {
+        verdict["weles_answer"] = answer.clone();
+        return finish(
+            verdict,
+            FAILED,
+            "purchase_uncorrelated",
+            format!(
+                "Weles's purchase answer does not carry this request's id {request_id} as \
+                 request_id, so the member it banked is unknown; the Weles serving this gateway \
+                 predates naming the bought member in its answer: {answer}"
+            ),
+            Value::Null,
+        );
+    }
     let Some(account) = answer["account"].as_str() else {
         return finish(
             verdict,

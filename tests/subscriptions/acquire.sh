@@ -73,6 +73,10 @@ case "$result" in
     id=$(field acquire .subscription_id)
     account=$(field acquire .account)
     shortage=$(field acquire .shortage)
+    request=$(field acquire .request_id)
+    [ -n "$request" ] && [ "$request" != null ] || fail "the acquired verdict carries no request_id"
+    [ "$id" != "$request" ] || fail "the acquired member is the purchase's correlation id $request, not a member"
+    case "$id" in claude-code-?*) ;; *) fail "the acquired member $id is not named <provider>-<account>" ;; esac
     case "$shortage" in spent | sessions_full | unusable) ;; *) fail "the acquisition named no shortage: $shortage" ;; esac
     run list subscription list --gateway-consumer "$CONSUMER" --bearer-role "$BEARER_ROLE" --json
     jq -e --arg id "$id" '[.. | objects | select(.subscription_id? == $id or .id? == $id)] | any' \
