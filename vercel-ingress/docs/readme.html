@@ -172,7 +172,7 @@ provider attempts, normalized errors, and auditable routing decisions.</p>
   including <code>-best</code> for the strongest operator-approved subscription route.</li>
 <li>Agent-scoped selectors: <code>any</code>, <code>any-vision-capable</code>, and <code>task:&lt;task-name&gt;</code>.</li>
 <li>Direct provider capabilities owned by Brama and subscription capabilities
-  delegated to one agent.</li>
+  available through the shared vault pool.</li>
 <li>Final-use secret redemption through the local Skarbiec capability socket in
   managed deployments, or a zeroizing in-memory credential map in standalone
   desktop deployments.</li>
@@ -285,7 +285,7 @@ advertised by the API, MCP server, examples, or release notes.</p>
 <li><strong>Outcome:</strong> Brama redeems the selected credential at final use and returns the
   normalized provider result.</li>
 <li><strong>Safety boundary:</strong> <code>billingTarget</code> must name the same provider and an active
-  subscription belonging to the signed agent.</li>
+  non-retired subscription in the shared pool; provenance tags do not gate routing.</li>
 </ul>
 <h3 id="select-an-available-or-task-ranked-model">Select an available or task-ranked model<a class="headerlink" href="#select-an-available-or-task-ranked-model" title="Link to this section">&para;</a></h3>
 <ul>
@@ -408,7 +408,7 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   canonical <code>provider/model</code> routes available for buffered and streamed calls.</li>
 <li><strong>HTTP discovery:</strong> <code>GET /v1/models</code>; account discovery combines public
   catalog metadata with models executable by that account's stored keys, while
-  signed agent discovery includes agent-owned subscriptions.</li>
+  signed agent discovery includes the shared subscription pool.</li>
 <li><strong>Subscription lifecycle:</strong> <code>GET</code>, <code>POST</code>, and <code>DELETE</code>
   <code>/v1/subscriptions/:agent_id</code>; always bearer- and HMAC-protected. A <code>GET</code>
   returns, per subscription, the plan windows the provider itself reported

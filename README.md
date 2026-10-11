@@ -58,7 +58,7 @@ provider attempts, normalized errors, and auditable routing decisions.
   including `-best` for the strongest operator-approved subscription route.
 - Agent-scoped selectors: `any`, `any-vision-capable`, and `task:<task-name>`.
 - Direct provider capabilities owned by Brama and subscription capabilities
-  delegated to one agent.
+  available through the shared vault pool.
 - Final-use secret redemption through the local Skarbiec capability socket in
   managed deployments, or a zeroizing in-memory credential map in standalone
   desktop deployments.
@@ -126,7 +126,7 @@ advertised by the API, MCP server, examples, or release notes.
 - **Outcome:** Brama redeems the selected credential at final use and returns the
   normalized provider result.
 - **Safety boundary:** `billingTarget` must name the same provider and an active
-  subscription belonging to the signed agent.
+  non-retired subscription in the shared pool; provenance tags do not gate routing.
 
 ### Select an available or task-ranked model
 
@@ -284,7 +284,7 @@ operator paths. Runnable, risk-labeled workflows are indexed in
   available for buffered and streamed calls.
 - **HTTP discovery:** `GET /v1/models`; account discovery combines public
   catalog metadata with models executable by that account's stored keys, while
-  signed agent discovery includes agent-owned subscriptions.
+  signed agent discovery includes the shared subscription pool.
 - **Subscription lifecycle:** `GET`, `POST`, and `DELETE`
   `/v1/subscriptions/:agent_id`; always bearer- and HMAC-protected. A `GET`
   returns, per subscription, the plan windows the provider itself reported

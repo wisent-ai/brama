@@ -63,11 +63,11 @@ A missing trio on a route that needs one is <code>401</code>:</p>
 </tr>
 <tr>
 <td><code>best</code> (or an alias delegating to it)</td>
-<td>a subscription owned by the signed agent</td>
+<td>an eligible subscription in the shared vault pool</td>
 </tr>
 <tr>
 <td><code>any</code>, <code>any-vision-capable</code>, <code>task:&lt;name&gt;</code></td>
-<td>a subscription owned by the signed agent</td>
+<td>an eligible subscription in the shared vault pool</td>
 </tr>
 <tr>
 <td>explicit <code>billingTarget</code></td>
@@ -77,9 +77,9 @@ A missing trio on a route that needs one is <code>401</code>:</p>
 </table>
 <p><code>billingTarget</code> (<code>providerId</code>, <code>accountId</code>, <code>subscriptionId</code>) names an exact
 target: <code>providerId</code> must match the route's provider, and <code>subscriptionId</code>
-must resolve to an active, non-retired resource owned by the signed agent.
-Selectors never authorize a direct provider credential or another agent's
-subscription.</p>
+must resolve to an active, non-retired resource in the shared subscription pool.
+The signed identity authenticates and attributes the request; provenance tags do
+not partition routing. Selectors never authorize a direct provider credential.</p>
 <h2 id="bounds">Bounds<a class="headerlink" href="#bounds" title="Link to this section">&para;</a></h2>
 <p>Candidate and credential selection follow the
 <a href="/docs/core/state-and-failures">core request contract</a>:</p>
@@ -115,7 +115,7 @@ depend on it: provider prompt caches live behind one account, and one
 conversation's spend belongs in one account's ledger.</p>
 <h2 id="selectors">Selectors<a class="headerlink" href="#selectors" title="Link to this section">&para;</a></h2>
 <ul>
-<li><code>any</code> — active agent-owned stateless routes, ranked as above.</li>
+<li><code>any</code> — active subscription-backed stateless routes, ranked as above.</li>
 <li><code>any-vision-capable</code> — the <code>any</code> contract after filtering to catalog
   models whose input modalities include <code>image</code>.</li>
 <li><code>task:&lt;task-name&gt;</code> — the latest active quality observation per active
@@ -173,8 +173,9 @@ subscription_reauthorization_required</code>, or <code>503 credential_unauthoriz
 <ul>
 <li><strong>Authentication.</strong> A valid bearer (<a href="/docs/concepts/client-identity">client identity</a>)
   proves transport, not spend.</li>
-<li><strong>Ownership.</strong> A subscription's vault item names an owner; the entitlement
-  check is what enforces it per request.</li>
+<li><strong>Ownership.</strong> A subscription's provenance records who banked it and
+  governs retirement authority. It does not restrict which authenticated caller
+  may route through the shared subscription pool.</li>
 </ul></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>

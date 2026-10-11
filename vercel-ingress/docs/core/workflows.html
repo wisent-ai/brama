@@ -109,16 +109,16 @@ body. The bearer-bound agent, signed agent, and path agent must agree where
 present.</p>
 <p>The deployment alias <code>best</code> resolves to the one operator-selected subscription
 route recorded for it. It is accepted only for bearers whose model allowlist
-names <code>best</code>; the HMAC identity still selects the subscription owner. The alias
-never authorizes a direct provider credential, another agent's subscription, or
-a second route.</p>
+names <code>best</code>; the HMAC identity authenticates and attributes the caller.
+Eligible subscriptions come from the shared vault pool, not from per-agent
+provenance tags. The alias never authorizes a direct provider credential or a second route.</p>
 <p><code>billingTarget</code> contains <code>providerId</code>, <code>accountId</code>, and <code>subscriptionId</code>:</p>
 <ul>
 <li><code>providerId</code> must match the canonical route provider;</li>
 <li><code>accountId</code> is required as caller decision evidence but is not credential
   authority;</li>
-<li><code>subscriptionId</code> must resolve to an active non-retired resource owned by the
-  signed agent.</li>
+<li><code>subscriptionId</code> must resolve to an active non-retired resource in the
+  shared subscription pool.</li>
 </ul>
 <p>An explicit subscription route walks every eligible credential on that
 one route, ordered by what their plans have left: the maximum used fraction the
@@ -141,10 +141,10 @@ never adds a credential, never survives a block, a retirement, or a full
 reported window, and never overrides <code>billingTarget</code>.</p>
 <h2 id="workflow-selectors">Workflow: selectors<a class="headerlink" href="#workflow-selectors" title="Link to this section">&para;</a></h2>
 <p>A selector is not an alias. An alias names one route; a selector asks Brama to
-rank candidate subscriptions the caller already owns and to try them in that
+rank eligible subscriptions in the shared pool and to try them in that
 order, within the bounds below.</p>
 <h3 id="any"><code>any</code><a class="headerlink" href="#any" title="Link to this section">&para;</a></h3>
-<p>Select active agent-owned stateless routes, order them by the freest usable
+<p>Select active subscription-backed stateless routes, order them by the freest usable
 subscription behind each route, randomize exact ties, and try every model
 candidate in that order. Each candidate walks its eligible credentials until
 served or refused without rotation; routes of a provider whose whole pool
