@@ -38,11 +38,21 @@ fn now_ms() -> i64 {
         .unwrap_or_default()
 }
 
+/// The pins, through a poisoned lock: each entry is written whole, so a panic
+/// elsewhere leaves them usable, and dropping them would silently move every
+/// agent off the credential that holds its cache.
+fn pins() -> std::sync::MutexGuard<'static, HashMap<(String, String), Pin>> {
+    match PINS.lock() {
+        Ok(pins) => pins,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
 /// The credential this agent is pinned to for this provider, if the pin is
 /// still inside its own window.
 fn pinned_credential(agent_id: &str, provider: &str) -> Option<String> {
     let key = (agent_id.to_string(), provider.to_string());
-    let mut pins = PINS.lock().ok()?;
+    let mut pins = pins();
     let pin = pins.get(&key)?;
     if pin
         .expires_at_ms
@@ -62,15 +72,13 @@ pub(in crate::subscription_dispatch::dispatch) fn pin_credential(
     credential_id: &str,
 ) {
     let expires_at_ms = usage::next_reset_ms(credential_id);
-    if let Ok(mut pins) = PINS.lock() {
-        pins.insert(
-            (agent_id.to_string(), provider.to_string()),
-            Pin {
-                credential_id: credential_id.to_string(),
-                expires_at_ms,
-            },
-        );
-    }
+    pins().insert(
+        (agent_id.to_string(), provider.to_string()),
+        Pin {
+            credential_id: credential_id.to_string(),
+            expires_at_ms,
+        },
+    );
 }
 
 /// Move the pinned credential to the front of the candidate list.
