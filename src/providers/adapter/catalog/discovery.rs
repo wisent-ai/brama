@@ -41,27 +41,21 @@ pub async fn discover_models(
             descriptor,
             &key,
         );
-        if let Ok(response) = request.send().await {
-            if response.status().is_success() {
-                if let Ok(body) = response.json::<Value>().await {
-                    let dynamic = body
-                        .get("data")
-                        .or_else(|| body.get("models"))
-                        .and_then(Value::as_array)
-                        .cloned()
-                        .unwrap_or_default();
-                    models.extend(
-                        dynamic
-                            .iter()
-                            .filter_map(|row| catalog_model_from_value(provider_id, row)),
-                    );
-                }
-            }
+        let listing = listed_rows(provider_id, request).await;
+        if let Ok(dynamic) = &listing {
+            models.extend(
+                dynamic
+                    .iter()
+                    .filter_map(|row| catalog_model_from_value(provider_id, row)),
+            );
         }
         models.sort_by(|left, right| left.route_id.cmp(&right.route_id));
         models.dedup_by(|left, right| left.route_id == right.route_id);
         if models.is_empty() {
-            return Err(format!("provider `{provider_id}` has no catalog models"));
+            return Err(match listing {
+                Err(cause) => format!("provider `{provider_id}` has no catalog models: {cause}"),
+                Ok(_) => format!("provider `{provider_id}` has no catalog models"),
+            });
         }
         return Ok(models);
     }
@@ -77,19 +71,10 @@ pub async fn discover_models(
         &key,
         secret,
     );
-    let dynamic = match request.send().await {
-        Ok(response) if response.status().is_success() => response
-            .json::<Value>()
-            .await
-            .ok()
-            .and_then(|body| {
-                body.get("data")
-                    .or_else(|| body.get("models"))
-                    .and_then(Value::as_array)
-                    .cloned()
-            })
-            .unwrap_or_default(),
-        _ => Vec::new(),
+    let listing = listed_rows(provider_id, request).await;
+    let dynamic = match &listing {
+        Ok(rows) => rows.as_slice(),
+        Err(_) => &[],
     };
     let mut models = dynamic
         .iter()
@@ -105,10 +90,59 @@ pub async fn discover_models(
     models.dedup_by(|left, right| left.route_id == right.route_id);
     apply_omp_model_metadata(provider_id, &mut models);
     if models.is_empty() {
+        let cause = match listing {
+            Err(cause) => format!(": {cause}"),
+            Ok(_) => String::new(),
+        };
         return Err(format!(
             "provider `{provider_id}` returned no models and this build carries no substitute \
-             model list for it"
+             model list for it{cause}"
         ));
     }
     Ok(models)
+}
+
+/// The model rows a provider's listing endpoint answered, or why it gave
+/// none: unreachable, refused with its body, not JSON, or carrying neither
+/// `data` nor `models`. A listing failure used to be dropped silently, so a
+/// provider left with no models was reported without the reason.
+async fn listed_rows(
+    provider_id: &str,
+    request: reqwest::RequestBuilder,
+) -> Result<Vec<Value>, String> {
+    let response = stado_wait::until(
+        stado_wait::Kind::Network,
+        "list provider models",
+        provider_id,
+        request.send(),
+    )
+    .await
+    .map_err(|error| {
+        format!(
+            "the model listing could not be reached: {}",
+            error.without_url()
+        )
+    })?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = match response.text().await {
+            Ok(text) => text,
+            Err(error) => format!("(the body could not be read: {})", error.without_url()),
+        };
+        return Err(format!("the model listing answered {status}: {body}"));
+    }
+    let body: Value = response.json().await.map_err(|error| {
+        format!(
+            "the model listing is not readable JSON: {}",
+            error.without_url()
+        )
+    })?;
+    match body
+        .get("data")
+        .or_else(|| body.get("models"))
+        .and_then(Value::as_array)
+    {
+        Some(rows) => Ok(rows.clone()),
+        None => Err("the model listing carries neither `data` nor `models`".to_string()),
+    }
 }
