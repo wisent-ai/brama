@@ -20,9 +20,13 @@
 //! every agent the same registry names, through the same router, and exits
 //! non-zero with the router's answer on the first refusal.
 
+mod installation;
 pub(crate) mod pins;
 
-use std::collections::{BTreeMap, BTreeSet};
+use installation::{agent_ids, installation, refusal_detail, Installation};
+pub(crate) use installation::{home, service_settings};
+
+use std::collections::BTreeSet;
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
@@ -82,32 +86,6 @@ const PEM_LINE: usize = 76;
 /// Owner read and write only.
 const OWNER_ONLY: u32 = 0o600;
 
-/// The home directory; an unset HOME is refused, since read as the empty path
-/// every service file would be looked for under the working directory.
-pub(crate) fn home() -> Result<PathBuf, String> {
-    std::env::var("HOME").map(PathBuf::from).map_err(|error| {
-        format!("HOME cannot be read, so the Brama installation cannot be found: {error}")
-    })
-}
-
-/// `~/.config/brama/service.env` as `NAME=value` settings, quotes removed.
-pub(crate) fn service_settings(home: &Path) -> Result<BTreeMap<String, String>, String> {
-    let path = home.join(".config/brama/service.env");
-    let text =
-        std::fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))?;
-    Ok(text
-        .lines()
-        .filter_map(|line| line.split_once('='))
-        .filter(|(name, _)| !name.trim_start().starts_with('#'))
-        .map(|(name, value)| {
-            (
-                name.trim().to_string(),
-                value.trim().trim_matches(['\'', '"']).to_string(),
-            )
-        })
-        .collect())
-}
-
 fn public_key_pem(raw: &str) -> Result<String, String> {
     let key = STANDARD
         .decode(raw)
@@ -115,126 +93,18 @@ fn public_key_pem(raw: &str) -> Result<String, String> {
     let mut der = ED25519_SPKI_PREFIX.to_vec();
     der.extend(key);
     let body = STANDARD.encode(der);
-    let lines: Vec<&str> = body
+    let lines = body
         .as_bytes()
         .chunks(PEM_LINE)
-        .map(|chunk| std::str::from_utf8(chunk).unwrap_or(""))
-        .collect();
+        .map(|chunk| {
+            std::str::from_utf8(chunk)
+                .map_err(|error| format!("PEM body line is not text: {error}"))
+        })
+        .collect::<Result<Vec<&str>, String>>()?;
     Ok(format!(
         "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----\n",
         lines.join("\n")
     ))
-}
-
-/// What `register` and `deregister` both act through: the entitlements
-/// router, the vault, the workload registry, and the service settings the
-/// router runs with.
-struct Installation {
-    home: PathBuf,
-    settings: BTreeMap<String, String>,
-    router: String,
-    vault: String,
-    registry_path: PathBuf,
-    workload: Value,
-}
-
-fn installation() -> Result<Installation, String> {
-    let home = home()?;
-    let settings = service_settings(&home)?;
-    let env = |name: &str| std::env::var(name).ok().filter(|value| !value.is_empty());
-    let setting = |name: &str| {
-        settings
-            .get(name)
-            .cloned()
-            .filter(|value| !value.is_empty())
-    };
-    // The launcher passes these directly, and then they are authoritative: it
-    // has just provisioned the directory whose key must be registered. Outside
-    // the launcher, `current` is authoritative for executable and trust
-    // material; service.env can keep paths from an older digest.
-    let running =
-        std::fs::canonicalize(home.join(".stado/services/brama/current")).unwrap_or_default();
-    let root = if running.join("darwin-arm").is_dir() {
-        running.join("darwin-arm")
-    } else {
-        running
-    };
-    let current_router = root.join("bin/skarbiec-entitlements-router");
-    let current_config = root.join("etc/brama-skarbiec");
-    let router = env("ENTITLEMENTS_ROUTER_BIN")
-        .or_else(|| {
-            current_router
-                .is_file()
-                .then(|| current_router.display().to_string())
-        })
-        .or_else(|| setting("ENTITLEMENTS_ROUTER_BIN"));
-    let vault = env("SKARBIEC_VAULT_FILE").or_else(|| setting("SKARBIEC_VAULT_FILE"));
-    let config_dir = env("BRAMA_SKARBIEC_CONFIG_DIR")
-        .or_else(|| {
-            current_config
-                .is_dir()
-                .then(|| current_config.display().to_string())
-        })
-        .or_else(|| setting("BRAMA_SKARBIEC_CONFIG_DIR"));
-    let (Some(router), Some(vault)) = (router, vault) else {
-        return Err("ENTITLEMENTS_ROUTER_BIN and SKARBIEC_VAULT_FILE must be named by the running installation, environment, or service env".into());
-    };
-    let registry_path = PathBuf::from(config_dir.unwrap_or_default()).join("registry.json");
-    let registry: Value = match std::fs::read(&registry_path) {
-        Ok(bytes) => serde_json::from_slice(&bytes).map_err(|error| {
-            format!(
-                "workload registry {} is not JSON: {error}",
-                registry_path.display()
-            )
-        })?,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Err(format!(
-                "no workload registry at {}",
-                registry_path.display()
-            ))
-        }
-        Err(error) => {
-            return Err(format!(
-                "cannot read workload registry {}: {error}",
-                registry_path.display()
-            ))
-        }
-    };
-    let workload = registry
-        .get("workloads")
-        .and_then(Value::as_object)
-        .and_then(|workloads| workloads.values().next())
-        .cloned()
-        .unwrap_or(Value::Null);
-    Ok(Installation {
-        home,
-        settings,
-        router,
-        vault,
-        registry_path,
-        workload,
-    })
-}
-
-fn agent_ids(workload: &Value) -> Vec<&str> {
-    workload
-        .get("agent_ids")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .collect()
-}
-
-/// The router's own words for a refusal: stderr, or stdout when stderr is empty.
-fn refusal_detail(output: &std::process::Output) -> String {
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let detail = if stderr.trim().is_empty() {
-        String::from_utf8_lossy(&output.stdout).trim().to_string()
-    } else {
-        stderr.trim().to_string()
-    };
-    detail.replace('\n', " ")
 }
 
 /// The inverse of `register`. Revoking a grant the vault does not hold is
