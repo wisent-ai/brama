@@ -184,7 +184,8 @@ impl CapabilityClient {
             .shutdown(std::net::Shutdown::Write)
             .map_err(|error| unreachable("closing the request to", error))?;
 
-        let line = read_control_line(&mut stream)?;
+        let line = read_control_line(&mut stream)
+            .map_err(|error| unreachable("reading the control line from", error))?;
         let control: RedeemControl = serde_json::from_slice(&line).map_err(|error| {
             CapabilityError::AuthorityAnswer(format!(
                 "control line from {socket} is not JSON ({error}): {}",
@@ -206,7 +207,10 @@ impl CapabilityClient {
         let mut extra = [0_u8; 1];
         match stream.read(&mut extra) {
             Ok(0) => Ok(Secret::from_zeroizing(secret)),
-            Ok(_) | Err(_) => Err(CapabilityError::RedemptionDenied),
+            Ok(_) => Err(CapabilityError::AuthorityAnswer(format!(
+                "response from {socket} contains trailing bytes after the {length}-byte secret"
+            ))),
+            Err(error) => Err(unreachable("reading the secret boundary from", error)),
         }
     }
 }
@@ -239,14 +243,20 @@ struct RedeemControl {
     secret_len: Option<usize>,
 }
 
-fn read_control_line(stream: &mut UnixStream) -> Result<Vec<u8>, CapabilityError> {
+fn read_control_line(stream: &mut UnixStream) -> std::io::Result<Vec<u8>> {
     let mut line = Vec::with_capacity(256);
     let mut byte = [0_u8; 1];
     loop {
-        match stream.read(&mut byte) {
-            Ok(1) if byte[0] == b'\n' => return Ok(line),
-            Ok(1) => line.push(byte[0]),
-            _ => return Err(CapabilityError::RedemptionDenied),
+        match stream.read(&mut byte)? {
+            0 => return Err(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                format!(
+                    "authority closed response after {} control-line bytes before its terminator",
+                    line.len()
+                ),
+            )),
+            _ if byte[0] == b'\n' => return Ok(line),
+            _ => line.push(byte[0]),
         }
     }
 }

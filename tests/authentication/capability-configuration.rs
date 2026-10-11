@@ -118,3 +118,48 @@ async fn request_sign_lookup_preserves_actual_refusal_or_expected_identity() {
         );
     }
 }
+
+#[test]
+#[ignore = "Requires an isolated real capability authority with an observed transport or response-frame failure"]
+fn capability_redemption_retains_actual_wire_failure() {
+    let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("target/real-tests/capability-wire")
+        .join(uuid::Uuid::new_v4().to_string());
+    std::fs::create_dir_all(&directory).expect("create evidence directory");
+    let mut evidence = Evidence {
+        path: directory.join("report.json"),
+        report: json!({"test_build": brama::build_info::current(),
+            "command": std::env::args().collect::<Vec<_>>()}),
+    };
+    assert_eq!(
+        evidence.report["test_build"]["source_revision"],
+        required("TEST_SOURCE_REVISION")
+    );
+    let id = required("CAPABILITY_ID");
+    let resource = required("CAPABILITY_RESOURCE");
+    let operation = required("EXPECTED_CAPABILITY_OPERATION");
+    let cause = required("EXPECTED_CAPABILITY_CAUSE");
+    let socket = required("SKARBIEC_CAP_SOCKET");
+    let client = CapabilityClient::from_env().expect("actual valid client configuration");
+    let binding = CapabilityRef::provider(&id, &resource).expect("actual capability binding");
+    let error = client
+        .redeem(&binding)
+        .expect_err("actual failed wire operation must refuse");
+    let detail = error.to_string();
+    evidence.report["refusal"] = json!(detail);
+    evidence.report["resource"] = json!(resource);
+    assert!(
+        matches!(
+            error,
+            brama::capability::CapabilityError::AuthorityUnreachable(_)
+                | brama::capability::CapabilityError::AuthorityAnswer(_)
+        ),
+        "wire failure was misclassified as authorization denial: {detail}"
+    );
+    for expected in [&operation, &cause, &socket] {
+        assert!(
+            detail.contains(expected.as_str()),
+            "wire refusal lost {expected}: {detail}"
+        );
+    }
+}
