@@ -158,9 +158,12 @@ fn unreached(agent_id: &str, walked: &[String]) -> Vec<String> {
         })
         .map(|entry| {
             let provider = entry.provider.trim();
+            let retired = crate::journal::is_retired(&entry.id);
             let cause = if entry.status != "active" {
                 format!("its status is {}", entry.status)
-            } else if crate::journal::is_retired(&entry.id) {
+            } else if let Err(unread) = &retired {
+                format!("whether its owner retired it could not be read: {unread}")
+            } else if retired == Ok(true) {
                 "it is retired".to_owned()
             } else if let Some(refused) =
                 crate::subscription_dispatch::usage::standing_refusal(&entry.id)

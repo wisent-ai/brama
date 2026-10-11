@@ -74,6 +74,7 @@ pub(crate) fn document(
     let observed_at_ms = now_ms();
     let seed_states = std::cell::OnceCell::new();
     let leases = crate::subscription_dispatch::leases::counts();
+    let mut journal_unreadable = false;
     // One row shape for every audience. The rows an agent may see are fewer
     // than the operator's, and that is the whole of the difference: a console
     // and an agent reading the same account read the same fields about it,
@@ -95,7 +96,24 @@ pub(crate) fn document(
                     errors.push(error);
                 }
             }
-            if entry.status == "active" && !retired(&entry.id, recorded.as_ref()) {
+            let retirement = retired(&entry.id, recorded.as_ref());
+            if let Err(cause) = &retirement {
+                // Named once for the whole report: the same journal refuses
+                // every row the same way.
+                if !journal_unreadable {
+                    journal_unreadable = true;
+                    errors.push(failure_json(
+                        &failure::envelope(
+                            "brama.subscriptions.journal",
+                            Code::Config,
+                            "subscription retirement journal",
+                            cause.clone(),
+                        )
+                        .with_context("attempted_at_ms", observed_at_ms.to_string()),
+                    ));
+                }
+            }
+            if entry.status == "active" && retirement == Ok(false) {
                 if let Some(failure) =
                     crate::subscription_dispatch::sign_in::observed_failure(&entry.id)
                 {
@@ -104,9 +122,9 @@ pub(crate) fn document(
             }
             let mut row = subscription_row(entry, recorded.as_ref(), windows);
             account::annotate_second_factor(&mut row, &seed_states);
-            row["state"] = json!(if entry.status == "undiscovered" {
+            row["state"] = json!(if entry.status == "undiscovered" || retirement.is_err() {
                 "unknown"
-            } else if retired(&entry.id, recorded.as_ref()) {
+            } else if retirement == Ok(true) {
                 "burnt"
             } else {
                 state(recorded.as_ref(), observed_at_ms)
@@ -192,7 +210,7 @@ pub(crate) async fn inventory(scope: &PoolScope) -> (Vec<SubscriptionEntry>, Vec
             entries
                 .entry(id.clone())
                 .or_insert_with(|| SubscriptionEntry {
-                    status: if retired(&id, Some(&recorded)) {
+                    status: if retired(&id, Some(&recorded)) == Ok(true) {
                         "retired"
                     } else {
                         "undiscovered"
@@ -235,7 +253,7 @@ fn reading_error(
         .with_context("provider", &entry.provider)
         .with_context("attempted_at_ms", now.to_string())));
     }
-    if entry.status != "active" || retired(&entry.id, recorded) {
+    if entry.status != "active" || retired(&entry.id, recorded) != Ok(false) {
         return None;
     }
     let check = usage::plan_usage_check(recorded);

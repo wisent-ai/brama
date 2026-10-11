@@ -143,7 +143,8 @@ pub(super) async fn retire_managed_subscription(
     let Some(owned) = owned else {
         return Err(api_error(StatusCode::NOT_FOUND, "subscription not found"));
     };
-    crate::journal::retire(&subscription_id);
+    crate::journal::retire(&subscription_id)
+        .map_err(|detail| api_error(StatusCode::INTERNAL_SERVER_ERROR, &detail))?;
     // Retirement is recorded in the ledger as well as the journal, so a row can
     // say `disabled` with the instant and the reason it happened rather than
     // leaving a reader to infer a retirement from an absence.

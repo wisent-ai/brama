@@ -29,7 +29,18 @@ pub(super) async fn buy(options: &AcquireOptions, shortage: Shortage) -> Value {
     let mut requested = verdict.clone();
     requested["result"] = json!(REQUESTED);
     requested["detail"] = json!("Weles was asked to buy the account");
-    crate::journal::record_subscription_acquisition(&requested);
+    // The request record is what stops a later pass from buying again while
+    // this answer is outstanding; unwritten, nothing is bought.
+    if let Err(detail) = crate::journal::record_subscription_acquisition(&requested) {
+        return super::decide::refusal(
+            options,
+            "journal_unwritable",
+            format!(
+                "the purchase request could not be journaled, so no account is bought: {detail}"
+            ),
+            json!({}),
+        );
+    }
     let purchase = match weles::purchase(
         provider,
         &request_id,
@@ -157,6 +168,10 @@ fn finish(mut verdict: Value, result: &str, code: &str, detail: String, refresh:
     verdict["code"] = json!(code);
     verdict["detail"] = json!(detail);
     verdict["refresh"] = refresh;
-    crate::journal::record_subscription_acquisition(&verdict);
+    // The purchase already happened; an end that could not be journaled is
+    // reported with the verdict instead of looking recorded.
+    if let Err(error) = crate::journal::record_subscription_acquisition(&verdict) {
+        verdict["journal_failure"] = json!(error);
+    }
     verdict
 }

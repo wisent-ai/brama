@@ -26,7 +26,7 @@ pub(crate) async fn sweep() -> Result<Value, String> {
     let mut checks_scheduled = 0usize;
     for entry in entries {
         if entry.status != "active"
-            || crate::journal::is_retired(&entry.id)
+            || crate::journal::is_retired(&entry.id)?
             || !broker::supports_oauth_refresh(&entry.provider)
             || !visited.insert(entry.id.clone())
         {

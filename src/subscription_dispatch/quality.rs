@@ -47,7 +47,7 @@ pub async fn collect_task_quality(opts: TaskQualityOptions) -> Result<Value, Str
     }
 
     if opts.persist {
-        persist_quality_rows(&opts, &rows);
+        persist_quality_rows(&opts, &rows)?;
     }
 
     let top_score = rows
@@ -155,7 +155,7 @@ fn expected_matches(opts: &TaskQualityOptions, content: &str) -> bool {
     false
 }
 
-fn persist_quality_rows(opts: &TaskQualityOptions, rows: &[Value]) {
+fn persist_quality_rows(opts: &TaskQualityOptions, rows: &[Value]) -> Result<(), String> {
     for row in rows {
         let model = row
             .get("metadata")
@@ -175,8 +175,9 @@ fn persist_quality_rows(opts: &TaskQualityOptions, rows: &[Value]) {
             &string_field(row, "status"),
             score,
             &string_field(row, "checked_at"),
-        );
+        )?;
     }
+    Ok(())
 }
 
 fn score_field(row: &Value) -> f64 {

@@ -40,7 +40,8 @@ pub(in crate::subscription_dispatch::dispatch) async fn mark_credential_revoked(
     credential_id: &str,
     provider: &str,
     cause: &str,
-) {
-    crate::journal::retire(credential_id);
+) -> Result<(), String> {
+    crate::journal::retire(credential_id)?;
     usage::record_credential_disabled(credential_id, provider, cause);
+    Ok(())
 }

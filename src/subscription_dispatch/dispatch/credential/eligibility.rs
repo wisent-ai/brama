@@ -20,13 +20,15 @@ pub(in crate::subscription_dispatch::dispatch) fn eligible_subscription_entries(
             ));
         }
     }
-    Ok(entries
-        .into_iter()
-        .filter(|entry| {
-            provider_matches(&entry.provider, provider)
-                && entry.status == "active"
-                && !crate::journal::is_retired(&entry.id)
-                && target.is_none_or(|target| entry.id == target.subscription_id)
-        })
-        .collect())
+    let mut eligible = Vec::new();
+    for entry in entries {
+        if provider_matches(&entry.provider, provider)
+            && entry.status == "active"
+            && target.is_none_or(|target| entry.id == target.subscription_id)
+            && !crate::journal::is_retired(&entry.id)?
+        {
+            eligible.push(entry);
+        }
+    }
+    Ok(eligible)
 }

@@ -39,14 +39,21 @@ pub(in crate::core::server) async fn account_agent_for_route(
             &format!("route {route}: no live subscription; discovery failed: {error}"),
         )
     })?;
-    Ok(entries
-        .into_iter()
-        .any(|entry| {
-            entry.provider.eq_ignore_ascii_case(provider)
-                && entry.status == "active"
-                && !crate::journal::is_retired(&entry.id)
-        })
-        .then_some(agent_id))
+    for entry in entries {
+        if !entry.provider.eq_ignore_ascii_case(provider) || entry.status != "active" {
+            continue;
+        }
+        let retired = crate::journal::is_retired(&entry.id).map_err(|error| {
+            api_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                &format!("route {route}: {error}"),
+            )
+        })?;
+        if !retired {
+            return Ok(Some(agent_id));
+        }
+    }
+    Ok(None)
 }
 
 pub(in crate::core::server) async fn account_credential_provider(

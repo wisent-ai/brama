@@ -60,6 +60,7 @@ pub async fn enroll(mut report: DiscoveryReport) -> Value {
         }
         let mut existing = None;
         let mut retired_match = None;
+        let mut journal_error = None;
         for member in members.iter().filter(|member| {
             member.provider == observation.provider
                 && member
@@ -67,12 +68,21 @@ pub async fn enroll(mut report: DiscoveryReport) -> Value {
                     .as_deref()
                     .is_some_and(|account| account.eq_ignore_ascii_case(&observation.account))
         }) {
-            if crate::journal::is_retired(&member.id) {
-                retired_match = Some(member);
-            } else {
-                existing = Some(member);
-                break;
+            match crate::journal::is_retired(&member.id) {
+                Ok(true) => retired_match = Some(member),
+                Ok(false) => {
+                    existing = Some(member);
+                    break;
+                }
+                Err(error) => {
+                    journal_error = Some(format!("{}: {error}", member.id));
+                    break;
+                }
             }
+        }
+        if let Some(error) = journal_error {
+            report.errors.push(error);
+            continue;
         }
         if existing.is_none() {
             if let Some(retired) = retired_match {
@@ -106,11 +116,20 @@ pub async fn enroll(mut report: DiscoveryReport) -> Value {
                 continue;
             }
         }
-        if crate::journal::is_retired(&id) && !crate::journal::membership_was_removed(&id) {
-            report.errors.push(format!(
-                "{id}: retired by its owner; discovery cannot reinstate it"
-            ));
-            continue;
+        match crate::journal::is_retired(&id)
+            .and_then(|retired| Ok(retired && !crate::journal::membership_was_removed(&id)?))
+        {
+            Ok(false) => {}
+            Ok(true) => {
+                report.errors.push(format!(
+                    "{id}: retired by its owner; discovery cannot reinstate it"
+                ));
+                continue;
+            }
+            Err(error) => {
+                report.errors.push(format!("{id}: {error}"));
+                continue;
+            }
         }
         if let Err(error) = usage::record_discovered_account(&id, &observation, existing.is_none())
         {
@@ -141,12 +160,22 @@ pub async fn enroll(mut report: DiscoveryReport) -> Value {
             Ok(())
         };
         let error = registration.err();
-        if error.is_none() && crate::journal::membership_was_removed(&id) {
-            crate::journal::reinstate(&id);
-            if crate::journal::is_retired(&id) {
-                report.errors.push(format!(
+        if error.is_none() {
+            let reinstated = crate::journal::membership_was_removed(&id).and_then(|removed| {
+                if !removed {
+                    return Ok(None);
+                }
+                crate::journal::reinstate(&id)?;
+                crate::journal::is_retired(&id).map(Some)
+            });
+            match reinstated {
+                Ok(Some(true)) => report.errors.push(format!(
                     "subscription {id}: replacement membership remains retired after registration"
-                ));
+                )),
+                Ok(_) => {}
+                Err(journal_error) => report
+                    .errors
+                    .push(format!("subscription {id}: {journal_error}")),
             }
         }
         if let Some(error) = &error {

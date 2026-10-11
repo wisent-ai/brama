@@ -31,10 +31,8 @@ pub async fn registry_models_for_agent(
         list_ms = listing.elapsed().as_millis(),
         "an agent's subscriptions listed by the broker"
     );
-    let entries = listed
-        .into_iter()
-        .filter(|entry| entry.status == "active" && !crate::journal::is_retired(&entry.id))
-        .collect::<Vec<_>>();
+    let entries = active_unretired(listed)
+        .map_err(|error| Refusal::gateway(GatewayRefusal::DependencyUnavailable, error))?;
     super::cache::routing::models(entries)
 }
 
@@ -47,11 +45,23 @@ pub async fn prepare_routing(agent_id: &str, discover_models: bool) -> Result<()
     if !discover_models {
         return Ok(());
     }
-    let entries = entries
-        .into_iter()
-        .filter(|entry| entry.status == "active" && !crate::journal::is_retired(&entry.id))
-        .collect();
+    let entries = active_unretired(entries)
+        .map_err(|error| Refusal::gateway(GatewayRefusal::DependencyUnavailable, error))?;
     super::cache::routing::refresh(entries).await.map(|_| ())
+}
+
+/// The active members whose owner has not retired them. An unreadable journal
+/// is the refusal: read as empty it would route to a member its owner retired.
+pub(super) fn active_unretired(
+    entries: Vec<broker::SubscriptionEntry>,
+) -> Result<Vec<broker::SubscriptionEntry>, String> {
+    let mut kept = Vec::new();
+    for entry in entries {
+        if entry.status == "active" && !crate::journal::is_retired(&entry.id)? {
+            kept.push(entry);
+        }
+    }
+    Ok(kept)
 }
 
 pub(super) async fn discover_subscription_models(

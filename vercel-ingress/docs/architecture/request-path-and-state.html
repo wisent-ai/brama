@@ -96,7 +96,7 @@ and never a secret. Deploy gates and uptime monitors read <code>/readyz</code>.<
 <tbody>
 <tr>
 <td><code>$BRAMA_STATE_DIR/journal.jsonl</code> (<code>~/.brama/</code>)</td>
-<td>append-only records: <code>retire</code>, <code>subscription_refresh</code>, <code>check</code> (task quality); readers take the last matching record; never credential material</td>
+<td>append-only records: <code>retire</code>, <code>reinstate</code>, <code>membership_removed</code>, <code>subscription_refresh</code>, <code>subscription_sign_in</code>, <code>subscription_acquisition</code>, <code>check</code> (task quality); readers take the last matching record; never credential material. A record that cannot be appended fails its operation with the journal path and the OS cause (a retirement, reinstatement or purchase request is not reported as done; a verdict already decided carries <code>journal_failure</code>). Only a journal that does not exist yet reads as empty: an unreadable file or an undecodable line is a refusal with the path and cause, so dispatch, leasing, resets, acquisition and readiness never treat a member as not retired because its retirement could not be read; the pool report shows such a member as <code>unknown</code> with the journal's cause.</td>
 </tr>
 <tr>
 <td><code>BRAMA_SUBSCRIPTION_USAGE_FILE</code> (<code>~/.config/brama/subscription-usage.json</code>)</td>

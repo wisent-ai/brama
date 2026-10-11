@@ -12,7 +12,7 @@ pub(super) fn verdict(
     failure: Value,
     refresh: Value,
 ) -> Value {
-    let output = json!({
+    let mut output = json!({
         "subscription_id": identity.get("subscription_id").cloned().unwrap_or_else(|| json!(options.subscription_id)),
         "provider": options.provider,
         "login_item": identity.get("login_item").cloned().unwrap_or_else(|| json!(options.login_item)),
@@ -32,7 +32,11 @@ pub(super) fn verdict(
         "failure": failure,
         "refresh": refresh,
     });
-    crate::journal::record_subscription_sign_in(&output);
+    // The journal is what later stops a repeat of a final refusal; a verdict
+    // it could not keep says so instead of looking recorded.
+    if let Err(error) = crate::journal::record_subscription_sign_in(&output) {
+        output["journal_failure"] = json!(error);
+    }
     output
 }
 
@@ -42,8 +46,10 @@ pub(super) fn unchanged_failed_attempt(
     id: &str,
     account_revision: &str,
     executor_revision: &str,
-) -> Option<Value> {
-    let previous = crate::journal::latest_subscription_sign_in(id)?;
+) -> Result<Option<Value>, String> {
+    let Some(previous) = crate::journal::latest_subscription_sign_in(id)? else {
+        return Ok(None);
+    };
     let same_account =
         previous.get("account_revision").and_then(Value::as_str) == Some(account_revision);
     let same_executor =
@@ -51,14 +57,17 @@ pub(super) fn unchanged_failed_attempt(
     // A cooldown that cannot be read stops new sign-ins and says why, rather
     // than driving a browser under a pacing nobody declared.
     let cooling_down = match crate::subscription_dispatch::refresh_sweep::sign_in_cooldown() {
-        Ok(Some(cooldown)) => !crate::journal::subscription_sign_in_due(id, cooldown),
+        Ok(Some(cooldown)) => !crate::journal::subscription_sign_in_due(id, cooldown)?,
         Ok(None) => false,
         Err(refusal) => {
             tracing::warn!(subscription = %id, "{refusal}");
             true
         }
     };
-    stops_a_new_attempt(&previous, same_account, same_executor, cooling_down).then_some(previous)
+    Ok(
+        stops_a_new_attempt(&previous, same_account, same_executor, cooling_down)
+            .then_some(previous),
+    )
 }
 
 /// The recorded verdict handed back in place of a run, saying so: `replayed`
@@ -158,9 +167,12 @@ pub(super) fn observed_failure(id: &str) -> Option<Blocked> {
                 credential.state == crate::subscription_dispatch::usage::CredentialState::Active
                     && credential.recorded_at_ms >= check.at_ms
             });
-        let completed_after_check = crate::journal::latest_subscription_sign_in(id)
-            .and_then(|attempt| attempt.get("at_ms").and_then(Value::as_i64))
-            .is_some_and(|at| at >= check.at_ms);
+        let completed_after_check = match crate::journal::latest_subscription_sign_in(id) {
+            Ok(latest) => latest
+                .and_then(|attempt| attempt.get("at_ms").and_then(Value::as_i64))
+                .is_some_and(|at| at >= check.at_ms),
+            Err(cause) => return Some(journal_unreadable(cause)),
+        };
         if !active_after_check && !completed_after_check {
             return Some(Blocked::Operation {
                 code: check.code.clone(),
@@ -170,7 +182,12 @@ pub(super) fn observed_failure(id: &str) -> Option<Blocked> {
             });
         }
     }
-    let previous = crate::journal::latest_subscription_sign_in(id)?;
+    let previous = match crate::journal::latest_subscription_sign_in(id) {
+        Ok(previous) => previous?,
+        // Whether the last sign-in failed lives in the journal; unreadable,
+        // the member is held with the journal's cause rather than called clear.
+        Err(cause) => return Some(journal_unreadable(cause)),
+    };
     if previous.get("result").and_then(Value::as_str) != Some(FAILED) {
         return None;
     }
@@ -209,4 +226,15 @@ pub(super) fn observed_failure(id: &str) -> Option<Blocked> {
             .and_then(Value::as_u64)
             .and_then(|value| u16::try_from(value).ok()),
     })
+}
+
+/// The hold an unreadable journal puts on a member: its sign-in history is
+/// unknown, so it is neither cleared nor blamed on the provider.
+fn journal_unreadable(cause: String) -> Blocked {
+    Blocked::Operation {
+        code: "journal_unreadable".into(),
+        stage: "journal".into(),
+        detail: cause,
+        status: None,
+    }
 }

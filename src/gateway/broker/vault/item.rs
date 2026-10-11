@@ -99,7 +99,9 @@ pub(in crate::gateway::broker) async fn put_credential(
         .flatten()
         .find_map(|tag| tag.strip_prefix("brama:id:"))
     {
-        if crate::journal::membership_was_removed(id) {
+        if crate::journal::membership_was_removed(id).map_err(|error| {
+            format!("credential publication refused for subscription {id}: {error}")
+        })? {
             return Err(format!("credential publication refused: subscription {id} was removed during reconciliation"));
         }
     }

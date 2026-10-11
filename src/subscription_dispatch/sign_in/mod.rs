@@ -66,14 +66,18 @@ pub fn automatic_sign_in_sentence(provider: &str) -> String {
     let states: Vec<String> = ids
         .into_iter()
         .map(|id| {
-            if crate::journal::is_retired(id) {
-                return format!("{id}: retired");
+            match crate::journal::is_retired(id) {
+                Ok(true) => return format!("{id}: retired"),
+                Ok(false) => {}
+                Err(cause) => {
+                    return format!("{id}: whether its owner retired it could not be read: {cause}")
+                }
             }
             if let Some(failure) = observed_failure(id) {
                 return format!("{id}: failed ({}: {})", failure.code(), failure.detail());
             }
             match crate::journal::latest_subscription_sign_in(id) {
-                Some(latest) => format!(
+                Ok(Some(latest)) => format!(
                     "{id}: last {} at {}",
                     latest
                         .get("result")
@@ -84,7 +88,8 @@ pub fn automatic_sign_in_sentence(provider: &str) -> String {
                         .and_then(Value::as_str)
                         .unwrap_or("an unrecorded time")
                 ),
-                None => format!("{id}: never ran"),
+                Ok(None) => format!("{id}: never ran"),
+                Err(cause) => format!("{id}: its sign-in history could not be read: {cause}"),
             }
         })
         .collect();
@@ -153,14 +158,15 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
         Some(id) if !id.is_empty() => id.to_owned(),
         _ => {
             let entries = crate::gateway::broker::list_all_subscriptions().await?;
-            let matching: Vec<_> = entries
-                .iter()
-                .filter(|entry| {
-                    entry.provider == options.provider
-                        && entry.status == "active"
-                        && !crate::journal::is_retired(&entry.id)
-                })
-                .collect();
+            let mut matching = Vec::new();
+            for entry in &entries {
+                if entry.provider == options.provider
+                    && entry.status == "active"
+                    && !crate::journal::is_retired(&entry.id).map_err(SignInError::Dependency)?
+                {
+                    matching.push(entry);
+                }
+            }
             if matching.len() != 1 {
                 return Err(SignInError::Dependency(format!(
                     "Skarbiec lists {} active subscriptions for {}; an exact subscription id is required",
@@ -190,7 +196,9 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
         &id,
         &resolved.account_revision,
         &resolved.source_revision,
-    ) {
+    )
+    .map_err(SignInError::Dependency)?
+    {
         return verdict::replayed(previous, &resolved.account_revision, &id);
     }
     let mut identity = serde_json::to_value(&resolved).expect("resolved account serializes");

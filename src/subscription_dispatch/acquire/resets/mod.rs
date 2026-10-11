@@ -18,7 +18,7 @@ pub async fn refresh(member: &str, provider: &str) -> Result<ResetOffer, String>
             .resets
             .as_ref()
             .ok_or_else(|| format!("provider {provider} declares no saved-reset report"))?;
-        if crate::journal::is_retired(member) {
+        if crate::journal::is_retired(member)? {
             return Err(format!(
                 "subscription {member} is retired; its grant is not used"
             ));

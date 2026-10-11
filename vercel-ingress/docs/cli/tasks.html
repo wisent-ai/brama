@@ -46,6 +46,8 @@
 <li><code>max_models must be at least one</code>, <code>task is required</code>, <code>prompt is required</code>, <code>expected_exact or expected_contains is required</code> — <code>measure</code> input refusals.</li>
 <li><code>no checks are recorded for task &lt;KEY&gt; of agent &lt;ID&gt;; `brama tasks measure &lt;KEY&gt; --agent-id &lt;ID&gt; --persist …` records them</code> — <code>show</code> of a task nobody measured; selection refuses that task too.</li>
 <li><code>the journal holds a check without its task or time: &lt;record&gt;</code> — <code>list</code> met a malformed journal record; the record is printed whole.</li>
+<li><code>cannot read the journal &lt;path&gt;: &lt;cause&gt;</code> — the journal exists but cannot be read as a file; <code>show</code> and <code>list</code> refuse instead of reading it as empty. Only a journal that does not exist yet is empty.</li>
+<li><code>the journal &lt;path&gt; holds a line that is not JSON (&lt;line&gt;): &lt;cause&gt;</code> — a record the reader cannot decode; the line is printed whole and nothing after it is guessed.</li>
 </ul>
 <p>Except where stated, each refusal prints to stderr and exits 1; Clap separately refuses omitted required flags before the handler runs.</p>
 <p>See <a href="/docs/concepts/entitlement#selectors">task selectors</a> or <a href="/docs/cli">the CLI tree</a>.</p></article>

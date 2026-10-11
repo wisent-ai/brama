@@ -47,11 +47,11 @@ fn spawn_console_discovery() {
         return;
     }
     tokio::spawn(async move {
-        let entries = match broker::list_all_subscriptions().await {
-            Ok(entries) => entries
-                .into_iter()
-                .filter(|entry| entry.status == "active" && !crate::journal::is_retired(&entry.id))
-                .collect::<Vec<_>>(),
+        let entries = match broker::list_all_subscriptions()
+            .await
+            .and_then(super::subscription_models::active_unretired)
+        {
+            Ok(entries) => entries,
             Err(error) => {
                 tracing::warn!(
                     %error,

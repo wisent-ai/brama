@@ -24,8 +24,20 @@ pub(crate) async fn sweep() -> Value {
     let mut failed = Vec::new();
     for agent in broker::configured_request_sign_agents() {
         for entry in broker::list_subscriptions(&agent).await {
-            if entry.status != "active" || crate::journal::is_retired(&entry.id) {
+            if entry.status != "active" {
                 continue;
+            }
+            match crate::journal::is_retired(&entry.id) {
+                Ok(true) => continue,
+                Ok(false) => {}
+                Err(error) => {
+                    failed.push(json!({
+                        "subscription": entry.id,
+                        "provider": entry.provider,
+                        "error": error,
+                    }));
+                    continue;
+                }
             }
             // A subscription shared by two agents is one account with one plan,
             // and reading it twice would ask one provider the same question

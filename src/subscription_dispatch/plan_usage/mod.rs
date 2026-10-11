@@ -153,12 +153,26 @@ pub async fn refresh(subscription_id: &str, provider: &str) -> Result<(), Failur
 pub async fn report(scope: &pool::PoolScope) -> Value {
     let (entries, mut errors) = pool::inventory(scope).await;
     if errors.is_empty() {
-        let attempts: Vec<_> = entries
-            .iter()
-            .filter(|entry| entry.status == "active" && !crate::journal::is_retired(&entry.id))
-            .map(|entry| refresh(&entry.id, &entry.provider))
-            .collect();
-        if attempts.is_empty() {
+        let mut attempts = Vec::new();
+        for entry in entries.iter().filter(|entry| entry.status == "active") {
+            match crate::journal::is_retired(&entry.id) {
+                Ok(true) => {}
+                Ok(false) => attempts.push(refresh(&entry.id, &entry.provider)),
+                // An unreadable journal says nothing about which accounts
+                // their owners retired, so none is read and the cause stands.
+                Err(error) => {
+                    attempts.clear();
+                    errors.push(failure::envelope(
+                        "brama.subscriptions.usage",
+                        Code::Config,
+                        "subscription usage refresh",
+                        error,
+                    ));
+                    break;
+                }
+            }
+        }
+        if attempts.is_empty() && errors.is_empty() {
             errors.push(
                 failure::envelope(
                     "brama.subscriptions.usage",

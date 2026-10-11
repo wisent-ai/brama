@@ -257,6 +257,11 @@ pub async fn adopt(
     {
         record.extend(origin);
     }
-    crate::journal::record_subscription_sign_in(&record);
+    crate::journal::record_subscription_sign_in(&record).map_err(|error| {
+        format!(
+            "the grant from {source} is stored and its proof is {}, but the sign-in verdict could not be journaled: {error}",
+            verdict.result
+        )
+    })?;
     Ok(verdict)
 }

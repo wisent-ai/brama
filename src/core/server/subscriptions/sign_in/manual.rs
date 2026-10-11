@@ -65,7 +65,9 @@ async fn active_account(
         .into_iter()
         .find(|entry| entry.id == subscription_id.trim())
         .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "subscription not found"))?;
-    if entry.status != "active" || crate::journal::is_retired(&entry.id) {
+    let retired = crate::journal::is_retired(&entry.id)
+        .map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?;
+    if entry.status != "active" || retired {
         return Err(api_error(
             StatusCode::CONFLICT,
             "retired subscriptions cannot be signed in",
@@ -171,7 +173,8 @@ pub(in crate::core::server) async fn disown_admin_grant(
             "the pool holds no member with that id",
         ));
     };
-    crate::journal::retire(subscription_id);
+    crate::journal::retire(subscription_id)
+        .map_err(|detail| api_error(StatusCode::INTERNAL_SERVER_ERROR, &detail))?;
     crate::subscription_dispatch::usage::record_credential_disabled(
         subscription_id,
         &provider,

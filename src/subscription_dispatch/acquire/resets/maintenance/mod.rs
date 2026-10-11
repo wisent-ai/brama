@@ -17,8 +17,12 @@ pub async fn run() -> Value {
     let mut results = Vec::new();
     let mut ok = true;
     for member in members {
-        if crate::journal::is_retired(&member.id) {
-            continue;
+        match crate::journal::is_retired(&member.id) {
+            Ok(true) => continue,
+            Ok(false) => {}
+            // Without the journal no member is known not to be retired, so
+            // nothing is redeemed this pass and the cause is the answer.
+            Err(error) => return json!({"ok": false, "error": error, "members": results}),
         }
         let declared = match super::super::declaration::provider(&member.provider) {
             Ok(provider) => provider,

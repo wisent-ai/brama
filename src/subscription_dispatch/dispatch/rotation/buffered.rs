@@ -239,12 +239,21 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
                 "provider refused a token it had just issued; the subscription needs \
                  re-authorization and is retired until it is granted"
             );
-            mark_credential_revoked(
+            if let Err(unrecorded) = mark_credential_revoked(
                 credential_id,
                 provider,
                 "the provider refused a token it had just issued",
             )
-            .await;
+            .await
+            {
+                warn!(
+                    event = "credential_retirement_unrecorded",
+                    provider,
+                    credential_index = index,
+                    error = %unrecorded,
+                    "the retirement could not be journaled, so this credential will be selected again"
+                );
+            }
         }
         if refused_credential(&result) {
             saw_auth_rejection = true;

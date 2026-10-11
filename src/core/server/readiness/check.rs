@@ -117,13 +117,26 @@ pub(super) async fn calculate_readiness(
             if entry.status != "active" {
                 continue;
             }
-            if !crate::journal::is_retired(&entry.id) {
-                if let Some(failure) =
-                    crate::subscription_dispatch::sign_in::observed_failure(&entry.id)
-                {
-                    sign_in_blocked
-                        .entry(entry.id.clone())
-                        .or_insert((entry.provider.clone(), failure));
+            match crate::journal::is_retired(&entry.id) {
+                Ok(true) => {}
+                Ok(false) => {
+                    if let Some(failure) =
+                        crate::subscription_dispatch::sign_in::observed_failure(&entry.id)
+                    {
+                        sign_in_blocked
+                            .entry(entry.id.clone())
+                            .or_insert((entry.provider.clone(), failure));
+                    }
+                }
+                // Whether its owner retired it cannot be read, so it is not
+                // counted ready: the journal's own cause is the reason.
+                Err(error) => {
+                    unroutable.push(json!({
+                        "agent": agent,
+                        "provider": entry.provider,
+                        "reason": error,
+                    }));
+                    continue;
                 }
             }
             let provider = entry.provider.trim().to_string();

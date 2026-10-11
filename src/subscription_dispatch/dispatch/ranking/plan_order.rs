@@ -69,7 +69,6 @@ pub(super) fn route_plan_key(subscriptions: &[broker::SubscriptionEntry], route_
     for entry in subscriptions {
         if !provider_matches(&entry.provider, provider)
             || entry.status != "active"
-            || crate::journal::is_retired(&entry.id)
             || usage::is_blocked(&entry.id)
         {
             continue;
@@ -91,8 +90,10 @@ pub(super) async fn order_models_by_plan(
     agent_id: &str,
     models: &mut [String],
 ) -> Result<(), Refusal> {
-    let subscriptions = broker::routing_subscriptions(agent_id)
-        .map_err(|error| Refusal::gateway(GatewayRefusal::DependencyUnavailable, error))?;
+    let subscriptions = unretired(
+        broker::routing_subscriptions(agent_id)
+            .map_err(|error| Refusal::gateway(GatewayRefusal::DependencyUnavailable, error))?,
+    )?;
     models.sort_by(|left, right| {
         route_plan_key(&subscriptions, left)
             .partial_cmp(&route_plan_key(&subscriptions, right))
@@ -101,6 +102,23 @@ pub(super) async fn order_models_by_plan(
     shuffle_within_equal(models, |model| {
         ordered_float_key(route_plan_key(&subscriptions, model))
     })
+}
+
+/// The subscriptions whose owner has not retired them, which are the only ones
+/// a plan key may count. An unreadable journal is a refusal: read as empty it
+/// would rank a route by a member its owner retired.
+pub(super) fn unretired(
+    subscriptions: Vec<broker::SubscriptionEntry>,
+) -> Result<Vec<broker::SubscriptionEntry>, Refusal> {
+    let mut kept = Vec::new();
+    for entry in subscriptions {
+        let retired = crate::journal::is_retired(&entry.id)
+            .map_err(|error| Refusal::gateway(GatewayRefusal::DependencyUnavailable, error))?;
+        if !retired {
+            kept.push(entry);
+        }
+    }
+    Ok(kept)
 }
 
 /// An f64 routing key as an orderable integer: sign-flipped bits, so equal

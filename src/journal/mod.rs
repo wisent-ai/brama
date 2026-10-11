@@ -33,33 +33,71 @@ fn journal_path() -> PathBuf {
 
 static PATH: LazyLock<PathBuf> = LazyLock::new(journal_path);
 
-fn append(record: Value) {
+/// Append one record. Every failure names the journal and the OS cause: a
+/// retirement or acquisition that was not written must not look written.
+fn append(record: Value) -> Result<(), String> {
     let path = &*PATH;
     if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
+        std::fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "cannot create the journal directory {}: {error}",
+                parent.display()
+            )
+        })?;
     }
     let line = format!("{record}\n");
-    if let Ok(mut file) = std::fs::OpenOptions::new()
+    let mut file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(path)
-    {
-        let _ = file.write_all(line.as_bytes());
-    }
-    std::process::Command::new("chmod")
+        .map_err(|error| format!("cannot open the journal {}: {error}", path.display()))?;
+    file.write_all(line.as_bytes())
+        .map_err(|error| format!("cannot append to the journal {}: {error}", path.display()))?;
+    let status = std::process::Command::new("chmod")
         .arg("600")
         .arg(path)
         .status()
-        .ok();
+        .map_err(|error| {
+            format!(
+                "cannot run chmod on the journal {}: {error}",
+                path.display()
+            )
+        })?;
+    if !status.success() {
+        return Err(format!(
+            "chmod could not restrict the journal {} to its owner: {status}",
+            path.display()
+        ));
+    }
+    Ok(())
 }
 
-fn read_all() -> Vec<Value> {
-    let Ok(text) = std::fs::read_to_string(&*PATH) else {
-        return Vec::new();
+/// Every record. Only a journal that does not exist yet is empty; an
+/// unreadable journal or a line that is not JSON is refused with the path and
+/// the cause, because reading it as empty answers "not retired" for a member
+/// its owner retired.
+fn read_all() -> Result<Vec<Value>, String> {
+    let path = &*PATH;
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(format!(
+                "cannot read the journal {}: {error}",
+                path.display()
+            ))
+        }
     };
     text.lines()
         .filter(|line| !line.trim().is_empty())
-        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .map(|line| {
+            serde_json::from_str::<Value>(line).map_err(|error| {
+                format!(
+                    "the journal {} holds a line that is not JSON ({line}): {error}",
+                    path.display()
+                )
+            })
+        })
         .collect()
 }
 
@@ -72,18 +110,18 @@ fn field<'a>(record: &'a Value, key: &str) -> &'a str {
 }
 
 /// Mark a subscription entry (by broker item id) retired so dispatch skips it.
-pub fn retire(item_id: &str) {
-    append(json!({"kind": "retire", "id": item_id, "at": now()}));
+pub fn retire(item_id: &str) -> Result<(), String> {
+    append(json!({"kind": "retire", "id": item_id, "at": now()}))
 }
 
 /// Retain why obsolete membership was removed without retiring its account.
-pub fn remove_membership(item_id: &str) {
-    append(json!({"kind": "membership_removed", "id": item_id, "at": now()}));
+pub fn remove_membership(item_id: &str) -> Result<(), String> {
+    append(json!({"kind": "membership_removed", "id": item_id, "at": now()}))
 }
 
 /// Only reconciliation tombstones can be replaced by later account discovery.
-pub fn membership_was_removed(item_id: &str) -> bool {
-    read_all()
+pub fn membership_was_removed(item_id: &str) -> Result<bool, String> {
+    Ok(read_all()?
         .iter()
         .rev()
         .filter(|record| field(record, "id") == item_id)
@@ -93,7 +131,7 @@ pub fn membership_was_removed(item_id: &str) -> bool {
                 "retire" | "reinstate" | "membership_removed"
             )
         })
-        .is_some_and(|record| field(record, "kind") == "membership_removed")
+        .is_some_and(|record| field(record, "kind") == "membership_removed"))
 }
 
 /// Take one retirement back, because this deployment uses that account
@@ -108,14 +146,14 @@ pub fn membership_was_removed(item_id: &str) -> bool {
 /// retirement, and the newest of the two decides. A reinstatement is not a
 /// credential: the member is in the rotation again and still needs a grant
 /// of this gateway's own, which is what the sign-in commands obtain.
-pub fn reinstate(item_id: &str) {
-    append(json!({"kind": "reinstate", "id": item_id, "at": now()}));
+pub fn reinstate(item_id: &str) -> Result<(), String> {
+    append(json!({"kind": "reinstate", "id": item_id, "at": now()}))
 }
 
 /// Whether dispatch skips this member: the newest of its retirement and
 /// reinstatement records, not merely whether a retirement was ever written.
-pub fn is_retired(item_id: &str) -> bool {
-    read_all()
+pub fn is_retired(item_id: &str) -> Result<bool, String> {
+    Ok(read_all()?
         .iter()
         .filter(|record| field(record, "id") == item_id)
         .filter_map(|record| match field(record, "kind") {
@@ -124,7 +162,7 @@ pub fn is_retired(item_id: &str) -> bool {
             _ => None,
         })
         .next_back()
-        .unwrap_or_default()
+        == Some(true))
 }
 
 /// Record one operator-run credential refresh, with the reason they gave.
@@ -144,7 +182,7 @@ pub fn record_subscription_refresh(
     result: &str,
     attempted: usize,
     detail: &str,
-) {
+) -> Result<(), String> {
     append(json!({
         "kind": "subscription_refresh",
         "provider": provider,
@@ -153,25 +191,25 @@ pub fn record_subscription_refresh(
         "attempted": attempted,
         "detail": detail,
         "at": now(),
-    }));
+    }))
 }
 
 /// Retain the exact non-secret authentication outcome, including its source
 /// revision, failed stage and Weles run id. Timestamps alone cannot say what ran.
-pub fn record_subscription_sign_in(outcome: &Value) {
+pub fn record_subscription_sign_in(outcome: &Value) -> Result<(), String> {
     let mut record = outcome.clone();
     record["kind"] = json!("subscription_sign_in");
     record["at"] = json!(now());
     record["at_ms"] = json!(chrono::Utc::now().timestamp_millis());
-    append(record);
+    append(record)
 }
 
 /// The newest completed automatic or operator sign-in for one subscription.
-pub fn latest_subscription_sign_in(subscription_id: &str) -> Option<Value> {
-    read_all().into_iter().rev().find(|record| {
+pub fn latest_subscription_sign_in(subscription_id: &str) -> Result<Option<Value>, String> {
+    Ok(read_all()?.into_iter().rev().find(|record| {
         field(record, "kind") == "subscription_sign_in"
             && field(record, "subscription_id") == subscription_id
-    })
+    }))
 }
 
 /// When the newest completed sign-in for one subscription happened, or `None`
@@ -181,44 +219,47 @@ pub fn latest_subscription_sign_in(subscription_id: &str) -> Option<Value> {
 /// sign-in could produce a different answer needs the instant, not an elapsed
 /// window, because what it compares against is when the stored credential's
 /// verdict was recorded.
-pub fn latest_subscription_sign_in_at_ms(subscription_id: &str) -> Option<i64> {
-    latest_subscription_sign_in(subscription_id).map(|latest| {
+pub fn latest_subscription_sign_in_at_ms(subscription_id: &str) -> Result<Option<i64>, String> {
+    Ok(latest_subscription_sign_in(subscription_id)?.map(|latest| {
         latest
             .get("at_ms")
             .and_then(Value::as_i64)
             .unwrap_or_default()
-    })
+    }))
 }
 
 /// Whether another browser sign-in may start after the persisted cooldown.
 ///
 /// The journal, not process memory, is authoritative so restarting Brama cannot
 /// turn one refusal into repeated Google sign-in and 2FA prompts.
-pub fn subscription_sign_in_due(subscription_id: &str, cooldown: std::time::Duration) -> bool {
-    let Some(at_ms) = latest_subscription_sign_in_at_ms(subscription_id) else {
-        return true;
+pub fn subscription_sign_in_due(
+    subscription_id: &str,
+    cooldown: std::time::Duration,
+) -> Result<bool, String> {
+    let Some(at_ms) = latest_subscription_sign_in_at_ms(subscription_id)? else {
+        return Ok(true);
     };
     let cooldown_ms = i64::try_from(cooldown.as_millis()).unwrap_or(i64::MAX);
-    chrono::Utc::now().timestamp_millis().saturating_sub(at_ms) >= cooldown_ms
+    Ok(chrono::Utc::now().timestamp_millis().saturating_sub(at_ms) >= cooldown_ms)
 }
 
 /// Retain one account acquisition: the accounts counted, the plan read, the
 /// Weles run and its stages, and how it ended. Written when the purchase is
 /// requested (`requested`) and again when it ends, so a purchase whose answer
 /// never came back is still on record as asked for.
-pub fn record_subscription_acquisition(outcome: &Value) {
+pub fn record_subscription_acquisition(outcome: &Value) -> Result<(), String> {
     let mut record = outcome.clone();
     record["kind"] = json!("subscription_acquisition");
     record["at"] = json!(now());
     record["at_ms"] = json!(chrono::Utc::now().timestamp_millis());
-    append(record);
+    append(record)
 }
 
 /// The newest acquisition record for one provider, of any result.
-pub fn latest_subscription_acquisition(provider: &str) -> Option<Value> {
-    read_all().into_iter().rev().find(|record| {
+pub fn latest_subscription_acquisition(provider: &str) -> Result<Option<Value>, String> {
+    Ok(read_all()?.into_iter().rev().find(|record| {
         field(record, "kind") == "subscription_acquisition" && field(record, "provider") == provider
-    })
+    }))
 }
 
 /// Append one task-quality observation.
@@ -232,7 +273,7 @@ pub fn record_check(
     status: &str,
     score: Option<f64>,
     checked_at: &str,
-) {
+) -> Result<(), String> {
     let mut record = json!({
         "kind": "check",
         "agent_id": agent_id,
@@ -246,25 +287,25 @@ pub fn record_check(
     if let Some(value) = score {
         record["score"] = json!(value);
     }
-    append(record);
+    append(record)
 }
 
 /// Task-quality observations for one agent + task name.
-pub fn checks_for_task(agent_id: &str, task: &str) -> Vec<Value> {
-    read_all()
+pub fn checks_for_task(agent_id: &str, task: &str) -> Result<Vec<Value>, String> {
+    Ok(read_all()?
         .into_iter()
         .filter(|r| {
             field(r, "kind") == "check"
                 && field(r, "agent_id") == agent_id
                 && field(r, "task") == task
         })
-        .collect()
+        .collect())
 }
 
 /// All task-quality observations for one agent.
-pub fn checks_for_agent(agent_id: &str) -> Vec<Value> {
-    read_all()
+pub fn checks_for_agent(agent_id: &str) -> Result<Vec<Value>, String> {
+    Ok(read_all()?
         .into_iter()
         .filter(|r| field(r, "kind") == "check" && field(r, "agent_id") == agent_id)
-        .collect()
+        .collect())
 }

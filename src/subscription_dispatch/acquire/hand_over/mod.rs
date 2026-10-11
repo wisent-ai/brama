@@ -53,7 +53,7 @@ pub async fn hand_over(
             continue;
         };
         let account = account.trim().to_lowercase();
-        if crate::journal::is_retired(subscription_id) || !seen.insert(account.clone()) {
+        if crate::journal::is_retired(subscription_id)? || !seen.insert(account.clone()) {
             continue;
         }
         if held.contains(&account) {

@@ -60,10 +60,12 @@ pub(super) async fn members(provider: &str) -> Result<Vec<Member>, String> {
     let entries = broker::list_all_subscriptions().await.map_err(|error| {
         format!("the Skarbiec subscription inventory could not be read: {error}")
     })?;
-    Ok(entries
-        .into_iter()
-        .filter(|entry| entry.provider == provider && !crate::journal::is_retired(&entry.id))
-        .map(|entry| Member {
+    let mut members = Vec::new();
+    for entry in entries {
+        if entry.provider != provider || crate::journal::is_retired(&entry.id)? {
+            continue;
+        }
+        members.push(Member {
             account: entry
                 .account
                 .as_deref()
@@ -71,8 +73,9 @@ pub(super) async fn members(provider: &str) -> Result<Vec<Member>, String> {
                 .filter(|account| !account.is_empty())
                 .map(str::to_lowercase),
             id: entry.id,
-        })
-        .collect())
+        });
+    }
+    Ok(members)
 }
 
 /// The distinct accounts the members belong to.

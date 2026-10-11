@@ -115,14 +115,18 @@ fn members<'a>(
     entries: &'a [broker::SubscriptionEntry],
     provider: &str,
     live: &[Lease],
-) -> Members<'a> {
+) -> Result<Members<'a>, String> {
     let mut usable = Vec::new();
     let mut refused = Vec::new();
     for entry in entries
         .iter()
         .filter(|entry| entry.provider == provider && entry.status == "active")
-        .filter(|entry| !crate::journal::is_retired(&entry.id))
     {
+        // An unreadable journal is a refusal: read as empty it would lease a
+        // member its owner retired.
+        if crate::journal::is_retired(&entry.id)? {
+            continue;
+        }
         match usage::standing_refusal(&entry.id) {
             Some(refusal) => refused.push(json!({
                 "subscription_id": entry.id,
@@ -139,7 +143,7 @@ fn members<'a>(
             }
         }
     }
-    Members { usable, refused }
+    Ok(Members { usable, refused })
 }
 
 fn count(leases: &[Lease]) -> u64 {
@@ -222,7 +226,7 @@ pub async fn sessions_shortage(provider: &str) -> Result<Option<Value>, String> 
         format!("the Skarbiec subscription inventory could not be read: {error}")
     })?;
     let live = register::live()?;
-    let Members { usable, .. } = members(&entries, provider, &live);
+    let Members { usable, .. } = members(&entries, provider, &live)?;
     if usable.is_empty() {
         return Ok(None);
     }

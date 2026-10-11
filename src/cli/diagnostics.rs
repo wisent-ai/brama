@@ -266,7 +266,10 @@ async fn measure(args: MeasureArgs) {
 /// The checks recorded for one task, as `task:<KEY>` selection reads them;
 /// a task nobody measured is refused, since selection refuses it too.
 fn show(args: ShowArgs) {
-    let checks = brama::journal::checks_for_task(&args.agent_id, &args.task);
+    let checks = match brama::journal::checks_for_task(&args.agent_id, &args.task) {
+        Ok(checks) => checks,
+        Err(error) => fail(error),
+    };
     if checks.is_empty() {
         fail(format!(
             "no checks are recorded for task {} of agent {}; `brama tasks measure {} --agent-id {} --persist …` records them",
@@ -282,7 +285,11 @@ fn show(args: ShowArgs) {
 /// Every task one agent has checks for: how many, and when the newest was taken.
 fn list(args: ListArgs) {
     let mut tasks: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for check in brama::journal::checks_for_agent(&args.agent_id) {
+    let checks = match brama::journal::checks_for_agent(&args.agent_id) {
+        Ok(checks) => checks,
+        Err(error) => fail(error),
+    };
+    for check in checks {
         let (Some(task), Some(at)) = (check["task"].as_str(), check["checked_at"].as_str()) else {
             fail(format!(
                 "the journal holds a check without its task or time: {check}"

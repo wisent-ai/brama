@@ -9,9 +9,16 @@ pub(super) async fn reconcile(members: &mut Vec<SubscriptionEntry>) -> Result<Ve
     let leased = leases::live()?;
     let mut retained = BTreeMap::new();
     let mut obsolete = BTreeMap::new();
+    // Each member's retirement is read once; an unreadable journal stops the
+    // reconciliation before anything is removed.
+    let mut retired = BTreeMap::new();
+    for member in members.iter() {
+        retired.insert(member.id.clone(), crate::journal::is_retired(&member.id)?);
+    }
     members.sort_by(|left, right| {
-        crate::journal::is_retired(&left.id)
-            .cmp(&crate::journal::is_retired(&right.id))
+        retired
+            .get(&left.id)
+            .cmp(&retired.get(&right.id))
             .then_with(|| left.id.cmp(&right.id))
     });
     for member in members.iter() {
@@ -19,7 +26,7 @@ pub(super) async fn reconcile(members: &mut Vec<SubscriptionEntry>) -> Result<Ve
             .account
             .as_deref()
             .filter(|account| !account.trim().is_empty());
-        if crate::journal::membership_was_removed(&member.id) {
+        if crate::journal::membership_was_removed(&member.id)? {
             obsolete.insert(
                 member.id.clone(),
                 (
@@ -86,8 +93,8 @@ pub(super) async fn reconcile(members: &mut Vec<SubscriptionEntry>) -> Result<Ve
         if leased.iter().any(|lease| lease.subscription_id == id) {
             return Err(format!("cannot reconcile subscription {id}: active session leases remain; completed removals: {removed:?}"));
         }
-        crate::journal::remove_membership(&id);
-        if !crate::journal::is_retired(&id) {
+        crate::journal::remove_membership(&id)?;
+        if !crate::journal::is_retired(&id)? {
             return Err(format!(
                 "cannot reconcile subscription {id}: retirement was not persisted"
             ));

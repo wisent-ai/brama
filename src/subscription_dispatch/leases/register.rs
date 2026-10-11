@@ -154,7 +154,7 @@ pub(super) fn take(
     let Members {
         mut usable,
         refused,
-    } = members(entries, provider, &register.leases);
+    } = members(entries, provider, &register.leases).map_err(unavailable)?;
     if usable.is_empty() {
         return Err(Refused::NoUsableMember {
             provider: provider.to_owned(),

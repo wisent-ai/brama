@@ -240,13 +240,16 @@ pub async fn reinstate_member(
     // Retirement wrote a journal marker and a ledger state, and the pool
     // skips a member for either; a member whose credential the ledger calls
     // disabled is retired whatever the journal says.
-    if !retired(subscription_id, usage::usage_for(subscription_id).as_ref()) {
+    let retirement = retired(subscription_id, usage::usage_for(subscription_id).as_ref())
+        .map_err(|detail| (ReinstateRefused::Unreadable, detail))?;
+    if !retirement {
         return Err((
             ReinstateRefused::NotRetired,
             format!("`{subscription_id}` is not retired, so there is nothing to reinstate"),
         ));
     }
-    crate::journal::reinstate(subscription_id);
+    crate::journal::reinstate(subscription_id)
+        .map_err(|detail| (ReinstateRefused::Unreadable, detail))?;
     usage::record_credential_reinstated(subscription_id, &provider, reason);
     Ok(json!({
         "subscription_id": subscription_id,
@@ -263,12 +266,16 @@ pub async fn reinstate_member(
 /// told, and so an attempt that found nothing to do is audited too: afterwards
 /// the question is who ran this and what the product answered.
 fn verdict(provider: &str, reason: &str, attempted: usize, result: &str, detail: String) -> Value {
-    crate::journal::record_subscription_refresh(provider, reason, result, attempted, &detail);
+    let journaled =
+        crate::journal::record_subscription_refresh(provider, reason, result, attempted, &detail);
     json!({
         "provider": provider,
         "attempted": attempted,
         "result": result,
         "detail": detail,
+        // The audit record is part of the answer: one that could not be
+        // written is said, not implied by silence.
+        "journal_failure": journaled.err(),
     })
 }
 
@@ -313,11 +320,14 @@ fn detail(
 /// A retired subscription is left out. Somebody took it out of the pool
 /// deliberately, and rotating its grant would put back what they removed.
 async fn candidates(provider: &str) -> Result<Vec<String>, String> {
-    Ok(broker::list_all_subscriptions()
-        .await?
-        .into_iter()
-        .filter(|entry| entry.provider == provider && entry.status == "active")
-        .filter(|entry| !retired(&entry.id, usage::usage_for(&entry.id).as_ref()))
-        .map(|entry| entry.id)
-        .collect())
+    let mut kept = Vec::new();
+    for entry in broker::list_all_subscriptions().await? {
+        if entry.provider == provider
+            && entry.status == "active"
+            && !retired(&entry.id, usage::usage_for(&entry.id).as_ref())?
+        {
+            kept.push(entry.id);
+        }
+    }
+    Ok(kept)
 }

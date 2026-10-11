@@ -27,7 +27,7 @@ pub async fn probe_subscription_redemption(
     subscription_id: &str,
     provider: &str,
 ) -> Result<(), String> {
-    if crate::journal::is_retired(subscription_id) {
+    if crate::journal::is_retired(subscription_id)? {
         return Err(no_active_credential_summary(provider));
     }
     if let Some(refusal) = usage::standing_refusal(subscription_id) {

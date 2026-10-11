@@ -37,7 +37,9 @@ pub(super) async fn decide(options: &AcquireOptions) -> Result<Shortage, Box<Val
         )
     })?;
     if options.trigger != Trigger::Operator {
-        if let Some(previous) = unresolved_attempt(provider) {
+        let unresolved = unresolved_attempt(provider)
+            .map_err(|detail| refuse("journal_unreadable", detail, json!({})))?;
+        if let Some(previous) = unresolved {
             return Err(refuse(
                 "previous_acquisition_unresolved",
                 format!(
@@ -186,11 +188,13 @@ pub(super) async fn decide(options: &AcquireOptions) -> Result<Shortage, Box<Val
 
 /// The newest attempt for `provider` when it failed or never reported how it
 /// ended: the state in which a maintenance pass stops buying.
-fn unresolved_attempt(provider: &str) -> Option<Value> {
-    crate::journal::latest_subscription_acquisition(provider).filter(|previous| {
-        let result = previous["result"].as_str();
-        result == Some(FAILED) || result == Some(REQUESTED)
-    })
+fn unresolved_attempt(provider: &str) -> Result<Option<Value>, String> {
+    Ok(
+        crate::journal::latest_subscription_acquisition(provider)?.filter(|previous| {
+            let result = previous["result"].as_str();
+            result == Some(FAILED) || result == Some(REQUESTED)
+        }),
+    )
 }
 
 /// A decision not to buy. Refusals are not journaled: nothing was asked of

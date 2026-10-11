@@ -40,8 +40,8 @@ pub(super) fn subscription_row(
         // Said plainly, because a retired member and a member whose grant the
         // provider refused both read `burnt`, and only one of them is
         // repaired by putting it back in the rotation.
-        "retired": retired(&entry.id, recorded),
-        "sign_in": crate::journal::latest_subscription_sign_in(&entry.id),
+        "retired": journal_field(retired(&entry.id, recorded)),
+        "sign_in": journal_field(crate::journal::latest_subscription_sign_in(&entry.id)),
         "automatic_sign_in": automatic_sign_in_view(entry, recorded),
         "limits": windows.limits,
         "measured": recorded.map(|usage| &usage.measured),
@@ -62,13 +62,23 @@ fn automatic_sign_in_view(
     entry: &SubscriptionEntry,
     recorded: Option<&SubscriptionUsage>,
 ) -> Value {
+    let (retired, latest) = match crate::journal::is_retired(&entry.id).and_then(|retired| {
+        Ok((
+            retired,
+            crate::journal::latest_subscription_sign_in(&entry.id)?,
+        ))
+    }) {
+        Ok(read) => read,
+        // Whether it applies and how it last ended both live in the journal;
+        // unreadable, the view says so instead of reporting a state.
+        Err(cause) => return json!({ "state": "unknown", "journal_error": cause }),
+    };
     let applies = crate::subscription_dispatch::sign_in::weles_provider(&entry.provider).is_some()
         && entry.status == "active"
-        && !crate::journal::is_retired(&entry.id);
+        && !retired;
     let failure = applies
         .then(|| crate::subscription_dispatch::sign_in::observed_failure(&entry.id))
         .flatten();
-    let latest = crate::journal::latest_subscription_sign_in(&entry.id);
     json!({
         "applies": applies,
         "automatic": applies && failure.is_none(),
@@ -98,7 +108,10 @@ fn automatic_sign_in_view(
 /// Only the worker's explicit observation answers this part of the report.
 fn second_factor_view(entry: &SubscriptionEntry) -> Value {
     let failure = crate::subscription_dispatch::sign_in::observed_failure(&entry.id);
-    let latest = crate::journal::latest_subscription_sign_in(&entry.id);
+    let latest = match crate::journal::latest_subscription_sign_in(&entry.id) {
+        Ok(latest) => latest,
+        Err(cause) => return json!({ "required": Value::Null, "journal_error": cause }),
+    };
     let observation = latest
         .as_ref()
         .and_then(|attempt| attempt.get("second_factor"));
@@ -172,10 +185,10 @@ fn credential_view(entry: &SubscriptionEntry, recorded: Option<&SubscriptionUsag
     let Some(credential) = recorded.and_then(|usage| usage.credential.as_ref()) else {
         return Value::Null;
     };
-    let state = if entry.status == "retired" || crate::journal::is_retired(&entry.id) {
-        CredentialState::Disabled
-    } else {
-        credential.state
+    let state = match crate::journal::is_retired(&entry.id) {
+        Err(cause) => return json!({ "state": "unknown", "journal_error": cause }),
+        Ok(retired) if retired || entry.status == "retired" => CredentialState::Disabled,
+        Ok(_) => credential.state,
     };
     json!({
         "state": state.as_str(),
@@ -267,11 +280,23 @@ pub(super) fn last_redeem_error(recorded: Option<&SubscriptionUsage>, now_ms: i6
 }
 
 /// Whether this subscription was deliberately taken out of the pool.
-pub(super) fn retired(subscription_id: &str, recorded: Option<&SubscriptionUsage>) -> bool {
-    crate::journal::is_retired(subscription_id)
+pub(super) fn retired(
+    subscription_id: &str,
+    recorded: Option<&SubscriptionUsage>,
+) -> Result<bool, String> {
+    Ok(crate::journal::is_retired(subscription_id)?
         || recorded
             .and_then(|usage| usage.credential.as_ref())
-            .is_some_and(|credential| credential.state == CredentialState::Disabled)
+            .is_some_and(|credential| credential.state == CredentialState::Disabled))
+}
+
+/// One view field the journal answers: its value, or the journal's own
+/// refusal as `{ "unreadable": cause }`, never a value standing in for it.
+fn journal_field<T: serde::Serialize>(read: Result<T, String>) -> Value {
+    match read {
+        Ok(value) => json!(value),
+        Err(cause) => json!({ "unreadable": cause }),
+    }
 }
 
 pub(super) fn named(provider: &str) -> String {

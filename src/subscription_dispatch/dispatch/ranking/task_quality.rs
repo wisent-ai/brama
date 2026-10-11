@@ -8,7 +8,7 @@ use crate::gateway::broker;
 use crate::types::{GatewayRefusal, Refusal};
 
 use super::candidates::active_supported_models_for_agent;
-use super::plan_order::{ordered_float_key, route_plan_key, shuffle_within_equal};
+use super::plan_order::{ordered_float_key, route_plan_key, shuffle_within_equal, unretired};
 
 fn string_field(row: &Value, key: &str) -> String {
     match row.get(key) {
@@ -42,7 +42,8 @@ pub(in crate::subscription_dispatch::dispatch) async fn task_quality_models(
     task: &str,
 ) -> Result<Vec<String>, Refusal> {
     let active_models = active_supported_models_for_agent(agent_id).await?;
-    let rows = crate::journal::checks_for_task(agent_id, task);
+    let rows = crate::journal::checks_for_task(agent_id, task)
+        .map_err(|error| Refusal::gateway(GatewayRefusal::DependencyUnavailable, error))?;
     if rows.is_empty() {
         // A task nobody measured is a selector that names nothing here.
         return Err(Refusal::gateway(
@@ -88,8 +89,10 @@ pub(in crate::subscription_dispatch::dispatch) async fn task_quality_models(
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| b.2.cmp(&a.2))
     });
-    let subscriptions = broker::routing_subscriptions(agent_id)
-        .map_err(|error| Refusal::gateway(GatewayRefusal::DependencyUnavailable, error))?;
+    let subscriptions = unretired(
+        broker::routing_subscriptions(agent_id)
+            .map_err(|error| Refusal::gateway(GatewayRefusal::DependencyUnavailable, error))?,
+    )?;
     let mut ordered = Vec::new();
     let mut idx = 0;
     while idx < scored.len() {

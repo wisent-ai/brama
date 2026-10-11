@@ -156,7 +156,9 @@ async fn sign_in_selected_subscription(
         .into_iter()
         .find(|entry| entry.id == subscription_id)
         .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "subscription not found"))?;
-    if entry.status != "active" || crate::journal::is_retired(&entry.id) {
+    let retired = crate::journal::is_retired(&entry.id)
+        .map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?;
+    if entry.status != "active" || retired {
         return Err(api_error(
             StatusCode::CONFLICT,
             "retired subscriptions cannot be signed in",
