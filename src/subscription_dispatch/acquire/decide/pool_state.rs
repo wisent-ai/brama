@@ -89,10 +89,14 @@ pub(super) fn accounts(members: &[Member]) -> BTreeSet<AccountKey> {
         .collect()
 }
 
-/// Whether a window is at its whole limit: a reading is a fraction of the
-/// provider's own limit, so the whole limit is one.
-pub(in crate::subscription_dispatch::acquire) fn at_limit(used_fraction: f64) -> bool {
-    used_fraction >= 1.0 // https://brama.wisent.com/docs/concepts/subscription
+/// The whole of a plan window: a reading is a fraction of the provider's own
+/// limit, so the whole limit is one, and what is left of a window is this
+/// less the reading.
+pub const WHOLE_LIMIT: f64 = 1.0; // https://brama.wisent.com/docs/concepts/subscription
+
+/// Whether a window is at its whole limit.
+pub fn at_limit(used_fraction: f64) -> bool {
+    used_fraction >= WHOLE_LIMIT
 }
 
 /// Read one member's plan now and say where it stands.
