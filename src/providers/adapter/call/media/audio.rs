@@ -13,6 +13,7 @@ use super::super::super::registry::{
 };
 use super::super::credential::authorize_provider;
 use super::super::outcome::refusal::{provider_refused, transport_refusal};
+use super::super::outcome::response_body::response_text;
 use super::super::outcome::typed::{typed_route, typed_transport};
 use super::{elevenlabs, minimax};
 use crate::types::{GatewayRefusal, ProviderRefusal, Refusal};
@@ -272,8 +273,10 @@ pub(super) async fn audio_answer(
         .to_string();
     if !status.is_success() {
         // A refused audio request answers JSON, not audio, so the ordinary
-        // provider refusal reader applies to exactly this branch.
-        let text = response.text().await.unwrap_or_default();
+        // provider refusal reader applies to exactly this branch - read
+        // through the one body reader, so a body that breaks off or is not
+        // UTF-8 is refused with that cause instead of an empty sentence.
+        let (status, _plan, text) = response_text(response).await?;
         return Err(provider_refused(route_id, status, &text));
     }
     let bytes = response.bytes().await.map_err(|error| {
