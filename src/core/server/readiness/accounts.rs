@@ -183,7 +183,7 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
         "traffic can be served, but the vault holds a subscription this process was not started \
          with: the runtime policy does not name it"
     } else if !untagged.is_empty() {
-        "traffic can be served, but the vault holds a subscription account with no agent route"
+        "traffic can be served, but the vault holds a subscription account with incomplete routing metadata"
     } else if !facts.unroutable.is_empty() {
         "traffic can be served, but at least one active subscription contributes no model"
     } else if !blocked.is_empty() {
