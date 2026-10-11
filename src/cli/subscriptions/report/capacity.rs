@@ -19,9 +19,7 @@ use super::instant;
 /// pool.
 pub(super) fn print_capacity(accounts: &Value) {
     let Some(capacity) = accounts.get("capacity") else {
-        println!(
-            "account capacity: not stated by this gateway (older than the capacity reading)"
-        );
+        println!("account capacity: not stated by this gateway (older than the capacity reading)");
         return;
     };
     let capacity: Vec<AccountCapacity> = match serde_json::from_value(capacity.clone()) {

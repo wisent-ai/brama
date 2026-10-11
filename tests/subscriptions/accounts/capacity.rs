@@ -24,7 +24,10 @@ fn attributed_rows(pool: &Value) -> BTreeMap<(String, String), Vec<&Value>> {
         if account.is_empty() {
             continue;
         }
-        let provider = row["provider"].as_str().expect("member provider").to_owned();
+        let provider = row["provider"]
+            .as_str()
+            .expect("member provider")
+            .to_owned();
         rows.entry((provider, account.to_lowercase()))
             .or_default()
             .push(row);
@@ -71,9 +74,15 @@ fn account_capacity_is_the_newest_reading_across_the_members_of_each_account() {
         member_ids.sort_unstable();
         let mut listed: Vec<&str> = account.members.iter().map(String::as_str).collect();
         listed.sort_unstable();
-        assert_eq!(listed, member_ids, "{key:?}: members are the attributed rows");
+        assert_eq!(
+            listed, member_ids,
+            "{key:?}: members are the attributed rows"
+        );
         for id in account.usable_members.iter() {
-            assert!(account.members.contains(id), "{key:?}: usable member {id} is a member");
+            assert!(
+                account.members.contains(id),
+                "{key:?}: usable member {id} is a member"
+            );
         }
         for refused in &account.refused_members {
             assert!(
@@ -81,7 +90,10 @@ fn account_capacity_is_the_newest_reading_across_the_members_of_each_account() {
                 "{key:?}: refused member {} is a member",
                 refused.member
             );
-            assert!(!refused.refusal.trim().is_empty(), "{key:?}: a refusal states its reason");
+            assert!(
+                !refused.refusal.trim().is_empty(),
+                "{key:?}: a refusal states its reason"
+            );
         }
         assert_eq!(
             account.usable_members.len() + account.refused_members.len(),
@@ -93,7 +105,10 @@ fn account_capacity_is_the_newest_reading_across_the_members_of_each_account() {
             .iter()
             .map(|row| row["live_sessions"].as_u64())
             .sum::<Option<u64>>();
-        assert_eq!(account.live_sessions, carried, "{key:?}: live sessions are the rows' sum");
+        assert_eq!(
+            account.live_sessions, carried,
+            "{key:?}: live sessions are the rows' sum"
+        );
         // Each window is the newest reading of that limit any member holds.
         for window in &account.windows {
             let Some(newest) = members
@@ -116,16 +131,24 @@ fn account_capacity_is_the_newest_reading_across_the_members_of_each_account() {
                 "{key:?}: {} carries the newest reading's fraction",
                 window.limit_id
             );
-            assert!(account.members.contains(&window.member), "{key:?}: window read off a member");
+            assert!(
+                account.members.contains(&window.member),
+                "{key:?}: window read off a member"
+            );
             assert_eq!(
                 window.current,
-                window.resets_at_ms.is_none_or(|resets| resets > observed_at_ms),
+                window
+                    .resets_at_ms
+                    .is_none_or(|resets| resets > observed_at_ms),
                 "{key:?}: {} is current while its reset is ahead",
                 window.limit_id
             );
             match window.remaining_fraction {
                 Some(remaining) => {
-                    assert!(window.current, "{key:?}: only a current window has a remainder");
+                    assert!(
+                        window.current,
+                        "{key:?}: only a current window has a remainder"
+                    );
                     assert_eq!(
                         remaining,
                         WHOLE_LIMIT - window.used_fraction,
