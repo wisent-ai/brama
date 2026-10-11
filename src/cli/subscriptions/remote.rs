@@ -82,6 +82,23 @@ fn client() -> Result<reqwest::Client, String> {
         .map_err(|error| format!("gateway client: {error}"))
 }
 
+/// The gateway's status and JSON body. A body that cannot be read or is not
+/// JSON is refused with what it carried, rather than read as `null`: a 2xx
+/// verdict printed as `null` and a refusal "with no reason" both hid it.
+async fn answer(response: reqwest::Response, gateway: &str) -> Result<(u16, Value), String> {
+    let status = response.status().as_u16();
+    let text = response.text().await.map_err(|error| {
+        format!(
+            "the gateway {gateway} answered HTTP {status} but its body could not be read: {}",
+            error.without_url()
+        )
+    })?;
+    let body = serde_json::from_str(&text).map_err(|error| {
+        format!("the gateway {gateway} answered HTTP {status} with a body that is not JSON ({error}): {text}")
+    })?;
+    Ok((status, body))
+}
+
 /// Give one member back: the gateway retires it and forgets its credential.
 ///
 /// This removes the members left over from the borrowing this product used
@@ -110,8 +127,7 @@ pub(crate) async fn disown(
         .send()
         .await
         .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
-    let status = response.status().as_u16();
-    let body: Value = response.json().await.unwrap_or(Value::Null);
+    let (status, body) = answer(response, gateway).await?;
     if !HTTP_SUCCESS.contains(&status) {
         return Err(format!(
             "the gateway refused to retire {subscription_id}: HTTP {status}: {}",
@@ -154,8 +170,7 @@ pub(crate) async fn reinstate(
         .send()
         .await
         .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
-    let status = response.status().as_u16();
-    let body: Value = response.json().await.unwrap_or(Value::Null);
+    let (status, body) = answer(response, gateway).await?;
     if !HTTP_SUCCESS.contains(&status) {
         return Err(format!(
             "the gateway refused to reinstate {subscription_id}: HTTP {status}: {}",
@@ -202,8 +217,7 @@ pub(crate) async fn refresh(
         .send()
         .await
         .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
-    let status = response.status().as_u16();
-    let body: Value = response.json().await.unwrap_or(Value::Null);
+    let (status, body) = answer(response, gateway).await?;
     if !HTTP_SUCCESS.contains(&status) {
         return Err(format!(
             "the gateway refused to refresh {provider}: HTTP {status}: {}",
@@ -241,8 +255,7 @@ pub(crate) async fn attribute(
         .send()
         .await
         .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
-    let status = response.status().as_u16();
-    let body: Value = response.json().await.unwrap_or(Value::Null);
+    let (status, body) = answer(response, gateway).await?;
     if !HTTP_SUCCESS.contains(&status) {
         return Err(format!(
             "the gateway refused to attribute {provider}: HTTP {status}: {}",
@@ -265,8 +278,7 @@ pub(crate) async fn maintain(gateway: &str, bearer: &str) -> Result<Value, Strin
     let response = stado_wait::http::request(request)
         .await
         .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
-    let status = response.status().as_u16();
-    let body: Value = response.json().await.unwrap_or(Value::Null);
+    let (status, body) = answer(response, gateway).await?;
     if !HTTP_SUCCESS.contains(&status) {
         return Err(format!(
             "the gateway refused the maintenance pass: HTTP {status}: {}",
