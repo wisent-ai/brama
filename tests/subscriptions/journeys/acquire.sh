@@ -16,9 +16,9 @@
 # Every command, its outcome and its answer go to the run's report.txt.
 #
 # Usage: BRAMA=target/release/brama CONSUMER=<directory consumer> BEARER_ROLE=<console bearer role> \
-#   tests/subscriptions/acquire.sh
+#   tests/subscriptions/journeys/acquire.sh
 set -eu
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../../.."
 BIN=${BRAMA:?set BRAMA to the brama binary under test, e.g. BRAMA=target/release/brama}
 CONSUMER=${CONSUMER:?set CONSUMER to the Stado directory consumer that resolves the gateway}
 BEARER_ROLE=${BEARER_ROLE:?set BEARER_ROLE to the role of the console bearer item}

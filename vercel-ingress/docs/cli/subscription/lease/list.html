@@ -30,7 +30,7 @@
 <p><code>&lt;provider&gt;: at most &lt;n&gt; sessions per subscription</code> for each provider <code>src/subscription_dispatch/acquire/providers.json</code> declares with a stated limit, <code>&lt;provider&gt;: no lease is given: &lt;refusal&gt;</code> for each whose limit is not stated, one line per live lease, then <code>&lt;subscription&gt; carries &lt;n&gt;</code> per subscription with a lease. Nothing is written.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <p>A gateway refusal exits 1 and prints its error document: <code>503</code> with the cause when the register cannot be read. Without a gateway: <code>a lease lives on the gateway that holds the pool: name --gateway or --gateway-consumer</code>.</p>
-<p>The real test is <code>tests/subscriptions/leases.sh</code>. See <a href="/docs/cli/subscription">the command group</a> or <a href="/docs/cli">the CLI tree</a>.</p></article>
+<p>The real test is <code>tests/subscriptions/journeys/leases.sh</code>. See <a href="/docs/cli/subscription">the command group</a> or <a href="/docs/cli">the CLI tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>
   </div>

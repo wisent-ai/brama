@@ -59,7 +59,7 @@ identity and the capacity boundary, not statistical randomness. The command
 below runs the journey; its presence is not an execution result.</p>
 <pre><code class="language-console">cargo test --test subscription-capacity lease_distribution -- --ignored --nocapture</code></pre>
 <p>The spent-pool journey <code>tests/subscriptions/leases/spent.rs</code> requires <code>LEASE_SPENT_PROVIDER</code>, a declared provider without an authorized account-purchase cap whose every pool member has a current plan window at its whole limit, plus the shared inputs. It takes a lease for a fresh session and expects <code>503 no_usable_member</code> naming every member with its window at the limit and carrying <code>details.acquisition</code>, and the persisted lease list unchanged; a lease given instead is released and fails the journey. Run it with <code>cargo test --test subscription-capacity spent_pool_leases -- --ignored --nocapture</code>.</p>
-<p>The real test is <code>tests/subscriptions/leases.sh</code>. See <a href="/docs/cli/subscription">the command group</a> or <a href="/docs/cli">the CLI tree</a>.</p></article>
+<p>The real test is <code>tests/subscriptions/journeys/leases.sh</code>. See <a href="/docs/cli/subscription">the command group</a> or <a href="/docs/cli">the CLI tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>
   </div>

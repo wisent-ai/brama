@@ -14,9 +14,9 @@
 # its outcome and its answer go to the run's report.txt; a failed check stops
 # the run after naming itself there.
 #
-# Usage: BRAMA=target/release/brama SKARBIEC_BIN=$(command -v skarbiec) tests/subscriptions/forget_remembered_member.sh
+# Usage: BRAMA=target/release/brama SKARBIEC_BIN=$(command -v skarbiec) tests/subscriptions/journeys/forget_remembered_member.sh
 set -eu
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../../.."
 BIN=${BRAMA:?set BRAMA to the brama binary under test, e.g. BRAMA=target/release/brama}
 VAULT_BIN=${SKARBIEC_BIN:?set SKARBIEC_BIN to the skarbiec binary that owns this run's vault}
 RUN="$(date -u +%Y%m%dT%H%M%SZ)-$$"

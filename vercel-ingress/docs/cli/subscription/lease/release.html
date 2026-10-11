@@ -32,7 +32,7 @@
 <p>One line per lease released, then <code>released &lt;n&gt;</code>; or <code>nothing was live under that name; nothing released</code>. The gateway removes the released leases from its register.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <p>Naming neither a lease nor a session is refused by the parser before any request. A gateway refusal exits 1 and prints its error document: <code>400 invalid_request</code> when the body names nothing (<code>a release names the lease id or the session_id whose leases end</code>), <code>403</code> when a signed agent or an account holder names a lease another identity took (<code>lease &lt;id&gt; was taken by another identity; &lt;agent&gt; may end only the leases it took, and nothing was released</code>), <code>503</code> with the cause when the register cannot be read or written. The console bearer ends every lease. Without a gateway: <code>a lease lives on the gateway that holds the pool: name --gateway or --gateway-consumer</code>.</p>
-<p>The real test is <code>tests/subscriptions/leases.sh</code>. See <a href="/docs/cli/subscription">the command group</a> or <a href="/docs/cli">the CLI tree</a>.</p></article>
+<p>The real test is <code>tests/subscriptions/journeys/leases.sh</code>. See <a href="/docs/cli/subscription">the command group</a> or <a href="/docs/cli">the CLI tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>
   </div>

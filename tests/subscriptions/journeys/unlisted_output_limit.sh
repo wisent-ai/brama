@@ -14,9 +14,9 @@
 # Every command, its outcome and its answer go to the run's report.txt; a
 # failed check stops the run after naming itself there.
 #
-# Usage: BRAMA=target/release/brama AGENT=<agent id> MODEL=claude-code/<model id> tests/subscriptions/unlisted_output_limit.sh
+# Usage: BRAMA=target/release/brama AGENT=<agent id> MODEL=claude-code/<model id> tests/subscriptions/journeys/unlisted_output_limit.sh
 set -eu
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../../.."
 BIN=${BRAMA:?set BRAMA to the brama binary under test, e.g. BRAMA=target/release/brama}
 AGENT=${AGENT:?set AGENT to the agent id whose subscription pays for the request}
 MODEL=${MODEL:?set MODEL to a provider/model route the embedded limits table does not list}

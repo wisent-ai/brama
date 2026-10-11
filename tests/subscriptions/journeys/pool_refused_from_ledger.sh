@@ -13,9 +13,9 @@
 # makes before any of that. Every command, its outcome and its answer go to
 # the run's report.txt; a failed check stops the run after naming itself there.
 #
-# Usage: BRAMA=target/release/brama tests/subscriptions/pool_refused_from_ledger.sh
+# Usage: BRAMA=target/release/brama tests/subscriptions/journeys/pool_refused_from_ledger.sh
 set -eu
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../../.."
 BIN=${BRAMA:?set BRAMA to the brama binary under test, e.g. BRAMA=target/release/brama}
 RUN="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 ROOT="$PWD/target/real-tests/subscriptions/pool-refused-from-ledger-$RUN"
