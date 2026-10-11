@@ -9,16 +9,17 @@
 
 use serde_json::{json, Map, Value};
 
-use super::super::outcome::refusal::{provider_refused, transport_refusal};
-use super::super::outcome::response_body::response_text;
-use super::super::outcome::typed::typed_object;
-use super::audio::{audio, Call, SpokenAudio};
+use super::super::super::outcome::refusal::{provider_refused, transport_refusal};
+use super::super::super::outcome::response_body::response_text;
+use super::super::super::outcome::typed::typed_object;
+use super::super::audio::{audio, SpokenAudio};
+use super::super::call::Call;
 use crate::types::{GatewayRefusal, ProviderRefusal, Refusal};
 
 /// What MiniMax encodes when the caller names no format.
 const DEFAULT_FORMAT: &str = "mp3";
 
-pub(super) async fn speak(
+pub(in super::super) async fn speak(
     call: &Call<'_>,
     payload: Map<String, Value>,
 ) -> Result<SpokenAudio, Refusal> {
@@ -59,7 +60,7 @@ pub(super) async fn speak(
     hex_audio(call.route_id, response, &format).await
 }
 
-pub(super) async fn compose(
+pub(in super::super) async fn compose(
     call: &Call<'_>,
     payload: Map<String, Value>,
 ) -> Result<SpokenAudio, Refusal> {

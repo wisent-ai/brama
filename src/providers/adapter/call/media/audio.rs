@@ -8,13 +8,13 @@
 use serde_json::{Map, Value};
 
 use super::super::super::registry::{
-    endpoint, supports_music_route, supports_speech_route, supports_voices_route, MediaWire,
+    supports_music_route, supports_speech_route, supports_voices_route, MediaWire,
     ProviderDescriptor,
 };
-use super::super::credential::authorize_provider;
 use super::super::outcome::refusal::{provider_refused, transport_refusal};
 use super::super::outcome::response_body::response_text;
 use super::super::outcome::typed::{typed_route, typed_transport};
+use super::call::Call;
 use super::{elevenlabs, minimax};
 use crate::types::{GatewayRefusal, ProviderRefusal, Refusal};
 
@@ -199,46 +199,6 @@ pub async fn dispatch_voice_delete(
         MediaWire::OpenAi | MediaWire::MiniMax | MediaWire::Gemini | MediaWire::OpenRouter => {
             Err(no_adapter(route_id, "voice library"))
         }
-    }
-}
-
-/// Everything one vendor adapter needs to make its call.
-pub(super) struct Call<'a> {
-    pub(super) route_id: &'a str,
-    pub(super) descriptor: &'static ProviderDescriptor,
-    pub(super) model_id: &'a str,
-    pub(super) key: &'a str,
-    pub(super) base_url: &'a str,
-    pub(super) client: &'a reqwest::Client,
-    pub(super) secret: &'a str,
-}
-
-impl Call<'_> {
-    pub(super) fn post(&self, path: &str) -> reqwest::RequestBuilder {
-        authorize_provider(
-            self.client.post(endpoint(self.base_url, path)),
-            self.descriptor,
-            self.key,
-            self.secret,
-        )
-    }
-
-    pub(super) fn get(&self, path: &str) -> reqwest::RequestBuilder {
-        authorize_provider(
-            self.client.get(endpoint(self.base_url, path)),
-            self.descriptor,
-            self.key,
-            self.secret,
-        )
-    }
-
-    pub(super) fn delete(&self, path: &str) -> reqwest::RequestBuilder {
-        authorize_provider(
-            self.client.delete(endpoint(self.base_url, path)),
-            self.descriptor,
-            self.key,
-            self.secret,
-        )
     }
 }
 

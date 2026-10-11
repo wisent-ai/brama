@@ -15,11 +15,12 @@
 //! with its reference images renamed ([`openrouter_request`]).
 
 mod audio;
+mod call;
 mod edit;
-mod elevenlabs;
 mod form;
-mod gemini;
-mod minimax;
+mod wires;
+
+use wires::{elevenlabs, gemini, minimax};
 
 use serde_json::{json, Map, Value};
 
@@ -54,7 +55,7 @@ pub async fn dispatch_image(
     let edits = !descriptor.image_edit_path.is_empty() && edit::asks_for_edit(&payload);
     if descriptor.media_wire == MediaWire::Gemini || edits {
         let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
-        let call = audio::Call {
+        let call = call::Call {
             route_id,
             descriptor,
             model_id: &model_id,

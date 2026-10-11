@@ -10,12 +10,13 @@
 
 use serde_json::{json, Map, Value};
 
-use super::super::outcome::refusal::{provider_refused, transport_refusal};
-use super::super::outcome::response_body::response_text;
-use super::super::outcome::typed::typed_object;
-use super::audio::{audio, audio_answer, Call, SpokenAudio, VoiceSample};
-use super::form::Form;
-use super::{answered, valid_path_segment};
+use super::super::super::outcome::refusal::{provider_refused, transport_refusal};
+use super::super::super::outcome::response_body::response_text;
+use super::super::super::outcome::typed::typed_object;
+use super::super::audio::{audio, audio_answer, SpokenAudio, VoiceSample};
+use super::super::call::Call;
+use super::super::form::Form;
+use super::super::{answered, valid_path_segment};
 use crate::types::{GatewayRefusal, ProviderRefusal, Refusal};
 
 /// The OpenAI-shaped option ElevenLabs has no counterpart for.
@@ -23,7 +24,7 @@ const UNSUPPORTED: &[&str] = &["instructions"];
 /// The request fields that travel inside `voice_settings`.
 const VOICE_SETTINGS: &[&str] = &["stability", "similarity_boost", "speed"];
 
-pub(super) async fn speak(
+pub(in super::super) async fn speak(
     call: &Call<'_>,
     payload: Map<String, Value>,
 ) -> Result<SpokenAudio, Refusal> {
@@ -88,7 +89,7 @@ pub(super) async fn speak(
 }
 
 /// The account's voices, as ElevenLabs lists them under `voices`.
-pub(super) async fn voices(call: &Call<'_>) -> Result<Value, Refusal> {
+pub(in super::super) async fn voices(call: &Call<'_>) -> Result<Value, Refusal> {
     let response = call
         .get(call.descriptor.voices_path)
         .send()
@@ -98,7 +99,7 @@ pub(super) async fn voices(call: &Call<'_>) -> Result<Value, Refusal> {
 }
 
 /// One voice cloned from recordings; the answer carries its `voice_id`.
-pub(super) async fn clone_voice(
+pub(in super::super) async fn clone_voice(
     call: &Call<'_>,
     name: &str,
     description: Option<&str>,
@@ -132,7 +133,10 @@ pub(super) async fn clone_voice(
 /// acknowledgement. An id that is not one path segment is refused before
 /// any request, and a voice the account does not hold is the provider's
 /// refusal.
-pub(super) async fn delete_voice(call: &Call<'_>, voice_id: &str) -> Result<Value, Refusal> {
+pub(in super::super) async fn delete_voice(
+    call: &Call<'_>,
+    voice_id: &str,
+) -> Result<Value, Refusal> {
     if !valid_path_segment(voice_id) {
         return Err(invalid(format!(
             "voice id `{voice_id}` is not one path segment"

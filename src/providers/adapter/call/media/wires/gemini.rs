@@ -8,14 +8,14 @@
 
 use serde_json::{json, Map, Value};
 
-use super::super::outcome::refusal::{provider_refused, transport_refusal};
-use super::super::outcome::response_body::response_text;
-use super::super::outcome::typed::typed_object;
-use super::audio::Call;
-use super::valid_path_segment;
+use super::super::super::outcome::refusal::{provider_refused, transport_refusal};
+use super::super::super::outcome::response_body::response_text;
+use super::super::super::outcome::typed::typed_object;
+use super::super::call::Call;
+use super::super::valid_path_segment;
 use crate::types::{GatewayRefusal, ProviderRefusal, Refusal};
 
-pub(super) async fn generate_image(
+pub(in super::super) async fn generate_image(
     call: &Call<'_>,
     payload: Map<String, Value>,
 ) -> Result<Value, Refusal> {

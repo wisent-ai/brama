@@ -15,7 +15,7 @@ use serde_json::{Map, Value};
 
 use super::super::outcome::refusal::transport_refusal;
 use super::answered;
-use super::audio::Call;
+use super::call::Call;
 use super::form::Form;
 use crate::types::{GatewayRefusal, Refusal};
 
