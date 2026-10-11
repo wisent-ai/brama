@@ -126,7 +126,7 @@ pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
 pub fn provider_capability_configured(provider: &str) -> bool {
     !crate::providers::adapter::provider_requires_credential(provider)
         || configured_provider_capabilities().contains(provider)
-        || provider_grant_routed(provider)
+        || (!local_provider_credentials_enabled() && provider_grant_routed(provider))
 }
 
 /// Whether the vault's own routing table answers this provider, asked of the
