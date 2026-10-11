@@ -68,13 +68,24 @@ pub(super) async fn create_subscription(
                 "selected subscription belongs to a different provider",
             ));
         }
-        if let (Some(expected), Some(stated)) = (owned.account.as_deref(), account) {
-            if !expected.eq_ignore_ascii_case(stated) {
+        match (owned.account.as_deref(), account) {
+            (Some(expected), Some(stated)) if !expected.eq_ignore_ascii_case(stated) => {
                 return Err(api_error(
                     StatusCode::CONFLICT,
                     "selected subscription belongs to a different account",
                 ));
             }
+            // A member is a real account's subscription: one the vault holds
+            // with no account, banked again without naming it, would stay in
+            // the pool as a credential nobody signs in as.
+            (None, None) => {
+                return Err(api_error(
+                    StatusCode::BAD_REQUEST,
+                    "account email address is required: the selected subscription names no account, \
+                     and the pool holds only real accounts' subscriptions",
+                ));
+            }
+            _ => {}
         }
         requested_id.to_owned()
     } else {
