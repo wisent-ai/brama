@@ -56,7 +56,7 @@ chrono = { version = "0.4", features = ["serde"] }
 subtle = "2.6"
 uuid = { version = "1", features = ["serde", "v4"] }
 wisent-errors = { git = "https://github.com/wisent-ai/wisent-errors", rev = "8947ad21ac852750b118b417f9dfe68f144ad295" }
-wisent-onboarding-client = { git = "https://github.com/wisent-ai/echo-web", rev = "aa423766991c3c958145bc7e5f2a62748bb3951c", package = "wisent-onboarding-client" }
+wisent-onboarding-client = { git = "https://github.com/wisent-ai/echo-web", rev = "22437b2e8c29291f3db6c4d605d20e7db3bdb2e1", package = "wisent-onboarding-client" }
 stado-wait = { git = "https://github.com/wisent-ai/stado", package = "stado-wait" }
 
 ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }

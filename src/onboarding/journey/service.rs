@@ -108,7 +108,10 @@ impl Transport for BramaTransport {
         product_id: &str,
         journey_id: &str,
     ) -> Result<JourneyBundle, JourneyError> {
-        let remote = self.remote.as_ref().ok_or(JourneyError::Transport)?;
+        let remote = self
+            .remote
+            .as_ref()
+            .ok_or_else(|| unconfigured("bundle.read"))?;
         let result = remote
             .post(
                 "bundle.read",
@@ -134,7 +137,10 @@ impl Transport for BramaTransport {
     }
 
     async fn collect_event(&self, event: &RuntimeEvent) -> Result<(), JourneyError> {
-        let remote = self.remote.as_ref().ok_or(JourneyError::Transport)?;
+        let remote = self
+            .remote
+            .as_ref()
+            .ok_or_else(|| unconfigured("events.collect"))?;
         let event =
             serde_json::to_value(event).map_err(|error| transport("events.collect", error))?;
         remote.post("events.collect", &event).await?;
@@ -147,7 +153,10 @@ impl Transport for BramaTransport {
         attempt_id: Uuid,
         subject_hash: &str,
     ) -> Result<Option<Value>, JourneyError> {
-        let remote = self.remote.as_ref().ok_or(JourneyError::Transport)?;
+        let remote = self
+            .remote
+            .as_ref()
+            .ok_or_else(|| unconfigured("state.read"))?;
         let state = remote
             .post(
                 "state.read",
@@ -165,7 +174,10 @@ impl Transport for BramaTransport {
         &self,
         request: &ExperimentAssignmentRequest,
     ) -> Result<ExperimentAssignment, JourneyError> {
-        let remote = self.remote.as_ref().ok_or(JourneyError::Transport)?;
+        let remote = self
+            .remote
+            .as_ref()
+            .ok_or_else(|| unconfigured("experiments.assign"))?;
         let request = serde_json::to_value(request)
             .map_err(|error| transport("experiments.assign", error))?;
         let assignment = remote.post("experiments.assign", &request).await?;
@@ -173,10 +185,14 @@ impl Transport for BramaTransport {
     }
 }
 
-/// The refusal this port's contract allows, logged with its cause first:
-/// `JourneyError::Transport` carries none, so without the log a journey that
-/// never reaches Stado says nothing about why.
+/// A transport refusal with its operation and cause, logged as well so a
+/// journey that never reaches Stado leaves a trace in the gateway log.
 fn transport(operation: &str, cause: impl std::fmt::Display) -> JourneyError {
     tracing::warn!(%operation, %cause, "onboarding journey transport failed");
-    JourneyError::Transport
+    JourneyError::Transport(format!("{operation}: {cause}"))
+}
+
+/// No Stado onboarding route is configured, so `operation` was not attempted.
+fn unconfigured(operation: &str) -> JourneyError {
+    transport(operation, "no Stado onboarding route is configured")
 }
