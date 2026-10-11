@@ -42,7 +42,7 @@ account facts.</p>
 <p>Receipt provenance and cache keys include the organization, mailbox and
 message IDs as a JSON tuple after <code>skrzynka:</code>. A previously unscoped
 cache entry cannot supply facts for a selected organization. The real receipt
-journey <code>tests/subscriptions/discovery/receipt.rs</code> requires the same
+journey <code>tests/subscriptions/discovery/sources/receipt.rs</code> requires the same
 <code>SKRZYNKA_ORGANIZATION</code> on its host and gateway, plus its existing
 real receipt/account inputs. It checks that organization-bound provenance is
 persisted without replacing the current harness plan with historical receipt

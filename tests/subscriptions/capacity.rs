@@ -13,7 +13,7 @@ mod borrowed_grant;
 mod concurrent_leases;
 #[path = "identity/decoding.rs"]
 mod credential_decoding;
-#[path = "discovery/receipt.rs"]
+#[path = "discovery/sources/receipt.rs"]
 mod historical_receipt;
 #[path = "leases/fairness.rs"]
 mod lease_distribution;
@@ -23,7 +23,7 @@ mod membership_reconciliation;
 mod membership_standing;
 #[path = "discovery/capability.rs"]
 mod metadata_capability;
-#[path = "discovery/claude.rs"]
+#[path = "discovery/sources/claude.rs"]
 mod native_harness;
 #[path = "discovery/pending.rs"]
 mod pending_discovery;
@@ -31,7 +31,7 @@ mod pending_discovery;
 mod reconciliation_refusal;
 #[path = "identity/recoverable.rs"]
 mod recoverable_account;
-#[path = "discovery/sign_in.rs"]
+#[path = "discovery/sources/sign_in.rs"]
 mod remote_sign_in;
 #[path = "resets/policy.rs"]
 mod reset_policy;
