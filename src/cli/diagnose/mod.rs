@@ -120,10 +120,17 @@ pub(super) fn moment(path: &Path) -> String {
         .unwrap_or_else(|_| "unknown".into())
 }
 
-pub(super) fn read_json(path: &Path) -> Option<Value> {
-    std::fs::read(path)
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+/// The JSON at `path`: `Ok(None)` only when there is no file, the read or
+/// parse failure as the error otherwise, so a diagnosis never calls a file
+/// absent that is present and broken.
+pub(super) fn read_json(path: &Path) -> Result<Option<Value>, String> {
+    match std::fs::read(path) {
+        Ok(bytes) => serde_json::from_slice(&bytes)
+            .map(Some)
+            .map_err(|error| format!("not JSON: {error}")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!("cannot be read: {error}")),
+    }
 }
 
 pub(crate) async fn run(json: bool) {

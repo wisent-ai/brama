@@ -27,7 +27,7 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
     let policy_path = config_dir.join("policy.json");
     let mut granted = BTreeSet::new();
     match read_json(&policy_path) {
-        Some(policy) => {
+        Ok(Some(policy)) => {
             for rule in policy
                 .pointer("/roles/brama-runtime")
                 .and_then(Value::as_array)
@@ -52,7 +52,8 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
                 }
             );
         }
-        None => say!("  {}: absent", policy_path.display()),
+        Ok(None) => say!("  {}: absent", policy_path.display()),
+        Err(cause) => say!("  {}: {cause}", policy_path.display()),
     }
     let routes_path = match (
         layout.settings.get("SKARBIEC_CAPABILITY_ROUTES_FILE"),
@@ -67,7 +68,7 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
     };
     let mut routed = BTreeSet::new();
     match read_json(&routes_path) {
-        Some(document) => {
+        Ok(Some(document)) => {
             let table = document.get("routes").cloned().unwrap_or(document);
             for (resource, coordinate) in table.as_object().into_iter().flatten() {
                 if coordinate.get("item").is_some_and(Value::is_string)
@@ -93,7 +94,8 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
                 );
             }
         }
-        None => say!("  {}: absent", routes_path.display()),
+        Ok(None) => say!("  {}: absent", routes_path.display()),
+        Err(cause) => say!("  {}: {cause}", routes_path.display()),
     }
     granted
         .intersection(&routed)
@@ -114,9 +116,16 @@ pub(super) fn print_alias_routes(layout: &Layout, providers: &BTreeSet<String>) 
         .get("BRAMA_INFERENCE_ROUTES_FILE")
         .map(PathBuf::from)
         .unwrap_or_else(|| layout.home.join(".config/brama/inference-routes.json"));
-    let Some(document) = read_json(&routes_path) else {
-        say!("  {}: absent", routes_path.display());
-        return;
+    let document = match read_json(&routes_path) {
+        Ok(Some(document)) => document,
+        Ok(None) => {
+            say!("  {}: absent", routes_path.display());
+            return;
+        }
+        Err(cause) => {
+            say!("  {}: {cause}", routes_path.display());
+            return;
+        }
     };
     say!("  {}", routes_path.display());
     let deployments: Vec<&str> = document
