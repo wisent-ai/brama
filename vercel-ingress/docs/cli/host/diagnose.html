@@ -32,7 +32,7 @@
 <li><code>installed generations</code> — every installed generation, the files it is missing, whether its entitlements router answers <code>grant capability</code>, and whether its trust registry pins that exact binary.</li>
 <li><code>service env</code> — <code>~/.config/brama/service.env</code>; a value is shown only when it is an existing path, so no secret is printed.</li>
 <li><code>policy grants against authority routes</code> — the provider grants in the generation's <code>policy.json</code> against the authority-owned routes table.</li>
-<li><code>alias routes against routed provider grants</code> — each alias route against the providers policy and routes both allow.</li>
+<li><code>alias routes against routed provider grants</code> — each alias route against the providers policy and routes both allow. In both sections a file is called <code>absent</code> only when it does not exist; one that exists and cannot be read is printed as <code>&lt;path&gt;: cannot be read: &lt;cause&gt;</code>, one that does not parse as <code>&lt;path&gt;: not JSON: &lt;cause&gt;</code>.</li>
 <li><code>reachability</code> — the loopback port <code>service.env</code> names (or a line saying it names none), the address the gateway announced when it bound, and every origin <code>tailscale serve status</code> publishes, each with the status it answered.</li>
 <li><code>current boot attempt</code> — the whole unit log (<code>~/.stado/logs/&lt;unit&gt;.log</code>) from the last line <code>brama launcher: boot attempt of &lt;installation&gt;</code>; a log written by a launcher that predates that line is shown whole under <code>the unit's log (no boot attempt marker in it)</code>.</li>
 </ul>
