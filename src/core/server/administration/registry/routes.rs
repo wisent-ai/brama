@@ -28,7 +28,9 @@ pub(in crate::core::server) async fn update_admin_route(
     if !valid_alias(&request.alias) {
         return Err(api_error(StatusCode::BAD_REQUEST, "invalid route alias"));
     }
-    if !route_supported(&request.alias, &request.primary) {
+    if !route_supported(&request.alias, &request.primary)
+        .map_err(|error| api_error(StatusCode::SERVICE_UNAVAILABLE, &error))?
+    {
         return Err(api_error(
             StatusCode::BAD_REQUEST,
             "route is unsupported or unavailable",

@@ -3,6 +3,9 @@ use reqwest::{Client, Method, StatusCode};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
+#[path = "route-refusal.rs"]
+mod route_refusal;
+
 struct Evidence {
     path: PathBuf,
     report: Value,

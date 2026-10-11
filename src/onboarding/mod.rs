@@ -145,8 +145,11 @@ pub async fn run_first_use(
         billing_target: None,
         response_schema: None,
     };
-    let direct_provider = provider_id_from_route(&request.model)
-        .is_some_and(crate::gateway::broker::provider_capability_configured);
+    let direct_provider = match provider_id_from_route(&request.model) {
+        Some(provider) => crate::gateway::broker::provider_capability_configured(provider)
+            .map_err(JourneyError::Invalid)?,
+        None => false,
+    };
     let response = if is_subscription_model(&request.model) && !direct_provider {
         dispatch_subscription_for_agent(&agent_id, &request).await
     } else {

@@ -56,9 +56,9 @@ receives, and Brama dispatches nowhere else. That attempt finishes on its
 provider result or transport failure, not on an elapsed-time cutoff.
 <a href="/docs/cli/aliases"><code>brama aliases</code></a> prints the alias, its state and its
 route, and <code>GET /v1/aliases</code> returns the same reading as rows of
-<code>{"alias","state","route","reason","required","authorized","last_answer","concurrency"}</code> with the four
-states <code>serving</code>, <code>no_route</code>, <code>capability_absent</code> and
-<code>routes_file_invalid</code>.</p>
+<code>{"alias","state","route","reason","required","authorized","last_answer","concurrency"}</code> with the
+states <code>serving</code>, <code>no_route</code>, <code>capability_absent</code>,
+<code>capability_check_failed</code> and <code>routes_file_invalid</code>. A failed credential-route inspection retains the authority's operation and cause; it is not cached as an absent credential.</p>
 <p>Validation is strict before any provider is considered: unknown JSON fields
 are refused, a stated <code>max_tokens</code> must be at least one, <code>temperature</code> is bounded at 2, and a
 model name outside the four-part vocabulary is

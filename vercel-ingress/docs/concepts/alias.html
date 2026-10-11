@@ -108,16 +108,20 @@ serves the aliases that are serviceable, and logs
 this route; the alias will not serve" (<code>src/core/server.rs</code>).</p>
 <h2 id="an-alias-that-cannot-serve-says-so"><a class="headerlink" href="#an-alias-that-cannot-serve-says-so" title="Link to this section">An alias that cannot serve says so&para;</a></h2>
 <p>A declared alias is never silently dropped. The gateway judges every alias it
-knows into one of four states, and every surface reports the same word:</p>
+knows into one of the following states, and every surface reports the same word:</p>
 <table>
 <thead><tr><th>state</th><th>meaning</th><th>repair</th></tr></thead>
 <tbody>
 <tr><td><code>serving</code></td><td>at least one declared route names a provider this gateway holds a credential for, or delegates to <code>best</code></td><td>none</td></tr>
 <tr><td><code>no_route</code></td><td>the alias is known — required by the contract or named by a caller's allowlist — but no route is declared for it</td><td>declare a route with <code>PUT /v1/admin/routes</code> or in the launcher's <code>model_aliases</code> policy</td></tr>
 <tr><td><code>capability_absent</code></td><td>every declared route names a provider whose capability was never issued on this host</td><td>issue the provider capability, or point the alias at a route the host can reach, such as <code>best</code></td></tr>
+<tr><td><code>capability_check_failed</code></td><td>the credential authority could not establish a usable provider route</td><td>repair the operation named in <code>reason</code>; an execution, decoding or vault refusal is not proof that no credential was configured</td></tr>
 <tr><td><code>routes_file_invalid</code></td><td>the route registry file exists and cannot be read, so nothing in it serves</td><td>repair the file named by <code>BRAMA_INFERENCE_ROUTES_FILE</code></td></tr>
 </tbody>
 </table>
+<p>Managed route inspection retains the exact <code>route resolve</code> resource, execution or decoding error, process exit status and diagnostic output. A vault row's <code>problem</code> and an incomplete coordinate are refusals, not missing providers. Failed inspections are not cached as absent routes. The next inspection can observe recovery without restarting Brama. Standalone credential-store read errors likewise remain failures rather than selecting managed credentials.</p>
+<p><code>PUT /v1/admin/routes</code> returns <code>503</code> with the inspection cause before changing the registry. Onboarding stops before its billable request rather than switching from an unreadable direct-provider check to subscription dispatch. Brama Desktop's Routing inspector displays the same state and reason; permitted direct routes remain visible as unavailable in <code>GET /v1/models</code> when their inspection fails.</p>
+<p>Real refusal qualification: run <code>cargo test --test credential-administration -- --ignored --exact route_refusal::route_authority_failure_remains_visible_and_preserves_registry</code> against an isolated gateway and its real Skarbiec authority. Supply <code>TEST_SOURCE_REVISION</code>, <code>GATEWAY_SOURCE_REVISION</code>, <code>BRAMA_ADMIN_URL</code>, <code>BRAMA_ADMIN_BEARER</code>, <code>EXPECTED_ALIAS</code>, <code>EXPECTED_ROUTE</code>, <code>EXPECTED_ROUTE_OPERATION</code> and <code>EXPECTED_ROUTE_CAUSE</code> from that fixture. The alias must already name the expected direct route and fail authority inspection; the test refuses a healthy or different fixture before attempting a route write. It checks alias and catalogue diagnostics, the rejected write, the unchanged persisted registry, and repeated inspection without caching the failure as absence. It makes no provider request, installs no credential, and retains revision-bound HTTP evidence under <code>target/real-tests/route-authority</code>. Execute separately for each actual failing operation; a missing fixture or an unexecuted run is not a pass.</p>
 <p>Where the verdict is read:</p>
 <ul>
 <li><code>GET /v1/models</code> lists a declared alias the caller may use even when it

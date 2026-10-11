@@ -60,11 +60,17 @@ pub fn route_shape_writable(alias: &str, route: &str) -> bool {
     alias_route_shape_supported(alias, route)
 }
 
-fn route_supported(alias: &str, route: &str) -> bool {
-    route_shape_writable(alias, route)
-        && (!alias_requires_direct_capability(alias, route)
-            || crate::providers::adapter::provider_id_from_route(route)
-                .is_some_and(crate::gateway::broker::provider_capability_configured))
+fn route_supported(alias: &str, route: &str) -> Result<bool, String> {
+    if !route_shape_writable(alias, route) {
+        return Ok(false);
+    }
+    if !alias_requires_direct_capability(alias, route) {
+        return Ok(true);
+    }
+    match crate::providers::adapter::provider_id_from_route(route) {
+        Some(provider) => crate::gateway::broker::provider_capability_configured(provider),
+        None => Ok(false),
+    }
 }
 
 /// One model category and the membership rule it carries. The three lists are

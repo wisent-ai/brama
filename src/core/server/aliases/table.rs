@@ -104,16 +104,26 @@ impl ModelAliases {
             // gateway at all. Start, serve what is serviceable, and let the
             // aliases that have no credential resolve to nothing, exactly as an
             // alias nobody declared already does.
-            if alias_requires_direct_capability(alias.as_str(), route)
-                && !crate::providers::adapter::provider_id_from_route(route)
-                    .is_some_and(crate::gateway::broker::provider_capability_configured)
-            {
-                warn!(
-                    event = "alias_provider_capability_absent",
-                    alias = %alias,
-                    route = %route,
-                    "no provider capability was issued for this route; the alias will not serve"
-                );
+            if alias_requires_direct_capability(alias.as_str(), route) {
+                let configured = match crate::providers::adapter::provider_id_from_route(route) {
+                    Some(provider) => {
+                        crate::gateway::broker::provider_capability_configured(provider)
+                    }
+                    None => Ok(false),
+                };
+                match configured {
+                    Ok(true) => {}
+                    Ok(false) => warn!(
+                        event = "alias_provider_capability_absent",
+                        alias = %alias, route = %route,
+                        "no provider capability was issued for this route; the alias will not serve"
+                    ),
+                    Err(error) => warn!(
+                        event = "alias_provider_capability_check_failed",
+                        alias = %alias, route = %route, %error,
+                        "provider capability could not be inspected; the alias will not serve"
+                    ),
+                }
             }
         }
         Ok(Self {
@@ -134,10 +144,15 @@ impl ModelAliases {
         if !alias_requires_direct_capability(alias, &route) {
             return Some(route);
         }
-        if crate::providers::adapter::provider_id_from_route(&route)
-            .is_some_and(crate::gateway::broker::provider_capability_configured)
-        {
-            return Some(route);
+        if let Some(provider) = crate::providers::adapter::provider_id_from_route(&route) {
+            match crate::gateway::broker::provider_capability_configured(provider) {
+                Ok(true) => return Some(route),
+                Ok(false) => {}
+                Err(error) => {
+                    warn!(event = "alias_provider_capability_check_failed", %alias, %route, %error);
+                    return None;
+                }
+            }
         }
         warn!(
             event = "alias_route_unserviceable",

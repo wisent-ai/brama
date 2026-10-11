@@ -113,13 +113,23 @@ pub(in crate::core::server) async fn list_models(
     // direct routes. Those routes remain real and dispatchable even when the
     // optional public catalogue is unavailable, so the authenticated model list
     // must not become empty while inference still works.
+    let mut unavailable_reasons: HashMap<String, String> = HashMap::new();
     if let Some(allowed_models) = client_identity.allowed_models.as_ref() {
         for route in allowed_models {
-            if crate::providers::adapter::provider_id_from_route(route)
-                .is_some_and(crate::gateway::broker::provider_capability_configured)
-            {
-                model_ids.push(route.clone());
-                available.insert(route.clone());
+            if let Some(provider) = crate::providers::adapter::provider_id_from_route(route) {
+                match crate::gateway::broker::provider_capability_configured(provider) {
+                    Ok(true) => {
+                        model_ids.push(route.clone());
+                        available.insert(route.clone());
+                    }
+                    Ok(false) => {}
+                    Err(error) => {
+                        degraded = true;
+                        model_ids.push(route.clone());
+                        available.remove(route);
+                        unavailable_reasons.insert(route.clone(), error);
+                    }
+                }
             }
         }
     }
@@ -128,7 +138,6 @@ pub(in crate::core::server) async fn list_models(
     // one that is declared and cannot serve is listed as unavailable with the
     // reason, because a name that silently vanishes from the catalogue reads
     // to the caller as "no such model" and sends it to fix the wrong thing.
-    let mut unavailable_reasons: HashMap<String, String> = HashMap::new();
     for alias in aliases.declared() {
         if !client_identity.authorizes_model(&alias) {
             continue;

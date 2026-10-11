@@ -121,12 +121,19 @@ pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
     configured
 }
 
-/// Configuration inspection must not issue credentials or block the HTTP worker.
-/// Readiness and final-use redemption establish whether this declaration works.
-pub fn provider_capability_configured(provider: &str) -> bool {
-    !crate::providers::adapter::provider_requires_credential(provider)
-        || configured_provider_capabilities().contains(provider)
-        || (!local_provider_credentials_enabled() && provider_grant_routed(provider))
+/// Inspect configured credential routes without issuing a credential.
+/// An unreadable authority is not evidence that a provider is absent.
+pub fn provider_capability_configured(provider: &str) -> Result<bool, String> {
+    if !crate::providers::adapter::provider_requires_credential(provider) {
+        return Ok(true);
+    }
+    if local_provider_credentials_enabled() {
+        return local_provider_names().map(|names| names.iter().any(|name| name == provider));
+    }
+    if configured_provider_capabilities().contains(provider) {
+        return Ok(true);
+    }
+    provider_grant_routed(provider)
 }
 
 /// Whether the vault's own routing table answers this provider, asked of the
@@ -140,22 +147,24 @@ pub fn provider_capability_configured(provider: &str) -> bool {
 /// presence check parsed a file named by a variable while the credential path
 /// asked Skarbiec, so the two readers of one table disagreed exactly when no
 /// launcher had spoken. This asks the same question the credential path asks,
-/// of the same authority, and caches the answer per provider: one child
-/// process per provider per process, never one per request.
-fn provider_grant_routed(provider: &str) -> bool {
+/// of the same authority. Only an observed result is cached; a failed read
+/// remains a refusal and a later request can observe recovery.
+fn provider_grant_routed(provider: &str) -> Result<bool, String> {
     let resource = provider_resource(provider);
     if let Some(known) = GRANT_ROUTED
         .read()
-        .ok()
-        .and_then(|cache| cache.get(&resource).copied())
+        .map_err(|_| format!("read grant-route cache for `{resource}`: lock is poisoned"))?
+        .get(&resource)
+        .copied()
     {
-        return known;
+        return Ok(known);
     }
-    let routed = resolve_grant_route(&resource);
-    if let Ok(mut cache) = GRANT_ROUTED.write() {
-        cache.insert(resource, routed);
-    }
-    routed
+    let routed = resolve_grant_route(&resource)?;
+    GRANT_ROUTED
+        .write()
+        .map_err(|_| format!("store grant-route observation for `{resource}`: lock is poisoned"))?
+        .insert(resource, routed);
+    Ok(routed)
 }
 
 static GRANT_ROUTED: LazyLock<RwLock<HashMap<String, bool>>> =
@@ -163,42 +172,56 @@ static GRANT_ROUTED: LazyLock<RwLock<HashMap<String, bool>>> =
 
 /// One `route resolve` for one resource, run to its exit, reading only
 /// whether the vault answers a complete coordinate for it.
-fn resolve_grant_route(resource: &str) -> bool {
-    let Ok(child) = std::process::Command::new(super::vault::entitlements_router_bin())
+fn resolve_grant_route(resource: &str) -> Result<bool, String> {
+    let binary = super::vault::entitlements_router_bin();
+    let mut command = std::process::Command::new(&binary);
+    command
         .arg("route")
         .arg("resolve")
         .arg(resource)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-    else {
-        return false;
-    };
-    let Ok(output) = child.wait_with_output() else {
-        return false;
-    };
+        .stdin(std::process::Stdio::null());
+    let output = stado_wait::output(&mut command)
+        .map_err(|error| format!("execute `{binary} route resolve {resource}`: {error}"))?;
     if !output.status.success() {
-        return false;
+        return Err(format!(
+            "`{binary} route resolve {resource}` exited with {}: stdout: {}; stderr: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        ));
     }
-    let Ok(document) = serde_json::from_slice::<serde_json::Value>(&output.stdout) else {
-        return false;
-    };
-    document
+    let document: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .map_err(|error| format!("decode `{binary} route resolve {resource}` response: {error}"))?;
+    let routes = document
         .get("routes")
         .and_then(serde_json::Value::as_array)
-        .is_some_and(|routes| {
-            routes.iter().any(|route| {
-                route.get("resource").and_then(serde_json::Value::as_str) == Some(resource)
-                    && route.get("problem").is_none()
-                    && route
-                        .get("item")
-                        .and_then(serde_json::Value::as_str)
-                        .is_some_and(|item| !item.is_empty())
-                    && route
-                        .get("field")
-                        .and_then(serde_json::Value::as_str)
-                        .is_some_and(|field| !field.is_empty())
-            })
-        })
+        .ok_or_else(|| {
+            format!("`{binary} route resolve {resource}` response has no routes array")
+        })?;
+    let mut configured = false;
+    for route in routes {
+        if route.get("resource").and_then(serde_json::Value::as_str) != Some(resource) {
+            continue;
+        }
+        if let Some(problem) = route.get("problem") {
+            return Err(format!(
+                "`{binary} route resolve {resource}` refused: {problem}"
+            ));
+        }
+        if !route
+            .get("item")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|item| !item.is_empty())
+            || !route
+                .get("field")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|field| !field.is_empty())
+        {
+            return Err(format!(
+                "`{binary} route resolve {resource}` returned an incomplete coordinate"
+            ));
+        }
+        configured = true;
+    }
+    Ok(configured)
 }

@@ -16,6 +16,8 @@ pub const ALIAS_NO_ROUTE: &str = "no_route";
 pub const ALIAS_CAPABILITY_ABSENT: &str = "capability_absent";
 /// The route registry file exists and cannot be read, so nothing in it serves.
 pub const ALIAS_ROUTES_FILE_INVALID: &str = "routes_file_invalid";
+/// Credential authority inspection failed; absence has not been established.
+pub const ALIAS_CAPABILITY_CHECK_FAILED: &str = "capability_check_failed";
 
 /// One alias, what it points at, and whether that can be served right now.
 #[derive(Clone, Debug, Serialize)]
@@ -111,17 +113,34 @@ impl ModelAliases {
                 }),
             };
         };
-        if !alias_requires_direct_capability(alias, &route)
-            || crate::providers::adapter::provider_id_from_route(&route)
-                .is_some_and(crate::gateway::broker::provider_capability_configured)
-        {
-            return AliasDiagnosis {
-                alias: alias.to_string(),
-                state: ALIAS_SERVING,
-                route: Some(route),
-                reason: None,
-                subscription_resolved: false,
-            };
+        let configured = if !alias_requires_direct_capability(alias, &route) {
+            Ok(true)
+        } else {
+            match crate::providers::adapter::provider_id_from_route(&route) {
+                Some(provider) => crate::gateway::broker::provider_capability_configured(provider),
+                None => Ok(false),
+            }
+        };
+        match configured {
+            Ok(true) => {
+                return AliasDiagnosis {
+                    alias: alias.to_string(),
+                    state: ALIAS_SERVING,
+                    route: Some(route),
+                    reason: None,
+                    subscription_resolved: false,
+                };
+            }
+            Err(error) => {
+                return AliasDiagnosis {
+                    alias: alias.to_string(),
+                    state: ALIAS_CAPABILITY_CHECK_FAILED,
+                    route: Some(route),
+                    reason: Some(error),
+                    subscription_resolved: false,
+                };
+            }
+            Ok(false) => {}
         }
         let provider =
             crate::providers::adapter::provider_id_from_route(&route).unwrap_or_default();
