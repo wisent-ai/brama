@@ -61,3 +61,39 @@ fn failed_reset_report_retains_last_offer_and_persists_actual_cause() {
     run.report["result"] = json!("passed");
     run.save();
 }
+
+#[test]
+#[ignore = "Requires a real non-JSON reset-policy HTTP refusal while the gateway pool remains readable"]
+fn policy_read_retains_gateway_http_refusal_body() {
+    let mut run = Run::new();
+    let endpoint = required("EXPECTED_POLICY_REFUSAL_ENDPOINT");
+    let status = required("EXPECTED_POLICY_REFUSAL_HTTP_STATUS");
+    let body = required("EXPECTED_POLICY_REFUSAL_BODY");
+    assert!(
+        serde_json::from_str::<serde_json::Value>(&body).is_err(),
+        "this journey requires the actual non-JSON refusal body"
+    );
+    let output = run.command(&["subscription", "reset-policy", "show"]);
+    assert!(
+        !output.status.success(),
+        "a successful policy response does not qualify refusal diagnostics"
+    );
+    let cause = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        cause.contains(&format!("POST {endpoint}")),
+        "refusal lost the failed gateway operation: {cause}"
+    );
+    assert!(
+        cause.contains(&format!("HTTP {status}")),
+        "refusal lost the gateway HTTP status: {cause}"
+    );
+    assert!(
+        cause.contains(&body),
+        "refusal lost the actual non-JSON response body: {cause}"
+    );
+    run.snapshot_pool();
+    run.report["expected_policy_refusal"] =
+        json!({"endpoint": endpoint, "status": status, "body": body});
+    run.report["result"] = json!("passed");
+    run.save();
+}

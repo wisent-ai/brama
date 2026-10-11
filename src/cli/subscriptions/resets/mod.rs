@@ -58,32 +58,17 @@ async fn execute(args: &ResetArgs) -> Result<Value, String> {
     let client = reqwest::Client::builder()
         .build()
         .map_err(|error| error.to_string())?;
-    let response = stado_wait::http::request(
-        client
-            .post(format!(
-                "{}/v1/admin/subscription-pool/reset",
-                gateway.trim_end_matches('/')
-            ))
-            .bearer_auth(bearer.trim())
-            .json(
-                &json!({"provider": args.provider, "member": args.member, "reason": args.reason}),
-            ),
-    )
-    .await
-    .map_err(|error| format!("gateway reset request: {error}"))?;
-    let status = response.status();
-    let answer: Value = stado_wait::until(
-        stado_wait::Kind::Network,
-        "decode subscription reset response",
-        &gateway,
-        response.json(),
-    )
-    .await
-    .map_err(|error| format!("gateway reset HTTP {status}: {error}"))?;
-    if !status.is_success() {
-        return Err(format!("gateway reset HTTP {status}: {answer}"));
-    }
-    Ok(answer)
+    let address = format!(
+        "{}/v1/admin/subscription-pool/reset",
+        gateway.trim_end_matches('/')
+    );
+    let response =
+        stado_wait::http::request(client.post(&address).bearer_auth(bearer.trim()).json(
+            &json!({"provider": args.provider, "member": args.member, "reason": args.reason}),
+        ))
+        .await
+        .map_err(|error| format!("POST {address}: {error}"))?;
+    gateway_answer(response, &address).await
 }
 
 /// Where a reset-policy command is answered: this host's Brama state, or the
@@ -209,22 +194,25 @@ async fn policy_answer(target: &PolicyTarget, request: PolicyRequest) -> Result<
             .json(&request),
     )
     .await
-    .map_err(|error| format!("gateway reset-policy request to {address}: {error}"))?;
+    .map_err(|error| format!("POST {address}: {error}"))?;
+    gateway_answer(response, &address).await
+}
+
+async fn gateway_answer(response: reqwest::Response, address: &str) -> Result<Value, String> {
     let status = response.status();
-    let answer: Value = stado_wait::until(
+    let body = stado_wait::until(
         stado_wait::Kind::Network,
-        "decode reset-policy response",
-        &gateway,
-        response.json(),
+        "read gateway reset response",
+        address,
+        response.text(),
     )
     .await
-    .map_err(|error| format!("gateway reset-policy HTTP {status} from {address}: {error}"))?;
+    .map_err(|error| format!("POST {address}: HTTP {status}: reading response: {error}"))?;
     if !status.is_success() {
-        return Err(format!(
-            "gateway reset-policy HTTP {status} from {address}: {answer}"
-        ));
+        return Err(format!("POST {address}: HTTP {status}: {body}"));
     }
-    Ok(answer)
+    serde_json::from_str(&body)
+        .map_err(|error| format!("POST {address}: HTTP {status}: invalid JSON: {error}"))
 }
 
 /// The same three operations on this host's Brama state, answered in the
