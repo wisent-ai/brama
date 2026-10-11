@@ -105,7 +105,11 @@ pub struct Request {
 }
 
 /// The usable members of `provider` and the live leases each carries, with
-/// the members the ledger refuses set apart.
+/// the members the ledger refuses set apart: a standing refusal (sign-in
+/// owed, a block in force) or a current plan window at its whole limit. A
+/// session leased onto a spent plan would run on an account the provider
+/// refuses, and a pool whose every member is spent or full is the shortage
+/// an acquisition buys for.
 struct Members<'a> {
     usable: Vec<(&'a broker::SubscriptionEntry, Vec<Lease>)>,
     refused: Vec<Value>,
@@ -127,11 +131,15 @@ fn members<'a>(
         if crate::journal::is_retired(&entry.id)? {
             continue;
         }
-        match usage::standing_refusal(&entry.id) {
+        let refusal = match usage::standing_refusal(&entry.id) {
+            Some(refusal) => Some(refusal.message),
+            None => window_at_limit(&entry.id),
+        };
+        match refusal {
             Some(refusal) => refused.push(json!({
                 "subscription_id": entry.id,
                 "account": entry.account,
-                "refusal": refusal.message,
+                "refusal": refusal,
             })),
             None => {
                 let on_subscription: Vec<Lease> = live
@@ -144,6 +152,37 @@ fn members<'a>(
         }
     }
     Ok(Members { usable, refused })
+}
+
+/// The current plan window of `subscription_id` at its whole limit, as a
+/// refusal names it: which window, how much of it is used and when the
+/// provider says it resets. `None` when no current window is at its limit or
+/// nothing was ever read. A window whose own reset has passed is not
+/// current: its last reading no longer holds the account.
+fn window_at_limit(subscription_id: &str) -> Option<String> {
+    let now = chrono::Utc::now().timestamp_millis();
+    let windows = usage::plan_windows(usage::usage_for(subscription_id).as_ref());
+    let reading = windows.limits.iter().find(|reading| {
+        reading
+            .resets_at_ms
+            .is_none_or(|resets_at_ms| resets_at_ms > now)
+            && crate::subscription_dispatch::acquire::at_limit(reading.used_fraction)
+    })?;
+    let window = match &reading.window_label {
+        Some(window_label) => window_label.as_str(),
+        None => reading.label.as_str(),
+    };
+    let resets = match reading
+        .resets_at_ms
+        .and_then(chrono::DateTime::from_timestamp_millis)
+    {
+        Some(at) => format!("it resets at {}", at.format("%Y-%m-%dT%H:%M:%SZ")),
+        None => "the provider named no reset".to_string(),
+    };
+    Some(format!(
+        "plan window {window} is at its whole limit ({} used); {resets}",
+        reading.used_fraction
+    ))
 }
 
 fn count(leases: &[Lease]) -> u64 {

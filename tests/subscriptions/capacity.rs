@@ -2,6 +2,7 @@
 //! Journeys require BRAMA, CLI_SOURCE_REVISION, CONSUMER, BEARER_ROLE and GATEWAY_SOURCE_REVISION.
 //! Reset reporting additionally requires MEMBER and EXPECTED_CREDITS.
 //! Discovery requires EXPECTED_ACCOUNT, EXPECTED_HARNESS_PROVIDER and EXPECTED_PROVIDER.
+//! The spent-pool lease journey requires LEASE_SPENT_PROVIDER.
 #[path = "identity/authenticator.rs"]
 mod authenticator_identity;
 #[path = "identity/borrowed.rs"]
@@ -34,6 +35,8 @@ mod reset_report_refusal;
 mod retired_discovery;
 #[path = "resets/retired.rs"]
 mod retired_reset;
+#[path = "leases/spent.rs"]
+mod spent_pool_leases;
 mod support;
 
 use serde_json::{json, Value};
