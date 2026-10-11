@@ -30,6 +30,25 @@ usage reading. A live credential alone is not proof of current usage.</p>
 <h2 id="discover">Find accounts you already own</h2>
 <pre><code class="language-console">brama subscription discover --gateway-consumer &lt;consumer&gt; --bearer-role &lt;console bearer role&gt; --json</code></pre>
 <p>Run this where your coding harness knows your accounts. Brama reads public account metadata and the gateway checks synchronized receipts through Skrzynka. Each discovered account retains its provider, address, plan when reported, source and observation time. It enters the pool without copying a harness grant; Weles must obtain Brama's independent grant for that exact account.</p>
+<p>Configure <code>SKRZYNKA_ORGANIZATION</code> in the gateway's environment with
+the organization whose synchronized mailboxes may supply purchase receipts.
+Brama captures its trimmed value once per collection and passes it explicitly
+as <code>skrzynka --organization &lt;organization&gt;</code> for mailbox listing,
+message pagination and message retrieval. A missing or blank value produces
+a receipt-discovery error before any mailbox command; neither the local
+discovery caller's environment nor an implicit Skrzynka default supplies
+gateway scope. CLI and Desktop retain that error beside other discovered
+account facts.</p>
+<p>Receipt provenance and cache keys include the organization, mailbox and
+message IDs as a JSON tuple after <code>skrzynka:</code>. A previously unscoped
+cache entry cannot supply facts for a selected organization. The real receipt
+journey <code>tests/subscriptions/discovery/receipt.rs</code> requires the same
+<code>SKRZYNKA_ORGANIZATION</code> on its host and gateway, plus its existing
+real receipt/account inputs. It checks that organization-bound provenance is
+persisted without replacing the current harness plan with historical receipt
+information. Run the <code>historical_receipt</code> filter of the
+<code>subscription-capacity</code> test target only against authorized isolated
+fixtures; discovery may register accounts and schedule their independent sign-in.</p>
 <p>Desktop's <strong>Discover accounts</strong> action shows the same report. A missing grant, failed mailbox read or unavailable discovery source remains visible with its cause. Member names do not assign rank: capacity and availability decide which member can serve.</p>
 <p>After a nonempty discovery with no source errors, the gateway reconciles obsolete membership before enrolling accounts. It removes members without a recorded account, borrowed-grant members, ledger-only entries without discovery metadata, and duplicate members for the same provider and account. Member labels never establish ownership or routing priority. The <code>removed</code> report names each removed member and its reason, and Desktop shows those same outcomes.</p>
 <p>Reconciliation marks obsolete membership unavailable, checks for live session leases, moves only that member's tagged vault items to recoverable trash, confirms their absence from live inventory, and removes its overlay and usage-ledger entry. Shared login items are not removed. Active leases, changed account identity, unreadable account metadata, vault refusals and failed persistence stop reconciliation with the operation and cause. An interrupted removal is resumed on later discovery; its tombstone is distinct from an owner's retirement. Discovery still cannot reinstate an owner-retired account.</p>

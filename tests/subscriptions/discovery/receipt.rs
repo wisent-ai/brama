@@ -1,5 +1,5 @@
 //! Requires a real synchronized purchase receipt for an account also in OMP.
-//! RECEIPT_ID and MEMBER select existing records; no mail or grant is fabricated.
+//! RECEIPT_ID, MEMBER and SKRZYNKA_ORGANIZATION select real records; no mail or grant is fabricated.
 use super::{required, Run};
 use serde_json::{json, Value};
 use std::process::{Command, Stdio};
@@ -30,14 +30,26 @@ fn historical_purchase_does_not_replace_current_reported_plan() {
     let receipt_id = required("RECEIPT_ID");
     let account = required("EXPECTED_ACCOUNT");
     let harness_provider = required("EXPECTED_HARNESS_PROVIDER");
-    let receipt = observe(&mut run, "skrzynka", &["message", "show", &receipt_id]);
+    let organization = required("SKRZYNKA_ORGANIZATION");
+    let organization = organization.trim();
+    let receipt = observe(
+        &mut run,
+        "skrzynka",
+        &[
+            "--organization",
+            organization,
+            "message",
+            "show",
+            &receipt_id,
+        ],
+    );
     let sent_at = chrono::DateTime::parse_from_rfc3339(
         receipt["sent_at"].as_str().expect("real receipt date"),
     )
     .expect("provider receipt timestamp")
     .timestamp_millis();
     let mailbox = receipt["mailbox_id"].as_str().expect("receipt mailbox");
-    let source = format!("skrzynka:{mailbox}:{receipt_id}");
+    let source = format!("skrzynka:{}", json!([organization, mailbox, receipt_id]));
     let usage = observe(&mut run, "omp", &["usage", "--json"]);
     let row = usage["reports"]
         .as_array()

@@ -5,10 +5,16 @@ mod infer;
 use super::harness::DiscoveryReport;
 use serde_json::Value;
 
-async fn command(arguments: &[&str]) -> Result<Value, String> {
-    let operation = format!("skrzynka {}", arguments.join(" "));
+async fn command(organization: &str, arguments: &[&str]) -> Result<Value, String> {
+    let operation = format!(
+        "skrzynka --organization {organization} {}",
+        arguments.join(" ")
+    );
     let mut child = tokio::process::Command::new("skrzynka");
-    child.args(arguments).kill_on_drop(true);
+    child
+        .args(["--organization", organization])
+        .args(arguments)
+        .kill_on_drop(true);
     let output = stado_wait::output_async(&mut child)
         .await
         .map_err(|error| format!("{operation}: {error}"))?;
@@ -32,7 +38,14 @@ pub async fn collect() -> DiscoveryReport {
 }
 
 async fn read(report: &mut DiscoveryReport) -> Result<(), String> {
-    let mailboxes = command(&["mailbox", "list"]).await?;
+    let organization = std::env::var("SKRZYNKA_ORGANIZATION").map_err(|error| {
+        format!("receipt discovery cannot select a Skrzynka organization: SKRZYNKA_ORGANIZATION is unavailable on the gateway: {error}")
+    })?;
+    let organization = organization.trim();
+    if organization.is_empty() {
+        return Err("receipt discovery requires nonempty SKRZYNKA_ORGANIZATION on the gateway; no mailbox command was run".to_owned());
+    }
+    let mailboxes = command(organization, &["mailbox", "list"]).await?;
     let mailboxes = mailboxes
         .as_array()
         .ok_or_else(|| "skrzynka mailbox list did not return a mailbox array".to_owned())?;
@@ -58,7 +71,11 @@ async fn read(report: &mut DiscoveryReport) -> Result<(), String> {
         let mut seen = std::collections::BTreeSet::new();
         loop {
             let offset = seen.len().to_string();
-            let page = command(&["message", "list", "--mailbox", id, "--offset", &offset]).await?;
+            let page = command(
+                organization,
+                &["message", "list", "--mailbox", id, "--offset", &offset],
+            )
+            .await?;
             let messages = page
                 .as_array()
                 .ok_or_else(|| format!("Skrzynka mailbox {id}: message list is not an array"))?;
@@ -72,12 +89,15 @@ async fn read(report: &mut DiscoveryReport) -> Result<(), String> {
                 if !seen.insert(message_id.to_owned()) {
                     return Err(format!("Skrzynka mailbox {id}: pagination repeated message {message_id}; complete receipt coverage is unconfirmed"));
                 }
-                let source = format!("skrzynka:{id}:{message_id}");
+                let source = format!(
+                    "skrzynka:{}",
+                    serde_json::json!([organization, id, message_id])
+                );
                 if let Some(accounts) = cache.entries.get(&source) {
                     report.accounts.extend(accounts.iter().cloned());
                     continue;
                 }
-                let full = command(&["message", "show", message_id]).await?;
+                let full = command(organization, &["message", "show", message_id]).await?;
                 match infer::accounts(&full, &source).await {
                     Ok(accounts) => {
                         report.accounts.extend(accounts.iter().cloned());
