@@ -38,8 +38,7 @@ pub(super) struct DispatchPlan<'a> {
     pub(super) stream: bool,
 }
 
-pub(super) async fn dispatch(plan: DispatchPlan<'_>, selected_model: &str) -> DispatchedCall {
-    let _ = selected_model;
+pub(super) async fn dispatch(plan: DispatchPlan<'_>) -> DispatchedCall {
     let DispatchPlan {
         client_identity,
         headers,

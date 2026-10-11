@@ -254,23 +254,20 @@ pub(super) async fn route_model_call(
         started,
     };
     let admission = crate::journal::concurrency::admit(requested_model);
-    let dispatched = dispatch::dispatch(
-        DispatchPlan {
-            client_identity,
-            headers,
-            raw_body,
-            request: &request,
-            task_subscription: task_subscription.as_deref(),
-            any_subscription,
-            any_vision_capable_subscription,
-            best_subscription,
-            preferred_route: preferred_route.as_deref(),
-            account_agent: account_agent.as_deref(),
-            caller_scoped_request,
-            stream,
-        },
-        &meta.selected_model,
-    )
+    let dispatched = dispatch::dispatch(DispatchPlan {
+        client_identity,
+        headers,
+        raw_body,
+        request: &request,
+        task_subscription: task_subscription.as_deref(),
+        any_subscription,
+        any_vision_capable_subscription,
+        best_subscription,
+        preferred_route: preferred_route.as_deref(),
+        account_agent: account_agent.as_deref(),
+        caller_scoped_request,
+        stream,
+    })
     .await;
     admission.settle(settled(&dispatched));
     Ok((dispatched, meta))
