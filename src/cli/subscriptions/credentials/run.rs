@@ -13,6 +13,7 @@ pub(crate) async fn run(command: SubscriptionCommand) {
         SubscriptionCommand::List(args) => super::super::report(args).await,
         SubscriptionCommand::Discover(args) => super::super::discovery::run(args).await,
         SubscriptionCommand::Reset(args) => super::super::resets::run(args).await,
+        SubscriptionCommand::ResetPolicy(command) => super::super::resets::policy(command).await,
         SubscriptionCommand::Refresh {
             provider,
             reason,

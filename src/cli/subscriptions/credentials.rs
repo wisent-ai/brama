@@ -38,6 +38,9 @@ pub(crate) enum SubscriptionCommand {
     Discover(super::discovery::DiscoveryArgs),
     /// Redeem a saved provider reset for the selected member and journal the reason
     Reset(super::resets::ResetArgs),
+    /// Read, state or remove the operator's policy for redeeming a provider's saved resets automatically
+    #[command(subcommand)]
+    ResetPolicy(super::resets::PolicyCommand),
     /// Refresh this provider's subscription credentials now, here or on the
     /// gateway that holds them
     #[command(group(ArgGroup::new("destination").args(["gateway", "gateway_consumer"])))]

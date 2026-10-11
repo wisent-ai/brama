@@ -1,7 +1,8 @@
 //! A reset consumes already-owned provider capacity; it never purchases an account.
 
 use super::remote::Destination;
-use clap::{ArgGroup, Args};
+use clap::{ArgGroup, Args, Subcommand};
+use serde::Serialize;
 use serde_json::{json, Value};
 
 #[derive(Args)]
@@ -83,4 +84,173 @@ async fn execute(args: &ResetArgs) -> Result<Value, String> {
         return Err(format!("gateway reset HTTP {status}: {answer}"));
     }
     Ok(answer)
+}
+
+/// Where a reset-policy command is answered: this host's Brama state, or the
+/// gateway that holds the pool.
+#[derive(Args)]
+#[command(group(ArgGroup::new("destination").args(["gateway", "gateway_consumer"])))]
+pub(crate) struct PolicyTarget {
+    #[arg(long)]
+    gateway: Option<String>,
+    #[arg(long)]
+    gateway_consumer: Option<String>,
+    #[arg(long, requires = "destination")]
+    bearer_role: Option<String>,
+    #[arg(long)]
+    json: bool,
+}
+
+/// The operator's policy for redeeming a provider's saved resets automatically.
+#[derive(Subcommand)]
+pub(crate) enum PolicyCommand {
+    /// Every provider's stated policy
+    Show {
+        #[command(flatten)]
+        target: PolicyTarget,
+    },
+    /// State one provider's policy, replacing the one before
+    Set {
+        provider: String,
+        /// Credits never spent automatically
+        #[arg(long)]
+        keep_credits: u64,
+        /// A window must stay blocked longer than this before a credit is spent on it
+        #[arg(long)]
+        min_blocked_minutes: u64,
+        /// A credit expiring within this many hours is spent rather than lost
+        #[arg(long)]
+        salvage_horizon_hours: u64,
+        #[arg(long)]
+        reason: String,
+        #[command(flatten)]
+        target: PolicyTarget,
+    },
+    /// Remove one provider's policy, so its resets are no longer redeemed automatically
+    Clear {
+        provider: String,
+        #[command(flatten)]
+        target: PolicyTarget,
+    },
+}
+
+/// One reset-policy operation, in the document the gateway's
+/// `/v1/admin/subscription-pool/reset-policy` route reads.
+#[derive(Serialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+enum PolicyRequest {
+    Show,
+    Set {
+        provider: String,
+        keep_credits: u64,
+        min_blocked_minutes: u64,
+        salvage_horizon_hours: u64,
+        reason: String,
+    },
+    Clear {
+        provider: String,
+    },
+}
+
+pub(crate) async fn policy(command: PolicyCommand) {
+    let (target, request) = match command {
+        PolicyCommand::Show { target } => (target, PolicyRequest::Show),
+        PolicyCommand::Set {
+            provider,
+            keep_credits,
+            min_blocked_minutes,
+            salvage_horizon_hours,
+            reason,
+            target,
+        } => (
+            target,
+            PolicyRequest::Set {
+                provider,
+                keep_credits,
+                min_blocked_minutes,
+                salvage_horizon_hours,
+                reason,
+            },
+        ),
+        PolicyCommand::Clear { provider, target } => (target, PolicyRequest::Clear { provider }),
+    };
+    match policy_answer(&target, request).await {
+        Ok(answer) => crate::cli::print_answer(&answer, target.json),
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(libc::EXIT_FAILURE);
+        }
+    }
+}
+
+/// Answer `request` from this host's Brama state, or ask the gateway that
+/// holds the pool.
+async fn policy_answer(target: &PolicyTarget, request: PolicyRequest) -> Result<Value, String> {
+    let destination = Destination {
+        gateway: target.gateway.clone(),
+        gateway_consumer: target.gateway_consumer.clone(),
+        bearer_role: target.bearer_role.clone(),
+    };
+    let (gateway, bearer) = destination.resolve_reading_stdin().await?;
+    let Some(gateway) = gateway else {
+        return local_policy(request);
+    };
+    let client = reqwest::Client::builder()
+        .build()
+        .map_err(|error| error.to_string())?;
+    let address = format!(
+        "{}/v1/admin/subscription-pool/reset-policy",
+        gateway.trim_end_matches('/')
+    );
+    let response = stado_wait::http::request(
+        client
+            .post(&address)
+            .bearer_auth(bearer.trim())
+            .json(&request),
+    )
+    .await
+    .map_err(|error| format!("gateway reset-policy request to {address}: {error}"))?;
+    let status = response.status();
+    let answer: Value = stado_wait::until(
+        stado_wait::Kind::Network,
+        "decode reset-policy response",
+        &gateway,
+        response.json(),
+    )
+    .await
+    .map_err(|error| format!("gateway reset-policy HTTP {status} from {address}: {error}"))?;
+    if !status.is_success() {
+        return Err(format!(
+            "gateway reset-policy HTTP {status} from {address}: {answer}"
+        ));
+    }
+    Ok(answer)
+}
+
+/// The same three operations on this host's Brama state, answered in the
+/// gateway route's shape.
+fn local_policy(request: PolicyRequest) -> Result<Value, String> {
+    use brama::subscription_dispatch::acquire::resets::settings;
+    match request {
+        PolicyRequest::Show => settings::all().map(|policies| json!({ "policies": policies })),
+        PolicyRequest::Set {
+            provider,
+            keep_credits,
+            min_blocked_minutes,
+            salvage_horizon_hours,
+            reason,
+        } => {
+            let policy = settings::ResetPolicy {
+                keep_credits,
+                min_blocked_minutes,
+                salvage_horizon_hours,
+                reason,
+                stated_at: chrono::Utc::now().to_rfc3339(),
+            };
+            settings::set(&provider, policy)
+                .map(|policy| json!({ "provider": provider, "policy": policy }))
+        }
+        PolicyRequest::Clear { provider } => settings::clear(&provider)
+            .map(|policy| json!({ "provider": provider, "cleared": policy })),
+    }
 }
