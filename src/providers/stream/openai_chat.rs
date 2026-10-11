@@ -27,9 +27,17 @@ pub(super) fn openai_chat_items(
     if data.trim() == OPENAI_DONE {
         return (items, true);
     }
+    // A chunk that is not JSON ends the stream with the chunk named: dropped,
+    // the text or tool call it carried vanished from an answer that still
+    // finished as complete.
     let body: Value = match serde_json::from_str(data) {
         Ok(body) => body,
-        Err(_) => return (items, false),
+        Err(error) => {
+            items.push(StreamItem::Failed(format!(
+                "provider stream chunk is not JSON ({error}): {data}"
+            )));
+            return (items, true);
+        }
     };
     if let Some(error) = body.get("error") {
         let message = error
