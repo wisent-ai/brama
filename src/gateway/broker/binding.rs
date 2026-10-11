@@ -28,14 +28,27 @@ fn configured_provider_grants() -> std::collections::HashSet<String> {
     let Some(path) = std::env::var_os("SKARBIEC_CAPABILITY_ROUTES_FILE") else {
         return std::collections::HashSet::new();
     };
-    let Ok(raw) = std::fs::read_to_string(path) else {
-        return std::collections::HashSet::new();
+    // A declared table that cannot be read or parsed describes no provider,
+    // which hides every alias it routes; say which file and why, so
+    // `capability_absent` is not read as a provider nobody configured.
+    let path = std::path::PathBuf::from(path);
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(raw) => raw,
+        Err(error) => {
+            tracing::warn!(event = "grant_routes_unreadable", path = %path.display(), %error, "no provider is described by the grant routes table");
+            return std::collections::HashSet::new();
+        }
     };
-    let Ok(table) = serde_json::from_str::<serde_json::Value>(&raw) else {
-        return std::collections::HashSet::new();
+    let table = match serde_json::from_str::<serde_json::Value>(&raw) {
+        Ok(table) => table,
+        Err(error) => {
+            tracing::warn!(event = "grant_routes_unparseable", path = %path.display(), %error, "no provider is described by the grant routes table");
+            return std::collections::HashSet::new();
+        }
     };
     let routes = table.get("routes").unwrap_or(&table);
     let Some(routes) = routes.as_object() else {
+        tracing::warn!(event = "grant_routes_not_an_object", path = %path.display(), "no provider is described by the grant routes table");
         return std::collections::HashSet::new();
     };
     routes
