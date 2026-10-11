@@ -8,6 +8,8 @@ mod authenticator_identity;
 mod concurrent_leases;
 #[path = "discovery/receipt.rs"]
 mod historical_receipt;
+#[path = "leases/fairness.rs"]
+mod lease_distribution;
 #[path = "discovery/reconciliation/real.rs"]
 mod membership_reconciliation;
 #[path = "discovery/capability.rs"]
