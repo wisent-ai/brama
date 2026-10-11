@@ -95,7 +95,7 @@ fn candidates(settings: &BTreeMap<String, String>, home: &Path) -> Vec<String> {
 }
 
 async fn probe(args: ProbeArgs) -> Result<(), String> {
-    let home = home();
+    let home = home()?;
     let settings = service_settings(&home)?;
     let router = settings
         .get("ENTITLEMENTS_ROUTER_BIN")
