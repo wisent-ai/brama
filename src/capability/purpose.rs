@@ -65,4 +65,14 @@ pub enum CapabilityError {
     InvalidConfiguration,
     #[error("capability redemption denied")]
     RedemptionDenied,
+    /// The authority's socket could not be reached, written or read; the io
+    /// error says which. Not a denial: the authority never answered.
+    #[error("capability authority unreachable: {0}")]
+    AuthorityUnreachable(String),
+    /// The authority answered something that is not its wire format.
+    #[error("capability authority answered outside its wire format: {0}")]
+    AuthorityAnswer(String),
+    /// The workload signing key could not be opened or read.
+    #[error("workload signing key unreadable: {0}")]
+    KeyUnreadable(String),
 }

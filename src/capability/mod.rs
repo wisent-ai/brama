@@ -197,18 +197,28 @@ impl CapabilityClient {
         );
         encoded.push(b'\n');
 
-        let mut stream =
-            UnixStream::connect(&self.socket).map_err(|_| CapabilityError::RedemptionDenied)?;
+        // A socket that cannot be reached, written or read is not a denial:
+        // the authority never answered, and the io error says why.
+        let socket = self.socket.display();
+        let unreachable = |step: &str, error: std::io::Error| {
+            CapabilityError::AuthorityUnreachable(format!("{step} {socket}: {error}"))
+        };
+        let mut stream = UnixStream::connect(&self.socket)
+            .map_err(|error| unreachable("connecting to", error))?;
         stream
             .write_all(&encoded)
-            .map_err(|_| CapabilityError::RedemptionDenied)?;
+            .map_err(|error| unreachable("writing to", error))?;
         stream
             .shutdown(std::net::Shutdown::Write)
-            .map_err(|_| CapabilityError::RedemptionDenied)?;
+            .map_err(|error| unreachable("closing the request to", error))?;
 
         let line = read_control_line(&mut stream)?;
-        let control: RedeemControl =
-            serde_json::from_slice(&line).map_err(|_| CapabilityError::RedemptionDenied)?;
+        let control: RedeemControl = serde_json::from_slice(&line).map_err(|error| {
+            CapabilityError::AuthorityAnswer(format!(
+                "control line from {socket} is not JSON ({error}): {}",
+                String::from_utf8_lossy(&line)
+            ))
+        })?;
         if control.version != WIRE_VERSION || control.status != "ok" {
             return Err(CapabilityError::RedemptionDenied);
         }
@@ -218,9 +228,9 @@ impl CapabilityClient {
             .map(std::num::NonZeroUsize::get)
             .ok_or(CapabilityError::RedemptionDenied)?;
         let mut secret = Zeroizing::new(vec![0_u8; length]);
-        if stream.read_exact(&mut secret).is_err() {
-            return Err(CapabilityError::RedemptionDenied);
-        }
+        stream
+            .read_exact(&mut secret)
+            .map_err(|error| unreachable("reading the secret from", error))?;
         let mut extra = [0_u8; 1];
         match stream.read(&mut extra) {
             Ok(0) => Ok(Secret::from_zeroizing(secret)),

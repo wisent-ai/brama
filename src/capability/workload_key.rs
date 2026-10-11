@@ -31,10 +31,10 @@ pub(super) fn read_owner_key(path: &Path) -> Result<SigningKey, CapabilityError>
         .read(true)
         .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
         .open(path)
-        .map_err(|_| CapabilityError::InvalidConfiguration)?;
+        .map_err(|error| CapabilityError::KeyUnreadable(format!("{}: {error}", path.display())))?;
     let metadata = file
         .metadata()
-        .map_err(|_| CapabilityError::InvalidConfiguration)?;
+        .map_err(|error| CapabilityError::KeyUnreadable(format!("{}: {error}", path.display())))?;
     if !metadata.file_type().is_file()
         || metadata.uid() != unsafe { libc::geteuid() }
         || metadata.mode() & GROUP_OR_OTHER_ACCESS != 0
@@ -45,7 +45,7 @@ pub(super) fn read_owner_key(path: &Path) -> Result<SigningKey, CapabilityError>
     }
     let mut encoded = Zeroizing::new(Vec::with_capacity(metadata.len() as usize));
     file.read_to_end(&mut encoded)
-        .map_err(|_| CapabilityError::InvalidConfiguration)?;
+        .map_err(|error| CapabilityError::KeyUnreadable(format!("{}: {error}", path.display())))?;
     parse_signing_key(&encoded)
 }
 
