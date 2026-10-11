@@ -115,64 +115,36 @@ pub async fn list_all_subscriptions() -> Result<Vec<SubscriptionEntry>, String> 
 /// the launcher exported. An empty catalogue means this process was started
 /// without one (a standalone or a test), where every account would look
 /// unnamed; that says nothing, so nothing is reported.
-pub async fn policy_unnamed_subscriptions() -> Vec<SubscriptionEntry> {
-    let configured = configured_subscription_ids();
+pub async fn policy_unnamed_subscriptions() -> Result<Vec<SubscriptionEntry>, String> {
+    let configured = configured_subscription_ids()?;
     if configured.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
-    match list_all_subscriptions().await {
-        Ok(entries) => entries
-            .into_iter()
-            .filter(|entry| !configured.contains(&entry.id))
-            .collect(),
-        Err(error) => {
-            warn!(event = "policy_unnamed_subscription_census_failed", %error);
-            Vec::new()
-        }
-    }
+    Ok(list_all_subscriptions()
+        .await?
+        .into_iter()
+        .filter(|entry| !configured.contains(&entry.id))
+        .collect())
 }
 
-/// Every subscription account in the vault that carries no `brama:agent:` tag.
-///
-/// Discovery finds an account by that tag, so an item that loses it stops
-/// existing for every caller and every screen while its credential stays
-/// perfectly valid. It is the one failure this deployment had no way to see:
-/// the account is not expired, not refused and not retired -- it is simply not
-/// looked at, and nothing that lists subscriptions can say so, because the
-/// listing is the thing that lost it.
-///
-/// Read through the same `list` the per-agent discovery already shells, so
-/// nothing here becomes a second reader of the vault, and metadata only: an
-/// item id, a provider and a subscription id, never a value.
-pub async fn list_unroutable_accounts() -> Vec<UnroutableAccount> {
-    let stdout = match raw_listing(
+/// Incomplete subscription metadata from the same vault listing used by routing.
+/// Metadata only; an unavailable census is an error, never an empty inventory.
+pub async fn list_unroutable_accounts() -> Result<Vec<UnroutableAccount>, String> {
+    let stdout = raw_listing(
         &entitlements_router_bin(),
         "list unroutable subscription accounts",
     )
-    .await
-    {
-        Ok(stdout) => stdout,
-        Err(error) => {
-            warn!(event = "unroutable_account_listing_failed", %error);
-            return Vec::new();
-        }
-    };
-    match parse_unroutable_accounts(&stdout) {
-        Ok(accounts) => accounts,
-        Err(error) => {
-            warn!(event = "unroutable_account_listing_failed", %error);
-            Vec::new()
-        }
-    }
+    .await?;
+    parse_unroutable_accounts(&stdout)
 }
 
 /// Incomplete Brama credential metadata that still identifies an exact
 /// subscription. These entries are renewal candidates, not routable entries:
 /// Weles must prove the declared account maps to the same subscription id;
 /// banking the independent grant adds the routing tags before dispatch.
-pub async fn list_recoverable_subscriptions() -> Vec<SubscriptionEntry> {
-    list_unroutable_accounts()
-        .await
+pub async fn list_recoverable_subscriptions() -> Result<Vec<SubscriptionEntry>, String> {
+    Ok(list_unroutable_accounts()
+        .await?
         .into_iter()
         .filter_map(|account| {
             Some(SubscriptionEntry {
@@ -184,7 +156,7 @@ pub async fn list_recoverable_subscriptions() -> Vec<SubscriptionEntry> {
                 account: account.account,
             })
         })
-        .collect()
+        .collect())
 }
 
 mod listing;

@@ -123,8 +123,7 @@ this diagnostic waits for the discovery operation it was asked to perform.</p>
 
 <h2 id="readyz-answers-503"><code>/readyz</code> answers 503<a class="headerlink" href="#readyz-answers-503" title="Link to this section">&para;</a></h2>
 <p>A readiness probe for one subscription reads that member's recorded credential and quota refusal before requesting its grant. Its diagnostic names the selected subscription and the retained cause, including the recorded quota reopening time when present. It does not claim that every other account failed because this member is unavailable, and a refused credential is not redeemed merely to repeat its recorded refusal.</p>
-<p><code>reason</code> is one of five sentences (<code>src/core/server.rs:2343-2355</code>), each
-naming a different repair:</p>
+<p><code>reason</code> retains the observed readiness problem. Inspect the corresponding fields rather than inferring account health from the HTTP status alone:</p>
 <table>
 <thead>
 <tr>
@@ -150,9 +149,9 @@ naming a different repair:</p>
 <td><code>unredeemable[]</code>, then <code>brama subscription list</code> for the refusal sentence</td>
 </tr>
 <tr>
-<td><code>the vault holds a subscription account whose item carries no agent tag: it is unroutable, and no subscription listing can report it</code></td>
-<td>an account lost its <code>brama:agent:</code> tag; the credential still works and nothing can route to it</td>
-<td><code>unroutable_accounts[]</code> names item and coordinate; restore the tag in the vault</td>
+<td><code>traffic can be served, but the vault holds a subscription account with no agent route</code></td>
+<td>an account lacks routing identity metadata; <code>brama:agent:</code> is provenance, not a shared-pool routing gate</td>
+<td><code>unroutable_accounts[]</code> identifies the actual missing <code>brama:subscription</code>, <code>brama:provider:</code> or <code>brama:id:</code> metadata</td>
 </tr>
 <tr>
 <td><code>every credential was obtained, and at least one active subscription contributes no model: it cannot be routed to</code></td>
@@ -161,6 +160,8 @@ naming a different repair:</p>
 </tr>
 </tbody>
 </table>
+<p>Readiness returns <code>inventory_errors</code> entries with <code>operation</code> and <code>detail</code> when the unroutable-account census or boot-catalog comparison cannot be read. JSON, environment and vault failures retain their actual cause. An empty <code>unroutable_accounts</code> is not a complete census when these errors are present. The response sets <code>degraded:true</code> and <code>operator_action_required:true</code>, and includes the causes in <code>reason</code>. An otherwise working route remains <code>ready:true</code>; inventory diagnostics do not disable it. Desktop's Posture screen displays this warning even while the gateway can serve traffic.</p>
+<p>Qualify the actual endpoint with <code>cargo test --test readiness-inventory -- --ignored --nocapture</code>. Supply <code>BRAMA_READINESS_URL</code>, <code>GATEWAY_SOURCE_REVISION</code>, <code>EXPECTED_READY</code>, <code>EXPECTED_READINESS_HTTP_STATUS</code>, and <code>EXPECTED_INVENTORY_ERROR</code> naming an observed cause. A refused census also requires its <code>EXPECTED_INVENTORY_OPERATION</code>. Use a real isolated gateway with the relevant unreadable vault or malformed boot catalog; the journey does not manufacture a provider, edit a deployment or restart it. For the healthy completed census, supply an empty expected error. Reports retain the test build, request, HTTP status, full returned body and serving revision under <code>target/real-tests/readiness-inventory</code>. This API journey does not qualify the native screen; inspect the same actual report in Posture separately.</p>
 <p>Waiting repairs none of these — every 503 here is an authorization or
 inventory statement, not load. The three subscription-shaped rows are worked
 through in

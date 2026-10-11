@@ -29,14 +29,22 @@ pub(super) struct ServiceFacts {
 }
 
 pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
+    let mut inventory_errors = Vec::new();
     // A subscription item that loses its `brama:subscription` mark disappears
     // from discovery. The broker reports those explicitly without treating
     // unrelated vault entries as subscription accounts.
     let untagged: Vec<Value> = if facts.standalone {
         Vec::new()
     } else {
-        crate::gateway::broker::list_unroutable_accounts()
-            .await
+        let accounts = match crate::gateway::broker::list_unroutable_accounts().await {
+            Ok(accounts) => accounts,
+            Err(detail) => {
+                inventory_errors
+                    .push(json!({"operation": "list_unroutable_accounts", "detail": detail}));
+                Vec::new()
+            }
+        };
+        accounts
             .into_iter()
             .map(|account| {
                 let (provider_str, reason) = match (&account.provider, &account.id) {
@@ -88,7 +96,15 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
     let mut untagged = untagged;
     let mut unnamed = 0usize;
     if !facts.standalone {
-        for entry in crate::gateway::broker::policy_unnamed_subscriptions().await {
+        let entries = match crate::gateway::broker::policy_unnamed_subscriptions().await {
+            Ok(entries) => entries,
+            Err(detail) => {
+                inventory_errors
+                    .push(json!({"operation": "policy_unnamed_subscriptions", "detail": detail}));
+                Vec::new()
+            }
+        };
+        for entry in entries {
             untagged.push(json!({
                 "id": entry.id,
                 "provider": entry.provider,
@@ -143,7 +159,8 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
         && facts.unredeemable.is_empty()
         && untagged.is_empty()
         && facts.unroutable.is_empty()
-        && blocked.is_empty();
+        && blocked.is_empty()
+        && inventory_errors.is_empty();
     let status = if serving || repairable {
         axum::http::StatusCode::OK
     } else {
@@ -171,8 +188,26 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
         "traffic can be served, but at least one active subscription contributes no model"
     } else if !blocked.is_empty() {
         "traffic can be served, but at least one account cannot be signed in by this gateway"
+    } else if !inventory_errors.is_empty() {
+        "traffic can be served, but subscription inventory is incomplete"
     } else {
         "every configured provider credential was obtained, every active subscription redeemed, and every active subscription account is routable"
+    };
+    let reason = if inventory_errors.is_empty() {
+        reason.to_owned()
+    } else {
+        format!(
+            "{reason}; subscription inventory could not be fully read: {}",
+            inventory_errors
+                .iter()
+                .map(|error| format!(
+                    "{}: {}",
+                    error["operation"].as_str().expect("operation"),
+                    error["detail"].as_str().expect("detail")
+                ))
+                .collect::<Vec<_>>()
+                .join("; ")
+        )
     };
     ReadinessReport {
         status,
@@ -187,6 +222,7 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
             "subscriptions": facts.subscriptions,
             "unredeemable": facts.unredeemable,
             "unroutable_accounts": untagged,
+            "inventory_errors": inventory_errors,
             "automatic_sign_in": json!({
                 "host": placement.to_json(),
                 "blocked": blocked,

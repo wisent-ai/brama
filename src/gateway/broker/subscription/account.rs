@@ -59,7 +59,6 @@ pub struct UnroutableAccount {
 
 #[derive(Debug, Deserialize)]
 struct BrokerItems {
-    #[serde(default)]
     items: Vec<BrokerSubscriptionEntry>,
 }
 
@@ -77,19 +76,12 @@ struct BrokerSubscriptionEntry {
     account: Option<String>,
 }
 
-pub(in crate::gateway::broker) fn configured_subscription_ids() -> std::collections::HashSet<String>
-{
-    let Some(catalog) = std::env::var(SUBSCRIPTION_CATALOG_ENV)
-        .ok()
-        .and_then(|encoded| serde_json::from_str::<BrokerItems>(&encoded).ok())
-    else {
-        return std::collections::HashSet::new();
-    };
-    catalog
-        .items
-        .into_iter()
-        .filter_map(|entry| entry.id)
-        .collect()
+pub(in crate::gateway::broker) fn configured_subscription_ids(
+) -> Result<std::collections::HashSet<String>, String> {
+    match configured_subscriptions() {
+        Some(entries) => entries.map(|entries| entries.into_iter().map(|entry| entry.id).collect()),
+        None => Ok(std::collections::HashSet::new()),
+    }
 }
 
 fn complete_field(value: Option<String>) -> Option<String> {
@@ -141,7 +133,11 @@ pub(super) fn parse_subscriptions(
 }
 
 pub(super) fn configured_subscriptions() -> Option<Result<Vec<SubscriptionEntry>, String>> {
-    let encoded = std::env::var(SUBSCRIPTION_CATALOG_ENV).ok()?;
+    let encoded = match std::env::var(SUBSCRIPTION_CATALOG_ENV) {
+        Ok(encoded) => encoded,
+        Err(std::env::VarError::NotPresent) => return None,
+        Err(error) => return Some(Err(format!("read {SUBSCRIPTION_CATALOG_ENV}: {error}"))),
+    };
     Some(parse_subscriptions(encoded.as_bytes(), None))
 }
 

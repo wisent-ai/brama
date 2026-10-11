@@ -98,7 +98,14 @@ pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
     if client().is_none() {
         return configured;
     }
-    let subscription_ids = configured_subscription_ids();
+    let subscription_ids = match configured_subscription_ids() {
+        Ok(ids) => ids,
+        Err(error) => {
+            tracing::warn!(event = "subscription_catalog_invalid", %error,
+                "provider capability map cannot be classified without the subscription catalog");
+            return configured;
+        }
+    };
     if let Some(map) = capability_map(PROVIDER_CAPABILITIES_ENV) {
         for (provider, capability_id) in map {
             if subscription_ids.contains(&provider)
