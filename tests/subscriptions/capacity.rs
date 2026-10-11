@@ -4,6 +4,8 @@
 //! Discovery requires EXPECTED_ACCOUNT, EXPECTED_HARNESS_PROVIDER and EXPECTED_PROVIDER.
 #[path = "identity/authenticator.rs"]
 mod authenticator_identity;
+#[path = "identity/borrowed.rs"]
+mod borrowed_grant;
 #[path = "leases/concurrency.rs"]
 mod concurrent_leases;
 #[path = "discovery/receipt.rs"]

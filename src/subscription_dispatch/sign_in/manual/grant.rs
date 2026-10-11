@@ -1,20 +1,6 @@
-//! A grant Brama did not obtain itself, stored as a subscription's
-//! credential and proved without spending the one thing that makes it a
-//! grant.
-//!
-//! A grant reaches Brama three ways now: the provider issues it for a code
-//! the operator pasted, a harness on the machine already holds one, or a
-//! console hands one over. All three end here, as the one document the
-//! refresh path reads for that provider, so the sweep that keeps it alive
-//! sees nothing unusual about it.
-//!
-//! The proof is a probe, not a refresh. A refresh rotates the refresh token
-//! and revokes the one it replaced; a grant taken from a harness would then
-//! be dead in the harness the moment Brama proved it, and every session the
-//! operator has open on that account would fail at its next refresh. A probe
-//! spends one minimal completion on the access token both sides hold and
-//! rotates nothing; the sweep rotates it later, when the access token nears
-//! its end, which is the moment the harness's copy goes stale anyway.
+//! Independent provider grants admitted through manual code exchange or console.
+//! Stored harness copies retain their provenance and are never adopted as ours.
+//! A probe proves a newly admitted grant without rotating its refresh token.
 
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -59,12 +45,8 @@ pub fn claude_document(access: &str, refresh: &str, expires_at_ms: i64) -> Zeroi
     )
 }
 
-/// The marker a grant carried while Brama could take one from a harness on
-/// the machine. Borrowing is gone — a provider issues one OAuth pair per
-/// sign-in and revokes it when a second holder refreshes, so the copy cost
-/// the operator the session they were working in — and the key stays named
-/// here because grants stored before then still carry it and are stripped
-/// of it on read.
+/// Legacy harness-copy provenance. Its presence refuses admission and provider use;
+/// only a new independent sign-in can replace the marked grant.
 pub const BORROWED_FROM: &str = "brama_borrowed_from";
 
 /// Store the document as this subscription's credential, once it is a grant
@@ -79,18 +61,15 @@ pub async fn store(
     account: Option<&str>,
 ) -> Result<(), String> {
     let _ = origin;
-    let mut parsed: Value = serde_json::from_str(document)
-        .map_err(|_| "the grant is not a JSON document".to_owned())?;
+    let parsed: Value = serde_json::from_str(document)
+        .map_err(|error| format!("the grant is not a JSON document: {error}"))?;
+    if parsed.get(BORROWED_FROM).is_some() {
+        return Err("the grant carries borrowed harness provenance; obtain an independent Brama sign-in instead of adopting or removing its marker".to_owned());
+    }
     if !crate::gateway::renewable(&parsed, provider) {
         return Err(format!(
             "the grant is not the `{provider}` document Brama's refresh path reads, or carries no refresh token; Brama cannot keep a grant it cannot renew"
         ));
-    }
-    // A grant stored today is this gateway's own, so any inherited borrowed
-    // marker goes: keeping it would tell `renewal` never to rotate a pair
-    // nobody else holds, and the account would expire unrenewable.
-    if let Some(object) = parsed.as_object_mut() {
-        object.remove(BORROWED_FROM);
     }
     let stored = Zeroizing::new(parsed.to_string());
     // The account the grant belongs to is written beside it as the item's
@@ -108,11 +87,8 @@ pub async fn store(
     .map_err(|detail| format!("the grant could not be stored: {detail}"))
 }
 
-/// Whether the pool already holds exactly this grant for the subscription:
-/// the sweep hands every borrowed grant over on every pass, and a grant the
-/// harness has not rotated since is nothing to store or prove again. The
-/// borrowed marker and the codex shape's `last_refresh` stamp, written at
-/// read time, are not part of the grant.
+/// Compare grants without the provider's observation-only refresh timestamp.
+/// Borrowed provenance is never discarded or accepted as an unchanged own grant.
 async fn already_stored(provider: &str, subscription_id: &str, document: &str) -> bool {
     let Ok(current) = broker::redeem_subscription_credential(subscription_id, provider).await
     else {
@@ -127,9 +103,11 @@ async fn already_stored(provider: &str, subscription_id: &str, document: &str) -
     ) else {
         return false;
     };
+    if incoming.get(BORROWED_FROM).is_some() {
+        return false;
+    }
     for value in [&mut stored, &mut incoming] {
         if let Some(object) = value.as_object_mut() {
-            object.remove(BORROWED_FROM);
             object.remove("last_refresh");
         }
     }
@@ -177,15 +155,7 @@ pub async fn adopt(
     }
     let source = origin.sentence();
     let who = account.clone().unwrap_or_else(|| "the account".to_owned());
-    // A member the pool disowned is the one case where an identical grant is
-    // news. `renewal` refuses to rotate a borrowed grant and records
-    // `needs_reauthorization` with the harness named, expecting the sweep to
-    // bring that harness's current grant — and the sweep then answered
-    // `unchanged`, because the harness's grant is byte-for-byte the one
-    // already stored. That pair leaves a gateway's whole pool for a provider
-    // disowned while the harness on the machine goes on answering on the
-    // same account. The grant the harness still uses is the evidence the
-    // disowning was wrong, so it is proved again rather than skipped.
+    // A previously refused independent grant must be proved again, not skipped.
     let disowned = crate::subscription_dispatch::usage::needs_reauthorization(subscription_id);
     if !disowned
         && already_stored(provider, subscription_id, &document).await

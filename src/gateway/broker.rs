@@ -285,7 +285,9 @@ pub async fn subscription_credential(
     provider: &str,
 ) -> Result<Secret, Failure> {
     let credential = redeem_subscription_credential(subscription_id, provider).await?;
-    if !super::oauth_refresh::needs_refresh(&credential, provider) {
+    if !subscription::is_borrowed(&credential)
+        && !super::oauth_refresh::needs_refresh(&credential, provider)
+    {
         return Ok(credential);
     }
     drop(credential);

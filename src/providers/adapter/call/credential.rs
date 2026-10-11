@@ -51,6 +51,14 @@ pub(crate) fn credential_key(item: &str, secret: &str) -> Result<String, String>
     let Some(document) = credential_document(trimmed) else {
         return Ok(trimmed.to_string());
     };
+    if document
+        .get(crate::subscription_dispatch::sign_in::manual::grant::BORROWED_FROM)
+        .is_some()
+    {
+        return Err(format!(
+            "Skarbiec item `{item}` carries a borrowed harness grant; Brama requires its own independent sign-in before provider use"
+        ));
+    }
     // An envelope around a bare secret unwraps to a string, and so does a
     // credential that was stored as a quoted JSON string. Both are the key.
     if let Some(key) = document.as_str() {

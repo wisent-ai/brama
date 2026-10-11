@@ -10,16 +10,16 @@ use super::super::super::vault::{existing_item_account, existing_item_tags, put_
 use super::super::tags::subscription_tags_for_write;
 use crate::capability::Secret;
 
-/// The harness a stored grant was borrowed from, for grants written when
-/// borrowing still existed. Nothing writes this marker now; a grant that
-/// still carries it is one Brama must not rotate, because the machine it
-/// was taken from still holds the same pair.
-pub(super) fn borrowed_from(credential: &Secret) -> Option<String> {
-    let raw = credential.expose_utf8().ok()?;
-    let blob: serde_json::Value = serde_json::from_str(raw).ok()?;
-    blob.get(crate::subscription_dispatch::sign_in::manual::grant::BORROWED_FROM)?
-        .as_str()
-        .map(str::to_owned)
+/// Legacy harness copies must not be spent or rotated by this gateway.
+pub(in crate::gateway::broker) fn is_borrowed(credential: &Secret) -> bool {
+    let Ok(raw) = credential.expose_utf8() else {
+        return false;
+    };
+    let Ok(blob) = serde_json::from_str::<serde_json::Value>(raw) else {
+        return false;
+    };
+    blob.get(crate::subscription_dispatch::sign_in::manual::grant::BORROWED_FROM)
+        .is_some()
 }
 
 /// Store a rotated subscription credential, with the tags discovery requires.

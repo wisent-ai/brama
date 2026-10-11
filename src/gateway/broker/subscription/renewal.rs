@@ -32,30 +32,16 @@ pub(in crate::gateway::broker) async fn refresh_subscription_credential_inner(
     // concurrent caller observe the value already written to the vault.
     let _guard = OAUTH_REFRESH_LOCK.lock().await;
     let credential = redeem_subscription_credential(subscription_id, provider).await?;
-    // A grant taken from a harness is the harness's to rotate. Rotating it
-    // here revokes the refresh token the harness holds, and the accounts the
-    // harness is signed into die within the hour of Brama's first refresh of
-    // their copies, the operator's own open session among them. So a borrowed
-    // grant is spent as it stands - its expiry is a hint, and the provider is
-    // the one to say no - and when the provider has said no (`force`: the
-    // request path asking for a rotation after a refusal, or an operator's
-    // refresh), the member needs a sign-in. Nothing copies a harness grant in
-    // any more, so the refusal names the sign-in routes that do exist.
-    let borrowed = borrowed_from(&credential);
-    if !force && (borrowed.is_some() || !oauth_refresh::needs_refresh(&credential, provider)) {
-        return Ok(credential);
-    }
-    if let Some(harness) = borrowed {
+    // Reject legacy harness copies before either use or refresh, even when
+    // their access token has not expired. Reconciliation can retire the member;
+    // only independent Weles sign-in supplies this gateway's own grant.
+    if is_borrowed(&credential) {
         let refused = failure::envelope(
             POINT_CREDENTIAL_PERSIST,
             Code::Config,
             IMPACT_CREDENTIAL_PERSIST,
             format!(
-                "this grant was borrowed from {harness}, which refreshes its own copy; Brama does \
-                 not rotate it, and nothing brings {harness}'s grant over any more. The renewal \
-                 sweep signs the account in through Weles on its own; when it cannot, \
-                 `brama subscription list` names what blocks it under sign_in_blocked, and a \
-                 Google prompt it raises is approved on the account owner's phone"
+                "subscription `{subscription_id}` carries a borrowed harness grant; Brama neither uses nor rotates it. Obtain an independent grant through Weles; `brama subscription list` retains the sign-in refusal when that cannot complete"
             ),
         )
         .with_context("subscription", subscription_id)
@@ -66,6 +52,9 @@ pub(in crate::gateway::broker) async fn refresh_subscription_credential_inner(
             refused.detail.as_deref().unwrap_or_default(),
         );
         return Err(refused);
+    }
+    if !force && !oauth_refresh::needs_refresh(&credential, provider) {
+        return Ok(credential);
     }
     let mut fresh = match oauth_refresh::refresh(&credential, provider).await {
         Ok(fresh) => fresh,
@@ -179,7 +168,8 @@ fn record_refusal(subscription_id: &str, provider: &str, refused: &Failure) {
 
 mod storing;
 
-use storing::{borrowed_from, unusable_document};
+pub(in crate::gateway::broker) use storing::is_borrowed;
+use storing::unusable_document;
 pub use storing::{
     put_subscription_credential, put_subscription_credential_for_account, subscription_account,
 };
