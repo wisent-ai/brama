@@ -18,10 +18,10 @@ pub(in crate::core::server) async fn list_admin_credentials(
     Extension(client_identity): Extension<ModelClientIdentity>,
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
-    let providers = crate::gateway::broker::local_provider_names().map_err(|_| {
+    let providers = crate::gateway::broker::local_provider_names().map_err(|error| {
         api_error(
             StatusCode::CONFLICT,
-            "standalone credential store is not enabled",
+            &format!("list standalone provider credentials: {error}"),
         )
     })?;
     Ok(Json(json!({"providers": providers})))
@@ -52,10 +52,10 @@ pub(in crate::core::server) async fn delete_admin_credential(
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
     let removed = crate::gateway::broker::remove_local_provider_credential(&request.provider)
-        .map_err(|_| {
+        .map_err(|error| {
             api_error(
                 StatusCode::CONFLICT,
-                "standalone credential store is not enabled",
+                &format!("delete standalone provider credential: {error}"),
             )
         })?;
     if !removed {

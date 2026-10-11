@@ -147,11 +147,7 @@ this host keeps, the one a deployment without Skarbiec redeems from.</p>
   <code>{"ok": true, "provider": "&lt;provider&gt;"}</code>. A provider with nothing stored
   is <code>404 provider credential not found</code>.</li>
 </ul>
-<p>When this deployment keeps no standalone store at all, the read and the delete answer
-<code>409 standalone credential store is not enabled</code> and the write is refused with
-the store's own sentence as a <code>400</code>. In every case the request is refused, and
-credentials continue to be redeemed from the authority that owns them
-(<a href="/docs/architecture">architecture</a>).</p>
+<p>Read and delete failures retain the failed operation and the credential store's actual cause with <code>409</code>. A disabled store reports <code>standalone credential store is not enabled</code>; a poisoned credential lock is not misreported as a disabled store. The write retains its store refusal with <code>400</code>. No refusal returns a credential value.</p><p>Qualify the refusal surface with <code>cargo test --test credential-administration -- --ignored --nocapture</code>, supplying <code>BRAMA_ADMIN_URL</code>, <code>BRAMA_ADMIN_BEARER</code>, <code>TEST_SOURCE_REVISION</code>, <code>GATEWAY_SOURCE_REVISION</code> and the independently known <code>EXPECTED_STORE_REFUSAL</code>. Use an isolated real gateway whose standalone store is unavailable. The journey verifies the serving revision and exact read refusal before attempting deletion of a fresh random provider identifier, then requires the same refusal state on a second read. It retains actual HTTP results and source identity; it installs no credential, induces no process failure and does not qualify a poisoned lock unless that is the real fixture's observed condition.</p>
 <h2 id="administered-subscriptions">Administered subscriptions<a class="headerlink" href="#administered-subscriptions" title="Link to this section">&para;</a></h2>
 <p>Four paths act on a subscription the console administers. Each one happens because the
 console asked for it; no timer reaches any of them.</p>

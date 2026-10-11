@@ -29,6 +29,10 @@ path = "tests/subscriptions/overlay.rs"
 name = "readiness-inventory"
 path = "tests/readiness/inventory.rs"
 
+[[test]]
+name = "credential-administration"
+path = "tests/administration/credential-refusal.rs"
+
 [dependencies]
 async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
