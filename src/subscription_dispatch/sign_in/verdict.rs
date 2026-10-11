@@ -1,8 +1,67 @@
-use super::{Blocked, SignInOptions};
+use super::{weles_provider, Blocked, SignInOptions};
 use serde_json::{json, Value};
 
 pub(super) const SIGNED_IN: &str = "signed_in";
 pub(super) const FAILED: &str = "failed";
+/// What the automatic sign-in did for every recorded subscription of one
+/// provider, as the sentence a refusal carries beside "the provider rejected
+/// every credential".
+///
+/// Re-authorization is this product's own job: the refresh sweep signs a
+/// refused subscription back in through Weles with the login row Skarbiec
+/// holds. A refusal that says only "re-authorization required" reads as an
+/// instruction to a person, and asks the operator to sign in by hand for a
+/// sweep that already ran and failed. The refusal says, per subscription,
+/// whether that sweep does not apply, never ran, last succeeded, or failed
+/// and on what.
+pub fn automatic_sign_in_sentence(provider: &str) -> String {
+    let recorded = crate::subscription_dispatch::usage::recorded_subscriptions();
+    let mut ids: Vec<&String> = recorded
+        .iter()
+        .filter(|(_, usage)| usage.provider == provider)
+        .map(|(id, _)| id)
+        .collect();
+    ids.sort();
+    if ids.is_empty() {
+        return format!(
+            "automatic sign-in: no '{provider}' subscription is recorded in the usage ledger"
+        );
+    }
+    if weles_provider(provider).is_none() {
+        return format!("automatic sign-in: provider '{provider}' declares no Weles authorization capability; no independent grant was obtained");
+    }
+    let states: Vec<String> = ids
+        .into_iter()
+        .map(|id| {
+            match crate::journal::is_retired(id) {
+                Ok(true) => return format!("{id}: retired"),
+                Ok(false) => {}
+                Err(cause) => {
+                    return format!("{id}: whether its owner retired it could not be read: {cause}")
+                }
+            }
+            if let Some(failure) = observed_failure(id) {
+                return format!("{id}: failed ({}: {})", failure.code(), failure.detail());
+            }
+            match crate::journal::latest_subscription_sign_in(id) {
+                Ok(Some(latest)) => format!(
+                    "{id}: last {} at {}",
+                    latest
+                        .get("result")
+                        .and_then(Value::as_str)
+                        .unwrap_or("ran"),
+                    latest
+                        .get("at")
+                        .and_then(Value::as_str)
+                        .unwrap_or("an unrecorded time")
+                ),
+                Ok(None) => format!("{id}: never ran"),
+                Err(cause) => format!("{id}: its sign-in history could not be read: {cause}"),
+            }
+        })
+        .collect();
+    format!("automatic sign-in: {}", states.join("; "))
+}
 
 pub(super) fn verdict(
     options: &SignInOptions,
@@ -154,7 +213,7 @@ fn stops_a_new_attempt(
         && ((rejected && (credential_rejected || same_executor)) || (cooling_down && same_executor))
 }
 
-pub(super) fn observed_failure(id: &str) -> Option<Blocked> {
+pub fn observed_failure(id: &str) -> Option<Blocked> {
     let current = crate::subscription_dispatch::usage::usage_for(id);
     if let Some(check) = current
         .as_ref()

@@ -56,12 +56,43 @@ pub(crate) async fn sweep() -> Result<Value, String> {
             Swept::NotDue | Swept::Skipped => {}
         }
     }
+    // A vault item with an exact account identity but no routing mark is
+    // outside the pool, so nothing above saw it. Its mark is restored and
+    // its sign-in scheduled, so the account gets its own grant without
+    // anybody retagging the item by hand; one that cannot be admitted is
+    // reported with its cause and left for the next pass.
+    let mut admitted = Vec::new();
+    let mut refused_admission = Vec::new();
+    for account in broker::list_unroutable_accounts().await? {
+        let Some(id) = account.id.clone() else {
+            continue;
+        };
+        if visited.contains(&id) || crate::journal::is_retired(&id)? {
+            continue;
+        }
+        match crate::subscription_dispatch::sign_in::admit_recoverable(&id).await {
+            Ok(Some(entry)) => {
+                visited.insert(entry.id.clone());
+                admitted.push(
+                    json!({ "id": entry.id, "provider": entry.provider, "item": account.item }),
+                );
+                let scheduled = broker::supports_oauth_refresh(&entry.provider)
+                    && schedule_sign_in(entry.id, entry.provider);
+                checks_scheduled += usize::from(scheduled);
+            }
+            Ok(None) => {}
+            Err(detail) => {
+                refused_admission.push(json!({ "id": id, "item": account.item, "detail": detail }))
+            }
+        }
+    }
     info!(
         event = "credential_refresh_sweep_finished",
         subscriptions = visited.len(),
         refreshed,
         refused,
         sign_in_checks_scheduled = checks_scheduled,
+        recovered = admitted.len(),
         "Finished subscription renewal; scheduled checks are not completed browser logins"
     );
     Ok(json!({
@@ -69,5 +100,7 @@ pub(crate) async fn sweep() -> Result<Value, String> {
         "refreshed": refreshed,
         "refused": refused,
         "sign_in_checks_scheduled": checks_scheduled,
+        "recovered": admitted,
+        "unrecoverable": refused_admission,
     }))
 }

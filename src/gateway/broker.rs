@@ -90,6 +90,18 @@ pub async fn register_discovered_account(
     vault::register_discovered_account(provider, id, account, metadata).await
 }
 
+/// Restore the routing mark on a vault item that identifies an exact
+/// account but lost it: the pool, the renewal sweep and Weles's login
+/// resolution see the member again; no credential is written.
+pub async fn restore_subscription_mark(
+    provider: &str,
+    id: &str,
+    item: &str,
+    account: &str,
+) -> Result<(), String> {
+    vault::restore_subscription_mark(provider, id, item, account).await
+}
+
 /// Redeem a direct provider API credential immediately before the HTTP call.
 ///
 /// Managed launches issue at final use because a short-lived, single-use id

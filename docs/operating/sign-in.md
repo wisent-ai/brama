@@ -110,12 +110,29 @@ credential, or a historical OAuth item missing its exact Weles account schedules
 one Weles sign-in at a time.
 Completed browser runs and permanent account-mapping refusals keep their
 cooldown in the journal, so a Brama restart does not repeat them; a transient
-Weles preflight failure does not consume that cooldown. Historical vault items
-that still carry `brama:id:` and `brama:provider:` but lost routing tags remain
-unavailable to callers; the
-policy grants only Brama enough access to repair them, Weles proves their primary
-account mapping, and a successful donation restores `brama:subscription`,
-`brama:agent:`, and `brama:login:`.
+Weles preflight failure does not consume that cooldown.
+
+A vault item that still names an exact account — `brama:id:`,
+`brama:provider:` and `brama:account:` — but lost its `brama:subscription`
+mark is outside the pool: discovery does not list it, and `/readyz` reports it
+under `unroutable_accounts` with the route that admits it. The sweep admits it
+on its next pass: the mark is restored on the item as it is (no field is
+written, no credential imported, a tag that disagrees with the identity is
+refused by name), the member is scheduled for its Weles sign-in like a
+discovered account, and the independent grant Weles banks is what makes it
+routable. The sweep's answer lists each under `recovered` (`id`, `provider`,
+`item`) and each it could not admit under `unrecoverable` with the cause — an
+item that names no `brama:account:` is refused `names no provider account
+(brama:account:), so no login can be resolved for it; record the account on
+the item and sign in again`. The same admission runs when the account is
+named by hand: `brama subscription sign-in <provider> --by weles
+--subscription-id <id> --reason <why>` here or through the gateway
+(`POST /v1/admin/subscription-pool/sign-in`, the account and agent routes)
+restores the mark before Weles resolves the login, instead of answering
+`subscription not found`; an id that is neither in the pool nor recoverable
+is refused `Skarbiec lists no subscription <id> for <provider>: neither in the
+pool nor as a recoverable account`. Brama Desktop's Subscription Pool sign-in
+goes through the same route.
 
 The real functional journeys in `tests/providers/subscription_real.rs` run one
 Weles login and one provider refresh for each of Claude Code, Codex, and Kimi.

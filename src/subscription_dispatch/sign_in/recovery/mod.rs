@@ -3,6 +3,8 @@
 //! subscription: after confirmed enrolment, resolve the changed account and
 //! run authentication and persisted-credential verification again.
 
+pub(crate) mod membership;
+
 use serde_json::{json, Value};
 
 use super::verdict::{verdict, FAILED};

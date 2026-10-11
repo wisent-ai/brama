@@ -74,12 +74,18 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
             .into_iter()
             .map(|account| {
                 let (provider_str, reason) = match (&account.provider, &account.id) {
-                    (Some(provider), Some(_id)) => {
+                    (Some(provider), Some(id)) => {
                         let refusal = crate::subscription_dispatch::dispatch::no_active_credential_summary(provider);
+                        let admission = match &account.account {
+                            Some(_) => format!(
+                                "the next maintenance pass restores the mark and schedules its sign-in, and `brama subscription sign-in {provider} --by weles --subscription-id {id} --reason <why>` does so now"
+                            ),
+                            None => "it names no provider account (brama:account:), so no sign-in can be resolved for it until the account is recorded on the item".to_string(),
+                        };
                         (provider.clone(), format!(
                             "the vault holds this account and its item carries no 'brama:subscription' mark, \
                              so subscription discovery cannot see it and no caller can route to it; \
-                             every request for this provider answers '{refusal}'"
+                             every request for this provider answers '{refusal}'; {admission}"
                         ))
                     }
                     (Some(provider), None) => {

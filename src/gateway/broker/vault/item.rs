@@ -10,6 +10,7 @@ use serde::Deserialize;
 mod discovery;
 pub(in crate::gateway::broker) use discovery::register as register_discovered_account;
 pub(in crate::gateway::broker) use discovery::remove as remove_subscription_item;
+pub(in crate::gateway::broker) use discovery::restore_mark as restore_subscription_mark;
 
 use super::router::{entitlements_router_bin, raw_listing, router_output, router_refusal};
 

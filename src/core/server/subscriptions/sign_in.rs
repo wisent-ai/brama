@@ -152,10 +152,20 @@ async fn sign_in_selected_subscription(
         None => crate::gateway::broker::list_all_subscriptions().await,
     }
     .map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?;
-    let entry = entries
+    // An id the pool does not list may be a recoverable account: a vault
+    // item with the exact identity but no routing mark, which readiness
+    // reports as unroutable. Its sign-in is the repair, so it is admitted
+    // here instead of answered "not found".
+    let entry = match entries
         .into_iter()
         .find(|entry| entry.id == subscription_id)
-        .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "subscription not found"))?;
+    {
+        Some(entry) => entry,
+        None => crate::subscription_dispatch::sign_in::admit_recoverable(subscription_id)
+            .await
+            .map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?
+            .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "subscription not found"))?,
+    };
     let retired = crate::journal::is_retired(&entry.id)
         .map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?;
     if entry.status != "active" || retired {

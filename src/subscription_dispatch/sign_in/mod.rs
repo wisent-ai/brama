@@ -8,6 +8,7 @@ pub mod worker;
 
 use crate::subscription_dispatch::pool;
 pub use blocked::{Blocked, SignInError};
+pub use recovery::membership::admit_recoverable;
 use serde_json::{json, Value};
 use verdict::{verdict, FAILED, SIGNED_IN};
 use worker::api::{worker_api_base, worker_api_token};
@@ -25,76 +26,8 @@ pub struct SignInOptions {
     pub progress: Option<Progress>,
 }
 
-pub fn weles_provider(provider: &str) -> Option<&'static str> {
-    super::acquire::declaration::provider(provider.trim())
-        .ok()?
-        .weles_provider
-        .as_deref()
-}
-
-pub fn observed_failure(subscription_id: &str) -> Option<Blocked> {
-    verdict::observed_failure(subscription_id)
-}
-
-/// What the automatic sign-in did for every recorded subscription of one
-/// provider, as the sentence a refusal carries beside "the provider rejected
-/// every credential".
-///
-/// Re-authorization is this product's own job: the refresh sweep signs a
-/// refused subscription back in through Weles with the login row Skarbiec
-/// holds. A refusal that says only "re-authorization required" reads as an
-/// instruction to a person, and asks the operator to sign in by hand for a
-/// sweep that already ran and failed. The refusal says, per subscription,
-/// whether that sweep does not apply, never ran, last succeeded, or failed
-/// and on what.
-pub fn automatic_sign_in_sentence(provider: &str) -> String {
-    let recorded = crate::subscription_dispatch::usage::recorded_subscriptions();
-    let mut ids: Vec<&String> = recorded
-        .iter()
-        .filter(|(_, usage)| usage.provider == provider)
-        .map(|(id, _)| id)
-        .collect();
-    ids.sort();
-    if ids.is_empty() {
-        return format!(
-            "automatic sign-in: no '{provider}' subscription is recorded in the usage ledger"
-        );
-    }
-    if weles_provider(provider).is_none() {
-        return format!("automatic sign-in: provider '{provider}' declares no Weles authorization capability; no independent grant was obtained");
-    }
-    let states: Vec<String> = ids
-        .into_iter()
-        .map(|id| {
-            match crate::journal::is_retired(id) {
-                Ok(true) => return format!("{id}: retired"),
-                Ok(false) => {}
-                Err(cause) => {
-                    return format!("{id}: whether its owner retired it could not be read: {cause}")
-                }
-            }
-            if let Some(failure) = observed_failure(id) {
-                return format!("{id}: failed ({}: {})", failure.code(), failure.detail());
-            }
-            match crate::journal::latest_subscription_sign_in(id) {
-                Ok(Some(latest)) => format!(
-                    "{id}: last {} at {}",
-                    latest
-                        .get("result")
-                        .and_then(Value::as_str)
-                        .unwrap_or("ran"),
-                    latest
-                        .get("at")
-                        .and_then(Value::as_str)
-                        .unwrap_or("an unrecorded time")
-                ),
-                Ok(None) => format!("{id}: never ran"),
-                Err(cause) => format!("{id}: its sign-in history could not be read: {cause}"),
-            }
-        })
-        .collect();
-    format!("automatic sign-in: {}", states.join("; "))
-}
+pub use verdict::{automatic_sign_in_sentence, observed_failure};
+pub use worker::weles_provider;
 
 pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, SignInError> {
     let result = recovery::execute(&options).await;
@@ -155,7 +88,25 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
         status: None,
     })?;
     let id = match options.subscription_id.as_deref() {
-        Some(id) if !id.is_empty() => id.to_owned(),
+        Some(id) if !id.is_empty() => {
+            // An exact id the pool does not list may be a recoverable account
+            // (complete identity, lost routing mark): admitted here, so its
+            // sign-in banks the independent grant that makes it routable
+            // instead of Weles answering "subscription not found".
+            let listed = crate::gateway::broker::list_all_subscriptions().await?;
+            if !listed.iter().any(|entry| entry.id == id) {
+                recovery::membership::admit_recoverable(id)
+                    .await
+                    .map_err(SignInError::Dependency)?
+                    .ok_or_else(|| {
+                        SignInError::Dependency(format!(
+                            "Skarbiec lists no subscription {id} for {}: neither in the pool nor as a recoverable account",
+                            options.provider
+                        ))
+                    })?;
+            }
+            id.to_owned()
+        }
         _ => {
             let entries = crate::gateway::broker::list_all_subscriptions().await?;
             let mut matching = Vec::new();
@@ -167,12 +118,12 @@ async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
                     matching.push(entry);
                 }
             }
-            if matching.len() != 1 {
+            let [only] = matching.as_slice() else {
                 return Err(SignInError::Dependency(format!(
                     "Skarbiec lists {} active subscriptions for {}; an exact subscription id is required",
                     matching.len(), options.provider)));
-            }
-            matching[0].id.clone()
+            };
+            only.id.clone()
         }
     };
     let client = reqwest::Client::builder()

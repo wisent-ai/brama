@@ -29,6 +29,8 @@ mod native_harness;
 mod pending_discovery;
 #[path = "discovery/reconciliation/refusal.rs"]
 mod reconciliation_refusal;
+#[path = "identity/recoverable.rs"]
+mod recoverable_account;
 #[path = "discovery/sign_in.rs"]
 mod remote_sign_in;
 #[path = "resets/policy.rs"]
@@ -217,8 +219,14 @@ fn discovered_harness_account_persists_once_with_its_observed_plan() {
             "window {limit_id} is older than the harness's fetch"
         );
         if recorded_at_ms == fetched_at_ms {
-            assert_eq!(reading["used_fraction"], limit["amount"]["usedFraction"], "{limit_id}");
-            assert_eq!(reading["resets_at_ms"], limit["window"]["resetsAt"], "{limit_id}");
+            assert_eq!(
+                reading["used_fraction"], limit["amount"]["usedFraction"],
+                "{limit_id}"
+            );
+            assert_eq!(
+                reading["resets_at_ms"], limit["window"]["resetsAt"],
+                "{limit_id}"
+            );
             assert_eq!(reading["label"], limit["label"], "{limit_id}");
             harness_readings.push(limit_id.to_owned());
         }
