@@ -171,9 +171,15 @@ pub(crate) async fn run(json: bool) {
             }
             let resolved = installation::print_units(&layout);
             installation::print_generations(&layout, resolved.as_deref());
-            let config_dir = installation::print_service_env(&layout, resolved.as_deref());
-            let providers = capability::print_policy_grants(&layout, &config_dir);
-            capability::print_alias_routes(&layout, &providers);
+            match installation::print_service_env(&layout, resolved.as_deref()) {
+                Some(config_dir) => {
+                    let providers = capability::print_policy_grants(&layout, &config_dir);
+                    capability::print_alias_routes(&layout, &providers);
+                }
+                None => emit(
+                    "=== policy grants against authority routes\nnot compared: the serving generation's trust config directory is unknown, as the service env section says".into(),
+                ),
+            }
             reachability::print_reachability(&layout).await;
             reachability::print_boot_attempt(&layout);
         }

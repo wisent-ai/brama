@@ -12,6 +12,12 @@ use serde_json::Value;
 use super::trust::{registry_verdict, router_answers, CAPABILITY_COMMAND};
 use super::{moment, Layout, SERVICE_LABEL};
 
+// `say!` writes through `super::emit`, which from `env` is this module.
+use super::emit;
+
+mod env;
+pub(super) use env::print_service_env;
+
 /// The files a complete generation carries.
 const REQUIRED_FILES: [&str; 5] = [
     "bin/brama",
@@ -222,83 +228,4 @@ pub(super) fn print_generations(layout: &Layout, resolved: Option<&Path>) {
             say!("    registry: {line}");
         }
     }
-}
-
-/// The service env beside the runtime coordinates; returns the trust config
-/// directory of the generation that serves. A value is shown only when it is
-/// an existing path, so no secret the env carries is ever printed.
-pub(super) fn print_service_env(layout: &Layout, resolved: Option<&Path>) -> PathBuf {
-    say!("\n=== service env");
-    for (name, value) in &layout.settings {
-        if Path::new(value).exists() {
-            say!("  {name}={value}");
-        } else {
-            say!("  {name}=<not a path; value not shown>");
-        }
-    }
-    let (config_dir, runtime_dir) = match layout.release_record("active") {
-        Some(record) => {
-            let text = |key: &str| {
-                record
-                    .get(key)
-                    .map(|value| {
-                        value
-                            .as_str()
-                            .map(str::to_string)
-                            .unwrap_or_else(|| value.to_string())
-                    })
-                    .unwrap_or_else(|| "None".into())
-            };
-            let root = layout.release_root("active").unwrap_or_default();
-            let generation = root.parent().map(Path::to_path_buf).unwrap_or_default();
-            say!(
-                "active release: {} pid={} port={} root={}",
-                text("version"),
-                text("pid"),
-                text("port"),
-                root.display()
-            );
-            let runtime = layout.home.join(".stado/run/brama").join(format!(
-                "{}-{}",
-                text("version"),
-                text("port")
-            ));
-            (layout.config_dir_for(&generation), runtime)
-        }
-        None => {
-            let generation = resolved.map(|path| {
-                let darwin = path
-                    .file_name()
-                    .is_some_and(|name| name.to_string_lossy().starts_with("darwin-"));
-                if darwin {
-                    path.parent().unwrap_or(path).to_path_buf()
-                } else {
-                    path.to_path_buf()
-                }
-            });
-            say!("active release: absent; inspecting legacy current");
-            match generation {
-                Some(generation) => {
-                    let name = generation
-                        .file_name()
-                        .map(|name| name.to_string_lossy().into_owned())
-                        .unwrap_or_default();
-                    (
-                        layout.config_dir_for(&generation),
-                        layout
-                            .home
-                            .join(".stado/run")
-                            .join(format!("brama-skarbiec-{name}")),
-                    )
-                }
-                None => (
-                    layout.home.join(".config/brama/trust"),
-                    layout.home.join(".stado/run/brama-skarbiec"),
-                ),
-            }
-        }
-    };
-    say!("config dir:  {}", config_dir.display());
-    say!("runtime dir: {}", runtime_dir.display());
-    config_dir
 }
