@@ -83,12 +83,6 @@ pub struct AcquireOptions {
 static IN_FLIGHT: LazyLock<std::sync::Arc<tokio::sync::Mutex<()>>> =
     LazyLock::new(|| std::sync::Arc::new(tokio::sync::Mutex::new(())));
 
-/// Every declared provider, in name order: the providers a maintenance pass
-/// decides for.
-pub fn acquirable_providers() -> Vec<&'static str> {
-    declaration::declared_providers()
-}
-
 /// Decide, and when every condition holds, buy one account and prove it.
 ///
 /// `Err` is a request that cannot be decided at all (an unknown provider, no
@@ -117,10 +111,11 @@ pub async fn acquire_account(options: AcquireOptions) -> Result<Value, String> {
 /// Decide for a maintenance pass and, when every condition holds, start the
 /// purchase without holding the pass for the length of a browser run. The
 /// answer is the decision; the purchase's own verdict is journaled and logged
-/// when it ends.
+/// when it ends. Every provider `providers.json` declares is decided for, in
+/// name order; there is no second list of acquirable providers.
 pub async fn maintenance_pass() -> Value {
     let mut verdicts = Vec::new();
-    for provider in acquirable_providers() {
+    for provider in declaration::declared_providers() {
         let options = AcquireOptions {
             provider: provider.to_owned(),
             reason: format!("no {provider} account in the pool can serve: each has spent its plan or cannot be used"),
