@@ -13,7 +13,10 @@ use zeroize::Zeroizing;
 
 use super::unattended;
 
+mod membership;
 pub(crate) mod pool;
+
+pub(crate) use membership::{disown, forget, reinstate};
 
 const HTTP_SUCCESS: std::ops::Range<u16> = 200..300;
 
@@ -97,132 +100,6 @@ async fn answer(response: reqwest::Response, gateway: &str) -> Result<(u16, Valu
         format!("the gateway {gateway} answered HTTP {status} with a body that is not JSON ({error}): {text}")
     })?;
     Ok((status, body))
-}
-
-/// Give one member back: the gateway retires it and forgets its credential.
-///
-/// This removes the members left over from the borrowing this product used
-/// to allow: a grant taken from a machine that was also using it, which is
-/// how a provider comes to revoke the session that machine was in.
-pub(crate) async fn disown(
-    gateway: &str,
-    bearer: &str,
-    subscription_id: &str,
-    reason: &str,
-) -> Result<String, String> {
-    let subscription_id = subscription_id.trim();
-    if subscription_id.is_empty() {
-        return Err("name the subscription to disown".into());
-    }
-    if reason.trim().is_empty() {
-        return Err("--reason must say why this member is given back".into());
-    }
-    let response = client()?
-        .post(format!(
-            "{}/v1/admin/subscription-pool/disown",
-            gateway.trim_end_matches('/')
-        ))
-        .bearer_auth(bearer)
-        .json(&json!({"subscription_id": subscription_id, "reason": reason}))
-        .send()
-        .await
-        .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
-    let (status, body) = answer(response, gateway).await?;
-    if !HTTP_SUCCESS.contains(&status) {
-        return Err(format!(
-            "the gateway refused to retire {subscription_id}: HTTP {status}: {}",
-            refusal(&body)
-        ));
-    }
-    Ok(format!(
-        "{subscription_id} was retired: the gateway forgot its credential, and any machine that \
-         signed that account in keeps its own session"
-    ))
-}
-
-/// Drop one member the pool only remembers: the gateway writes the reason
-/// to its journal and removes the usage history row, so the next pool
-/// report no longer lists it.
-pub(crate) async fn forget(
-    gateway: &str,
-    bearer: &str,
-    subscription_id: &str,
-    reason: &str,
-) -> Result<String, String> {
-    let subscription_id = subscription_id.trim();
-    if subscription_id.is_empty() {
-        return Err("name the subscription to forget".into());
-    }
-    if reason.trim().is_empty() {
-        return Err("--reason must say why this member is forgotten".into());
-    }
-    let request = client()?
-        .post(format!(
-            "{}/v1/admin/subscription-pool/forget",
-            gateway.trim_end_matches('/')
-        ))
-        .bearer_auth(bearer)
-        .json(&json!({"subscription_id": subscription_id, "reason": reason}));
-    let response = stado_wait::http::request(request)
-        .await
-        .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
-    let (status, body) = answer(response, gateway).await?;
-    if !HTTP_SUCCESS.contains(&status) {
-        return Err(format!(
-            "the gateway refused to forget {subscription_id}: HTTP {status}: {}",
-            refusal(&body)
-        ));
-    }
-    match body.get("detail").and_then(Value::as_str) {
-        Some(detail) => Ok(detail.to_owned()),
-        None => Err(format!(
-            "the gateway {gateway} accepted forgetting {subscription_id} but its answer carries \
-             no detail: {body}"
-        )),
-    }
-}
-
-/// Put one retired member back in the rotation, because this deployment
-/// uses that account after all.
-///
-/// A retirement was permanent: the gateway answered `no active credential
-/// for agent` for a member it had given back, its own sign-in report said
-/// `retired`, and no command in the product could take that back. This is
-/// that command.
-pub(crate) async fn reinstate(
-    gateway: &str,
-    bearer: &str,
-    subscription_id: &str,
-    reason: &str,
-) -> Result<String, String> {
-    let subscription_id = subscription_id.trim();
-    if subscription_id.is_empty() {
-        return Err("name the subscription to reinstate".into());
-    }
-    if reason.trim().is_empty() {
-        return Err("--reason must say why this member is used again".into());
-    }
-    let response = client()?
-        .post(format!(
-            "{}/v1/admin/subscription-pool/reinstate",
-            gateway.trim_end_matches('/')
-        ))
-        .bearer_auth(bearer)
-        .json(&json!({"subscription_id": subscription_id, "reason": reason}))
-        .send()
-        .await
-        .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
-    let (status, body) = answer(response, gateway).await?;
-    if !HTTP_SUCCESS.contains(&status) {
-        return Err(format!(
-            "the gateway refused to reinstate {subscription_id}: HTTP {status}: {}",
-            refusal(&body)
-        ));
-    }
-    Ok(format!(
-        "{subscription_id} is in the rotation again; it holds no grant of this gateway's own \
-         until a sign-in obtains one"
-    ))
 }
 
 /// Ask the gateway that holds the credentials to refresh one provider's
