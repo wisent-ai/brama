@@ -110,3 +110,23 @@ pub(super) async fn dispatch(plan: DispatchPlan<'_>, selected_model: &str) -> Di
         }
     }
 }
+
+/// How a dispatched call ended, as the concurrency measurement reads it: a
+/// provider's rate limit or no free pool credential is a capacity refusal.
+pub(super) fn settled(dispatched: &DispatchedCall) -> crate::journal::concurrency::Settled {
+    use crate::journal::concurrency::Settled;
+    use crate::types::{GatewayRefusal, ProviderRefusal};
+    match dispatched {
+        DispatchedCall::Committed(_) => Settled::Answered,
+        DispatchedCall::Buffered(resp) => {
+            match crate::core::server::refusal::classed::failure_class(resp) {
+                None => Settled::Answered,
+                Some(
+                    ProviderRefusal::RateLimited
+                    | ProviderRefusal::Gateway(GatewayRefusal::SubscriptionUnavailable),
+                ) => Settled::RefusedForCapacity,
+                Some(_) => Settled::Other,
+            }
+        }
+    }
+}

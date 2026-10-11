@@ -25,61 +25,23 @@ use crate::core::server::subscriptions::account::account_agent_for_route;
 use crate::subscription_dispatch::{
     is_subscription_model, provider_requires_caller_identity, RoutedStream,
 };
-use crate::types::{BillingTarget, ModelRequest, ModelResponse};
+use crate::types::{ModelRequest, ModelResponse};
 
 use super::request::{
     is_any_subscription_selector, is_any_vision_capable_subscription_selector,
     task_subscription_selector,
 };
 
-use dispatch::DispatchPlan;
+use dispatch::{settled, DispatchPlan};
+use lease::leased_target;
+
+mod lease;
+pub(crate) use lease::{ACCOUNT_HEADER, SUBSCRIPTION_HEADER};
 
 /// Whether this call was answered in one piece or committed as a stream.
 pub(super) enum DispatchedCall {
     Buffered(ModelResponse),
     Committed(RoutedStream),
-}
-
-/// The header a session on a leased subscription sends with every request.
-pub(crate) const SUBSCRIPTION_HEADER: &str = "x-brama-subscription";
-/// The account the leased member declares, when it declares one.
-pub(crate) const ACCOUNT_HEADER: &str = "x-brama-account";
-
-/// The billing target the request headers name, `None` when they name none,
-/// refused by name when the header is not `<provider>:<subscription_id>`.
-/// The account is the member's declared one, or its id when it declares
-/// none, as the rotation counts members.
-fn leased_target(headers: &HeaderMap) -> Result<Option<BillingTarget>, String> {
-    let Some(named) = headers.get(SUBSCRIPTION_HEADER) else {
-        return Ok(None);
-    };
-    let named = named.to_str().map_err(|_| {
-        format!("{SUBSCRIPTION_HEADER} is not text; it names <provider>:<subscription_id>")
-    })?;
-    let (provider, subscription) = named
-        .split_once(':')
-        .map(|(provider, subscription)| (provider.trim(), subscription.trim()))
-        .filter(|(provider, subscription)| !provider.is_empty() && !subscription.is_empty())
-        .ok_or_else(|| {
-            format!("{SUBSCRIPTION_HEADER} is {named:?}; it names <provider>:<subscription_id>")
-        })?;
-    let account = match headers.get(ACCOUNT_HEADER) {
-        Some(account) => account
-            .to_str()
-            .map_err(|_| format!("{ACCOUNT_HEADER} is not text; it names the member's account"))?
-            .trim()
-            .to_string(),
-        None => String::new(),
-    };
-    Ok(Some(BillingTarget {
-        provider_id: provider.to_string(),
-        account_id: if account.is_empty() {
-            subscription.to_string()
-        } else {
-            account
-        },
-        subscription_id: subscription.to_string(),
-    }))
 }
 
 /// What the routing decision produced besides the call itself, so every
@@ -312,26 +274,6 @@ pub(super) async fn route_model_call(
     .await;
     admission.settle(settled(&dispatched));
     Ok((dispatched, meta))
-}
-
-/// How a dispatched call ended, as the concurrency measurement reads it: a
-/// provider's rate limit or no free pool credential is a capacity refusal.
-fn settled(dispatched: &DispatchedCall) -> crate::journal::concurrency::Settled {
-    use crate::journal::concurrency::Settled;
-    use crate::types::{GatewayRefusal, ProviderRefusal};
-    match dispatched {
-        DispatchedCall::Committed(_) => Settled::Answered,
-        DispatchedCall::Buffered(resp) => {
-            match crate::core::server::refusal::classed::failure_class(resp) {
-                None => Settled::Answered,
-                Some(
-                    ProviderRefusal::RateLimited
-                    | ProviderRefusal::Gateway(GatewayRefusal::SubscriptionUnavailable),
-                ) => Settled::RefusedForCapacity,
-                Some(_) => Settled::Other,
-            }
-        }
-    }
 }
 
 fn uuid_v4() -> String {
