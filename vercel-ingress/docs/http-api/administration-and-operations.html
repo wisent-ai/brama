@@ -42,7 +42,7 @@ which is <code>true</code>; <code>boundaries</code>
 (<code>{"credentials":"skarbiec","releases":"stado","routing":"brama"}</code>);
 <code>providers[]</code> in the same shape <code>/stats</code> reports; and
 <code>routes</code>, the registry document as read from the configured file. When that file
-will not read, the answer is <code>503 route registry unavailable</code>.</p>
+will not read, the answer is <code>503 read route registry &lt;path&gt;: &lt;cause&gt;</code>, retaining the actual filesystem, parser or validation refusal.</p>
 <p>The registry document under <code>routes</code> carries exactly three known top-level
 fields — the schema version, <code>deployments</code> and <code>routes</code> — and
 <code>routes</code> maps each alias to its single destination:</p>
@@ -70,23 +70,23 @@ anything else — including a list of further routes — does not write. Refusal
 <li>a <code>400</code> route-validation refusal when the stated route is unsupported,
   duplicates the destination the alias already holds, or is unavailable on this
   deployment;</li>
-<li><code>409 route update was rejected</code> when validation of the resulting document
-  fails.</li>
+<li><code>503</code> with the credential authority's operation and cause when route inspection fails, before any registry mutation;</li>
+<li><code>409 update alias `&lt;alias&gt;` in route registry &lt;path&gt;: &lt;cause&gt;</code> for a registry read, validation or persistence failure.</li>
 </ul>
 <p><strong>DELETE <code>/v1/admin/routes</code></strong> takes exactly
 <code>{"alias"}</code> and removes that alias from the document. It answers
 <code>400 invalid route alias</code> for a malformed name,
 <code>409 required route aliases cannot be deleted</code> for an alias in the compiled-in
 contract, <code>404 route alias not found</code> for one the document does not carry, and
-<code>409 route deletion was rejected</code> when the resulting document does not
-validate.</p>
+<code>409 delete alias `&lt;alias&gt;` from route registry &lt;path&gt;: &lt;cause&gt;</code> for a registry read, validation or persistence failure.
+Brama Desktop receives these same messages through its existing failed-mutation and snapshot diagnostics.</p>
 <p>Both answer <code>{"ok": true, "routes": &lt;document&gt;}</code>, the whole registry
 document as committed, so the caller reads the new state rather than assuming it. The write
 is validated first and then committed by atomic owner-only replacement: either the file is
 the new document or it is the old one. Nothing partial is left on disk, and a rejected write
 leaves the file exactly as it was.</p>
 <p>What the resulting states look like from the client side is
-<a href="/docs/http-api/discovery-and-subscriptions#get-v1aliases"><code>GET /v1/aliases</code></a>.</p>
+<a href="/docs/http-api/discovery-and-subscriptions#get-v1aliases"><code>GET /v1/aliases</code></a>.</p><p>Registry-refusal qualification: <code>cargo test --test credential-administration -- --ignored --exact route_refusal::invalid_registry_preserves_read_and_mutation_causes</code>. Use an isolated, quiescent real gateway whose invalid registry is readable by the qualification process. Supply <code>TEST_SOURCE_REVISION</code>, <code>GATEWAY_SOURCE_REVISION</code>, <code>BRAMA_ADMIN_URL</code>, <code>BRAMA_ADMIN_BEARER</code>, <code>EXPECTED_REGISTRY_PATH</code> and the independently observed <code>EXPECTED_REGISTRY_CAUSE</code>. The test verifies build identity and the snapshot refusal before attempting writes; it uses only a fresh alias owned by that run, checks both mutation causes and byte-for-byte unchanged registry contents, and retains HTTP evidence under <code>target/real-tests/registry-refusal</code>. It does not create the invalid fixture, change credentials or contact a model provider.</p>
 <h2 id="model-categories">Model categories<a class="headerlink" href="#model-categories" title="Link to this section">&para;</a></h2>
 <p><strong>PUT <code>/v1/admin/categories</code></strong> takes exactly
 <code>{"category", "providers", "routes", "terms"}</code> — the name and the whole

@@ -44,7 +44,16 @@ pub(in crate::core::server) async fn update_admin_route(
     })?;
     let routes =
         crate::core::inference_routes::update_route(path, &request.alias, &request.primary)
-            .map_err(|_| api_error(StatusCode::CONFLICT, "route update was rejected"))?;
+            .map_err(|error| {
+                api_error(
+                    StatusCode::CONFLICT,
+                    &format!(
+                        "update alias `{}` in route registry {}: {error}",
+                        request.alias,
+                        path.display()
+                    ),
+                )
+            })?;
     Ok(Json(json!({"ok": true, "routes": routes})))
 }
 
@@ -74,7 +83,14 @@ pub(in crate::core::server) async fn delete_admin_route(
             if error == "route alias not found" {
                 api_error(StatusCode::NOT_FOUND, &error)
             } else {
-                api_error(StatusCode::CONFLICT, "route deletion was rejected")
+                api_error(
+                    StatusCode::CONFLICT,
+                    &format!(
+                        "delete alias `{}` from route registry {}: {error}",
+                        request.alias,
+                        path.display()
+                    ),
+                )
             }
         })?;
     Ok(Json(json!({"ok": true, "routes": routes})))

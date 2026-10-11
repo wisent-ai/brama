@@ -21,10 +21,10 @@ pub(in crate::core::server) async fn admin_snapshot(
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
     let routes = match aliases.routes_file.as_deref() {
-        Some(path) => crate::core::inference_routes::snapshot(path).map_err(|_| {
+        Some(path) => crate::core::inference_routes::snapshot(path).map_err(|error| {
             api_error(
                 StatusCode::SERVICE_UNAVAILABLE,
-                "route registry unavailable",
+                &format!("read route registry {}: {error}", path.display()),
             )
         })?,
         None => json!({
