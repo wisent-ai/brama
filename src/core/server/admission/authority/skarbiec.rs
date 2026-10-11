@@ -36,10 +36,7 @@ pub(super) async fn ask_authority(bearer: &str) -> WorkloadAuthorityAnswer {
     };
     let introspect = format!("{}/v1/tokens/introspect", base.trim_end_matches('/'));
     let response = match client
-        .post(format!(
-            "{}/v1/tokens/introspect",
-            base.trim_end_matches('/')
-        ))
+        .post(&introspect)
         .header("X-Consumer", consumer)
         .bearer_auth(own.trim())
         .json(&json!({"token": bearer}))
@@ -51,20 +48,34 @@ pub(super) async fn ask_authority(bearer: &str) -> WorkloadAuthorityAnswer {
             return WorkloadAuthorityAnswer::Unavailable(format!("POST {introspect}: {error}"))
         }
     };
-    if response.status().is_server_error() || response.status() == StatusCode::TOO_MANY_REQUESTS {
-        return WorkloadAuthorityAnswer::Unavailable(format!(
-            "POST {introspect} answered {}",
-            response.status()
-        ));
-    }
-    if !response.status().is_success() {
+    let status = response.status();
+    if !status.is_success() && !status.is_server_error() && status != StatusCode::TOO_MANY_REQUESTS
+    {
         return WorkloadAuthorityAnswer::Rejected;
     }
-    let answer: Value = match response.json().await {
+    let mut body = match response.text().await {
+        Ok(body) => body,
+        Err(error) => {
+            return WorkloadAuthorityAnswer::Unavailable(format!(
+                "POST {introspect} answered {status}; cannot read its response body: {error}"
+            ));
+        }
+    };
+    if !status.is_success() {
+        for credential in [bearer, own.trim()] {
+            if !credential.is_empty() && body.contains(credential) {
+                body = body.replace(credential, "[redacted]");
+            }
+        }
+        return WorkloadAuthorityAnswer::Unavailable(format!(
+            "POST {introspect} answered {status}: {body}"
+        ));
+    }
+    let answer: Value = match serde_json::from_str(&body) {
         Ok(answer) => answer,
         Err(error) => {
             return WorkloadAuthorityAnswer::Unavailable(format!(
-                "POST {introspect} answered a body that is not JSON: {error}"
+                "POST {introspect} answered {status} with a body that is not JSON: {error}"
             ))
         }
     };

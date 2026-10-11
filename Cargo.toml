@@ -17,6 +17,10 @@ path = "src/lib.rs"
 name = "subscription-capacity"
 path = "tests/subscriptions/capacity.rs"
 
+[[test]]
+name = "workload-authority"
+path = "tests/authentication/authority.rs"
+
 [dependencies]
 async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
