@@ -165,7 +165,8 @@ pub async fn record_accounts(provider: &str) -> Result<Value, String> {
 pub(super) fn accounts(rows: &[Value], capacity: Vec<capacity::Account>) -> Value {
     let mut per_provider: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut unattributed: Vec<String> = Vec::new();
-    let mut ledger_only: Vec<String> = Vec::new();
+    // Retired or disabled members: in the pool, but no account of its count.
+    let mut inactive: Vec<String> = Vec::new();
     for row in rows {
         let id = row.get("id").and_then(Value::as_str).unwrap_or_default();
         let provider = row
@@ -173,7 +174,7 @@ pub(super) fn accounts(rows: &[Value], capacity: Vec<capacity::Account>) -> Valu
             .and_then(Value::as_str)
             .unwrap_or_default();
         if row.get("status").and_then(Value::as_str) != Some("active") {
-            ledger_only.push(id.to_string());
+            inactive.push(id.to_string());
             continue;
         }
         match identity(row) {
@@ -195,7 +196,7 @@ pub(super) fn accounts(rows: &[Value], capacity: Vec<capacity::Account>) -> Valu
         "total": total,
         "per_provider": per_provider,
         "members_without_account": unattributed,
-        "ledger_only_members": ledger_only,
+        "inactive_members": inactive,
         "capacity": capacity,
     })
 }

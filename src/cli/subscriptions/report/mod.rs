@@ -63,9 +63,9 @@ pub(super) fn print_accounts(accounts: Option<&Value>) {
             .map_or(0, Vec::len)
     };
     println!(
-        "{} member(s) declare no account, {} remembered only by the usage ledger",
+        "{} member(s) declare no account, {} not active (retired or disabled)",
         count("members_without_account"),
-        count("ledger_only_members")
+        count("inactive_members")
     );
     capacity::print_capacity(accounts);
 }

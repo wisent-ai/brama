@@ -136,8 +136,10 @@ different numbers and reading one as the other is how a deployment holding five
 accounts reads as fifteen: it carries <code>total</code>, <code>per_provider</code> —
 one list of account coordinates per provider — plus
 <code>members_without_account</code>, the members whose own record states no account,
-and <code>ledger_only_members</code>, the ids the vault
-no longer lists and only the usage ledger remembers. Two members naming one
+and <code>inactive_members</code>, the retired or disabled members, in the pool but
+no account of its count; ids the vault no longer lists and only the usage ledger
+remembers are no members at all and stand in the document's own
+<code>remembered</code> list. Two members naming one
 account are one account. An account is read from the member itself — the
 <code>brama:account:</code> tag on its vault item, or that item's
 <code>account_ref</code> — and from nothing else. A member's id, its label and the
