@@ -103,6 +103,35 @@ if [ "$result" = acquired ]; then
   grep -qi "email:$account|" "$ROOT/omp-accounts.txt" || fail "omp does not hold the bought account $account"
 fi
 
+# A session asks for a lease. The gateway either gives one, or, when every
+# usable member is full or none can serve, buys for that shortage before it
+# answers: a lease answered after a purchase carries the verdict, which must
+# be `acquired` and name the shortage; a refusal must carry the verdict of
+# the acquisition it started. The session's lease is released afterwards.
+SESSION="real-test-acquire-$RUN"
+run lease subscription lease take claude-code --session-id "$SESSION" --holder brama-real-test \
+  --gateway-consumer "$CONSUMER" --bearer-role "$BEARER_ROLE" --json
+if [ "$outcome" = accepted ]; then
+  [ "$(field lease .lease.session_id)" = "$SESSION" ] || fail "the lease answered is not this session's"
+  if [ "$(field lease '.acquisition != null')" = true ]; then
+    [ "$(field lease .acquisition.result)" = acquired ] ||
+      fail "a lease answered after a purchase carries a verdict that is not acquired"
+    case "$(field lease .acquisition.shortage)" in sessions_full | spent | unusable) ;;
+      *) fail "the purchase behind the lease named no shortage" ;;
+    esac
+  fi
+  run release subscription lease release --session-id "$SESSION" \
+    --gateway-consumer "$CONSUMER" --bearer-role "$BEARER_ROLE" --json
+  [ "$outcome" = accepted ] || fail "the test session's lease could not be released"
+else
+  grep -Eq 'pool_full|no_usable_member|limit_unstated|dependency_unavailable|invalid_request' "$ROOT/lease.stderr" ||
+    fail "the lease refusal named no code"
+  if grep -Eq 'pool_full|no_usable_member' "$ROOT/lease.stderr"; then
+    grep -q '"acquisition"' "$ROOT/lease.stderr" ||
+      fail "a lease refused for a shortage carries no acquisition verdict"
+  fi
+fi
+
 touch "$ROOT/passed"
 echo "PASS" >>"$REPORT"
 echo "PASS: $REPORT"

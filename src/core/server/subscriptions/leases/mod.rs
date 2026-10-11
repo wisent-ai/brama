@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use crate::core::server::admission::identity::ModelClientIdentity;
 use crate::core::server::refusal::{api_error, api_error_with_details, ApiError};
 use crate::subscription_dispatch::acquire::{
-    acquire_account, declaration, AcquireOptions, Trigger,
+    acquire_account, declaration, AcquireOptions, Trigger, ACQUIRED,
 };
 use crate::subscription_dispatch::leases;
 
@@ -52,10 +52,12 @@ pub(in crate::core::server) async fn list_leases(
 }
 
 /// Take a lease for one session. A pool whose every usable member carries
-/// the operator's limit is refused `409 pool_full` with each member's count,
-/// and an acquisition is started for that shortage: its verdict is in the
-/// refusal's `details.acquisition`, so the caller reads what was bought or
-/// why not.
+/// the operator's limit (`409 pool_full`), or whose members none can serve
+/// (`503 no_usable_member`), starts an acquisition for that shortage. When
+/// the acquisition bought an account, the lease is taken again and the
+/// session runs on the bought account, with the acquisition's verdict beside
+/// the lease; otherwise the refusal carries the verdict in
+/// `details.acquisition`, so the caller reads what was bought or why not.
 pub(in crate::core::server) async fn take_lease(
     Extension(client_identity): Extension<ModelClientIdentity>,
     headers: HeaderMap,
@@ -70,57 +72,100 @@ pub(in crate::core::server) async fn take_lease(
             ),
         )
     })?;
-    match leases::take(&request, scope.agent()).await {
-        Ok(taken) => Ok(Json(serde_json::to_value(taken).map_err(|error| {
-            api_error(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                &format!("the lease cannot be encoded: {error}"),
-            )
-        })?)),
-        Err(refused @ leases::Refused::PoolFull { .. }) => {
-            let acquisition = match acquire_account(AcquireOptions {
-                provider: request.provider.clone(),
-                reason: refused.detail(),
-                trigger: Trigger::SessionsFull,
-                progress: None,
-            })
-            .await
-            {
-                Ok(verdict) => verdict,
-                Err(error) => json!({"result": "undecidable", "detail": error}),
-            };
-            Err(api_error_with_details(
-                StatusCode::CONFLICT,
-                "pool_full",
-                &refused.detail(),
-                json!({"refusal": refused, "acquisition": acquisition}),
-            ))
+    let refused = match leases::take(&request, scope.agent()).await {
+        Ok(taken) => return taken_json(&taken, None),
+        Err(refused) => refused,
+    };
+    let (status, code, trigger) = match &refused {
+        leases::Refused::PoolFull { .. } => {
+            (StatusCode::CONFLICT, "pool_full", Trigger::SessionsFull)
         }
-        Err(refused @ leases::Refused::Incomplete { .. }) => Err(api_error_with_details(
-            StatusCode::BAD_REQUEST,
-            "invalid_request",
-            &refused.detail(),
-            json!({"refusal": refused}),
-        )),
-        Err(refused @ leases::Refused::LimitUnstated { .. }) => Err(api_error_with_details(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "limit_unstated",
-            &refused.detail(),
-            json!({"refusal": refused}),
-        )),
-        Err(refused @ leases::Refused::NoUsableMember { .. }) => Err(api_error_with_details(
+        leases::Refused::NoUsableMember { .. } => (
             StatusCode::SERVICE_UNAVAILABLE,
             "no_usable_member",
-            &refused.detail(),
-            json!({"refusal": refused}),
-        )),
-        Err(refused @ leases::Refused::Unavailable { .. }) => Err(api_error_with_details(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "dependency_unavailable",
-            &refused.detail(),
-            json!({"refusal": refused}),
+            Trigger::NoUsableMember,
+        ),
+        leases::Refused::Incomplete { .. } => {
+            return Err(refusal(
+                StatusCode::BAD_REQUEST,
+                "invalid_request",
+                &refused,
+                None,
+            ))
+        }
+        leases::Refused::LimitUnstated { .. } => {
+            return Err(refusal(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "limit_unstated",
+                &refused,
+                None,
+            ))
+        }
+        leases::Refused::Unavailable { .. } => {
+            return Err(refusal(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "dependency_unavailable",
+                &refused,
+                None,
+            ))
+        }
+    };
+    let acquisition = match acquire_account(AcquireOptions {
+        provider: request.provider.clone(),
+        reason: refused.detail(),
+        trigger,
+        progress: None,
+    })
+    .await
+    {
+        Ok(verdict) => verdict,
+        Err(error) => json!({"result": "undecidable", "detail": error}),
+    };
+    if acquisition["result"] != json!(ACQUIRED) {
+        return Err(refusal(status, code, &refused, Some(acquisition)));
+    }
+    // The bought account is in the pool now; the same session takes its
+    // lease again, and the account that ends it is the one just bought or
+    // whichever member the bought one freed.
+    match leases::take(&request, scope.agent()).await {
+        Ok(taken) => taken_json(&taken, Some(acquisition)),
+        Err(after) => Err(api_error_with_details(
+            status,
+            code,
+            &format!(
+                "an account was bought for this shortage, and the lease was refused again: {}",
+                after.detail()
+            ),
+            json!({"refusal": after, "first_refusal": refused, "acquisition": acquisition}),
         )),
     }
+}
+
+/// A lease taken, with the acquisition that made room for it when one did.
+fn taken_json(taken: &leases::Taken, acquisition: Option<Value>) -> Result<Json<Value>, ApiError> {
+    let mut answer = serde_json::to_value(taken).map_err(|error| {
+        api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &format!("the lease cannot be encoded: {error}"),
+        )
+    })?;
+    if let Some(acquisition) = acquisition {
+        answer["acquisition"] = acquisition;
+    }
+    Ok(Json(answer))
+}
+
+fn refusal(
+    status: StatusCode,
+    code: &str,
+    refused: &leases::Refused,
+    acquisition: Option<Value>,
+) -> ApiError {
+    let mut details = json!({"refusal": refused});
+    if let Some(acquisition) = acquisition {
+        details["acquisition"] = acquisition;
+    }
+    api_error_with_details(status, code, &refused.detail(), details)
 }
 
 #[derive(Debug, Deserialize)]

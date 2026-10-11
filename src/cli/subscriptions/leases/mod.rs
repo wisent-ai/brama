@@ -132,7 +132,13 @@ pub(crate) async fn take(
         crate::cli::print_json(&taken);
         return;
     }
+    // A lease the gateway could give only after buying an account carries
+    // the purchase verdict beside it, printed whole.
+    let acquisition = taken.get("acquisition").cloned();
     let taken: Taken = answered(taken, "lease");
+    if let Some(acquisition) = acquisition {
+        println!("bought for this session: {acquisition}");
+    }
     print_lease(&taken.lease);
     println!(
         "{}: {} of {} sessions on {}",

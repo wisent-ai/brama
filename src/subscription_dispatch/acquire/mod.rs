@@ -33,6 +33,10 @@ mod purchase;
 pub mod resets;
 mod weles;
 
+/// The one reading of a plan fraction every decision shares: the pool's
+/// account capacity and the acquisition read the same limit.
+pub(crate) use decide::pool_state::{at_limit, WHOLE_LIMIT};
+
 use std::sync::LazyLock;
 
 use serde_json::{json, Value};
@@ -50,14 +54,17 @@ pub const FAILED: &str = "failed";
 const REQUESTED: &str = "requested";
 
 /// Who asked for the acquisition. An operator's request runs even after a
-/// failed attempt; a maintenance pass does not. A lease refused because every
-/// usable subscription carries the operator's limit of sessions buys for
-/// that shortage: the plans are not spent, the accounts are.
+/// failed attempt; a maintenance pass does not, nor does a lease. A lease
+/// refused because every usable subscription carries the operator's limit of
+/// sessions buys for that shortage: the plans are not spent, the accounts
+/// are. A lease refused because no member of the provider can serve at all
+/// buys as a maintenance pass would: every account spent or unusable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Trigger {
     Operator,
     Maintenance,
     SessionsFull,
+    NoUsableMember,
 }
 
 impl Trigger {
@@ -66,6 +73,7 @@ impl Trigger {
             Self::Operator => "operator",
             Self::Maintenance => "maintenance",
             Self::SessionsFull => "sessions_full",
+            Self::NoUsableMember => "no_usable_member",
         }
     }
 }
