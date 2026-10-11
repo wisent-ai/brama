@@ -175,6 +175,7 @@ pub(crate) fn document(
             .with_context("attempted_at_ms", observed_at_ms.to_string()),
         ));
     }
+    let acquisition = acquisitions(&mut errors, observed_at_ms);
     let ok = errors.is_empty();
     json!({
         "ok": ok,
@@ -183,8 +184,41 @@ pub(crate) fn document(
         "scope": scope.named(),
         "errors": errors,
         "accounts": accounts(&rows, capacity::accounts(&observed, observed_at_ms)),
+        "acquisition": acquisition,
         "subscriptions": rows,
     })
+}
+
+/// The newest acquisition journaled for every provider `providers.json`
+/// declares, `null` for one never bought for: what `brama subscription list`
+/// prints as `last purchase` and Brama Desktop shows under its purchase
+/// panel. A journal that cannot be read is one failure of the report, named
+/// once, and the object is left out rather than read as "never bought".
+fn acquisitions(errors: &mut Vec<Value>, observed_at_ms: i64) -> Value {
+    let mut latest = serde_json::Map::new();
+    for provider in crate::subscription_dispatch::acquire::declaration::declared_providers() {
+        match crate::journal::latest_subscription_acquisition(provider) {
+            Ok(Some(record)) => {
+                latest.insert(provider.to_owned(), record);
+            }
+            Ok(None) => {
+                latest.insert(provider.to_owned(), Value::Null);
+            }
+            Err(cause) => {
+                errors.push(failure_json(
+                    &failure::envelope(
+                        "brama.subscriptions.acquisition",
+                        Code::Config,
+                        "subscription acquisition journal",
+                        cause,
+                    )
+                    .with_context("attempted_at_ms", observed_at_ms.to_string()),
+                ));
+                return Value::Null;
+            }
+        }
+    }
+    Value::Object(latest)
 }
 
 pub(crate) async fn inventory(scope: &PoolScope) -> (Vec<SubscriptionEntry>, Vec<Failure>) {
