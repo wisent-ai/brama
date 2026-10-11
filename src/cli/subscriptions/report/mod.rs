@@ -6,6 +6,8 @@
 
 use serde_json::Value;
 
+mod membership;
+
 /// How many accounts the pool holds, which is not how many members it has,
 /// and which accounts those are.
 ///
@@ -85,6 +87,7 @@ pub(super) fn print_pool(report: &Value) {
         .count();
     println!("{live} of {} subscription credentials are live", rows.len());
     print_accounts(report.get("accounts"));
+    membership::print_acquisitions(report);
     println!(
         "usage report: {}",
         if report.get("ok").and_then(Value::as_bool) == Some(true) {
@@ -104,6 +107,7 @@ pub(super) fn print_pool(report: &Value) {
                 .map(|label| format!(" ({label})"))
                 .unwrap_or_default()
         );
+        membership::print_membership(row);
         if let Some(expires_at) = text(row, "expires_at") {
             println!("    expires_at: {expires_at}");
         }
