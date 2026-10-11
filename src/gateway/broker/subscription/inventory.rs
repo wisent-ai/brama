@@ -26,8 +26,17 @@ use super::donation::donated_subscriptions;
 ///
 /// This always performs live discovery. The trusted startup catalog belongs to
 /// internal routing only and cannot turn a failed user-facing read into success.
-/// `agent_id` names the caller for the log; the pool is the same for every one.
+/// `agent_id` names the caller in the log of a failed discovery; the pool is
+/// the same for every one.
 pub async fn discover_subscriptions(agent_id: &str) -> Result<Vec<SubscriptionEntry>, String> {
+    let discovered = live_pool().await;
+    if let Err(error) = &discovered {
+        warn!(event = "subscription_discovery_failed", agent_id, %error, "live subscription discovery failed");
+    }
+    discovered
+}
+
+async fn live_pool() -> Result<Vec<SubscriptionEntry>, String> {
     let broker = entitlements_router_bin()?;
     let mut entries = live_subscriptions(&broker, true).await?;
     for donated in donated_subscriptions(None)? {
@@ -36,7 +45,6 @@ pub async fn discover_subscriptions(agent_id: &str) -> Result<Vec<SubscriptionEn
             None => entries.push(donated),
         }
     }
-    let _ = agent_id;
     Ok(entries)
 }
 
