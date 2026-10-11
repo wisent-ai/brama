@@ -107,6 +107,11 @@ pub(super) fn print_pool(report: &Value) {
         if let Some(expires_at) = text(row, "expires_at") {
             println!("    expires_at: {expires_at}");
         }
+        // The sessions holding a lease on this member; an unreadable lease
+        // register leaves it unstated and is named among the errors below.
+        if let Some(sessions) = row.get("live_sessions").and_then(Value::as_u64) {
+            println!("    live sessions: {sessions}");
+        }
         if let Some(discovery) = row.get("discovery").filter(|value| value.is_object()) {
             println!(
                 "    discovered account: {} plan={} plan_at={} first_seen={} sources={}",

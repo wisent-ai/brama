@@ -131,10 +131,11 @@ pub(crate) fn document(
             });
             row["expires_at"] = expires_at(recorded.as_ref());
             row["last_redeem_error"] = last_redeem_error(recorded.as_ref(), observed_at_ms);
-            // The sessions the member carries, from the lease register; an
-            // unreadable register is a failure of this report, named once.
+            // The sessions the member carries, from the lease register: a
+            // member no live lease names carries none. Only an unreadable
+            // register is `null`, and is a failure of this report, named once.
             row["live_sessions"] = match &leases {
-                Ok(counts) => json!(counts.get(&entry.id).copied()),
+                Ok(counts) => json!(counts.get(&entry.id).copied().into_iter().sum::<u64>()),
                 Err(_) => Value::Null,
             };
             row

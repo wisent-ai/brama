@@ -101,6 +101,19 @@ run released-again subscription lease release --session-id "$SESSION" "${at_gate
 run list-after subscription lease list "${at_gateway[@]}" --json
 jq -e --arg id "$lease" '.leases[] | select(.id == $id)' "$ROOT/list-after.json" >/dev/null &&
   fail "the released lease $lease is still listed"
+# A member no live lease names carries no session: the pool report says so
+# with a number, never the null that means an unread register.
+none=$(jq -n '[] | length')
+run pool-after subscription list "${at_gateway[@]}" --json
+listed_after=$(jq -r --arg s "$subscription" --argjson none "$none" '.counts[$s] // $none' "$ROOT/list-after.json")
+reported_after=$(jq -r --arg s "$subscription" '.subscriptions[] | select(.id == $s) | .live_sessions' "$ROOT/pool-after.json")
+[ "$listed_after" = "$reported_after" ] ||
+  fail "after the release the lease list says $subscription carries $listed_after, the pool report says $reported_after"
+jq -e '[.subscriptions[] | .live_sessions | numbers] | length == ([.subscriptions[]] | length)' "$ROOT/pool-after.json" >/dev/null ||
+  fail "a member of a readable lease register has no live_sessions count"
+run pool-text subscription list "${at_gateway[@]}"
+grep -qF "live sessions: " "$ROOT/pool-text.json" || fail "the pool report text does not print each member's live sessions"
+echo "ok: after the release $subscription carries $reported_after in both registers and the text report prints the counts" >>"$REPORT"
 
 # --- a full pool refuses the next session, and releases free it ---
 FULL="$ROOT/full-sessions.txt"
