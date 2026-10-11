@@ -210,9 +210,19 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
         match request.body(body).send().await {
             Ok(answer) => {
                 let status = answer.status();
-                let text = answer.text().await.unwrap_or_default();
-                if status.is_success() {
-                    let payload: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
+                // An answer whose body cannot be read, or a success that is not
+                // JSON, did not serve the alias: it is a refusal with its cause.
+                let outcome: Result<Value, String> = match answer.text().await {
+                    Err(error) => Err(format!("unreadable answer: {}", error.without_url())),
+                    Ok(text) if !status.is_success() => Err(text.trim().replace('\n', " ")),
+                    Ok(text) => serde_json::from_str(&text).map_err(|error| {
+                        format!(
+                            "answer is not JSON ({error}): {}",
+                            text.trim().replace('\n', " ")
+                        )
+                    }),
+                };
+                if let Ok(payload) = &outcome {
                     let said = payload
                         .pointer("/choices/0/message/content")
                         .and_then(Value::as_str)
@@ -225,9 +235,8 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
                         "aliases",
                         json!({ "alias": alias, "status": status.as_u16(), "model": served, "said": said }),
                     );
-                } else {
+                } else if let Err(refusal) = outcome {
                     unserved += 1;
-                    let refusal = text.trim().replace('\n', " ");
                     say(
                         format!("{alias} {} {refusal}", status.as_u16()),
                         "aliases",
