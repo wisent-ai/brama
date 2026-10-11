@@ -113,33 +113,32 @@ fn client() -> Option<CapabilityClient> {
 /// accepted for standalone callers, but its refusal is steady state: obtain a
 /// fresh capability and redeem that. Neither path holds plaintext beyond the
 /// returned [`Secret`].
-pub async fn provider_credential(provider: &str) -> Option<Secret> {
+pub async fn provider_credential(provider: &str) -> Result<Secret, Failure> {
     if !crate::providers::adapter::provider_requires_credential(provider) {
-        return Some(Secret::from_bytes(Vec::new()));
-    }
-    if local_provider_credentials_enabled() {
-        return local_provider_credential(provider);
+        return Ok(Secret::from_bytes(Vec::new()));
     }
     let resource = provider_resource(provider);
-    match obtain_credential(
-        &resource,
-        configured_capability(PROVIDER_CAPABILITIES_ENV, provider),
-    )
-    .await
-    {
-        Ok(secret) => Some(secret),
-        Err(refused) => {
-            let refused = refused.with_context("provider", provider);
-            warn!(
-                event = "provider_credential_unavailable",
-                provider,
-                envelope = %refused.to_json(),
-                "{}",
-                refused.render()
-            );
-            None
-        }
-    }
+    let result = if local_provider_credentials_enabled() {
+        local_provider_credential(provider)
+            .map_err(|detail| credential_failure(detail, &resource, Code::Config))
+    } else {
+        obtain_credential(
+            &resource,
+            configured_capability(PROVIDER_CAPABILITIES_ENV, provider),
+        )
+        .await
+    };
+    result.map_err(|refused| {
+        let refused = refused.with_context("provider", provider);
+        warn!(
+            event = "provider_credential_unavailable",
+            provider,
+            envelope = %refused.to_json(),
+            "{}",
+            refused.render()
+        );
+        refused
+    })
 }
 
 /// The one cascade every managed credential comes through: a capability the

@@ -63,20 +63,24 @@ pub(super) async fn calculate_readiness(
     };
 
     let provider_results = join_all(providers.iter().map(|provider| async {
-        let obtained = crate::gateway::broker::provider_credential(provider)
+        let refusal = crate::gateway::broker::provider_credential(provider)
             .await
-            .is_some();
-        (provider.clone(), obtained)
+            .err()
+            .map(|failure| failure.render());
+        (provider.clone(), refusal)
     }))
     .await;
-    let provider_available = provider_results.iter().any(|(_, obtained)| *obtained);
+    let provider_available = provider_results
+        .iter()
+        .any(|(_, refusal)| refusal.is_none());
     let mut checked = Vec::with_capacity(provider_results.len());
     let mut denied = Vec::new();
-    for (provider, obtained) in provider_results {
+    for (provider, refusal) in provider_results {
+        let obtained = refusal.is_none();
         if !obtained {
             denied.push(provider.clone());
         }
-        checked.push(json!({ "provider": provider, "credential": obtained }));
+        checked.push(json!({ "provider": provider, "credential": obtained, "reason": refusal }));
     }
     publish_interim(ReadinessReport::interim(
         provider_available,

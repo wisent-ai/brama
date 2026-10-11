@@ -90,6 +90,25 @@ async fn inventory_read_failures_remain_visible_in_readiness() {
         .as_array()
         .expect("typed inventory diagnostic array");
     if let Some(operation) = operation {
+        if operation == "provider_credential" {
+            let provider = required("EXPECTED_INVENTORY_PROVIDER");
+            assert!(errors.iter().any(|entry| entry["operation"] == operation
+                && entry["provider"] == provider
+                && entry["detail"]
+                    .as_str()
+                    .is_some_and(|detail| detail.contains(&cause))));
+            let row = body["providers"]
+                .as_array()
+                .expect("direct provider readiness")
+                .iter()
+                .find(|row| row["provider"] == provider)
+                .expect("selected provider result");
+            assert_eq!(row["credential"], false);
+            assert!(row["reason"]
+                .as_str()
+                .expect("direct credential refusal")
+                .contains(&cause));
+        }
         assert_eq!(body["degraded"], true);
         assert_eq!(body["operator_action_required"], true);
         assert!(

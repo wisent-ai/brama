@@ -10,7 +10,7 @@
 //! caller above tests to know which world it is in.
 
 use std::collections::HashMap;
-use std::sync::{LazyLock, RwLock};
+use std::sync::{LazyLock, OnceLock, RwLock};
 
 use zeroize::{Zeroize, Zeroizing};
 
@@ -20,8 +20,7 @@ use crate::capability::Secret;
 type LocalCredential = Zeroizing<Vec<u8>>;
 type LocalCredentialMap = HashMap<String, LocalCredential>;
 
-pub(super) static LOCAL_PROVIDER_CREDENTIALS: LazyLock<RwLock<Option<LocalCredentialMap>>> =
-    LazyLock::new(|| RwLock::new(None));
+static LOCAL_PROVIDER_CREDENTIALS: OnceLock<RwLock<LocalCredentialMap>> = OnceLock::new();
 pub(super) static LOCAL_SUBSCRIPTION_CREDENTIALS: LazyLock<RwLock<LocalCredentialMap>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
@@ -48,32 +47,26 @@ pub fn install_local_provider_credentials(encoded: &mut String) -> Result<(), St
         );
         value.zeroize();
     }
-    let mut installed = LOCAL_PROVIDER_CREDENTIALS
-        .write()
-        .map_err(|_| "local provider credential lock is poisoned".to_owned())?;
-    if installed.is_some() {
-        return Err("local provider credentials were already installed".to_owned());
-    }
-    *installed = Some(credentials);
-    Ok(())
+    LOCAL_PROVIDER_CREDENTIALS
+        .set(RwLock::new(credentials))
+        .map_err(|_| "local provider credentials were already installed".to_owned())
 }
 
 pub fn local_provider_credentials_enabled() -> bool {
+    LOCAL_PROVIDER_CREDENTIALS.get().is_some()
+}
+
+fn local_provider_store() -> Result<&'static RwLock<LocalCredentialMap>, String> {
     LOCAL_PROVIDER_CREDENTIALS
-        .read()
-        .is_ok_and(|credentials| credentials.is_some())
+        .get()
+        .ok_or_else(|| "standalone credential store is not enabled".to_owned())
 }
 
 pub fn local_provider_names() -> Result<Vec<String>, String> {
-    let credentials = LOCAL_PROVIDER_CREDENTIALS
+    let credentials = local_provider_store()?
         .read()
         .map_err(|_| "local provider credential lock is poisoned".to_owned())?;
-    let mut names = credentials
-        .as_ref()
-        .ok_or_else(|| "standalone credential store is not enabled".to_owned())?
-        .keys()
-        .cloned()
-        .collect::<Vec<_>>();
+    let mut names = credentials.keys().cloned().collect::<Vec<_>>();
     names.sort();
     Ok(names)
 }
@@ -83,12 +76,9 @@ pub fn put_local_provider_credential(provider: &str, credential: &str) -> Result
     if provider.is_empty() || credential.is_empty() {
         return Err("provider and credential must contain valid values".to_owned());
     }
-    let mut credentials = LOCAL_PROVIDER_CREDENTIALS
+    let mut credentials = local_provider_store()?
         .write()
         .map_err(|_| "local provider credential lock is poisoned".to_owned())?;
-    let credentials = credentials
-        .as_mut()
-        .ok_or_else(|| "standalone credential store is not enabled".to_owned())?;
     credentials.insert(
         provider.to_owned(),
         Zeroizing::new(credential.as_bytes().to_vec()),
@@ -97,22 +87,19 @@ pub fn put_local_provider_credential(provider: &str, credential: &str) -> Result
 }
 
 pub fn remove_local_provider_credential(provider: &str) -> Result<bool, String> {
-    let mut credentials = LOCAL_PROVIDER_CREDENTIALS
+    let mut credentials = local_provider_store()?
         .write()
         .map_err(|_| "local provider credential lock is poisoned".to_owned())?;
-    let credentials = credentials
-        .as_mut()
-        .ok_or_else(|| "standalone credential store is not enabled".to_owned())?;
     Ok(credentials.remove(provider).is_some())
 }
 
-pub(super) fn local_provider_credential(provider: &str) -> Option<Secret> {
-    LOCAL_PROVIDER_CREDENTIALS
+pub(super) fn local_provider_credential(provider: &str) -> Result<Secret, String> {
+    local_provider_store()?
         .read()
-        .ok()?
-        .as_ref()?
+        .map_err(|_| "local provider credential lock is poisoned".to_owned())?
         .get(provider)
         .map(|value| Secret::from_bytes(value.as_slice().to_vec()))
+        .ok_or_else(|| format!("standalone credential store has no credential for `{provider}`"))
 }
 
 pub(super) fn put_local_subscription_credential(

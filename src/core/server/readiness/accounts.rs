@@ -30,6 +30,20 @@ pub(super) struct ServiceFacts {
 
 pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
     let mut inventory_errors = Vec::new();
+    if facts.standalone {
+        if let Err(detail) = crate::gateway::broker::local_provider_names() {
+            inventory_errors.push(json!({"operation": "local_provider_names", "detail": detail}));
+        }
+    }
+    for checked in &facts.checked {
+        if let Some(detail) = checked["reason"].as_str() {
+            inventory_errors.push(json!({
+                "operation": "provider_credential",
+                "provider": checked["provider"],
+                "detail": detail,
+            }));
+        }
+    }
     // A subscription item that loses its `brama:subscription` mark disappears
     // from discovery. The broker reports those explicitly without treating
     // unrelated vault entries as subscription accounts.

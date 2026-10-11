@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 use std::sync::{LazyLock, RwLock};
 
-use super::standalone::LOCAL_PROVIDER_CREDENTIALS;
+use super::standalone::{local_provider_credentials_enabled, local_provider_names};
 use super::subscription::configured_subscription_ids;
 use super::{capability_map, client, provider_resource};
 use crate::capability::CapabilityRef;
@@ -83,16 +83,15 @@ fn configured_provider_grants() -> std::collections::HashSet<String> {
 /// Parsing the capability map and grant routes once avoids rebuilding the
 /// workload client for every model in a catalogue with thousands of entries.
 pub fn configured_provider_capabilities() -> std::collections::HashSet<String> {
-    if let Some(configured) = LOCAL_PROVIDER_CREDENTIALS
-        .read()
-        .ok()
-        .and_then(|credentials| {
-            credentials
-                .as_ref()
-                .map(|values| values.keys().cloned().collect())
-        })
-    {
-        return configured;
+    if local_provider_credentials_enabled() {
+        return match local_provider_names() {
+            Ok(names) => names.into_iter().collect(),
+            Err(error) => {
+                tracing::warn!(event = "standalone_provider_inventory_unreadable", %error,
+                    "standalone provider discovery failed; managed credentials are not eligible");
+                std::collections::HashSet::new()
+            }
+        };
     }
     let mut configured = configured_provider_grants();
     if client().is_none() {

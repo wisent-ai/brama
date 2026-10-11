@@ -108,14 +108,18 @@ async fn discover_direct_provider_models() -> Vec<provider_registry::RegistryMod
         {
             continue;
         }
-        let Some(secret) = broker::provider_credential(&provider).await else {
-            continue;
-        };
-        let Ok(secret) = secret.expose_utf8() else {
-            continue;
-        };
-        let resource = broker::provider_resource(&provider);
-        match provider_registry::discover_models(&provider, &resource, secret).await {
+        let discovery = async {
+            let secret = broker::provider_credential(&provider)
+                .await
+                .map_err(|failure| failure.render())?;
+            let secret = secret.expose_utf8().map_err(|error| {
+                format!("read direct `{provider}` credential as UTF-8: {error}")
+            })?;
+            let resource = broker::provider_resource(&provider);
+            provider_registry::discover_models(&provider, &resource, secret).await
+        }
+        .await;
+        match discovery {
             Ok(models) => {
                 if let Ok(mut cache) = REGISTRY_MODEL_CACHE.lock() {
                     cache.insert(

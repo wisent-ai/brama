@@ -178,18 +178,15 @@ async fn direct_credential(route_id: &str) -> Result<(String, String), Refusal> 
     }
     let credential = broker::provider_credential(&provider)
         .await
-        .ok_or_else(|| {
-            Refusal::gateway(
-                GatewayRefusal::DependencyUnavailable,
-                format!("direct '{provider}' credential is unavailable"),
-            )
+        .map_err(|refused| {
+            Refusal::gateway(GatewayRefusal::DependencyUnavailable, refused.render())
         })?;
     let credential = credential
         .expose_utf8()
-        .map_err(|_| {
+        .map_err(|error| {
             Refusal::gateway(
                 GatewayRefusal::ProviderFailure,
-                format!("direct '{provider}' credential is not valid UTF-8"),
+                format!("direct '{provider}' credential is not valid UTF-8: {error}"),
             )
         })?
         .to_string();
