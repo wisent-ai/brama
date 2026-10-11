@@ -89,22 +89,41 @@ fn tool_calls_from_response(response: &ModelResponse) -> Vec<ToolCall> {
 /// `stop_reason` is derived, not reported: the internal response does not
 /// carry the provider's reason, so a tool call reads as `tool_use` and
 /// anything else as `end_turn` -- the two readings a caller can act on.
-pub fn anthropic_response(id: &str, model: &str, response: &ModelResponse) -> Value {
+///
+/// A tool call whose arguments are not JSON is refused with the tool's name
+/// and the arguments as the model wrote them: reading them as `{}` handed
+/// the caller a call to run with none of the arguments the model meant.
+/// Arguments that are empty are a call without arguments.
+pub fn anthropic_response(
+    id: &str,
+    model: &str,
+    response: &ModelResponse,
+) -> Result<Value, String> {
     let tool_calls = tool_calls_from_response(response);
     let mut content = Vec::new();
     if !response.content.is_empty() {
         content.push(json!({ "type": "text", "text": response.content }));
     }
     for call in &tool_calls {
+        let arguments = call.function.arguments.trim();
+        let input = if arguments.is_empty() {
+            json!({})
+        } else {
+            serde_json::from_str::<Value>(arguments).map_err(|error| {
+                format!(
+                    "the model called {} with arguments that are not JSON ({error}): {arguments}",
+                    call.function.name
+                )
+            })?
+        };
         content.push(json!({
             "type": "tool_use",
             "id": call.id,
             "name": call.function.name,
-            "input": serde_json::from_str::<Value>(&call.function.arguments)
-                .unwrap_or_else(|_| json!({})),
+            "input": input,
         }));
     }
-    json!({
+    Ok(json!({
         "id": id,
         "type": "message",
         "role": "assistant",
@@ -116,7 +135,7 @@ pub fn anthropic_response(id: &str, model: &str, response: &ModelResponse) -> Va
             "input_tokens": response.input_tokens,
             "output_tokens": response.output_tokens,
         },
-    })
+    }))
 }
 
 /// Shape one buffered internal response as an OpenAI Responses object.

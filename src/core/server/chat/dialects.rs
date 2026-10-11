@@ -55,15 +55,10 @@ pub(in crate::core::server) async fn anthropic_messages(
             }
             crate::core::perf::record(&requested_model, resp.latency_ms, resp.output_tokens);
             let model = meta.reported_model(&requested_model, &resp.model);
-            (
-                StatusCode::OK,
-                Json(crate::core::wire::anthropic_response(
-                    &message_id,
-                    &model,
-                    &resp,
-                )),
-            )
-                .into_response()
+            match crate::core::wire::anthropic_response(&message_id, &model, &resp) {
+                Ok(message) => (StatusCode::OK, Json(message)).into_response(),
+                Err(message) => api_error(StatusCode::BAD_GATEWAY, &message).into_response(),
+            }
         }
         DispatchedCall::Committed(routed) => {
             log_stream_commit(&routed, &client_identity, &meta, &requested_model);
