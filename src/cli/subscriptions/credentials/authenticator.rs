@@ -1,11 +1,21 @@
-use clap::Subcommand;
+use clap::{ArgGroup, Subcommand};
 #[derive(Subcommand)]
 pub(crate) enum AuthenticatorCommand {
-    /// List which accounts need a second factor to be signed in, and which of them hold the secret that answers one
+    /// List which accounts need a second factor to be signed in, and which of them hold the secret that answers one, here or on the gateway that holds the vault
+    #[command(group(ArgGroup::new("destination").args(["gateway", "gateway_consumer"])))]
     List {
         /// Narrow the list to one provider; without it every provider is listed
         #[arg(long)]
         provider: Option<String>,
+        /// The gateway whose vault holds the seeds; the console's bearer is read from stdin
+        #[arg(long)]
+        gateway: Option<String>,
+        /// Resolve the gateway through Stado's service directory as this consumer
+        #[arg(long)]
+        gateway_consumer: Option<String>,
+        /// Read the console's bearer from the vault item playing this role (its `token` field) instead of from stdin
+        #[arg(long, value_name = "ROLE", requires = "destination")]
+        bearer_role: Option<String>,
         /// Print the list as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,

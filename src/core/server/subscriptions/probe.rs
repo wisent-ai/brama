@@ -29,6 +29,12 @@ pub(in crate::core::server) struct AttributeSubscriptionPoolRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub(in crate::core::server) struct SecondFactorRequest {
+    provider: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(in crate::core::server) struct AcquireSubscriptionRequest {
     provider: String,
     reason: String,
@@ -130,6 +136,23 @@ pub(in crate::core::server) async fn attribute_admin_subscription_pool(
         .await
         .map(Json)
         .map_err(|message| api_error(StatusCode::BAD_REQUEST, &message))
+}
+
+/// Which accounts need a second factor and which hold the authenticator seed
+/// that answers it, read from the vault this serving process reads: the
+/// vault Weles signs in from. A machine that reads the fleet vault remotely
+/// holds no vault its own `skarbiec totp-seed-state` can open, so the report
+/// is asked of the gateway there. A vault that cannot be read is a 503 naming
+/// the vault program's own error.
+pub(in crate::core::server) async fn second_factor_admin_subscription_pool(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Json(request): Json<SecondFactorRequest>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    pool::second_factor_report(request.provider.as_deref())
+        .await
+        .map(Json)
+        .map_err(|message| api_error(StatusCode::SERVICE_UNAVAILABLE, &message))
 }
 
 /// One maintenance pass of this serving process, the work it used to run on

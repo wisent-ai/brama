@@ -56,8 +56,28 @@ pub(super) async fn attribute(destination: Destination, provider: &str, json: bo
 
 /// Report which accounts need a second factor, and which hold the secret
 /// that answers one.
-pub(super) async fn second_factor(provider: Option<&str>, json: bool) {
-    match brama::subscription_dispatch::pool::second_factor_report(provider).await {
+///
+/// Named a gateway, the gateway reads the vault it serves from, which holds
+/// the seeds Weles answers a second factor with. Named none, this host's own
+/// vault program reads them, and on a workstation that reads the fleet vault
+/// remotely that program refuses and names the vault owner.
+pub(super) async fn second_factor(destination: Destination, provider: Option<&str>, json: bool) {
+    let report = match destination.resolve_reading_stdin().await {
+        Ok((Some(gateway), bearer)) => {
+            super::remote::second_factor(&gateway, bearer.trim(), provider).await
+        }
+        Ok((None, _)) => brama::subscription_dispatch::pool::second_factor_report(provider)
+            .await
+            .map_err(|error| {
+                format!(
+                    "{error}\nthe gateway that serves the pool reads the vault Weles signs in \
+                     from: brama subscription authenticator list --gateway-consumer <consumer> \
+                     --bearer-role <role>"
+                )
+            }),
+        Err(error) => Err(error),
+    };
+    match report {
         Ok(report) => {
             if json {
                 crate::cli::print_json(&report);

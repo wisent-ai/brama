@@ -109,3 +109,67 @@ fn authenticator_report_counts_accounts_and_refuses_missing_identity() {
     run.report["result"] = json!("passed");
     run.save();
 }
+
+/// Run on a workstation that reads the fleet vault remotely: its own vault
+/// program holds no seeds, so only the gateway that serves the pool can say
+/// which accounts hold the authenticator their sign-in needs.
+#[test]
+#[ignore = "Requires a workstation without the fleet vault, the isolated gateway and a fully attributed provider"]
+fn authenticator_report_is_read_from_the_gateway_vault() {
+    let mut run = Run::new();
+    let attributed = required("ATTRIBUTED_PROVIDER");
+    let mut expected: Vec<String> = required("ATTRIBUTED_ACCOUNTS")
+        .split_whitespace()
+        .map(str::to_lowercase)
+        .collect();
+    expected.sort();
+    let list = [
+        "subscription",
+        "authenticator",
+        "list",
+        "--provider",
+        &attributed,
+        "--json",
+    ];
+    let local = run.standalone(&list);
+    assert!(
+        !local.status.success(),
+        "a workstation without the fleet vault must not answer from a copy"
+    );
+    let cause = String::from_utf8_lossy(&local.stderr);
+    assert!(
+        cause.contains("--gateway-consumer"),
+        "the local refusal must name the gateway reading: {cause}"
+    );
+    let remote = run.command(&list);
+    assert!(
+        remote.status.success(),
+        "{}",
+        String::from_utf8_lossy(&remote.stderr)
+    );
+    let report: Value =
+        serde_json::from_slice(&remote.stdout).expect("gateway authenticator report");
+    let rows = report["accounts"].as_array().expect("gateway accounts");
+    let mut actual: Vec<String> = rows
+        .iter()
+        .map(|row| {
+            row["account"]
+                .as_str()
+                .expect("account identity")
+                .to_lowercase()
+        })
+        .collect();
+    actual.sort();
+    assert_eq!(
+        actual, expected,
+        "the gateway must report the vault's real accounts"
+    );
+    assert!(
+        rows.iter()
+            .all(|row| row["seed"].is_string() || row["seed_error"].is_string()),
+        "every account must state its seed or the error that kept it unread: {report}"
+    );
+    run.report["gateway_authenticator_report"] = report;
+    run.report["result"] = json!("passed");
+    run.save();
+}

@@ -184,6 +184,35 @@ pub(crate) async fn attribute(
     Ok(body)
 }
 
+/// Ask the gateway that holds the vault which accounts need a second factor
+/// and which hold the seed that answers it. Only the vault owner can say: a
+/// workstation's own vault program refuses, because the fleet vault is not
+/// on it.
+pub(crate) async fn second_factor(
+    gateway: &str,
+    bearer: &str,
+    provider: Option<&str>,
+) -> Result<Value, String> {
+    let request = client()?
+        .post(format!(
+            "{}/v1/admin/subscription-pool/second-factor",
+            gateway.trim_end_matches('/')
+        ))
+        .bearer_auth(bearer)
+        .json(&json!({"provider": provider}));
+    let response = stado_wait::http::request(request)
+        .await
+        .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
+    let (status, body) = answer(response, gateway).await?;
+    if !HTTP_SUCCESS.contains(&status) {
+        return Err(format!(
+            "the gateway refused the second-factor report: HTTP {status}: {}",
+            refusal(&body)
+        ));
+    }
+    Ok(body)
+}
+
 /// Ask the serving gateway for one maintenance pass and return its report.
 pub(crate) async fn maintain(gateway: &str, bearer: &str) -> Result<Value, String> {
     let discovery = brama::subscription_dispatch::discovery::harness::collect().await;

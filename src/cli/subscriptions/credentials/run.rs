@@ -139,9 +139,25 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             .await
         }
         SubscriptionCommand::Authenticator {
-            command: AuthenticatorCommand::List { provider, json },
+            command:
+                AuthenticatorCommand::List {
+                    provider,
+                    gateway,
+                    gateway_consumer,
+                    bearer_role,
+                    json,
+                },
         } => {
-            membership::second_factor(provider.as_deref(), json).await;
+            membership::second_factor(
+                remote::Destination {
+                    gateway,
+                    gateway_consumer,
+                    bearer_role,
+                },
+                provider.as_deref(),
+                json,
+            )
+            .await;
         }
         SubscriptionCommand::Attribute {
             provider,
