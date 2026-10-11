@@ -185,6 +185,53 @@ fn discovered_harness_account_persists_once_with_its_observed_plan() {
     let discovered_at = persisted["discovery"]["discovered_at_ms"]
         .as_i64()
         .expect("first discovery time");
+    // The windows the harness relayed are the member's readings, each read at
+    // the harness's own fetch instant, unless a newer reading replaced one.
+    let fetched_at_ms = observed_account["fetchedAt"]
+        .as_i64()
+        .expect("the real harness report states when it was fetched");
+    let relayed = observed_account["limits"]
+        .as_array()
+        .expect("the real harness report lists the account's limits");
+    assert!(
+        !relayed.is_empty(),
+        "the selected account must report at least one plan window"
+    );
+    let readings = persisted["limits"]
+        .as_array()
+        .expect("persisted member limits");
+    let mut harness_readings = Vec::new();
+    for limit in relayed {
+        let limit_id = limit["id"].as_str().expect("harness limit id");
+        let Some(reading) = readings
+            .iter()
+            .find(|reading| reading["limit_id"] == limit_id)
+        else {
+            panic!("window {limit_id} was not recorded: {readings:?}");
+        };
+        let recorded_at_ms = reading["recorded_at_ms"]
+            .as_i64()
+            .expect("a recorded reading states its instant");
+        assert!(
+            recorded_at_ms >= fetched_at_ms,
+            "window {limit_id} is older than the harness's fetch"
+        );
+        if recorded_at_ms == fetched_at_ms {
+            assert_eq!(reading["used_fraction"], limit["amount"]["usedFraction"], "{limit_id}");
+            assert_eq!(reading["resets_at_ms"], limit["window"]["resetsAt"], "{limit_id}");
+            assert_eq!(reading["label"], limit["label"], "{limit_id}");
+            harness_readings.push(limit_id.to_owned());
+        }
+    }
+    if harness_readings.len() == readings.len() {
+        assert_eq!(persisted["usage_source"], "harness", "{persisted}");
+    }
+    run.report["harness_windows"] = json!({
+        "fetched_at_ms": fetched_at_ms,
+        "relayed": relayed.len(),
+        "recorded_at_fetch": harness_readings,
+    });
+    run.save();
     let repeated = run.command(&["subscription", "discover"]);
     assert!(
         repeated.status.success(),

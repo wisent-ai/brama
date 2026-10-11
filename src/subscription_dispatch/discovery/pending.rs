@@ -70,6 +70,19 @@ impl Pending {
                         existing.plan = observation.plan.clone();
                         existing.fact_at_ms = observation.fact_at_ms;
                     }
+                    // Each window keeps its newest reading: a later fetch of
+                    // the same account replaces it, an older one does not.
+                    for window in &observation.windows {
+                        match existing
+                            .windows
+                            .iter_mut()
+                            .find(|held| held.limit_id == window.limit_id)
+                        {
+                            Some(held) if held.recorded_at_ms >= window.recorded_at_ms => {}
+                            Some(held) => *held = window.clone(),
+                            None => existing.windows.push(window.clone()),
+                        }
+                    }
                 }
                 None => self.accounts.push(observation.clone()),
             }

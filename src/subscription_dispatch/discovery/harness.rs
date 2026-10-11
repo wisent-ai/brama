@@ -1,7 +1,16 @@
 //! Account facts exposed by a harness's public usage command, never its grants.
+//!
+//! Beside the identity, `omp usage --json` relays the provider's own report
+//! of each account's plan windows (for Claude the five-hour and the weekly
+//! ones): what fraction is used and when each resets, as of the instant the
+//! harness fetched it. Those readings travel with the observation into the
+//! ledger, so an account Brama holds no grant for still has what it has left
+//! stated from the provider's measurement rather than from nothing.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::types::LimitReading;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AccountObservation {
@@ -12,6 +21,11 @@ pub struct AccountObservation {
     pub observed_at_ms: i64,
     pub fact_at_ms: i64,
     pub discovered_at_ms: i64,
+    /// The provider's plan windows as the harness relayed them, read at the
+    /// instant the harness fetched its report; empty for a source that
+    /// states identity only.
+    #[serde(default)]
+    pub windows: Vec<LimitReading>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -115,6 +129,7 @@ async fn claude() -> DiscoveryReport {
             observed_at_ms,
             fact_at_ms: observed_at_ms,
             discovered_at_ms: observed_at_ms,
+            windows: Vec::new(),
         }],
         errors: Vec::new(),
     }
@@ -154,6 +169,7 @@ fn parse_accounts(document: &Value) -> DiscoveryReport {
                 observed_at_ms,
                 fact_at_ms: observed_at_ms,
                 discovered_at_ms: observed_at_ms,
+                windows: Vec::new(),
             })
         })();
         match parsed {
@@ -206,6 +222,13 @@ pub fn parse_usage(document: &Value, source: &str, observed_at_ms: i64) -> Disco
             .pointer("/metadata/planType")
             .and_then(Value::as_str)
             .map(str::to_owned);
+        let windows = match super::windows::windows(report, source, harness_provider, account) {
+            Ok(windows) => windows,
+            Err(error) => {
+                result.errors.push(error);
+                Vec::new()
+            }
+        };
         result.accounts.push(AccountObservation {
             provider: provider.to_owned(),
             account: account.to_lowercase(),
@@ -214,6 +237,7 @@ pub fn parse_usage(document: &Value, source: &str, observed_at_ms: i64) -> Disco
             observed_at_ms,
             fact_at_ms: observed_at_ms,
             discovered_at_ms: observed_at_ms,
+            windows,
         });
     }
     result

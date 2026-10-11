@@ -5,6 +5,7 @@ pub mod harness;
 mod pending;
 mod receipts;
 mod reconciliation;
+mod windows;
 pub use enroll::enroll;
 
 use crate::subscription_dispatch::acquire::declaration;

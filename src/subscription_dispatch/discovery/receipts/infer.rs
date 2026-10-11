@@ -95,6 +95,7 @@ pub async fn accounts(message: &Value, source: &str) -> Result<Vec<AccountObserv
             observed_at_ms,
             fact_at_ms,
             discovered_at_ms: observed_at_ms,
+            windows: Vec::new(),
         });
     }
     Ok(accounts)

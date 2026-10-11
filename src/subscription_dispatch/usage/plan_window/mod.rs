@@ -31,6 +31,12 @@ pub enum UsageSource {
     Traffic,
     /// An operator's on-demand probe, which spends one minimal completion.
     Probe,
+    /// A coding harness's public usage command (`omp usage --json`), which
+    /// relays the provider's own report about an account the harness is
+    /// signed into. The same statement as `Provider`, read through the
+    /// harness instead of a grant Brama holds, which is how an account Brama
+    /// has no grant for still has a reading.
+    Harness,
 }
 
 impl UsageSource {
@@ -40,6 +46,7 @@ impl UsageSource {
             Self::Provider => "provider",
             Self::Traffic => "traffic",
             Self::Probe => "probe",
+            Self::Harness => "harness",
         }
     }
 }

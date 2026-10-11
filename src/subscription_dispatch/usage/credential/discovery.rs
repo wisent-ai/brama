@@ -1,6 +1,6 @@
 //! Account discovery is durable metadata, never proof of a usable grant.
 
-use super::super::{now_ms, write_ledger};
+use super::super::{now_ms, write_ledger, UsageSource};
 use super::{Credential, CredentialState};
 use crate::subscription_dispatch::discovery::harness::AccountObservation;
 use serde::{Deserialize, Serialize};
@@ -75,6 +75,23 @@ pub fn record_discovered_account(
             .discovered_at_ms
             .min(observation.discovered_at_ms);
         discovered.observed_at_ms = discovered.observed_at_ms.max(observation.observed_at_ms);
+        // The windows the harness relayed are the provider's statement about
+        // this account; each lands in the same map the provider's own report
+        // and real traffic write to, and only a newer reading replaces one.
+        let mut relayed = false;
+        for window in &observation.windows {
+            let newer = entry
+                .limits
+                .get(&window.limit_id)
+                .is_none_or(|held| held.recorded_at_ms < window.recorded_at_ms);
+            if newer {
+                entry.limits.insert(window.limit_id.clone(), window.clone());
+                relayed = true;
+            }
+        }
+        if relayed {
+            entry.usage_source = Some(UsageSource::Harness);
+        }
         entry.updated_at_ms = Some(now_ms());
         if needs_grant && entry.credential.is_none() {
             entry.credential = Some(Credential {

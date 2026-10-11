@@ -119,7 +119,12 @@ A failed attempt or an elapsed reset marks the reading stale immediately; one
 fresh window does not make older windows current.</p>
 <p>In listings, <code>usage_source</code> names which statement the newest window is —
 <code>provider</code> (the provider's report, no quota), <code>traffic</code> (response headers),
-or <code>probe</code> (the operator's on-demand check). <code>usage_check</code>
+<code>probe</code> (the operator's on-demand check) or <code>harness</code> (the provider's
+report as a coding harness signed into the account relays it through its public usage
+command, <code>omp usage --json</code>, read by account discovery: the same statement as
+<code>provider</code>, obtained without a grant Brama holds, which is how a discovered account
+that Brama has not signed in still states what it has left; each relayed window is read at the
+harness's <code>fetchedAt</code> and only a newer reading replaces one). <code>usage_check</code>
 holds the latest free-report attempt's time, success and detail independently
 of completion checks. An empty <code>limits</code> array can mean an unread
 account, a failed read, expired history or an unsupported report; none means
