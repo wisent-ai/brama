@@ -176,10 +176,26 @@ fn installation() -> Result<Installation, String> {
         return Err("ENTITLEMENTS_ROUTER_BIN and SKARBIEC_VAULT_FILE must be named by the running installation, environment, or service env".into());
     };
     let registry_path = PathBuf::from(config_dir.unwrap_or_default()).join("registry.json");
-    let registry: Value = std::fs::read(&registry_path)
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        .ok_or_else(|| format!("no workload registry at {}", registry_path.display()))?;
+    let registry: Value = match std::fs::read(&registry_path) {
+        Ok(bytes) => serde_json::from_slice(&bytes).map_err(|error| {
+            format!(
+                "workload registry {} is not JSON: {error}",
+                registry_path.display()
+            )
+        })?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(format!(
+                "no workload registry at {}",
+                registry_path.display()
+            ))
+        }
+        Err(error) => {
+            return Err(format!(
+                "cannot read workload registry {}: {error}",
+                registry_path.display()
+            ))
+        }
+    };
     let workload = registry
         .get("workloads")
         .and_then(Value::as_object)
@@ -306,10 +322,14 @@ fn register() -> Result<Value, String> {
             named.join(", ")
         ));
     };
-    let routes: Value = std::fs::read(routes_path)
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        .ok_or_else(|| format!("{} is not JSON", routes_path.display()))?;
+    let bytes = std::fs::read(routes_path).map_err(|error| {
+        format!(
+            "cannot read capability routes table {}: {error}",
+            routes_path.display()
+        )
+    })?;
+    let routes: Value = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("{} is not JSON: {error}", routes_path.display()))?;
     let capabilities: BTreeSet<String> = routes
         .as_object()
         .into_iter()
