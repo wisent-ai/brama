@@ -29,7 +29,13 @@ impl BramaTransport {
         let remote = std::env::var("STADO_INTEGRATION_API_URL")
             .ok()
             .zip(std::env::var("BRAMA_STADO_INTEGRATION_TOKEN").ok())
-            .and_then(|(base_url, token)| RemoteStado::new(&base_url, token).ok());
+            .and_then(|(base_url, token)| match RemoteStado::new(&base_url, token) {
+                Ok(remote) => Some(remote),
+                Err(error) => {
+                    tracing::warn!(%error, "onboarding journey: the declared Stado connection is refused");
+                    None
+                }
+            });
         Self { remote }
     }
 }
@@ -52,7 +58,7 @@ impl RemoteStado {
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             .build()
-            .map_err(|_| JourneyError::Transport)?;
+            .map_err(|error| transport("building the client", error))?;
         Ok(Self {
             base_url,
             token,
@@ -66,7 +72,7 @@ impl RemoteStado {
             .join(&format!(
                 "integration/{STADO_CLIENT}/onboarding/{PRODUCT_ID}/{operation}"
             ))
-            .map_err(|_| JourneyError::Transport)?;
+            .map_err(|error| transport(operation, error))?;
         let response = self
             .client
             .post(endpoint)
@@ -74,18 +80,24 @@ impl RemoteStado {
             .json(body)
             .send()
             .await
-            .map_err(|_| JourneyError::Transport)?;
+            .map_err(|error| transport(operation, error.without_url()))?;
         if !response.status().is_success() {
-            return Err(JourneyError::Transport);
+            return Err(transport(
+                operation,
+                format!("Stado answered HTTP {}", response.status()),
+            ));
         }
-        let envelope: Value = response.json().await.map_err(|_| JourneyError::Transport)?;
+        let envelope: Value = response
+            .json()
+            .await
+            .map_err(|error| transport(operation, error.without_url()))?;
         if envelope.get("ok") != Some(&Value::Bool(true)) {
-            return Err(JourneyError::Transport);
+            return Err(transport(operation, format!("Stado refused: {envelope}")));
         }
         envelope
             .get("result")
             .cloned()
-            .ok_or(JourneyError::Transport)
+            .ok_or_else(|| transport(operation, format!("Stado answered no result: {envelope}")))
     }
 }
 
@@ -109,7 +121,7 @@ impl Transport for BramaTransport {
             )
             .await?;
         let bundle: JourneyBundle =
-            serde_json::from_value(result).map_err(|_| JourneyError::Transport)?;
+            serde_json::from_value(result).map_err(|error| transport("bundle.read", error))?;
         if bundle.definition.schema_version != 1
             || bundle.definition.product_id != PRODUCT_ID
             || bundle.definition.journey_id != JOURNEY_ID
@@ -123,7 +135,8 @@ impl Transport for BramaTransport {
 
     async fn collect_event(&self, event: &RuntimeEvent) -> Result<(), JourneyError> {
         let remote = self.remote.as_ref().ok_or(JourneyError::Transport)?;
-        let event = serde_json::to_value(event).map_err(|_| JourneyError::Transport)?;
+        let event =
+            serde_json::to_value(event).map_err(|error| transport("events.collect", error))?;
         remote.post("events.collect", &event).await?;
         Ok(())
     }
@@ -153,8 +166,17 @@ impl Transport for BramaTransport {
         request: &ExperimentAssignmentRequest,
     ) -> Result<ExperimentAssignment, JourneyError> {
         let remote = self.remote.as_ref().ok_or(JourneyError::Transport)?;
-        let request = serde_json::to_value(request).map_err(|_| JourneyError::Transport)?;
+        let request = serde_json::to_value(request)
+            .map_err(|error| transport("experiments.assign", error))?;
         let assignment = remote.post("experiments.assign", &request).await?;
-        serde_json::from_value(assignment).map_err(|_| JourneyError::Transport)
+        serde_json::from_value(assignment).map_err(|error| transport("experiments.assign", error))
     }
+}
+
+/// The refusal this port's contract allows, logged with its cause first:
+/// `JourneyError::Transport` carries none, so without the log a journey that
+/// never reaches Stado says nothing about why.
+fn transport(operation: &str, cause: impl std::fmt::Display) -> JourneyError {
+    tracing::warn!(%operation, %cause, "onboarding journey transport failed");
+    JourneyError::Transport
 }
