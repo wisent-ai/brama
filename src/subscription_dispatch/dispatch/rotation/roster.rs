@@ -8,7 +8,8 @@ use crate::types::{GatewayRefusal, ModelRequest, ModelResponse};
 
 use super::super::credential::eligibility::eligible_subscription_entries;
 use super::super::ranking::pin::apply_pin;
-use super::super::refusal::envelope::refuse;
+use super::super::ranking::plan_order::shuffle_within_equal;
+use super::super::refusal::envelope::{refuse, refuse_as};
 use super::super::refusal::pool_empty::no_active_credential_summary;
 
 /// The accounts one route may rotate across, already ordered.
@@ -71,6 +72,17 @@ pub(super) async fn ordered_candidate_rows(
         ));
     }
 
+    // Shuffle before the stable plan sort: only equal-headroom rows retain
+    // random order, so vault listing order never elects an unpinned account.
+    shuffle_within_equal(&mut rows, |_| ()).map_err(|error| {
+        refuse_as(
+            request,
+            POINT_CREDENTIAL_SELECTION,
+            error.class,
+            error.message,
+            None,
+        )
+    })?;
     // Freest plan first, the ledger's own numbers rather than list order; the
     // agent's pinned credential then leads unless its window says it is full.
     // Both reorder the same eligible list; an explicit billing target has

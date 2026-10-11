@@ -13,10 +13,10 @@ fn random_u64() -> Result<u64, Refusal> {
     let mut bytes = [0; size_of::<u64>()];
     std::fs::File::open("/dev/urandom")
         .and_then(|mut source| source.read_exact(&mut bytes))
-        .map_err(|_| {
+        .map_err(|error| {
             Refusal::gateway(
                 GatewayRefusal::DependencyUnavailable,
-                "operating system randomness is unavailable",
+                format!("reading operating system randomness from /dev/urandom: {error}"),
             )
         })?;
     Ok(u64::from_ne_bytes(bytes))
@@ -30,7 +30,7 @@ fn random_u64() -> Result<u64, Refusal> {
 /// key derived from plan state says something true about the candidates; an
 /// equal key says nothing, and "nothing" is the only thing chance should
 /// decide.
-pub(super) fn shuffle_within_equal<T, K: PartialOrd>(
+pub(in crate::subscription_dispatch::dispatch) fn shuffle_within_equal<T, K: PartialOrd>(
     items: &mut [T],
     key: impl Fn(&T) -> K,
 ) -> Result<(), Refusal> {

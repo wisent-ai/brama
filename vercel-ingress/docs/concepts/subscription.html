@@ -39,6 +39,15 @@ it, and that gate cost more than it protected: subscriptions tagged for nobody
 and a consumer tagged on nothing left paid plans answering <code>all bounded
 credentials unavailable</code>. The tag remains as provenance of who banked an account and
 decides who may retire it; it gates no routing.</p>
+<p>For both buffered and streaming requests, members with equal plan headroom
+are shuffled before selection; vault listing order and names such as
+<code>primary</code> or <code>secondary</code> confer no preference.
+The stable plan sort preserves different headroom priorities. An existing
+usable caller pin still takes precedence for prompt-cache affinity, while an
+explicit billing target remains restricted to its selected member. Blocked
+members remain behind unblocked members. If operating-system randomness cannot
+be read, selection refuses before provider dispatch and reports the failed
+operation and its actual OS error through the normal response diagnostics.</p>
 <p>Discovery shells the local entitlements router's <code>list</code> (binary from
 <code>ENTITLEMENTS_ROUTER_BIN</code>, default <code>entitlements-router</code>); a successful
 listing is cached for 60 seconds. User-facing discovery preserves process
