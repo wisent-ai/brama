@@ -53,31 +53,16 @@ pub(super) async fn ask_authority(bearer: &str) -> WorkloadAuthorityAnswer {
     {
         return WorkloadAuthorityAnswer::Rejected;
     }
-    let mut body = match response.text().await {
-        Ok(body) => body,
-        Err(error) => {
-            return WorkloadAuthorityAnswer::Unavailable(format!(
-                "POST {introspect} answered {status}; cannot read its response body: {error}"
-            ));
-        }
-    };
-    if !status.is_success() {
-        for credential in [bearer, own.trim()] {
-            if !credential.is_empty() && body.contains(credential) {
-                body = body.replace(credential, "[redacted]");
-            }
-        }
-        return WorkloadAuthorityAnswer::Unavailable(format!(
-            "POST {introspect} answered {status}: {body}"
-        ));
-    }
-    let answer: Value = match serde_json::from_str(&body) {
+    let answer: Value = match super::response::read_json(
+        response,
+        "POST",
+        &introspect,
+        &[bearer, own.trim()],
+    )
+    .await
+    {
         Ok(answer) => answer,
-        Err(error) => {
-            return WorkloadAuthorityAnswer::Unavailable(format!(
-                "POST {introspect} answered {status} with a body that is not JSON: {error}"
-            ))
-        }
+        Err(error) => return WorkloadAuthorityAnswer::Unavailable(error),
     };
     if answer.get("active").and_then(Value::as_bool) != Some(true) {
         return WorkloadAuthorityAnswer::Rejected;

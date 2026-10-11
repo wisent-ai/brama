@@ -49,7 +49,7 @@ pub(super) async fn ask_wisent_identity(bearer: &str) -> WisentIdentityAnswer {
         }
     };
     let response = match client
-        .get(format!("{origin}/auth/v1/user"))
+        .get(&user)
         .header("apikey", &anon_key)
         .bearer_auth(bearer)
         .send()
@@ -58,29 +58,16 @@ pub(super) async fn ask_wisent_identity(bearer: &str) -> WisentIdentityAnswer {
         Ok(response) => response,
         Err(error) => return WisentIdentityAnswer::Unavailable(format!("GET {user}: {error}")),
     };
-    if response.status().is_server_error() || response.status() == StatusCode::TOO_MANY_REQUESTS {
-        return WisentIdentityAnswer::Unavailable(format!(
-            "GET {user} answered {}",
-            response.status()
-        ));
-    }
-    if !response.status().is_success() {
+    let status = response.status();
+    if !status.is_success() && !status.is_server_error() && status != StatusCode::TOO_MANY_REQUESTS
+    {
         return WisentIdentityAnswer::Rejected;
     }
-    let bytes = match response.bytes().await {
-        Ok(bytes) => bytes,
-        Err(error) => {
-            return WisentIdentityAnswer::Unavailable(format!("GET {user} body: {error}"))
-        }
-    };
-    let answer: Value = match serde_json::from_slice(&bytes) {
-        Ok(answer) => answer,
-        Err(error) => {
-            return WisentIdentityAnswer::Unavailable(format!(
-                "GET {user} answered a body that is not JSON: {error}"
-            ))
-        }
-    };
+    let answer: Value =
+        match super::response::read_json(response, "GET", &user, &[bearer, &anon_key]).await {
+            Ok(answer) => answer,
+            Err(error) => return WisentIdentityAnswer::Unavailable(error),
+        };
     let Some(user_id) = answer.get("id").and_then(Value::as_str) else {
         return WisentIdentityAnswer::Unavailable(format!("GET {user} answered a user with no id"));
     };
@@ -92,19 +79,30 @@ pub(super) async fn ask_wisent_identity(bearer: &str) -> WisentIdentityAnswer {
     }
 }
 
+fn organization_unavailable(cause: String) -> IdentityResolutionError {
+    tracing::warn!(event = "organization_authority_unavailable", %cause);
+    IdentityResolutionError::UpstreamUnavailable
+}
+
 pub(super) async fn authorize_organization(
     bearer: &str,
     expected_user_id: uuid::Uuid,
     expected_organization_id: uuid::Uuid,
 ) -> Result<HumanOrganizationContext, IdentityResolutionError> {
     let Some((origin, anon_key)) = wisent_identity() else {
-        return Err(IdentityResolutionError::UpstreamUnavailable);
+        return Err(organization_unavailable(
+            "BRAMA_WISENT_AUTH_URL or BRAMA_WISENT_AUTH_ANON_KEY is unset; no organization can be authorized".into(),
+        ));
     };
-    let client = crate::providers::adapter::control_client()
-        .map_err(|_| IdentityResolutionError::UpstreamUnavailable)?;
+    let authorize = format!("{origin}/rest/v1/rpc/authorize_organization");
+    let client = crate::providers::adapter::control_client().map_err(|error| {
+        organization_unavailable(format!(
+            "cannot build the Wisent Identity organization client: {error}"
+        ))
+    })?;
     let response = client
-        .post(format!("{origin}/rest/v1/rpc/authorize_organization"))
-        .header("apikey", anon_key)
+        .post(&authorize)
+        .header("apikey", &anon_key)
         .header("Accept", "application/vnd.pgrst.object+json")
         .header(
             WISENT_ORGANIZATION_HEADER,
@@ -114,7 +112,7 @@ pub(super) async fn authorize_organization(
         .json(&json!({"target_org_id": expected_organization_id}))
         .send()
         .await
-        .map_err(|_| IdentityResolutionError::UpstreamUnavailable)?;
+        .map_err(|error| organization_unavailable(format!("POST {authorize}: {error}")))?;
     let status = response.status();
     if status == StatusCode::UNAUTHORIZED {
         return Err(IdentityResolutionError::Unauthorized);
@@ -122,15 +120,10 @@ pub(super) async fn authorize_organization(
     if status == StatusCode::FORBIDDEN || status == StatusCode::NOT_ACCEPTABLE {
         return Err(IdentityResolutionError::Forbidden);
     }
-    if !status.is_success() {
-        return Err(IdentityResolutionError::UpstreamUnavailable);
-    }
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|_| IdentityResolutionError::UpstreamUnavailable)?;
     let authorization: OrganizationAuthorization =
-        serde_json::from_slice(&bytes).map_err(|_| IdentityResolutionError::UpstreamUnavailable)?;
+        super::response::read_json(response, "POST", &authorize, &[bearer, &anon_key])
+            .await
+            .map_err(organization_unavailable)?;
     if authorization.user_id != expected_user_id
         || authorization.organization_id != expected_organization_id
     {

@@ -6,6 +6,7 @@
 //! [`skarbiec`] for a workload, [`wisent`] for a person — on every request,
 //! so a revocation takes effect on the next request.
 
+mod response;
 pub(super) mod skarbiec;
 pub(super) mod wisent;
 
