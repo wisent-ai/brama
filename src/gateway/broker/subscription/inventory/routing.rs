@@ -46,9 +46,12 @@ pub async fn refresh_routing_subscriptions(agent_id: &str) -> InventoryResult {
     if let Err(error) = &result {
         tracing::warn!(event = "routing_inventory_discovery_failed", %error, "routing refuses without waiting for discovery");
     }
-    let mut snapshot = SNAPSHOT
-        .lock()
-        .map_err(|error| format!("routing inventory state could not publish discovery: {error}"))?;
+    let mut snapshot = SNAPSHOT.lock().map_err(|error| {
+        // The pass runs detached and its result is dropped, so this log line
+        // is the only place a discovery that could not be published is seen.
+        tracing::warn!(event = "routing_inventory_discovery_unpublished", %error, "subscription inventory discovery finished but could not be published");
+        format!("routing inventory state could not publish discovery: {error}")
+    })?;
     snapshot.result = Some(result.clone());
     snapshot.refreshing = false;
     result
