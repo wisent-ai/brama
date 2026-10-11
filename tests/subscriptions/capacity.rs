@@ -17,6 +17,8 @@ mod historical_receipt;
 mod lease_distribution;
 #[path = "discovery/reconciliation/real.rs"]
 mod membership_reconciliation;
+#[path = "standing/mod.rs"]
+mod membership_standing;
 #[path = "discovery/capability.rs"]
 mod metadata_capability;
 #[path = "discovery/claude.rs"]
