@@ -16,28 +16,14 @@ pub(super) fn failure_json(failure: &Failure) -> Value {
 }
 
 /// Why one row of the document is not a healthy answer, in the words of
-/// whatever produced the refusal.
-///
-/// A subscription the ledger remembers but the vault no longer lists is its own
-/// case: nothing can confirm its credential, which is a different problem from a
-/// grant that was refused.
+/// whatever produced the refusal. Every row is a member the vault lists, or
+/// a retired one the usage history remembers.
 pub(super) fn reading_error(
     entry: &SubscriptionEntry,
     recorded: Option<&SubscriptionUsage>,
     windows: &usage::PlanWindows,
     now: i64,
 ) -> Option<Value> {
-    if entry.status == "undiscovered" {
-        return Some(failure_json(&failure::envelope(
-            "brama.subscriptions.discovery",
-            Code::Config,
-            "one subscription usage report",
-            "subscription exists in usage history but was not returned by Skarbiec; its current credential cannot be confirmed",
-        )
-        .with_context("subscription", &entry.id)
-        .with_context("provider", &entry.provider)
-        .with_context("attempted_at_ms", now.to_string())));
-    }
     if entry.status != "active" || retired(&entry.id, recorded) != Ok(false) {
         return None;
     }

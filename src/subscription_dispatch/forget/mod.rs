@@ -1,15 +1,14 @@
-//! Dropping a member the pool only remembers.
+//! Dropping a member only the usage ledger remembers.
 //!
 //! The pool is what the vault lists, plus what account discovery enrolled
 //! from the harnesses' own account commands and from purchase receipts. The
-//! usage ledger remembers every member that ever ran through this gateway,
-//! and the pool report lists each of those the vault no longer returns as
-//! `undiscovered`, with `subscription exists in usage history but was not
-//! returned by Skarbiec`. Such a row is not an account this deployment
-//! uses: nothing can confirm a credential for it, no sign-in names it, and
-//! the only thing it does is make the pool look larger than it is. `disown`
-//! cannot take it: that verb retires a member the vault lists and removes
-//! its credential, and the vault lists nothing here.
+//! usage ledger remembers every member that ever ran through this gateway;
+//! one the vault no longer returns is not a pool member, so the pool report
+//! does not list it, but its row stays in the ledger. Such a row is not an
+//! account this deployment uses: nothing can confirm a credential for it and
+//! no sign-in names it. `disown` cannot take it: that verb retires a member
+//! the vault lists and removes its credential, and the vault lists nothing
+//! here.
 //!
 //! This is the verb for exactly that row. It refuses a member the vault
 //! still lists (that one is `disown`'s), a member nothing remembers, and a

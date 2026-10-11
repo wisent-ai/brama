@@ -5,10 +5,10 @@
 # writes, holding that member and one more the vault does not list; the
 # journal and lease register live in a state directory this run owns.
 #
-# The story: `list` shows the remembered member as `undiscovered` with
-# `exists in usage history`; forgetting it with a reason is accepted, the
-# journal gains a `forgotten` record carrying that reason, the ledger loses
-# the row, and the next `list` no longer names it; forgetting the listed
+# The story: `list` names only the member the vault holds — the one the
+# ledger alone remembers is no pool member; forgetting it with a reason is
+# accepted, the journal gains a `forgotten` record carrying that reason, the
+# ledger loses the row, and the next `list` still does not name it; forgetting the listed
 # member is refused back to `disown`; forgetting an id nobody knows is
 # refused as such; an empty reason is refused by the parser. Every command,
 # its outcome and its answer go to the run's report.txt; a failed check stops
@@ -84,9 +84,16 @@ printf '%s' '{"token":"not-a-real-grant"}' | "$VAULT_BIN" set-json "$LISTED" --t
   fail "skarbiec set-json $LISTED was refused: $(cat "$ROOT/vault-output")"
 printf '$ skarbiec set-json %s --type token --tags brama:subscription,brama:provider:claude-code,brama:id:%s\noutput: %s\n\n' "$LISTED" "$LISTED" "$(cat "$ROOT/vault-output")" >>"$REPORT"
 printf '%s' "{\"subscriptions\":{\"$LISTED\":{\"provider\":\"claude-code\"},\"$REMEMBERED\":{\"provider\":\"claude-code\"}}}" >"$BRAMA_SUBSCRIPTION_USAGE_FILE"
+run either subscription list --json
+[ "$(jq -r "[.subscriptions[].id] | index(\"$REMEMBERED\")" "$ROOT/answer.json")" = null ] ||
+  fail "a member only the usage history remembers is listed among the pool's members"
+[ "$(jq -r "[.remembered[].id] | index(\"$REMEMBERED\")" "$ROOT/answer.json")" != null ] ||
+  fail "the remembered id is not answered under remembered: $(cat "$ROOT/answer.json")"
+[ "$(jq -r "[.subscriptions[].id] | index(\"$LISTED\")" "$ROOT/answer.json")" != null ] ||
+  fail "the member the vault holds is not listed"
+echo "ok: the pool lists the vault's member and answers the remembered id apart" >>"$REPORT"
 run either subscription list
-says "$REMEMBERED" "the remembered member is listed"
-says "subscription exists in usage history but was not returned by Skarbiec" "and named as a memory the vault does not confirm"
+says "remembered by the usage history only, not pool members" "the text names the remembered ids apart"
 
 # --- the refusals, each with its own cause ---
 run refused subscription forget --subscription-id "$REMEMBERED" --reason ""

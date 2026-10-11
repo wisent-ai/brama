@@ -81,3 +81,29 @@ pub(super) fn print_acquisitions(report: &Value) {
         }
     }
 }
+
+/// The ids the usage ledger remembers that are no pool member, from the pool
+/// document's `remembered` list: counted nowhere, each dropped with `brama
+/// subscription forget`. A gateway without the list says nothing of them.
+pub(super) fn print_remembered(report: &Value) {
+    let remembered: Vec<&Value> = report
+        .get("remembered")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .collect();
+    if remembered.is_empty() {
+        return;
+    }
+    println!(
+        "remembered by the usage history only, not pool members ({}): drop each with brama subscription forget --subscription-id <id> --reason <why>",
+        remembered.len()
+    );
+    for entry in remembered {
+        println!(
+            "    {} ({})",
+            text(entry, "id").into_iter().collect::<String>(),
+            text(entry, "provider").into_iter().collect::<String>()
+        );
+    }
+}

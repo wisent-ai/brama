@@ -90,6 +90,7 @@ pub(super) fn print_pool(report: &Value) {
     println!("{live} of {} subscription credentials are live", rows.len());
     print_accounts(report.get("accounts"));
     membership::print_acquisitions(report);
+    membership::print_remembered(report);
     println!(
         "usage report: {}",
         if report.get("ok").and_then(Value::as_bool) == Some(true) {

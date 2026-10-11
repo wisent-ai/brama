@@ -239,14 +239,13 @@ pub(in crate::core::server) async fn reinstate_admin_grant(
         })
 }
 
-/// `POST /v1/admin/subscription-pool/forget`: a member the pool only
-/// remembers is dropped, for a reason.
+/// `POST /v1/admin/subscription-pool/forget`: a member only the usage
+/// ledger remembers is dropped from it, for a reason.
 ///
-/// The usage ledger lists every member that ever ran here, and the pool
-/// report shows each one the vault no longer returns as `undiscovered`.
-/// `disown` refuses those (`the pool holds no member with that id`), so an
-/// account this deployment stopped using stayed in every report with no
-/// verb to take it out. This is that verb; a member the vault lists is
+/// The usage ledger keeps every member that ever ran here; one the vault no
+/// longer returns is no pool member and is not listed, but its row stays.
+/// `disown` refuses it (`the pool holds no member with that id`). This is
+/// the verb that takes the row out; a member the vault lists is
 /// refused back to `disown`. The reason is the caller's: a request without
 /// one is refused, because the journal keeps it as the operator's words.
 pub(in crate::core::server) async fn forget_admin_member(

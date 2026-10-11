@@ -218,10 +218,10 @@ console asked for it; no timer reaches any of them.</p>
   does not hold, <code>409</code> for one that is not retired, <code>403</code> for any
   caller but the console.</li>
 <li><strong>POST <code>/v1/admin/subscription-pool/forget</code></strong> drops one
-  member the pool only remembers: <code>{"subscription_id", "reason"}</code>. The usage
-  ledger lists every member that ever ran here and the pool report shows each one the
-  vault no longer returns as <code>undiscovered</code>; <code>disown</code> refuses those,
-  so they stayed in every report. Forgetting journals the reason as a
+  id only the usage ledger remembers: <code>{"subscription_id", "reason"}</code>. The usage
+  ledger keeps every id that ever ran here; one the vault no longer returns, never retired,
+  is no pool member, counted by nothing, and the pool report answers it apart under
+  <code>remembered</code> (<code>{id, provider}</code>); <code>disown</code> refuses it. Forgetting journals the reason as a
   <code>forgotten</code> record, drops any overlay entry and local credential under the id
   and removes the ledger row; nothing is read from or written to the vault, and discovery
   may enrol the account again under its own identity. This is

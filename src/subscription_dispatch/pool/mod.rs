@@ -127,7 +127,7 @@ pub(crate) fn document(
             }
             let mut row = subscription_row(entry, recorded.as_ref(), windows);
             account::annotate_second_factor(&mut row, &seed_states);
-            row["state"] = json!(if entry.status == "undiscovered" || retirement.is_err() {
+            row["state"] = json!(if retirement.is_err() {
                 "unknown"
             } else if retirement == Ok(true) {
                 "burnt"
@@ -186,7 +186,25 @@ pub(crate) fn document(
         "accounts": accounts(&rows, capacity::accounts(&observed, observed_at_ms)),
         "acquisition": acquisition,
         "subscriptions": rows,
+        "remembered": remembered(scope, entries),
     })
+}
+
+/// The ids the usage ledger remembers that are no pool member: the vault
+/// does not list them and they were never retired. They are answered apart
+/// from `subscriptions`, counted nowhere, so the console can drop each with
+/// `brama subscription forget`; an agent's scoped read is told none.
+fn remembered(scope: &PoolScope, entries: &[SubscriptionEntry]) -> Value {
+    if scope.agent().is_some() {
+        return json!([]);
+    }
+    let members: std::collections::BTreeSet<&str> =
+        entries.iter().map(|entry| entry.id.as_str()).collect();
+    usage::recorded_subscriptions()
+        .into_iter()
+        .filter(|(id, _)| !members.contains(id.as_str()))
+        .map(|(id, recorded)| json!({ "id": id, "provider": named(&recorded.provider) }))
+        .collect()
 }
 
 /// The newest acquisition journaled for every provider `providers.json`
@@ -246,19 +264,23 @@ pub(crate) async fn inventory(scope: &PoolScope) -> (Vec<SubscriptionEntry>, Vec
         .into_iter()
         .map(|entry| (entry.id.clone(), entry))
         .collect();
-    // Only the deployment scope can include historical accounts. A scoped read
-    // must never widen an agent's ownership from a shared usage ledger.
+    // Only the deployment scope can include historical accounts, and only
+    // those retired, so a burnt account still says why it left. A scoped read
+    // must never widen an agent's ownership from a shared usage ledger. A
+    // member the usage history remembers but the vault does not list is not
+    // a subscription this deployment holds, whatever id it ran under: listed
+    // as `undiscovered`, every test and renamed id that ever served a request
+    // stood beside the real accounts. Such a row stays in the ledger until
+    // `brama subscription forget` drops it, and is not a pool member.
     if scope.agent().is_none() {
         for (id, recorded) in usage::recorded_subscriptions() {
-            entries
-                .entry(id.clone())
-                .or_insert_with(|| SubscriptionEntry {
-                    status: if retired(&id, Some(&recorded)) == Ok(true) {
-                        "retired"
-                    } else {
-                        "undiscovered"
-                    }
-                    .into(),
+            if entries.contains_key(&id) || retired(&id, Some(&recorded)) != Ok(true) {
+                continue;
+            }
+            entries.insert(
+                id.clone(),
+                SubscriptionEntry {
+                    status: "retired".into(),
                     id,
                     provider: named(&recorded.provider),
                     label: None,
@@ -267,7 +289,8 @@ pub(crate) async fn inventory(scope: &PoolScope) -> (Vec<SubscriptionEntry>, Vec
                         .discovery
                         .as_ref()
                         .map(|account| account.account.clone()),
-                });
+                },
+            );
         }
     }
     (entries.into_values().collect(), errors)
