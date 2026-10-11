@@ -6,6 +6,7 @@
 
 use serde_json::Value;
 
+mod capacity;
 mod membership;
 
 /// How many accounts the pool holds, which is not how many members it has,
@@ -66,6 +67,7 @@ pub(super) fn print_accounts(accounts: Option<&Value>) {
         count("members_without_account"),
         count("ledger_only_members")
     );
+    capacity::print_capacity(accounts);
 }
 
 /// The same subscription report as the desktop, including partial failures.
@@ -267,7 +269,7 @@ pub(super) fn print_pool(report: &Value) {
     }
 }
 
-fn instant(value: Option<&Value>) -> String {
+pub(super) fn instant(value: Option<&Value>) -> String {
     value
         .and_then(Value::as_i64)
         .filter(|value| *value > 0)

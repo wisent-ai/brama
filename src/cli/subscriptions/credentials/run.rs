@@ -201,6 +201,26 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             )
             .await;
         }
+        SubscriptionCommand::Forget {
+            subscription_id,
+            reason,
+            gateway,
+            gateway_consumer,
+            bearer_role,
+            json,
+        } => {
+            membership::forget(
+                remote::Destination {
+                    gateway,
+                    gateway_consumer,
+                    bearer_role,
+                },
+                &subscription_id,
+                &reason,
+                json,
+            )
+            .await;
+        }
         SubscriptionCommand::Acquire {
             provider,
             reason,

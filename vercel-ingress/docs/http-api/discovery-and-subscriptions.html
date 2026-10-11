@@ -147,6 +147,28 @@ login reports two accounts as one. A member that records no account is listed
 here rather than counted, and
 <a href="/docs/cli/subscription/attribute"><code>brama subscription attribute
 &lt;provider&gt;</code></a> records it from that member's own grant.</p>
+<p><code>accounts.capacity</code> states what each of those accounts has left, one object
+per account the rows attribute, read across every member that carries it:
+<code>provider</code>, <code>account</code>, <code>members</code>, <code>usable_members</code>
+(nothing in the ledger stands against them), <code>refused_members</code>
+(<code>member</code>, <code>refusal</code> in the ledger's words), <code>blocked_until_ms</code>
+(the latest instant a standing block on any member lifts, absent when none stands),
+<code>live_sessions</code> (the leases all members carry, <code>null</code> when the lease
+register could not be read), <code>windows</code>, <code>tightest_remaining_fraction</code>
+and <code>available</code>. Each window is the newest reading of one plan window
+(<code>limit_id</code>, for Claude <code>five_hour</code> and <code>seven_day</code>) any member
+of the account holds, named by the <code>member</code> it was read off:
+<code>used_fraction</code> is the provider's own statement, <code>remaining_fraction</code> is
+the whole limit less it and is <code>null</code> for a window that is not
+<code>current</code> (its <code>resets_at_ms</code> has passed and nothing has been read
+since), and <code>read_at_ms</code> is when Brama read it. <code>available</code> is whether a
+session put on the account now would be served: a usable member exists and no current
+window is at its limit. Two members of one account draw on one quota, which is why the
+reading is per account; Brama computes no number the provider did not state, so an
+account with no reading carries an empty <code>windows</code> and a <code>null</code>
+<code>tightest_remaining_fraction</code> rather than a free plan. The acquisition and a
+session-placing policy (Oko's model policy) read this object, so what they decide on is
+what <code>brama subscription list</code> and Brama Desktop show.</p>
 <code>scope</code> is <code>deployment</code> or the agent id the answer was narrowed to, so
 a caller reads the narrowing instead of inferring it from the row count. Every row carries
 the same fields whoever asked: <code>id</code>, <code>provider</code>,

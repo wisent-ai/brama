@@ -217,6 +217,22 @@ console asked for it; no timer reaches any of them.</p>
   <code>400 subscription_id is required</code>, <code>404</code> for a member this pool
   does not hold, <code>409</code> for one that is not retired, <code>403</code> for any
   caller but the console.</li>
+<li><strong>POST <code>/v1/admin/subscription-pool/forget</code></strong> drops one
+  member the pool only remembers: <code>{"subscription_id", "reason"}</code>. The usage
+  ledger lists every member that ever ran here and the pool report shows each one the
+  vault no longer returns as <code>undiscovered</code>; <code>disown</code> refuses those,
+  so they stayed in every report. Forgetting journals the reason as a
+  <code>forgotten</code> record, drops any overlay entry and local credential under the id
+  and removes the ledger row; nothing is read from or written to the vault, and discovery
+  may enrol the account again under its own identity. This is
+  <a href="/docs/cli/subscription/forget"><code>brama subscription forget</code></a>.
+  Answers <code>{"ok", "subscription_id", "provider", "detail"}</code>. Refusals:
+  <code>400</code> for an empty id or a missing reason (<code>reason is required: say why
+  this member is forgotten</code>), <code>404</code> when neither the vault nor the usage
+  history knows the id, <code>409</code> when the vault lists the member (the answer names
+  <code>disown</code>) or a live session still leases it, <code>503</code> when the vault,
+  the lease register or the journal cannot be read, <code>403</code> for any caller but the
+  console.</li>
 <li><strong>POST <code>/v1/admin/subscription-pool/refresh</code></strong> takes
   <code>{"provider", "reason"}</code> and runs the same audited refresh as
   <code>brama subscription refresh</code>, answering the verdict with status 200 (captured:

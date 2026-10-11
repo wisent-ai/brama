@@ -140,6 +140,48 @@ pub(crate) async fn disown(
     ))
 }
 
+/// Drop one member the pool only remembers: the gateway writes the reason
+/// to its journal and removes the usage history row, so the next pool
+/// report no longer lists it.
+pub(crate) async fn forget(
+    gateway: &str,
+    bearer: &str,
+    subscription_id: &str,
+    reason: &str,
+) -> Result<String, String> {
+    let subscription_id = subscription_id.trim();
+    if subscription_id.is_empty() {
+        return Err("name the subscription to forget".into());
+    }
+    if reason.trim().is_empty() {
+        return Err("--reason must say why this member is forgotten".into());
+    }
+    let request = client()?
+        .post(format!(
+            "{}/v1/admin/subscription-pool/forget",
+            gateway.trim_end_matches('/')
+        ))
+        .bearer_auth(bearer)
+        .json(&json!({"subscription_id": subscription_id, "reason": reason}));
+    let response = stado_wait::http::request(request)
+        .await
+        .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
+    let (status, body) = answer(response, gateway).await?;
+    if !HTTP_SUCCESS.contains(&status) {
+        return Err(format!(
+            "the gateway refused to forget {subscription_id}: HTTP {status}: {}",
+            refusal(&body)
+        ));
+    }
+    match body.get("detail").and_then(Value::as_str) {
+        Some(detail) => Ok(detail.to_owned()),
+        None => Err(format!(
+            "the gateway {gateway} accepted forgetting {subscription_id} but its answer carries \
+             no detail: {body}"
+        )),
+    }
+}
+
 /// Put one retired member back in the rotation, because this deployment
 /// uses that account after all.
 ///

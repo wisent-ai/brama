@@ -23,6 +23,10 @@
 //! A member that records no account is reported as unattributed rather than
 //! counted, and `brama subscription attribute <provider>` records it from
 //! that member's own grant.
+//!
+//! What each account has left, read across its members, is `capacity`.
+
+pub(crate) mod capacity;
 
 use std::collections::BTreeMap;
 
@@ -152,12 +156,13 @@ pub async fn record_accounts(provider: &str) -> Result<Value, String> {
 }
 
 /// The pool's accounts: how many this deployment holds, which accounts they
-/// are per provider, and what could not be attributed to one.
+/// are per provider, what could not be attributed to one, and what each
+/// account has left (`capacity`, one entry per account the rows attribute).
 ///
 /// The accounts are stated, not just counted, because the number is only
 /// checkable against the accounts an operator knows they hold if the
 /// document says which ones it means.
-pub(super) fn accounts(rows: &[Value]) -> Value {
+pub(super) fn accounts(rows: &[Value], capacity: Vec<capacity::Account>) -> Value {
     let mut per_provider: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut unattributed: Vec<String> = Vec::new();
     let mut ledger_only: Vec<String> = Vec::new();
@@ -191,5 +196,6 @@ pub(super) fn accounts(rows: &[Value]) -> Value {
         "per_provider": per_provider,
         "members_without_account": unattributed,
         "ledger_only_members": ledger_only,
+        "capacity": capacity,
     })
 }

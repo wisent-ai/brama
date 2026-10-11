@@ -20,6 +20,7 @@
 
 mod account;
 mod attribution;
+mod reading;
 mod refresh;
 mod scope;
 
@@ -31,12 +32,13 @@ use wisent_errors::{Code, Failure};
 use crate::core::failure;
 use crate::gateway::broker::{self, SubscriptionEntry};
 use crate::subscription_dispatch::usage;
-use crate::subscription_dispatch::usage::{CredentialState, SubscriptionUsage};
 
 use account::{expires_at, last_redeem_error, named, now_ms, retired, state, subscription_row};
-use attribution::accounts;
+use attribution::{accounts, capacity};
+use reading::{failure_json, reading_error};
 
 pub use account::subscription_view;
+pub use attribution::capacity::{Account as AccountCapacity, Window as CapacityWindow};
 pub use attribution::{record_accounts, second_factor_report};
 pub use refresh::{refresh_provider, refresh_subscription, reinstate_member, ReinstateRefused};
 pub use scope::PoolScope;
@@ -75,6 +77,9 @@ pub(crate) fn document(
     let seed_states = std::cell::OnceCell::new();
     let leases = crate::subscription_dispatch::leases::counts();
     let mut journal_unreadable = false;
+    // What every account has left is read off the same observations the
+    // rows are built from, so the two never disagree about a member.
+    let mut observed = Vec::with_capacity(entries.len());
     // One row shape for every audience. The rows an agent may see are fewer
     // than the operator's, and that is the whole of the difference: a console
     // and an agent reading the same account read the same fields about it,
@@ -134,10 +139,17 @@ pub(crate) fn document(
             // The sessions the member carries, from the lease register: a
             // member no live lease names carries none. Only an unreadable
             // register is `null`, and is a failure of this report, named once.
-            row["live_sessions"] = match &leases {
-                Ok(counts) => json!(counts.get(&entry.id).copied().into_iter().sum::<u64>()),
-                Err(_) => Value::Null,
-            };
+            let live_sessions = leases
+                .as_ref()
+                .ok()
+                .map(|counts| counts.get(&entry.id).copied().into_iter().sum::<u64>());
+            row["live_sessions"] = json!(live_sessions);
+            observed.push(capacity::Observed {
+                entry,
+                recorded,
+                retired: retirement == Ok(true),
+                live_sessions,
+            });
             row
         })
         .collect::<Vec<_>>();
@@ -170,13 +182,9 @@ pub(crate) fn document(
         "observed_at_ms": observed_at_ms,
         "scope": scope.named(),
         "errors": errors,
-        "accounts": accounts(&rows),
+        "accounts": accounts(&rows, capacity::accounts(&observed, observed_at_ms)),
         "subscriptions": rows,
     })
-}
-
-fn failure_json(failure: &Failure) -> Value {
-    serde_json::from_str(&failure.to_json()).expect("Wisent failure serialization is JSON")
 }
 
 pub(crate) async fn inventory(scope: &PoolScope) -> (Vec<SubscriptionEntry>, Vec<Failure>) {
@@ -229,79 +237,4 @@ pub(crate) async fn inventory(scope: &PoolScope) -> (Vec<SubscriptionEntry>, Vec
         }
     }
     (entries.into_values().collect(), errors)
-}
-
-/// Why one row of the document is not a healthy answer, in the words of
-/// whatever produced the refusal.
-///
-/// A subscription the ledger remembers but the vault no longer lists is its own
-/// case: nothing can confirm its credential, which is a different problem from a
-/// grant that was refused.
-fn reading_error(
-    entry: &SubscriptionEntry,
-    recorded: Option<&SubscriptionUsage>,
-    windows: &usage::PlanWindows,
-    now: i64,
-) -> Option<Value> {
-    if entry.status == "undiscovered" {
-        return Some(failure_json(&failure::envelope(
-            "brama.subscriptions.discovery",
-            Code::Config,
-            "one subscription usage report",
-            "subscription exists in usage history but was not returned by Skarbiec; its current credential cannot be confirmed",
-        )
-        .with_context("subscription", &entry.id)
-        .with_context("provider", &entry.provider)
-        .with_context("attempted_at_ms", now.to_string())));
-    }
-    if entry.status != "active" || retired(&entry.id, recorded) != Ok(false) {
-        return None;
-    }
-    let check = usage::plan_usage_check(recorded);
-    if check.is_some_and(|check| !check.ok) {
-        if let Some(failure) = recorded.and_then(|recorded| recorded.usage_failure.as_ref()) {
-            return Some(failure.clone());
-        }
-    }
-    let credential = recorded.and_then(|recorded| recorded.credential.as_ref());
-    let detail = if let Some(cause) = credential
-        .filter(|credential| credential.state == CredentialState::NeedsReauthorization)
-        .and_then(|credential| credential.cause.as_deref())
-    {
-        cause
-    } else if let Some(check) = check.filter(|check| !check.ok) {
-        check
-            .detail
-            .as_deref()
-            .unwrap_or("usage refresh failed without a stated reason")
-    } else if windows.stale {
-        "the last usage reading is no longer current; refresh usage to obtain a new report"
-    } else if windows.limits.is_empty() {
-        if check.is_some_and(|check| check.ok)
-            && !crate::providers::adapter::publishes_plan_usage(&entry.provider)
-        {
-            return None;
-        }
-        if check.is_some() {
-            "no current plan windows are available from the last usage reading"
-        } else {
-            "usage has not been read for this subscription"
-        }
-    } else {
-        return None;
-    };
-    Some(failure_json(
-        &failure::envelope(
-            "brama.subscriptions.usage",
-            failure::code_for_message(detail, "provider_failure"),
-            "one subscription usage report",
-            detail,
-        )
-        .with_context("subscription", &entry.id)
-        .with_context("provider", &entry.provider)
-        .with_context(
-            "attempted_at_ms",
-            check.map_or(now, |check| check.attempted_at_ms).to_string(),
-        ),
-    ))
 }

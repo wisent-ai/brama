@@ -3,6 +3,8 @@
 //! Reset reporting additionally requires MEMBER and EXPECTED_CREDITS.
 //! Discovery requires EXPECTED_ACCOUNT, EXPECTED_HARNESS_PROVIDER and EXPECTED_PROVIDER.
 //! The spent-pool lease journey requires LEASE_SPENT_PROVIDER.
+#[path = "accounts/capacity.rs"]
+mod account_capacity;
 #[path = "identity/authenticator.rs"]
 mod authenticator_identity;
 #[path = "identity/borrowed.rs"]

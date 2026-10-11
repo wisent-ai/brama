@@ -50,6 +50,33 @@ operator looking for a sign-in nothing needs.
 Without `--json` the same report is printed as lines, led by how many credentials
 are live -- which is the question that gets the command run.
 
+Each row also says where the member stands, from fields the document already
+carries: `retired: <cause> (recorded <instant>)` for a member taken out of the
+rotation, the cause and instant being `credential.cause` and
+`credential.recorded_at_ms` written with the retirement (`retired by its owning
+agent`, a provider's refusal, a reconciliation); `last sign-in: <result> at
+<instant>: <detail>` from `sign_in`, the newest journaled sign-in, automatic or
+operator-run; `membership: discovered account <account> has not been signed in
+by Brama` for a member discovery registered that holds no sign-in; and
+`membership: unknown; the retirement journal could not be read: <cause>` from
+`credential.journal_error`. Brama Desktop shows the same as its **Membership**
+column and section.
+
+The report's head prints `last purchase of <provider>: <result> at <instant>:
+<detail>`, followed by who asked (`trigger`), the `reason`, the `shortage`
+bought for, the `account`, the `plan_tier` and the `request_id`, for every
+provider `providers.json` declares, from the document's `acquisition` object:
+the newest journaled acquisition per provider, `null` for one never bought
+for. A journaled purchase is `requested` (Weles was asked and has not
+answered; nothing more is bought for that provider until it ends),
+`acquired` or `failed` (the detail names the step and cause, and `brama
+maintain` stops buying for that provider until an operator runs the
+acquisition again). A refusal is a decision, not a purchase: it is not
+journaled, and `brama subscription acquire` prints it with its code and cause
+when it is asked. A gateway whose acquisition journal cannot be read names
+that among the report's errors and leaves the object out; the line then reads
+`last purchase: the acquisition journal could not be read (see errors)`.
+
 ## `brama subscription refresh <provider> --reason <text>`
 
 Runs the refresh the gateway's own timer runs, for one provider, now. A burnt or
@@ -95,6 +122,26 @@ bearer from the vault item that plays the role, read with
 `stado credentials get --role`; no item is named. A refusal exits nonzero with
 the gateway's own sentence. A missing or stale provider usage report is not
 zero usage; read each window's observation and reset times.
+
+## What each account has left
+
+Members are rows; accounts are what the operator pays for, and two members of
+one account draw on one quota. The pool document therefore carries
+`accounts.capacity`, one object per account the rows attribute, with the
+newest reading of every plan window any of its members holds (for Claude the
+`five_hour` and `seven_day` windows): the provider's `used_fraction`, the
+`remaining_fraction` (the whole limit less it; `null` for a window whose reset
+instant has passed and that nothing has read since), `resets_at_ms`,
+`read_at_ms` and the `member` it was read off. Beside the windows:
+`usable_members`, `refused_members` with the ledger's reason, `blocked_until_ms`,
+`live_sessions` (`null` when the lease register could not be read),
+`tightest_remaining_fraction` and `available`, whether a session put on the
+account now would be served. `brama subscription list` prints it under the
+account lines, one line per account and one per window; Brama Desktop shows
+it as **Account capacity** on the subscription pool screen. The acquisition
+and a session-placing policy read the same object, so what they decide on is
+what the operator sees. Brama computes no number the provider did not state:
+an account with no reading has an empty `windows`, not a free plan.
 
 What the usage ledger holds, and what loading one that cannot be read does, is
 in [the usage ledger page](../usage-ledger.md). Signing a disowned grant back in

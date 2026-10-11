@@ -116,23 +116,57 @@ pub(super) async fn reinstate(
     json: bool,
 ) {
     if destination.gateway.is_none() && destination.gateway_consumer.is_none() {
-        match brama::subscription_dispatch::pool::reinstate_member(subscription_id, reason).await {
-            Ok(verdict) => said(
-                text(&verdict, "subscription_id").unwrap_or_default(),
-                text(&verdict, "detail").unwrap_or_default(),
-                json,
-            ),
-            Err((_, error)) => {
-                eprintln!("{error}");
-                std::process::exit(1);
-            }
-        }
+        answered(
+            brama::subscription_dispatch::pool::reinstate_member(subscription_id, reason).await,
+            json,
+        );
         return;
     }
     act(destination, subscription_id, json, |gateway, bearer| {
         let subscription_id = subscription_id.to_owned();
         let reason = reason.to_owned();
         async move { super::remote::reinstate(&gateway, &bearer, &subscription_id, &reason).await }
+    })
+    .await;
+}
+
+/// One membership change made on this host: its verdict said, or its
+/// refusal printed as it is and the command ended unsuccessfully.
+fn answered<Refused>(outcome: Result<Value, (Refused, String)>, json: bool) {
+    match outcome {
+        Ok(verdict) => said(
+            text(&verdict, "subscription_id").unwrap_or_default(),
+            text(&verdict, "detail").unwrap_or_default(),
+            json,
+        ),
+        Err((_, error)) => {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// Drop one member the pool only remembers.
+///
+/// Named a gateway, this asks that gateway; named none, it acts on this
+/// host's own usage history through the same code the gateway's route runs.
+pub(super) async fn forget(
+    destination: Destination,
+    subscription_id: &str,
+    reason: &str,
+    json: bool,
+) {
+    if destination.gateway.is_none() && destination.gateway_consumer.is_none() {
+        answered(
+            brama::subscription_dispatch::forget::forget_member(subscription_id, reason).await,
+            json,
+        );
+        return;
+    }
+    act(destination, subscription_id, json, |gateway, bearer| {
+        let subscription_id = subscription_id.to_owned();
+        let reason = reason.to_owned();
+        async move { super::remote::forget(&gateway, &bearer, &subscription_id, &reason).await }
     })
     .await;
 }

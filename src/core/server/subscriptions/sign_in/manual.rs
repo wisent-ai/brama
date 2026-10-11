@@ -239,6 +239,54 @@ pub(in crate::core::server) async fn reinstate_admin_grant(
         })
 }
 
+/// `POST /v1/admin/subscription-pool/forget`: a member the pool only
+/// remembers is dropped, for a reason.
+///
+/// The usage ledger lists every member that ever ran here, and the pool
+/// report shows each one the vault no longer returns as `undiscovered`.
+/// `disown` refuses those (`the pool holds no member with that id`), so an
+/// account this deployment stopped using stayed in every report with no
+/// verb to take it out. This is that verb; a member the vault lists is
+/// refused back to `disown`. The reason is the caller's: a request without
+/// one is refused, because the journal keeps it as the operator's words.
+pub(in crate::core::server) async fn forget_admin_member(
+    Extension(client_identity): Extension<ModelClientIdentity>,
+    Json(request): Json<DisownRequest>,
+) -> Result<Json<Value>, ApiError> {
+    require_brama_desktop(&client_identity)?;
+    let Some(reason) = request
+        .reason
+        .as_deref()
+        .map(str::trim)
+        .filter(|reason| !reason.is_empty())
+    else {
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            "reason is required: say why this member is forgotten",
+        ));
+    };
+    crate::subscription_dispatch::forget::forget_member(&request.subscription_id, reason)
+        .await
+        .map(|verdict| {
+            Json(json!({
+                "ok": true,
+                "subscription_id": verdict["subscription_id"],
+                "provider": verdict["provider"],
+                "detail": verdict["detail"],
+            }))
+        })
+        .map_err(|(refused, detail)| {
+            use crate::subscription_dispatch::forget::ForgetRefused;
+            let status = match refused {
+                ForgetRefused::Invalid => StatusCode::BAD_REQUEST,
+                ForgetRefused::NoRecord => StatusCode::NOT_FOUND,
+                ForgetRefused::Listed | ForgetRefused::Leased => StatusCode::CONFLICT,
+                ForgetRefused::Unreadable => StatusCode::SERVICE_UNAVAILABLE,
+            };
+            api_error(status, &detail)
+        })
+}
+
 /// What the console names when it gives a member back.
 #[derive(serde::Deserialize)]
 pub(in crate::core::server) struct DisownRequest {

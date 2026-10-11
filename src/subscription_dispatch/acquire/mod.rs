@@ -34,8 +34,8 @@ pub mod resets;
 mod weles;
 
 /// The one reading of a plan fraction every decision shares: the pool's
-/// account capacity and the acquisition read the same limit.
-pub(crate) use decide::pool_state::{at_limit, WHOLE_LIMIT};
+/// account capacity, the acquisition and the real tests read the same limit.
+pub use decide::pool_state::{at_limit, WHOLE_LIMIT};
 
 use std::sync::LazyLock;
 

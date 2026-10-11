@@ -176,6 +176,31 @@ pub(crate) enum SubscriptionCommand {
         #[arg(long, default_value_t = false)]
         json: bool,
     },
+    /// Drop one member the pool only remembers: a subscription the usage history lists but the vault does not; a member the vault lists is refused back to `disown`
+    #[command(
+        name = "forget",
+        group(ArgGroup::new("destination").args(["gateway", "gateway_consumer"]))
+    )]
+    Forget {
+        /// The remembered member to drop
+        #[arg(long)]
+        subscription_id: String,
+        /// Why it is forgotten; recorded in the gateway's journal in these words
+        #[arg(long, value_parser = NonEmptyStringValueParser::new())]
+        reason: String,
+        /// The gateway holding the usage history; the console's bearer is read from stdin
+        #[arg(long)]
+        gateway: Option<String>,
+        /// Resolve the gateway through Stado's service directory as this consumer
+        #[arg(long)]
+        gateway_consumer: Option<String>,
+        /// Read the console's bearer from the vault item playing this role (its `token` field) instead of from stdin
+        #[arg(long, value_name = "ROLE", requires = "destination")]
+        bearer_role: Option<String>,
+        /// Print `{subscription_id, detail}` as JSON instead of a line
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
     /// Buy one new account of this provider when every account in the pool
     /// has spent its plan and the pool holds fewer accounts than the
     /// operator allows: Weles creates and pays for it on the plan the pool's
