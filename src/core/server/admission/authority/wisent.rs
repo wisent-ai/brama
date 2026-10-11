@@ -35,15 +35,18 @@ fn wisent_identity() -> Option<(String, String)> {
 
 pub(super) async fn ask_wisent_identity(bearer: &str) -> WisentIdentityAnswer {
     let Some((origin, anon_key)) = wisent_identity() else {
-        tracing::warn!(
-            event = "wisent_identity_unconfigured",
-            "BRAMA_WISENT_AUTH_URL or BRAMA_WISENT_AUTH_ANON_KEY is unset; no person can be resolved"
+        return WisentIdentityAnswer::Unavailable(
+            "BRAMA_WISENT_AUTH_URL or BRAMA_WISENT_AUTH_ANON_KEY is unset; no person can be resolved".into(),
         );
-        return WisentIdentityAnswer::Unavailable;
     };
+    let user = format!("{origin}/auth/v1/user");
     let client = match crate::providers::adapter::control_client() {
         Ok(client) => client,
-        Err(_) => return WisentIdentityAnswer::Unavailable,
+        Err(error) => {
+            return WisentIdentityAnswer::Unavailable(format!(
+                "cannot build the Wisent Identity client: {error}"
+            ))
+        }
     };
     let response = match client
         .get(format!("{origin}/auth/v1/user"))
@@ -53,28 +56,39 @@ pub(super) async fn ask_wisent_identity(bearer: &str) -> WisentIdentityAnswer {
         .await
     {
         Ok(response) => response,
-        Err(_) => return WisentIdentityAnswer::Unavailable,
+        Err(error) => return WisentIdentityAnswer::Unavailable(format!("GET {user}: {error}")),
     };
     if response.status().is_server_error() || response.status() == StatusCode::TOO_MANY_REQUESTS {
-        return WisentIdentityAnswer::Unavailable;
+        return WisentIdentityAnswer::Unavailable(format!(
+            "GET {user} answered {}",
+            response.status()
+        ));
     }
     if !response.status().is_success() {
         return WisentIdentityAnswer::Rejected;
     }
     let bytes = match response.bytes().await {
         Ok(bytes) => bytes,
-        Err(_) => return WisentIdentityAnswer::Unavailable,
+        Err(error) => {
+            return WisentIdentityAnswer::Unavailable(format!("GET {user} body: {error}"))
+        }
     };
     let answer: Value = match serde_json::from_slice(&bytes) {
         Ok(answer) => answer,
-        Err(_) => return WisentIdentityAnswer::Unavailable,
+        Err(error) => {
+            return WisentIdentityAnswer::Unavailable(format!(
+                "GET {user} answered a body that is not JSON: {error}"
+            ))
+        }
     };
     let Some(user_id) = answer.get("id").and_then(Value::as_str) else {
-        return WisentIdentityAnswer::Unavailable;
+        return WisentIdentityAnswer::Unavailable(format!("GET {user} answered a user with no id"));
     };
     match uuid::Uuid::parse_str(user_id) {
         Ok(user_id) => WisentIdentityAnswer::Resolved(user_id),
-        Err(_) => WisentIdentityAnswer::Unavailable,
+        Err(error) => WisentIdentityAnswer::Unavailable(format!(
+            "GET {user} answered an id that is not a UUID ({user_id}): {error}"
+        )),
     }
 }
 

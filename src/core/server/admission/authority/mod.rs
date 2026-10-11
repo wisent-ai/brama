@@ -37,7 +37,8 @@ pub(super) enum WorkloadAuthorityAnswer {
 pub(super) enum WisentIdentityAnswer {
     Resolved(uuid::Uuid),
     Rejected,
-    Unavailable,
+    /// The authority could not answer, and the operation that failed.
+    Unavailable(String),
 }
 
 /// Resolve workload credentials through their service authority and human
@@ -64,8 +65,10 @@ pub(super) async fn identity_from_authority(
             return Err(IdentityResolutionError::UpstreamUnavailable)
         }
         WisentIdentityAnswer::Rejected => return Err(IdentityResolutionError::Unauthorized),
-        WisentIdentityAnswer::Unavailable => {
-            return Err(IdentityResolutionError::UpstreamUnavailable)
+        WisentIdentityAnswer::Unavailable(cause) => {
+            // The client sees 503; the log keeps which call failed and why.
+            tracing::warn!(event = "wisent_identity_unavailable", %cause);
+            return Err(IdentityResolutionError::UpstreamUnavailable);
         }
     };
     let organization_id = organization_header
