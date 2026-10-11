@@ -64,14 +64,14 @@ pub(super) struct Layout {
 }
 
 impl Layout {
-    fn read() -> Self {
-        let home = super::workload::home();
+    fn read() -> Result<Self, String> {
+        let home = super::workload::home()?;
         let settings = service_settings(&home).unwrap_or_default();
         let release_state = std::fs::read(home.join(".stado/release-state/brama.json"))
             .ok()
             .and_then(|bytes| serde_json::from_slice(&bytes).ok())
             .unwrap_or(Value::Null);
-        Layout {
+        Ok(Layout {
             services: home.join(".stado/services/brama"),
             log: home
                 .join(".stado/logs")
@@ -79,7 +79,7 @@ impl Layout {
             home,
             settings,
             release_state,
-        }
+        })
     }
 
     /// One release-state record that names a release directory.
@@ -139,14 +139,18 @@ pub(crate) async fn run(json: bool) {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Vec::new());
     }
-    let layout = Layout::read();
-    let resolved = installation::print_units(&layout);
-    installation::print_generations(&layout, resolved.as_deref());
-    let config_dir = installation::print_service_env(&layout, resolved.as_deref());
-    let providers = capability::print_policy_grants(&layout, &config_dir);
-    capability::print_alias_routes(&layout, &providers);
-    reachability::print_reachability(&layout).await;
-    reachability::print_boot_attempt(&layout);
+    match Layout::read() {
+        Ok(layout) => {
+            let resolved = installation::print_units(&layout);
+            installation::print_generations(&layout, resolved.as_deref());
+            let config_dir = installation::print_service_env(&layout, resolved.as_deref());
+            let providers = capability::print_policy_grants(&layout, &config_dir);
+            capability::print_alias_routes(&layout, &providers);
+            reachability::print_reachability(&layout).await;
+            reachability::print_boot_attempt(&layout);
+        }
+        Err(cause) => emit(format!("=== installation\n{cause}")),
+    }
     let Some(lines) = COLLECTED
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)

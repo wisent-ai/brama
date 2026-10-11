@@ -82,8 +82,12 @@ const PEM_LINE: usize = 76;
 /// Owner read and write only.
 const OWNER_ONLY: u32 = 0o600;
 
-pub(crate) fn home() -> PathBuf {
-    PathBuf::from(std::env::var("HOME").unwrap_or_default())
+/// The home directory; an unset HOME is refused, since read as the empty path
+/// every service file would be looked for under the working directory.
+pub(crate) fn home() -> Result<PathBuf, String> {
+    std::env::var("HOME")
+        .map(PathBuf::from)
+        .map_err(|error| format!("HOME cannot be read, so the Brama installation cannot be found: {error}"))
 }
 
 /// `~/.config/brama/service.env` as `NAME=value` settings, quotes removed.
@@ -135,7 +139,7 @@ struct Installation {
 }
 
 fn installation() -> Result<Installation, String> {
-    let home = home();
+    let home = home()?;
     let settings = service_settings(&home)?;
     let env = |name: &str| std::env::var(name).ok().filter(|value| !value.is_empty());
     let setting = |name: &str| {
