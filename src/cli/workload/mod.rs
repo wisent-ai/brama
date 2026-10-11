@@ -22,11 +22,11 @@
 
 mod installation;
 pub(crate) mod pins;
+mod routes;
 
 use installation::{agent_ids, installation, refusal_detail, Installation};
 pub(crate) use installation::{home, service_settings};
 
-use std::collections::BTreeSet;
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
@@ -158,76 +158,19 @@ fn register() -> Result<Value, String> {
         registry_path,
         workload,
     } = installation()?;
-    let env = |name: &str| std::env::var(name).ok().filter(|value| !value.is_empty());
-    let setting = |name: &str| {
-        settings
-            .get(name)
-            .cloned()
-            .filter(|value| !value.is_empty())
-    };
     let public_key = workload
         .get("proof_key")
         .and_then(Value::as_str)
-        .unwrap_or("");
+        .filter(|key| !key.is_empty());
     let agents = agent_ids(&workload);
-    if public_key.is_empty() || agents.is_empty() {
+    let (Some(public_key), false) = (public_key, agents.is_empty()) else {
         return Err(format!(
             "{} names no proof key or agent to bind it to",
             registry_path.display()
         ));
-    }
-    // On a running host the routes table is not beside the vault the broker
-    // opens; looking only there grants nothing and leaves every redemption
-    // denied, silently.
-    let mut candidates: Vec<PathBuf> = env("SKARBIEC_CAPABILITY_ROUTES_FILE")
-        .or_else(|| setting("SKARBIEC_CAPABILITY_ROUTES_FILE"))
-        .map(PathBuf::from)
-        .into_iter()
-        .collect();
-    candidates.push(Path::new(&vault).with_file_name("capability-routes.json"));
-    candidates.push(home.join(".stado/capability-routes.json"));
-    let Some(routes_path) = candidates.iter().find(|path| path.is_file()) else {
-        let named: Vec<String> = candidates
-            .iter()
-            .map(|path| path.display().to_string())
-            .collect();
-        return Err(format!(
-            "no capability routes table found at {}",
-            named.join(", ")
-        ));
     };
-    let bytes = std::fs::read(routes_path).map_err(|error| {
-        format!(
-            "cannot read capability routes table {}: {error}",
-            routes_path.display()
-        )
-    })?;
-    let routes: Value = serde_json::from_slice(&bytes)
-        .map_err(|error| format!("{} is not JSON: {error}", routes_path.display()))?;
-    let capabilities: BTreeSet<String> = routes
-        .as_object()
-        .into_iter()
-        .flat_map(|entries| entries.values())
-        .filter_map(|entry| {
-            let item = entry
-                .get("item")?
-                .as_str()
-                .filter(|value| !value.is_empty())?;
-            let field = entry
-                .get("field")?
-                .as_str()
-                .filter(|value| !value.is_empty())?;
-            Some(format!("acquire:{item}#{field}"))
-        })
-        .collect();
+    let (routes_path, capabilities) = routes::capabilities(&home, &vault, &settings)?;
     let mut granted = Vec::with_capacity(agents.len());
-    if capabilities.is_empty() {
-        return Err(format!(
-            "{} maps nothing, so there is nothing to grant",
-            routes_path.display()
-        ));
-    }
-    let capabilities: Vec<String> = capabilities.into_iter().collect();
     let pem = public_key_pem(public_key)?;
     let key_file =
         registry_path.with_file_name(format!(".workload-key-{}.pem", std::process::id()));
@@ -280,7 +223,9 @@ fn register() -> Result<Value, String> {
                 refusal_detail(&minted)
             ));
         }
-        let answer: Value = serde_json::from_str(stdout.trim()).unwrap_or(Value::Null);
+        let answer: Value = serde_json::from_str(stdout.trim()).map_err(|error| {
+            format!("grant issue for {agent} succeeded but answered no JSON: {error}")
+        })?;
         granted.push(json!({
             "agent": agent,
             "workload_bound": answer.get("workload_bound").unwrap_or(&Value::Null),

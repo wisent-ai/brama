@@ -20,7 +20,12 @@ pub(crate) fn mismatches(registry: &Path, binary: &Path) -> Result<Vec<String>, 
         .and_then(Value::as_object)
         .and_then(|workloads| workloads.values().next())
         .cloned()
-        .unwrap_or(Value::Null);
+        .ok_or_else(|| {
+            format!(
+                "workload registry {} declares no workload",
+                registry.display()
+            )
+        })?;
     let bytes = std::fs::read(binary).map_err(|error| format!("{}: {error}", binary.display()))?;
     // SAFETY: getuid and getgid cannot fail and touch no memory.
     let (uid, gid) = unsafe { (libc::getuid(), libc::getgid()) };
