@@ -25,18 +25,14 @@ const DONATED_SUBSCRIPTIONS_FILE_ENV: &str = "BRAMA_DONATED_SUBSCRIPTIONS_FILE";
 
 /// Path of the donated-subscriptions overlay file.
 pub fn donated_subscriptions_path() -> PathBuf {
-    std::env::var(DONATED_SUBSCRIPTIONS_FILE_ENV)
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-            PathBuf::from(home)
-                .join(".stado")
-                .join("var")
-                .join("brama")
-                .join("donated-subscriptions.json")
-        })
+    match std::env::var(DONATED_SUBSCRIPTIONS_FILE_ENV) {
+        Ok(value) if !value.trim().is_empty() => PathBuf::from(value),
+        _ => crate::journal::home_dir()
+            .join(".stado")
+            .join("var")
+            .join("brama")
+            .join("donated-subscriptions.json"),
+    }
 }
 
 /// Overlay entries, for routing (`owner: None`) or for the agent that banked

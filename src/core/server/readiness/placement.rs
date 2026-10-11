@@ -63,17 +63,13 @@ impl Placement {
 /// The Stado binary that answers placement, the same resolution the sign-in
 /// path uses to find Weles.
 fn stado_binary() -> std::path::PathBuf {
-    std::env::var("BRAMA_STADO_BIN")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-            std::path::PathBuf::from(home)
-                .join(".stado")
-                .join("bin")
-                .join("stado")
-        })
+    match std::env::var("BRAMA_STADO_BIN") {
+        Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
+        _ => crate::journal::home_dir()
+            .join(".stado")
+            .join("bin")
+            .join("stado"),
+    }
 }
 
 async fn read_placement() -> Placement {

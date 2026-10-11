@@ -16,17 +16,13 @@ use zeroize::Zeroizing;
 /// The Stado binary that answers both lookups, resolved exactly as the
 /// readiness path resolves it.
 fn stado_binary() -> std::path::PathBuf {
-    std::env::var("BRAMA_STADO_BIN")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-            std::path::PathBuf::from(home)
-                .join(".stado")
-                .join("bin")
-                .join("stado")
-        })
+    match std::env::var("BRAMA_STADO_BIN") {
+        Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
+        _ => crate::journal::home_dir()
+            .join(".stado")
+            .join("bin")
+            .join("stado"),
+    }
 }
 
 async fn stado(arguments: &[&str]) -> Result<Zeroizing<String>, String> {

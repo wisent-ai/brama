@@ -15,16 +15,26 @@ pub mod concurrency;
 pub mod resets;
 
 /// Brama's own state directory on this host: `$BRAMA_STATE_DIR`, or
-/// `$HOME/.brama`. The journal, the agent replay record and the model
-/// catalog copy all live here, never in a shared temporary directory.
+/// `.brama` under the user's home. The journal, the agent replay record and
+/// the model catalog copy all live here, never in a shared temporary
+/// directory.
 pub(crate) fn state_dir() -> PathBuf {
     if let Ok(dir) = std::env::var("BRAMA_STATE_DIR") {
         if !dir.trim().is_empty() {
             return PathBuf::from(dir.trim());
         }
     }
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".brama")
+    home_dir().join(".brama")
+}
+
+/// The user's home: HOME, else the home the user database records. With
+/// neither, Brama stops with the cause; reading `.` as home put retirement
+/// markers, leases and replay records in whatever directory Brama started
+/// from, where the next start under another directory never saw them.
+pub(crate) fn home_dir() -> PathBuf {
+    std::env::home_dir().expect(
+        "neither HOME nor the user database names a home directory, so Brama cannot find its state or the Stado binary",
+    )
 }
 
 fn journal_path() -> PathBuf {

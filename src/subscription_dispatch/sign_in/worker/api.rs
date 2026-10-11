@@ -65,17 +65,7 @@ pub(crate) async fn worker_api_base() -> Result<WelesEndpoint, String> {
             });
         }
     }
-    let stado = std::env::var("BRAMA_STADO_BIN")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-            std::path::PathBuf::from(home)
-                .join(".stado")
-                .join("bin")
-                .join("stado")
-        });
+    let stado = stado_binary();
     // A host may declare one resolver adapter per consumer, and Stado refuses
     // to guess between them: without a named consumer `brama subscription
     // sign-in` dies on "<host> declares 3 resolver adapters for
@@ -184,17 +174,7 @@ const REAUTH_ROLE: &str = "brama-weles-reauth";
 /// once per sign-in, before any HTTP exchange, and both callers are already
 /// waiting on a child process for the length of a browser login.
 fn vault_reauth_token() -> Result<String, String> {
-    let stado = std::env::var("BRAMA_STADO_BIN")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-            std::path::PathBuf::from(home)
-                .join(".stado")
-                .join("bin")
-                .join("stado")
-        });
+    let stado = stado_binary();
     let output = std::process::Command::new(&stado)
         .args([
             "credentials",
@@ -229,4 +209,16 @@ fn vault_reauth_token() -> Result<String, String> {
         return Err(format!("role {REAUTH_ROLE} has an empty token"));
     }
     Ok(token)
+}
+
+/// The Stado binary: `BRAMA_STADO_BIN`, else `.stado/bin/stado` under the
+/// user's home, never under the working directory.
+fn stado_binary() -> std::path::PathBuf {
+    match std::env::var("BRAMA_STADO_BIN") {
+        Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
+        _ => crate::journal::home_dir()
+            .join(".stado")
+            .join("bin")
+            .join("stado"),
+    }
 }
