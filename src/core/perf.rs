@@ -12,7 +12,7 @@
 //! per process, never fleet-wide.
 
 use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex};
+use std::sync::{LazyLock, Mutex, MutexGuard};
 
 use serde::{Deserialize, Serialize};
 
@@ -43,6 +43,18 @@ static REGISTRY: LazyLock<Mutex<HashMap<String, PerfStats>>> = LazyLock::new(|| 
 
 fn persist_path() -> String {
     std::env::var("BRAMA_PERF_PATH").unwrap_or_else(|_| "/tmp/brama-perf.json".into())
+}
+
+/// The stats are counters a panic mid-record leaves at worst one dispatch
+/// short, so a poisoned lock is recovered rather than served as no stats.
+fn registry() -> MutexGuard<'static, HashMap<String, PerfStats>> {
+    match REGISTRY.lock() {
+        Ok(map) => map,
+        Err(poisoned) => {
+            tracing::warn!(event = "perf_stats_lock_poisoned");
+            poisoned.into_inner()
+        }
+    }
 }
 
 /// An absent file is a first start; one that cannot be read or does not parse
@@ -78,10 +90,7 @@ pub fn record(model: &str, latency_ms: f64, output_tokens: u32) {
     } else {
         0.0
     };
-    let Ok(mut map) = REGISTRY.lock() else {
-        tracing::warn!(event = "perf_stats_lock_poisoned", %model);
-        return;
-    };
+    let mut map = registry();
     let stats = map.entry(model.to_string()).or_default();
     stats.count += 1;
     stats.total_latency_ms += latency_ms;
@@ -136,9 +145,7 @@ fn average(model: &str, stats: &PerfStats) -> ModelPerf {
 
 /// All tracked models, most-used first.
 pub fn snapshot() -> Vec<ModelPerf> {
-    let Ok(map) = REGISTRY.lock() else {
-        return Vec::new();
-    };
+    let map = registry();
     let mut out: Vec<ModelPerf> = map
         .iter()
         .map(|(model, stats)| average(model, stats))
@@ -149,14 +156,10 @@ pub fn snapshot() -> Vec<ModelPerf> {
 
 /// Averages for a single route id, when stats exist.
 pub fn get(model: &str) -> Option<ModelPerf> {
-    REGISTRY
-        .lock()
-        .ok()?
-        .get(model)
-        .map(|stats| average(model, stats))
+    registry().get(model).map(|stats| average(model, stats))
 }
 
 /// Number of models currently tracked.
 pub fn tracked_count() -> usize {
-    REGISTRY.lock().map(|map| map.len()).unwrap_or(0)
+    registry().len()
 }
