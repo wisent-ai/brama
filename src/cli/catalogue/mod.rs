@@ -14,7 +14,7 @@ use clap::{Args, Subcommand};
 use serde_json::json;
 
 use brama::core::inference_routes::categories::{categories_for, declared};
-use brama::providers::adapter::ModelKind;
+use brama::providers::adapter::{ModelKind, Weights};
 use brama::subscription_dispatch::model_catalog;
 
 pub(crate) use categories::run_categories;
@@ -67,7 +67,7 @@ pub(crate) async fn models(args: ModelsArgs) {
     }
     if weights
         .as_deref()
-        .is_some_and(|value| value != "open" && value != "closed")
+        .is_some_and(|value| Weights::parse(value).is_none())
     {
         eprintln!("weights must be open or closed");
         std::process::exit(1);

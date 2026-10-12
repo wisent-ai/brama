@@ -17,7 +17,7 @@ pub(in crate::providers::adapter) use address::{
     validated_provider_base_url,
 };
 pub(in crate::providers::adapter) use advertised_model::model_from_value;
-pub use facets::{kind_from_output, ModelKind};
+pub use facets::{kind_from_output, ModelKind, Weights};
 pub(in crate::providers::adapter) use known_limits::apply_omp_model_metadata;
 pub(crate) use known_limits::known_max_output_tokens;
 pub use route::{

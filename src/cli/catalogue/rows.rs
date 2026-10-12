@@ -7,22 +7,23 @@
 
 use serde_json::{json, Value};
 
-use brama::providers::adapter::{ModelKind, RegistryModel};
+use brama::providers::adapter::{ModelKind, RegistryModel, Weights};
 
 pub(super) struct ModelRow<'a> {
     pub(super) model: &'a RegistryModel,
     pub(super) categories: Vec<String>,
 }
 
+/// The third answer to whether weights are published, and not a hedge:
+/// models.dev states `open_weights` per model, and a row that omits it has
+/// told us nothing about how the weights were published.
+const UNSTATED_WEIGHTS: &str = "unknown";
+
 impl ModelRow<'_> {
-    /// `unknown` is the third answer and it is not a hedge: models.dev states
-    /// `open_weights` per model, and a row that omits it has told us nothing
-    /// about how the weights were published.
     pub(super) fn weights(&self) -> &'static str {
-        match self.model.open_weights {
-            Some(true) => "open",
-            Some(false) => "closed",
-            None => "unknown",
+        match Weights::of(self.model.open_weights) {
+            Some(weights) => weights.as_str(),
+            None => UNSTATED_WEIGHTS,
         }
     }
 
@@ -61,8 +62,8 @@ pub(super) fn matches_filters(
             return false;
         }
     }
-    if let Some(weights) = weights {
-        if row.weights() != weights {
+    if let Some(weights) = weights.and_then(Weights::parse) {
+        if Weights::of(row.model.open_weights) != Some(weights) {
             return false;
         }
     }

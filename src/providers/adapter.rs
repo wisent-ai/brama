@@ -44,7 +44,7 @@ pub use registry::{
     providers, route, supports_chat_route, supports_decision_route, supports_embedding_route,
     supports_image_route, supports_moderation_route, supports_music_route, supports_speech_route,
     supports_video_route, supports_voices_route, valid_model_id, valid_provider_id, AuthKind,
-    MediaWire, ModelKind, ProviderDescriptor, RegistryModel, WireProtocol,
+    MediaWire, ModelKind, ProviderDescriptor, RegistryModel, Weights, WireProtocol,
 };
 
 pub(crate) use call::credential::credential_key;

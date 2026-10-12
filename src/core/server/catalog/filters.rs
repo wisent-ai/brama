@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use crate::core::inference_routes::categories::valid_category_name;
 use crate::core::server::refusal::{api_error, ApiError};
-use crate::providers::adapter::{valid_provider_id, ModelKind, RegistryModel};
+use crate::providers::adapter::{valid_provider_id, ModelKind, RegistryModel, Weights};
 
 #[derive(Debug, Default)]
 pub(in crate::core::server) struct CatalogFilters {
@@ -19,13 +19,6 @@ pub(in crate::core::server) struct CatalogFilters {
     weights: Option<String>,
     category: Option<String>,
     provider: Option<String>,
-}
-
-/// Whether the caller asked for published weights or for withheld ones.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Weights {
-    Open,
-    Closed,
 }
 
 #[derive(Debug, Default)]
@@ -88,9 +81,10 @@ impl CatalogFilters {
             None => None,
         };
         let weights = match stated(&self.weights) {
-            Some("open") => Some(Weights::Open),
-            Some("closed") => Some(Weights::Closed),
-            Some(_) => return Err(bad_request("weights must be open or closed")),
+            Some(value) => Some(
+                Weights::parse(value)
+                    .ok_or_else(|| bad_request("weights must be open or closed"))?,
+            ),
             None => None,
         };
         let category = match stated(&self.category) {
@@ -151,10 +145,7 @@ impl ValidCatalogFilters {
             }
         }
         if let Some(weights) = self.weights {
-            let Some(published) = model.open_weights else {
-                return false;
-            };
-            if published != (weights == Weights::Open) {
+            if Weights::of(model.open_weights) != Some(weights) {
                 return false;
             }
         }

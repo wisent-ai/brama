@@ -34,15 +34,51 @@ impl ModelKind {
     }
 
     /// The name a caller writes in `?kind=`, or nothing when it wrote
-    /// something this gateway has no kind for.
+    /// something this gateway has no kind for. Read back through
+    /// [`ModelKind::as_str`], the one spelling of each kind.
     pub fn parse(value: &str) -> Option<ModelKind> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "text" => Some(ModelKind::Text),
-            "image" => Some(ModelKind::Image),
-            "video" => Some(ModelKind::Video),
-            "audio" => Some(ModelKind::Audio),
-            _ => None,
+        let wanted = value.trim().to_ascii_lowercase();
+        [
+            ModelKind::Text,
+            ModelKind::Image,
+            ModelKind::Video,
+            ModelKind::Audio,
+        ]
+        .into_iter()
+        .find(|kind| kind.as_str() == wanted)
+    }
+}
+
+/// Whether a model's weights are published (`open`) or withheld (`closed`),
+/// as its source's `open_weights` flag states and as the catalogue's
+/// `weights` filter names them. A source that never stated the flag has no
+/// answer, which is neither.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Weights {
+    Open,
+    Closed,
+}
+
+impl Weights {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Weights::Open => "open",
+            Weights::Closed => "closed",
         }
+    }
+
+    /// The answer a caller writes in `weights`, or nothing when it wrote
+    /// something else; read back through [`Weights::as_str`].
+    pub fn parse(value: &str) -> Option<Weights> {
+        let wanted = value.trim().to_ascii_lowercase();
+        [Weights::Open, Weights::Closed]
+            .into_iter()
+            .find(|weights| weights.as_str() == wanted)
+    }
+
+    /// What a source's `open_weights` flag says, when it says anything.
+    pub fn of(open_weights: Option<bool>) -> Option<Weights> {
+        open_weights.map(|open| if open { Weights::Open } else { Weights::Closed })
     }
 }
 
