@@ -9,8 +9,8 @@ use crate::providers::adapter as provider_registry;
 use crate::types::{GatewayRefusal, Refusal};
 
 use super::cache::{
-    cached_registry_models, failure_fresh, models_fresh, CachedRegistryModels,
-    REGISTRY_MODEL_CACHE, REGISTRY_MODEL_FAILURE_CACHE,
+    cached_registry_models, failure_fresh, failures_cache, models_cache, models_fresh,
+    CachedRegistryModels,
 };
 use super::subscription_models::discover_subscription_models;
 
@@ -88,25 +88,17 @@ async fn discover_direct_provider_models(
     let mut discovered = Vec::new();
     for provider in providers {
         let cache_key = format!("{provider}:direct");
-        if let Some(models) = REGISTRY_MODEL_CACHE.lock().ok().and_then(|cache| {
-            cache
-                .get(&cache_key)
-                .filter(|item| models_fresh(item.fetched))
-                .map(|item| item.models.clone())
-        }) {
+        if let Some(models) = models_cache()
+            .get(&cache_key)
+            .filter(|item| models_fresh(item.fetched))
+            .map(|item| item.models.clone())
+        {
             discovered.extend(models);
             continue;
         }
-        if REGISTRY_MODEL_FAILURE_CACHE
-            .lock()
-            .ok()
-            .and_then(|cache| {
-                cache
-                    .get(&cache_key)
-                    .filter(|(fetched, _)| failure_fresh(*fetched))
-                    .cloned()
-            })
-            .is_some()
+        if failures_cache()
+            .get(&cache_key)
+            .is_some_and(|(fetched, _)| failure_fresh(*fetched))
         {
             continue;
         }
@@ -123,27 +115,23 @@ async fn discover_direct_provider_models(
         .await;
         match discovery {
             Ok(models) => {
-                if let Ok(mut cache) = REGISTRY_MODEL_CACHE.lock() {
-                    cache.insert(
-                        cache_key,
-                        CachedRegistryModels {
-                            fetched: Instant::now(),
-                            models: models.clone(),
-                        },
-                    );
-                }
+                models_cache().insert(
+                    cache_key,
+                    CachedRegistryModels {
+                        fetched: Instant::now(),
+                        models: models.clone(),
+                    },
+                );
                 discovered.extend(models);
             }
             Err(error) => {
-                if let Ok(mut cache) = REGISTRY_MODEL_FAILURE_CACHE.lock() {
-                    cache.insert(
-                        cache_key,
-                        (
-                            Instant::now(),
-                            Refusal::gateway(GatewayRefusal::DependencyUnavailable, error.clone()),
-                        ),
-                    );
-                }
+                failures_cache().insert(
+                    cache_key,
+                    (
+                        Instant::now(),
+                        Refusal::gateway(GatewayRefusal::DependencyUnavailable, error.clone()),
+                    ),
+                );
                 tracing::warn!(
                     %provider,
                     %error,

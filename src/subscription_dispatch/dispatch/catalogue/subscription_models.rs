@@ -12,8 +12,8 @@ use crate::types::{GatewayRefusal, ProviderRefusal, Refusal};
 
 use super::super::refusal::envelope::{credential_refusal_class, failure_detail};
 use super::cache::{
-    cached_discovery_refusal_since, cached_subscription_models_since, lock_discovery,
-    CachedRegistryModels, REGISTRY_MODEL_CACHE, REGISTRY_MODEL_FAILURE_CACHE,
+    cached_discovery_refusal_since, cached_subscription_models_since, failures_cache,
+    lock_discovery, models_cache, CachedRegistryModels,
 };
 
 pub async fn registry_models_for_agent(
@@ -133,12 +133,10 @@ pub(super) async fn discover_subscription_models(
                     );
                     // Remembered like a discovery failure, for the same reason:
                     // the next request is not a new fact about this credential.
-                    if let Ok(mut cache) = REGISTRY_MODEL_FAILURE_CACHE.lock() {
-                        cache.insert(
-                            cache_key.clone(),
-                            (Instant::now(), Refusal::gateway(class, detail.clone())),
-                        );
-                    }
+                    failures_cache().insert(
+                        cache_key.clone(),
+                        (Instant::now(), Refusal::gateway(class, detail.clone())),
+                    );
                     failures.push(Refusal::gateway(class, format!("{}: {detail}", entry.id)));
                     continue;
                 }
@@ -160,9 +158,7 @@ pub(super) async fn discover_subscription_models(
                 Err(error) => {
                     // The provider's model list could not be read.
                     let refused = Refusal::gateway(GatewayRefusal::DependencyUnavailable, error);
-                    if let Ok(mut cache) = REGISTRY_MODEL_FAILURE_CACHE.lock() {
-                        cache.insert(cache_key.clone(), (Instant::now(), refused.clone()));
-                    }
+                    failures_cache().insert(cache_key.clone(), (Instant::now(), refused.clone()));
                     failures.push(Refusal::new(
                         refused.class,
                         format!("{}: {}", entry.id, refused.message),
@@ -170,15 +166,13 @@ pub(super) async fn discover_subscription_models(
                     continue;
                 }
             };
-            if let Ok(mut cache) = REGISTRY_MODEL_CACHE.lock() {
-                cache.insert(
-                    cache_key,
-                    CachedRegistryModels {
-                        fetched: Instant::now(),
-                        models: discovered.clone(),
-                    },
-                );
-            }
+            models_cache().insert(
+                cache_key,
+                CachedRegistryModels {
+                    fetched: Instant::now(),
+                    models: discovered.clone(),
+                },
+            );
             discovered
         };
         for model in models {

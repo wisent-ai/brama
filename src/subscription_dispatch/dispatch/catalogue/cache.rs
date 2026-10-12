@@ -24,7 +24,7 @@ pub(super) fn models_fresh(fetched: Instant) -> bool {
     crate::types::still_fresh(MODEL_AGE_ENV, fetched)
 }
 
-pub(super) static REGISTRY_MODEL_CACHE: LazyLock<Mutex<HashMap<String, CachedRegistryModels>>> =
+static REGISTRY_MODEL_CACHE: LazyLock<Mutex<HashMap<String, CachedRegistryModels>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// A discovery refusal may be held too, so a catalog call does not wait on a
@@ -38,9 +38,29 @@ pub(super) fn failure_fresh(fetched: Instant) -> bool {
     crate::types::still_fresh(FAILURE_AGE_ENV, fetched)
 }
 
-pub(super) static REGISTRY_MODEL_FAILURE_CACHE: LazyLock<
-    Mutex<HashMap<String, (Instant, Refusal)>>,
-> = LazyLock::new(|| Mutex::new(HashMap::new()));
+static REGISTRY_MODEL_FAILURE_CACHE: LazyLock<Mutex<HashMap<String, (Instant, Refusal)>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// The discovered-models cache. Each entry is replaced whole, so a panic
+/// while it was held leaves nothing half-written and the lock is recovered:
+/// left poisoned, every catalog call would read no models and record no
+/// refusal, with nothing said about why.
+pub(super) fn models_cache() -> std::sync::MutexGuard<'static, HashMap<String, CachedRegistryModels>>
+{
+    match REGISTRY_MODEL_CACHE.lock() {
+        Ok(cache) => cache,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+/// The discovery-refusal cache, recovered on the same terms as [`models_cache`].
+pub(super) fn failures_cache() -> std::sync::MutexGuard<'static, HashMap<String, (Instant, Refusal)>>
+{
+    match REGISTRY_MODEL_FAILURE_CACHE.lock() {
+        Ok(cache) => cache,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
 
 type DiscoveryLocks = Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>;
 static DISCOVERY_LOCKS: LazyLock<DiscoveryLocks> = LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -56,23 +76,19 @@ pub(super) fn cached_subscription_models_since(
     key: &str,
     since: Instant,
 ) -> Option<Vec<provider_registry::RegistryModel>> {
-    REGISTRY_MODEL_CACHE.lock().ok().and_then(|cache| {
-        cache
-            .get(key)
-            .filter(|item| models_fresh(item.fetched) || item.fetched >= since)
-            .map(|item| item.models.clone())
-    })
+    models_cache()
+        .get(key)
+        .filter(|item| models_fresh(item.fetched) || item.fetched >= since)
+        .map(|item| item.models.clone())
 }
 
 /// The refusal discovery recorded for `key` that a caller who began at `since`
 /// may take, on the same terms as [`cached_subscription_models_since`].
 pub(super) fn cached_discovery_refusal_since(key: &str, since: Instant) -> Option<Refusal> {
-    REGISTRY_MODEL_FAILURE_CACHE.lock().ok().and_then(|cache| {
-        cache
-            .get(key)
-            .filter(|(fetched, _)| failure_fresh(*fetched) || *fetched >= since)
-            .map(|(_, refused)| refused.clone())
-    })
+    failures_cache()
+        .get(key)
+        .filter(|(fetched, _)| failure_fresh(*fetched) || *fetched >= since)
+        .map(|(_, refused)| refused.clone())
 }
 
 /// Coalesce a cold read by subscription, never across unrelated accounts.
@@ -112,9 +128,7 @@ pub(super) async fn lock_discovery(key: &str) -> tokio::sync::OwnedMutexGuard<()
 /// exposes names which.
 pub fn discovery_failure(provider: &str, subscription_id: &str) -> Option<String> {
     let key = format!("{}:{subscription_id}", provider.trim());
-    REGISTRY_MODEL_FAILURE_CACHE
-        .lock()
-        .ok()?
+    failures_cache()
         .get(&key)
         .filter(|(fetched, _)| failure_fresh(*fetched))
         .map(|(_, refused)| refused.message.clone())
@@ -122,9 +136,7 @@ pub fn discovery_failure(provider: &str, subscription_id: &str) -> Option<String
 
 /// Everything currently held in the discovery cache, whatever put it there.
 pub(super) fn cached_registry_models() -> Vec<provider_registry::RegistryModel> {
-    let Ok(cache) = REGISTRY_MODEL_CACHE.lock() else {
-        return Vec::new();
-    };
+    let cache = models_cache();
     cache
         .values()
         .filter(|item| models_fresh(item.fetched))
