@@ -35,7 +35,7 @@ const LISTING_AGE_ENV: &str = "BRAMA_SUBSCRIPTION_LISTING_AGE_SECONDS";
 /// queued behind it, newer than their own requests, so serving it assumes no
 /// age at all.
 fn stored_listing(since: Instant) -> Option<Vec<SubscriptionEntry>> {
-    let cache = LIVE_SUBSCRIPTIONS_CACHE.lock().ok()?;
+    let cache = listing_cache();
     let (fetched_at, entries) = cache.as_ref()?;
     (crate::types::still_fresh(LISTING_AGE_ENV, *fetched_at) || *fetched_at >= since)
         .then(|| entries.clone())
@@ -62,10 +62,18 @@ pub(super) async fn live_subscriptions(
         }
     }
     let entries = list_subscriptions_live(broker).await?;
-    if let Ok(mut cache) = LIVE_SUBSCRIPTIONS_CACHE.lock() {
-        *cache = Some((Instant::now(), entries.clone()));
-    }
+    *listing_cache() = Some((Instant::now(), entries.clone()));
     Ok(entries)
+}
+
+/// The stored listing. A panic while it was held cannot leave a half-written
+/// entry, since it is replaced whole, so a poisoned lock is recovered rather
+/// than turning every later request into its own vault read.
+fn listing_cache() -> std::sync::MutexGuard<'static, Option<(Instant, Vec<SubscriptionEntry>)>> {
+    match LIVE_SUBSCRIPTIONS_CACHE.lock() {
+        Ok(cache) => cache,
+        Err(poisoned) => poisoned.into_inner(),
+    }
 }
 
 /// Complete each member's account from its own vault item where its tags do
