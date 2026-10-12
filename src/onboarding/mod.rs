@@ -73,9 +73,12 @@ pub async fn run_first_use(
         println!();
     }
     if let Some(progress) = journey.progress() {
-        let _ = transport
+        if let Err(error) = transport
             .read_state(PRODUCT_ID, progress.attempt_id, &subject_hash)
-            .await;
+            .await
+        {
+            eprintln!("brama: the recorded first-use progress could not be read back: {error}");
+        }
         if progress.status == ProgressStatus::Completed {
             println!(
                 "Brama first-use journey is already complete: a real model response was received."
