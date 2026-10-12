@@ -24,7 +24,15 @@ to the [README](../../README.md).
   model routes, and always requires the server-verified organization context
   described below. A missing or malformed organization header returns `400`,
   an invalid bearer `401`, no membership `403`, and an unavailable identity
-  authority `503`.
+  authority `503`. A workload bearer not in the boot table is put to Skarbiec
+  on every request; when this machine's Stado resolver already holds a
+  connection on the Skarbiec adapter unanswered (its published
+  `resolver-waiting.json` names one on that bind), the request is not sent
+  to stand behind it: the admission answers `503` at once and the gateway's
+  `workload_authority_unavailable` diagnostic names the held wait — its
+  service, consumer, phase, endpoint, host and start — and `stado resolver
+  status`. A waiting list that cannot be read refuses the same way with its
+  cause.
 - **Account API keys and subscriptions:** authenticated Wisent users use
   `GET|POST /v1/account/subscriptions` and
   `DELETE /v1/account/subscriptions/:subscription_id`. Every human request sends

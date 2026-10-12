@@ -35,6 +35,13 @@ pub(super) async fn ask_authority(bearer: &str) -> WorkloadAuthorityAnswer {
         }
     };
     let introspect = format!("{}/v1/tokens/introspect", base.trim_end_matches('/'));
+    // A bind the resolver already holds unanswered is not sent one more
+    // request to stand behind the held ones: the caller is told what stands.
+    match super::held::held_at(&base) {
+        Ok(None) => {}
+        Ok(Some(held)) => return WorkloadAuthorityAnswer::Unavailable(held),
+        Err(unreadable) => return WorkloadAuthorityAnswer::Unavailable(unreadable),
+    }
     let response = match client
         .post(&introspect)
         .header("X-Consumer", consumer)
