@@ -66,8 +66,12 @@ static LAST: LazyLock<Mutex<BTreeMap<String, LastAnswer>>> = LazyLock::new(|| {
 /// refusal's contract code and sentence. Writes only when the alias's answer
 /// changed.
 pub fn record(alias: &str, refusal: Option<(&str, Option<&str>)>) {
-    let Ok(mut last) = LAST.lock() else {
-        return;
+    // Each alias's entry is replaced whole, so a panic while the record was
+    // held cannot leave half of one; left poisoned, no alias's answer would
+    // ever be recorded again and the record would freeze with nothing said.
+    let mut last = match LAST.lock() {
+        Ok(last) => last,
+        Err(poisoned) => poisoned.into_inner(),
     };
     let answered = refusal.is_none();
     let class = refusal.map(|(code, _)| code.to_string());
