@@ -43,14 +43,16 @@
             "fmt",
             "--",
             "--check"
-          ]
+          ],
+          "kind": "format"
         },
         {
           "name": "brama-release-quality",
           "argv": [
             "bash",
             "src/release/quality.sh"
-          ]
+          ],
+          "kind": "lint"
         }
       ],
       "build": {
@@ -87,14 +89,16 @@
             "fmt",
             "--",
             "--check"
-          ]
+          ],
+          "kind": "format"
         },
         {
           "name": "brama-release-quality",
           "argv": [
             "bash",
             "src/release/quality.sh"
-          ]
+          ],
+          "kind": "lint"
         }
       ],
       "build": {
@@ -133,7 +137,8 @@
             "quality",
             "--root",
             "vercel-ingress/docs"
-          ]
+          ],
+          "kind": "format"
         }
       ],
       "build": {
