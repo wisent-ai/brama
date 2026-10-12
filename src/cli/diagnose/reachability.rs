@@ -22,18 +22,25 @@ pub(super) async fn print_reachability(layout: &Layout) {
             say!("  service.env names no PORT; only the address the gateway announced is probed")
         }
     }
-    let log = std::fs::read(&layout.log)
-        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-        .unwrap_or_default();
-    if let Some(announced) = log
-        .lines()
-        .filter_map(|line| {
-            line.split_once(ANNOUNCEMENT)
-                .map(|(_, rest)| rest.trim().to_string())
-        })
-        .next_back()
-    {
-        targets.push(format!("http://{announced}/health"));
+    // A log that cannot be read hides the address the gateway announced; that
+    // is said, never read as a gateway that announced nothing.
+    match std::fs::read(&layout.log) {
+        Ok(bytes) => {
+            if let Some(announced) = String::from_utf8_lossy(&bytes)
+                .lines()
+                .filter_map(|line| {
+                    line.split_once(ANNOUNCEMENT)
+                        .map(|(_, rest)| rest.trim().to_string())
+                })
+                .next_back()
+            {
+                targets.push(format!("http://{announced}/health"));
+            }
+        }
+        Err(error) => say!(
+            "  {}: not read ({error}); the address the gateway announced is not probed",
+            layout.log.display()
+        ),
     }
     let tailscale = [
         "/usr/local/bin/tailscale",
@@ -43,35 +50,48 @@ pub(super) async fn print_reachability(layout: &Layout) {
     .into_iter()
     .find(|path| std::path::Path::new(path).exists());
     if let Some(tailscale) = tailscale {
-        if let Ok(served) = Command::new(tailscale).args(["serve", "status"]).output() {
-            let text = format!(
-                "{}{}",
-                String::from_utf8_lossy(&served.stdout),
-                String::from_utf8_lossy(&served.stderr)
-            );
-            for line in text
-                .lines()
-                .map(str::trim)
-                .filter(|line| line.contains("proxy") || line.contains("https://"))
-            {
-                say!("  serve: {line}");
-                // Each published origin is probed as published; no port is
-                // assumed for the tailnet proxy.
-                for origin in line
-                    .split_whitespace()
-                    .filter(|word| word.starts_with("https://"))
+        let mut serve_status = Command::new(tailscale);
+        serve_status.args(["serve", "status"]);
+        match stado_wait::output(&mut serve_status) {
+            Ok(served) => {
+                let text = format!(
+                    "{}{}",
+                    String::from_utf8_lossy(&served.stdout),
+                    String::from_utf8_lossy(&served.stderr)
+                );
+                for line in text
+                    .lines()
+                    .map(str::trim)
+                    .filter(|line| line.contains("proxy") || line.contains("https://"))
                 {
-                    targets.push(format!("{}/health", origin.trim_end_matches('/')));
+                    say!("  serve: {line}");
+                    // Each published origin is probed as published; no port is
+                    // assumed for the tailnet proxy.
+                    for origin in line
+                        .split_whitespace()
+                        .filter(|word| word.starts_with("https://"))
+                    {
+                        targets.push(format!("{}/health", origin.trim_end_matches('/')));
+                    }
                 }
             }
+            Err(error) => say!(
+                "  {tailscale} serve status could not run ({error}); the tailnet origin is not probed"
+            ),
         }
     }
     // The tailnet certificate is private to the fleet; reachability, not
     // trust, is the question here.
-    let client = reqwest::Client::builder()
+    let client = match reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
-        .build();
-    let Ok(client) = client else { return };
+        .build()
+    {
+        Ok(client) => client,
+        Err(error) => {
+            say!("  no HTTP client to probe with ({error}); no address was probed");
+            return;
+        }
+    };
     let mut seen = Vec::new();
     for target in targets {
         if seen.contains(&target) {
@@ -102,6 +122,9 @@ pub(super) fn print_boot_attempt(layout: &Layout) {
                 }
             }
         }
-        Err(_) => say!("  {}: absent", layout.log.display()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            say!("  {}: absent", layout.log.display())
+        }
+        Err(error) => say!("  {}: not read: {error}", layout.log.display()),
     }
 }
