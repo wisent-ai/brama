@@ -214,7 +214,15 @@ async fn sign_in_selected_subscription(
                 json!({"event": "refused", "status": status.as_u16(), "error": error.to_string()})
             }
         };
-        let _ = events.send(last);
+        // A Desktop that went away never sees how the sign-in ended, so the
+        // outcome is logged where an operator can still find it.
+        if let Err(unheard) = events.send(last) {
+            tracing::warn!(
+                event = "sign_in_outcome_unheard",
+                outcome = %unheard.0,
+                "the sign-in ended after the Desktop that asked for it stopped listening"
+            );
+        }
     });
     let lines = futures_util::stream::unfold(received, |mut received| async move {
         let event = received.recv().await?;
