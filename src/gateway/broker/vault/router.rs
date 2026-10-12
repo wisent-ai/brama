@@ -43,6 +43,20 @@ type ListingResult = Result<Arc<Vec<u8>>, String>;
 static IN_FLIGHT: LazyLock<Mutex<Option<Shared<BoxFuture<'static, ListingResult>>>>> =
     LazyLock::new(|| Mutex::new(None));
 
+/// The slot holds one shared listing that is only ever replaced whole, so a
+/// panic while it was held leaves nothing half-written: the lock is
+/// recovered, which keeps listings served and a finished one cleared.
+fn in_flight_listing(
+) -> std::sync::MutexGuard<'static, Option<Shared<BoxFuture<'static, ListingResult>>>> {
+    match IN_FLIGHT.lock() {
+        Ok(slot) => slot,
+        Err(poisoned) => {
+            tracing::warn!(event = "vault_listing_lock_poisoned");
+            poisoned.into_inner()
+        }
+    }
+}
+
 /// The bare `list` of `binary`: the listing already in flight when one is,
 /// otherwise a new one every concurrent caller joins. A refused or failed
 /// listing is returned to every joined caller and kept by none.
@@ -51,9 +65,7 @@ pub(in crate::gateway::broker) async fn raw_listing(
     operation: &str,
 ) -> ListingResult {
     let listing = {
-        let mut in_flight = IN_FLIGHT
-            .lock()
-            .map_err(|_| "raw vault listing lock poisoned".to_owned())?;
+        let mut in_flight = in_flight_listing();
         match in_flight.as_ref() {
             Some(shared) => shared.clone(),
             None => {
@@ -77,7 +89,8 @@ pub(in crate::gateway::broker) async fn raw_listing(
         }
     };
     let result = listing.clone().await;
-    if let Ok(mut in_flight) = IN_FLIGHT.lock() {
+    {
+        let mut in_flight = in_flight_listing();
         // Only the listing that just finished is cleared; a newer one a later
         // caller started stays for the callers joining it.
         if in_flight
