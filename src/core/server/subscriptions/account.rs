@@ -56,27 +56,37 @@ pub(in crate::core::server) async fn account_agent_for_route(
     Ok(None)
 }
 
+/// The provider a credential may be banked for: `Ok(None)` when the value
+/// names none Brama supports. A model catalogue that cannot be read is its own
+/// refusal: read as `None`, it told the caller a catalogued provider was
+/// unsupported while the real cause was the catalogue.
 pub(in crate::core::server) async fn account_credential_provider(
     value: Option<&str>,
-) -> Option<String> {
+) -> Result<Option<String>, ApiError> {
     let provider = match value.map(str::trim) {
         Some("claude_code") => "claude-code",
         Some(provider) if !provider.is_empty() => provider,
-        _ => return None,
+        _ => return Ok(None),
     };
     if provider == "local-openai" {
-        return None;
+        return Ok(None);
     }
     if crate::providers::adapter::provider(provider).is_some() {
-        return Some(provider.to_string());
+        return Ok(Some(provider.to_string()));
     }
-    crate::subscription_dispatch::model_catalog::snapshot()
+    let catalogue = crate::subscription_dispatch::model_catalog::snapshot()
         .await
-        .ok()?
+        .map_err(|error| {
+            api_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                &format!("provider {provider} is not built in, and the model catalogue that lists the others cannot be read: {error}"),
+            )
+        })?;
+    Ok(catalogue
         .providers
         .get(provider)
         .filter(|provider| provider.executable())
-        .map(|provider| provider.id.clone())
+        .map(|provider| provider.id.clone()))
 }
 
 pub(super) fn donation_login_item(value: Option<&str>) -> Result<Option<String>, ApiError> {

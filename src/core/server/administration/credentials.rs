@@ -33,7 +33,7 @@ pub(in crate::core::server) async fn put_admin_credential(
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
     let provider = account_credential_provider(Some(&request.provider))
-        .await
+        .await?
         .ok_or_else(|| {
             api_error(
                 StatusCode::BAD_REQUEST,

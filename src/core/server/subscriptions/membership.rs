@@ -30,7 +30,7 @@ pub(super) async fn create_subscription(
         return Err(api_error(StatusCode::BAD_REQUEST, "invalid agent id"));
     }
     let provider = account_credential_provider(request.provider.as_deref())
-        .await
+        .await?
         .ok_or_else(|| {
             api_error(
                 StatusCode::BAD_REQUEST,
