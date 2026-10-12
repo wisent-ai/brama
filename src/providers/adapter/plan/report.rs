@@ -41,6 +41,15 @@ const ANTHROPIC_USAGE_WINDOWS: &[(&str, &str, &str, &str, bool)] = &[
     ),
 ];
 
+/// The label and window label the usage report gives `limit_id`, so a reading
+/// off response headers names one window the way the report names it.
+pub(super) fn anthropic_window_labels(limit_id: &str) -> Option<(&'static str, &'static str)> {
+    ANTHROPIC_USAGE_WINDOWS
+        .iter()
+        .find(|(_, id, _, _, _)| *id == limit_id)
+        .map(|(_, _, label, window, _)| (*label, *window))
+}
+
 /// The usage reports state utilization as a percentage, while the ledger stores
 /// it as a fraction.
 const PERCENT_SCALE: f64 = 100.0;

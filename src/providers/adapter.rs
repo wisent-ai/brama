@@ -104,7 +104,7 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
         Ok(result) => result,
         Err(refused) => return attempted_failure(&request.model, refused),
     };
-    let limits = limit_readings(descriptor.id, &plan);
+    let limits = limit_readings(&plan);
     if !status.is_success() {
         // The provider just said this model takes no temperature: the same
         // request goes once more without it. `learn` is true only the first
@@ -219,13 +219,13 @@ pub async fn dispatch_stream(
         if refused_settings::learn_refused_temperature(model_id.as_ref(), status, &text) {
             return Box::pin(dispatch_stream(request, item, secret)).await;
         }
-        let limits = limit_readings(descriptor.id, &plan);
+        let limits = limit_readings(&plan);
         return Err(with_limits(
             provider_error(&request.model, status, &text),
             limits,
         ));
     }
-    let limits = limit_readings(descriptor.id, &plan_headers(response.headers()));
+    let limits = limit_readings(&plan_headers(response.headers()));
     Ok(crate::providers::stream::ProviderStream {
         limits,
         events: crate::providers::stream::spawn(descriptor.wire, response),

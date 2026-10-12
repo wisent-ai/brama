@@ -42,14 +42,28 @@ pub(in crate::providers::adapter) fn observed_at_ms() -> i64 {
         .unwrap_or_default()
 }
 
-/// Turn one provider's plan headers into limit readings.
+/// The names an answer gives its windows or meters: the part between
+/// `prefix` and `suffix` of every header that has both.
+fn named_between<'a>(
+    headers: &'a HashMap<String, String>,
+    prefix: &'a str,
+    suffix: &'a str,
+) -> impl Iterator<Item = &'a str> {
+    headers
+        .keys()
+        .filter_map(move |name| name.strip_prefix(prefix)?.strip_suffix(suffix))
+}
+
+/// Turn one answer's plan headers into limit readings.
 ///
 /// Anthropic publishes a utilization fraction and a reset instant per named
 /// window; Codex publishes a used percentage, the window length in minutes and
-/// a reset instant, per meter. Nothing is invented for providers that publish
-/// neither -- an absent reading is absent, not zero.
+/// a reset instant, per meter. Which family an answer carries, and which
+/// windows or meters, is read from the header names themselves, so no list of
+/// provider ids, windows or meters is kept beside what the provider sends: an
+/// answer that carries neither family has no readings -- an absent reading is
+/// absent, not zero.
 pub(in crate::providers::adapter) fn limit_readings(
-    provider_id: &str,
     headers: &HashMap<String, String>,
 ) -> Vec<LimitReading> {
     let seconds_to_ms = |seconds: f64| (seconds * 1_000.0).round() as i64;
@@ -57,51 +71,45 @@ pub(in crate::providers::adapter) fn limit_readings(
     // same set of headers, so a per-reading clock call would only invent
     // differences the provider never stated.
     let recorded_at_ms = observed_at_ms();
-    match provider_id {
-        "claude-code" | "anthropic" => ["5h", "7d"]
-            .into_iter()
-            .filter_map(|window| {
-                let prefix = format!("anthropic-ratelimit-unified-{window}");
-                let used = header_number(headers, &format!("{prefix}-utilization"))?;
-                let resets = header_number(headers, &format!("{prefix}-reset"))
-                    .filter(|value| *value > 0.0)
-                    .map(seconds_to_ms);
-                Some(LimitReading {
-                    limit_id: format!("anthropic:{window}"),
-                    label: match window {
-                        "5h" => "Claude 5 hour".to_string(),
-                        _ => "Claude 7 day".to_string(),
-                    },
-                    window_label: Some(match window {
-                        "5h" => "5 hours".to_string(),
-                        _ => "7 days".to_string(),
-                    }),
-                    used_fraction: used.clamp(0.0, 1.0),
-                    resets_at_ms: resets,
-                    recorded_at_ms,
-                })
+    let anthropic = named_between(headers, "anthropic-ratelimit-unified-", "-utilization")
+        .filter_map(|window| {
+            let prefix = format!("anthropic-ratelimit-unified-{window}");
+            let used = header_number(headers, &format!("{prefix}-utilization"))?;
+            let resets = header_number(headers, &format!("{prefix}-reset"))
+                .filter(|value| *value > 0.0)
+                .map(seconds_to_ms);
+            let limit_id = format!("anthropic:{window}");
+            let (label, window_label) = match super::report::anthropic_window_labels(&limit_id) {
+                Some((label, window_label)) => (label.to_string(), window_label.to_string()),
+                None => (format!("Claude {window} window"), window.to_string()),
+            };
+            Some(LimitReading {
+                limit_id,
+                label,
+                window_label: Some(window_label),
+                used_fraction: used.clamp(0.0, 1.0),
+                resets_at_ms: resets,
+                recorded_at_ms,
             })
-            .collect(),
-        "codex" | "openai-codex" => ["primary", "secondary"]
-            .into_iter()
-            .filter_map(|meter| {
-                let percent = header_number(headers, &format!("x-codex-{meter}-used-percent"))?;
-                let minutes = header_number(headers, &format!("x-codex-{meter}-window-minutes"));
-                let resets = header_number(headers, &format!("x-codex-{meter}-reset-at"))
-                    .filter(|value| *value > 0.0)
-                    .map(seconds_to_ms);
-                Some(LimitReading {
-                    limit_id: format!("codex:{meter}"),
-                    label: format!("Codex {meter} window"),
-                    window_label: minutes.map(window_label_from_minutes),
-                    used_fraction: (percent / 100.0).clamp(0.0, 1.0),
-                    resets_at_ms: resets,
-                    recorded_at_ms,
-                })
-            })
-            .collect(),
-        _ => Vec::new(),
-    }
+        });
+    let codex = named_between(headers, "x-codex-", "-used-percent").filter_map(|meter| {
+        let percent = header_number(headers, &format!("x-codex-{meter}-used-percent"))?;
+        let minutes = header_number(headers, &format!("x-codex-{meter}-window-minutes"));
+        let resets = header_number(headers, &format!("x-codex-{meter}-reset-at"))
+            .filter(|value| *value > 0.0)
+            .map(seconds_to_ms);
+        Some(LimitReading {
+            limit_id: format!("codex:{meter}"),
+            label: format!("Codex {meter} window"),
+            window_label: minutes.map(window_label_from_minutes),
+            used_fraction: (percent / 100.0).clamp(0.0, 1.0),
+            resets_at_ms: resets,
+            recorded_at_ms,
+        })
+    });
+    let mut readings: Vec<LimitReading> = anthropic.chain(codex).collect();
+    readings.sort_by(|left, right| left.limit_id.cmp(&right.limit_id));
+    readings
 }
 
 /// Carry the plan readings out with whatever response the call produced.

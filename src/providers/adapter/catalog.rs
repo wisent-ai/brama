@@ -186,7 +186,7 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
         Ok(result) => result,
         Err(refused) => return attempted_failure(&request.model, refused),
     };
-    let limits = limit_readings(&descriptor.id, &plan);
+    let limits = limit_readings(&plan);
     if !status.is_success() {
         return with_limits(provider_error(&request.model, status, &text), limits);
     }
