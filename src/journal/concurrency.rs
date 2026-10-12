@@ -73,13 +73,11 @@ pub struct Admission {
 /// Count one call to `alias` in flight.
 pub fn admit(alias: &str) -> Admission {
     let call = Arc::new(());
-    if let Ok(mut routes) = ROUTES.lock() {
-        routes
-            .entry(alias.to_string())
-            .or_default()
-            .calls
-            .push(Arc::downgrade(&call));
-    }
+    routes()
+        .entry(alias.to_string())
+        .or_default()
+        .calls
+        .push(Arc::downgrade(&call));
     Admission {
         alias: alias.to_string(),
         call,
@@ -91,9 +89,7 @@ impl Admission {
     /// measurement.
     pub fn settle(self, how: Settled) {
         let Admission { alias, call } = self;
-        let Ok(mut routes) = ROUTES.lock() else {
-            return;
-        };
+        let mut routes = routes();
         let route = routes.entry(alias).or_default();
         let with_this_one = route.in_flight();
         drop(call);
@@ -117,9 +113,7 @@ impl Admission {
 
 /// Every alias's measured concurrency since this gateway started.
 pub fn current() -> BTreeMap<String, Concurrency> {
-    let Ok(mut routes) = ROUTES.lock() else {
-        return BTreeMap::new();
-    };
+    let mut routes = routes();
     routes
         .iter_mut()
         .map(|(alias, route)| {
@@ -131,4 +125,15 @@ pub fn current() -> BTreeMap<String, Concurrency> {
             (alias.clone(), measured)
         })
         .collect()
+}
+
+/// The per-alias measurements. A panic while they were held can leave at most
+/// one call's fold unfinished, which the next settlement overwrites, so the
+/// lock is recovered: left poisoned, every call would go uncounted and
+/// `current` would answer that nothing was ever measured.
+fn routes() -> std::sync::MutexGuard<'static, BTreeMap<String, Route>> {
+    match ROUTES.lock() {
+        Ok(routes) => routes,
+        Err(poisoned) => poisoned.into_inner(),
+    }
 }
