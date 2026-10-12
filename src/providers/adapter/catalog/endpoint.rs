@@ -20,9 +20,12 @@ pub(in crate::providers::adapter) fn catalog_endpoint(base_url: &str, path: &str
     endpoint(base, path)
 }
 
+/// The endpoint each public-catalogue provider Brama may execute is sent to,
+/// by its models.dev id. The roster's own providers (claude-code, together…)
+/// carry their address in their roster entry instead.
 fn trusted_catalog_base_url(provider_id: &str) -> Option<&'static str> {
     match provider_id {
-        "anthropic" | "claude-code" => Some("https://api.anthropic.com/v1"),
+        "anthropic" => Some("https://api.anthropic.com/v1"),
         "kimi" => Some("https://api.kimi.com/coding/v1"),
         "openai" => Some("https://api.openai.com/v1"),
         "codex" => Some("https://chatgpt.com/backend-api/codex"),
@@ -33,7 +36,7 @@ fn trusted_catalog_base_url(provider_id: &str) -> Option<&'static str> {
         "deepseek" => Some("https://api.deepseek.com"),
         "cerebras" => Some("https://api.cerebras.ai/v1"),
         "fireworks" => Some("https://api.fireworks.ai/inference/v1"),
-        "together" | "togetherai" => Some("https://api.together.xyz/v1"),
+        "togetherai" => Some("https://api.together.xyz/v1"),
         "nvidia" => Some("https://integrate.api.nvidia.com/v1"),
         "moonshot" => Some("https://api.moonshot.ai/v1"),
         "zai" => Some("https://api.z.ai/api/paas/v4"),
@@ -53,10 +56,10 @@ fn trusted_catalog_base_url(provider_id: &str) -> Option<&'static str> {
 pub(in crate::providers::adapter) fn catalog_provider_base_url(
     descriptor: &CatalogProvider,
 ) -> Result<String, String> {
-    if let Some(configured) = provider_base_url_override(&descriptor.id) {
-        return validated_provider_base_url(&descriptor.id, &configured, true);
-    }
-    let base_url = trusted_catalog_base_url(&descriptor.id)
+    let declared = trusted_catalog_base_url(&descriptor.id)
         .ok_or_else(|| format!("provider `{}` has no trusted endpoint", descriptor.id))?;
-    validated_provider_base_url(&descriptor.id, base_url, false)
+    if let Some(configured) = provider_base_url_override(&descriptor.id) {
+        return validated_provider_base_url(&descriptor.id, &configured, declared, true);
+    }
+    validated_provider_base_url(&descriptor.id, declared, declared, false)
 }

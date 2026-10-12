@@ -10,40 +10,18 @@ pub(in crate::providers::adapter) fn endpoint(base_url: &str, path: &str) -> Str
     format!("{}{}", base_url.trim_end_matches('/'), path)
 }
 
-fn trusted_provider_hosts(provider_id: &str) -> Option<&'static [&'static str]> {
-    match provider_id {
-        "anthropic" | "claude-code" => Some(&["api.anthropic.com"]),
-        "kimi" => Some(&["api.kimi.com"]),
-        "openai" => Some(&["api.openai.com"]),
-        "codex" => Some(&["chatgpt.com"]),
-        "openrouter" => Some(&["openrouter.ai"]),
-        "groq" => Some(&["api.groq.com"]),
-        "mistral" => Some(&["api.mistral.ai"]),
-        "xai" => Some(&["api.x.ai"]),
-        "deepseek" => Some(&["api.deepseek.com"]),
-        "cerebras" => Some(&["api.cerebras.ai"]),
-        "fireworks" => Some(&["api.fireworks.ai"]),
-        "together" | "togetherai" => Some(&["api.together.xyz"]),
-        "nvidia" => Some(&["integrate.api.nvidia.com"]),
-        "moonshot" => Some(&["api.moonshot.ai"]),
-        "zai" => Some(&["api.z.ai"]),
-        "qwen" => Some(&["dashscope-intl.aliyuncs.com"]),
-        "huggingface" => Some(&["router.huggingface.co"]),
-        "featherless" => Some(&["api.featherless.ai"]),
-        "venice" => Some(&["api.venice.ai"]),
-        "novita" => Some(&["api.novita.ai"]),
-        "synthetic" => Some(&["api.synthetic.new"]),
-        "typesafe" => Some(&["api.typesafe.ai"]),
-        "perplexity" => Some(&["api.perplexity.ai"]),
-        "deepinfra" => Some(&["api.deepinfra.com"]),
-        "google" => Some(&["generativelanguage.googleapis.com"]),
-        "gemini" => Some(&["generativelanguage.googleapis.com"]),
-        "elevenlabs" => Some(&["api.elevenlabs.io"]),
-        "minimax" => Some(&["api.minimax.io"]),
-        "byteplus" => Some(&["ark.ap-southeast.bytepluses.com"]),
-        "local-openai" => Some(&[]),
-        _ => None,
-    }
+/// The scheme of a provider address, spelled as the URL spells it: a
+/// provider is reached over HTTPS, and a loopback deployment override may
+/// also use plain HTTP.
+#[derive(serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+enum WebScheme {
+    Http,
+    Https,
+}
+
+fn web_scheme(url: &reqwest::Url) -> Option<WebScheme> {
+    serde_json::from_value(serde_json::Value::String(url.scheme().to_owned())).ok()
 }
 
 pub(in crate::providers::adapter) fn provider_base_url_override(
@@ -64,9 +42,15 @@ pub(in crate::providers::adapter) fn provider_base_url_override(
         .filter(|value| !value.trim().is_empty())
 }
 
+/// `candidate` as the base URL `provider_id` may be sent to. The trusted
+/// host is the host of the address the provider is declared with
+/// (`declared`, its roster or catalogue entry), so a deployment override may
+/// move the path but never the host, except to loopback when
+/// `allow_explicit_loopback` says the override is the deployment's own.
 pub(in crate::providers::adapter) fn validated_provider_base_url(
     provider_id: &str,
     candidate: &str,
+    declared: &str,
     allow_explicit_loopback: bool,
 ) -> Result<String, String> {
     if candidate.trim() != candidate {
@@ -89,28 +73,30 @@ pub(in crate::providers::adapter) fn validated_provider_base_url(
     let host = url
         .host_str()
         .ok_or_else(|| format!("provider `{provider_id}` base URL has no host"))?;
-    let trusted = trusted_provider_hosts(provider_id)
-        .ok_or_else(|| format!("provider `{provider_id}` has no trusted host policy"))?;
+    let trusted = reqwest::Url::parse(declared)
+        .ok()
+        .and_then(|declared| declared.host_str().map(str::to_owned))
+        .ok_or_else(|| {
+            format!("provider `{provider_id}` is declared with {declared}, which names no host")
+        })?;
     let loopback = host.eq_ignore_ascii_case("localhost")
         || host
             .parse::<std::net::IpAddr>()
             .is_ok_and(|address| address.is_loopback());
+    let scheme = web_scheme(&url);
     if loopback {
-        if !allow_explicit_loopback || !matches!(url.scheme(), "http" | "https") {
+        if !allow_explicit_loopback || scheme.is_none() {
             return Err(format!(
                 "provider `{provider_id}` loopback endpoint requires an explicit deployment override"
             ));
         }
     } else {
-        if url.scheme() != "https" {
+        if scheme != Some(WebScheme::Https) {
             return Err(format!("provider `{provider_id}` base URL must use HTTPS"));
         }
-        if !trusted
-            .iter()
-            .any(|allowed| host.eq_ignore_ascii_case(allowed))
-        {
+        if !host.eq_ignore_ascii_case(&trusted) {
             return Err(format!(
-                "provider `{provider_id}` host `{host}` is not trusted"
+                "provider `{provider_id}` host `{host}` is not trusted: it is declared at `{trusted}`"
             ));
         }
     }
@@ -121,9 +107,14 @@ pub(in crate::providers::adapter) fn provider_base_url(
     descriptor: &ProviderDescriptor,
 ) -> Result<String, String> {
     if let Some(configured) = provider_base_url_override(descriptor.id) {
-        return validated_provider_base_url(descriptor.id, &configured, true);
+        return validated_provider_base_url(descriptor.id, &configured, descriptor.base_url, true);
     }
-    validated_provider_base_url(descriptor.id, descriptor.base_url, false)
+    validated_provider_base_url(
+        descriptor.id,
+        descriptor.base_url,
+        descriptor.base_url,
+        false,
+    )
 }
 
 pub(in crate::providers::adapter) fn provider_base_url_for(
@@ -134,7 +125,7 @@ pub(in crate::providers::adapter) fn provider_base_url_for(
         return provider_base_url(descriptor);
     }
     if let Some(configured) = provider_base_url_override(descriptor.id) {
-        return validated_provider_base_url(descriptor.id, &configured, true);
+        return validated_provider_base_url(descriptor.id, &configured, descriptor.base_url, true);
     }
     let path = crate::core::inference_routes::configured_path()
         .ok_or_else(|| "BRAMA_INFERENCE_ROUTES_FILE is required for local inference".to_string())?;

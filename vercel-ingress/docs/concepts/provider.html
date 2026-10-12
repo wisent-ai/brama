@@ -202,16 +202,19 @@ digest-pinned vLLM lifecycle.</p>
 ambient proxies. <code>BRAMA_PROVIDER_&lt;PROVIDER&gt;_BASE_URL</code> (the provider id
 uppercased, non-alphanumerics to <code>_</code>) overrides one provider's base, and the
 override is validated with these exact refusals
-(<code>src/providers/adapter.rs:1066-1117</code>):</p>
+(<code>src/providers/adapter/registry/address.rs</code>):</p>
 <ul>
 <li><code>provider</code><id><code>base URL must not contain surrounding whitespace</code></li>
 <li><code>provider</code><id><code>has an invalid base URL: &lt;error&gt;</code></li>
 <li><code>provider</code><id><code>base URL must be an absolute URL without user info</code></li>
 <li><code>provider</code><id><code>base URL must not contain a query or fragment</code></li>
 <li><code>provider</code><id><code>base URL has no host</code></li>
+<li><code>provider</code><id><code>is declared with</code><url><code>, which names no host</code></li>
 <li><code>provider</code><id><code>base URL must use HTTPS</code> (non-loopback hosts)</li>
-<li><code>provider</code><id><code>host</code><host><code>is not trusted</code> (non-loopback host outside
-  the provider's trusted-host policy)</li>
+<li><code>provider</code><id><code>host</code><host><code>is not trusted: it is declared at</code><host>
+  (the trusted host is the host of the address the provider is declared with: its roster
+  entry, or for a public-catalogue provider the endpoint Brama keeps for its models.dev id;
+  an override may change the path, not the host)</li>
 <li><code>provider</code><id><code>loopback endpoint requires an explicit deployment
   override</code> (loopback is accepted only through the env override, <code>http</code> or
   <code>https</code>)</li>
