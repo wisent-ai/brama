@@ -141,7 +141,8 @@ fn a_workload_admission_on_a_held_skarbiec_adapter_is_refused_naming_the_wait() 
         "the waiting list holds nothing on the Skarbiec bind {skarbiec_bind}: {held:?}"
     );
     let mut run = Run::new();
-    run.report["held"] = json!({ "waiting_file": waiting_file, "bind": skarbiec_bind, "waits": on_bind });
+    run.report["held"] =
+        json!({ "waiting_file": waiting_file, "bind": skarbiec_bind, "waits": on_bind });
     run.save();
     let before_log = std::fs::read(&log_path).expect("read actual gateway log before admission");
     let output = run.standalone(&[
@@ -163,18 +164,24 @@ fn a_workload_admission_on_a_held_skarbiec_adapter_is_refused_naming_the_wait() 
         !output.status.success(),
         "a held Skarbiec adapter admitted a workload"
     );
+    let unavailable = format!("HTTP {}:", StatusCode::SERVICE_UNAVAILABLE.as_u16());
     assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains(&format!("HTTP {}:", StatusCode::SERVICE_UNAVAILABLE.as_u16())),
+        String::from_utf8_lossy(&output.stderr).contains(&unavailable),
         "CLI did not preserve the gateway service-unavailable refusal"
     );
     let wait = on_bind.first().expect("one held wait");
+    let service = wait["service"]
+        .as_str()
+        .expect("the wait names its service");
+    let endpoint = wait["endpoint"]
+        .as_str()
+        .expect("the wait names its endpoint");
     let diagnostic = observed.lines().find(|line| {
         line.contains("workload_authority_unavailable")
             && line.contains("holds")
             && line.contains("unanswered connection(s) on that adapter")
-            && line.contains(wait["service"].as_str().expect("the wait names its service"))
-            && line.contains(wait["endpoint"].as_str().expect("the wait names its endpoint"))
+            && line.contains(service)
+            && line.contains(endpoint)
     });
     assert!(
         diagnostic.is_some(),
