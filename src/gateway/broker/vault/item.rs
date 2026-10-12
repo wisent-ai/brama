@@ -166,8 +166,15 @@ pub(in crate::gateway::broker) async fn put_credential(
         .take()
         .ok_or_else(|| "credential write child stdin is unavailable".to_owned())?;
     if let Err(error) = stdin.write_all(document.as_bytes()).await {
-        let _ = child.kill().await;
-        return Err(format!("write credential document to child stdin: {error}"));
+        let stopped = match child.kill().await {
+            Ok(()) => String::new(),
+            Err(kill) => {
+                format!("; the child could not be stopped and may store a partial document: {kill}")
+            }
+        };
+        return Err(format!(
+            "write credential document to child stdin: {error}{stopped}"
+        ));
     }
     drop(stdin);
     let output = super::router::wait_within_footprint(child, "credential write").await?;

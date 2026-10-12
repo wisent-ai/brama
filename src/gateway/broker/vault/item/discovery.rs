@@ -60,8 +60,15 @@ pub(in crate::gateway::broker) async fn register(
         .take()
         .ok_or_else(|| "account registration stdin is unavailable".to_owned())?;
     if let Err(error) = input.write_all(document.to_string().as_bytes()).await {
-        let _ = child.kill().await;
-        return Err(format!("write discovered account metadata: {error}"));
+        let stopped = match child.kill().await {
+            Ok(()) => String::new(),
+            Err(kill) => format!(
+                "; the registration could not be stopped and may store partial metadata: {kill}"
+            ),
+        };
+        return Err(format!(
+            "write discovered account metadata: {error}{stopped}"
+        ));
     }
     drop(input);
     let output = stado_wait::child_output_async(
@@ -215,8 +222,15 @@ pub(in crate::gateway::broker) async fn restore_mark(
         .take()
         .ok_or_else(|| "routing mark restoration stdin is unavailable".to_owned())?;
     if let Err(error) = input.write_all(document.to_string().as_bytes()).await {
-        let _ = child.kill().await;
-        return Err(format!("write recoverable account document: {error}"));
+        let stopped = match child.kill().await {
+            Ok(()) => String::new(),
+            Err(kill) => format!(
+                "; the restoration could not be stopped and may store a partial document: {kill}"
+            ),
+        };
+        return Err(format!(
+            "write recoverable account document: {error}{stopped}"
+        ));
     }
     drop(input);
     let output = stado_wait::child_output_async(
