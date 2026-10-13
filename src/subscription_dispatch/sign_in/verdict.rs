@@ -255,10 +255,13 @@ pub fn observed_failure(id: &str) -> Option<Blocked> {
     if previous.get("result").and_then(Value::as_str) != Some(FAILED) {
         return None;
     }
+    // An attempt refused before any run (identity, login lookup) records
+    // `started_at_ms` as null, not absent: read it as a number, so the
+    // completion instant stands in for a run start that never happened.
     let began = previous
         .get("started_at_ms")
-        .or_else(|| previous.get("at_ms"))
-        .and_then(Value::as_i64);
+        .and_then(Value::as_i64)
+        .or_else(|| previous.get("at_ms").and_then(Value::as_i64));
     if let (Some(began), Some(credential)) = (
         began,
         current.as_ref().and_then(|usage| usage.credential.as_ref()),
