@@ -62,13 +62,8 @@ async fn on_gateway(gateway: &str, bearer: &str, options: &SignInOptions) -> Res
     if options.reason.trim().is_empty() {
         return Err("--reason must say why this sign-in is being run".into());
     }
-    let pool = stado_wait::until(
-        stado_wait::Kind::Network,
-        "read selected subscription before sign-in",
-        gateway,
-        remote::pool::report(gateway, bearer, false),
-    )
-    .await?;
+    // The pool report announces its own waits: the request and the body read.
+    let pool = remote::pool::report(gateway, bearer, false).await?;
     let rows = pool["subscriptions"]
         .as_array()
         .ok_or_else(|| "gateway pool report lacks subscriptions".to_owned())?;
@@ -85,7 +80,7 @@ async fn on_gateway(gateway: &str, bearer: &str, options: &SignInOptions) -> Res
     let client = reqwest::Client::builder()
         .build()
         .map_err(|error| format!("gateway sign-in client: {error}"))?;
-    let mut response = stado_wait::http::request(
+    let mut response = stado_wait::request(
         client
             .post(format!(
                 "{}/v1/admin/subscription-pool/sign-in",

@@ -110,13 +110,8 @@ pub async fn run(
         }
     };
     persist(&outcome)?;
-    let response = stado_wait::until(
-        stado_wait::Kind::Network,
-        "send journaled subscription reset",
-        member,
-        prepared.send(),
-    )
-    .await;
+    // The redemption announces its own waits: the send and the body read.
+    let response = prepared.exchange().await;
     match response {
         Ok(response) => {
             let confirmed = response["ok"].as_bool() == Some(true);

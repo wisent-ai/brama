@@ -18,7 +18,7 @@ use zeroize::Zeroizing;
 fn stado_binary() -> std::path::PathBuf {
     match std::env::var("BRAMA_STADO_BIN") {
         Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
-        _ => crate::journal::home_dir()
+        _ => brama::journal::home_dir()
             .join(".stado")
             .join("bin")
             .join("stado"),

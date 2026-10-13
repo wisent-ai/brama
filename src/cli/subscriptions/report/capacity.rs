@@ -3,7 +3,7 @@
 
 use serde_json::Value;
 
-use crate::subscription_dispatch::pool::AccountCapacity;
+use brama::subscription_dispatch::pool::AccountCapacity;
 
 use super::instant;
 

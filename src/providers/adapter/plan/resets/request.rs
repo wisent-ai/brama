@@ -50,11 +50,14 @@ pub struct PreparedRequest {
 }
 
 impl PreparedRequest {
-    pub async fn send(self) -> Result<Value, String> {
+    /// Send the request and read its JSON answer. Both waits are announced
+    /// here — the send through `stado_wait::send_built`, the body read
+    /// through `stado_wait::until` — so a caller awaits this without its own.
+    pub async fn exchange(self) -> Result<Value, String> {
         let operation = self.request.method().to_string();
         let url = self.request.url().clone();
         let item = self.item;
-        let response = stado_wait::http::send_built(
+        let response = stado_wait::send_built(
             stado_wait::Kind::Network,
             "provider reset",
             self.client,
@@ -93,12 +96,7 @@ pub async fn request(
     path: &str,
     body: Option<&Value>,
 ) -> Result<Value, String> {
-    let prepared = prepare(provider_id, item, secret, path, body)?;
-    stado_wait::until(
-        stado_wait::Kind::Network,
-        format!("read reset report {path}"),
-        provider_id,
-        prepared.send(),
-    )
-    .await
+    prepare(provider_id, item, secret, path, body)?
+        .exchange()
+        .await
 }

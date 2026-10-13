@@ -63,7 +63,7 @@ async fn execute(args: &ResetArgs) -> Result<Value, String> {
         gateway.trim_end_matches('/')
     );
     let response =
-        stado_wait::http::request(client.post(&address).bearer_auth(bearer.trim()).json(
+        stado_wait::request(client.post(&address).bearer_auth(bearer.trim()).json(
             &json!({"provider": args.provider, "member": args.member, "reason": args.reason}),
         ))
         .await
@@ -187,7 +187,7 @@ async fn policy_answer(target: &PolicyTarget, request: PolicyRequest) -> Result<
         "{}/v1/admin/subscription-pool/reset-policy",
         gateway.trim_end_matches('/')
     );
-    let response = stado_wait::http::request(
+    let response = stado_wait::request(
         client
             .post(&address)
             .bearer_auth(bearer.trim())

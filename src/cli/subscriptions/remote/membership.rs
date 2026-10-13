@@ -70,7 +70,7 @@ pub(crate) async fn forget(
         ))
         .bearer_auth(bearer)
         .json(&json!({"subscription_id": subscription_id, "reason": reason}));
-    let response = stado_wait::http::request(request)
+    let response = stado_wait::request(request)
         .await
         .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
     let (status, body) = answer(response, gateway).await?;

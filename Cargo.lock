@@ -2611,7 +2611,7 @@ source = "git+https://github.com/wisent-ai/wisent-errors?rev=8947ad21ac852750b11
 [[package]]
 name = "wisent-onboarding-client"
 version = "0.1.0"
-source = "git+https://github.com/wisent-ai/echo-web?rev=aa423766991c3c958145bc7e5f2a62748bb3951c#aa423766991c3c958145bc7e5f2a62748bb3951c"
+source = "git+https://github.com/wisent-ai/echo-web?rev=22437b2e8c29291f3db6c4d605d20e7db3bdb2e1#22437b2e8c29291f3db6c4d605d20e7db3bdb2e1"
 dependencies = [
  "async-trait",
  "reqwest",

@@ -38,7 +38,7 @@ pub(crate) fn state_dir() -> PathBuf {
 /// neither, Brama stops with the cause; reading `.` as home put retirement
 /// markers, leases and replay records in whatever directory Brama started
 /// from, where the next start under another directory never saw them.
-pub(crate) fn home_dir() -> PathBuf {
+pub fn home_dir() -> PathBuf {
     std::env::home_dir().expect(
         "neither HOME nor the user database names a home directory, so Brama cannot find its state or the Stado binary",
     )

@@ -55,7 +55,7 @@ async fn call(
     if let Some(body) = body {
         request = request.json(&body);
     }
-    let response = stado_wait::http::request(request)
+    let response = stado_wait::request(request)
         .await
         .map_err(|error| format!("the gateway {origin} did not answer: {error}"))?;
     let status = response.status();

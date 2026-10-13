@@ -200,7 +200,7 @@ pub(crate) async fn second_factor(
         ))
         .bearer_auth(bearer)
         .json(&json!({"provider": provider}));
-    let response = stado_wait::http::request(request)
+    let response = stado_wait::request(request)
         .await
         .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
     let (status, body) = answer(response, gateway).await?;
@@ -223,7 +223,7 @@ pub(crate) async fn maintain(gateway: &str, bearer: &str) -> Result<Value, Strin
         ))
         .bearer_auth(bearer)
         .json(&discovery);
-    let response = stado_wait::http::request(request)
+    let response = stado_wait::request(request)
         .await
         .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
     let (status, body) = answer(response, gateway).await?;

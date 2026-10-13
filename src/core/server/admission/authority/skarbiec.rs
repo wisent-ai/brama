@@ -68,7 +68,8 @@ pub(super) async fn ask_authority(bearer: &str) -> WorkloadAuthorityAnswer {
     {
         return WorkloadAuthorityAnswer::Rejected;
     }
-    let read = super::response::read_json(response, "POST", &introspect, &[bearer, own.trim()]);
+    let secrets = [bearer, own.trim()];
+    let read = super::response::read_json(response, "POST", &introspect, &secrets);
     let answer: Value = tokio::select! {
         read = read => match read {
             Ok(answer) => answer,

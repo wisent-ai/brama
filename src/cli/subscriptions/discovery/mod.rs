@@ -51,7 +51,7 @@ async fn execute(destination: Destination) -> Result<Value, String> {
     let client = reqwest::Client::builder()
         .build()
         .map_err(|error| error.to_string())?;
-    let response = stado_wait::http::request(
+    let response = stado_wait::request(
         client
             .post(format!(
                 "{}/v1/admin/subscription-pool/discover",

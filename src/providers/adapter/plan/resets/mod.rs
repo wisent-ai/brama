@@ -119,16 +119,11 @@ pub struct PreparedRedemption {
 }
 
 impl PreparedRedemption {
-    /// Send the already validated mutation exactly once, after intent is durable.
-    pub async fn send(self) -> Result<Value, String> {
+    /// Send the already validated mutation exactly once, after intent is
+    /// durable; the request announces its own waits.
+    pub async fn exchange(self) -> Result<Value, String> {
         let result_field = self.result_field;
-        let answer = stado_wait::until(
-            stado_wait::Kind::Network,
-            "redeem saved provider reset",
-            "provider capacity endpoint",
-            self.request.send(),
-        )
-        .await?;
+        let answer = self.request.exchange().await?;
         let result = answer
             .get(result_field)
             .and_then(Value::as_str)
