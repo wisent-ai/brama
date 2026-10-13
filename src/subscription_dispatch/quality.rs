@@ -114,12 +114,15 @@ async fn check_model(opts: &TaskQualityOptions, model: &str) -> Value {
     let content = resp.content.trim().to_string();
     let passed = resp.success && expected_matches(opts, &content);
     let score = if passed { 1.0 } else { 0.0 };
-    let provider = provider_for(model).unwrap_or("unknown");
+    // A model no route names a provider for is recorded with no provider: the
+    // row was filed under provider "unknown", and the scores then read as a
+    // provider's.
+    let provider = provider_for(model);
     json!({
         "agent_id": opts.agent_id,
         "source": SOURCE,
         "provider": provider,
-        "service": service_name(provider),
+        "service": provider.map(service_name),
         "subscription_id": Value::Null,
         "account_identifier": opts.task,
         "status": if passed { "active" } else { "failed" },
@@ -157,6 +160,12 @@ fn expected_matches(opts: &TaskQualityOptions, content: &str) -> bool {
 
 fn persist_quality_rows(opts: &TaskQualityOptions, rows: &[Value]) -> Result<(), String> {
     for row in rows {
+        // The journal attributes a check to a provider; a check of a model no
+        // route names a provider for stays in the returned rows with a null
+        // provider and is not journaled under an empty one.
+        let Some(provider) = row.get("provider").and_then(Value::as_str) else {
+            continue;
+        };
         let model = row
             .get("metadata")
             .and_then(|m| m.get("model"))
@@ -168,7 +177,7 @@ fn persist_quality_rows(opts: &TaskQualityOptions, rows: &[Value]) -> Result<(),
             .and_then(Value::as_f64);
         crate::journal::record_check(
             &opts.agent_id,
-            &string_field(row, "provider"),
+            provider,
             model,
             &opts.task,
             SOURCE,
