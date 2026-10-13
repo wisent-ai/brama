@@ -72,12 +72,13 @@ pub(super) fn schedule_sign_in(subscription_id: String, provider: String) -> boo
         match tokio::spawn(sign_in::sign_in_provider(options)).await {
             Ok(Ok(verdict)) => {
                 record_check(&subscription_id, &provider, None);
+                // The verdict is logged as Weles returned it; a result or
+                // detail it left out stays absent rather than "unknown".
                 info!(
                     event = "credential_sign_in_finished",
                     subscription = %subscription_id,
                     provider = %provider,
-                    result = verdict.get("result").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
-                    detail = verdict.get("detail").and_then(serde_json::Value::as_str).unwrap_or_default()
+                    verdict = %verdict
                 );
             }
             // A blocked reason is a declaration this deployment is missing: it
