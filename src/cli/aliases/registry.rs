@@ -82,7 +82,16 @@ fn report_registry(path: &std::path::Path, document: &Value, json: bool, change:
     let routes = document.get("routes").and_then(Value::as_object);
     println!("routes: {}", routes.map_or(0, serde_json::Map::len));
     for (alias, destination) in routes.into_iter().flatten() {
-        println!("{:<32} {}", alias, destination.as_str().unwrap_or("-"));
+        println!("{:<32} {}", alias, destination_text(destination));
+    }
+}
+
+/// A route's destination: its text, or the JSON it is written as when it is
+/// not text, so a destination of another shape is shown rather than a dash.
+fn destination_text(destination: &Value) -> String {
+    match destination.as_str() {
+        Some(text) => text.to_string(),
+        None => destination.to_string(),
     }
 }
 
@@ -115,6 +124,6 @@ pub(super) fn migrate(file: Option<PathBuf>, json: bool) {
     let routes = document.get("routes").and_then(Value::as_object);
     println!("routes: {}", routes.map_or(0, serde_json::Map::len));
     for (alias, destination) in routes.into_iter().flatten() {
-        println!("{:<32} {}", alias, destination.as_str().unwrap_or("-"));
+        println!("{:<32} {}", alias, destination_text(destination));
     }
 }

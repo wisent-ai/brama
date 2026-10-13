@@ -111,12 +111,11 @@ pub(crate) async fn report(args: AliasesArgs) {
             }
         );
         for alias in &report.aliases {
-            println!(
-                "{:<32} {:<20} {}",
-                alias.alias,
-                alias.state,
-                alias.route.as_deref().unwrap_or("-")
-            );
+            let route = match alias.route.as_deref() {
+                Some(route) => route,
+                None => "(no route)",
+            };
+            println!("{:<32} {:<20} {route}", alias.alias, alias.state);
             if let Some(reason) = &alias.reason {
                 println!("{:<32} {}", "", reason);
             }
