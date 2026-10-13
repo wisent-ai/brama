@@ -28,6 +28,17 @@ pub(in crate::gateway::broker) async fn refresh_subscription_credential_inner(
     provider: &str,
     force: bool,
 ) -> Result<Secret, Failure> {
+    if let Some(refused) = awaiting::refusal(subscription_id, provider) {
+        return Err(refused);
+    }
+    refresh_presented(subscription_id, provider, force).await
+}
+
+async fn refresh_presented(
+    subscription_id: &str,
+    provider: &str,
+    force: bool,
+) -> Result<Secret, Failure> {
     // Refresh-token rotation is single-flight. Re-reading after the lock lets a
     // concurrent caller observe the value already written to the vault.
     let _guard = OAUTH_REFRESH_LOCK.lock().await;
@@ -69,7 +80,7 @@ pub(in crate::gateway::broker) async fn refresh_subscription_credential_inner(
                 envelope = %refused.to_json(),
                 "OAuth refresh failed"
             );
-            record_refusal(subscription_id, provider, &refused);
+            awaiting::record_refusal(subscription_id, provider, &refused);
             return Err(refused);
         }
     };
@@ -124,48 +135,7 @@ pub(in crate::gateway::broker) async fn refresh_subscription_credential_inner(
     Ok(refreshed)
 }
 
-/// Put a refused refresh in the ledger when the provider disowned the grant,
-/// and leave the record alone when nothing about the grant was learned.
-///
-/// Both refresh paths classify here -- the sweep ahead of expiry and the forced
-/// refresh a rejected request triggers -- so a credential cannot read as dead on
-/// one path and healthy on the other.
-fn record_refusal(subscription_id: &str, provider: &str, refused: &Failure) {
-    // The provider's own sentence, or a stand-in when it refused without one:
-    // the ledger's cause is what an operator reads, and an empty cause is a row
-    // that says a sign-in is needed without saying why.
-    let detail = refused
-        .detail
-        .as_deref()
-        .unwrap_or("the provider refused this credential's refresh without saying why");
-    match oauth_refresh::classify_refusal(refused) {
-        oauth_refresh::RefreshRefusal::Definitive => {
-            warn!(
-                event = "credential_refresh_refused_definitively",
-                subscription = %subscription_id,
-                provider,
-                error = detail,
-                "the provider will not accept this grant again; only a sign-in repairs it"
-            );
-            crate::subscription_dispatch::usage::record_reauthorization_needed(
-                subscription_id,
-                provider,
-                detail,
-            );
-        }
-        oauth_refresh::RefreshRefusal::Transient => {
-            warn!(
-                event = "credential_refresh_transient_skipped",
-                subscription = %subscription_id,
-                provider,
-                error = detail,
-                "the refresh failed without the provider disowning the grant; the \
-                 credential is left as it stands for the next sweep"
-            );
-        }
-    }
-}
-
+mod awaiting;
 mod storing;
 
 pub(in crate::gateway::broker) use storing::is_borrowed;
@@ -184,6 +154,16 @@ pub async fn refresh_subscription_credential(
     provider: &str,
 ) -> Result<Secret, Failure> {
     refresh_subscription_credential_inner(subscription_id, provider, true).await
+}
+
+/// The operator's deliberate retry of a grant the ledger holds awaiting a
+/// sign-in: the one refresh that presents a disowned grant again, because an
+/// operator who doubts the provider's verdict asked for it by name.
+pub async fn retry_disowned_subscription_credential(
+    subscription_id: &str,
+    provider: &str,
+) -> Result<Secret, Failure> {
+    refresh_presented(subscription_id, provider, true).await
 }
 
 /// Whether this provider's subscription credentials are OAuth grants that can be

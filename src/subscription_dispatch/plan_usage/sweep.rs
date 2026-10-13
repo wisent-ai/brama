@@ -22,6 +22,10 @@ pub(crate) async fn sweep() -> Value {
     let mut seen = BTreeSet::new();
     let mut read = 0_usize;
     let mut failed = Vec::new();
+    // Members whose grant the provider disowned: their plan cannot be read
+    // with that grant and its refresh is not asked again until a sign-in, so
+    // they are listed with the ledger's cause instead of failing once more.
+    let mut awaiting_sign_in = Vec::new();
     let agents = match broker::configured_request_sign_agents() {
         Ok(agents) => agents,
         Err(error) => {
@@ -55,6 +59,14 @@ pub(crate) async fn sweep() -> Value {
             if !usage::plan_usage_due(&entry.id) {
                 continue;
             }
+            if let Some(cause) = usage::awaiting_sign_in_cause(&entry.id) {
+                awaiting_sign_in.push(json!({
+                    "subscription": entry.id,
+                    "provider": entry.provider,
+                    "cause": cause,
+                }));
+                continue;
+            }
             read = read.saturating_add(1);
             if let Err(error) = refresh(&entry.id, &entry.provider).await {
                 warn!(
@@ -83,5 +95,6 @@ pub(crate) async fn sweep() -> Value {
         "subscriptions": seen.len(),
         "read": read,
         "failed": failed,
+        "awaiting_sign_in": awaiting_sign_in,
     })
 }

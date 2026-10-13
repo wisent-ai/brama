@@ -6,8 +6,10 @@
 //! audit record beside the state it changed, and reports the verdict rather
 //! than the credential -- what it obtains is dropped unread.
 //!
-//! The sweep and these share one code path, the forced form of what the timer
-//! calls, so a grant cannot come back alive here and dead there.
+//! The sweep and these share one refresh path, with one difference an operator
+//! asks for by running them: a grant the ledger holds awaiting a sign-in is
+//! presented to the provider again here, while the sweep and the request path
+//! leave it alone until a sign-in stores a new one.
 
 use serde_json::{json, Value};
 
@@ -77,7 +79,7 @@ pub async fn refresh_provider(provider: &str, reason: &str) -> Result<Value, Str
     let mut refusals = Vec::new();
     let mut unreadable: usize = 0;
     for subscription_id in &candidates {
-        match broker::refresh_subscription_credential(subscription_id, provider).await {
+        match broker::retry_disowned_subscription_credential(subscription_id, provider).await {
             // Dropped unread. This command reports that a credential now exists,
             // never what it is, and the ledger already holds the new expiry.
             Ok(credential) => {
@@ -159,7 +161,7 @@ pub async fn refresh_subscription(
             format!("`{provider}` credentials have no OAuth refresh path"),
         ));
     }
-    match broker::refresh_subscription_credential(subscription_id, provider).await {
+    match broker::retry_disowned_subscription_credential(subscription_id, provider).await {
         Ok(credential) => {
             drop(credential);
             Ok(verdict(
