@@ -290,9 +290,12 @@ serving process unless one it started is still running, so a gateway whose sched
 fires still renews grants and schedules sign-ins. Before the first pass it reads
 <code>{"last_pass_unix": null, "detail": "no maintenance pass has run since this process
 started: one runs when the host's Stado schedule calls brama maintain, and when a request is
-refused for want of a signed-in subscription"}</code>. The gateway keeps no timer, so it
-does not judge lateness; a monitor compares <code>last_pass_unix</code> with the schedule it
-declared.</p>
+refused for want of a signed-in subscription; a host with no such schedule declares it with
+stado repair brama --step declarations --target &lt;host&gt; --apply"}</code>. That repair
+step declares the schedule the gateway's installation recipe declares, under the
+installation's own id, for a gateway a release update placed without it. The gateway keeps
+no timer, so it does not judge lateness; a monitor compares <code>last_pass_unix</code> with
+the schedule it declared.</p>
 <h2 id="get-stats"><code>GET /stats</code><a class="headerlink" href="#get-stats" title="Link to this section">&para;</a></h2>
 <p>Bearer-protected process telemetry, with no dependency probing. Captured keys:
 <code>build</code>, <code>configuredDirectProviders</code>, <code>dependencyPolicy</code>

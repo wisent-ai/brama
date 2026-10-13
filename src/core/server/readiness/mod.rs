@@ -141,7 +141,8 @@ fn maintenance_state() -> Value {
             "last_pass_unix": null,
             "detail": "no maintenance pass has run since this process started: one runs when the \
                        host's Stado schedule calls brama maintain, and when a request is refused \
-                       for want of a signed-in subscription"
+                       for want of a signed-in subscription; a host with no such schedule \
+                       declares it with stado repair brama --step declarations --target <host> --apply"
         }),
     }
 }
