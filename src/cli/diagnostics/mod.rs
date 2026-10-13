@@ -36,7 +36,12 @@ fn fail(detail: impl std::fmt::Display) -> ! {
 /// One JSON line by default, which release tooling and the docs read; with
 /// `--text`, the same fields as `key: value` lines for a person.
 pub(crate) fn print_version(text: bool) {
-    let identity = serde_json::to_value(brama::build_info()).unwrap_or_default();
+    let identity = match serde_json::to_value(brama::build_info()) {
+        Ok(identity) => identity,
+        Err(error) => fail(format!(
+            "this build's identity cannot be written as JSON: {error}"
+        )),
+    };
     if text {
         super::print_answer(&identity, false);
     } else {
@@ -48,15 +53,23 @@ pub(crate) fn detect(json: bool) {
     let res = detect_compute_resources();
     if json {
         let report = serde_json::json!({ "resources": res });
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&report).unwrap_or_else(|_| "{}".into())
-        );
+        println!("{report:#}");
         return;
     }
-    println!("GPU Type: {}", res.gpu_type.as_deref().unwrap_or("none"));
-    println!("GPU Name: {}", res.gpu_name.as_deref().unwrap_or("unknown"));
-    println!("VRAM: {:.1} GB", res.vram_gb);
+    match res.gpu_type.as_deref() {
+        Some(kind) => println!("GPU Type: {kind}"),
+        None => {
+            println!("GPU Type: none detected (not Apple Silicon, and nvidia-smi named no GPU)")
+        }
+    }
+    match res.gpu_name.as_deref() {
+        Some(name) => println!("GPU Name: {name}"),
+        None => println!("GPU Name: not reported"),
+    }
+    match res.vram_gb {
+        Some(vram) => println!("VRAM: {vram:.1} GB"),
+        None => println!("VRAM: no dedicated memory reported"),
+    }
     println!("RAM: {:.1} GB", res.ram_gb);
     println!("CPU Cores: {}", res.cpu_cores);
     println!("CUDA: {}", res.has_cuda);

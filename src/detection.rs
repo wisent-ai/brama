@@ -17,12 +17,17 @@ pub fn detect_compute_resources() -> ComputeResources {
     let is_apple_silicon = is_darwin && is_aarch64;
 
     let (gpu_type, gpu_name, vram_gb, has_cuda, has_metal) = if is_apple_silicon {
-        let (name, vram) = detect_apple_silicon();
-        (Some("apple_silicon".into()), name, vram, false, true)
+        (
+            Some("apple_silicon".into()),
+            detect_apple_silicon(),
+            None,
+            false,
+            true,
+        )
     } else {
         match detect_nvidia() {
             Some((name, vram)) => (Some("nvidia".into()), Some(name), vram, true, false),
-            None => (None, None, 0.0, false, false),
+            None => (None, None, None, false, false),
         }
     };
 
@@ -37,14 +42,16 @@ pub fn detect_compute_resources() -> ComputeResources {
     };
 
     info!(
-        "Detected: GPU={:?} VRAM={:.1}GB RAM={:.1}GB cores={}",
+        "Detected: GPU={:?} VRAM={:?}GB RAM={:.1}GB cores={}",
         resources.gpu_type, resources.vram_gb, resources.ram_gb, resources.cpu_cores,
     );
 
     resources
 }
 
-fn detect_apple_silicon() -> (Option<String>, f64) {
+/// The chipset `system_profiler` names. Apple Silicon's GPU shares system
+/// memory, so no dedicated VRAM is reported for it: RAM is that memory.
+fn detect_apple_silicon() -> Option<String> {
     let output = Command::new("system_profiler")
         .args(["SPDisplaysDataType"])
         .output();
@@ -55,28 +62,19 @@ fn detect_apple_silicon() -> (Option<String>, f64) {
             let name = text
                 .lines()
                 .find(|l| l.contains("Chipset Model:"))
-                .map(|l| l.split(':').nth(1).unwrap_or("").trim().to_string());
-
-            // On Apple Silicon, the unified memory is
-            // shared between CPU and GPU. We use total
-            // system RAM as a proxy and report 75% of
-            // it as available VRAM (typical allocation).
-            let mut sys = System::new_all();
-            sys.refresh_all();
-            let total_gb = sys.total_memory() as f64 / (1024.0 * 1024.0 * 1024.0);
-            let vram = total_gb * 0.75;
-
-            debug!("Apple Silicon detected: {:?}, ~{:.1}GB VRAM", name, vram);
-            (name, vram)
+                .and_then(|l| l.split_once(':'))
+                .map(|(_, name)| name.trim().to_string());
+            debug!("Apple Silicon detected: {:?}", name);
+            name
         }
         Err(e) => {
-            warn!("Could not run system_profiler: {e}");
-            (None, 0.0)
+            warn!("Could not run system_profiler, so the GPU is not named: {e}");
+            None
         }
     }
 }
 
-fn detect_nvidia() -> Option<(String, f64)> {
+fn detect_nvidia() -> Option<(String, Option<f64>)> {
     let output = Command::new("nvidia-smi")
         .args([
             "--query-gpu=name,memory.total",
@@ -91,10 +89,16 @@ fn detect_nvidia() -> Option<(String, f64)> {
             let parts: Vec<&str> = line.split(',').map(|s| s.trim()).collect();
             if parts.len() >= 2 {
                 let name = parts[0].to_string();
-                let vram_mb: f64 = parts[1].parse().unwrap_or(0.0);
+                let vram_mb: f64 = match parts[1].parse() {
+                    Ok(vram_mb) => vram_mb,
+                    Err(error) => {
+                        warn!("nvidia-smi named {name} with a memory size that is not a number: {error}");
+                        return Some((name, None));
+                    }
+                };
                 let vram_gb = vram_mb / 1024.0;
                 debug!("NVIDIA GPU: {} with {:.1}GB VRAM", name, vram_gb);
-                Some((name, vram_gb))
+                Some((name, Some(vram_gb)))
             } else {
                 None
             }

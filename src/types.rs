@@ -30,7 +30,9 @@ pub enum RouterError {
 pub struct ComputeResources {
     pub gpu_type: Option<String>,
     pub gpu_name: Option<String>,
-    pub vram_gb: f64,
+    /// Dedicated GPU memory as the driver reports it; none where the GPU
+    /// shares system memory (Apple Silicon) or no driver reported a size.
+    pub vram_gb: Option<f64>,
     pub ram_gb: f64,
     pub cpu_cores: usize,
     pub has_cuda: bool,

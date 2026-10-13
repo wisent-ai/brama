@@ -34,7 +34,7 @@ fn schema(properties: Value, required: Vec<&str>) -> Value {
 fn tools() -> Value {
     json!([
         {"name": "brama_detect",
-         "description": "Detect local compute resources (GPU type/name, VRAM, RAM, CPU cores, CUDA/Metal) and the model + backend brama would recommend for this host. Local only; no network, no credentials, no cost.",
+         "description": "Detect local compute resources: GPU type and name, dedicated VRAM (null where the GPU shares system memory or none was reported), RAM, CPU cores, CUDA/Metal. Local only; no network, no credentials, no cost.",
          "inputSchema": schema(json!({}), vec![])},
     ])
 }
@@ -42,7 +42,7 @@ fn tools() -> Value {
 fn text_result(value: &Value) -> Value {
     let text = match value {
         Value::String(s) => s.clone(),
-        other => serde_json::to_string_pretty(other).unwrap_or_default(),
+        other => format!("{other:#}"),
     };
     json!({"content": [{"type": "text", "text": text}]})
 }

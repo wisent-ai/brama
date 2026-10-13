@@ -72,6 +72,11 @@ RAM: ... GB
 CPU Cores: ...
 ```
 
+`VRAM` is the dedicated memory the GPU driver reports. Where the GPU shares
+system memory (Apple Silicon) or no driver reports a size, the line reads
+`VRAM: no dedicated memory reported` and `--json` carries `"vram_gb": null`;
+the GPU's share of `RAM` is not estimated.
+
 Neither command starts a service. The checkout path may leave build output under
 `target/`; it is a local build cache, not product state. Continue with
 [`ONBOARDING.md`](https://brama.wisent.com/docs/onboarding) for the authenticated loopback and production
