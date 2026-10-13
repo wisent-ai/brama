@@ -192,8 +192,15 @@ pub struct LimitReading {
 pub struct ModelResponse {
     pub content: String,
     pub model: String,
+    /// Zero unless `usage_stated`: a count the provider did not state is no
+    /// measurement, and readers that total tokens skip such an answer and
+    /// count it apart instead of adding its zeros.
     pub input_tokens: u32,
     pub output_tokens: u32,
+    /// Whether the provider stated this answer's token usage. Absent in
+    /// records written before the flag existed.
+    #[serde(default)]
+    pub usage_stated: bool,
     pub latency_ms: f64,
     pub cost: f64,
     pub success: bool,
@@ -228,6 +235,7 @@ impl ModelResponse {
             model: model.to_string(),
             input_tokens: 0,
             output_tokens: 0,
+            usage_stated: false,
             latency_ms: 0.0,
             cost: 0.0,
             attempts: 0,

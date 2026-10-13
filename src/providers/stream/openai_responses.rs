@@ -75,10 +75,17 @@ pub(super) fn responses_items(event: Option<&str>, data: &str) -> (Vec<StreamIte
         "response.completed" | "response.incomplete" => {
             let response = body.get("response").cloned().unwrap_or(Value::Null);
             let usage = response.get("usage").cloned().unwrap_or(Value::Null);
-            items.push(StreamItem::Delta(StreamDelta::Usage {
-                input_tokens: json_u32(usage.get("input_tokens")).unwrap_or_default(),
-                output_tokens: json_u32(usage.get("output_tokens")).unwrap_or_default(),
-            }));
+            // Usage is passed on only when the provider stated both counts;
+            // a stream without it is recorded as carrying no measurement.
+            if let (Some(input_tokens), Some(output_tokens)) = (
+                json_u32(usage.get("input_tokens")),
+                json_u32(usage.get("output_tokens")),
+            ) {
+                items.push(StreamItem::Delta(StreamDelta::Usage {
+                    input_tokens,
+                    output_tokens,
+                }));
+            }
             let reason = if kind == "response.incomplete" {
                 Some(
                     response

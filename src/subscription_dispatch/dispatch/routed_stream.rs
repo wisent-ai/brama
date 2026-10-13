@@ -45,8 +45,9 @@ pub(in crate::subscription_dispatch::dispatch) fn spawn_stream_recorder(
     let mut events = stream.events;
     tokio::spawn(async move {
         let mut content = String::new();
-        let mut input_tokens = 0;
-        let mut output_tokens = 0;
+        // Usage counts only once the stream states them; a stream that never
+        // does is recorded as carrying no measurement, not as zero tokens.
+        let mut usage: Option<(u32, u32)> = None;
         let mut error: Option<String> = None;
         let mut finished = false;
         loop {
@@ -59,10 +60,7 @@ pub(in crate::subscription_dispatch::dispatch) fn spawn_stream_recorder(
                 StreamItem::Delta(StreamDelta::Usage {
                     input_tokens: input,
                     output_tokens: output,
-                }) => {
-                    input_tokens = *input;
-                    output_tokens = *output;
-                }
+                }) => usage = Some((*input, *output)),
                 StreamItem::Failed(message) => error = Some(message.clone()),
                 _ => {}
             }
@@ -90,8 +88,11 @@ pub(in crate::subscription_dispatch::dispatch) fn spawn_stream_recorder(
             response.failure_kind = None;
         }
         response.content = content;
-        response.input_tokens = input_tokens;
-        response.output_tokens = output_tokens;
+        if let Some((input, output)) = usage {
+            response.input_tokens = input;
+            response.output_tokens = output;
+            response.usage_stated = true;
+        }
         response.latency_ms = started.elapsed().as_secs_f64() * 1_000.0;
         response.attempts = attempts;
         response.limits = limits;

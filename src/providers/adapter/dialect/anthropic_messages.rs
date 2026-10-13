@@ -4,6 +4,7 @@
 use serde_json::{json, Value};
 
 use super::named_tool_choice;
+use crate::providers::adapter::stated_usage;
 use crate::types::{Message, ModelRequest, ModelResponse, ToolCall};
 
 pub(in crate::providers::adapter) fn anthropic_tool_choice(choice: &Value) -> Option<Value> {
@@ -146,17 +147,16 @@ pub(in crate::providers::adapter) fn model_response_from_anthropic(
             _ => {}
         }
     }
+    let (input_tokens, output_tokens, usage_stated) = stated_usage(
+        body.pointer("/usage/input_tokens"),
+        body.pointer("/usage/output_tokens"),
+    );
     ModelResponse {
         content: text,
         model: route_id.to_string(),
-        input_tokens: body
-            .pointer("/usage/input_tokens")
-            .and_then(Value::as_u64)
-            .unwrap_or(0) as u32,
-        output_tokens: body
-            .pointer("/usage/output_tokens")
-            .and_then(Value::as_u64)
-            .unwrap_or(0) as u32,
+        input_tokens,
+        output_tokens,
+        usage_stated,
         latency_ms: elapsed_ms,
         cost: 0.0,
         success: true,

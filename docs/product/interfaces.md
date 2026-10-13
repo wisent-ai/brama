@@ -59,7 +59,9 @@ to the [README](../../README.md).
   returns, per subscription, the plan windows the provider itself reported
   (`limits`: `used_fraction`, `window_label`, `resets_at_ms`, and the
   `recorded_at_ms` the reading was taken at), what Brama measured (`measured`:
-  requests, failures, input and output tokens, first and last use), any
+  requests, failures, input and output tokens, first and last use, and
+  `last_unmeasured_call_ms`, when an answer whose provider stated no token
+  usage was last recorded -- such answers are not in the token totals), any
   rate-limit `block` in force, when the record last changed
   (`observed_at_ms`), where the newest window came from and whether it is still
   current (`usage_source`: `provider`, `traffic` or `probe`, and `stale`), the

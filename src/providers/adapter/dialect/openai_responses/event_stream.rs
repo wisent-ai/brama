@@ -3,6 +3,7 @@
 use serde_json::Value;
 
 use crate::providers::adapter::call::outcome::refusal::attempted_failure;
+use crate::providers::adapter::stated_usage;
 use crate::types::{ModelResponse, ProviderRefusal, Refusal, ToolCall};
 
 /// The class of a failure the backend reported inside a 200 stream, from the
@@ -175,17 +176,16 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
         }
     }
     let usage = completed.get("usage");
+    let (input_tokens, output_tokens, usage_stated) = stated_usage(
+        usage.and_then(|usage| usage.get("input_tokens")),
+        usage.and_then(|usage| usage.get("output_tokens")),
+    );
     ModelResponse {
         content,
         model: route_id.to_string(),
-        input_tokens: usage
-            .and_then(|usage| usage.get("input_tokens"))
-            .and_then(Value::as_u64)
-            .unwrap_or(0) as u32,
-        output_tokens: usage
-            .and_then(|usage| usage.get("output_tokens"))
-            .and_then(Value::as_u64)
-            .unwrap_or(0) as u32,
+        input_tokens,
+        output_tokens,
+        usage_stated,
         latency_ms: elapsed_ms,
         cost: 0.0,
         success: true,

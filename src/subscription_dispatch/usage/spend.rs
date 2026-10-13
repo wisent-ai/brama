@@ -31,6 +31,11 @@ pub struct Measured {
     pub input_tokens: u64,
     #[serde(default)]
     pub output_tokens: u64,
+    /// When an answer whose provider stated no token usage was last recorded.
+    /// Such answers are not in the two totals above, which hold only what was
+    /// measured, so a reader knows the totals leave calls out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_unmeasured_call_ms: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub since_ms: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -87,14 +92,18 @@ pub fn record_call_from(
         if !response.success {
             entry.measured.failures = entry.measured.failures.saturating_add(1);
         }
-        entry.measured.input_tokens = entry
-            .measured
-            .input_tokens
-            .saturating_add(u64::from(response.input_tokens));
-        entry.measured.output_tokens = entry
-            .measured
-            .output_tokens
-            .saturating_add(u64::from(response.output_tokens));
+        if response.usage_stated {
+            entry.measured.input_tokens = entry
+                .measured
+                .input_tokens
+                .saturating_add(u64::from(response.input_tokens));
+            entry.measured.output_tokens = entry
+                .measured
+                .output_tokens
+                .saturating_add(u64::from(response.output_tokens));
+        } else if response.success {
+            entry.measured.last_unmeasured_call_ms = Some(now);
+        }
         for reading in &response.limits {
             entry
                 .limits

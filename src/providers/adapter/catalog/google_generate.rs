@@ -3,6 +3,7 @@
 use serde_json::{json, Value};
 
 use super::super::dialect::named_tool_choice;
+use crate::providers::adapter::stated_usage;
 use crate::types::{Message, ModelRequest, ModelResponse, ToolCall};
 
 fn google_tool_config(choice: &Value) -> Option<Value> {
@@ -140,17 +141,16 @@ pub(super) fn model_response_from_google(
             });
         }
     }
+    let (input_tokens, output_tokens, usage_stated) = stated_usage(
+        body.pointer("/usageMetadata/promptTokenCount"),
+        body.pointer("/usageMetadata/candidatesTokenCount"),
+    );
     ModelResponse {
         content,
         model: route_id.to_string(),
-        input_tokens: body
-            .pointer("/usageMetadata/promptTokenCount")
-            .and_then(Value::as_u64)
-            .unwrap_or(0) as u32,
-        output_tokens: body
-            .pointer("/usageMetadata/candidatesTokenCount")
-            .and_then(Value::as_u64)
-            .unwrap_or(0) as u32,
+        input_tokens,
+        output_tokens,
+        usage_stated,
         latency_ms: elapsed_ms,
         cost: 0.0,
         success: true,

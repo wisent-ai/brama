@@ -2,6 +2,7 @@
 
 use serde_json::{json, Value};
 
+use crate::providers::adapter::stated_usage;
 use crate::types::{ModelRequest, ModelResponse, ResponseSchema, ToolCall};
 
 /// The chat wire's `response_format` for an answer schema. Strict, so a
@@ -59,17 +60,16 @@ pub(in crate::providers::adapter) fn model_response_from_openai(
                 .collect::<Vec<_>>()
         })
         .filter(|calls| !calls.is_empty());
+    let (input_tokens, output_tokens, usage_stated) = stated_usage(
+        body.pointer("/usage/prompt_tokens"),
+        body.pointer("/usage/completion_tokens"),
+    );
     ModelResponse {
         content,
         model: route_id.to_string(),
-        input_tokens: body
-            .pointer("/usage/prompt_tokens")
-            .and_then(Value::as_u64)
-            .unwrap_or(0) as u32,
-        output_tokens: body
-            .pointer("/usage/completion_tokens")
-            .and_then(Value::as_u64)
-            .unwrap_or(0) as u32,
+        input_tokens,
+        output_tokens,
+        usage_stated,
         latency_ms: elapsed_ms,
         cost: 0.0,
         success: true,

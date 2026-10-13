@@ -251,3 +251,17 @@ fn unconfigured_route(request: &ModelRequest, error: String) -> ModelResponse {
 fn client_unavailable(request: &ModelRequest, error: String) -> ModelResponse {
     ModelResponse::refused(&request.model, GatewayRefusal::DependencyUnavailable, error)
 }
+
+/// The token usage a provider answer states: both counts and `true` when it
+/// states both, otherwise zero counts and `false`. A count the provider left
+/// out is no measurement, so the answer says it carries none rather than a
+/// usage of zero tokens.
+fn stated_usage(input: Option<&Value>, output: Option<&Value>) -> (u32, u32, bool) {
+    match (
+        input.and_then(Value::as_u64),
+        output.and_then(Value::as_u64),
+    ) {
+        (Some(input), Some(output)) => (input as u32, output as u32, true),
+        _ => (Default::default(), Default::default(), false),
+    }
+}
