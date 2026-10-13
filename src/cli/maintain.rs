@@ -98,17 +98,20 @@ fn print_report(report: &Value) {
         .and_then(Value::as_array)
     {
         for failure in failed {
+            // A failure row without its subscription or provider is named as
+            // such; "?" read like part of an id.
+            let said = |field: &str| match failure.get(field).and_then(Value::as_str) {
+                Some(text) => text,
+                None => "not reported",
+            };
             println!(
                 "  failed {} ({}): {}",
-                failure
-                    .get("subscription")
-                    .and_then(Value::as_str)
-                    .unwrap_or("?"),
-                failure
-                    .get("provider")
-                    .and_then(Value::as_str)
-                    .unwrap_or("?"),
-                failure.get("error").cloned().unwrap_or(Value::Null)
+                said("subscription"),
+                said("provider"),
+                match failure.get("error") {
+                    Some(error) => error.clone(),
+                    None => Value::String("no error was reported".to_string()),
+                }
             );
         }
     }
