@@ -7,7 +7,10 @@
 use serde_json::Value;
 
 mod capacity;
+mod fields;
 mod membership;
+
+pub(super) use fields::{instant, text};
 
 /// How many accounts the pool holds, which is not how many members it has,
 /// and which accounts those are.
@@ -281,20 +284,4 @@ pub(super) fn print_pool(report: &Value) {
             }
         }
     }
-}
-
-pub(super) fn instant(value: Option<&Value>) -> String {
-    value
-        .and_then(Value::as_i64)
-        .filter(|value| *value > 0)
-        .and_then(chrono::DateTime::from_timestamp_millis)
-        .map(|at| at.to_rfc3339())
-        .unwrap_or_else(|| "unknown".to_string())
-}
-
-/// One string field, absent when the report states nothing there. A `null` reads
-/// as absent, which is what the pool report writes for an expiry a credential
-/// does not state and for a refusal there has not been.
-pub(super) fn text<'a>(report: &'a Value, key: &str) -> Option<&'a str> {
-    report.get(key).and_then(Value::as_str)
 }
