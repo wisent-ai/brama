@@ -30,6 +30,10 @@ name = "readiness-inventory"
 path = "tests/readiness/inventory.rs"
 
 [[test]]
+name = "readiness-standing"
+path = "tests/readiness/standing.rs"
+
+[[test]]
 name = "credential-administration"
 path = "tests/administration/credential-refusal.rs"
 

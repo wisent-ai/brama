@@ -24,17 +24,13 @@ struct PendingChannel {
     phase: Option<String>,
 }
 
-/// Where the resolver keeps its state on this machine: Stado's own
-/// contract, overridable the way Stado's readers override it.
+/// Where the resolver publishes its waits: beside its state, whose place is
+/// Stado's own contract (`readiness::standing::resolver_state_file`).
 fn waiting_file() -> Option<PathBuf> {
-    let state = match std::env::var_os("STADO_RESOLVER_STATE_FILE").filter(|path| !path.is_empty())
-    {
-        Some(path) => PathBuf::from(path),
-        None => PathBuf::from(std::env::var_os("HOME")?)
-            .join(".stado")
-            .join("resolver-state.json"),
-    };
-    Some(state.with_file_name("resolver-waiting.json"))
+    Some(
+        crate::core::server::readiness::standing::resolver_state_file()?
+            .with_file_name("resolver-waiting.json"),
+    )
 }
 
 /// Why a call to `url` would stand, when this machine's resolver already

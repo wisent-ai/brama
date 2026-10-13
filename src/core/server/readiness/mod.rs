@@ -9,6 +9,7 @@
 mod accounts;
 pub(in crate::core::server) mod check;
 mod placement;
+pub(in crate::core::server) mod standing;
 
 use std::sync::LazyLock;
 
@@ -145,17 +146,26 @@ fn maintenance_state() -> Value {
 }
 
 /// Return the last completed credential and routing check, with the last
-/// maintenance pass beside it.
+/// maintenance pass beside it. A credential call standing unanswered past
+/// the declared refresh interval overrides it: the gateway declares it
+/// serves nothing and names the source (`standing`).
 pub(in crate::core::server) async fn readyz() -> impl IntoResponse {
     let report = match READINESS_REPORT.read() {
         Ok(current) => current.clone(),
         Err(poisoned) => poisoned.into_inner().clone(),
     };
+    let mut status = report.status;
     let mut body = report.body;
     if let Some(object) = body.as_object_mut() {
         object.insert("maintenance".to_string(), maintenance_state());
+        if let Some(refusal) = standing::refusal() {
+            status = StatusCode::SERVICE_UNAVAILABLE;
+            object.insert("ready".to_string(), Value::Bool(false));
+            object.insert("reason".to_string(), Value::String(refusal.clone()));
+            object.insert("credential_source".to_string(), Value::String(refusal));
+        }
     }
-    (report.status, Json(body))
+    (status, Json(body))
 }
 
 /// Learn this host's placement and take the first readiness reading, once.

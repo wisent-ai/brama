@@ -42,17 +42,25 @@ pub(super) async fn ask_authority(bearer: &str) -> WorkloadAuthorityAnswer {
         Ok(Some(held)) => return WorkloadAuthorityAnswer::Unavailable(held),
         Err(unreadable) => return WorkloadAuthorityAnswer::Unavailable(unreadable),
     }
-    let response = match client
+    // The call stands in the readiness register until it is answered; a
+    // readiness reading that finds it standing past the declared refresh
+    // interval ends it with the sentence `/readyz` gives.
+    let mut standing = crate::core::server::readiness::standing::Standing::begin(&introspect);
+    let sent = client
         .post(&introspect)
         .header("X-Consumer", consumer)
         .bearer_auth(own.trim())
         .json(&json!({"token": bearer}))
-        .send()
-        .await
-    {
-        Ok(response) => response,
-        Err(error) => {
-            return WorkloadAuthorityAnswer::Unavailable(format!("POST {introspect}: {error}"))
+        .send();
+    let response = tokio::select! {
+        answered = sent => match answered {
+            Ok(response) => response,
+            Err(error) => {
+                return WorkloadAuthorityAnswer::Unavailable(format!("POST {introspect}: {error}"))
+            }
+        },
+        refusal = standing.ended() => {
+            return WorkloadAuthorityAnswer::Unavailable(format!("POST {introspect}: {refusal}"))
         }
     };
     let status = response.status();
@@ -60,17 +68,17 @@ pub(super) async fn ask_authority(bearer: &str) -> WorkloadAuthorityAnswer {
     {
         return WorkloadAuthorityAnswer::Rejected;
     }
-    let answer: Value = match super::response::read_json(
-        response,
-        "POST",
-        &introspect,
-        &[bearer, own.trim()],
-    )
-    .await
-    {
-        Ok(answer) => answer,
-        Err(error) => return WorkloadAuthorityAnswer::Unavailable(error),
+    let read = super::response::read_json(response, "POST", &introspect, &[bearer, own.trim()]);
+    let answer: Value = tokio::select! {
+        read = read => match read {
+            Ok(answer) => answer,
+            Err(error) => return WorkloadAuthorityAnswer::Unavailable(error),
+        },
+        refusal = standing.ended() => {
+            return WorkloadAuthorityAnswer::Unavailable(format!("POST {introspect}: {refusal}"))
+        }
     };
+    drop(standing);
     if answer.get("active").and_then(Value::as_bool) != Some(true) {
         return WorkloadAuthorityAnswer::Rejected;
     }

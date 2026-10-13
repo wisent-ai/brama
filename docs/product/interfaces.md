@@ -99,7 +99,20 @@ to the [README](../../README.md).
   unredeemable, or unroutable account visible without blocking a release that
   contains its repair; HTTP 503 means no configured route can serve. Deploy
   checks and uptime monitors should read `/readyz`; `/health` only proves the
-  process is running.
+  process is running. Every call to the credential source (Skarbiec's token
+  introspection on each workload admission) is recorded while it stands;
+  when one has stood longer than the refresh interval this host's Stado
+  resolver declares (its state's target in `~/.stado/cache/registry-last-good.json`,
+  `service_resolver.refresh_seconds`), `/readyz` answers 503 with
+  `ready: false` and `reason` and `credential_source` set to "the credential
+  source has not answered: <n> call(s) stand longer than the <s>s refresh
+  interval this host's resolver declares, the oldest to <url> for <s>s; Brama
+  serves no chat until it answers", whatever the last sweep found, and that
+  same reading ends each such admission with the sentence (`503`,
+  `workload_authority_unavailable`) instead of letting it stand. A host whose
+  resolver declares no interval reads no standing call. Qualification:
+  `tests/readiness/standing.rs` against a stand-in that accepts and never
+  answers.
 - **Error contract:** a refused redemption is `503 authorization_error` with
   code `credential_unauthorized` and `retryable: false`, never a `429
   capacity_error`. Waiting does not repair an authorization id that does not
