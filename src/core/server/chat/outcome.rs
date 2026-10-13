@@ -18,7 +18,7 @@ use crate::core::server::telemetry::{
     TOTAL_REQUESTS,
 };
 use crate::subscription_dispatch::RoutedStream;
-use crate::types::{ModelResponse, ProviderRefusal};
+use crate::types::{GatewayRefusal, ModelResponse, ProviderRefusal};
 
 use super::routing::RoutedCallMeta;
 
@@ -78,6 +78,15 @@ pub(super) fn tally_and_log_buffered(
 /// Every format shares it: a caller that cannot get its generation needs the
 /// contract code and retryability, and those are Brama's, not the wire's.
 pub(super) fn failure_response(resp: &mut ModelResponse) -> Response {
+    // Refused for want of a signed-in subscription: the gateway's own
+    // maintenance pass is what signs one in, so the refusal starts it.
+    if resp.failure_kind
+        == Some(ProviderRefusal::Gateway(
+            GatewayRefusal::SubscriptionReauthorizationRequired,
+        ))
+    {
+        crate::core::server::subscriptions::maintenance::start_after_refusal();
+    }
     // Only a failure is answered here, and every failure states its class; one
     // that arrived without it is the unattributed provider failure.
     let contract = provider_refusal_contract(

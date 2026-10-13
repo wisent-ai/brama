@@ -127,9 +127,9 @@ pub(in crate::core::server) fn record_maintenance(ok: bool) {
 
 /// What `/readyz` says about maintenance. The gateway keeps no timer, so it
 /// cannot tell a late pass from an early one; it states when the last pass
-/// ended and how, and says plainly when none has run, because then nothing
-/// renews a grant or schedules a sign-in until the host's Stado schedule runs
-/// `brama maintain`.
+/// ended and how, and says plainly when none has run. A pass runs when the
+/// host's Stado schedule calls `brama maintain`, and when a request is
+/// refused for want of a signed-in subscription.
 fn maintenance_state() -> Value {
     let last = match LAST_MAINTENANCE.read() {
         Ok(last) => *last,
@@ -139,8 +139,9 @@ fn maintenance_state() -> Value {
         Some((finished, ok)) => json!({"last_pass_unix": finished, "last_pass_ok": ok}),
         None => json!({
             "last_pass_unix": null,
-            "detail": "no maintenance pass has run since this process started: nothing renews a \
-                       grant or schedules a sign-in until the host's Stado schedule runs brama maintain"
+            "detail": "no maintenance pass has run since this process started: one runs when the \
+                       host's Stado schedule calls brama maintain, and when a request is refused \
+                       for want of a signed-in subscription"
         }),
     }
 }

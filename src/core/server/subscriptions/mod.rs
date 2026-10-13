@@ -5,6 +5,7 @@
 
 pub(in crate::core::server) mod account;
 pub(in crate::core::server) mod leases;
+pub(in crate::core::server) mod maintenance;
 mod membership;
 pub(in crate::core::server) mod probe;
 pub(in crate::core::server) mod sign_in;

@@ -155,58 +155,16 @@ pub(in crate::core::server) async fn second_factor_admin_subscription_pool(
         .map_err(|message| api_error(StatusCode::SERVICE_UNAVAILABLE, &message))
 }
 
-/// One maintenance pass of this serving process, the work it used to run on
-/// its own timers: read every plan usage report that is due, renew every
-/// grant whose stated expiry has passed, decide whether a spent pool needs a
-/// new account (and start buying it), and take a fresh readiness reading. The
-/// host's Stado schedule decides how often; `brama maintain` is the caller.
-/// `ok` is false when any step failed, and each failure is in the body with
-/// its error; an acquisition refusal is a decision, not a failure.
+/// One maintenance pass of this serving process ([`super::maintenance::pass`]),
+/// asked by `brama maintain` on the host's Stado schedule.
 pub(in crate::core::server) async fn maintain_admin(
     Extension(client_identity): Extension<ModelClientIdentity>,
     supplied: Option<Json<crate::subscription_dispatch::discovery::harness::DiscoveryReport>>,
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
-    let observed = match supplied {
-        Some(Json(report)) => report,
-        None => crate::subscription_dispatch::discovery::harness::collect().await,
-    };
-    let discovery = crate::subscription_dispatch::discovery::enroll(observed).await;
-    let plan_usage = crate::subscription_dispatch::plan_usage::sweep().await;
-    let credentials = crate::subscription_dispatch::refresh_sweep::sweep().await;
-    let resets = crate::subscription_dispatch::acquire::resets::maintenance::run().await;
-    let acquisition = if discovery["ok"].as_bool() == Some(true)
-        && resets["ok"].as_bool() == Some(true)
-    {
-        crate::subscription_dispatch::acquire::maintenance_pass().await
-    } else {
-        json!({"verdicts": [], "result": "refused",
-            "detail": "account discovery or saved-capacity maintenance is incomplete; no account was purchased"})
-    };
-    let readiness = crate::core::server::readiness::recompute().await;
-    let usage_failed = plan_usage
-        .get("failed")
-        .and_then(Value::as_array)
-        .is_some_and(|failed| !failed.is_empty());
-    let ready = readiness.get("ready").and_then(Value::as_bool) == Some(true);
-    let ok = discovery["ok"].as_bool() == Some(true)
-        && resets["ok"].as_bool() == Some(true)
-        && !usage_failed
-        && credentials.is_ok()
-        && ready;
-    crate::core::server::readiness::record_maintenance(ok);
-    Ok(Json(json!({
-        "ok": ok,
-        "discovery": discovery,
-        "plan_usage": plan_usage,
-        "resets": resets,
-        "credentials": match credentials {
-            Ok(report) => report,
-            Err(error) => json!({"error": error}),
-        },
-        "acquisition": acquisition,
-        "readiness": readiness,
-    })))
+    Ok(Json(
+        super::maintenance::pass(supplied.map(|Json(report)| report)).await,
+    ))
 }
 
 /// Register independently observed account metadata; sign-in stays with Weles.
