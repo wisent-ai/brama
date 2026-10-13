@@ -29,7 +29,7 @@ impl ModelRow<'_> {
 
     pub(super) fn categories_column(&self) -> String {
         if self.categories.is_empty() {
-            "-".to_string()
+            "(none)".to_string()
         } else {
             self.categories.join(",")
         }

@@ -130,16 +130,15 @@ impl Layout {
     }
 }
 
-/// Seconds since the epoch as `YYYY-MM-DDTHH:MM:SSZ`.
+/// Seconds since the epoch as `YYYY-MM-DDTHH:MM:SSZ`, or why the file's
+/// modification time could not be read; "unknown" dropped the cause.
 pub(super) fn moment(path: &Path) -> String {
-    std::fs::symlink_metadata(path)
-        .and_then(|meta| meta.modified())
-        .map(|time| {
-            chrono::DateTime::<chrono::Utc>::from(time)
-                .format("%Y-%m-%dT%H:%M:%SZ")
-                .to_string()
-        })
-        .unwrap_or_else(|_| "unknown".into())
+    match std::fs::symlink_metadata(path).and_then(|meta| meta.modified()) {
+        Ok(time) => chrono::DateTime::<chrono::Utc>::from(time)
+            .format("%Y-%m-%dT%H:%M:%SZ")
+            .to_string(),
+        Err(error) => format!("not read ({error})"),
+    }
 }
 
 /// The JSON at `path`: `Ok(None)` only when there is no file, the read or
