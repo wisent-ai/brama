@@ -44,12 +44,12 @@ pub(super) fn print_accounts(accounts: Option<&Value>) {
                 .join("; ")
         })
         .unwrap_or_default();
-    let total = accounts
-        .get("total")
-        .and_then(Value::as_u64)
-        .unwrap_or_default();
+    let total = match accounts.get("total").and_then(Value::as_u64) {
+        Some(total) => format!("{total} account(s)"),
+        None => "account count not reported".to_string(),
+    };
     println!(
-        "{total} account(s){}",
+        "{total}{}",
         if per_provider.is_empty() {
             String::new()
         } else {
@@ -78,11 +78,15 @@ pub(super) fn print_pool(report: &Value) {
             build["version"], build["source_revision"], build["platform"], build["built_at"]
         );
     }
-    let rows: &[Value] = report
-        .get("subscriptions")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default();
+    // A report without its subscription list is said as such rather than
+    // read as an empty pool.
+    let rows: &[Value] = match report.get("subscriptions").and_then(Value::as_array) {
+        Some(rows) => rows,
+        None => {
+            println!("the report carries no subscription list");
+            &[]
+        }
+    };
     let live = rows
         .iter()
         .filter(|row| text(row, "state") == Some("live"))
@@ -101,11 +105,16 @@ pub(super) fn print_pool(report: &Value) {
     );
 
     for row in rows {
+        // A row field the gateway left out is named as such, not as a value.
+        let reported = |field: &str| match text(row, field) {
+            Some(value) => value,
+            None => "not reported",
+        };
         println!(
             "{:<8} {:<14} {}{}",
-            text(row, "state").unwrap_or("unknown"),
-            text(row, "provider").unwrap_or("unknown"),
-            text(row, "id").unwrap_or("unknown"),
+            reported("state"),
+            reported("provider"),
+            reported("id"),
             text(row, "label")
                 .map(|label| format!(" ({label})"))
                 .unwrap_or_default()
@@ -199,11 +208,15 @@ pub(super) fn print_pool(report: &Value) {
             state.get("applies").and_then(Value::as_bool) == Some(true)
                 && state.get("automatic").and_then(Value::as_bool) == Some(false)
         }) {
-            println!(
-                "    sign_in_blocked: {}: {}",
-                text(automatic, "blocked_by").unwrap_or("unknown"),
-                text(automatic, "detail").unwrap_or("no reason was stated")
-            );
+            let blocked_by = match text(automatic, "blocked_by") {
+                Some(blocker) => blocker,
+                None => "blocker not reported",
+            };
+            let detail = match text(automatic, "detail") {
+                Some(detail) => detail,
+                None => "no reason was stated",
+            };
+            println!("    sign_in_blocked: {blocked_by}: {detail}");
         }
         if let Some(check) = row.get("usage_check").filter(|check| !check.is_null()) {
             println!(
