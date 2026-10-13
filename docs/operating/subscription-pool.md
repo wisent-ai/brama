@@ -114,13 +114,16 @@ Read the serving gateway's subscription view, including its provider usage
 windows, without copying a credential into a shell command:
 
 ```bash
-brama subscription list --gateway-consumer <consumer> --bearer-role <console bearer role> --json
+brama subscription list --gateway-consumer <consumer> --bearer-role brama-desktop-model-router --json
 ```
 
 The gateway's origin comes from Stado's service directory and the console
 bearer from the vault item that plays the role, read with
-`stado credentials get --role`; no item is named. A refusal exits nonzero with
-the gateway's own sentence. A missing or stale provider usage report is not
+`stado credentials get --role`; no item is named. `brama-desktop-model-router`
+is the role Brama Desktop reads its gateway bearer by, and the one the
+gateway's console verbs accept (`list` and `attribute` answer with it); a
+bearer read by another role is refused with HTTP 401. A refusal exits nonzero
+with the gateway's own sentence. A missing or stale provider usage report is not
 zero usage; read each window's observation and reset times.
 
 ## What each account has left
