@@ -141,9 +141,19 @@ pub async fn record_accounts(provider: &str) -> Result<Value, String> {
     for id in members {
         match crate::gateway::broker::record_subscription_account(&id, provider).await {
             Ok(Some(account)) => recorded.push(json!({"member": id, "account": account})),
+            // A grant with no address cannot be attributed from here; the
+            // reason says what records the identity instead, so the answer
+            // is actionable without reading a sign-in refusal first.
             Ok(None) => unattributed.push(json!({
                 "member": id,
-                "reason": "this member's grant states no account, so nothing was recorded",
+                "reason": format!(
+                    "this member's grant states no account, so nothing was recorded; record \
+                     the identity on the subscription item provider:{provider}:{id} instead: \
+                     tag it brama:login:<login item> (stado credentials item retag --host \
+                     <vault host> provider:{provider}:{id} --tags \"<its current tags>,\
+                     brama:login:<login item>\"), declare provider {provider} on its login \
+                     item, or name the login explicitly with --login-item at sign-in"
+                ),
             })),
             Err(detail) => unattributed.push(json!({"member": id, "reason": detail})),
         }
