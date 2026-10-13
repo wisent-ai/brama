@@ -1,3 +1,4 @@
+use super::blocked::{journal_unreadable, observed_at};
 use super::{weles_provider, Blocked, SignInOptions};
 use serde_json::{json, Value};
 
@@ -236,7 +237,11 @@ pub fn observed_failure(id: &str) -> Option<Blocked> {
             return Some(Blocked::Operation {
                 code: check.code.clone(),
                 stage: "automatic_sign_in_check".into(),
-                detail: check.detail.clone(),
+                detail: format!(
+                    "{} ({})",
+                    check.detail,
+                    observed_at(Some(check.at_ms), "checked")
+                ),
                 status: None,
             });
         }
@@ -275,25 +280,17 @@ pub fn observed_failure(id: &str) -> Option<Blocked> {
             .and_then(Value::as_str)
             .unwrap_or("unrecorded")
             .into(),
-        detail: previous
-            .get("detail")
-            .and_then(Value::as_str)
-            .unwrap_or("The previous authentication attempt did not retain its outcome")
-            .into(),
+        detail: format!(
+            "{} ({})",
+            match previous.get("detail").and_then(Value::as_str) {
+                Some(detail) => detail,
+                None => "The previous authentication attempt did not retain its outcome",
+            },
+            observed_at(began, "attempted")
+        ),
         status: previous
             .pointer("/failure/http_status")
             .and_then(Value::as_u64)
             .and_then(|value| u16::try_from(value).ok()),
     })
-}
-
-/// The hold an unreadable journal puts on a member: its sign-in history is
-/// unknown, so it is neither cleared nor blamed on the provider.
-fn journal_unreadable(cause: String) -> Blocked {
-    Blocked::Operation {
-        code: "journal_unreadable".into(),
-        stage: "journal".into(),
-        detail: cause,
-        status: None,
-    }
 }

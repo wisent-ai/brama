@@ -129,3 +129,24 @@ impl From<String> for SignInError {
         Self::Dependency(value)
     }
 }
+
+/// When a held member's failure was observed, so a refusal repeated after
+/// the vault or the executor changed is read as the last observation and
+/// not as the state of now.
+pub(super) fn observed_at(at_ms: Option<i64>, verb: &str) -> String {
+    match at_ms.and_then(chrono::DateTime::from_timestamp_millis) {
+        Some(at) => format!("{verb} at {}", at.to_rfc3339()),
+        None => format!("{verb} at an unrecorded time"),
+    }
+}
+
+/// The hold an unreadable journal puts on a member: its sign-in history is
+/// unknown, so it is neither cleared nor blamed on the provider.
+pub(super) fn journal_unreadable(cause: String) -> Blocked {
+    Blocked::Operation {
+        code: "journal_unreadable".into(),
+        stage: "journal".into(),
+        detail: cause,
+        status: None,
+    }
+}
