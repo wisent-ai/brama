@@ -73,7 +73,9 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
         accounts
             .into_iter()
             .map(|account| {
-                let (provider_str, reason) = match (&account.provider, &account.id) {
+                // An item without a 'brama:provider:' tag names no provider:
+                // the row carries null, not a provider called "unknown".
+                let (provider_str, reason): (Option<String>, String) = match (&account.provider, &account.id) {
                     (Some(provider), Some(id)) => {
                         let refusal = crate::subscription_dispatch::dispatch::no_active_credential_summary(provider);
                         let admission = match &account.account {
@@ -82,7 +84,7 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
                             ),
                             None => "it names no provider account (brama:account:), so no sign-in can be resolved for it until the account is recorded on the item".to_string(),
                         };
-                        (provider.clone(), format!(
+                        (Some(provider.clone()), format!(
                             "the vault holds this account and its item carries no 'brama:subscription' mark, \
                              so subscription discovery cannot see it and no caller can route to it; \
                              every request for this provider answers '{refusal}'; {admission}"
@@ -90,20 +92,20 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
                     }
                     (Some(provider), None) => {
                         let refusal = crate::subscription_dispatch::dispatch::no_active_credential_summary(provider);
-                        (provider.clone(), format!(
+                        (Some(provider.clone()), format!(
                             "the vault holds this account; its item carries 'brama:provider:' but no 'brama:id:' tag; \
                              subscription discovery cannot route to it without both tags; \
                              every request for this provider would answer '{refusal}'"
                         ))
                     }
                     (None, Some(_id)) => {
-                        ("unknown".to_string(),
+                        (None,
                          "the vault holds this account; its item carries 'brama:id:' but no 'brama:provider:' tag; \
                           subscription discovery cannot route to it without both tags; \
                           operator: add the missing 'brama:provider:' tag or remove this item".to_string())
                     }
                     (None, None) => {
-                        ("unknown".to_string(),
+                        (None,
                          "the vault holds this subscription account, but its item carries no 'brama:id:' or 'brama:provider:' tags; \
                           subscription discovery cannot route to it; \
                           operator: restore both tags or remove this item from the vault".to_string())
