@@ -34,6 +34,10 @@ name = "readiness-standing"
 path = "tests/readiness/standing.rs"
 
 [[test]]
+name = "readiness-maintenance"
+path = "tests/readiness/maintenance.rs"
+
+[[test]]
 name = "credential-administration"
 path = "tests/administration/credential-refusal.rs"
 
