@@ -247,10 +247,13 @@ pub(super) fn print_pool(report: &Value) {
             let amount = limit
                 .get("used_fraction")
                 .and_then(Value::as_f64)
-                .map(|fraction| format!("{:.1}%", fraction * 100.0))
-                .unwrap_or_else(|| "unknown".to_string());
+                .map(|fraction| format!("{:.1}%", fraction * 100.0));
+            let amount = match amount {
+                Some(amount) => format!("{amount} used"),
+                None => "used share not stated".to_string(),
+            };
             println!(
-                "    {}: {amount} used; reset {}; observed {}{}",
+                "    {}: {amount}; reset {}; observed {}{}",
                 text(limit, "window_label")
                     .or_else(|| text(limit, "label"))
                     .unwrap_or("unnamed window"),
