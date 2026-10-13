@@ -150,3 +150,30 @@ pub(super) fn journal_unreadable(cause: String) -> Blocked {
         status: None,
     }
 }
+
+/// Each member's sign-in state with the dispatch hold it is under now: a
+/// spent window or a rate limit names the instant it lifts and the
+/// provider's own words, so a refusal does not send its reader to repair a
+/// sign-in for a member that only waits for its window to reset.
+pub(super) fn with_holds(ids: &[&String], states: Vec<String>) -> Vec<String> {
+    ids.iter()
+        .zip(states)
+        .map(|(id, state)| match held(id) {
+            Some(hold) => format!("{state}, {hold}"),
+            None => state,
+        })
+        .collect()
+}
+
+fn held(id: &str) -> Option<String> {
+    let block = crate::subscription_dispatch::usage::usage_for(id)?.block?;
+    if block.blocked_until_ms <= chrono::Utc::now().timestamp_millis() {
+        return None;
+    }
+    let until = chrono::DateTime::from_timestamp_millis(block.blocked_until_ms)?;
+    Some(format!(
+        "held until {} by the provider's answer: {}",
+        until.to_rfc3339(),
+        block.reason
+    ))
+}

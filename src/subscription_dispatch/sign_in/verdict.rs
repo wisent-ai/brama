@@ -1,4 +1,4 @@
-use super::blocked::{journal_unreadable, observed_at};
+use super::blocked::{journal_unreadable, observed_at, with_holds};
 use super::{weles_provider, Blocked, SignInOptions};
 use serde_json::{json, Value};
 
@@ -32,7 +32,8 @@ pub fn automatic_sign_in_sentence(provider: &str) -> String {
         return format!("automatic sign-in: provider '{provider}' declares no Weles authorization capability; no independent grant was obtained");
     }
     let states: Vec<String> = ids
-        .into_iter()
+        .iter()
+        .copied()
         .map(|id| {
             match crate::journal::is_retired(id) {
                 Ok(true) => return format!("{id}: retired"),
@@ -61,7 +62,7 @@ pub fn automatic_sign_in_sentence(provider: &str) -> String {
             }
         })
         .collect();
-    format!("automatic sign-in: {}", states.join("; "))
+    format!("automatic sign-in: {}", with_holds(&ids, states).join("; "))
 }
 
 pub(super) fn verdict(
