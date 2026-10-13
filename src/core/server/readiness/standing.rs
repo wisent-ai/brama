@@ -38,15 +38,17 @@ fn standing() -> std::sync::MutexGuard<'static, BTreeMap<usize, Call>> {
     }
 }
 
-/// A call recorded as standing until it is dropped.
-pub(in crate::core::server) struct Standing {
+/// A call recorded as standing until it is dropped: a credential call to
+/// Skarbiec over HTTP, or a vault child this gateway shells and waits on,
+/// which stands the same way when the vault on this host answers nothing.
+pub(crate) struct Standing {
     marker: Arc<()>,
     ended: oneshot::Receiver<String>,
 }
 
 impl Standing {
     /// Record a call to `target` as standing from now.
-    pub(in crate::core::server) fn begin(target: &str) -> Self {
+    pub(crate) fn begin(target: &str) -> Self {
         let marker = Arc::new(());
         let (end, ended) = oneshot::channel();
         let call = Call {
@@ -60,7 +62,7 @@ impl Standing {
 
     /// Resolves once a readiness reading ends this call, with its sentence;
     /// a call no reading ends never resolves here.
-    pub(in crate::core::server) async fn ended(&mut self) -> String {
+    pub(crate) async fn ended(&mut self) -> String {
         match (&mut self.ended).await {
             Ok(sentence) => sentence,
             Err(_) => std::future::pending().await,

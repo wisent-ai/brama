@@ -11,15 +11,10 @@ use std::sync::{Arc, LazyLock, Mutex};
 
 use futures_util::future::{BoxFuture, FutureExt, Shared};
 
-const ENTITLEMENTS_ROUTER_BIN_ENV: &str = "ENTITLEMENTS_ROUTER_BIN";
-/// The vault binary's second declaration, the one Skarbiec's own fixtures and
-/// Stado's release journeys set.
-const SKARBIEC_BIN_ENV: &str = "SKARBIEC_BIN";
-const DEFAULT_ENTITLEMENTS_ROUTER_BIN: &str = "entitlements-router";
-/// The installed vault CLI, in the two names it is reached by on this fleet.
-const VAULT_PROGRAM_NAMES: [&str; 2] = [DEFAULT_ENTITLEMENTS_ROUTER_BIN, "skarbiec"];
-/// Where the fleet installs it when nothing is on `PATH`, relative to `$HOME`.
-const VAULT_HOME_RELATIVE: &str = ".stado/bin/skarbiec";
+mod executable;
+
+pub(crate) use executable::entitlements_router_bin;
+use executable::{ENTITLEMENTS_ROUTER_BIN_ENV, SKARBIEC_BIN_ENV};
 
 /// The router's bare `list`: the JSON row of every vault item.
 ///
@@ -103,59 +98,6 @@ pub(in crate::gateway::broker) async fn raw_listing(
     result
 }
 
-/// The vault binary this gateway shells for every credential operation.
-///
-/// Four places, in this order: the router's own declaration, the vault's
-/// declaration, an executable of either name on `PATH`, and the path the
-/// fleet installs it at. The bare word `entitlements-router` used to be the
-/// whole answer, and on a machine where the vault is installed as
-/// `~/.stado/bin/skarbiec` and nothing exports either variable, every
-/// credential write fails with `No such file or directory (os error 2)` and
-/// names no program — `brama subscription sync` answers that for every
-/// grant the machine holds, while nothing that needs a working subscription
-/// can be served.
-pub(crate) fn entitlements_router_bin() -> Result<String, String> {
-    for declaration in [ENTITLEMENTS_ROUTER_BIN_ENV, SKARBIEC_BIN_ENV] {
-        match std::env::var(declaration) {
-            Ok(value) if value.trim().is_empty() => {
-                return Err(format!("resolve vault executable: {declaration} is empty"));
-            }
-            Ok(value) => return Ok(value.trim().to_owned()),
-            Err(std::env::VarError::NotPresent) => {}
-            Err(error) => {
-                return Err(format!(
-                    "read vault executable declaration {declaration}: {error}"
-                ))
-            }
-        }
-    }
-    if let Some(found) = VAULT_PROGRAM_NAMES.into_iter().find_map(on_path) {
-        return Ok(found);
-    }
-    if let Some(home) = std::env::var_os("HOME") {
-        let installed = std::path::Path::new(&home).join(VAULT_HOME_RELATIVE);
-        if is_executable_file(&installed) {
-            return Ok(installed.display().to_string());
-        }
-    }
-    Ok(DEFAULT_ENTITLEMENTS_ROUTER_BIN.to_owned())
-}
-
-/// Is `path` a file this process could execute?
-fn is_executable_file(path: &std::path::Path) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::metadata(path)
-        .is_ok_and(|info| info.is_file() && info.permissions().mode() & 0o111 != 0)
-}
-
-/// The first executable named `program` on `PATH`.
-fn on_path(program: &str) -> Option<String> {
-    std::env::split_paths(&std::env::var_os("PATH")?)
-        .map(|directory| directory.join(program))
-        .find(|candidate| is_executable_file(candidate))
-        .map(|candidate| candidate.display().to_string())
-}
-
 /// Run one entitlements-router command and read its output.
 ///
 /// The child's own exit is the answer. A vault read on a cold keychain and a
@@ -221,7 +163,13 @@ fn declared_ceiling() -> Result<Option<(u64, std::time::Duration)>, String> {
 /// ends is attributable from the log without any assumed duration. When the
 /// operator declares a resident ceiling, the child is ended once it passes
 /// it, and the refusal names the operation, the pid and the measured
-/// footprint.
+/// footprint. The child also stands in the readiness register while it
+/// runs: a vault that accepts the command and never answers left every
+/// chat request on it unanswered until the client's transport gave up with
+/// an empty reply, with `/readyz` still answering ready. A readiness reading
+/// that finds the child standing longer than the refresh interval this
+/// host's resolver declares ends it with the reading's own sentence, which
+/// the request is then refused with, and `/readyz` says the same.
 pub(in crate::gateway::broker) async fn wait_within_footprint(
     child: tokio::process::Child,
     operation: &str,
@@ -229,12 +177,27 @@ pub(in crate::gateway::broker) async fn wait_within_footprint(
     let pid = child.id();
     let ceiling = declared_ceiling().map_err(|refusal| format!("{operation}: {refusal}"))?;
     tracing::info!(operation, pid = ?pid, "vault child started");
+    let pid_text = match pid {
+        Some(pid) => pid.to_string(),
+        None => "already reaped".to_string(),
+    };
+    let mut standing = crate::core::server::Standing::begin(&format!(
+        "vault child `{operation}` (pid {pid_text})"
+    ));
     let output = child.wait_with_output();
     tokio::pin!(output);
     let Some((ceiling, cadence)) = ceiling else {
-        let finished = output.await;
-        tracing::info!(operation, pid = ?pid, "vault child ended");
-        return finished.map_err(|error| format!("{operation}: wait for the vault child: {error}"));
+        tokio::select! {
+            finished = &mut output => {
+                tracing::info!(operation, pid = ?pid, "vault child ended");
+                return finished.map_err(|error| format!("{operation}: wait for the vault child: {error}"));
+            }
+            sentence = standing.ended() => {
+                tracing::warn!(operation, pid = ?pid, "vault child abandoned by the readiness reading");
+                // Dropping the pinned wait kills the child (kill_on_drop).
+                return Err(format!("{operation}: vault child pid {pid_text} abandoned: {sentence}"));
+            }
+        }
     };
     let mut system = sysinfo::System::new();
     let mut checks = tokio::time::interval(cadence);
@@ -243,6 +206,10 @@ pub(in crate::gateway::broker) async fn wait_within_footprint(
             finished = &mut output => {
                 tracing::info!(operation, pid = ?pid, "vault child ended");
                 return finished.map_err(|error| format!("{operation}: wait for the vault child: {error}"));
+            }
+            sentence = standing.ended() => {
+                tracing::warn!(operation, pid = ?pid, "vault child abandoned by the readiness reading");
+                return Err(format!("{operation}: vault child pid {pid_text} abandoned: {sentence}"));
             }
             _ = checks.tick() => {
                 let Some(pid) = pid.map(sysinfo::Pid::from_u32) else { continue };

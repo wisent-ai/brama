@@ -296,6 +296,23 @@ step declares the schedule the gateway's installation recipe declares, under the
 installation's own id, for a gateway a release update placed without it. The gateway keeps
 no timer, so it does not judge lateness; a monitor compares <code>last_pass_unix</code> with
 the schedule it declared.</p>
+<p>A credential call that stands unanswered overrides the completed report. Each call to
+the credential source — a Skarbiec introspection over HTTP, and each vault child the gateway
+shells (<code>list subscriptions</code>, <code>inspect credential account</code>,
+<code>read credential account</code>, …) — is recorded while it stands. When this request finds
+one standing longer than the refresh interval this host's Stado resolver declares, the answer
+is <code>503</code>, <code>ready: false</code>, and <code>reason</code> and
+<code>credential_source</code> carry <code>the credential source has not answered: &lt;N&gt;
+call(s) stand longer than the &lt;N&gt;s refresh interval this host's resolver declares, the
+oldest to vault child `read credential account` (pid &lt;N&gt;) for &lt;N&gt;s; Brama serves no
+chat until it answers</code>. The same reading ends every such call: the vault child is
+ended, the gateway's log says <code>vault child abandoned by the readiness reading</code>,
+and the request that waited on it is refused with that sentence instead of standing until
+the client's transport gives up with an empty reply. Nothing here keeps a clock: the reading
+happens when this route is asked. Qualification against a vault that never answers:
+<code>cargo test --test readiness-vault-standing -- --ignored</code>, with the isolated
+gateway started with <code>SKARBIEC_BIN</code> naming that test's executable and
+<code>BRAMA_TEST_VAULT_STANDS</code> set.</p>
 <h2 id="get-stats"><code>GET /stats</code><a class="headerlink" href="#get-stats" title="Link to this section">&para;</a></h2>
 <p>Bearer-protected process telemetry, with no dependency probing. Captured keys:
 <code>build</code>, <code>configuredDirectProviders</code>, <code>dependencyPolicy</code>

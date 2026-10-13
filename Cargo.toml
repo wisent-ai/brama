@@ -34,6 +34,11 @@ name = "readiness-standing"
 path = "tests/readiness/standing.rs"
 
 [[test]]
+name = "readiness-vault-standing"
+path = "tests/readiness/vault_standing.rs"
+harness = false
+
+[[test]]
 name = "readiness-maintenance"
 path = "tests/readiness/maintenance.rs"
 
