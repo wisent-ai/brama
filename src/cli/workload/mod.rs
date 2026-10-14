@@ -127,11 +127,12 @@ fn deregister() -> Result<Value, String> {
     }
     let mut revoked_agents = Vec::with_capacity(agents.len());
     for agent in agents {
-        let revoked = Command::new(&router)
-            .args(["grant", "revoke", agent])
-            .envs(&settings)
-            .output()
-            .map_err(|error| format!("grant revoke for {agent} could not run: {error}"))?;
+        let revoked = stado_wait::output(
+            Command::new(&router)
+                .args(["grant", "revoke", agent])
+                .envs(&settings),
+        )
+        .map_err(|error| format!("grant revoke for {agent} could not run: {error}"))?;
         if !revoked.status.success() {
             return Err(format!(
                 "grant revoke refused {agent}: {}",
@@ -182,30 +183,31 @@ fn register() -> Result<Value, String> {
             .open(&key_file)
             .and_then(|mut file| file.write_all(pem.as_bytes()));
         let minted = written.and_then(|()| {
-            Command::new(&router)
-                .args([
-                    "grant",
-                    "issue",
-                    agent,
-                    "--capabilities",
-                    &capabilities.join(","),
-                ])
-                .arg("--workload-public-key-file")
-                .arg(&key_file)
-                .arg("--replace-capabilities")
-                // Skarbiec 0.4.15 refuses a grant that does not state its
-                // lifetime, and an acquire grant may not be `--until-revoked`
-                // ("an acquire grant lends its lifetime to every bearer it
-                // mints; state --ttl-seconds"): 0.4.53 failed every boot on
-                // the first refusal, 0.4.54 on the second. Brama chooses no
-                // lifetime for its runtime grant; its Skarbiec policy
-                // (libexec/generate-skarbiec-config.mjs) writes the largest
-                // integer JSON carries exactly, which reads as none, and the
-                // grant states the same.
-                .arg("--ttl-seconds")
-                .arg(RUNTIME_GRANT_TTL_SECONDS.to_string())
-                .envs(&settings)
-                .output()
+            stado_wait::output(
+                Command::new(&router)
+                    .args([
+                        "grant",
+                        "issue",
+                        agent,
+                        "--capabilities",
+                        &capabilities.join(","),
+                    ])
+                    .arg("--workload-public-key-file")
+                    .arg(&key_file)
+                    .arg("--replace-capabilities")
+                    // Skarbiec 0.4.15 refuses a grant that does not state its
+                    // lifetime, and an acquire grant may not be `--until-revoked`
+                    // ("an acquire grant lends its lifetime to every bearer it
+                    // mints; state --ttl-seconds"): 0.4.53 failed every boot on
+                    // the first refusal, 0.4.54 on the second. Brama chooses no
+                    // lifetime for its runtime grant; its Skarbiec policy
+                    // (libexec/generate-skarbiec-config.mjs) writes the largest
+                    // integer JSON carries exactly, which reads as none, and the
+                    // grant states the same.
+                    .arg("--ttl-seconds")
+                    .arg(RUNTIME_GRANT_TTL_SECONDS.to_string())
+                    .envs(&settings),
+            )
         });
         // The next agent writes the same file with `create_new`; one left
         // behind would refuse it as existing instead of by this cause.

@@ -27,12 +27,13 @@ fn stado_binary() -> std::path::PathBuf {
 
 async fn stado(arguments: &[&str]) -> Result<Zeroizing<String>, String> {
     let binary = stado_binary();
-    let output = tokio::process::Command::new(&binary)
-        .kill_on_drop(true)
-        .args(arguments)
-        .output()
-        .await
-        .map_err(|error| format!("`{}` could not be run: {error}", binary.display()))?;
+    let output = stado_wait::output_async(
+        tokio::process::Command::new(&binary)
+            .kill_on_drop(true)
+            .args(arguments),
+    )
+    .await
+    .map_err(|error| format!("`{}` could not be run: {error}", binary.display()))?;
     if !output.status.success() {
         let said = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(format!(
