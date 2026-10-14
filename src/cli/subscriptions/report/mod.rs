@@ -271,11 +271,12 @@ pub(super) fn print_pool(report: &Value) {
             let mut current = Some(error);
             let mut prefix = "";
             while let Some(failure) = current {
-                eprintln!(
-                    "{account}: {prefix}{}: {}",
-                    text(failure, "failure_point").unwrap_or("unknown operation"),
-                    text(failure, "detail").unwrap_or("failed without a stated reason")
-                );
+                // A failure that does not state its point or detail is printed
+                // as sent: an invented "unknown operation" named nothing.
+                match (text(failure, "failure_point"), text(failure, "detail")) {
+                    (Some(point), Some(detail)) => eprintln!("{account}: {prefix}{point}: {detail}"),
+                    _ => eprintln!("{account}: {prefix}failure reported without its point or detail: {failure}"),
+                }
                 current = failure.get("cause").filter(|cause| cause.is_object());
                 prefix = "caused by ";
             }
