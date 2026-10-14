@@ -11,13 +11,11 @@ use std::path::Path;
 use serde_json::Value;
 
 use super::super::document::{
-    read_body, snapshot, validate_document, write_registry, ROUTE_WRITE_LOCK, SCHEMA_VERSION,
+    read_body, route_write_guard, snapshot, validate_document, write_registry, SCHEMA_VERSION,
 };
 
 pub fn update_route(path: &Path, alias: &str, primary: &str) -> Result<Value, String> {
-    let _guard = ROUTE_WRITE_LOCK
-        .lock()
-        .map_err(|_| "inference route write lock is poisoned".to_string())?;
+    let _guard = route_write_guard();
     let mut value = snapshot(path)?;
     let document = value
         .as_object_mut()
@@ -33,9 +31,7 @@ pub fn update_route(path: &Path, alias: &str, primary: &str) -> Result<Value, St
 }
 
 pub fn delete_route(path: &Path, alias: &str) -> Result<Value, String> {
-    let _guard = ROUTE_WRITE_LOCK
-        .lock()
-        .map_err(|_| "inference route write lock is poisoned".to_string())?;
+    let _guard = route_write_guard();
     let mut value = snapshot(path)?;
     let document = value
         .as_object_mut()
@@ -64,9 +60,7 @@ pub fn delete_route(path: &Path, alias: &str) -> Result<Value, String> {
 /// empty value the loader would have assumed, so running it twice produces the
 /// same document as running it once.
 pub fn migrate(path: &Path) -> Result<Value, String> {
-    let _guard = ROUTE_WRITE_LOCK
-        .lock()
-        .map_err(|_| "inference route write lock is poisoned".to_string())?;
+    let _guard = route_write_guard();
     let body = read_body(path)?;
     let value: Value = serde_json::from_str(&body)
         .map_err(|error| format!("invalid inference routes: {error}"))?;

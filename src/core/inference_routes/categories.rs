@@ -24,7 +24,7 @@ use serde_json::Value;
 
 use crate::providers::adapter::RegistryModel;
 
-use super::document::{read, snapshot, write_registry, ROUTE_WRITE_LOCK};
+use super::document::{read, route_write_guard, snapshot, write_registry};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -197,9 +197,7 @@ pub fn set_category(path: &Path, name: &str, category: &Category) -> Result<Valu
     }
     let normalized = category.normalized();
     normalized.validate(name)?;
-    let _guard = ROUTE_WRITE_LOCK
-        .lock()
-        .map_err(|_| "inference route write lock is poisoned".to_string())?;
+    let _guard = route_write_guard();
     let mut value = snapshot(path)?;
     let document = value
         .as_object_mut()
@@ -222,9 +220,7 @@ pub fn set_category(path: &Path, name: &str, category: &Category) -> Result<Valu
 /// than a silent success, because the operator is otherwise told the document
 /// changed when it did not.
 pub fn delete_category(path: &Path, name: &str) -> Result<Value, String> {
-    let _guard = ROUTE_WRITE_LOCK
-        .lock()
-        .map_err(|_| "inference route write lock is poisoned".to_string())?;
+    let _guard = route_write_guard();
     let mut value = snapshot(path)?;
     let document = value
         .as_object_mut()

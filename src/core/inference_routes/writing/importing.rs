@@ -8,8 +8,8 @@ use std::path::Path;
 use serde_json::Value;
 
 use super::super::document::{
-    ensure_parent, route_file_exists, snapshot, validate_document, write_registry,
-    ROUTE_WRITE_LOCK, SCHEMA_VERSION,
+    ensure_parent, route_file_exists, route_write_guard, snapshot, validate_document,
+    write_registry, SCHEMA_VERSION,
 };
 
 #[derive(Debug, Clone)]
@@ -45,9 +45,7 @@ pub fn import_routes(
     imports: &[RouteImport],
     replace_alias_conflicts: bool,
 ) -> Result<(Value, Vec<RouteImportResult>), String> {
-    let _guard = ROUTE_WRITE_LOCK
-        .lock()
-        .map_err(|_| "inference route write lock is poisoned".to_string())?;
+    let _guard = route_write_guard();
     let mut value = if route_file_exists(path)? {
         snapshot(path)?
     } else {

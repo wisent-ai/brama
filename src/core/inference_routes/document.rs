@@ -55,7 +55,14 @@ pub(super) struct Registry {
 /// the member down is such a document, so writers state it explicitly.
 pub(super) const SCHEMA_VERSION: u32 = 1;
 
-pub(super) static ROUTE_WRITE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+static ROUTE_WRITE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+/// Serializes every write of the routes document. The lock guards no value,
+/// so a writer that panicked leaves nothing half-done in it; refusing on its
+/// poison stopped every later route write until the process restarted.
+pub(super) fn route_write_guard() -> std::sync::MutexGuard<'static, ()> {
+    crate::core::sync::held(&ROUTE_WRITE_LOCK, "inference route write")
+}
 
 pub(super) fn read_body(path: &Path) -> Result<String, String> {
     let metadata = std::fs::symlink_metadata(path)
