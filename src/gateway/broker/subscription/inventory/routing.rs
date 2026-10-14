@@ -20,9 +20,10 @@ static SNAPSHOT: LazyLock<Mutex<Snapshot>> = LazyLock::new(|| Mutex::new(Snapsho
 /// The observed routing pool. The agent names the refresh log, not a separate pool.
 /// Credential redemption remains authoritative at dispatch; metadata grants no access.
 pub fn routing_subscriptions(agent_id: &str) -> InventoryResult {
-    let mut snapshot = SNAPSHOT
-        .lock()
-        .map_err(|error| format!("routing inventory state is unavailable: {error}"))?;
+    // A poisoned snapshot refused every request and, with `refreshing` left
+    // set, was never refreshed again; the value is replaced whole, so it is
+    // taken back.
+    let mut snapshot = crate::core::sync::held(&SNAPSHOT, "routing inventory snapshot");
     let result = match &snapshot.result {
         Some(result) => result.clone(),
         None => Err(
@@ -46,12 +47,7 @@ pub async fn refresh_routing_subscriptions(agent_id: &str) -> InventoryResult {
     if let Err(error) = &result {
         tracing::warn!(event = "routing_inventory_discovery_failed", %error, "routing refuses without waiting for discovery");
     }
-    let mut snapshot = SNAPSHOT.lock().map_err(|error| {
-        // The pass runs detached and its result is dropped, so this log line
-        // is the only place a discovery that could not be published is seen.
-        tracing::warn!(event = "routing_inventory_discovery_unpublished", %error, "subscription inventory discovery finished but could not be published");
-        format!("routing inventory state could not publish discovery: {error}")
-    })?;
+    let mut snapshot = crate::core::sync::held(&SNAPSHOT, "routing inventory snapshot");
     snapshot.result = Some(result.clone());
     snapshot.refreshing = false;
     result
