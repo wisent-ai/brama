@@ -114,19 +114,22 @@ impl Layout {
         })
     }
 
-    fn release_root(&self, name: &str) -> Option<PathBuf> {
-        let dir = self.release_record(name)?.get("release_dir")?.as_str()?;
-        std::fs::canonicalize(dir).ok()
+    /// The release directory a release-state record names, resolved on this
+    /// host, or why it is not: no record naming one, or the resolution error.
+    fn release_root(&self, name: &str) -> Result<PathBuf, String> {
+        let dir = self
+            .release_record(name)
+            .and_then(|record| record.get("release_dir"))
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("the release state names no {name} release_dir"))?;
+        std::fs::canonicalize(dir).map_err(|error| format!("{dir}: {error}"))
     }
 
-    fn config_dir_for(&self, generation: &Path) -> PathBuf {
-        let name = generation
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
+    /// The trust config directory of the generation with this directory name.
+    fn config_dir_for(&self, generation: &std::ffi::OsStr) -> PathBuf {
         self.home
             .join(".config/brama")
-            .join(format!("trust-{name}"))
+            .join(format!("trust-{}", generation.to_string_lossy()))
     }
 }
 

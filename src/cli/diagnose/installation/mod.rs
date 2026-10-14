@@ -187,7 +187,7 @@ pub(super) fn print_generations(layout: &Layout, resolved: Option<&Path>) {
         let canonical = std::fs::canonicalize(&root).ok();
         let mut roles: Vec<String> = roles_recorded
             .iter()
-            .filter(|role| canonical.is_some() && layout.release_root(role) == canonical)
+            .filter(|role| canonical.is_some() && layout.release_root(role).ok() == canonical)
             .cloned()
             .collect();
         if std::fs::canonicalize(&generation).ok().as_deref() == resolved {
@@ -232,8 +232,16 @@ pub(super) fn print_generations(layout: &Layout, resolved: Option<&Path>) {
         if !unrunnable.is_empty() {
             say!("    NOT EXECUTABLE: {}", unrunnable.join(", "));
         }
-        for line in registry_verdict(&root, &layout.config_dir_for(&generation)) {
-            say!("    registry: {line}");
+        match generation.file_name() {
+            Some(name) => {
+                for line in registry_verdict(&root, &layout.config_dir_for(name)) {
+                    say!("    registry: {line}");
+                }
+            }
+            None => say!(
+                "    registry: {} names no generation directory",
+                generation.display()
+            ),
         }
     }
 }

@@ -32,13 +32,16 @@ fn legacy_generation(path: &Path) -> PathBuf {
 /// The trust config and runtime directories the active release names; none,
 /// said why, when its release directory cannot be resolved to a generation.
 fn active(layout: &Layout, record: &Value) -> Option<(PathBuf, PathBuf)> {
-    let Some(root) = layout.release_root("active") else {
-        say!(
-            "active release: {} release_dir={} does not resolve on this host",
-            field(record, "version"),
-            field(record, "release_dir")
-        );
-        return None;
+    let root = match layout.release_root("active") {
+        Ok(root) => root,
+        Err(cause) => {
+            say!(
+                "active release: {} release_dir={} does not resolve on this host: {cause}",
+                field(record, "version"),
+                field(record, "release_dir")
+            );
+            return None;
+        }
     };
     say!(
         "active release: {} pid={} port={} root={}",
@@ -47,7 +50,7 @@ fn active(layout: &Layout, record: &Value) -> Option<(PathBuf, PathBuf)> {
         field(record, "port"),
         root.display()
     );
-    let Some(generation) = root.parent() else {
+    let Some(generation) = root.parent().and_then(Path::file_name) else {
         say!(
             "active release root {} has no generation directory above it",
             root.display()
@@ -84,7 +87,7 @@ fn legacy(layout: &Layout, resolved: Option<&Path>) -> Option<(PathBuf, PathBuf)
         .home
         .join(".stado/run")
         .join(format!("brama-skarbiec-{}", name.to_string_lossy()));
-    Some((layout.config_dir_for(&generation), runtime))
+    Some((layout.config_dir_for(name), runtime))
 }
 
 /// The service env beside the runtime coordinates; returns the trust config
