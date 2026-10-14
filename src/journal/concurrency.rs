@@ -132,8 +132,5 @@ pub fn current() -> BTreeMap<String, Concurrency> {
 /// lock is recovered: left poisoned, every call would go uncounted and
 /// `current` would answer that nothing was ever measured.
 fn routes() -> std::sync::MutexGuard<'static, BTreeMap<String, Route>> {
-    match ROUTES.lock() {
-        Ok(routes) => routes,
-        Err(poisoned) => poisoned.into_inner(),
-    }
+    crate::core::sync::held(&ROUTES, "alias concurrency routes")
 }

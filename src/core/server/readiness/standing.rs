@@ -32,10 +32,7 @@ static STANDING: LazyLock<Mutex<BTreeMap<usize, Call>>> =
     LazyLock::new(|| Mutex::new(BTreeMap::new()));
 
 fn standing() -> std::sync::MutexGuard<'static, BTreeMap<usize, Call>> {
-    match STANDING.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    }
+    crate::core::sync::held(&STANDING, "standing calls")
 }
 
 /// A call recorded as standing until it is dropped: a credential call to

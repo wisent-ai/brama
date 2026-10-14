@@ -70,10 +70,7 @@ pub(super) async fn live_subscriptions(
 /// entry, since it is replaced whole, so a poisoned lock is recovered rather
 /// than turning every later request into its own vault read.
 fn listing_cache() -> std::sync::MutexGuard<'static, Option<(Instant, Vec<SubscriptionEntry>)>> {
-    match LIVE_SUBSCRIPTIONS_CACHE.lock() {
-        Ok(cache) => cache,
-        Err(poisoned) => poisoned.into_inner(),
-    }
+    crate::core::sync::held(&LIVE_SUBSCRIPTIONS_CACHE, "live subscriptions cache")
 }
 
 /// Complete each member's account from its own vault item where its tags do

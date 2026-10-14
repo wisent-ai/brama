@@ -47,19 +47,13 @@ static REGISTRY_MODEL_FAILURE_CACHE: LazyLock<Mutex<HashMap<String, (Instant, Re
 /// refusal, with nothing said about why.
 pub(super) fn models_cache() -> std::sync::MutexGuard<'static, HashMap<String, CachedRegistryModels>>
 {
-    match REGISTRY_MODEL_CACHE.lock() {
-        Ok(cache) => cache,
-        Err(poisoned) => poisoned.into_inner(),
-    }
+    crate::core::sync::held(&REGISTRY_MODEL_CACHE, "discovered models cache")
 }
 
 /// The discovery-refusal cache, recovered on the same terms as [`models_cache`].
 pub(super) fn failures_cache() -> std::sync::MutexGuard<'static, HashMap<String, (Instant, Refusal)>>
 {
-    match REGISTRY_MODEL_FAILURE_CACHE.lock() {
-        Ok(cache) => cache,
-        Err(poisoned) => poisoned.into_inner(),
-    }
+    crate::core::sync::held(&REGISTRY_MODEL_FAILURE_CACHE, "discovery refusal cache")
 }
 
 type DiscoveryLocks = Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>;
@@ -96,9 +90,7 @@ pub(super) fn cached_discovery_refusal_since(key: &str, since: Instant) -> Optio
 /// metadata and refusals are shared; inference still redeems its own credential.
 pub(super) async fn lock_discovery(key: &str) -> tokio::sync::OwnedMutexGuard<()> {
     let lock = {
-        let mut locks = DISCOVERY_LOCKS
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let mut locks = crate::core::sync::held(&DISCOVERY_LOCKS, "discovery locks");
         if let Some(lock) = locks.get(key) {
             Arc::clone(lock)
         } else {

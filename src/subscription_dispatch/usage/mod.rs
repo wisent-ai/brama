@@ -196,10 +196,7 @@ fn ledger_state(guard: &mut Option<LedgerState>) -> &mut LedgerState {
 /// The mutation is retained even when the write fails, so a report in this
 /// process still shows the newest observation alongside [`storage_error`].
 fn write_ledger<T>(apply: impl FnOnce(&mut Ledger) -> T) -> (T, Result<(), String>) {
-    let mut guard = match LEDGER.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    };
+    let mut guard = crate::core::sync::held(&LEDGER, "subscription usage ledger");
     let state = ledger_state(&mut guard);
     let outcome = apply(&mut state.ledger);
     let stored = if state.persist_blocked {
@@ -223,28 +220,19 @@ fn with_ledger<T>(apply: impl FnOnce(&mut Ledger) -> T) -> T {
 
 /// Read the current process ledger without rewriting it.
 fn read_ledger<T>(apply: impl FnOnce(&Ledger) -> T) -> T {
-    let mut guard = match LEDGER.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    };
+    let mut guard = crate::core::sync::held(&LEDGER, "subscription usage ledger");
     apply(&ledger_state(&mut guard).ledger)
 }
 
 /// Mutate only the current process view after a failed commit.
 fn with_ledger_memory<T>(apply: impl FnOnce(&mut Ledger) -> T) -> T {
-    let mut guard = match LEDGER.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    };
+    let mut guard = crate::core::sync::held(&LEDGER, "subscription usage ledger");
     apply(&mut ledger_state(&mut guard).ledger)
 }
 
 /// The actual ledger load or persistence failure still affecting this process.
 pub fn storage_error() -> Option<String> {
-    let mut guard = match LEDGER.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    };
+    let mut guard = crate::core::sync::held(&LEDGER, "subscription usage ledger");
     ledger_state(&mut guard).storage_error.clone()
 }
 

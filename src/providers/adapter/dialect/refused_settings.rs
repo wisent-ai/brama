@@ -13,7 +13,7 @@
 //! process.
 
 use std::collections::BTreeSet;
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use reqwest::StatusCode;
 
@@ -24,10 +24,7 @@ const TEMPERATURE_DEPRECATED: &str = "`temperature` is deprecated for this model
 
 /// Whether requests to this model must leave `temperature` out.
 pub(in crate::providers::adapter) fn omits_temperature(model_id: &str) -> bool {
-    TEMPERATURE_REFUSED
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .contains(model_id)
+    crate::core::sync::held(&TEMPERATURE_REFUSED, "refused temperature models").contains(model_id)
 }
 
 /// Reads a provider refusal; true when it just taught Brama that this
@@ -40,9 +37,7 @@ pub(in crate::providers::adapter) fn learn_refused_temperature(
     if status != StatusCode::BAD_REQUEST || !body.contains(TEMPERATURE_DEPRECATED) {
         return false;
     }
-    let learned = TEMPERATURE_REFUSED
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+    let learned = crate::core::sync::held(&TEMPERATURE_REFUSED, "refused temperature models")
         .insert(model_id.to_owned());
     if learned {
         tracing::warn!(

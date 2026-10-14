@@ -55,13 +55,7 @@ fn persist_path() -> String {
 /// The stats are counters a panic mid-record leaves at worst one dispatch
 /// short, so a poisoned lock is recovered rather than served as no stats.
 fn registry() -> MutexGuard<'static, HashMap<String, PerfStats>> {
-    match REGISTRY.lock() {
-        Ok(map) => map,
-        Err(poisoned) => {
-            tracing::warn!(event = "perf_stats_lock_poisoned");
-            poisoned.into_inner()
-        }
-    }
+    crate::core::sync::held(&REGISTRY, "perf stats")
 }
 
 /// An absent file is a first start; one that cannot be read or does not parse

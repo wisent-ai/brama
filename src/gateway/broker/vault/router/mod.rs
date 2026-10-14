@@ -43,13 +43,7 @@ static IN_FLIGHT: LazyLock<Mutex<Option<Shared<BoxFuture<'static, ListingResult>
 /// recovered, which keeps listings served and a finished one cleared.
 fn in_flight_listing(
 ) -> std::sync::MutexGuard<'static, Option<Shared<BoxFuture<'static, ListingResult>>>> {
-    match IN_FLIGHT.lock() {
-        Ok(slot) => slot,
-        Err(poisoned) => {
-            tracing::warn!(event = "vault_listing_lock_poisoned");
-            poisoned.into_inner()
-        }
-    }
+    crate::core::sync::held(&IN_FLIGHT, "vault listing in flight")
 }
 
 /// The bare `list` of `binary`: the listing already in flight when one is,

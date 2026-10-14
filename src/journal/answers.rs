@@ -69,10 +69,7 @@ pub fn record(alias: &str, refusal: Option<(&str, Option<&str>)>) {
     // Each alias's entry is replaced whole, so a panic while the record was
     // held cannot leave half of one; left poisoned, no alias's answer would
     // ever be recorded again and the record would freeze with nothing said.
-    let mut last = match LAST.lock() {
-        Ok(last) => last,
-        Err(poisoned) => poisoned.into_inner(),
-    };
+    let mut last = crate::core::sync::held(&LAST, "alias answers");
     let answered = refusal.is_none();
     let class = refusal.map(|(code, _)| code.to_string());
     if last
@@ -109,8 +106,5 @@ fn write(answers: &BTreeMap<String, LastAnswer>) -> Result<(), std::io::Error> {
 /// The running gateway's own copy of every alias's newest answer, for the
 /// HTTP view: the same record `brama aliases` reads from the file.
 pub fn current() -> BTreeMap<String, LastAnswer> {
-    match LAST.lock() {
-        Ok(last) => last.clone(),
-        Err(poisoned) => poisoned.into_inner().clone(),
-    }
+    crate::core::sync::held(&LAST, "alias answers").clone()
 }

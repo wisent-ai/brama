@@ -32,10 +32,7 @@ impl InFlight {
     /// Claim this subscription, or nothing when a refresh for it is already
     /// running.
     pub(super) fn claim(subscription_id: &str) -> Option<Self> {
-        let mut claimed = match IN_FLIGHT.lock() {
-            Ok(claimed) => claimed,
-            Err(poisoned) => poisoned.into_inner(),
-        };
+        let mut claimed = crate::core::sync::held(&IN_FLIGHT, "refresh claims");
         claimed
             .insert(subscription_id.to_owned())
             .then(|| Self(subscription_id.to_owned()))
@@ -44,10 +41,7 @@ impl InFlight {
 
 impl Drop for InFlight {
     fn drop(&mut self) {
-        let mut claimed = match IN_FLIGHT.lock() {
-            Ok(claimed) => claimed,
-            Err(poisoned) => poisoned.into_inner(),
-        };
+        let mut claimed = crate::core::sync::held(&IN_FLIGHT, "refresh claims");
         claimed.remove(&self.0);
     }
 }
