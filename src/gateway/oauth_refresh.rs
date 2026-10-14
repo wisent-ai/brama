@@ -257,16 +257,25 @@ pub(super) async fn refresh(
 ///
 /// The one source of a member's account that is not a name: an id, a label
 /// and a login row are names, and one Google login row backs both the Claude
-/// Code and the Codex subscription of one person. A credential that is not
-/// UTF-8, not JSON, or states no address yields nothing, and its member stays
-/// unattributed.
-pub(super) fn stated_account(secret: &Secret, provider: &str) -> Option<String> {
-    stated_account_text(secret.expose_utf8().ok()?, provider)
+/// Code and the Codex subscription of one person. `None` is a grant that
+/// states no address; a credential that is not UTF-8 or not JSON is refused
+/// with that cause, since "states no account" would be untrue of it.
+pub(super) fn stated_account(secret: &Secret, provider: &str) -> Result<Option<String>, String> {
+    let raw = secret
+        .expose_utf8()
+        .map_err(|error| format!("the stored grant is not UTF-8: {error}"))?;
+    stated_account_text(raw, provider)
+        .map_err(|error| format!("the stored grant is not a JSON document: {error}"))
 }
 
-pub(super) fn stated_account_text(raw: &str, provider: &str) -> Option<String> {
-    let mut blob: Value = serde_json::from_str(raw).ok()?;
+/// [`stated_account`] for a credential text; its JSON error is the caller's
+/// to read, since a bare API key is no JSON grant and states no account.
+pub(super) fn stated_account_text(
+    raw: &str,
+    provider: &str,
+) -> Result<Option<String>, serde_json::Error> {
+    let mut blob: Value = serde_json::from_str(raw)?;
     let stated = principal::credential_account(&blob, provider);
     zeroize_json_strings(&mut blob);
-    stated
+    Ok(stated)
 }

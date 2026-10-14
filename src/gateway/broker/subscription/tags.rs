@@ -120,7 +120,9 @@ pub(in crate::gateway::broker) async fn record_stated_account(
     if let Some(recorded) = existing_item_account(&item_id).await? {
         return Ok(Some(recorded));
     }
-    let Some(account) = oauth_refresh::stated_account(credential, provider) else {
+    let Some(account) = oauth_refresh::stated_account(credential, provider)
+        .map_err(|cause| format!("{item_id}: {cause}"))?
+    else {
         return Ok(None);
     };
     let raw = credential

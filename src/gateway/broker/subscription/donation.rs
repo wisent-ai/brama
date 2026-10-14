@@ -254,7 +254,13 @@ pub async fn put_donated_credential(
         );
         return Err(DonationRefusal::Unusable(detail));
     }
-    let grant_account = crate::gateway::oauth_refresh::stated_account_text(api_key, provider);
+    // A donated API key is a bare key, not a JSON grant, and states no
+    // account; only a JSON grant is read for the address it names.
+    let grant_account = match crate::gateway::oauth_refresh::stated_account_text(api_key, provider)
+    {
+        Ok(stated) => stated,
+        Err(_not_a_grant) => None,
+    };
     if let (Some(stated), Some(granted)) = (account, grant_account.as_deref()) {
         if !stated.eq_ignore_ascii_case(granted) {
             return Err(DonationRefusal::MappingConflict(
