@@ -34,19 +34,18 @@ fn anthropic_content(message: &Message) -> Value {
         if !text.is_empty() {
             blocks.push(json!({"type": "text", "text": text}));
         }
+        // Every history tool call was checked at the door for an id, a
+        // function name and JSON arguments (wire::validate_history_tool_calls),
+        // so each is carried as stated, with no stand-in for a missing part.
         for call in calls {
-            let Some(function) = call.get("function") else {
-                continue;
-            };
-            let input = function
-                .get("arguments")
+            let input = call
+                .pointer("/function/arguments")
                 .and_then(Value::as_str)
-                .and_then(|value| serde_json::from_str::<Value>(value).ok())
-                .unwrap_or_else(|| json!({}));
+                .and_then(|value| serde_json::from_str::<Value>(value).ok());
             blocks.push(json!({
                 "type": "tool_use",
-                "id": call.get("id").and_then(Value::as_str).unwrap_or("tool"),
-                "name": function.get("name").and_then(Value::as_str).unwrap_or("tool"),
+                "id": call.get("id"),
+                "name": call.pointer("/function/name"),
                 "input": input,
             }));
         }
