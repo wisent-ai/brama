@@ -4,8 +4,9 @@
 use serde_json::{json, Value};
 
 use super::named_tool_choice;
+use crate::providers::adapter::call::outcome::refusal::attempted_failure;
 use crate::providers::adapter::stated_usage;
-use crate::types::{Message, ModelRequest, ModelResponse, ToolCall};
+use crate::types::{Message, ModelRequest, ModelResponse, ProviderRefusal, Refusal, ToolCall};
 
 pub(in crate::providers::adapter) fn anthropic_tool_choice(choice: &Value) -> Option<Value> {
     if let Some(name) = named_tool_choice(choice) {
@@ -124,26 +125,36 @@ pub(in crate::providers::adapter) fn model_response_from_anthropic(
                     .and_then(Value::as_str)
                     .unwrap_or_default(),
             ),
-            Some("tool_use") => tool_calls.push(ToolCall {
-                id: block
-                    .get("id")
-                    .and_then(Value::as_str)
-                    .unwrap_or("tool")
-                    .to_string(),
-                call_type: "function".into(),
-                function: crate::types::ToolCallFunction {
-                    name: block
-                        .get("name")
-                        .and_then(Value::as_str)
-                        .unwrap_or("tool")
-                        .to_string(),
-                    arguments: block
-                        .get("input")
-                        .cloned()
-                        .unwrap_or_else(|| json!({}))
-                        .to_string(),
-                },
-            }),
+            Some("tool_use") => {
+                // A tool call without its id, name or input fails the answer
+                // with its cause: sent on as a call named "tool" with id
+                // "tool" and empty input, the caller ran or answered a call
+                // the model never made.
+                let field = |name: &str| block.get(name);
+                let (Some(id), Some(name), Some(input)) = (
+                    field("id").and_then(Value::as_str),
+                    field("name").and_then(Value::as_str),
+                    field("input"),
+                ) else {
+                    return attempted_failure(
+                        route_id,
+                        Refusal::new(
+                            ProviderRefusal::ProviderFailure,
+                            format!(
+                                "the provider answered a tool_use block without its id, name or input: {block}"
+                            ),
+                        ),
+                    );
+                };
+                tool_calls.push(ToolCall {
+                    id: id.to_string(),
+                    call_type: "function".into(),
+                    function: crate::types::ToolCallFunction {
+                        name: name.to_string(),
+                        arguments: input.to_string(),
+                    },
+                })
+            }
             _ => {}
         }
     }
