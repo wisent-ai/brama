@@ -83,11 +83,15 @@ pub(super) async fn second_factor(destination: Destination, provider: Option<&st
                 crate::cli::print_json(&report);
                 return;
             }
-            let count = |field: &str| {
-                report
-                    .get(field)
-                    .and_then(Value::as_u64)
-                    .unwrap_or_default()
+            // A count or field the gateway left out is named as such, never
+            // read as zero accounts or an empty name.
+            let count = |field: &str| match report.get(field).and_then(Value::as_u64) {
+                Some(count) => count.to_string(),
+                None => format!("an unreported number ({field} absent)"),
+            };
+            let field = |row: &Value, name: &str| match text(row, name) {
+                Some(value) => value.to_string(),
+                None => format!("<{name} not reported>"),
             };
             println!(
                 "{} account(s) asked for a second factor, {} did not ask in the observed sign-in, {} unobserved",
@@ -95,12 +99,11 @@ pub(super) async fn second_factor(destination: Destination, provider: Option<&st
                 count("not_required"),
                 count("unknown")
             );
-            for row in report
-                .get("accounts")
-                .and_then(Value::as_array)
-                .map(Vec::as_slice)
-                .unwrap_or_default()
-            {
+            let Some(accounts) = report.get("accounts").and_then(Value::as_array) else {
+                println!("  the report lists no accounts array");
+                return;
+            };
+            for row in accounts {
                 let needs = match row.get("required").and_then(Value::as_bool) {
                     Some(true) => "needs a second factor",
                     Some(false) => "not requested in the observed sign-in",
@@ -108,9 +111,9 @@ pub(super) async fn second_factor(destination: Destination, provider: Option<&st
                 };
                 println!(
                     "  {} {} -> {needs}; seed {}",
-                    text(row, "provider").unwrap_or_default(),
-                    text(row, "account").unwrap_or_default(),
-                    text(row, "seed").unwrap_or_default()
+                    field(row, "provider"),
+                    field(row, "account"),
+                    field(row, "seed")
                 );
                 if let Some(evidence) = text(row, "evidence") {
                     println!("    {evidence}");
@@ -268,18 +271,14 @@ fn print_attribution(verdict: &Value) {
         recorded.len(),
         recorded.len().saturating_add(unattributed.len())
     );
+    let field = |row: &Value, name: &str| match text(row, name) {
+        Some(value) => value.to_string(),
+        None => format!("<{name} not reported>"),
+    };
     for row in recorded {
-        println!(
-            "  {} -> {}",
-            text(row, "member").unwrap_or_default(),
-            text(row, "account").unwrap_or_default()
-        );
+        println!("  {} -> {}", field(row, "member"), field(row, "account"));
     }
     for row in unattributed {
-        println!(
-            "  {}: {}",
-            text(row, "member").unwrap_or_default(),
-            text(row, "reason").unwrap_or_default()
-        );
+        println!("  {}: {}", field(row, "member"), field(row, "reason"));
     }
 }
