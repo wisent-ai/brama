@@ -9,20 +9,19 @@ pub(crate) async fn authenticate_agent(
     headers: &HeaderMap,
     raw_body: &[u8],
 ) -> Result<String, String> {
-    let agent_id = headers
-        .get("x-agent-id")
-        .and_then(|v| v.to_str().ok())
-        .filter(|s| !s.is_empty())
-        .map(String::from)
-        .ok_or_else(|| "missing x-agent-id header".to_string())?;
-    let ts = headers
-        .get("x-agent-timestamp")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    let sig = headers
-        .get("x-agent-signature")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
+    // Each header is required by name: an absent timestamp or signature read
+    // as empty reached the HMAC check and was refused as a mismatch, after
+    // the agent's secret had already been read for nothing.
+    let header = |name: &str| {
+        headers
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| format!("missing {name} header"))
+    };
+    let agent_id = header("x-agent-id")?.to_string();
+    let ts = header("x-agent-timestamp")?;
+    let sig = header("x-agent-signature")?;
 
     let secret = broker::get_agent_auth_secret(&agent_id).await?;
 
