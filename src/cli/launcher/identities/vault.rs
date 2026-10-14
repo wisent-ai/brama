@@ -32,11 +32,10 @@ pub(super) fn role_holders(
     router: &Path,
     envs: &BTreeMap<String, String>,
 ) -> Result<BTreeMap<String, Vec<String>>, String> {
-    let output = Command::new(router)
-        .arg("list")
-        .envs(envs)
-        .output()
-        .map_err(|error| {
+    // Through the announced wait: a vault whose reads stand held this listing
+    // with nothing said about what it waited on.
+    let output =
+        stado_wait::output(Command::new(router).arg("list").envs(envs)).map_err(|error| {
             format!("listing the vault through the entitlements router failed: {error}")
         })?;
     if !output.status.success() {
@@ -83,13 +82,9 @@ pub(super) fn item_fields(
     envs: &BTreeMap<String, String>,
     item: &str,
 ) -> Result<Map<String, Value>, String> {
-    let output = Command::new(router)
-        .args(["get", item])
-        .envs(envs)
-        .output()
-        .map_err(|error| {
-            format!("reading {item} through the entitlements router failed: {error}")
-        })?;
+    let output = stado_wait::output(Command::new(router).args(["get", item]).envs(envs)).map_err(
+        |error| format!("reading {item} through the entitlements router failed: {error}"),
+    )?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let detail = if stderr.trim().is_empty() {

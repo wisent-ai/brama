@@ -92,11 +92,12 @@ fn own_calls() -> Vec<Vec<String>> {
 }
 
 fn inventory(router: &Path, args: &[&str], vault: &Path) -> Result<Value, String> {
-    let output = Command::new(router)
-        .args(args)
-        .env("SKARBIEC_VAULT_FILE", vault)
-        .output()
-        .map_err(|error| format!("broker inventory {} failed: {error}", args.join(" ")))?;
+    let output = stado_wait::output(
+        Command::new(router)
+            .args(args)
+            .env("SKARBIEC_VAULT_FILE", vault),
+    )
+    .map_err(|error| format!("broker inventory {} failed: {error}", args.join(" ")))?;
     if !output.status.success() {
         return Err(format!(
             "broker inventory {} failed: {}",
