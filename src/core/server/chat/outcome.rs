@@ -93,7 +93,15 @@ pub(super) fn failure_response(resp: &mut ModelResponse) -> Response {
         resp.failure_kind
             .unwrap_or(ProviderRefusal::ProviderFailure),
     );
-    let message = resp.error.take().unwrap_or_default();
+    // A failure that carried no sentence is said to be one, with its class
+    // and attempts, instead of reaching the caller as an empty message.
+    let message = match resp.error.take() {
+        Some(message) => message,
+        None => format!(
+            "the route failed after {} attempt(s) without stating a cause; its class is {}",
+            resp.attempts, contract.code
+        ),
+    };
     error_response(
         contract.status,
         contract.error_type,
