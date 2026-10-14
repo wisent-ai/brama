@@ -30,16 +30,21 @@ pub(in crate::core::server) fn record_typed_request(attempts: u32, failed: bool)
 
 /// One typed decision, folded into the same totals every other request lands
 /// in. A decision is one provider call whichever engine answered it, so it
-/// counts as one attempt and its tokens are the provider's own.
+/// counts as one attempt and its tokens are the provider's own; a count the
+/// provider did not state adds nothing, as for every other answer.
 pub(in crate::core::server) fn record_decision_request(
-    input_tokens: u32,
-    output_tokens: u32,
+    input_tokens: Option<u32>,
+    output_tokens: Option<u32>,
     failed: bool,
 ) {
     TOTAL_REQUESTS.fetch_add(1, Ordering::Relaxed);
     TOTAL_PROVIDER_ATTEMPTS.fetch_add(1, Ordering::Relaxed);
-    TOTAL_INPUT_TOKENS.fetch_add(u64::from(input_tokens), Ordering::Relaxed);
-    TOTAL_OUTPUT_TOKENS.fetch_add(u64::from(output_tokens), Ordering::Relaxed);
+    if let Some(input_tokens) = input_tokens {
+        TOTAL_INPUT_TOKENS.fetch_add(u64::from(input_tokens), Ordering::Relaxed);
+    }
+    if let Some(output_tokens) = output_tokens {
+        TOTAL_OUTPUT_TOKENS.fetch_add(u64::from(output_tokens), Ordering::Relaxed);
+    }
     if failed {
         TOTAL_FAILURES.fetch_add(1, Ordering::Relaxed);
     }

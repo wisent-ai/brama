@@ -114,9 +114,14 @@ pub(crate) async fn decide(args: DecideArgs) {
             for (key, answer) in &outcome.answers {
                 println!("{key:<24} {}", answer_line(answer));
             }
+            let stated = |count: Option<u32>| match count {
+                Some(count) => count.to_string(),
+                None => "not stated by the provider".to_string(),
+            };
             println!(
                 "Tokens: {} in / {} out",
-                outcome.input_tokens, outcome.output_tokens
+                stated(outcome.input_tokens),
+                stated(outcome.output_tokens)
             );
             println!("Latency: {:.0}ms", outcome.latency_ms);
         }

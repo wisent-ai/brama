@@ -98,7 +98,7 @@ pub(in crate::core::server) async fn decisions(
             Ok(Json(answered(&request.model, &outcome)))
         }
         Err(failure) => {
-            record_decision_request(0, 0, true);
+            record_decision_request(None, None, true);
             Err(refused(&request.model, &route, failure))
         }
     }

@@ -45,8 +45,10 @@ pub struct DecisionOutcome {
     pub answers: Map<String, Value>,
     pub engine: &'static str,
     pub route: String,
-    pub input_tokens: u32,
-    pub output_tokens: u32,
+    /// The tokens the provider stated it read and wrote; `None` when its
+    /// answer stated no usage, never a zero it did not report.
+    pub input_tokens: Option<u32>,
+    pub output_tokens: Option<u32>,
     pub latency_ms: f64,
 }
 
@@ -127,8 +129,8 @@ async fn decide_natively(
         answers,
         engine: ENGINE_NATIVE,
         route: route.to_string(),
-        input_tokens: usage_field(&body, "input_tokens"),
-        output_tokens: usage_field(&body, "output_tokens"),
+        input_tokens: usage_field(&body, "input_tokens")?,
+        output_tokens: usage_field(&body, "output_tokens")?,
         latency_ms: started.elapsed().as_secs_f64() * 1_000.0,
     })
 }
@@ -172,11 +174,21 @@ fn native_questions(request: &DecisionRequest) -> Value {
     Value::Object(questions)
 }
 
-fn usage_field(body: &Value, field: &str) -> u32 {
-    body.get("usage")
+/// `usage.<field>` of a provider's answer: `None` when it stated none, and a
+/// refusal naming the number when it does not fit the count's width.
+fn usage_field(body: &Value, field: &str) -> Result<Option<u32>, DecisionFailure> {
+    let Some(stated) = body
+        .get("usage")
         .and_then(|usage| usage.get(field))
         .and_then(Value::as_u64)
-        .unwrap_or_default() as u32
+    else {
+        return Ok(None);
+    };
+    u32::try_from(stated).map(Some).map_err(|error| {
+        DecisionFailure::Contract(format!(
+            "the provider stated usage.{field} {stated}, which no count holds: {error}"
+        ))
+    })
 }
 
 /// One chat answer, read as a decision.
@@ -209,8 +221,8 @@ pub fn outcome_from_chat(
         } else {
             response.model.clone()
         },
-        input_tokens: response.input_tokens,
-        output_tokens: response.output_tokens,
+        input_tokens: response.usage_stated.then_some(response.input_tokens),
+        output_tokens: response.usage_stated.then_some(response.output_tokens),
         latency_ms: response.latency_ms,
     })
 }
