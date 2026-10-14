@@ -7,7 +7,18 @@ to the [README](../../README.md).
   `/v1/responses`, `/v1/embeddings`, and `/v1/moderations` are the canonical
   model-execution interfaces. The three chat formats share one routing
   decision, one identity contract, and one attempt budget; they differ only in
-  the shape of the request and the answer.
+  the shape of the request and the answer. A field the caller's format
+  requires is never sent upstream blank or guessed: on Anthropic Messages a
+  message without `role` or `content`, a `tool_use` block without `id`,
+  `name` or `input`, a `tool_result` without `tool_use_id`, an image without
+  a base64 `media_type` and `data` or a `url`, and a tool without `name`; on
+  Responses a message item without `role` or `content`, a `function_call`
+  without `call_id`, `name` or `arguments`, a `function_call_output` without
+  `call_id` or `output`, an `input_image` without `image_url`, a content part
+  the gateway cannot carry, and a function tool without `name` -- each is
+  refused as a bad request naming the message, item or tool position and the
+  missing field, e.g. ``message 2: a `tool_use` content block carries no `id`
+  text``. An Anthropic image given by `url` is carried as that URL.
 - **Streaming:** any of the three chat formats streams when the request asks
   for it -- `"stream": true` on chat completions and Anthropic Messages,
   `"stream": true` on Responses. The response is `text/event-stream` in the
