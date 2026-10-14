@@ -226,10 +226,23 @@ fn register() -> Result<Value, String> {
         let answer: Value = serde_json::from_str(stdout.trim()).map_err(|error| {
             format!("grant issue for {agent} succeeded but answered no JSON: {error}")
         })?;
+        // The grant was issued for this workload's key; an answer that does
+        // not say it is bound to it, or does not state its expiry, is not
+        // recorded as a grant with blanks.
+        if answer.get("workload_bound") != Some(&Value::Bool(true)) {
+            return Err(format!(
+                "grant issue for {agent} did not answer workload_bound=true for the key it was given: {answer}"
+            ));
+        }
+        let Some(expires_at) = answer.get("expires_at") else {
+            return Err(format!(
+                "grant issue for {agent} answered no expires_at: {answer}"
+            ));
+        };
         granted.push(json!({
             "agent": agent,
-            "workload_bound": answer.get("workload_bound").unwrap_or(&Value::Null),
-            "expires_at": answer.get("expires_at").unwrap_or(&Value::Null),
+            "workload_bound": true,
+            "expires_at": expires_at,
         }));
     }
     Ok(json!({
