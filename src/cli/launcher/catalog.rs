@@ -34,35 +34,40 @@ fn tag_value<'a>(tags: &'a [&'a str], prefix: &str) -> Option<&'a str> {
 
 pub(super) fn build(available: &Path, policy: &Path, output: &Path) -> Result<(), String> {
     let items = read(available)?;
-    let policy = read(policy)?;
-    let allowed: BTreeSet<(String, String)> = policy
+    let items = items.as_array().ok_or_else(|| {
+        format!(
+            "{}: the available items are not a list",
+            available.display()
+        )
+    })?;
+    let policy_document = read(policy)?;
+    // A policy without the runtime role allows nothing, which would skip every
+    // subscription with a reason about one missing rule; it is refused whole.
+    let rules = policy_document
         .pointer("/roles/brama-runtime")
         .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter(|rule| rule.is_object())
-        .map(|rule| {
-            let text = |key: &str| {
-                rule.get(key)
-                    .and_then(Value::as_str)
-                    .unwrap_or("")
-                    .to_string()
-            };
-            (text("purpose"), text("resource"))
+        .ok_or_else(|| {
+            format!(
+                "{}: declares no roles.brama-runtime rule list",
+                policy.display()
+            )
+        })?;
+    let allowed: BTreeSet<(&str, &str)> = rules
+        .iter()
+        .filter_map(|rule| {
+            let purpose = rule.get("purpose").and_then(Value::as_str)?;
+            let resource = rule.get("resource").and_then(Value::as_str)?;
+            Some((purpose, resource))
         })
         .collect();
     let mut catalog = Vec::new();
     let mut unnamed = Vec::new();
-    for item in items.as_array().into_iter().flatten() {
-        if !item.is_object()
-            || item
-                .get("deleted")
-                .and_then(Value::as_bool)
-                .unwrap_or(false)
-        {
+    for item in items {
+        if !item.is_object() || item.get("deleted") == Some(&Value::Bool(true)) {
             continue;
         }
         let Some(name) = item.get("id").and_then(Value::as_str) else {
+            eprintln!("skipping an item without a text id: {item}");
             continue;
         };
         let tags: Vec<&str> = item
@@ -95,7 +100,7 @@ pub(super) fn build(available: &Path, policy: &Path, output: &Path) -> Result<()
         };
         let provider = provider.trim().to_lowercase().replace('_', "-");
         let resource = format!("provider:{provider}:{subscription}");
-        if !allowed.contains(&(AUTHENTICATE.to_string(), resource.clone())) {
+        if !allowed.contains(&(AUTHENTICATE, resource.as_str())) {
             eprintln!(
                 "skipping {name}: the runtime policy has no {AUTHENTICATE} rule for {resource}, so no capability route maps this resource to a vault item and field; the policy is generated from the vault's tags when the release is installed, so an item added since then is served again after the next install of this release on this host"
             );
