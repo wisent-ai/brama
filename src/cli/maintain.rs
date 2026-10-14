@@ -43,7 +43,7 @@ pub(crate) async fn run(args: MaintainArgs) {
         Ok(report) => report,
         Err(error) => {
             eprintln!("{error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     };
     if args.json {
@@ -52,7 +52,7 @@ pub(crate) async fn run(args: MaintainArgs) {
         print_report(&report);
     }
     if report.get("ok").and_then(Value::as_bool) != Some(true) {
-        std::process::exit(1);
+        crate::cli::fail();
     }
 }
 

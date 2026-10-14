@@ -25,6 +25,11 @@ fn print_json(report: &Value) {
     println!("{report:#}");
 }
 
+/// End the command unsuccessfully, as every Brama verb does.
+pub(crate) fn fail() -> ! {
+    std::process::exit(1) // https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/stdlib.h.html
+}
+
 /// One answer as `--json` prints it, or `key: value` lines for a person: a
 /// string as itself, null as `-`, anything nested as compact JSON; a list
 /// prints one compact item per line.

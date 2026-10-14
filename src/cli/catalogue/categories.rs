@@ -112,7 +112,7 @@ async fn list(args: ListArgs) {
 fn set(args: SetArgs) {
     let Some(path) = configured_path() else {
         eprintln!("{NO_REGISTRY}");
-        std::process::exit(1);
+        crate::cli::fail();
     };
     let category = Category {
         providers: args.providers,
@@ -123,7 +123,7 @@ fn set(args: SetArgs) {
         Ok(_) => changed(args.json, "declared", &args.name, &path),
         Err(error) => {
             eprintln!("{error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     }
 }
@@ -131,13 +131,13 @@ fn set(args: SetArgs) {
 fn remove(args: RemoveArgs) {
     let Some(path) = configured_path() else {
         eprintln!("{NO_REGISTRY}");
-        std::process::exit(1);
+        crate::cli::fail();
     };
     match delete_category(&path, &args.name) {
         Ok(_) => changed(args.json, "retired", &args.name, &path),
         Err(error) => {
             eprintln!("{error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     }
 }

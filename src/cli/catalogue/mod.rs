@@ -62,7 +62,7 @@ pub(crate) async fn models(args: ModelsArgs) {
     if let Some(kind) = kind.as_deref() {
         if ModelKind::parse(kind).is_none() {
             eprintln!("kind must be text, image, video or audio");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     }
     if weights
@@ -70,13 +70,13 @@ pub(crate) async fn models(args: ModelsArgs) {
         .is_some_and(|value| Weights::parse(value).is_none())
     {
         eprintln!("weights must be open or closed");
-        std::process::exit(1);
+        crate::cli::fail();
     }
     let snapshot = match model_catalog::snapshot().await {
         Ok(snapshot) => snapshot,
         Err(error) => {
             eprintln!("the model catalogue could not be read: {error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     };
     let declared_categories = declared();

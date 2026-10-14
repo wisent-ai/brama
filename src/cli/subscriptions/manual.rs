@@ -35,12 +35,12 @@ pub(crate) fn finish(verdict: Result<Value, String>, json: bool) {
             }
             let result = field("result");
             if result != Some("signed_in") && result != Some("unchanged") {
-                std::process::exit(1);
+                crate::cli::fail();
             }
         }
         Err(error) => {
             eprintln!("{error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     }
 }

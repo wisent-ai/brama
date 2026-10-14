@@ -13,7 +13,7 @@ fn registry_path(file: Option<PathBuf>) -> PathBuf {
             Ok(path) => path,
             Err(error) => {
                 eprintln!("route registry error: {error}");
-                std::process::exit(1);
+                crate::cli::fail();
             }
         },
     }
@@ -33,20 +33,20 @@ pub(super) fn set(alias: String, destination: String, file: Option<PathBuf>, jso
         eprintln!(
             "route alias `{alias}` is invalid: an alias is lowercase letters, digits, `-`, `_`, `.` and `/`"
         );
-        std::process::exit(1);
+        crate::cli::fail();
     }
     if !brama::core::server::route_shape_writable(&alias, &destination) {
         eprintln!(
             "alias `{alias}` cannot carry `{destination}`: it is not a shape this alias promises"
         );
-        std::process::exit(1);
+        crate::cli::fail();
     }
     let path = registry_path(file);
     let document = match brama::core::inference_routes::update_route(&path, &alias, &destination) {
         Ok(document) => document,
         Err(error) => {
             eprintln!("route update error: {error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     };
     report_registry(&path, &document, json, &format!("{alias} -> {destination}"));
@@ -55,14 +55,14 @@ pub(super) fn set(alias: String, destination: String, file: Option<PathBuf>, jso
 pub(super) fn remove(alias: String, file: Option<PathBuf>, json: bool) {
     if !brama::core::server::valid_alias(&alias) {
         eprintln!("route alias `{alias}` is invalid");
-        std::process::exit(1);
+        crate::cli::fail();
     }
     let path = registry_path(file);
     let document = match brama::core::inference_routes::delete_route(&path, &alias) {
         Ok(document) => document,
         Err(error) => {
             eprintln!("route removal error: {error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     };
     report_registry(&path, &document, json, &format!("{alias} removed"));
@@ -103,7 +103,7 @@ pub(super) fn migrate(file: Option<PathBuf>, json: bool) {
         Ok(document) => document,
         Err(error) => {
             eprintln!("route migration error: {error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     };
     if json {

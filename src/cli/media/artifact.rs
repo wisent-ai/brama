@@ -14,12 +14,12 @@ pub(super) fn write_artifact(path: &str, index: usize, total: usize, encoded: &s
         Ok(bytes) => bytes,
         Err(error) => {
             eprintln!("the provider's image is not base64: {error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     };
     if let Err(error) = std::fs::write(&destination, &bytes) {
         eprintln!("cannot write {}: {error}", destination.display());
-        std::process::exit(1);
+        crate::cli::fail();
     }
     println!(
         "[{index}] {} bytes written to {}",

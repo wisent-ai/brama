@@ -44,12 +44,12 @@ pub(super) async fn attribute(destination: Destination, provider: &str, json: bo
                 .and_then(Value::as_array)
                 .is_some_and(|left| !left.is_empty())
             {
-                std::process::exit(1);
+                crate::cli::fail();
             }
         }
         Err(error) => {
             eprintln!("{error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     }
 }
@@ -119,7 +119,7 @@ pub(super) async fn second_factor(destination: Destination, provider: Option<&st
         }
         Err(error) => {
             eprintln!("{error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     }
 }
@@ -161,7 +161,7 @@ fn answered<Refused>(outcome: Result<Value, (Refused, String)>, json: bool) {
         ),
         Err((_, error)) => {
             eprintln!("{error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     }
 }
@@ -220,16 +220,16 @@ where
             Ok(detail) => println!("{detail}"),
             Err(error) => {
                 eprintln!("{error}");
-                std::process::exit(1);
+                crate::cli::fail();
             }
         },
         Ok((None, _)) => {
             eprintln!("name the gateway holding the member: --gateway or --gateway-consumer");
-            std::process::exit(1);
+            crate::cli::fail();
         }
         Err(error) => {
             eprintln!("{error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     }
 }

@@ -63,7 +63,7 @@ pub(crate) async fn run(args: ReviewArgs) {
                         "the review could not be written to {}: {error}",
                         path.display()
                     );
-                    std::process::exit(1);
+                    crate::cli::fail();
                 }
             }
             if args.json {
@@ -81,7 +81,7 @@ pub(crate) async fn run(args: ReviewArgs) {
         }
         Err(message) => {
             eprintln!("review failed: {message}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     }
 }

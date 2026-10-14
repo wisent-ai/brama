@@ -27,18 +27,18 @@ pub(crate) async fn serve(args: ServeArgs) {
         let mut encoded = String::new();
         if let Err(error) = std::io::stdin().read_to_string(&mut encoded) {
             eprintln!("Server error: cannot read local credentials: {error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
         if let Err(error) = brama::gateway::broker::install_local_provider_credentials(&mut encoded)
         {
             eprintln!("Server error: {error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     }
     info!("Starting server on port {port}");
     if let Err(e) = start_server(port, local_credentials_stdin).await {
         eprintln!("Server error: {e}");
-        std::process::exit(1);
+        crate::cli::fail();
     }
 }
 

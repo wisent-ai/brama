@@ -78,7 +78,7 @@ pub(crate) async fn onboard(args: OnboardArgs) {
             Ok(true) => {}
             Err(error) => {
                 eprintln!("Configuration adoption error: {error}");
-                std::process::exit(1);
+                crate::cli::fail();
             }
         }
     } else if adopt_apply
@@ -95,12 +95,12 @@ pub(crate) async fn onboard(args: OnboardArgs) {
 
     match brama::onboarding::run_first_use(model, agent_id, allow_provider_cost, reset).await {
         Ok(false) if allow_provider_cost => {
-            std::process::exit(1);
+            crate::cli::fail();
         }
         Ok(_) => {}
         Err(error) => {
             eprintln!("Onboarding error: {error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     }
 }

@@ -110,11 +110,11 @@ pub(crate) async fn music(args: MusicArgs) {
         .await
         .unwrap_or_else(|refused| {
             eprintln!("{refused}");
-            std::process::exit(1);
+            crate::cli::fail();
         });
     if let Err(error) = std::fs::write(&args.output, &song.bytes) {
         eprintln!("cannot write {}: {error}", args.output);
-        std::process::exit(1);
+        crate::cli::fail();
     }
     let written = serde_json::json!({
         "route": route,
@@ -133,7 +133,7 @@ pub(crate) async fn voices(command: VoicesCommand) {
                 .await
                 .unwrap_or_else(|refused| {
                     eprintln!("{refused}");
-                    std::process::exit(1);
+                    crate::cli::fail();
                 });
             super::super::print_answer(&body, json);
         }
@@ -155,7 +155,7 @@ pub(crate) async fn voices(command: VoicesCommand) {
             for path in samples {
                 let bytes = std::fs::read(&path).unwrap_or_else(|error| {
                     eprintln!("cannot read {path}: {error}");
-                    std::process::exit(1);
+                    crate::cli::fail();
                 });
                 let filename = std::path::Path::new(&path)
                     .file_name()
@@ -163,7 +163,7 @@ pub(crate) async fn voices(command: VoicesCommand) {
                     .map(str::to_string)
                     .unwrap_or_else(|| {
                         eprintln!("{path} names no file");
-                        std::process::exit(1);
+                        crate::cli::fail();
                     });
                 recordings.push(VoiceSample {
                     filename,
@@ -176,7 +176,7 @@ pub(crate) async fn voices(command: VoicesCommand) {
                     .await
                     .unwrap_or_else(|refused| {
                         eprintln!("{refused}");
-                        std::process::exit(1);
+                        crate::cli::fail();
                     });
             super::super::print_answer(&body, json);
         }
@@ -197,7 +197,7 @@ pub(crate) async fn voices(command: VoicesCommand) {
                 .await
                 .unwrap_or_else(|refused| {
                     eprintln!("{refused}");
-                    std::process::exit(1);
+                    crate::cli::fail();
                 });
             super::super::print_answer(&body, json);
         }

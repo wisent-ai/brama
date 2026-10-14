@@ -70,7 +70,7 @@ pub(crate) async fn report(args: AliasesArgs) {
         Ok(report) => report,
         Err(error) => {
             eprintln!("aliases could not be read: {error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     };
     let unserviceable = report.unserviceable();
@@ -158,7 +158,7 @@ pub(crate) async fn report(args: AliasesArgs) {
         }
     }
     if strict && (unserviceable > 0 || pool_is_dry) {
-        std::process::exit(1);
+        crate::cli::fail();
     }
 }
 
@@ -189,6 +189,6 @@ pub(crate) async fn routes(command: RoutesCommand) {
     };
     if let Err(error) = applied {
         eprintln!("{error}");
-        std::process::exit(1);
+        crate::cli::fail();
     }
 }

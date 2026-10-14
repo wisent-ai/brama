@@ -137,6 +137,6 @@ pub(crate) fn run(command: LauncherCommand) {
     };
     if let Err(detail) = result {
         eprintln!("{detail}");
-        std::process::exit(1);
+        crate::cli::fail();
     }
 }

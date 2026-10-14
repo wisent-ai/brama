@@ -74,7 +74,7 @@ pub(crate) async fn decide(args: DecideArgs) {
         Ok(request) => request,
         Err(message) => {
             eprintln!("{message}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     };
     let route = match alias_routing(&model) {
@@ -86,11 +86,11 @@ pub(crate) async fn decide(args: DecideArgs) {
                     .reason
                     .unwrap_or_else(|| format!("alias `{model}` has no serviceable route"))
             );
-            std::process::exit(1);
+            crate::cli::fail();
         }
         Err(error) => {
             eprintln!("the alias table could not be read: {error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     };
     match decide_for_agent(&route, &agent_id, &request).await {
@@ -129,7 +129,7 @@ pub(crate) async fn decide(args: DecideArgs) {
                     eprintln!("decision_contract_violated: {}", failure.message())
                 }
             }
-            std::process::exit(1);
+            crate::cli::fail();
         }
     }
 }
@@ -140,7 +140,7 @@ fn read_argument(name: &str, value: &str) -> String {
         let mut buffer = String::new();
         if let Err(error) = std::io::stdin().read_to_string(&mut buffer) {
             eprintln!("--{name} could not be read from standard input: {error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
         return buffer;
     }
@@ -149,7 +149,7 @@ fn read_argument(name: &str, value: &str) -> String {
             Ok(text) => return text,
             Err(error) => {
                 eprintln!("--{name} could not be read from {path}: {error}");
-                std::process::exit(1);
+                crate::cli::fail();
             }
         }
     }

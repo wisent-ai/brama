@@ -17,7 +17,7 @@ pub(crate) async fn enrol_authenticator(
         eprintln!(
             "provider `{provider}` has no Weles sign-in, so it has no authenticator to enrol"
         );
-        std::process::exit(1);
+        crate::cli::fail();
     };
     match enrol(provider, weles, subscription_id, login_item).await {
         Ok(enrolment) => {
@@ -54,12 +54,12 @@ pub(crate) async fn enrol_authenticator(
             // on or it does not, and the caller is repairing a subscription
             // that cannot sign itself in: the status says which.
             if !enrolment.ok() {
-                std::process::exit(1);
+                crate::cli::fail();
             }
         }
         Err(error) => {
             eprintln!("{error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     }
 }

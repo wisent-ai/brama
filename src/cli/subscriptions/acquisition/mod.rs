@@ -8,10 +8,7 @@ use super::credentials::Harness;
 use super::remote;
 use brama::subscription_dispatch::acquire::{self, hand_over};
 
-/// End the command unsuccessfully, as every Brama verb does.
-fn fail() -> ! {
-    std::process::exit(1) // https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/stdlib.h.html
-}
+use crate::cli::fail;
 
 /// Run one acquisition and print its verdict. Exits unsuccessfully unless an
 /// account was bought: a refusal is an answer, but the caller asked for one.

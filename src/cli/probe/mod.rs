@@ -277,6 +277,6 @@ pub(crate) async fn run(args: ProbeArgs) {
     }
     if let Err(detail) = probe(args).await {
         eprintln!("{detail}");
-        std::process::exit(1);
+        crate::cli::fail();
     }
 }

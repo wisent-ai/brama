@@ -89,7 +89,7 @@ async fn start(args: StartArgs) {
         Ok(body) => answered(&model, &route, &body, as_json),
         Err(message) => {
             eprintln!("{message}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     }
 }
@@ -105,7 +105,7 @@ async fn status(args: StatusArgs) {
         Ok(body) => answered(&model, &route, &body, as_json),
         Err(message) => {
             eprintln!("{message}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     }
 }

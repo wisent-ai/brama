@@ -104,7 +104,7 @@ pub(crate) async fn image(args: ImageArgs) {
                 Ok(url) => encoded.push(Value::String(url)),
                 Err(reason) => {
                     eprintln!("{reason}");
-                    std::process::exit(1);
+                    crate::cli::fail();
                 }
             }
         }
@@ -117,7 +117,7 @@ pub(crate) async fn image(args: ImageArgs) {
             }
             Err(reason) => {
                 eprintln!("{reason}");
-                std::process::exit(1);
+                crate::cli::fail();
             }
         }
     }
@@ -140,7 +140,7 @@ pub(crate) async fn image(args: ImageArgs) {
         Ok(body) => body,
         Err(message) => {
             eprintln!("{message}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     };
     if as_json {
@@ -189,11 +189,11 @@ pub(super) fn resolve_media_route(model: &str) -> String {
                     .reason
                     .unwrap_or_else(|| format!("alias `{model}` has no serviceable route"))
             );
-            std::process::exit(1);
+            crate::cli::fail();
         }
         Err(error) => {
             eprintln!("the alias table could not be read: {error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     }
 }

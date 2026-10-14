@@ -99,12 +99,12 @@ pub(crate) async fn speak(args: SpeakArgs) {
         Ok(spoken) => spoken,
         Err(message) => {
             eprintln!("{message}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     };
     if let Err(error) = std::fs::write(&output, &spoken.bytes) {
         eprintln!("cannot write {output}: {error}");
-        std::process::exit(1);
+        crate::cli::fail();
     }
     let written = serde_json::json!({
         "model": model,

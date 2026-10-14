@@ -30,7 +30,7 @@ pub(crate) struct TestArgs {
 /// A refusal printed as it is, ending the command unsuccessfully.
 fn fail(detail: impl std::fmt::Display) -> ! {
     eprintln!("{detail}");
-    std::process::exit(1)
+    crate::cli::fail()
 }
 
 /// One JSON line by default, which release tooling and the docs read; with
@@ -162,6 +162,6 @@ pub(crate) async fn test_inference(args: TestArgs) {
             super::print_answer(&refused, json);
         }
         eprintln!("Error [{code}, attempts {}]: {reason}", resp.attempts);
-        std::process::exit(1);
+        crate::cli::fail();
     }
 }

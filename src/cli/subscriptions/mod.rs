@@ -65,7 +65,7 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
             Ok(body) => body,
             Err(error) => {
                 eprintln!("cannot read subscription membership from stdin: {error}");
-                std::process::exit(1);
+                crate::cli::fail();
             }
         };
         match brama::core::server::apply_subscription_membership(body.as_bytes()).await {
@@ -79,7 +79,7 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
                 } else {
                     eprintln!("{error}");
                 }
-                std::process::exit(1);
+                crate::cli::fail();
             }
         }
         return;
@@ -108,7 +108,7 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
         print_pool(&report);
     }
     if report.get("ok").and_then(Value::as_bool) != Some(true) {
-        std::process::exit(1);
+        crate::cli::fail();
     }
 }
 
@@ -122,25 +122,25 @@ async fn remote_report(destination: remote::Destination, refresh_usage: bool, js
         if let Err(error) = std::io::Read::read_to_string(&mut std::io::stdin(), &mut stdin_bearer)
         {
             eprintln!("reading the console bearer from stdin: {error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     }
     let (origin, bearer) = match destination.resolve(&stdin_bearer).await {
         Ok(resolved) => resolved,
         Err(error) => {
             eprintln!("{error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     };
     let Some(origin) = origin else {
         eprintln!("name --gateway or --gateway-consumer to read another gateway's pool");
-        std::process::exit(1);
+        crate::cli::fail();
     };
     let report = match remote::pool::report(&origin, bearer.trim(), refresh_usage).await {
         Ok(report) => report,
         Err(error) => {
             eprintln!("{error}");
-            std::process::exit(1);
+            crate::cli::fail();
         }
     };
     if json {
@@ -150,7 +150,7 @@ async fn remote_report(destination: remote::Destination, refresh_usage: bool, js
         print_pool(&report);
     }
     if report.get("ok").and_then(Value::as_bool) != Some(true) {
-        std::process::exit(1);
+        crate::cli::fail();
     }
 }
 

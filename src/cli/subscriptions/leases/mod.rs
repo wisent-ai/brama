@@ -11,10 +11,7 @@ use serde_json::{json, Value};
 use super::remote;
 use brama::subscription_dispatch::leases::{Lease, Taken};
 
-/// End the command unsuccessfully, as every Brama verb does.
-fn fail() -> ! {
-    std::process::exit(1) // https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/stdlib.h.html
-}
+use crate::cli::fail;
 
 #[derive(Deserialize)]
 struct Released {

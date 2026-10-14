@@ -45,12 +45,12 @@ pub(crate) async fn run(command: SubscriptionCommand) {
                     }
                     // Partial renewal is a failure, even if some grants now work.
                     if text(&verdict, "result") != Some("refreshed") {
-                        std::process::exit(1);
+                        crate::cli::fail();
                     }
                 }
                 Err(error) => {
                     eprintln!("{error}");
-                    std::process::exit(1);
+                    crate::cli::fail();
                 }
             }
         }

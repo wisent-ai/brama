@@ -73,7 +73,7 @@ pub(crate) async fn adopt(args: AdoptArgs) {
     .await
     {
         eprintln!("Configuration adoption error: {error}");
-        std::process::exit(1);
+        crate::cli::fail();
     }
 }
 
