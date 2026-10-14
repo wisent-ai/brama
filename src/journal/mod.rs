@@ -122,8 +122,10 @@ fn now() -> String {
     chrono::Utc::now().to_rfc3339()
 }
 
-fn field<'a>(record: &'a Value, key: &str) -> &'a str {
-    record.get(key).and_then(Value::as_str).unwrap_or("")
+/// A record's text field, or nothing when the record does not carry it as
+/// text: a missing field matches no query, not one that asks for "".
+fn field<'a>(record: &'a Value, key: &str) -> Option<&'a str> {
+    record.get(key).and_then(Value::as_str)
 }
 
 /// Mark a subscription entry (by broker item id) retired so dispatch skips it.
@@ -150,14 +152,19 @@ pub fn membership_was_removed(item_id: &str) -> Result<bool, String> {
     Ok(read_all()?
         .iter()
         .rev()
-        .filter(|record| field(record, "id") == item_id)
+        .filter(|record| field(record, "id") == Some(item_id))
         .find(|record| {
             matches!(
                 field(record, "kind"),
-                "retire" | "reinstate" | "membership_removed" | "forgotten"
+                Some("retire" | "reinstate" | "membership_removed" | "forgotten")
             )
         })
-        .is_some_and(|record| matches!(field(record, "kind"), "membership_removed" | "forgotten")))
+        .is_some_and(|record| {
+            matches!(
+                field(record, "kind"),
+                Some("membership_removed" | "forgotten")
+            )
+        }))
 }
 
 /// Take one retirement back, because this deployment uses that account
@@ -181,8 +188,8 @@ pub fn reinstate(item_id: &str) -> Result<(), String> {
 pub fn is_retired(item_id: &str) -> Result<bool, String> {
     Ok(read_all()?
         .iter()
-        .filter(|record| field(record, "id") == item_id)
-        .filter_map(|record| match field(record, "kind") {
+        .filter(|record| field(record, "id") == Some(item_id))
+        .filter_map(|record| match field(record, "kind")? {
             "retire" | "membership_removed" | "forgotten" => Some(true),
             "reinstate" => Some(false),
             _ => None,
@@ -224,9 +231,9 @@ pub fn checks_for_task(agent_id: &str, task: &str) -> Result<Vec<Value>, String>
     Ok(read_all()?
         .into_iter()
         .filter(|r| {
-            field(r, "kind") == "check"
-                && field(r, "agent_id") == agent_id
-                && field(r, "task") == task
+            field(r, "kind") == Some("check")
+                && field(r, "agent_id") == Some(agent_id)
+                && field(r, "task") == Some(task)
         })
         .collect())
 }
@@ -235,6 +242,6 @@ pub fn checks_for_task(agent_id: &str, task: &str) -> Result<Vec<Value>, String>
 pub fn checks_for_agent(agent_id: &str) -> Result<Vec<Value>, String> {
     Ok(read_all()?
         .into_iter()
-        .filter(|r| field(r, "kind") == "check" && field(r, "agent_id") == agent_id)
+        .filter(|r| field(r, "kind") == Some("check") && field(r, "agent_id") == Some(agent_id))
         .collect())
 }

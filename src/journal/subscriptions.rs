@@ -48,8 +48,8 @@ pub fn record_subscription_sign_in(outcome: &Value) -> Result<(), String> {
 /// The newest completed automatic or operator sign-in for one subscription.
 pub fn latest_subscription_sign_in(subscription_id: &str) -> Result<Option<Value>, String> {
     Ok(read_all()?.into_iter().rev().find(|record| {
-        field(record, "kind") == "subscription_sign_in"
-            && field(record, "subscription_id") == subscription_id
+        field(record, "kind") == Some("subscription_sign_in")
+            && field(record, "subscription_id") == Some(subscription_id)
     }))
 }
 
@@ -109,6 +109,7 @@ pub fn record_subscription_acquisition(outcome: &Value) -> Result<(), String> {
 /// The newest acquisition record for one provider, of any result.
 pub fn latest_subscription_acquisition(provider: &str) -> Result<Option<Value>, String> {
     Ok(read_all()?.into_iter().rev().find(|record| {
-        field(record, "kind") == "subscription_acquisition" && field(record, "provider") == provider
+        field(record, "kind") == Some("subscription_acquisition")
+            && field(record, "provider") == Some(provider)
     }))
 }
