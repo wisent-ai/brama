@@ -32,7 +32,10 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
     elapsed_ms: f64,
 ) -> ModelResponse {
     let mut content = String::new();
-    let mut completed = Value::Null;
+    // The terminal `response.completed` or `response.incomplete` event's
+    // response; a stream that ends without one was cut short, and its text
+    // so far passed on as a whole answer.
+    let mut completed = None;
     let mut failure = None;
     let mut done_text = String::new();
     let mut done_tool_calls = Vec::new();
@@ -44,8 +47,19 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
         if data.is_empty() || data == "[DONE]" {
             continue;
         }
-        let Ok(event) = serde_json::from_str::<Value>(data) else {
-            continue;
+        // An event that is not JSON fails the answer naming it: skipped, the
+        // text or call it carried vanished from an answer read as complete.
+        let event = match serde_json::from_str::<Value>(data) {
+            Ok(event) => event,
+            Err(error) => return attempted_failure(
+                route_id,
+                Refusal::new(
+                    ProviderRefusal::ProviderFailure,
+                    format!(
+                        "the provider stream carried an event that is not JSON ({error}): {data}"
+                    ),
+                ),
+            ),
         };
         match event.get("type").and_then(Value::as_str) {
             Some("response.output_text.delta") => {
@@ -70,33 +84,16 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
                                 }
                             }
                         }
-                        Some("function_call") => done_tool_calls.push(ToolCall {
-                            id: item
-                                .get("call_id")
-                                .or_else(|| item.get("id"))
-                                .and_then(Value::as_str)
-                                .unwrap_or("tool")
-                                .to_string(),
-                            call_type: "function".into(),
-                            function: crate::types::ToolCallFunction {
-                                name: item
-                                    .get("name")
-                                    .and_then(Value::as_str)
-                                    .unwrap_or("tool")
-                                    .to_string(),
-                                arguments: item
-                                    .get("arguments")
-                                    .and_then(Value::as_str)
-                                    .unwrap_or("{}")
-                                    .to_string(),
-                            },
-                        }),
+                        Some("function_call") => match function_call(item) {
+                            Ok(call) => done_tool_calls.push(call),
+                            Err(cause) => return function_call_failure(route_id, cause),
+                        },
                         _ => {}
                     }
                 }
             }
-            Some("response.completed") => {
-                completed = event.get("response").cloned().unwrap_or(Value::Null);
+            Some("response.completed") | Some("response.incomplete") => {
+                completed = event.get("response").cloned();
             }
             // A failure without a message is reported with the event as sent:
             // a fixed sentence in its place dropped what the provider said.
@@ -127,6 +124,16 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
             Refusal::new(class, format!("{}: {message}", class.contract_kind())),
         );
     }
+    let Some(completed) = completed else {
+        return attempted_failure(
+            route_id,
+            Refusal::new(
+                ProviderRefusal::ProviderFailure,
+                "the provider stream ended without response.completed or response.incomplete"
+                    .to_string(),
+            ),
+        );
+    };
     let mut tool_calls = Vec::new();
     if let Some(output) = completed.get("output").and_then(Value::as_array) {
         let mut text = String::new();
@@ -144,27 +151,10 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
                         }
                     }
                 }
-                Some("function_call") => tool_calls.push(ToolCall {
-                    id: item
-                        .get("call_id")
-                        .or_else(|| item.get("id"))
-                        .and_then(Value::as_str)
-                        .unwrap_or("tool")
-                        .to_string(),
-                    call_type: "function".into(),
-                    function: crate::types::ToolCallFunction {
-                        name: item
-                            .get("name")
-                            .and_then(Value::as_str)
-                            .unwrap_or("tool")
-                            .to_string(),
-                        arguments: item
-                            .get("arguments")
-                            .and_then(Value::as_str)
-                            .unwrap_or("{}")
-                            .to_string(),
-                    },
-                }),
+                Some("function_call") => match function_call(item) {
+                    Ok(call) => tool_calls.push(call),
+                    Err(cause) => return function_call_failure(route_id, cause),
+                },
                 _ => {}
             }
         }
@@ -200,4 +190,33 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
         limits: Vec::new(),
         failure_kind: None,
     }
+}
+
+/// A Responses `function_call` item as a tool call, or what it lacked. Read
+/// with id and name "tool" and arguments "{}", the caller ran or answered a
+/// call the model never made.
+fn function_call(item: &Value) -> Result<ToolCall, String> {
+    let text = |value: Option<&Value>, field: &str| {
+        value
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .ok_or_else(|| {
+                format!("the provider answered a function_call without its {field}: {item}")
+            })
+    };
+    Ok(ToolCall {
+        id: text(item.get("call_id").or_else(|| item.get("id")), "call_id")?,
+        call_type: "function".into(),
+        function: crate::types::ToolCallFunction {
+            name: text(item.get("name"), "name")?,
+            arguments: text(item.get("arguments"), "arguments")?,
+        },
+    })
+}
+
+fn function_call_failure(route_id: &str, cause: String) -> ModelResponse {
+    attempted_failure(
+        route_id,
+        Refusal::new(ProviderRefusal::ProviderFailure, cause),
+    )
 }
