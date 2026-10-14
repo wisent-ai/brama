@@ -32,11 +32,15 @@ pub(super) fn millis_per_second_i64() -> i64 {
     MILLIS_PER_SECOND
 }
 
+/// This machine's clock in epoch seconds. A clock set before the epoch is
+/// that many seconds negative, not the epoch itself, so an expiry written
+/// from it (now plus the lifetime the provider granted) is the instant the
+/// clock will actually show.
 pub(super) fn now_seconds() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_secs() as i64)
-        .unwrap_or_default()
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(elapsed) => elapsed.as_secs() as i64,
+        Err(before) => -(before.duration().as_secs() as i64),
+    }
 }
 
 fn normalize_epoch(epoch: f64) -> i64 {
