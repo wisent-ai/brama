@@ -19,10 +19,10 @@ pub(in crate::providers::adapter) async fn response_text(
     {
         body.extend_from_slice(&chunk);
     }
-    let text = String::from_utf8(body).map_err(|_| {
+    let text = String::from_utf8(body).map_err(|error| {
         Refusal::new(
             ProviderRefusal::ProviderFailure,
-            "provider_failure: provider response is not UTF-8",
+            format!("provider_failure: provider response is not UTF-8: {error}"),
         )
     })?;
     Ok((status, plan, text))

@@ -38,10 +38,10 @@ pub(in crate::providers::adapter) fn typed_transport(
         .map_err(|error| Refusal::gateway(GatewayRefusal::CredentialUnauthorized, error))?;
     let base_url = provider_base_url(descriptor)
         .map_err(|error| Refusal::gateway(GatewayRefusal::ProviderFailure, error))?;
-    let client = dispatch_client().map_err(|_| {
+    let client = dispatch_client().map_err(|error| {
         Refusal::gateway(
             GatewayRefusal::DependencyUnavailable,
-            "dependency_unavailable: provider client could not be built",
+            format!("dependency_unavailable: provider client could not be built: {error}"),
         )
     })?;
     Ok((key, base_url, client))
@@ -49,10 +49,10 @@ pub(in crate::providers::adapter) fn typed_transport(
 
 /// A provider answer that is not the JSON object every typed call returns.
 pub(in crate::providers::adapter) fn typed_object(text: &str) -> Result<Value, Refusal> {
-    let body: Value = serde_json::from_str(text).map_err(|_| {
+    let body: Value = serde_json::from_str(text).map_err(|error| {
         Refusal::new(
             ProviderRefusal::ProviderFailure,
-            "provider_failure: provider returned malformed JSON",
+            format!("provider_failure: provider returned malformed JSON: {error}"),
         )
     })?;
     if !body.is_object() {

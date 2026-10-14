@@ -75,7 +75,7 @@ pub async fn complete(
         });
     }
     let issued: Value = serde_json::from_slice(&body)
-        .map_err(|_| "the provider's answer is not JSON".to_owned())?;
+        .map_err(|error| format!("the provider's answer is not JSON: {error}"))?;
     let token = |name: &str| {
         issued
             .get(name)
@@ -83,10 +83,9 @@ pub async fn complete(
             .filter(|token| !token.is_empty())
             .map(|token| Zeroizing::new(token.to_owned()))
     };
-    let expires_in = issued
-        .get("expires_in")
-        .and_then(Value::as_i64)
-        .unwrap_or_default();
+    let expires_in = issued.get("expires_in").and_then(Value::as_i64).ok_or(
+        "the provider's answer carries no whole-second expires_in; Brama cannot tell when the access token lapses",
+    )?;
     let access = token("access_token").ok_or("the provider's answer carries no access token")?;
     let refresh = token("refresh_token").ok_or(
         "the provider's answer carries no refresh token; Brama cannot keep a grant it cannot renew",
