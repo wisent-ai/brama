@@ -102,10 +102,7 @@ static READINESS_REPORT: LazyLock<std::sync::RwLock<ReadinessReport>> =
     LazyLock::new(|| std::sync::RwLock::new(ReadinessReport::pending()));
 
 fn publish(report: ReadinessReport) {
-    match READINESS_REPORT.write() {
-        Ok(mut current) => *current = report,
-        Err(poisoned) => *poisoned.into_inner() = report,
-    }
+    *crate::core::sync::write_held(&READINESS_REPORT, "readiness report") = report;
 }
 
 /// The last `brama maintain` pass this process ran: when it finished, in Unix
@@ -119,10 +116,8 @@ pub(in crate::core::server) fn record_maintenance(ok: bool) {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_secs())
         .unwrap_or_default();
-    match LAST_MAINTENANCE.write() {
-        Ok(mut last) => *last = Some((finished, ok)),
-        Err(poisoned) => *poisoned.into_inner() = Some((finished, ok)),
-    }
+    let mut last = crate::core::sync::write_held(&LAST_MAINTENANCE, "last maintenance pass");
+    *last = Some((finished, ok));
 }
 
 /// What `/readyz` says about maintenance. The gateway keeps no timer, so it
@@ -131,10 +126,7 @@ pub(in crate::core::server) fn record_maintenance(ok: bool) {
 /// host's Stado schedule calls `brama maintain`, and when a request is
 /// refused for want of a signed-in subscription.
 fn maintenance_state() -> Value {
-    let last = match LAST_MAINTENANCE.read() {
-        Ok(last) => *last,
-        Err(poisoned) => *poisoned.into_inner(),
-    };
+    let last = *crate::core::sync::read_held(&LAST_MAINTENANCE, "last maintenance pass");
     match last {
         Some((finished, ok)) => json!({"last_pass_unix": finished, "last_pass_ok": ok}),
         None => json!({
@@ -152,9 +144,9 @@ fn maintenance_state() -> Value {
 /// the declared refresh interval overrides it: the gateway declares it
 /// serves nothing and names the source (`standing`).
 pub(in crate::core::server) async fn readyz() -> impl IntoResponse {
-    let report = match READINESS_REPORT.read() {
-        Ok(current) => current.clone(),
-        Err(poisoned) => poisoned.into_inner().clone(),
+    let report = {
+        let current = crate::core::sync::read_held(&READINESS_REPORT, "readiness report");
+        current.clone()
     };
     let mut status = report.status;
     let mut body = report.body;

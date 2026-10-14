@@ -33,10 +33,7 @@ struct RefreshRegistration {
 
 impl Drop for RefreshRegistration {
     fn drop(&mut self) {
-        let mut guard = match REFRESHING.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
+        let mut guard = crate::core::sync::held(&REFRESHING, "shared usage refreshes");
         guard.remove(&self.key);
     }
 }
@@ -75,10 +72,7 @@ pub(super) async fn join_refresh(
 
 pub(super) fn shared_refresh(subscription_id: &str, provider: &str) -> RefreshReceiver {
     let key = format!("{provider}\0{subscription_id}");
-    let mut guard = match REFRESHING.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    };
+    let mut guard = crate::core::sync::held(&REFRESHING, "shared usage refreshes");
     if let Some(receiver) = guard.get(&key) {
         return receiver.clone();
     }

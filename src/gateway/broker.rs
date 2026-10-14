@@ -248,21 +248,13 @@ pub async fn redeem_subscription_credential(
     provider: &str,
 ) -> Result<Secret, Failure> {
     let resource = subscription_resource(provider, subscription_id);
-    match LOCAL_SUBSCRIPTION_CREDENTIALS.read() {
-        Ok(credentials) => {
-            if let Some(credential) = credentials.get(&resource) {
-                return Ok(Secret::from_bytes(credential.as_slice().to_vec()));
-            }
-        }
-        Err(_) => {
-            return Err(credential_failure(
-                "local subscription credential lock is poisoned",
-                &resource,
-                Code::Config,
-            )
-            .with_context("subscription", subscription_id)
-            .with_context("provider", provider));
-        }
+    if let Some(credential) = crate::core::sync::read_held(
+        &LOCAL_SUBSCRIPTION_CREDENTIALS,
+        "local subscription credentials",
+    )
+    .get(&resource)
+    {
+        return Ok(Secret::from_bytes(credential.as_slice().to_vec()));
     }
 
     let seed =

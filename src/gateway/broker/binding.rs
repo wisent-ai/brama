@@ -122,19 +122,15 @@ pub fn provider_capability_configured(provider: &str) -> Result<bool, String> {
 /// remains a refusal and a later request can observe recovery.
 fn provider_grant_routed(provider: &str) -> Result<bool, String> {
     let resource = provider_resource(provider);
-    if let Some(known) = GRANT_ROUTED
-        .read()
-        .map_err(|_| format!("read grant-route cache for `{resource}`: lock is poisoned"))?
+    if let Some(known) = crate::core::sync::read_held(&GRANT_ROUTED, "grant-route cache")
         .get(&resource)
         .copied()
     {
         return Ok(known);
     }
     let routed = resolve_grant_route(&resource)?;
-    GRANT_ROUTED
-        .write()
-        .map_err(|_| format!("store grant-route observation for `{resource}`: lock is poisoned"))?
-        .insert(resource, routed);
+    let mut observed = crate::core::sync::write_held(&GRANT_ROUTED, "grant-route cache");
+    observed.insert(resource, routed);
     Ok(routed)
 }
 

@@ -63,9 +63,8 @@ fn local_provider_store() -> Result<&'static RwLock<LocalCredentialMap>, String>
 }
 
 pub fn local_provider_names() -> Result<Vec<String>, String> {
-    let credentials = local_provider_store()?
-        .read()
-        .map_err(|_| "local provider credential lock is poisoned".to_owned())?;
+    let credentials =
+        crate::core::sync::read_held(local_provider_store()?, "local provider credentials");
     let mut names = credentials.keys().cloned().collect::<Vec<_>>();
     names.sort();
     Ok(names)
@@ -76,9 +75,8 @@ pub fn put_local_provider_credential(provider: &str, credential: &str) -> Result
     if provider.is_empty() || credential.is_empty() {
         return Err("provider and credential must contain valid values".to_owned());
     }
-    let mut credentials = local_provider_store()?
-        .write()
-        .map_err(|_| "local provider credential lock is poisoned".to_owned())?;
+    let mut credentials =
+        crate::core::sync::write_held(local_provider_store()?, "local provider credentials");
     credentials.insert(
         provider.to_owned(),
         Zeroizing::new(credential.as_bytes().to_vec()),
@@ -87,16 +85,13 @@ pub fn put_local_provider_credential(provider: &str, credential: &str) -> Result
 }
 
 pub fn remove_local_provider_credential(provider: &str) -> Result<bool, String> {
-    let mut credentials = local_provider_store()?
-        .write()
-        .map_err(|_| "local provider credential lock is poisoned".to_owned())?;
+    let mut credentials =
+        crate::core::sync::write_held(local_provider_store()?, "local provider credentials");
     Ok(credentials.remove(provider).is_some())
 }
 
 pub(super) fn local_provider_credential(provider: &str) -> Result<Secret, String> {
-    local_provider_store()?
-        .read()
-        .map_err(|_| "local provider credential lock is poisoned".to_owned())?
+    crate::core::sync::read_held(local_provider_store()?, "local provider credentials")
         .get(provider)
         .map(|value| Secret::from_bytes(value.as_slice().to_vec()))
         .ok_or_else(|| format!("standalone credential store has no credential for `{provider}`"))
@@ -106,10 +101,11 @@ pub(super) fn put_local_subscription_credential(
     item_id: &str,
     secret: &[u8],
 ) -> Result<(), String> {
-    LOCAL_SUBSCRIPTION_CREDENTIALS
-        .write()
-        .map_err(|_| "local subscription credential lock is poisoned".to_owned())?
-        .insert(item_id.to_owned(), Zeroizing::new(secret.to_vec()));
+    crate::core::sync::write_held(
+        &LOCAL_SUBSCRIPTION_CREDENTIALS,
+        "local subscription credentials",
+    )
+    .insert(item_id.to_owned(), Zeroizing::new(secret.to_vec()));
     Ok(())
 }
 
@@ -117,9 +113,10 @@ pub fn remove_donated_credential(provider: &str, subscription_id: &str) -> Resul
     if !local_provider_credentials_enabled() {
         return Ok(());
     }
-    LOCAL_SUBSCRIPTION_CREDENTIALS
-        .write()
-        .map_err(|_| "local subscription credential lock is poisoned".to_owned())?
-        .remove(&subscription_resource(provider, subscription_id));
+    crate::core::sync::write_held(
+        &LOCAL_SUBSCRIPTION_CREDENTIALS,
+        "local subscription credentials",
+    )
+    .remove(&subscription_resource(provider, subscription_id));
     Ok(())
 }

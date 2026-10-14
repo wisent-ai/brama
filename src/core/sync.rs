@@ -8,19 +8,47 @@
 //! whole, so the state a panicking holder left is still a state; the lock is
 //! taken back, its poison cleared, and the recovery logged with its name.
 
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+
+fn recovered(name: &str) {
+    tracing::warn!(
+        event = "lock_poisoned_recovered",
+        lock = name,
+        "a holder of this lock panicked; the lock is taken back"
+    );
+}
 
 /// The guard of `mutex`, taken back from a poisoned lock instead of refused.
 pub fn held<'a, T>(mutex: &'a Mutex<T>, name: &str) -> MutexGuard<'a, T> {
     match mutex.lock() {
         Ok(guard) => guard,
         Err(poisoned) => {
-            tracing::warn!(
-                event = "lock_poisoned_recovered",
-                lock = name,
-                "a holder of this lock panicked; the lock is taken back"
-            );
+            recovered(name);
             mutex.clear_poison();
+            poisoned.into_inner()
+        }
+    }
+}
+
+/// A read guard of `lock`, taken back from a poisoned lock instead of refused.
+pub fn read_held<'a, T>(lock: &'a RwLock<T>, name: &str) -> RwLockReadGuard<'a, T> {
+    match lock.read() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            recovered(name);
+            lock.clear_poison();
+            poisoned.into_inner()
+        }
+    }
+}
+
+/// A write guard of `lock`, taken back from a poisoned lock instead of refused.
+pub fn write_held<'a, T>(lock: &'a RwLock<T>, name: &str) -> RwLockWriteGuard<'a, T> {
+    match lock.write() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            recovered(name);
+            lock.clear_poison();
             poisoned.into_inner()
         }
     }

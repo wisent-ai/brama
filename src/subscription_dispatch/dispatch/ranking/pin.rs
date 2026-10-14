@@ -42,10 +42,7 @@ fn now_ms() -> i64 {
 /// elsewhere leaves them usable, and dropping them would silently move every
 /// agent off the credential that holds its cache.
 fn pins() -> std::sync::MutexGuard<'static, HashMap<(String, String), Pin>> {
-    match PINS.lock() {
-        Ok(pins) => pins,
-        Err(poisoned) => poisoned.into_inner(),
-    }
+    crate::core::sync::held(&PINS, "credential pins")
 }
 
 /// The credential this agent is pinned to for this provider, if the pin is

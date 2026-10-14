@@ -124,9 +124,7 @@ fn persist(register: &Register) -> Result<(), String> {
 }
 
 fn locked<T>(apply: impl FnOnce(&mut Register) -> Result<T, String>) -> Result<T, String> {
-    let _guard = LOCK
-        .lock()
-        .map_err(|error| format!("the lease register lock is poisoned: {error}"))?;
+    let _guard = crate::core::sync::held(&LOCK, "lease register");
     let mut register = load()?;
     let answer = apply(&mut register)?;
     persist(&register)?;
@@ -135,9 +133,7 @@ fn locked<T>(apply: impl FnOnce(&mut Register) -> Result<T, String>) -> Result<T
 
 /// Every live lease, newest last.
 pub fn live() -> Result<Vec<Lease>, String> {
-    let _guard = LOCK
-        .lock()
-        .map_err(|error| format!("the lease register lock is poisoned: {error}"))?;
+    let _guard = crate::core::sync::held(&LOCK, "lease register");
     Ok(load()?.leases.into_iter().filter(Lease::is_live).collect())
 }
 
@@ -155,9 +151,7 @@ pub(super) fn take(
     use super::{count, fewest_then_freshest, member_row, members, Members, Refused, Taken};
 
     let unavailable = |detail| Refused::Unavailable { detail };
-    let _guard = LOCK
-        .lock()
-        .map_err(|error| unavailable(format!("the lease register lock is poisoned: {error}")))?;
+    let _guard = crate::core::sync::held(&LOCK, "lease register");
     let mut register = load().map_err(unavailable)?;
     register.leases.retain(Lease::is_live);
     if let Some(standing) = register.leases.iter().find(|lease| {
