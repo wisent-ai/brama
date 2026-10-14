@@ -165,7 +165,8 @@ impl CapabilityClient {
             proof,
         };
         let mut encoded = Zeroizing::new(
-            serde_json::to_vec(&request).map_err(|_| CapabilityError::RedemptionDenied)?,
+            serde_json::to_vec(&request)
+                .map_err(|error| CapabilityError::RequestEncoding(error.to_string()))?,
         );
         encoded.push(b'\n');
 
@@ -193,13 +194,21 @@ impl CapabilityClient {
             ))
         })?;
         if control.version != WIRE_VERSION || control.status != "ok" {
-            return Err(CapabilityError::RedemptionDenied);
+            return Err(CapabilityError::RedemptionDenied(format!(
+                "{socket} answered status {:?} at wire version {:?}; a secret comes with status \"ok\" at {WIRE_VERSION:?}",
+                control.status, control.version
+            )));
         }
         let length = control
             .secret_len
             .and_then(std::num::NonZeroUsize::new)
             .map(std::num::NonZeroUsize::get)
-            .ok_or(CapabilityError::RedemptionDenied)?;
+            .ok_or_else(|| {
+                CapabilityError::RedemptionDenied(format!(
+                    "{socket} answered ok with secret length {:?}, so no secret follows",
+                    control.secret_len
+                ))
+            })?;
         let mut secret = Zeroizing::new(vec![0_u8; length]);
         stream
             .read_exact(&mut secret)

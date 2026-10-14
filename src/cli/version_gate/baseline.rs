@@ -131,8 +131,8 @@ pub(super) fn check(root: &Path) -> Result<String, String> {
         .strip_prefix(ARCHIVE_MARKER)
         .or(marker.strip_prefix(HEAD_MARKER))
     {
-        let (recomputed, declared) = of_revision(root, reference).map_err(|_| {
-            format!("the baseline names {reference}, which this checkout cannot read")
+        let (recomputed, declared) = of_revision(root, reference).map_err(|error| {
+            format!("the baseline names {reference}, which this checkout cannot read: {error}")
         })?;
         if declared != version || recomputed != surface {
             return Err(format!(

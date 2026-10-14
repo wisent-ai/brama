@@ -63,8 +63,12 @@ pub enum CapabilityError {
     InvalidBinding,
     #[error("invalid capability client configuration: {0}")]
     InvalidConfiguration(String),
-    #[error("capability redemption denied")]
-    RedemptionDenied,
+    /// The authority answered, and not with a secret; says what it answered.
+    #[error("capability redemption denied: {0}")]
+    RedemptionDenied(String),
+    /// This client could not encode its own redemption request.
+    #[error("encode the capability redemption request: {0}")]
+    RequestEncoding(String),
     #[error("decode redeemed secret as UTF-8: {0}")]
     SecretEncoding(#[source] std::str::Utf8Error),
     /// The authority's socket could not be reached, written or read; the io

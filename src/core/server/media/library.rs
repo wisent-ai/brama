@@ -153,12 +153,14 @@ pub(in crate::core::server) async fn audio_voice_clone(
     )?;
     let mut samples = Vec::with_capacity(request.samples.len());
     for (index, sample) in request.samples.into_iter().enumerate() {
-        let bytes = BASE64.decode(sample.data_base64.as_bytes()).map_err(|_| {
-            api_error(
-                StatusCode::BAD_REQUEST,
-                &format!("samples[{index}].data_base64 is not base64"),
-            )
-        })?;
+        let bytes = BASE64
+            .decode(sample.data_base64.as_bytes())
+            .map_err(|error| {
+                api_error(
+                    StatusCode::BAD_REQUEST,
+                    &format!("samples[{index}].data_base64 is not base64: {error}"),
+                )
+            })?;
         if bytes.is_empty() {
             return Err(api_error(
                 StatusCode::BAD_REQUEST,

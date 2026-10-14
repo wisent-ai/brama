@@ -45,8 +45,12 @@ pub(in crate::core::server) async fn embeddings(
     let mut payload = Map::new();
     payload.insert(
         "input".to_string(),
-        serde_json::to_value(request.input)
-            .map_err(|_| api_error(StatusCode::BAD_REQUEST, "invalid embedding input"))?,
+        serde_json::to_value(request.input).map_err(|error| {
+            api_error(
+                StatusCode::BAD_REQUEST,
+                &format!("invalid embedding input: {error}"),
+            )
+        })?,
     );
     if let Some(value) = request.encoding_format {
         if !matches!(value.as_str(), "float" | "base64") {
@@ -108,8 +112,12 @@ pub(in crate::core::server) async fn moderations(
     let mut payload = Map::new();
     payload.insert(
         "input".to_string(),
-        serde_json::to_value(request.input)
-            .map_err(|_| api_error(StatusCode::BAD_REQUEST, "invalid moderation input"))?,
+        serde_json::to_value(request.input).map_err(|error| {
+            api_error(
+                StatusCode::BAD_REQUEST,
+                &format!("invalid moderation input: {error}"),
+            )
+        })?,
     );
     let body = match dispatch_direct_openai_typed(&source, "/v1/moderations", payload).await {
         Ok(body) => body,
