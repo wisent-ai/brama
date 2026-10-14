@@ -74,6 +74,9 @@ pub(in crate::core::server) async fn chat_completions(
             tool_calls: m.tool_calls,
         })
         .collect();
+    if let Err(message) = crate::core::wire::validate_history_tool_calls(&messages) {
+        return api_error(StatusCode::BAD_REQUEST, &message).into_response();
+    }
     let requested_model = req.model.as_deref().unwrap_or("").trim().to_string();
     if requested_model.is_empty() {
         return api_error(StatusCode::BAD_REQUEST, "missing field `model`").into_response();

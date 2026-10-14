@@ -220,6 +220,7 @@ pub fn responses_request(body: &[u8]) -> Result<InboundCall, String> {
             ))
         }
     };
+    super::validate_history_tool_calls(&messages)?;
     Ok(InboundCall {
         model,
         request: ModelRequest {

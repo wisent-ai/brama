@@ -76,6 +76,37 @@ fn validate(model: &str, max_tokens: Option<u32>, temperature: Option<f64>) -> R
     Ok(())
 }
 
+/// Every tool call a caller's history carries, as each provider wire needs
+/// it: an `id`, a `function.name` and `function.arguments` that are JSON text.
+/// Checked once at the door for all three formats, so no provider translation
+/// stands in a call named `tool` or empty arguments for one it cannot read.
+pub fn validate_history_tool_calls(messages: &[crate::types::Message]) -> Result<(), String> {
+    for (position, message) in messages.iter().enumerate() {
+        for call in message.tool_calls.iter().flatten() {
+            let text = |pointer: &str| call.pointer(pointer).and_then(Value::as_str);
+            let refused =
+                |what: &str| Err(format!("message {position}: a tool call {what}: {call}"));
+            if text("/id").is_none() {
+                return refused("carries no `id` text");
+            }
+            if text("/function/name").is_none() {
+                return refused("carries no `function.name` text");
+            }
+            match text("/function/arguments") {
+                None => return refused("carries no `function.arguments` text"),
+                Some(arguments) => {
+                    if let Err(error) = serde_json::from_str::<Value>(arguments) {
+                        return Err(format!(
+                            "message {position}: a tool call's `function.arguments` are not JSON ({error}): {call}"
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Buffered egress.
 // ---------------------------------------------------------------------------
