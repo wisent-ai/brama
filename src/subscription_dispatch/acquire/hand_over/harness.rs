@@ -46,10 +46,10 @@ pub(super) async fn held_accounts(
     harness: Harness,
     harness_provider: &str,
 ) -> Result<Option<BTreeSet<String>>, String> {
-    let output = match tokio::process::Command::new(harness.name())
-        .args(["usage", "accounts"])
-        .output()
-        .await
+    let output = match stado_wait::output_async(
+        tokio::process::Command::new(harness.name()).args(["usage", "accounts"]),
+    )
+    .await
     {
         Ok(output) => output,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),

@@ -15,9 +15,7 @@ use super::entitlements_router_bin;
 /// a reader that asks per member pays a full vault pass per member.
 pub fn login_seed_states() -> Result<std::collections::BTreeMap<String, String>, String> {
     let program = entitlements_router_bin()?;
-    let output = std::process::Command::new(&program)
-        .arg("totp-seed-state")
-        .output()
+    let output = stado_wait::output(std::process::Command::new(&program).arg("totp-seed-state"))
         .map_err(|error| format!("{program} totp-seed-state could not start: {error}"))?;
     if !output.status.success() {
         let detail = String::from_utf8_lossy(&output.stderr);

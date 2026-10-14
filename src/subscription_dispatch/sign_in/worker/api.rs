@@ -74,26 +74,27 @@ pub(crate) async fn worker_api_base() -> Result<WelesEndpoint, String> {
     // all. The sibling lookup in `cli::subscriptions::sync` already names its
     // consumer; this one did not.
     let consumer = env_or("BRAMA_WELES_ADMISSION_CONSUMER", "operator");
-    let output = tokio::process::Command::new(&stado)
-        .kill_on_drop(true)
-        .args([
-            "service",
-            "directory",
-            "connect",
-            "weles-admission",
-            "--consumer",
-            consumer.as_str(),
-            "--no-verify",
-            "--json",
-        ])
-        .output()
-        .await
-        .map_err(|error| {
-            format!(
-                "cannot resolve weles-admission through {}: {error}",
-                stado.display()
-            )
-        })?;
+    let output = stado_wait::output_async(
+        tokio::process::Command::new(&stado)
+            .kill_on_drop(true)
+            .args([
+                "service",
+                "directory",
+                "connect",
+                "weles-admission",
+                "--consumer",
+                consumer.as_str(),
+                "--no-verify",
+                "--json",
+            ]),
+    )
+    .await
+    .map_err(|error| {
+        format!(
+            "cannot resolve weles-admission through {}: {error}",
+            stado.display()
+        )
+    })?;
     if !output.status.success() {
         let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(format!(
@@ -175,23 +176,21 @@ const REAUTH_ROLE: &str = "brama-weles-reauth";
 /// waiting on a child process for the length of a browser login.
 fn vault_reauth_token() -> Result<String, String> {
     let stado = stado_binary();
-    let output = std::process::Command::new(&stado)
-        .args([
-            "credentials",
-            "get",
-            "--role",
-            REAUTH_ROLE,
-            "--field",
-            "token",
-        ])
-        .output()
-        .map_err(|error| {
-            format!(
-                "cannot read role {REAUTH_ROLE} through {}: {error} (declare another Stado with \
-                 BRAMA_STADO_BIN, or export BRAMA_WELES_REAUTH_TOKEN)",
-                stado.display()
-            )
-        })?;
+    let output = stado_wait::output(std::process::Command::new(&stado).args([
+        "credentials",
+        "get",
+        "--role",
+        REAUTH_ROLE,
+        "--field",
+        "token",
+    ]))
+    .map_err(|error| {
+        format!(
+            "cannot read role {REAUTH_ROLE} through {}: {error} (declare another Stado with \
+             BRAMA_STADO_BIN, or export BRAMA_WELES_REAUTH_TOKEN)",
+            stado.display()
+        )
+    })?;
     if !output.status.success() {
         let said: String = String::from_utf8_lossy(&output.stderr)
             .lines()

@@ -74,18 +74,19 @@ fn stado_binary() -> std::path::PathBuf {
 
 async fn read_placement() -> Placement {
     let stado = stado_binary();
-    let output = tokio::process::Command::new(&stado)
-        .kill_on_drop(true)
-        .args([
-            "service",
-            "directory",
-            "connect",
-            "brama",
-            "--no-verify",
-            "--json",
-        ])
-        .output()
-        .await;
+    let output = stado_wait::output_async(
+        tokio::process::Command::new(&stado)
+            .kill_on_drop(true)
+            .args([
+                "service",
+                "directory",
+                "connect",
+                "brama",
+                "--no-verify",
+                "--json",
+            ]),
+    )
+    .await;
     let output = match output {
         Ok(output) if output.status.success() => output,
         Ok(output) => {
