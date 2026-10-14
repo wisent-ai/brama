@@ -26,6 +26,7 @@
 
 <h2 id="weights">Weights: open or closed<a class="headerlink" href="#weights" title="Link to this section">&para;</a></h2>
 <p><code>openWeights</code> (<code>open_weights</code> in the OpenAI-shaped view) is the catalogue's own <code>open_weights</code> flag: <code>true</code> where the weights are published, <code>false</code> where they are withheld, and <code>null</code> where the source said nothing. <code>null</code> is a third answer, not a hedge — a model whose source never stated it matches neither <code>weights=open</code> nor <code>weights=closed</code>, and no filter treats absence as a claim.</p>
+<p><code>tools</code>, <code>reasoning</code> and <code>price</code> follow the same rule in the Jeden-shaped catalogue: an id the route registry holds no metadata for answers <code>null</code> for each, never <code>false</code> or a price of zero, so no budget or filter reads an unpriced model as free or an undeclared one as incapable.</p>
 
 <h2 id="declared-categories">Declared categories<a class="headerlink" href="#declared-categories" title="Link to this section">&para;</a></h2>
 <p>A category is a name the operator declares and the membership rule that decides which models carry it. Brama infers none: a gateway that guessed would be publishing an opinion as metadata, and a caller could not tell the two apart.</p>
