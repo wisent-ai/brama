@@ -98,20 +98,25 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
             Some("response.completed") => {
                 completed = event.get("response").cloned().unwrap_or(Value::Null);
             }
+            // A failure without a message is reported with the event as sent:
+            // a fixed sentence in its place dropped what the provider said.
             Some("response.failed") => {
                 let error = event.pointer("/response/error");
-                let message = error
+                let message = match error
                     .and_then(|error| error.get("message"))
                     .and_then(Value::as_str)
-                    .unwrap_or("codex response failed");
-                failure = Some((message.to_string(), stream_failure_class(error)));
+                {
+                    Some(message) => message.to_string(),
+                    None => format!("codex response failed without a message: {event}"),
+                };
+                failure = Some((message, stream_failure_class(error)));
             }
             Some("error") => {
-                let message = event
-                    .get("message")
-                    .and_then(Value::as_str)
-                    .unwrap_or("codex stream error");
-                failure = Some((message.to_string(), stream_failure_class(Some(&event))));
+                let message = match event.get("message").and_then(Value::as_str) {
+                    Some(message) => message.to_string(),
+                    None => format!("codex stream error without a message: {event}"),
+                };
+                failure = Some((message, stream_failure_class(Some(&event))));
             }
             _ => {}
         }
