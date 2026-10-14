@@ -156,7 +156,14 @@ fn distribution(
         // the rest -- is the one computed here. An undeclared label is still
         // refused above, and an answer that names no declared label at all
         // carries no mass and is refused below.
-        let value = answered.get(label).and_then(Value::as_f64).unwrap_or(0.0);
+        // A label written with something that is not a number is refused:
+        // read as zero it would move the model's mass silently.
+        let value = match answered.get(label) {
+            None => 0.0,
+            Some(written) => written.as_f64().ok_or_else(|| {
+                format!("answer for question `{key}` gives label `{label}` {written}, which is not a number")
+            })?,
+        };
         if !value.is_finite() || value < 0.0 {
             return Err(format!(
                 "answer for question `{key}` gives label `{label}` a probability that is not a number between zero and one"
