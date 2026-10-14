@@ -140,6 +140,7 @@ pub(super) async fn reinstate(
 ) {
     if destination.gateway.is_none() && destination.gateway_consumer.is_none() {
         answered(
+            subscription_id,
             brama::subscription_dispatch::pool::reinstate_member(subscription_id, reason).await,
             json,
         );
@@ -154,14 +155,15 @@ pub(super) async fn reinstate(
 }
 
 /// One membership change made on this host: its verdict said, or its
-/// refusal printed as it is and the command ended unsuccessfully.
-fn answered<Refused>(outcome: Result<Value, (Refused, String)>, json: bool) {
+/// refusal printed as it is and the command ended unsuccessfully. The member
+/// is the one asked about; a verdict without a detail is printed whole rather
+/// than as an empty sentence.
+fn answered<Refused>(subscription_id: &str, outcome: Result<Value, (Refused, String)>, json: bool) {
     match outcome {
-        Ok(verdict) => said(
-            text(&verdict, "subscription_id").unwrap_or_default(),
-            text(&verdict, "detail").unwrap_or_default(),
-            json,
-        ),
+        Ok(verdict) => match text(&verdict, "detail") {
+            Some(detail) => said(subscription_id, detail, json),
+            None => said(subscription_id, &verdict.to_string(), json),
+        },
         Err((_, error)) => {
             eprintln!("{error}");
             crate::cli::fail();
@@ -181,6 +183,7 @@ pub(super) async fn forget(
 ) {
     if destination.gateway.is_none() && destination.gateway_consumer.is_none() {
         answered(
+            subscription_id,
             brama::subscription_dispatch::forget::forget_member(subscription_id, reason).await,
             json,
         );
@@ -257,15 +260,18 @@ fn said(subscription_id: &str, detail: &str, json: bool) {
 /// comparing that count with the accounts they hold needs to see which
 /// member is missing rather than a number that disagrees.
 fn print_attribution(verdict: &Value) {
-    let rows = |field: &str| -> Vec<&Value> {
+    let rows = |field: &str| -> Option<Vec<&Value>> {
         verdict
             .get(field)
             .and_then(Value::as_array)
             .map(|rows| rows.iter().collect())
-            .unwrap_or_default()
     };
-    let recorded = rows("recorded");
-    let unattributed = rows("unattributed");
+    let (Some(recorded), Some(unattributed)) = (rows("recorded"), rows("unattributed")) else {
+        eprintln!(
+            "the attribution verdict does not list recorded and unattributed members: {verdict}"
+        );
+        crate::cli::fail();
+    };
     println!(
         "{} of {} member(s) name an account",
         recorded.len(),
