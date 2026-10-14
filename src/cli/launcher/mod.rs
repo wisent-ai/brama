@@ -115,13 +115,17 @@ pub(crate) fn run(command: LauncherCommand) {
             },
         ),
         LauncherCommand::SeedRoutes { path } => std::env::var("BRAMA_MODEL_ALIASES")
-            .map_err(|_| "BRAMA_MODEL_ALIASES is required".to_string())
+            .map_err(|error| {
+                format!("BRAMA_MODEL_ALIASES is required and could not be read: {error}")
+            })
             .and_then(|aliases| policy::seed_routes(&path, &aliases)),
         LauncherCommand::ModelRouterIdentities {
             router,
             backend_models,
         } => std::env::var("BRAMA_ALLOWED_MODELS")
-            .map_err(|_| "BRAMA_ALLOWED_MODELS is required".to_string())
+            .map_err(|error| {
+                format!("BRAMA_ALLOWED_MODELS is required and could not be read: {error}")
+            })
             .and_then(|allowed| {
                 printed(identities::model_router(&router, &allowed, &backend_models))
             }),
