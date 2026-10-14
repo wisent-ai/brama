@@ -9,10 +9,13 @@
 
 use serde_json::Value;
 
-use super::event::{json_u32, StreamDelta, StreamItem};
+use super::event::{json_u32, tool_call_index, tool_call_start, StreamDelta, StreamItem};
 
 /// The terminal `data: [DONE]` sentinel of the OpenAI chat wire.
 const OPENAI_DONE: &str = "[DONE]";
+
+/// The object type every chunk of this wire declares, named in a refusal.
+const CHUNK_EVENT: &str = "chat.completion.chunk";
 
 /// Translate one OpenAI chat-completions chunk into neutral items.
 ///
@@ -68,21 +71,29 @@ pub(super) fn openai_chat_items(
     }
     if let Some(calls) = delta.get("tool_calls").and_then(Value::as_array) {
         for call in calls {
-            let index = json_u32(call.get("index")).unwrap_or_default();
+            // A fragment without an index was appended to call 0, and a first
+            // fragment without an id or name started a call nobody could
+            // answer or run; either ends the stream naming what it lacked.
+            let index = match tool_call_index(CHUNK_EVENT, call.get("index")) {
+                Ok(index) => index,
+                Err(cause) => {
+                    items.push(StreamItem::Failed(cause));
+                    return (items, true);
+                }
+            };
             if saw_tool_call.insert(index) {
-                items.push(StreamItem::Delta(StreamDelta::ToolCallStart {
-                    index,
-                    id: call
-                        .get("id")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string(),
-                    name: call
-                        .pointer("/function/name")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string(),
-                }));
+                match tool_call_start(
+                    CHUNK_EVENT,
+                    call.get("index"),
+                    call.get("id"),
+                    call.pointer("/function/name"),
+                ) {
+                    Ok(start) => items.push(StreamItem::Delta(start)),
+                    Err(cause) => {
+                        items.push(StreamItem::Failed(cause));
+                        return (items, true);
+                    }
+                }
             }
             if let Some(arguments) = call.pointer("/function/arguments").and_then(Value::as_str) {
                 if !arguments.is_empty() {
