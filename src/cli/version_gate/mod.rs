@@ -85,13 +85,10 @@ fn dispatch(command: VersionGateCommand, cli: &clap::Command) -> Result<(), Stri
             self_check,
         } => {
             let names = match candidate {
-                Some(path) => contract::read_json(&path)?["surface"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .filter_map(serde_json::Value::as_str)
-                    .map(str::to_string)
-                    .collect(),
+                Some(path) => contract::surface_list(
+                    &contract::read_json(&path)?,
+                    &path.display().to_string(),
+                )?,
                 None => own_surface(&root, cli)?,
             };
             contract::run(&root, &names, self_check)

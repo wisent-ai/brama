@@ -19,7 +19,7 @@ use std::process::Command;
 
 use serde_json::{json, Value};
 
-use super::contract::{baseline_surface, read_json, BASELINE};
+use super::contract::{read_json, surface_list, BASELINE};
 use super::surface::{manifest_version, of_revision};
 
 mod channels;
@@ -79,7 +79,7 @@ pub(super) fn check(root: &Path) -> Result<String, String> {
     let baseline = read_json(&root.join(BASELINE))?;
     let source = baseline_text(&baseline, "source")?;
     let version = baseline_text(&baseline, "version")?;
-    let surface = baseline_surface(&baseline)?;
+    let surface = surface_list(&baseline, BASELINE)?;
     let regenerate = "regenerate it with brama version-gate baseline --write";
     let marker = first_word(source);
     if source.starts_with(STADO_MARKER) {
