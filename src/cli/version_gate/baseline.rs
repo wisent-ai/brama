@@ -58,23 +58,45 @@ pub(super) fn best(root: &Path) -> Result<Value, String> {
     Ok(json!({"version": declared, "source": source, "surface": surface}))
 }
 
+/// The first word of a baseline source: its channel marker and reference.
+fn first_word(text: &str) -> &str {
+    match text.split_once(' ') {
+        Some((word, _)) => word,
+        None => text,
+    }
+}
+
+/// One required text field of the committed baseline, refused by name.
+fn baseline_text<'a>(baseline: &'a Value, field: &str) -> Result<&'a str, String> {
+    baseline[field]
+        .as_str()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| format!("{BASELINE} carries no {field} text: {}", baseline[field]))
+}
+
 /// Check the committed baseline against the channel that published it.
 pub(super) fn check(root: &Path) -> Result<String, String> {
     let baseline = read_json(&root.join(BASELINE))?;
-    let source = baseline["source"].as_str().unwrap_or("");
-    let version = baseline["version"].as_str().unwrap_or("");
-    let surface: Vec<String> = baseline["surface"]
+    let source = baseline_text(&baseline, "source")?;
+    let version = baseline_text(&baseline, "version")?;
+    let surface = baseline["surface"]
         .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(str::to_string)
-        .collect();
-    if source.is_empty() || version.is_empty() || surface.is_empty() {
-        return Err(format!("{BASELINE} must carry source, version and surface"));
-    }
+        .filter(|entries| !entries.is_empty())
+        .ok_or_else(|| {
+            format!(
+                "{BASELINE} carries no surface list: {}",
+                baseline["surface"]
+            )
+        })?
+        .iter()
+        .map(|entry| {
+            entry.as_str().map(str::to_string).ok_or_else(|| {
+                format!("{BASELINE} lists a surface entry that is not text: {entry}")
+            })
+        })
+        .collect::<Result<Vec<String>, String>>()?;
     let regenerate = "regenerate it with brama version-gate baseline --write";
-    let marker = source.split(' ').next().unwrap_or("");
+    let marker = first_word(source);
     if source.starts_with(STADO_MARKER) {
         let revision = source
             .split("source_revision=")
@@ -113,13 +135,10 @@ pub(super) fn check(root: &Path) -> Result<String, String> {
     }
     if source.starts_with(GITHUB_MARKER) {
         let best = best(root)?;
-        let want = best["source"]
+        let best_source = best["source"]
             .as_str()
-            .unwrap_or("")
-            .split(' ')
-            .next()
-            .unwrap_or("")
-            .to_string();
+            .ok_or_else(|| format!("the best release channel answered no source text: {best}"))?;
+        let want = first_word(best_source).to_string();
         if marker != want {
             return Err(format!(
                 "the baseline is {marker}, but {want} is the best complete release; {regenerate}"
