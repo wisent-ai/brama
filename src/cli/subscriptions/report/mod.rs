@@ -21,32 +21,28 @@ pub(super) use fields::{instant, text};
 /// with the number of rows, which is a different number, and printing only
 /// a total answers a count nobody can check against the accounts they hold.
 pub(super) fn print_accounts(accounts: Option<&Value>) {
-    let Some(accounts) = accounts else { return };
-    let per_provider = accounts
-        .get("per_provider")
-        .and_then(Value::as_object)
-        .map(|providers| {
-            providers
-                .iter()
-                .map(|(provider, held)| {
-                    let named = held
-                        .as_array()
-                        .map(|held| {
-                            held.iter()
-                                .filter_map(Value::as_str)
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        })
-                        .unwrap_or_default();
-                    format!(
-                        "{provider} {}: {named}",
-                        held.as_array().map_or(0, Vec::len)
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("; ")
-        })
-        .unwrap_or_default();
+    let Some(accounts) = accounts else {
+        println!("account count not reported: the report carries no accounts section");
+        return;
+    };
+    let per_provider = match accounts.get("per_provider").and_then(Value::as_object) {
+        Some(providers) => providers
+            .iter()
+            .map(|(provider, held)| match held.as_array() {
+                Some(held) => format!(
+                    "{provider} {}: {}",
+                    held.len(),
+                    held.iter()
+                        .filter_map(Value::as_str)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                None => format!("{provider}: its accounts are not a list ({held})"),
+            })
+            .collect::<Vec<_>>()
+            .join("; "),
+        None => "accounts per provider not reported".to_string(),
+    };
     let total = match accounts.get("total").and_then(Value::as_u64) {
         Some(total) => format!("{total} account(s)"),
         None => "account count not reported".to_string(),
@@ -59,11 +55,9 @@ pub(super) fn print_accounts(accounts: Option<&Value>) {
             format!(": {per_provider}")
         }
     );
-    let count = |field: &str| {
-        accounts
-            .get(field)
-            .and_then(Value::as_array)
-            .map_or(0, Vec::len)
+    let count = |field: &str| match accounts.get(field).and_then(Value::as_array) {
+        Some(rows) => rows.len().to_string(),
+        None => format!("an unreported number of ({field} absent)"),
     };
     println!(
         "{} member(s) declare no account, {} not active (retired or disabled)",
