@@ -124,7 +124,19 @@ pub(crate) async fn image(args: ImageArgs) {
     if let Some(aspect_ratio) = aspect_ratio {
         payload.insert("aspect_ratio".to_string(), Value::String(aspect_ratio));
     }
-    let body = match dispatch_direct_image(&route, payload).await {
+    // An answer without the list of images rendered nothing, said as the
+    // gateway's answer, never as "Rendered 0 image(s)".
+    let answered = dispatch_direct_image(&route, payload)
+        .await
+        .and_then(
+            |body| match as_json || body.get("data").is_some_and(Value::is_array) {
+                true => Ok(body),
+                false => Err(format!(
+                    "the gateway answered without a data list of images: {body}"
+                )),
+            },
+        );
+    let body = match answered {
         Ok(body) => body,
         Err(message) => {
             eprintln!("{message}");
@@ -140,8 +152,9 @@ pub(crate) async fn image(args: ImageArgs) {
     let images = body
         .get("data")
         .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
     println!("Rendered {} image(s)", images.len());
     for (index, image) in images.iter().enumerate() {
         if let Some(url) = image.get("url").and_then(Value::as_str) {
