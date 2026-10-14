@@ -48,8 +48,11 @@ pub async fn run_first_use(
 ) -> Result<bool, JourneyError> {
     let built_in_definition = bundle_from_canonical(
         BUILT_IN_DEFINITION,
-        Uuid::parse_str(JOURNEY_VERSION_ID)
-            .map_err(|_| JourneyError::Invalid("Brama journey version id".into()))?,
+        Uuid::parse_str(JOURNEY_VERSION_ID).map_err(|error| {
+            JourneyError::Invalid(format!(
+                "Brama journey version id {JOURNEY_VERSION_ID:?}: {error}"
+            ))
+        })?,
     )?;
     let subject_hash = stable_subject_hash(&agent_id);
     let transport = BramaTransport::from_env();
