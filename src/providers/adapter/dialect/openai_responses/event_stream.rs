@@ -51,15 +51,10 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
         // text or call it carried vanished from an answer read as complete.
         let event = match serde_json::from_str::<Value>(data) {
             Ok(event) => event,
-            Err(error) => return attempted_failure(
-                route_id,
-                Refusal::new(
-                    ProviderRefusal::ProviderFailure,
-                    format!(
-                        "the provider stream carried an event that is not JSON ({error}): {data}"
-                    ),
-                ),
-            ),
+            Err(error) => {
+                let cause = format!("the provider stream sent a non-JSON event ({error}): {data}");
+                return provider_failure(route_id, cause);
+            }
         };
         match event.get("type").and_then(Value::as_str) {
             Some("response.output_text.delta") => {
@@ -86,7 +81,7 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
                         }
                         Some("function_call") => match function_call(item) {
                             Ok(call) => done_tool_calls.push(call),
-                            Err(cause) => return function_call_failure(route_id, cause),
+                            Err(cause) => return provider_failure(route_id, cause),
                         },
                         _ => {}
                     }
@@ -153,7 +148,7 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
                 }
                 Some("function_call") => match function_call(item) {
                     Ok(call) => tool_calls.push(call),
-                    Err(cause) => return function_call_failure(route_id, cause),
+                    Err(cause) => return provider_failure(route_id, cause),
                 },
                 _ => {}
             }
@@ -214,7 +209,8 @@ fn function_call(item: &Value) -> Result<ToolCall, String> {
     })
 }
 
-fn function_call_failure(route_id: &str, cause: String) -> ModelResponse {
+/// The attempt failed because the provider's answer could not be read.
+fn provider_failure(route_id: &str, cause: String) -> ModelResponse {
     attempted_failure(
         route_id,
         Refusal::new(ProviderRefusal::ProviderFailure, cause),
