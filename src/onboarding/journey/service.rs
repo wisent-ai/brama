@@ -24,36 +24,75 @@ struct RemoteStado {
     client: reqwest::Client,
 }
 
+/// One declared connection variable: its text, none when it is not set, or
+/// why it cannot be read.
+fn declared(name: &str) -> Result<Option<String>, String> {
+    match std::env::var(name) {
+        Ok(value) => Ok(Some(value)),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => Err(format!("{name} is not Unicode")),
+    }
+}
+
 impl BramaTransport {
+    /// The Stado connection the environment declares. Declaring neither
+    /// variable runs the journey locally; declaring only one, or one that
+    /// cannot be read or is refused, is said, since it disables the remote
+    /// journey the operator meant to enable.
     pub(crate) fn from_env() -> Self {
-        let remote = std::env::var("STADO_INTEGRATION_API_URL")
-            .ok()
-            .zip(std::env::var("BRAMA_STADO_INTEGRATION_TOKEN").ok())
-            .and_then(|(base_url, token)| match RemoteStado::new(&base_url, token) {
+        let declaration = declared("STADO_INTEGRATION_API_URL")
+            .and_then(|url| Ok((url, declared("BRAMA_STADO_INTEGRATION_TOKEN")?)));
+        let remote = match declaration {
+            Ok((None, None)) => None,
+            Ok((Some(base_url), Some(token))) => match RemoteStado::new(&base_url, token) {
                 Ok(remote) => Some(remote),
                 Err(error) => {
                     tracing::warn!(%error, "onboarding journey: the declared Stado connection is refused");
                     None
                 }
-            });
+            },
+            Ok((Some(_), None)) => {
+                tracing::warn!("onboarding journey: STADO_INTEGRATION_API_URL is declared without BRAMA_STADO_INTEGRATION_TOKEN, so no Stado connection is made");
+                None
+            }
+            Ok((None, Some(_))) => {
+                tracing::warn!("onboarding journey: BRAMA_STADO_INTEGRATION_TOKEN is declared without STADO_INTEGRATION_API_URL, so no Stado connection is made");
+                None
+            }
+            Err(error) => {
+                tracing::warn!(%error, "onboarding journey: the declared Stado connection cannot be read");
+                None
+            }
+        };
         Self { remote }
     }
 }
 
 impl RemoteStado {
     fn new(base_url: &str, token: String) -> Result<Self, JourneyError> {
-        let base_url =
-            Url::parse(base_url).map_err(|_| JourneyError::Invalid("Stado base URL".into()))?;
-        if base_url.scheme() != "https"
-            || base_url.host_str().is_none()
-            || !base_url.username().is_empty()
-            || base_url.password().is_some()
-            || base_url.query().is_some()
-            || base_url.fragment().is_some()
-            || base_url.path() != "/"
-            || token.trim().is_empty()
-        {
-            return Err(JourneyError::Invalid("Stado configuration".into()));
+        let base_url = Url::parse(base_url).map_err(|error| {
+            JourneyError::Invalid(format!("Stado base URL {base_url:?}: {error}"))
+        })?;
+        let refused = if base_url.scheme() != "https" {
+            Some("is not https")
+        } else if base_url.host_str().is_none() {
+            Some("names no host")
+        } else if !base_url.username().is_empty() || base_url.password().is_some() {
+            Some("carries credentials")
+        } else if base_url.query().is_some() || base_url.fragment().is_some() {
+            Some("carries a query or fragment")
+        } else if base_url.path() != "/" {
+            Some("has a path other than /")
+        } else {
+            None
+        };
+        if let Some(refused) = refused {
+            return Err(JourneyError::Invalid(format!("Stado base URL {refused}")));
+        }
+        if token.trim().is_empty() {
+            return Err(JourneyError::Invalid(
+                "BRAMA_STADO_INTEGRATION_TOKEN is empty".into(),
+            ));
         }
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
