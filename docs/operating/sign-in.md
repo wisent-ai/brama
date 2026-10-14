@@ -115,7 +115,10 @@ Weles preflight failure does not consume that cooldown.
 A vault item that still names an exact account — `brama:id:`,
 `brama:provider:` and `brama:account:` — but lost its `brama:subscription`
 mark is outside the pool: discovery does not list it, and `/readyz` reports it
-under `unroutable_accounts` with the route that admits it. The sweep admits it
+under `unroutable_accounts` with the route that admits it. A row whose item
+carries no `brama:provider:` tag has `provider: null` — no provider is named,
+not one called unknown — and Brama Desktop titles that decision "Account
+<id> names no provider and is outside the pool". The sweep admits it
 on its next pass: the mark is restored on the item as it is (no field is
 written, no credential imported, a tag that disagrees with the identity is
 refused by name), the member is scheduled for its Weles sign-in like a
