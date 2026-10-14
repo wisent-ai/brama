@@ -40,7 +40,16 @@ pub(in crate::core::server) async fn put_admin_credential(
                 "provider must name a supported remote API provider",
             )
         })?;
-    let credential = request.credential.as_deref().unwrap_or("");
+    let Some(credential) = request
+        .credential
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    else {
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            &format!("credential is required to store a {provider} API credential"),
+        ));
+    };
     crate::gateway::broker::put_local_provider_credential(&provider, credential)
         .map_err(|error| api_error(StatusCode::BAD_REQUEST, &error))?;
     Ok(Json(json!({"ok": true, "provider": provider})))
