@@ -69,18 +69,23 @@ fn vault_field(
 /// announced; plain HTTP is refused off loopback and the log may name an older
 /// bind, so neither alone is reliable. The launcher refuses to start without
 /// `PORT`, so no port is assumed here either: without one, only the announced
-/// address is tried, as `brama diagnose` does.
-fn candidates(settings: &BTreeMap<String, String>, home: &Path) -> Vec<String> {
+/// address is tried, as `brama diagnose` does. A log that was never written
+/// announces nothing; one that exists but cannot be read is refused, since
+/// skipping it would probe without the address it announces.
+fn candidates(settings: &BTreeMap<String, String>, home: &Path) -> Result<Vec<String>, String> {
     let mut candidates: Vec<String> = settings
         .get("PORT")
         .map(|port| format!("127.0.0.1:{port}"))
         .into_iter()
         .collect();
-    let log = std::fs::read(
-        home.join(".stado/logs")
-            .join(format!("{}.log", super::diagnose::SERVICE_LABEL)),
-    )
-    .unwrap_or_default();
+    let path = home
+        .join(".stado/logs")
+        .join(format!("{}.log", super::diagnose::SERVICE_LABEL));
+    let log = match std::fs::read(&path) {
+        Ok(log) => log,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(error) => return Err(format!("cannot read {}: {error}", path.display())),
+    };
     let announced = String::from_utf8_lossy(&log)
         .lines()
         .filter_map(|line| {
@@ -91,7 +96,7 @@ fn candidates(settings: &BTreeMap<String, String>, home: &Path) -> Vec<String> {
     if let Some(announced) = announced.filter(|address| !candidates.contains(address)) {
         candidates.push(announced);
     }
-    candidates
+    Ok(candidates)
 }
 
 async fn probe(args: ProbeArgs) -> Result<(), String> {
@@ -151,7 +156,7 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
         }
     };
     let mut base = None;
-    for authority in candidates(&settings, &home) {
+    for authority in candidates(&settings, &home)? {
         match client
             .get(format!("http://{authority}/health"))
             .send()
@@ -192,7 +197,7 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
             let stamp = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|elapsed| elapsed.as_secs())
-                .unwrap_or_default()
+                .map_err(|error| format!("the clock reads before the Unix epoch: {error}"))?
                 .to_string();
             let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
                 .map_err(|error| error.to_string())?;
