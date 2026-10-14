@@ -17,7 +17,7 @@ use tracing::warn;
 use super::super::standalone::{
     local_provider_credentials_enabled, put_local_subscription_credential,
 };
-use super::super::vault::{entitlements_router_bin, put_credential, raw_listing, VaultListItem};
+use super::super::vault::put_credential;
 use super::account::{parse_subscriptions, SubscriptionEntry};
 use super::tags::subscription_tags_for_write;
 
@@ -147,20 +147,11 @@ async fn donated_credential_tags(
     login_item: Option<&str>,
     account: Option<&str>,
 ) -> Result<Vec<String>, DonationRefusal> {
-    let stdout = raw_listing(
-        &entitlements_router_bin().map_err(DonationRefusal::Unwritable)?,
-        "list vault tags for donated credential",
-    )
-    .await
-    .map_err(DonationRefusal::Unwritable)?;
-    let items: Vec<VaultListItem> = serde_json::from_slice(&stdout).map_err(|error| {
-        DonationRefusal::Unwritable(format!("decode vault tags for donated credential: {error}"))
-    })?;
-    let mut tags = items
-        .into_iter()
-        .find(|item| item.id == item_id)
-        .map(|item| item.tags)
-        .unwrap_or_default();
+    // The tags the item carries now, through the one reader every credential
+    // write uses; an item not yet in the vault carries none.
+    let mut tags = super::super::vault::existing_item_tags(item_id)
+        .await
+        .map_err(DonationRefusal::Unwritable)?;
 
     // `brama:agent:` records who banked the account; it is not an
     // entitlement, so a renewal by another agent adds its name rather than

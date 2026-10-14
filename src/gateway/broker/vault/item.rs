@@ -31,22 +31,33 @@ pub(in crate::gateway::broker) struct VaultListItem {
     pub(in crate::gateway::broker) deleted: bool,
 }
 
-/// The tags one vault item carries right now, empty when it does not exist.
+/// Every row the entitlements router lists, decoded. `purpose` names the
+/// caller's question in a refusal, so a failed listing says what it was for.
+pub(in crate::gateway::broker) async fn listed_items(
+    purpose: &str,
+) -> Result<Vec<VaultListItem>, String> {
+    let stdout = raw_listing(&entitlements_router_bin()?, purpose).await?;
+    serde_json::from_slice(&stdout)
+        .map_err(|error| format!("decode the listing to {purpose}: {error}"))
+}
+
+/// The tags one live vault item carries right now; none when no live item
+/// has that id. A trashed row's tags are not carried: `put_credential`
+/// writes a fresh document over a trashed id, and its old tags would route
+/// the new credential as the account that was removed.
 pub(in crate::gateway::broker) async fn existing_item_tags(
     item_id: &str,
 ) -> Result<Vec<String>, String> {
-    let stdout = raw_listing(
-        &entitlements_router_bin()?,
-        "list vault tags for credential write",
+    let items = listed_items("list vault tags for credential write").await?;
+    Ok(
+        match items
+            .into_iter()
+            .find(|item| item.id == item_id && !item.deleted)
+        {
+            Some(item) => item.tags,
+            None => Vec::new(),
+        },
     )
-    .await?;
-    let items: Vec<VaultListItem> = serde_json::from_slice(&stdout)
-        .map_err(|error| format!("decode vault tags for credential write: {error}"))?;
-    Ok(items
-        .into_iter()
-        .find(|item| item.id == item_id)
-        .map(|item| item.tags)
-        .unwrap_or_default())
 }
 
 /// The principal one item already names as `context.account_ref`, or `None`
@@ -58,9 +69,7 @@ pub(in crate::gateway::broker) async fn existing_item_tags(
 pub(in crate::gateway::broker) async fn existing_item_account(
     item_id: &str,
 ) -> Result<Option<String>, String> {
-    let stdout = raw_listing(&entitlements_router_bin()?, "inspect credential account").await?;
-    let items: Vec<VaultListItem> = serde_json::from_slice(&stdout)
-        .map_err(|error| format!("decode credential account inventory: {error}"))?;
+    let items = listed_items("inspect credential account").await?;
     if !items.iter().any(|item| item.id == item_id && !item.deleted) {
         return Ok(None);
     }
@@ -106,9 +115,7 @@ pub(in crate::gateway::broker) async fn put_credential(
             return Err(format!("credential publication refused: subscription {id} was removed during reconciliation"));
         }
     }
-    let stdout = raw_listing(&entitlements_router_bin()?, "inspect credential target").await?;
-    let items: Vec<VaultListItem> = serde_json::from_slice(&stdout)
-        .map_err(|error| format!("decode credential target inventory: {error}"))?;
+    let items = listed_items("inspect credential target").await?;
     let mut document = if items.iter().any(|item| item.id == item_id && !item.deleted) {
         let current = router_output("read credential target metadata", |command| {
             command.arg("get").arg(item_id);

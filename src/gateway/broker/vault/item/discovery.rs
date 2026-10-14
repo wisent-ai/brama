@@ -3,8 +3,8 @@
 use serde_json::{json, Value};
 use tokio::io::AsyncWriteExt;
 
-use super::super::router::{entitlements_router_bin, raw_listing, router_refusal};
-use super::VaultListItem;
+use super::super::router::{entitlements_router_bin, router_refusal};
+use super::listed_items;
 
 pub(in crate::gateway::broker) async fn register(
     provider: &str,
@@ -14,13 +14,7 @@ pub(in crate::gateway::broker) async fn register(
 ) -> Result<(), String> {
     let _mutation = super::MUTATIONS.lock().await;
     let item = crate::gateway::broker::subscription_resource(provider, id);
-    let listing = raw_listing(
-        &entitlements_router_bin()?,
-        "inspect discovered account target",
-    )
-    .await?;
-    let rows: Vec<VaultListItem> = serde_json::from_slice(&listing)
-        .map_err(|error| format!("decode discovered account inventory: {error}"))?;
+    let rows = listed_items("inspect discovered account target").await?;
     if rows.iter().any(|row| !row.deleted && row.id == item) {
         let existing = super::existing_item_account(&item).await?;
         return match existing {
@@ -98,9 +92,7 @@ pub(in crate::gateway::broker) async fn remove(
     expected_account: Option<&str>,
 ) -> Result<(), String> {
     let _mutation = super::MUTATIONS.lock().await;
-    let listing = raw_listing(&entitlements_router_bin()?, "inspect obsolete subscription").await?;
-    let rows: Vec<VaultListItem> = serde_json::from_slice(&listing)
-        .map_err(|error| format!("decode obsolete subscription inventory: {error}"))?;
+    let rows = listed_items("inspect obsolete subscription").await?;
     let member_tag = format!("brama:id:{id}");
     let provider_tag = format!("brama:provider:{provider}");
     for row in rows
@@ -145,9 +137,7 @@ pub(in crate::gateway::broker) async fn remove(
             return Err(router_refusal("remove obsolete subscription item", &output));
         }
     }
-    let listing = raw_listing(&entitlements_router_bin()?, "verify subscription removal").await?;
-    let remaining: Vec<VaultListItem> = serde_json::from_slice(&listing)
-        .map_err(|error| format!("decode subscription removal verification: {error}"))?;
+    let remaining = listed_items("verify subscription removal").await?;
     if remaining
         .iter()
         .any(|row| !row.deleted && row.tags.contains(&member_tag))
@@ -173,9 +163,7 @@ pub(in crate::gateway::broker) async fn restore_mark(
     account: &str,
 ) -> Result<(), String> {
     let _mutation = super::MUTATIONS.lock().await;
-    let listing = raw_listing(&entitlements_router_bin()?, "inspect recoverable account").await?;
-    let rows: Vec<VaultListItem> = serde_json::from_slice(&listing)
-        .map_err(|error| format!("decode recoverable account inventory: {error}"))?;
+    let rows = listed_items("inspect recoverable account").await?;
     let row = rows
         .iter()
         .find(|row| !row.deleted && row.id == item_id)
@@ -242,9 +230,7 @@ pub(in crate::gateway::broker) async fn restore_mark(
     if !output.status.success() {
         return Err(router_refusal("restore routing mark", &output));
     }
-    let listing = raw_listing(&entitlements_router_bin()?, "verify routing mark").await?;
-    let rows: Vec<VaultListItem> = serde_json::from_slice(&listing)
-        .map_err(|error| format!("decode routing mark verification: {error}"))?;
+    let rows = listed_items("verify routing mark").await?;
     if !rows.iter().any(|row| {
         !row.deleted && row.id == item_id && row.tags.iter().any(|tag| tag == "brama:subscription")
     }) {
