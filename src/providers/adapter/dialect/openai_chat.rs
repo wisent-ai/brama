@@ -44,10 +44,18 @@ pub(in crate::providers::adapter) fn model_response_from_openai(
     body: Value,
     elapsed_ms: f64,
 ) -> ModelResponse {
-    let choice = body
-        .pointer("/choices/0/message")
-        .cloned()
-        .unwrap_or(Value::Null);
+    // An answer without a first choice's message is a failure naming what
+    // came back: read as an empty message, it passed on as a successful
+    // answer that said nothing.
+    let Some(choice) = body.pointer("/choices/0/message").cloned() else {
+        return attempted_failure(
+            route_id,
+            Refusal::new(
+                ProviderRefusal::ProviderFailure,
+                format!("the provider answered without choices[0].message: {body}"),
+            ),
+        );
+    };
     let content = choice
         .get("content")
         .and_then(Value::as_str)

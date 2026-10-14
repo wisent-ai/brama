@@ -110,28 +110,42 @@ pub(super) fn model_response_from_google(
     body: Value,
     elapsed_ms: f64,
 ) -> ModelResponse {
-    let mut content = String::new();
-    let mut tool_calls = Vec::new();
-    for (index, part) in body
+    // A candidate without content parts (one stopped for safety, recitation
+    // or length states only its finishReason) and a functionCall without a
+    // name are failures naming what came back: read as no parts and as a
+    // call named "tool", they passed on as a successful empty answer and a
+    // call the model never made.
+    let failed = |detail: String| {
+        crate::providers::adapter::call::outcome::refusal::attempted_failure(
+            route_id,
+            crate::types::Refusal::new(crate::types::ProviderRefusal::ProviderFailure, detail),
+        )
+    };
+    let Some(parts) = body
         .pointer("/candidates/0/content/parts")
         .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .enumerate()
-    {
+    else {
+        return failed(format!(
+            "the provider answered without candidates[0].content.parts: {body}"
+        ));
+    };
+    let mut content = String::new();
+    let mut tool_calls = Vec::new();
+    for (index, part) in parts.iter().enumerate() {
         if let Some(text) = part.get("text").and_then(Value::as_str) {
             content.push_str(text);
         }
         if let Some(call) = part.get("functionCall") {
+            let Some(name) = call.get("name").and_then(Value::as_str) else {
+                return failed(format!(
+                    "the provider answered a functionCall without a name: {part}"
+                ));
+            };
             tool_calls.push(ToolCall {
                 id: format!("google-call-{index}"),
                 call_type: "function".into(),
                 function: crate::types::ToolCallFunction {
-                    name: call
-                        .get("name")
-                        .and_then(Value::as_str)
-                        .unwrap_or("tool")
-                        .to_string(),
+                    name: name.to_string(),
                     arguments: call
                         .get("args")
                         .cloned()

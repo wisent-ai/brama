@@ -109,14 +109,21 @@ pub(in crate::providers::adapter) fn model_response_from_anthropic(
     body: Value,
     elapsed_ms: f64,
 ) -> ModelResponse {
+    // An answer without a content list is a failure naming what came back:
+    // read as no blocks, it passed on as a successful answer that said
+    // nothing.
+    let Some(blocks) = body.get("content").and_then(Value::as_array) else {
+        return attempted_failure(
+            route_id,
+            Refusal::new(
+                ProviderRefusal::ProviderFailure,
+                format!("the provider answered without a content list: {body}"),
+            ),
+        );
+    };
     let mut text = String::new();
     let mut tool_calls = Vec::new();
-    for block in body
-        .get("content")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-    {
+    for block in blocks {
         match block.get("type").and_then(Value::as_str) {
             Some("text") => text.push_str(
                 block
