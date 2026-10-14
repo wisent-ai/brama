@@ -13,13 +13,17 @@ fn responses_tool_choice(choice: &Value) -> Value {
         .unwrap_or_else(|| choice.clone())
 }
 
+/// Every tool call and tool result was checked at the door
+/// (wire::validate_history_tool_calls): a call has an id, a function name and
+/// JSON arguments, and a result names an earlier call. Each is carried as
+/// stated, with no stand-in for a missing part.
 fn responses_input(request: &ModelRequest) -> Vec<Value> {
     let mut input = Vec::with_capacity(request.messages.len());
     for message in &request.messages {
         if message.role == "tool" {
             input.push(json!({
                 "type": "function_call_output",
-                "call_id": message.tool_call_id.as_deref().unwrap_or("tool"),
+                "call_id": message.tool_call_id,
                 "output": message.content_text(),
             }));
             continue;
@@ -34,17 +38,11 @@ fn responses_input(request: &ModelRequest) -> Vec<Value> {
                 }));
             }
             for call in calls {
-                let Some(function) = call.get("function") else {
-                    continue;
-                };
                 input.push(json!({
                     "type": "function_call",
-                    "call_id": call.get("id").and_then(Value::as_str).unwrap_or("tool"),
-                    "name": function.get("name").and_then(Value::as_str).unwrap_or("tool"),
-                    "arguments": function
-                        .get("arguments")
-                        .and_then(Value::as_str)
-                        .unwrap_or("{}"),
+                    "call_id": call.get("id"),
+                    "name": call.pointer("/function/name"),
+                    "arguments": call.pointer("/function/arguments"),
                 }));
             }
             continue;

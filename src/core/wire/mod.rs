@@ -77,18 +77,36 @@ fn validate(model: &str, max_tokens: Option<u32>, temperature: Option<f64>) -> R
 }
 
 /// Every tool call a caller's history carries, as each provider wire needs
-/// it: an `id`, a `function.name` and `function.arguments` that are JSON text.
-/// Checked once at the door for all three formats, so no provider translation
-/// stands in a call named `tool` or empty arguments for one it cannot read.
+/// it: an `id`, a `function.name` and `function.arguments` that are JSON text;
+/// and every tool result, which must name by `tool_call_id` a call an earlier
+/// message carries. Checked once at the door for all three formats, so no
+/// provider translation stands in a call named `tool`, empty arguments, or a
+/// result answering no call, for one it cannot read.
 pub fn validate_history_tool_calls(messages: &[crate::types::Message]) -> Result<(), String> {
+    let mut called = std::collections::BTreeSet::new();
     for (position, message) in messages.iter().enumerate() {
+        if message.role == "tool" {
+            match message.tool_call_id.as_deref() {
+                None => {
+                    return Err(format!(
+                        "message {position}: a tool result carries no `tool_call_id`"
+                    ))
+                }
+                Some(id) if !called.contains(id) => {
+                    return Err(format!(
+                        "message {position}: a tool result answers `{id}`, which no earlier tool call carries"
+                    ))
+                }
+                Some(_) => {}
+            }
+        }
         for call in message.tool_calls.iter().flatten() {
             let text = |pointer: &str| call.pointer(pointer).and_then(Value::as_str);
             let refused =
                 |what: &str| Err(format!("message {position}: a tool call {what}: {call}"));
-            if text("/id").is_none() {
+            let Some(id) = text("/id") else {
                 return refused("carries no `id` text");
-            }
+            };
             if text("/function/name").is_none() {
                 return refused("carries no `function.name` text");
             }
@@ -102,6 +120,7 @@ pub fn validate_history_tool_calls(messages: &[crate::types::Message]) -> Result
                     }
                 }
             }
+            called.insert(id.to_string());
         }
     }
     Ok(())

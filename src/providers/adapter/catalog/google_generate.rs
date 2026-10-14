@@ -23,11 +23,19 @@ fn google_tool_config(choice: &Value) -> Option<Value> {
     }
 }
 
-fn google_parts(message: &Message) -> Vec<Value> {
+/// Every tool call and tool result was checked at the door
+/// (wire::validate_history_tool_calls): a call has an id, a function name and
+/// JSON arguments, and a result names an earlier call by `tool_call_id`. A
+/// `functionResponse` is named after the call it answers, found in `names`;
+/// read from the result's own optional `name`, it went out as "tool" for
+/// every caller that sends results the chat-completions way, and Gemini
+/// matched it to no call.
+fn google_parts(message: &Message, names: &std::collections::BTreeMap<&str, &Value>) -> Vec<Value> {
     if message.role == "tool" {
+        let name = message.tool_call_id.as_deref().and_then(|id| names.get(id));
         return vec![json!({
             "functionResponse": {
-                "name": message.name.as_deref().unwrap_or("tool"),
+                "name": name,
                 "response": {"result": message.content_text()},
             }
         })];
@@ -53,30 +61,36 @@ fn google_parts(message: &Message) -> Vec<Value> {
         _ => Vec::new(),
     };
     if let Some(calls) = &message.tool_calls {
-        parts.extend(calls.iter().filter_map(|call| {
-            let function = call.get("function")?;
-            let arguments = function
-                .get("arguments")
+        parts.extend(calls.iter().map(|call| {
+            let arguments = call
+                .pointer("/function/arguments")
                 .and_then(Value::as_str)
-                .and_then(|value| serde_json::from_str::<Value>(value).ok())
-                .unwrap_or_else(|| json!({}));
-            Some(json!({
+                .and_then(|value| serde_json::from_str::<Value>(value).ok());
+            json!({
                 "functionCall": {
-                    "name": function.get("name").and_then(Value::as_str).unwrap_or("tool"),
+                    "name": call.pointer("/function/name"),
                     "args": arguments,
                 }
-            }))
+            })
         }));
     }
     parts
 }
 
 pub(super) fn google_payload(request: &ModelRequest) -> Value {
+    // Each history tool call's function name by its id, so a tool result is
+    // named after the call it answers.
+    let names: std::collections::BTreeMap<&str, &Value> = request
+        .messages
+        .iter()
+        .flat_map(|message| message.tool_calls.iter().flatten())
+        .filter_map(|call| Some((call.get("id")?.as_str()?, call.pointer("/function/name")?)))
+        .collect();
     let mut body = json!({
         "contents": request.messages.iter().map(|message| {
             json!({
                 "role": if message.role == "assistant" { "model" } else { "user" },
-                "parts": google_parts(message),
+                "parts": google_parts(message, &names),
             })
         }).collect::<Vec<_>>(),
         "generationConfig": {},
