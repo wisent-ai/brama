@@ -53,12 +53,15 @@ pub(super) async fn print_reachability(layout: &Layout) {
         let mut serve_status = Command::new(tailscale);
         serve_status.args(["serve", "status"]);
         match stado_wait::output(&mut serve_status) {
+            // A status that failed publishes nothing; scanning its error
+            // text for origins found none and said nothing.
+            Ok(served) if !served.status.success() => say!(
+                "  {tailscale} serve status exited {}: {}; the tailnet origin is not probed",
+                served.status,
+                String::from_utf8_lossy(&served.stderr).trim()
+            ),
             Ok(served) => {
-                let text = format!(
-                    "{}{}",
-                    String::from_utf8_lossy(&served.stdout),
-                    String::from_utf8_lossy(&served.stderr)
-                );
+                let text = String::from_utf8_lossy(&served.stdout);
                 for line in text
                     .lines()
                     .map(str::trim)
