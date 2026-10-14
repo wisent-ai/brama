@@ -130,7 +130,8 @@ async fn check_model(opts: &TaskQualityOptions, model: &str) -> Value {
         "plan": Value::Null,
         "check_kind": "task_quality",
         "confidence": "observed",
-        "error": if resp.success { Value::Null } else { json!(resp.error.unwrap_or_default()) },
+        // A failure that stated no sentence is null here, not an empty one.
+        "error": if resp.success { Value::Null } else { json!(resp.error) },
         "metadata": {
             "task": opts.task,
             "model": model,
