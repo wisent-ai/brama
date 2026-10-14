@@ -35,12 +35,10 @@ pub(in crate::subscription_dispatch::dispatch::catalogue) fn models(
             "the subscription inventory contains no active member",
         ));
     }
-    let mut snapshot = SNAPSHOT.lock().map_err(|error| {
-        Refusal::gateway(
-            GatewayRefusal::DependencyUnavailable,
-            format!("model discovery state is unavailable: {error}"),
-        )
-    })?;
+    // A holder that panicked left a snapshot that is still a state: it is
+    // taken back, so one panic does not refuse every later request and leave
+    // `refreshing` set with no refresh ever starting again.
+    let mut snapshot = crate::core::sync::held(&SNAPSHOT, "model discovery snapshot");
     let published = snapshot.published.clone();
     let refresh_needed = !snapshot.refreshing;
     snapshot.refreshing = true;
@@ -80,15 +78,7 @@ pub(in crate::subscription_dispatch::dispatch::catalogue) async fn refresh(
         result: result.clone(),
         output_limits,
     });
-    let mut snapshot = SNAPSHOT.lock().map_err(|error| {
-        // The pass runs detached and its result is dropped, so this log line
-        // is the only place a discovery that could not be published is seen.
-        tracing::warn!(event = "routing_model_discovery_unpublished", %error, "routing model discovery finished but could not be published");
-        Refusal::gateway(
-            GatewayRefusal::DependencyUnavailable,
-            format!("routing model state could not publish discovery: {error}"),
-        )
-    })?;
+    let mut snapshot = crate::core::sync::held(&SNAPSHOT, "model discovery snapshot");
     let previous = snapshot.published.replace(published);
     snapshot.refreshing = false;
     drop(snapshot);
@@ -142,9 +132,7 @@ pub(in crate::subscription_dispatch::dispatch) fn sized_request(
 }
 
 fn discovered_max_output_tokens(provider_id: &str, model_id: &str) -> Result<Option<u64>, String> {
-    let snapshot = SNAPSHOT.lock().map_err(|error| {
-        format!("routing model state is unreadable while sizing {provider_id}/{model_id}: {error}")
-    })?;
+    let snapshot = crate::core::sync::held(&SNAPSHOT, "model discovery snapshot");
     let published = snapshot.published.clone();
     drop(snapshot);
     let published = match published {
