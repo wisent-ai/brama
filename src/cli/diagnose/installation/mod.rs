@@ -91,7 +91,10 @@ pub(super) fn print_units(layout: &Layout) -> Option<PathBuf> {
                     continue;
                 }
             };
-            let label = document.get("Label").and_then(Value::as_str).unwrap_or("");
+            let label = match document.get("Label").and_then(Value::as_str) {
+                Some(label) => label,
+                None => "(no Label)",
+            };
             let arguments: Vec<&str> = document
                 .get("ProgramArguments")
                 .and_then(Value::as_array)
@@ -130,17 +133,22 @@ pub(super) fn print_units(layout: &Layout) -> Option<PathBuf> {
 }
 
 fn installed_generations(layout: &Layout) -> Vec<PathBuf> {
+    // A directory that is not there holds no generation; one that cannot be
+    // listed may hold the generation that runs, so the diagnosis says so.
     let listing = |directory: &Path| -> Vec<PathBuf> {
-        std::fs::read_dir(directory)
-            .map(|entries| {
-                entries
-                    .flatten()
-                    .map(|entry| entry.path())
-                    .filter(|path| path.file_name().is_some_and(|name| name != "releases"))
-                    .filter(|path| std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir()))
-                    .collect()
-            })
-            .unwrap_or_default()
+        match std::fs::read_dir(directory) {
+            Ok(entries) => entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.file_name().is_some_and(|name| name != "releases"))
+                .filter(|path| std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir()))
+                .collect(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(error) => {
+                say!("  {}: cannot be listed: {error}", directory.display());
+                Vec::new()
+            }
+        }
     };
     let mut generations = listing(&layout.services);
     generations.extend(listing(&layout.services.join("releases")));
