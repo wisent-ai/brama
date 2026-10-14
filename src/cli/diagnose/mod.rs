@@ -209,8 +209,5 @@ pub(crate) async fn run(json: bool) {
         }
     }
     let document = serde_json::json!({ "sections": sections });
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&document).unwrap_or_else(|_| "{}".into())
-    );
+    println!("{document:#}");
 }

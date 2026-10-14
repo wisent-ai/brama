@@ -19,12 +19,10 @@ pub(crate) mod workload;
 
 use serde_json::Value;
 
-/// One report as the desktop console consumes it.
+/// One report as the desktop console consumes it. A `Value` always renders
+/// as JSON, so the alternate form prints it pretty with no failure to hide.
 fn print_json(report: &Value) {
-    println!(
-        "{}",
-        serde_json::to_string_pretty(report).unwrap_or_else(|_| "{}".into())
-    );
+    println!("{report:#}");
 }
 
 /// One answer as `--json` prints it, or `key: value` lines for a person: a
