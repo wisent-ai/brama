@@ -142,8 +142,14 @@ pub(super) fn print_alias_routes(layout: &Layout, providers: &BTreeSet<String>) 
         .into_iter()
         .flatten()
     {
-        let route = route.as_str().unwrap_or("");
-        let provider = route.split('/').next().unwrap_or("");
+        let Some(route) = route.as_str() else {
+            say!("    {alias} -> {route} [REFUSED: the route is not text]");
+            continue;
+        };
+        let provider = match route.split_once('/') {
+            Some((provider, _)) => provider,
+            None => route,
+        };
         // A bare destination naming a declared deployment is served by the
         // gateway as `local-openai/<deployment>`.
         let verdict = if route == BEST_ALIAS {

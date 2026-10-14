@@ -149,12 +149,9 @@ fn print_report(report: &Value) {
             verdict["provider"], verdict["result"], verdict["code"], verdict["detail"]
         );
     }
-    println!(
-        "readiness: ready={} {}",
-        count("/readiness/ready"),
-        report
-            .pointer("/readiness/reason")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-    );
+    let reason = match report.pointer("/readiness/reason").and_then(Value::as_str) {
+        Some(reason) => reason.to_string(),
+        None => "(no reason reported)".to_string(),
+    };
+    println!("readiness: ready={} {reason}", count("/readiness/ready"));
 }
