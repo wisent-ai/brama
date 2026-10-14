@@ -24,16 +24,12 @@ use super::{now_ms, CheckSource, Ledger, LedgerState};
 const USAGE_FILE_ENV: &str = "BRAMA_SUBSCRIPTION_USAGE_FILE";
 
 fn usage_path() -> Option<PathBuf> {
-    if let Ok(configured) = std::env::var(USAGE_FILE_ENV) {
-        let trimmed = configured.trim();
-        if !trimmed.is_empty() {
-            return Some(PathBuf::from(trimmed));
-        }
+    if let Some(configured) = crate::journal::declared_path(USAGE_FILE_ENV) {
+        return Some(configured);
     }
-    let home = std::env::var("HOME").ok()?;
+    let home = crate::journal::declared_path("HOME")?;
     Some(
-        PathBuf::from(home)
-            .join(".config")
+        home.join(".config")
             .join("brama")
             .join("subscription-usage.json"),
     )

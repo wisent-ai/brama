@@ -26,12 +26,23 @@ pub use subscriptions::{
 /// the model catalog copy all live here, never in a shared temporary
 /// directory.
 pub(crate) fn state_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("BRAMA_STATE_DIR") {
-        if !dir.trim().is_empty() {
-            return PathBuf::from(dir.trim());
-        }
+    match declared_path("BRAMA_STATE_DIR") {
+        Some(dir) => dir,
+        None => home_dir().join(".brama"),
     }
-    home_dir().join(".brama")
+}
+
+/// The path the environment variable `name` declares, trimmed when it is
+/// text. A path that is not Unicode is the one used: read with
+/// `std::env::var`, it was taken for unset and the default state directory
+/// or ledger stood in for the operator's.
+pub(crate) fn declared_path(name: &str) -> Option<PathBuf> {
+    let raw = std::env::var_os(name)?;
+    let path = match raw.into_string() {
+        Ok(text) => PathBuf::from(text.trim()),
+        Err(raw) => PathBuf::from(raw),
+    };
+    (!path.as_os_str().is_empty()).then_some(path)
 }
 
 /// The user's home: HOME, else the home the user database records. With
