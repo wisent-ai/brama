@@ -42,6 +42,28 @@ fn triple(version: &str) -> Result<[u64; 3], String> {
     <[u64; 3]>::try_from(parts).map_err(|_| invalid())
 }
 
+/// The committed baseline's surface list: refused when it is absent or empty,
+/// or when an entry is not text. Read with odd entries dropped, the gate
+/// compared a shortened surface and could miss a removed name.
+pub(super) fn baseline_surface(baseline: &Value) -> Result<Vec<String>, String> {
+    baseline["surface"]
+        .as_array()
+        .filter(|entries| !entries.is_empty())
+        .ok_or_else(|| {
+            format!(
+                "{BASELINE} carries no surface list: {}",
+                baseline["surface"]
+            )
+        })?
+        .iter()
+        .map(|entry| {
+            entry.as_str().map(str::to_string).ok_or_else(|| {
+                format!("{BASELINE} lists a surface entry that is not text: {entry}")
+            })
+        })
+        .collect()
+}
+
 /// The baseline's version and surface.
 pub(super) fn released(root: &Path) -> Result<(String, Vec<String>), String> {
     let baseline = read_json(&root.join(BASELINE))?;
@@ -49,17 +71,7 @@ pub(super) fn released(root: &Path) -> Result<(String, Vec<String>), String> {
         .as_str()
         .filter(|version| !version.is_empty())
         .ok_or(format!("{BASELINE} names no released version"))?;
-    let surface: Vec<String> = baseline["surface"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(str::to_string)
-        .collect();
-    if surface.is_empty() {
-        return Err(format!("{BASELINE} carries no surface"));
-    }
-    Ok((version.to_string(), surface))
+    Ok((version.to_string(), baseline_surface(&baseline)?))
 }
 
 /// Whether the owner declared, for this very version, a break the surface

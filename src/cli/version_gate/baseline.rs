@@ -19,7 +19,7 @@ use std::process::Command;
 
 use serde_json::{json, Value};
 
-use super::contract::{read_json, BASELINE};
+use super::contract::{baseline_surface, read_json, BASELINE};
 use super::surface::{manifest_version, of_revision};
 
 mod channels;
@@ -79,22 +79,7 @@ pub(super) fn check(root: &Path) -> Result<String, String> {
     let baseline = read_json(&root.join(BASELINE))?;
     let source = baseline_text(&baseline, "source")?;
     let version = baseline_text(&baseline, "version")?;
-    let surface = baseline["surface"]
-        .as_array()
-        .filter(|entries| !entries.is_empty())
-        .ok_or_else(|| {
-            format!(
-                "{BASELINE} carries no surface list: {}",
-                baseline["surface"]
-            )
-        })?
-        .iter()
-        .map(|entry| {
-            entry.as_str().map(str::to_string).ok_or_else(|| {
-                format!("{BASELINE} lists a surface entry that is not text: {entry}")
-            })
-        })
-        .collect::<Result<Vec<String>, String>>()?;
+    let surface = baseline_surface(&baseline)?;
     let regenerate = "regenerate it with brama version-gate baseline --write";
     let marker = first_word(source);
     if source.starts_with(STADO_MARKER) {
