@@ -60,15 +60,19 @@ pub(super) fn jeden(view: CatalogView, catalog_revision: Option<String>, degrade
                 .unwrap_or_else(|| vec!["text".to_string()]);
             let context_window = registry.and_then(|model| model.context_window);
             let max_output_tokens = registry.and_then(|model| model.max_output_tokens);
-            let tools = registry.is_some_and(|model| model.tools);
-            let reasoning = registry.is_some_and(|model| model.reasoning);
-            let price = registry.map_or((0.0, 0.0, 0.0, 0.0), |model| {
-                (
-                    model.input_price,
-                    model.output_price,
-                    model.cache_read_price,
-                    model.cache_write_price,
-                )
+            // Tools, reasoning and price come from the registry or are
+            // `null`: an id with no registry metadata was answered as free,
+            // without tools and without reasoning, which a budget, a filter
+            // or a console then read as facts about the model.
+            let tools = registry.map(|model| model.tools);
+            let reasoning = registry.map(|model| model.reasoning);
+            let price = registry.map(|model| {
+                json!({
+                    "input": model.input_price,
+                    "output": model.output_price,
+                    "cacheRead": model.cache_read_price,
+                    "cacheWrite": model.cache_write_price,
+                })
             });
             let mut entry = json!({
                 "id": id,
@@ -87,12 +91,7 @@ pub(super) fn jeden(view: CatalogView, catalog_revision: Option<String>, degrade
                 "categories": categories.get(&id).cloned().unwrap_or_default(),
                 "tools": tools,
                 "reasoning": reasoning,
-                "price": {
-                    "input": price.0,
-                    "output": price.1,
-                    "cacheRead": price.2,
-                    "cacheWrite": price.3,
-                },
+                "price": price,
                 "promotion": [],
             });
             // Which provider serves this id. Its absence is why a console
