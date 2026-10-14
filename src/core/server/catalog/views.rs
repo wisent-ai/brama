@@ -29,7 +29,11 @@ pub(super) struct CatalogView {
     pub(super) caller_known: bool,
 }
 
-pub(super) fn jeden(view: CatalogView, catalog_revision: String, degraded: bool) -> Value {
+/// The catalog as Jeden reads it. `catalogRevision` is the revision of the
+/// public catalog this answer was built from, absent when that catalog could
+/// not be read (the answer is then `degraded`): a stand-in revision made a
+/// degraded answer look like a known catalog.
+pub(super) fn jeden(view: CatalogView, catalog_revision: Option<String>, degraded: bool) -> Value {
     let CatalogView {
         model_ids,
         available,
@@ -116,12 +120,15 @@ pub(super) fn jeden(view: CatalogView, catalog_revision: String, degraded: bool)
             entry
         })
         .collect::<Vec<_>>();
-    json!({
-        "catalogRevision": catalog_revision,
+    let mut answer = json!({
         "version": "v1",
         "models": models,
         "degraded": degraded,
-    })
+    });
+    if let Some(revision) = catalog_revision {
+        answer["catalogRevision"] = json!(revision);
+    }
+    answer
 }
 
 pub(super) fn openai(view: CatalogView) -> Value {

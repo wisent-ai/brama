@@ -56,12 +56,11 @@ pub(in crate::core::server) async fn list_models(
     let mut available = HashSet::new();
 
     let mut registry_metadata = HashMap::new();
-    let mut catalog_revision =
-        std::env::var("BRAMA_CATALOG_REVISION").unwrap_or_else(|_| "brama-v1".into());
+    let mut catalog_revision = None;
     let mut degraded = false;
     match crate::subscription_dispatch::model_catalog::snapshot().await {
         Ok(catalog) => {
-            catalog_revision = catalog.revision.clone();
+            catalog_revision = Some(catalog.revision.clone());
             for model in &catalog.models {
                 model_ids.push(model.route_id.clone());
                 if catalog_agent.is_some() && configured_providers.contains(&model.provider_id) {
