@@ -19,6 +19,26 @@ pub struct TaskQualityOptions {
     pub allow_provider_cost: bool,
 }
 
+/// One model's check, kept typed until it is printed: the journal and the
+/// best-model choice read these fields, not the printed row read back with
+/// an empty model or a zero score standing in for one it did not find.
+struct Check {
+    model: String,
+    provider: Option<String>,
+    passed: bool,
+    score: f64,
+    checked_at: String,
+    row: Value,
+}
+
+fn status(passed: bool) -> &'static str {
+    if passed {
+        "active"
+    } else {
+        "failed"
+    }
+}
+
 pub async fn collect_task_quality(opts: TaskQualityOptions) -> Result<Value, String> {
     if !opts.allow_provider_cost {
         return Err(
@@ -41,41 +61,35 @@ pub async fn collect_task_quality(opts: TaskQualityOptions) -> Result<Value, Str
 
     let mut models = active_supported_models_for_agent(&opts.agent_id).await?;
     models.truncate(opts.max_models);
-    let mut rows = Vec::new();
+    let mut checks = Vec::new();
     for model in models {
-        rows.push(check_model(&opts, &model).await);
+        checks.push(check_model(&opts, &model).await);
     }
 
     if opts.persist {
-        persist_quality_rows(&opts, &rows)?;
+        persist_quality_rows(&opts, &checks)?;
     }
 
-    let top_score = rows
+    let top_score = checks
         .iter()
-        .filter(|row| string_field(row, "status") == "active")
-        .map(score_field)
-        .fold(None, |best: Option<f64>, score| {
-            Some(best.map_or(score, |existing| existing.max(score)))
-        });
-    let best_models = top_score
-        .map(|score| {
-            rows.iter()
-                .filter(|row| string_field(row, "status") == "active")
-                .filter(|row| (score_field(row) - score).abs() < f64::EPSILON)
-                .filter_map(|row| {
-                    row.get("metadata")
-                        .and_then(|metadata| metadata.get("model"))
-                        .and_then(|model| model.as_str())
-                        .map(String::from)
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+        .filter(|check| check.passed)
+        .map(|check| check.score)
+        .reduce(f64::max);
+    let best_models: Vec<String> = match top_score {
+        Some(top) => checks
+            .iter()
+            .filter(|check| check.passed && (check.score - top).abs() < f64::EPSILON)
+            .map(|check| check.model.clone())
+            .collect(),
+        None => Vec::new(),
+    };
     let best_model = if best_models.len() == 1 {
         best_models.first().cloned()
     } else {
         None
     };
+    let rows = checks.len();
+    let printed: Vec<Value> = checks.into_iter().map(|check| check.row).collect();
 
     Ok(json!({
         "ok": true,
@@ -84,14 +98,14 @@ pub async fn collect_task_quality(opts: TaskQualityOptions) -> Result<Value, Str
         "task": opts.task,
         "persisted": opts.persist,
         "maxModels": opts.max_models,
-        "rows": rows.len(),
+        "rows": rows,
         "bestModel": best_model,
         "bestModels": best_models,
-        "checks": rows,
+        "checks": printed,
     }))
 }
 
-async fn check_model(opts: &TaskQualityOptions, model: &str) -> Value {
+async fn check_model(opts: &TaskQualityOptions, model: &str) -> Check {
     let checked_at = chrono::Utc::now().to_rfc3339();
     let request = ModelRequest {
         messages: vec![Message {
@@ -117,15 +131,15 @@ async fn check_model(opts: &TaskQualityOptions, model: &str) -> Value {
     // A model no route names a provider for is recorded with no provider: the
     // row was filed under provider "unknown", and the scores then read as a
     // provider's.
-    let provider = provider_for(model);
-    json!({
+    let provider = provider_for(model).map(str::to_string);
+    let row = json!({
         "agent_id": opts.agent_id,
         "source": SOURCE,
         "provider": provider,
-        "service": provider.map(service_name),
+        "service": provider.as_deref().map(service_name),
         "subscription_id": Value::Null,
         "account_identifier": opts.task,
-        "status": if passed { "active" } else { "failed" },
+        "status": status(passed),
         "auth_method": Value::Null,
         "plan": Value::Null,
         "check_kind": "task_quality",
@@ -146,7 +160,15 @@ async fn check_model(opts: &TaskQualityOptions, model: &str) -> Value {
         },
         "checked_at": checked_at,
         "updated_at": checked_at,
-    })
+    });
+    Check {
+        model: model.to_string(),
+        provider,
+        passed,
+        score,
+        checked_at,
+        row,
+    }
 }
 
 fn expected_matches(opts: &TaskQualityOptions, content: &str) -> bool {
@@ -159,51 +181,26 @@ fn expected_matches(opts: &TaskQualityOptions, content: &str) -> bool {
     false
 }
 
-fn persist_quality_rows(opts: &TaskQualityOptions, rows: &[Value]) -> Result<(), String> {
-    for row in rows {
+fn persist_quality_rows(opts: &TaskQualityOptions, checks: &[Check]) -> Result<(), String> {
+    for check in checks {
         // The journal attributes a check to a provider; a check of a model no
         // route names a provider for stays in the returned rows with a null
         // provider and is not journaled under an empty one.
-        let Some(provider) = row.get("provider").and_then(Value::as_str) else {
+        let Some(provider) = check.provider.as_deref() else {
             continue;
         };
-        let model = row
-            .get("metadata")
-            .and_then(|m| m.get("model"))
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        let score = row
-            .get("metadata")
-            .and_then(|m| m.get("score"))
-            .and_then(Value::as_f64);
         crate::journal::record_check(
             &opts.agent_id,
             provider,
-            model,
+            &check.model,
             &opts.task,
             SOURCE,
-            &string_field(row, "status"),
-            score,
-            &string_field(row, "checked_at"),
+            status(check.passed),
+            Some(check.score),
+            &check.checked_at,
         )?;
     }
     Ok(())
-}
-
-fn score_field(row: &Value) -> f64 {
-    row.get("metadata")
-        .and_then(|metadata| metadata.get("score"))
-        .and_then(|score| score.as_f64())
-        .unwrap_or(0.0)
-}
-
-fn string_field(row: &Value, key: &str) -> String {
-    match row.get(key) {
-        Some(Value::String(value)) => value.trim().to_string(),
-        Some(Value::Number(value)) => value.to_string(),
-        Some(Value::Bool(value)) => value.to_string(),
-        _ => String::new(),
-    }
 }
 
 fn service_name(provider: &str) -> String {
