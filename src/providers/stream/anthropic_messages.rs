@@ -9,7 +9,9 @@
 
 use serde_json::Value;
 
-use super::event::{json_u32, tool_call_index, tool_call_start, StreamDelta, StreamItem};
+use super::event::{
+    json_u32, stream_error, tool_call_index, tool_call_start, StreamDelta, StreamItem,
+};
 
 /// Mutable state for the Anthropic messages wire: the input meter arrives at
 /// the start of the stream and the output meter only at its end.
@@ -104,11 +106,10 @@ pub(super) fn anthropic_items(
         }
         "message_stop" => return (items, true),
         "error" => {
-            let message = body
-                .pointer("/error/message")
-                .and_then(Value::as_str)
-                .unwrap_or("provider reported a stream error");
-            items.push(StreamItem::Failed(message.to_string()));
+            items.push(StreamItem::Failed(stream_error(
+                body.pointer("/error/message"),
+                &body,
+            )));
             return (items, true);
         }
         _ => {}

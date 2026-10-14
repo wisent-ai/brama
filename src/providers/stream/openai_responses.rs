@@ -9,7 +9,9 @@
 
 use serde_json::Value;
 
-use super::event::{json_u32, tool_call_index, tool_call_start, StreamDelta, StreamItem};
+use super::event::{
+    json_u32, stream_error, tool_call_index, tool_call_start, StreamDelta, StreamItem,
+};
 
 /// Translate one OpenAI Responses event into neutral items.
 pub(super) fn responses_items(event: Option<&str>, data: &str) -> (Vec<StreamItem>, bool) {
@@ -113,10 +115,8 @@ pub(super) fn responses_items(event: Option<&str>, data: &str) -> (Vec<StreamIte
             let message = body
                 .pointer("/response/error/message")
                 .or_else(|| body.pointer("/error/message"))
-                .or_else(|| body.get("message"))
-                .and_then(Value::as_str)
-                .unwrap_or("provider reported a stream error");
-            items.push(StreamItem::Failed(message.to_string()));
+                .or_else(|| body.get("message"));
+            items.push(StreamItem::Failed(stream_error(message, &body)));
             return (items, true);
         }
         _ => {}

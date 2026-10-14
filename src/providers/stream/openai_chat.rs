@@ -9,7 +9,9 @@
 
 use serde_json::Value;
 
-use super::event::{json_u32, tool_call_index, tool_call_start, StreamDelta, StreamItem};
+use super::event::{
+    json_u32, stream_error, tool_call_index, tool_call_start, StreamDelta, StreamItem,
+};
 
 /// The terminal `data: [DONE]` sentinel of the OpenAI chat wire.
 const OPENAI_DONE: &str = "[DONE]";
@@ -43,22 +45,23 @@ pub(super) fn openai_chat_items(
         }
     };
     if let Some(error) = body.get("error") {
-        let message = error
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or("provider reported a stream error");
-        items.push(StreamItem::Failed(message.to_string()));
+        items.push(StreamItem::Failed(stream_error(
+            error.get("message"),
+            &body,
+        )));
         return (items, true);
     }
-    if let Some(usage) = body.get("usage") {
-        let input = json_u32(usage.get("prompt_tokens")).unwrap_or_default();
-        let output = json_u32(usage.get("completion_tokens")).unwrap_or_default();
-        if input > 0 || output > 0 {
-            items.push(StreamItem::Delta(StreamDelta::Usage {
-                input_tokens: input,
-                output_tokens: output,
-            }));
-        }
+    // Usage is passed on only when the provider stated both counts, as on
+    // the Responses wire; a missing count read as 0 was a measurement nobody
+    // made, and a chunk carrying `usage: null` states none.
+    if let (Some(input_tokens), Some(output_tokens)) = (
+        json_u32(body.pointer("/usage/prompt_tokens")),
+        json_u32(body.pointer("/usage/completion_tokens")),
+    ) {
+        items.push(StreamItem::Delta(StreamDelta::Usage {
+            input_tokens,
+            output_tokens,
+        }));
     }
     let Some(choice) = body.pointer("/choices/0") else {
         return (items, false);

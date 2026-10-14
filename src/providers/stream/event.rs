@@ -105,3 +105,13 @@ pub(super) fn tool_call_index(event: &str, index: Option<&Value>) -> Result<u32,
         format!("provider stream event `{event}` carries tool call arguments with no index")
     })
 }
+
+/// What a provider's stream error says: the message it states, or, when it
+/// states none, the event as sent. A fixed sentence in its place dropped
+/// whatever the provider did say, so the failure could not be traced.
+pub(super) fn stream_error(message: Option<&Value>, event: &Value) -> String {
+    match message.and_then(Value::as_str) {
+        Some(message) => message.to_string(),
+        None => format!("provider reported a stream error without a message: {event}"),
+    }
+}
