@@ -32,6 +32,19 @@ to the [README](../../README.md).
   committed; the caller holds an incomplete answer and Brama has already
   stopped. Rotation across models and credentials happens only before the
   first byte, so a committed stream is never silently re-run.
+- **Provider answers Brama cannot read:** an answer is passed on only as the
+  provider stated it. A chat-completions answer without `choices[0].message`,
+  an Anthropic answer without a `content` list, a Google answer without
+  `candidates[0].content.parts` (a candidate stopped for safety, recitation or
+  length states only its `finishReason`), a buffered Responses stream with an
+  event that is not JSON or without `response.completed` or
+  `response.incomplete`, and a tool call without its id, name or arguments
+  each fail the attempt as a provider failure whose message names the missing
+  field and quotes what the provider sent. On a stream, a tool call fragment
+  without an `index`, or a first fragment without `id` or `name`, ends the
+  stream the same way. A provider error that states no message is reported
+  with the error event itself. Usage is recorded only when the provider stated
+  both the input and the output count.
 - **Authentication:** static and Skarbiec-issued workload/model-client bearers
   remain workload identities and do not send an organization header. A bearer
   validated by Wisent Supabase is a human identity on account, discovery, and
