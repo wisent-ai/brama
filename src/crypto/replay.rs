@@ -30,9 +30,9 @@ static GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 /// Accept `signature` for `agent_id` at `timestamp` once, or say why not.
 pub fn accept_once(agent_id: &str, timestamp: i64, signature: &str) -> Result<(), String> {
-    let _held = GUARD
-        .lock()
-        .map_err(|_| "the replay record lock was poisoned".to_string())?;
+    // The lock guards no value: the record is the file, read and written
+    // whole under it, and an unreadable file is refused below with its cause.
+    let _held = crate::core::sync::held(&GUARD, "agent replay record");
     let path = record_path();
     let mut record: BTreeMap<String, Accepted> = match fs::read(&path) {
         Ok(bytes) => serde_json::from_slice(&bytes).map_err(|error| {

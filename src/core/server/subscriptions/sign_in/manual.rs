@@ -88,7 +88,7 @@ pub(in crate::core::server) async fn begin_hand_sign_in(
         .map_err(|detail| api_error(StatusCode::CONFLICT, &detail))?;
     let sign_in_id = authorization.state.clone();
     let url = authorization.url.clone();
-    let mut pending = PENDING.lock().expect("pending manual sign-ins");
+    let mut pending = crate::core::sync::held(&PENDING, "pending manual sign-ins");
     pending.retain(|_, open| open.subscription_id != entry.id);
     pending.insert(
         sign_in_id.clone(),
@@ -114,7 +114,7 @@ pub(in crate::core::server) async fn complete_admin_manual_sign_in(
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
     let pending = {
-        let mut pending = PENDING.lock().expect("pending manual sign-ins");
+        let mut pending = crate::core::sync::held(&PENDING, "pending manual sign-ins");
         pending.remove(&sign_in_id)
     };
     let Some(pending) = pending else {
