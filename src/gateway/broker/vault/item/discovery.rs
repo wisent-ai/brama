@@ -1,7 +1,6 @@
 //! Register a discovered account without manufacturing or importing a credential.
 
 use serde_json::{json, Value};
-use tokio::io::AsyncWriteExt;
 
 use super::super::router::{entitlements_router_bin, router_refusal};
 use super::listed_items;
@@ -49,22 +48,12 @@ pub(in crate::gateway::broker) async fn register(
     let mut child = command
         .spawn()
         .map_err(|error| format!("start discovered account registration: {error}"))?;
-    let mut input = child
-        .stdin
-        .take()
-        .ok_or_else(|| "account registration stdin is unavailable".to_owned())?;
-    if let Err(error) = input.write_all(document.to_string().as_bytes()).await {
-        let stopped = match child.kill().await {
-            Ok(()) => String::new(),
-            Err(kill) => format!(
-                "; the registration could not be stopped and may store partial metadata: {kill}"
-            ),
-        };
-        return Err(format!(
-            "write discovered account metadata: {error}{stopped}"
-        ));
-    }
-    drop(input);
+    super::super::router::feed_stdin(
+        &mut child,
+        document.to_string().as_bytes(),
+        "register discovered account",
+    )
+    .await?;
     let output = stado_wait::child_output_async(
         child,
         format!("register discovered account {provider} {account}"),
@@ -205,22 +194,12 @@ pub(in crate::gateway::broker) async fn restore_mark(
     let mut child = command
         .spawn()
         .map_err(|error| format!("start routing mark restoration: {error}"))?;
-    let mut input = child
-        .stdin
-        .take()
-        .ok_or_else(|| "routing mark restoration stdin is unavailable".to_owned())?;
-    if let Err(error) = input.write_all(document.to_string().as_bytes()).await {
-        let stopped = match child.kill().await {
-            Ok(()) => String::new(),
-            Err(kill) => format!(
-                "; the restoration could not be stopped and may store a partial document: {kill}"
-            ),
-        };
-        return Err(format!(
-            "write recoverable account document: {error}{stopped}"
-        ));
-    }
-    drop(input);
+    super::super::router::feed_stdin(
+        &mut child,
+        document.to_string().as_bytes(),
+        "restore routing mark",
+    )
+    .await?;
     let output = stado_wait::child_output_async(
         child,
         format!("restore routing mark of subscription {id} on {item_id}"),

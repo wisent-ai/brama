@@ -101,7 +101,6 @@ pub(in crate::gateway::broker) async fn put_credential(
     account: Option<&str>,
 ) -> Result<(), String> {
     use std::process::Stdio;
-    use tokio::io::AsyncWriteExt;
 
     let _mutation = MUTATIONS.lock().await;
     if let Some(id) = tags
@@ -168,22 +167,7 @@ pub(in crate::gateway::broker) async fn put_credential(
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| format!("spawn credential write: {error}"))?;
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| "credential write child stdin is unavailable".to_owned())?;
-    if let Err(error) = stdin.write_all(document.as_bytes()).await {
-        let stopped = match child.kill().await {
-            Ok(()) => String::new(),
-            Err(kill) => {
-                format!("; the child could not be stopped and may store a partial document: {kill}")
-            }
-        };
-        return Err(format!(
-            "write credential document to child stdin: {error}{stopped}"
-        ));
-    }
-    drop(stdin);
+    super::router::feed_stdin(&mut child, document.as_bytes(), "credential write").await?;
     let output = super::router::wait_within_footprint(child, "credential write").await?;
     if !output.status.success() {
         return Err(router_refusal("credential write", &output));

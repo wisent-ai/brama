@@ -229,6 +229,34 @@ pub(in crate::gateway::broker) async fn wait_within_footprint(
     }
 }
 
+/// Hand `document` to a started router child on its stdin, then close it.
+/// A write that fails stops the child, because one left running may store
+/// the part it read; one that cannot be stopped is named in the refusal with
+/// what it may have stored.
+pub(in crate::gateway::broker) async fn feed_stdin(
+    child: &mut tokio::process::Child,
+    document: &[u8],
+    operation: &str,
+) -> Result<(), String> {
+    use tokio::io::AsyncWriteExt;
+    let mut input = child
+        .stdin
+        .take()
+        .ok_or_else(|| format!("{operation}: the child's stdin is unavailable"))?;
+    if let Err(error) = input.write_all(document).await {
+        let stopped = match child.kill().await {
+            Ok(()) => String::new(),
+            Err(kill) => {
+                format!("; the child could not be stopped and may store a partial document: {kill}")
+            }
+        };
+        return Err(format!(
+            "{operation}: writing the document to the child failed: {error}{stopped}"
+        ));
+    }
+    Ok(())
+}
+
 pub(in crate::gateway::broker) async fn router_output(
     operation: &str,
     configure: impl FnOnce(&mut tokio::process::Command),
