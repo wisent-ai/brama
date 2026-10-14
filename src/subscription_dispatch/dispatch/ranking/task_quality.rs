@@ -19,22 +19,37 @@ fn string_field(row: &Value, key: &str) -> String {
     }
 }
 
-fn score_field(row: &Value) -> Option<f64> {
-    row.get("score").and_then(|score| score.as_f64())
+/// A check row that cannot rank: its cause, naming the task and the row.
+fn malformed(task: &str, row: &Value, cause: String) -> Refusal {
+    Refusal::gateway(
+        GatewayRefusal::DependencyUnavailable,
+        format!("task '{task}' quality check {row} cannot rank: {cause}"),
+    )
 }
 
-fn model_field(row: &Value) -> Option<String> {
-    row.get("model")
-        .and_then(|model| model.as_str())
-        .map(|model| model.trim().to_string())
-        .filter(|model| !model.is_empty())
+fn score_field(row: &Value) -> Result<f64, String> {
+    match row.get("score") {
+        Some(score) => score
+            .as_f64()
+            .ok_or_else(|| format!("its score {score} is not a number")),
+        None => Err("it records no score".to_string()),
+    }
 }
 
-fn checked_at_field(row: &Value) -> i64 {
+fn model_field(row: &Value) -> Result<String, String> {
+    match row.get("model").and_then(|model| model.as_str()) {
+        Some(model) if !model.trim().is_empty() => Ok(model.trim().to_string()),
+        _ => Err("it names no model".to_string()),
+    }
+}
+
+/// When the check ran. A time that is absent or not RFC 3339 refuses: read
+/// as the epoch, a newer score of the same model lost to an older one.
+fn checked_at_field(row: &Value) -> Result<i64, String> {
     let value = string_field(row, "checked_at");
     chrono::DateTime::parse_from_rfc3339(&value)
         .map(|dt| dt.timestamp())
-        .unwrap_or(0)
+        .map_err(|error| format!("its checked_at {value:?} is not an RFC 3339 time: {error}"))
 }
 
 pub(in crate::subscription_dispatch::dispatch) async fn task_quality_models(
@@ -56,16 +71,14 @@ pub(in crate::subscription_dispatch::dispatch) async fn task_quality_models(
         .iter()
         .filter(|row| string_field(row, "status") == "active")
     {
-        let Some(model) = model_field(row) else {
-            continue;
-        };
+        // An active row that names no model, no score or no time refuses:
+        // passed over, the ranking stood on fewer measurements than recorded.
+        let model = model_field(row).map_err(|cause| malformed(task, row, cause))?;
         if !active_models.iter().any(|active| active == &model) {
             continue;
         }
-        let Some(score) = score_field(row) else {
-            continue;
-        };
-        let checked_at = checked_at_field(row);
+        let score = score_field(row).map_err(|cause| malformed(task, row, cause))?;
+        let checked_at = checked_at_field(row).map_err(|cause| malformed(task, row, cause))?;
         match latest_by_model.get(&model) {
             Some((_, existing_checked_at)) if *existing_checked_at >= checked_at => {}
             _ => {
