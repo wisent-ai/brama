@@ -118,7 +118,7 @@ fn deregister() -> Result<Value, String> {
         workload,
         ..
     } = installation()?;
-    let agents = agent_ids(&workload);
+    let agents = agent_ids(&workload)?;
     if agents.is_empty() {
         return Err(format!(
             "{} names no agent whose grant could be revoked",
@@ -162,7 +162,7 @@ fn register() -> Result<Value, String> {
         .get("proof_key")
         .and_then(Value::as_str)
         .filter(|key| !key.is_empty());
-    let agents = agent_ids(&workload);
+    let agents = agent_ids(&workload)?;
     let (Some(public_key), false) = (public_key, agents.is_empty()) else {
         return Err(format!(
             "{} names no proof key or agent to bind it to",

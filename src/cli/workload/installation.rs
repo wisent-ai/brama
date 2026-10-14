@@ -138,13 +138,20 @@ pub(super) fn installation() -> Result<Installation, String> {
     })
 }
 
-pub(super) fn agent_ids(workload: &Value) -> Vec<&str> {
+/// The agents the registry's workload names. An entry that is not text is
+/// refused: dropped, that agent was neither granted on register nor revoked
+/// on deregister, and nothing said so.
+pub(super) fn agent_ids(workload: &Value) -> Result<Vec<&str>, String> {
     workload
         .get("agent_ids")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .filter_map(Value::as_str)
+        .map(|agent| {
+            agent.as_str().ok_or_else(|| {
+                format!("the workload registry lists an agent id that is not text: {agent}")
+            })
+        })
         .collect()
 }
 
