@@ -11,6 +11,7 @@
 
 use serde_json::{json, Value};
 
+use crate::subscription_dispatch::sign_in::weles_provider;
 use crate::subscription_dispatch::sign_in::worker::api::{worker_api_base, worker_api_token};
 use crate::subscription_dispatch::sign_in::worker::progress::{self, Progress};
 
@@ -24,14 +25,6 @@ pub(super) struct Exchange {
     pub http_status: Option<u16>,
     /// Why the exchange ended without an answer, when it did.
     pub transport_failure: Option<String>,
-}
-
-/// The Weles provider name of a Brama provider, from its declaration.
-fn weles_provider(provider: &str) -> Result<&'static str, String> {
-    super::declaration::provider(provider)?
-        .weles_provider
-        .as_deref()
-        .ok_or_else(|| format!("provider {provider} declares no Weles account authorization or purchase capability"))
 }
 
 /// Ask Weles to buy one account, correlating the run by `request_id`.

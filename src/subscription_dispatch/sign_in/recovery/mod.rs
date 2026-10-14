@@ -39,8 +39,10 @@ pub(super) async fn execute(options: &SignInOptions) -> Result<Value, SignInErro
         .ok_or_else(|| {
             SignInError::Dependency("the missing-seed refusal names no login item".into())
         })?;
-    let provider = weles_provider(&options.provider).ok_or_else(|| {
-        SignInError::Dependency("the subscription has no supported authenticator enrolment".into())
+    let provider = weles_provider(&options.provider).map_err(|cause| {
+        SignInError::Dependency(format!(
+            "the subscription has no supported authenticator enrolment: {cause}"
+        ))
     })?;
     let enrolment = match enrol_authenticator(
         &options.provider,

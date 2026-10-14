@@ -6,12 +6,15 @@ pub(crate) mod api;
 pub(crate) mod enrolment;
 pub mod progress;
 
-/// The Weles provider name the declared subscription provider signs in
-/// through; `None` when its declaration names no Weles authorization
-/// capability.
-pub fn weles_provider(provider: &str) -> Option<&'static str> {
-    crate::subscription_dispatch::acquire::declaration::provider(provider.trim())
-        .ok()?
+/// The Weles provider name the declared subscription provider signs in and
+/// buys through, or why there is none: the provider is not declared at all,
+/// or its declaration names no Weles authorization capability. The one reader
+/// of that declaration field; an undeclared provider had read as one that
+/// declares no capability.
+pub fn weles_provider(provider: &str) -> Result<&'static str, String> {
+    let provider = provider.trim();
+    crate::subscription_dispatch::acquire::declaration::provider(provider)?
         .weles_provider
         .as_deref()
+        .ok_or_else(|| format!("provider `{provider}` declares no Weles authorization capability"))
 }

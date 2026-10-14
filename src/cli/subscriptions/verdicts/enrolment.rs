@@ -13,11 +13,12 @@ pub(crate) async fn enrol_authenticator(
     login_item: Option<&str>,
     as_json: bool,
 ) {
-    let Some(weles) = weles_provider(provider) else {
-        eprintln!(
-            "provider `{provider}` has no Weles sign-in, so it has no authenticator to enrol"
-        );
-        crate::cli::fail();
+    let weles = match weles_provider(provider) {
+        Ok(weles) => weles,
+        Err(cause) => {
+            eprintln!("{cause}, so it has no authenticator to enrol");
+            crate::cli::fail();
+        }
     };
     match enrol(provider, weles, subscription_id, login_item).await {
         Ok(enrolment) => {

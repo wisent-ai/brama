@@ -64,12 +64,7 @@ pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, SignInErr
 }
 
 async fn execute(options: &SignInOptions) -> Result<Value, SignInError> {
-    let provider = weles_provider(&options.provider).ok_or_else(|| {
-        SignInError::Dependency(format!(
-            "provider '{}' declares no Weles authorization capability",
-            options.provider
-        ))
-    })?;
+    let provider = weles_provider(&options.provider).map_err(SignInError::Dependency)?;
     if options.reason.trim().is_empty() {
         return Err("--reason must say why this sign-in is being run"
             .to_string()

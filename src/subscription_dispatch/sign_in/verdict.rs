@@ -28,8 +28,8 @@ pub fn automatic_sign_in_sentence(provider: &str) -> String {
             "automatic sign-in: no '{provider}' subscription is recorded in the usage ledger"
         );
     }
-    if weles_provider(provider).is_none() {
-        return format!("automatic sign-in: provider '{provider}' declares no Weles authorization capability; no independent grant was obtained");
+    if let Err(cause) = weles_provider(provider) {
+        return format!("automatic sign-in: {cause}; no independent grant was obtained");
     }
     let states: Vec<String> = ids
         .iter()

@@ -76,7 +76,7 @@ fn automatic_sign_in_view(
         // unreadable, the view says so instead of reporting a state.
         Err(cause) => return json!({ "state": "unknown", "journal_error": cause }),
     };
-    let applies = crate::subscription_dispatch::sign_in::weles_provider(&entry.provider).is_some()
+    let applies = crate::subscription_dispatch::sign_in::weles_provider(&entry.provider).is_ok()
         && entry.status == "active"
         && !retired;
     let failure = applies
