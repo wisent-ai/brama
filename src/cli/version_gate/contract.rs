@@ -66,16 +66,17 @@ pub(super) fn released(root: &Path) -> Result<(String, Vec<String>), String> {
 /// cannot show. It expires when the manifest moves past that version.
 fn declared_breakage(root: &Path, declared: &str) -> Result<bool, String> {
     let path = root.join(BREAKAGE);
-    if !path.is_file() {
-        return Ok(false);
+    // Only a declaration that does not exist is no declaration: one that
+    // cannot be examined would otherwise hide a declared break.
+    match std::fs::metadata(&path) {
+        Ok(metadata) if metadata.is_file() => {}
+        Ok(_) => return Err(format!("{BREAKAGE} exists but is not a file")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(format!("{BREAKAGE} cannot be examined: {error}")),
     }
     let declaration = read_json(&path)?;
-    if declaration["reason"]
-        .as_str()
-        .map(str::trim)
-        .unwrap_or("")
-        .is_empty()
-    {
+    let reason = declaration["reason"].as_str().map(str::trim);
+    if matches!(reason, None | Some("")) {
         return Err(format!(
             "{BREAKAGE} names no reason, so nothing here says what broke"
         ));
