@@ -227,26 +227,39 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
                         )
                     }),
                 };
-                if let Ok(payload) = &outcome {
+                // A success whose first choice carries no text did not serve
+                // the alias either: printed as said="" it read as a quiet model.
+                let outcome = outcome.and_then(|payload| {
                     let said = payload
                         .pointer("/choices/0/message/content")
                         .and_then(Value::as_str)
-                        .unwrap_or("")
-                        .trim()
-                        .to_string();
-                    let served = payload.get("model").and_then(Value::as_str).unwrap_or("");
-                    say(
-                        format!("{alias} {} model={served} said={said:?}", status.as_u16()),
-                        "aliases",
-                        json!({ "alias": alias, "status": status.as_u16(), "model": served, "said": said }),
-                    );
-                } else if let Err(refusal) = outcome {
-                    unserved += 1;
-                    say(
-                        format!("{alias} {} {refusal}", status.as_u16()),
-                        "aliases",
-                        json!({ "alias": alias, "status": status.as_u16(), "refusal": refusal }),
-                    );
+                        .map(|said| said.trim().to_string());
+                    match said {
+                        Some(said) => Ok((said, payload)),
+                        None => Err(format!("answer carries no text content: {payload}")),
+                    }
+                });
+                match outcome {
+                    Ok((said, payload)) => {
+                        let served = payload.get("model").and_then(Value::as_str);
+                        let shown = match served {
+                            Some(model) => model,
+                            None => "(not stated)",
+                        };
+                        say(
+                            format!("{alias} {} model={shown} said={said:?}", status.as_u16()),
+                            "aliases",
+                            json!({ "alias": alias, "status": status.as_u16(), "model": served, "said": said }),
+                        );
+                    }
+                    Err(refusal) => {
+                        unserved += 1;
+                        say(
+                            format!("{alias} {} {refusal}", status.as_u16()),
+                            "aliases",
+                            json!({ "alias": alias, "status": status.as_u16(), "refusal": refusal }),
+                        );
+                    }
                 }
             }
             Err(error) => {
