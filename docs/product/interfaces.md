@@ -19,9 +19,15 @@ to the [README](../../README.md).
   refused as a bad request naming the message, item or tool position and the
   missing field, e.g. ``message 2: a `tool_use` content block carries no `id`
   text``. On every format, a tool call the history carries must have an
-  `id`, a `function.name` and `function.arguments` that are JSON text, or the
-  request is refused naming the message and the call. An Anthropic image
-  given by `url` is carried as that URL.
+  `id`, a `function.name` and `function.arguments` that are JSON text, and a
+  tool result (a `tool` message, a `tool_result` block or a
+  `function_call_output` item) must name by its call id a tool call an
+  earlier message carries, or the request is refused naming the message and
+  the call, e.g. ``message 4: a tool result answers `call_7`, which no earlier
+  tool call carries``. Brama is stateless across calls, so a Responses request
+  that relies on `previous_response_id` must send the calls its results
+  answer. A Google `functionResponse` is named after the call it answers. An
+  Anthropic image given by `url` is carried as that URL.
 - **Streaming:** any of the three chat formats streams when the request asks
   for it -- `"stream": true` on chat completions and Anthropic Messages,
   `"stream": true` on Responses. The response is `text/event-stream` in the
