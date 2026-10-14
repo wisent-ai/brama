@@ -9,7 +9,7 @@
 
 use serde_json::Value;
 
-use super::event::{json_u32, StreamDelta, StreamItem};
+use super::event::{json_u32, tool_call_index, tool_call_start, StreamDelta, StreamItem};
 
 /// Mutable state for the Anthropic messages wire: the input meter arrives at
 /// the start of the stream and the output meter only at its end.
@@ -45,48 +45,49 @@ pub(super) fn anthropic_items(
                 json_u32(body.pointer("/message/usage/input_tokens")).unwrap_or_default();
         }
         "content_block_start" => {
-            let index = json_u32(body.get("index")).unwrap_or_default();
-            let block = body.get("content_block").cloned().unwrap_or(Value::Null);
-            if block.get("type").and_then(Value::as_str) == Some("tool_use") {
-                items.push(StreamItem::Delta(StreamDelta::ToolCallStart {
-                    index,
-                    id: block
-                        .get("id")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string(),
-                    name: block
-                        .get("name")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string(),
-                }));
-            }
-        }
-        "content_block_delta" => {
-            let index = json_u32(body.get("index")).unwrap_or_default();
-            let delta = body.get("delta").cloned().unwrap_or(Value::Null);
-            match delta.get("type").and_then(Value::as_str) {
-                Some("text_delta") => {
-                    if let Some(text) = delta.get("text").and_then(Value::as_str) {
-                        if !text.is_empty() {
-                            items.push(StreamItem::Delta(StreamDelta::Text(text.to_string())));
-                        }
+            if body.pointer("/content_block/type").and_then(Value::as_str) == Some("tool_use") {
+                match tool_call_start(
+                    "content_block_start",
+                    body.get("index"),
+                    body.pointer("/content_block/id"),
+                    body.pointer("/content_block/name"),
+                ) {
+                    Ok(start) => items.push(StreamItem::Delta(start)),
+                    Err(cause) => {
+                        items.push(StreamItem::Failed(cause));
+                        return (items, true);
                     }
                 }
-                Some("input_json_delta") => {
-                    if let Some(partial) = delta.get("partial_json").and_then(Value::as_str) {
-                        if !partial.is_empty() {
-                            items.push(StreamItem::Delta(StreamDelta::ToolCallArguments {
-                                index,
-                                delta: partial.to_string(),
-                            }));
-                        }
-                    }
-                }
-                _ => {}
             }
         }
+        "content_block_delta" => match body.pointer("/delta/type").and_then(Value::as_str) {
+            Some("text_delta") => {
+                if let Some(text) = body.pointer("/delta/text").and_then(Value::as_str) {
+                    if !text.is_empty() {
+                        items.push(StreamItem::Delta(StreamDelta::Text(text.to_string())));
+                    }
+                }
+            }
+            Some("input_json_delta") => {
+                if let Some(partial) = body.pointer("/delta/partial_json").and_then(Value::as_str) {
+                    if !partial.is_empty() {
+                        let index = match tool_call_index("content_block_delta", body.get("index"))
+                        {
+                            Ok(index) => index,
+                            Err(cause) => {
+                                items.push(StreamItem::Failed(cause));
+                                return (items, true);
+                            }
+                        };
+                        items.push(StreamItem::Delta(StreamDelta::ToolCallArguments {
+                            index,
+                            delta: partial.to_string(),
+                        }));
+                    }
+                }
+            }
+            _ => {}
+        },
         "message_delta" => {
             let output = json_u32(body.pointer("/usage/output_tokens")).unwrap_or_default();
             if state.input_tokens > 0 || output > 0 {

@@ -9,7 +9,7 @@
 
 use serde_json::Value;
 
-use super::event::{json_u32, StreamDelta, StreamItem};
+use super::event::{json_u32, tool_call_index, tool_call_start, StreamDelta, StreamItem};
 
 /// Translate one OpenAI Responses event into neutral items.
 pub(super) fn responses_items(event: Option<&str>, data: &str) -> (Vec<StreamItem>, bool) {
@@ -42,29 +42,38 @@ pub(super) fn responses_items(event: Option<&str>, data: &str) -> (Vec<StreamIte
             }
         }
         "response.output_item.added" => {
-            let index = json_u32(body.get("output_index")).unwrap_or_default();
-            let item = body.get("item").cloned().unwrap_or(Value::Null);
-            if item.get("type").and_then(Value::as_str) == Some("function_call") {
-                items.push(StreamItem::Delta(StreamDelta::ToolCallStart {
-                    index,
-                    id: item
-                        .get("call_id")
-                        .or_else(|| item.get("id"))
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string(),
-                    name: item
-                        .get("name")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string(),
-                }));
+            if body.pointer("/item/type").and_then(Value::as_str) == Some("function_call") {
+                let id = match body.pointer("/item/call_id") {
+                    Some(call_id) => Some(call_id),
+                    None => body.pointer("/item/id"),
+                };
+                match tool_call_start(
+                    "response.output_item.added",
+                    body.get("output_index"),
+                    id,
+                    body.pointer("/item/name"),
+                ) {
+                    Ok(start) => items.push(StreamItem::Delta(start)),
+                    Err(cause) => {
+                        items.push(StreamItem::Failed(cause));
+                        return (items, true);
+                    }
+                }
             }
         }
         "response.function_call_arguments.delta" => {
-            let index = json_u32(body.get("output_index")).unwrap_or_default();
             if let Some(delta) = body.get("delta").and_then(Value::as_str) {
                 if !delta.is_empty() {
+                    let index = match tool_call_index(
+                        "response.function_call_arguments.delta",
+                        body.get("output_index"),
+                    ) {
+                        Ok(index) => index,
+                        Err(cause) => {
+                            items.push(StreamItem::Failed(cause));
+                            return (items, true);
+                        }
+                    };
                     items.push(StreamItem::Delta(StreamDelta::ToolCallArguments {
                         index,
                         delta: delta.to_string(),

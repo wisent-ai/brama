@@ -68,3 +68,40 @@ pub(super) fn json_u32(value: Option<&Value>) -> Option<u32> {
         .and_then(Value::as_u64)
         .and_then(|number| u32::try_from(number).ok())
 }
+
+/// A tool call's position, id and name as one stream event states them, or
+/// the failure that ends the stream naming the event and what it lacked.
+/// Each wire's own field names are given by its reader. Read as 0 and empty,
+/// two calls without an index merged into one, and a call without an id or
+/// name reached the caller as a call it could neither answer nor run.
+pub(super) fn tool_call_start(
+    event: &str,
+    index: Option<&Value>,
+    id: Option<&Value>,
+    name: Option<&Value>,
+) -> Result<StreamDelta, String> {
+    let index = json_u32(index).ok_or_else(|| {
+        format!("provider stream event `{event}` starts a tool call with no index")
+    })?;
+    let text = |value: Option<&Value>, field: &str| {
+        value
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .ok_or_else(|| {
+                format!("provider stream event `{event}` starts tool call {index} with no {field}")
+            })
+    };
+    Ok(StreamDelta::ToolCallStart {
+        index,
+        id: text(id, "id")?,
+        name: text(name, "name")?,
+    })
+}
+
+/// The position a tool call's argument fragment belongs to, or the failure
+/// that ends the stream: a fragment without one was appended to call 0.
+pub(super) fn tool_call_index(event: &str, index: Option<&Value>) -> Result<u32, String> {
+    json_u32(index).ok_or_else(|| {
+        format!("provider stream event `{event}` carries tool call arguments with no index")
+    })
+}
