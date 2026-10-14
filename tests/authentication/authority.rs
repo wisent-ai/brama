@@ -72,10 +72,16 @@ fn workload_authority_admission_preserves_real_refusal_cause() {
             !output.status.success(),
             "unavailable authority admitted a workload"
         );
+        let said = String::from_utf8_lossy(&output.stderr);
         assert!(
-            String::from_utf8_lossy(&output.stderr)
-                .contains(&format!("HTTP {}:", expected.as_u16())),
+            said.contains(&format!("HTTP {}:", expected.as_u16())),
             "CLI did not preserve the gateway service-unavailable refusal"
+        );
+        // The refusal the client reads names the authority that did not
+        // answer and its cause, not only that an upstream is unavailable.
+        assert!(
+            said.contains("identity upstream unavailable: ") && said.contains(&cause),
+            "the gateway's refusal does not carry the authority's cause: {said}"
         );
         let diagnostic = observed.lines().find(|line| {
             line.contains("workload_authority_unavailable")

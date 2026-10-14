@@ -20,12 +20,17 @@ use super::presented_bearer;
 
 pub(in crate::core::server) const WISENT_ORGANIZATION_HEADER: &str = "x-wisent-organization-id";
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(super) enum IdentityResolutionError {
     InvalidOrganizationHeader,
     Forbidden,
     Unauthorized,
-    UpstreamUnavailable,
+    /// An authority the bearer had to be put to did not answer: which one,
+    /// the operation that failed and its cause, so the client reads the
+    /// dependency that stood instead of a sentence that names none. A
+    /// workload bearer rejected by Wisent Identity while Skarbiec did not
+    /// answer carries Skarbiec's cause: that is the authority it belongs to.
+    UpstreamUnavailable(String),
 }
 
 pub(super) enum WorkloadAuthorityAnswer {
@@ -54,23 +59,29 @@ pub(super) async fn identity_from_authority(
     let workload_unavailable = match skarbiec::ask_authority(bearer).await {
         WorkloadAuthorityAnswer::Resolved(identity) => return Ok(identity),
         WorkloadAuthorityAnswer::Unavailable(cause) => {
-            // The client sees 503; the log keeps which call failed and why.
+            // The client sees 503 with the cause; the log keeps it too.
             tracing::warn!(event = "workload_authority_unavailable", %cause);
-            true
+            Some(cause)
         }
-        WorkloadAuthorityAnswer::Rejected | WorkloadAuthorityAnswer::NotConfigured => false,
+        WorkloadAuthorityAnswer::Rejected | WorkloadAuthorityAnswer::NotConfigured => None,
     };
 
     let user_id = match wisent::ask_wisent_identity(bearer).await {
         WisentIdentityAnswer::Resolved(user_id) => user_id,
-        WisentIdentityAnswer::Rejected if workload_unavailable => {
-            return Err(IdentityResolutionError::UpstreamUnavailable)
-        }
-        WisentIdentityAnswer::Rejected => return Err(IdentityResolutionError::Unauthorized),
+        WisentIdentityAnswer::Rejected => match workload_unavailable {
+            Some(cause) => {
+                return Err(IdentityResolutionError::UpstreamUnavailable(format!(
+                    "the workload authority (Skarbiec) did not answer for this bearer, and Wisent Identity does not know it: {cause}"
+                )))
+            }
+            None => return Err(IdentityResolutionError::Unauthorized),
+        },
         WisentIdentityAnswer::Unavailable(cause) => {
-            // The client sees 503; the log keeps which call failed and why.
+            // The client sees 503 with the cause; the log keeps it too.
             tracing::warn!(event = "wisent_identity_unavailable", %cause);
-            return Err(IdentityResolutionError::UpstreamUnavailable);
+            return Err(IdentityResolutionError::UpstreamUnavailable(format!(
+                "Wisent Identity did not answer for this bearer: {cause}"
+            )));
         }
     };
     let organization_id = organization_header

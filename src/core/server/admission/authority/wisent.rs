@@ -81,7 +81,9 @@ pub(super) async fn ask_wisent_identity(bearer: &str) -> WisentIdentityAnswer {
 
 fn organization_unavailable(cause: String) -> IdentityResolutionError {
     tracing::warn!(event = "organization_authority_unavailable", %cause);
-    IdentityResolutionError::UpstreamUnavailable
+    IdentityResolutionError::UpstreamUnavailable(format!(
+        "the Wisent organization authority did not answer: {cause}"
+    ))
 }
 
 pub(super) async fn authorize_organization(

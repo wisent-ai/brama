@@ -123,7 +123,15 @@ means that the client or its allowlist is absent; no bearer value is printed.</p
 <li>Valid human bearer without membership in the requested organization →
   <code>403</code> <code>forbidden</code>.</li>
 <li>Unavailable Skarbiec/Supabase identity authority →
-  <code>503</code> <code>identity upstream unavailable</code>.</li>
+  <code>503</code> <code>identity upstream unavailable: &lt;which authority, the
+  operation that failed and its cause&gt;</code>. A workload bearer Wisent Identity
+  rejects while Skarbiec did not answer carries Skarbiec's cause (the authority it
+  belongs to: <code>the workload authority (Skarbiec) did not answer for this
+  bearer, and Wisent Identity does not know it: …</code>); a person's bearer carries
+  Wisent Identity's or the organization authority's. The gateway log keeps the same
+  cause under <code>workload_authority_unavailable</code>,
+  <code>wisent_identity_unavailable</code> or
+  <code>organization_authority_unavailable</code>.</li>
 <li>Valid bearer outside its path scope, or a signed agent that contradicts
   the workload bearer's <code>agent_id</code> binding or the path agent →
   <code>403</code> <code>forbidden</code>.</li>

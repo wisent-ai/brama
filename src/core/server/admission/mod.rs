@@ -115,10 +115,10 @@ pub(in crate::core::server) async fn require_model_bearer(
                 );
                 return api_error(StatusCode::UNAUTHORIZED, "unauthorized").into_response();
             }
-            Err(IdentityResolutionError::UpstreamUnavailable) => {
+            Err(IdentityResolutionError::UpstreamUnavailable(cause)) => {
                 return api_error(
                     StatusCode::SERVICE_UNAVAILABLE,
-                    "identity upstream unavailable",
+                    &format!("identity upstream unavailable: {cause}"),
                 )
                 .into_response()
             }
