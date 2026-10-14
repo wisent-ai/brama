@@ -6,11 +6,15 @@ pub(super) fn answer_line(answer: &Value) -> String {
     let Some(answer) = answer.as_object() else {
         return answer.to_string();
     };
-    let confidence = answer
-        .get("confidence")
-        .and_then(Value::as_f64)
-        .map(|value| format!("  confidence {value:.2}"))
-        .unwrap_or_default();
+    // An answer without a confidence says none; one that is not a number is
+    // shown as recorded, never as a number it does not hold.
+    let confidence = match answer.get("confidence") {
+        None => String::new(),
+        Some(value) => match value.as_f64() {
+            Some(value) => format!("  confidence {value:.2}"),
+            None => format!("  confidence {value}"),
+        },
+    };
     if let Some(noul) = answer.get("noul").and_then(Value::as_f64) {
         return format!("noul {noul:.4}{confidence}");
     }
@@ -29,7 +33,10 @@ fn distribution(answer: &Map<String, Value>) -> String {
     };
     let mut parts = probabilities
         .iter()
-        .map(|(label, value)| format!("{label}={:.2}", value.as_f64().unwrap_or_default()))
+        .map(|(label, value)| match value.as_f64() {
+            Some(probability) => format!("{label}={probability:.2}"),
+            None => format!("{label}={value}"),
+        })
         .collect::<Vec<_>>();
     parts.sort();
     format!("  [{}]", parts.join(" "))
