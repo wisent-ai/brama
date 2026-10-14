@@ -47,21 +47,22 @@ async fn refresh_presented(
     // their access token has not expired. Reconciliation can retire the member;
     // only independent Weles sign-in supplies this gateway's own grant.
     if is_borrowed(&credential) {
+        let detail = format!(
+            "subscription `{subscription_id}` carries a borrowed harness grant; Brama neither uses nor rotates it. Obtain an independent grant through Weles; `brama subscription list` retains the sign-in refusal when that cannot complete"
+        );
+        crate::subscription_dispatch::usage::record_reauthorization_needed(
+            subscription_id,
+            provider,
+            &detail,
+        );
         let refused = failure::envelope(
             POINT_CREDENTIAL_PERSIST,
             Code::Config,
             IMPACT_CREDENTIAL_PERSIST,
-            format!(
-                "subscription `{subscription_id}` carries a borrowed harness grant; Brama neither uses nor rotates it. Obtain an independent grant through Weles; `brama subscription list` retains the sign-in refusal when that cannot complete"
-            ),
+            detail,
         )
         .with_context("subscription", subscription_id)
         .with_context("provider", provider);
-        crate::subscription_dispatch::usage::record_reauthorization_needed(
-            subscription_id,
-            provider,
-            refused.detail.as_deref().unwrap_or_default(),
-        );
         return Err(refused);
     }
     if !force && !oauth_refresh::needs_refresh(&credential, provider) {
@@ -76,7 +77,7 @@ async fn refresh_presented(
             warn!(
                 event = "oauth_refresh_failed",
                 provider,
-                error = refused.detail.as_deref().unwrap_or_default(),
+                error = refused.detail.as_deref(),
                 envelope = %refused.to_json(),
                 "OAuth refresh failed"
             );
@@ -102,7 +103,7 @@ async fn refresh_presented(
         warn!(
             event = "oauth_refresh_persist_failed",
             provider,
-            error = unpersisted.detail.as_deref().unwrap_or_default(),
+            error = %persist_detail,
             envelope = %unpersisted.to_json(),
             "refreshed OAuth credential could not be persisted; the rotated grant is lost \
              and the stored one is already dead at the provider"
