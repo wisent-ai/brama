@@ -133,9 +133,17 @@ pub(in crate::core::server) async fn chat_completions(
                     completion_tokens: resp.output_tokens,
                     total_tokens: resp.input_tokens + resp.output_tokens,
                 },
-            })
-            .unwrap_or_default();
-            (StatusCode::OK, Json(body)).into_response()
+            });
+            // An answer that cannot be written as JSON is not sent as a
+            // successful `null`: the caller is told the generation was lost.
+            match body {
+                Ok(body) => (StatusCode::OK, Json(body)).into_response(),
+                Err(error) => api_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    &format!("the generation could not be written as a chat completion: {error}"),
+                )
+                .into_response(),
+            }
         }
         DispatchedCall::Committed(routed) => {
             log_stream_commit(&routed, &client_identity, &meta, &requested_model);
