@@ -62,7 +62,7 @@
           <tr><td><code>BRAMA_STATE_DIR</code></td><td><code>$HOME/.brama</code></td><td>holds <code>journal.jsonl</code>, the append-only retirement/quality/refresh journal; readers take the last matching record; credential material is never written here</td></tr>
           <tr><td><code>BRAMA_SUBSCRIPTION_USAGE_FILE</code></td><td><code>~/.config/brama/subscription-usage.json</code></td><td>per-subscription usage ledger, owner-readable, atomic writes</td></tr>
           <tr><td><code>BRAMA_DONATED_SUBSCRIPTIONS_FILE</code></td><td><code>/tmp/brama-skarbiec/donated-subscriptions.json</code></td><td>metadata-only donation overlay, atomic 0600 rewrite</td></tr>
-          <tr><td><code>BRAMA_PERF_PATH</code></td><td><code>/tmp/brama-perf.json</code></td><td>replaceable process telemetry</td></tr>
+          <tr><td><code>BRAMA_PERF_PATH</code></td><td><code>$BRAMA_STATE_DIR/perf.json</code> (<code>~/.brama/perf.json</code>)</td><td>replaceable process telemetry</td></tr>
         </tbody></table>
 
         <h2 id="timers-and-freshness">Sign-in pacing and freshness<a class="headerlink" href="#timers-and-freshness" title="Link to this section">&para;</a></h2>

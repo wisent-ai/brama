@@ -36,7 +36,7 @@ months, not process lifetimes.
 ## Other state
 
 `$BRAMA_STATE_DIR/journal.jsonl` contains retirement and quality records.
-`/tmp/brama-perf.json` (`BRAMA_PERF_PATH`) contains replaceable per-process
+`$BRAMA_STATE_DIR/perf.json` (`BRAMA_PERF_PATH` names another) contains replaceable per-process
 telemetry; a file that cannot be read, parsed or written is logged as a
 `perf_stats_*` warning with its path and cause. The entitlements router owns
 encrypted subscription credential storage in managed deployments.

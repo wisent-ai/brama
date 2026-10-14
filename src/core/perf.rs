@@ -41,8 +41,15 @@ pub struct ModelPerf {
 
 static REGISTRY: LazyLock<Mutex<HashMap<String, PerfStats>>> = LazyLock::new(|| Mutex::new(load()));
 
+/// `$BRAMA_PERF_PATH`, else `perf.json` in Brama's state directory: never the
+/// shared temporary directory, whose files any account may replace.
 fn persist_path() -> String {
-    std::env::var("BRAMA_PERF_PATH").unwrap_or_else(|_| "/tmp/brama-perf.json".into())
+    match std::env::var_os("BRAMA_PERF_PATH").filter(|path| !path.is_empty()) {
+        Some(path) => std::path::PathBuf::from(path),
+        None => crate::journal::state_dir().join("perf.json"),
+    }
+    .display()
+    .to_string()
 }
 
 /// The stats are counters a panic mid-record leaves at worst one dispatch
@@ -113,6 +120,12 @@ fn flush(map: &HashMap<String, PerfStats>) {
             return;
         }
     };
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        if let Err(error) = std::fs::create_dir_all(parent) {
+            tracing::warn!(event = "perf_stats_unwritten", path = %parent.display(), %error);
+            return;
+        }
+    }
     if let Err(error) = std::fs::write(&tmp, payload) {
         tracing::warn!(event = "perf_stats_unwritten", path = %tmp, %error);
         return;
