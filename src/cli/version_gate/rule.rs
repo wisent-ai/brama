@@ -165,71 +165,112 @@ pub(super) fn decide(
     })
 }
 
-fn names(value: &Value) -> Vec<String> {
-    value
+/// One surface list of a fixture case. A case without it, or with an entry
+/// that is not text, is malformed: read as empty it reproduced the
+/// `empty-surface` refusal by accident.
+fn names(case: &Value, field: &str) -> Result<Vec<String>, String> {
+    case[field]
         .as_array()
-        .map(|items| {
-            items
-                .iter()
-                .filter_map(Value::as_str)
+        .ok_or_else(|| format!("the case states no {field} array"))?
+        .iter()
+        .map(|item| {
+            item.as_str()
                 .map(str::to_string)
-                .collect()
+                .ok_or_else(|| format!("the case lists {item} in {field}, which is not text"))
         })
-        .unwrap_or_default()
+        .collect()
 }
 
-/// The JSON between the first pair of ``` fences of FIXTURES.md, or the whole
-/// text when it is already JSON.
-fn cases(text: &str) -> Result<Value, String> {
-    if let Ok(value) = serde_json::from_str(text) {
-        return Ok(value);
+/// The two groups of AutoVersion's fixtures document; a document missing
+/// either is refused by serde naming it.
+#[derive(serde::Deserialize)]
+struct Fixtures {
+    classify: Vec<Value>,
+    refuse: Vec<Value>,
+}
+
+/// The fixtures between the first pair of ``` fences of FIXTURES.md, or the
+/// whole text when it is already JSON.
+fn cases(text: &str) -> Result<Fixtures, String> {
+    if let Ok(fixtures) = serde_json::from_str(text) {
+        return Ok(fixtures);
     }
-    let block = text
-        .split("```")
-        .nth(1)
+    let (_, after) = text
+        .split_once("```")
         .ok_or("the fixtures file has no fenced block")?;
+    let block = match after.split_once("```") {
+        Some((block, _)) => block,
+        None => after,
+    };
     let body = block.split_once('\n').map_or(block, |(_, rest)| rest);
-    serde_json::from_str(body).map_err(|error| format!("the fenced fixtures are not JSON: {error}"))
+    serde_json::from_str(body)
+        .map_err(|error| format!("the fenced fixtures are not valid: {error}"))
+}
+
+/// The rule's answer to one case, or what makes the case malformed. A case
+/// without `current` was decided on "", so a broken fixture could pass as a
+/// refusal it never tested. The refuse cases leave the declaration out: an
+/// absent declaration is an unset one, as AutoVersion's fixtures write it.
+fn outcome(case: &Value) -> Result<Value, String> {
+    let current = case["current"]
+        .as_str()
+        .ok_or("the case states no current version")?;
+    let declared_breaking = match case.get("declared_breaking") {
+        None => false,
+        Some(value) => value
+            .as_bool()
+            .ok_or_else(|| format!("declared_breaking is {value}, not a boolean"))?,
+    };
+    Ok(
+        match decide(
+            current,
+            &names(case, "published")?,
+            &names(case, "candidate")?,
+            declared_breaking,
+        ) {
+            Ok(answer) => serde_json::json!({
+                "class": answer.change.name(),
+                "next": answer.next,
+                "removed": answer.removed,
+                "added": answer.added,
+            }),
+            Err(refusal) => serde_json::json!({ "refusal": refusal.name }),
+        },
+    )
 }
 
 /// Every `classify` case must yield exactly the recorded class, next version,
 /// removed and added names; every `refuse` case exactly the recorded refusal.
-/// Prints one line per case; `Ok(false)` when any differs.
+/// Prints one line per case; `Ok(false)` when any differs or is malformed. A
+/// case without a name is printed whole, not as "unnamed case".
 pub(super) fn conformance(text: &str) -> Result<bool, String> {
     let fixtures = cases(text)?;
-    let (mut failures, mut total) = (0usize, 0usize);
-    for group in ["classify", "refuse"] {
-        let list = fixtures[group]
-            .as_array()
-            .ok_or(format!("the fixtures declare no `{group}` list"))?;
-        for case in list {
-            total += 1;
-            let observed = match decide(
-                case["current"].as_str().unwrap_or(""),
-                &names(&case["published"]),
-                &names(&case["candidate"]),
-                case["declared_breaking"].as_bool().unwrap_or(false),
-            ) {
-                Ok(answer) => serde_json::json!({
-                    "class": answer.change.name(),
-                    "next": answer.next,
-                    "removed": answer.removed,
-                    "added": answer.added,
-                }),
-                Err(refusal) => serde_json::json!({ "refusal": refusal.name }),
-            };
-            let name = case["name"].as_str().unwrap_or("unnamed case");
-            if observed == case["expect"] {
-                println!("OK   {name}");
-            } else {
-                failures += 1;
+    let all: Vec<&Value> = fixtures.classify.iter().chain(&fixtures.refuse).collect();
+    let mut failed = Vec::new();
+    for case in &all {
+        let name = match case["name"].as_str() {
+            Some(name) => name.to_string(),
+            None => format!("(a case that states no name: {case})"),
+        };
+        match outcome(case) {
+            Ok(observed) if observed == case["expect"] => println!("OK   {name}"),
+            Ok(observed) => {
                 println!(
                     "FAIL {name}: expected {}, observed {observed}",
                     case["expect"]
                 );
+                failed.push(name);
+            }
+            Err(malformed) => {
+                println!("FAIL {name}: malformed case: {malformed}");
+                failed.push(name);
             }
         }
     }
-    println!("{} of {total} fixture case(s) reproduced", total - failures);
-    Ok(failures == 0)
+    println!(
+        "{} of {} fixture case(s) reproduced",
+        all.len() - failed.len(),
+        all.len()
+    );
+    Ok(failed.is_empty())
 }
