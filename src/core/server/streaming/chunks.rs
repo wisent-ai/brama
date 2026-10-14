@@ -75,15 +75,17 @@ impl ChatChunkStream {
             Some(reason) => choice["finish_reason"] = json!(reason),
             None => choice["finish_reason"] = Value::Null,
         }
+        // A JSON value always writes; its Display is that writing, with no
+        // failure to stand an empty frame in for.
         axum::response::sse::Event::default().data(
-            serde_json::to_string(&json!({
+            json!({
                 "id": self.request_id,
                 "object": "chat.completion.chunk",
                 "created": self.created,
                 "model": self.model,
                 "choices": [choice],
-            }))
-            .unwrap_or_default(),
+            })
+            .to_string(),
         )
     }
 
@@ -97,7 +99,7 @@ impl ChatChunkStream {
         output_tokens: u32,
     ) -> axum::response::sse::Event {
         axum::response::sse::Event::default().data(
-            serde_json::to_string(&json!({
+            json!({
                 "id": self.request_id,
                 "object": "chat.completion.chunk",
                 "created": self.created,
@@ -108,8 +110,8 @@ impl ChatChunkStream {
                     "completion_tokens": output_tokens,
                     "total_tokens": input_tokens + output_tokens,
                 },
-            }))
-            .unwrap_or_default(),
+            })
+            .to_string(),
         )
     }
 

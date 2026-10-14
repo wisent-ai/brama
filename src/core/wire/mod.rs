@@ -180,7 +180,6 @@ pub fn responses_response(id: &str, model: &str, created: u64, response: &ModelR
 // ---------------------------------------------------------------------------
 
 fn sse(event: &str, data: Value) -> Event {
-    Event::default()
-        .event(event)
-        .data(serde_json::to_string(&data).unwrap_or_default())
+    // A JSON value always writes; its Display is that writing.
+    Event::default().event(event).data(data.to_string())
 }
