@@ -18,7 +18,10 @@ to the [README](../../README.md).
   the gateway cannot carry, and a function tool without `name` -- each is
   refused as a bad request naming the message, item or tool position and the
   missing field, e.g. ``message 2: a `tool_use` content block carries no `id`
-  text``. An Anthropic image given by `url` is carried as that URL.
+  text``. On every format, a tool call the history carries must have an
+  `id`, a `function.name` and `function.arguments` that are JSON text, or the
+  request is refused naming the message and the call. An Anthropic image
+  given by `url` is carried as that URL.
 - **Streaming:** any of the three chat formats streams when the request asks
   for it -- `"stream": true` on chat completions and Anthropic Messages,
   `"stream": true` on Responses. The response is `text/event-stream` in the
