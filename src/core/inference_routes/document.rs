@@ -53,7 +53,7 @@ pub(super) struct Registry {
 
 /// The only registry schema version Brama reads; a document that never wrote
 /// the member down is such a document, so writers state it explicitly.
-pub(super) const SCHEMA_VERSION: u32 = 1;
+pub(super) const SCHEMA_VERSION: u32 = 1; // https://brama.wisent.com/docs/configuration/route-registry
 
 static ROUTE_WRITE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
@@ -73,11 +73,11 @@ pub(super) fn read_body(path: &Path) -> Result<String, String> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::{MetadataExt, PermissionsExt};
-        const NON_OWNER_MASK: u32 = 0o077;
+        let non_owner_mask = u32::from(libc::S_IRWXG | libc::S_IRWXO);
         if metadata.uid() != unsafe { libc::geteuid() } {
             return Err("inference routes must be owned by the Brama user".to_string());
         }
-        if metadata.permissions().mode() & NON_OWNER_MASK != 0 {
+        if metadata.permissions().mode() & non_owner_mask > 0 {
             return Err("inference routes must not be accessible by group or other".to_string());
         }
     }
@@ -111,10 +111,11 @@ pub fn validate_document(value: &Value) -> Result<(), String> {
         .map_err(|error| format!("invalid inference routes: {error}"))?;
     let mut deployment_names = HashSet::new();
     for deployment in &registry.deployments {
+        let reserved_port = deployment.endpoint.port == 0; // https://www.iana.org/assignments/service-names-port-numbers port 0 is reserved
         if deployment.name.is_empty()
             || !deployment_names.insert(deployment.name.as_str())
             || !safe_inference_host(&deployment.endpoint.host)
-            || deployment.endpoint.port == 0
+            || reserved_port
         {
             return Err(format!(
                 "inference deployment '{}' is duplicated or has no safe local or Tailscale endpoint",
@@ -140,22 +141,26 @@ pub(super) fn route_file_exists(path: &Path) -> Result<bool, String> {
     }
 }
 
+/// The directory that holds `path`. A bare file name's parent is the empty
+/// path, which the standard library reads as the current directory.
+fn parent_of(path: &Path) -> Result<&Path, String> {
+    path.parent().ok_or_else(|| {
+        format!(
+            "inference routes path {} names no file inside a directory",
+            path.display()
+        )
+    })
+}
+
 pub(super) fn ensure_parent(path: &Path) -> Result<(), String> {
-    let parent = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
-    std::fs::create_dir_all(parent)
+    std::fs::create_dir_all(parent_of(path)?)
         .map_err(|error| format!("cannot create inference routes directory: {error}"))
 }
 
 pub(super) fn write_registry(path: &Path, value: &Value) -> Result<(), String> {
     let bytes = serde_json::to_vec_pretty(value)
         .map_err(|error| format!("cannot encode inference routes: {error}"))?;
-    let parent = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
+    let parent = parent_of(path)?;
     let file_name = path
         .file_name()
         .and_then(|value| value.to_str())
@@ -167,7 +172,7 @@ pub(super) fn write_registry(path: &Path, value: &Value) -> Result<(), String> {
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
         #[cfg(unix)]
-        options.mode(0o600);
+        options.mode(u32::from(libc::S_IRUSR | libc::S_IWUSR));
         let mut file = options
             .open(&staging)
             .map_err(|error| format!("cannot create route staging file: {error}"))?;
