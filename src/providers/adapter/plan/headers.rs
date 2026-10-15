@@ -3,13 +3,22 @@
 
 use std::collections::HashMap;
 
+use tracing::warn;
+
 use super::window::window_label_from_minutes;
 use crate::types::{LimitReading, ModelResponse};
+
+/// Milliseconds in a second, for the reset instants headers state in seconds.
+const MS_PER_SECOND: f64 = 1_000.0; // https://www.bipm.org/en/measurement-units/si-prefixes milli = 10^-3
+/// The share a percentage states per unit.
+const PERCENT: f64 = 100.0; // https://www.iso.org/standard/64973.html ISO 80000-1: % = 0.01
 
 /// The response headers that carry plan state, lowercased, and nothing else.
 ///
 /// Only the two families any provider on this fleet publishes are kept, so a
 /// header sweep can never turn into an accidental log of provider metadata.
+/// A value that is not visible ASCII is kept as its bytes read, so the
+/// reading below names it instead of the header vanishing.
 pub(in crate::providers::adapter) fn plan_headers(
     headers: &reqwest::header::HeaderMap,
 ) -> HashMap<String, String> {
@@ -17,16 +26,37 @@ pub(in crate::providers::adapter) fn plan_headers(
         .iter()
         .filter_map(|(name, value)| {
             let name = name.as_str().to_ascii_lowercase();
-            if !(name.starts_with("anthropic-ratelimit-unified-") || name.starts_with("x-codex-")) {
-                return None;
-            }
-            Some((name, value.to_str().ok()?.to_string()))
+            (name.starts_with("anthropic-ratelimit-unified-") || name.starts_with("x-codex-"))
+                .then(|| (name, String::from_utf8_lossy(value.as_bytes()).into_owned()))
         })
         .collect()
 }
 
+/// A plan header's number. A header the answer does not carry is absent; one
+/// it carries that is not a number is absent too, and the gateway log names
+/// the header, its value and the parser's reason.
 fn header_number(headers: &HashMap<String, String>, name: &str) -> Option<f64> {
-    headers.get(name)?.trim().parse::<f64>().ok()
+    let value = headers.get(name)?;
+    match value.trim().parse::<f64>() {
+        Ok(number) => Some(number),
+        Err(error) => {
+            warn!(
+                event = "plan_header_unreadable",
+                header = name,
+                value = value.as_str(),
+                "{name} is not a number: {error}"
+            );
+            None
+        }
+    }
+}
+
+/// A reset instant a header states in seconds since the epoch; a header that
+/// states none, or no positive instant, names no reset.
+fn reset_ms(headers: &HashMap<String, String>, name: &str) -> Option<i64> {
+    header_number(headers, name)
+        .filter(|seconds| seconds.is_sign_positive() && seconds.is_normal())
+        .map(|seconds| (seconds * MS_PER_SECOND).round() as i64)
 }
 
 /// The wall-clock instant a provider answer was read, in milliseconds.
@@ -36,10 +66,7 @@ fn header_number(headers: &HashMap<String, String>, name: &str) -> Option<f64> {
 /// process, so it needs an epoch timestamp its reader can compare against its
 /// own clock.
 pub(in crate::providers::adapter) fn observed_at_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX))
-        .unwrap_or_default()
+    chrono::Utc::now().timestamp_millis()
 }
 
 /// The names an answer gives its windows or meters: the part between
@@ -62,11 +89,11 @@ fn named_between<'a>(
 /// windows or meters, is read from the header names themselves, so no list of
 /// provider ids, windows or meters is kept beside what the provider sends: an
 /// answer that carries neither family has no readings -- an absent reading is
-/// absent, not zero.
+/// absent, not zero. A used share is kept as the provider stated it, past the
+/// whole limit included.
 pub(in crate::providers::adapter) fn limit_readings(
     headers: &HashMap<String, String>,
 ) -> Vec<LimitReading> {
-    let seconds_to_ms = |seconds: f64| (seconds * 1_000.0).round() as i64;
     // One instant for every reading off one answer: they were all read from the
     // same set of headers, so a per-reading clock call would only invent
     // differences the provider never stated.
@@ -75,9 +102,6 @@ pub(in crate::providers::adapter) fn limit_readings(
         .filter_map(|window| {
             let prefix = format!("anthropic-ratelimit-unified-{window}");
             let used = header_number(headers, &format!("{prefix}-utilization"))?;
-            let resets = header_number(headers, &format!("{prefix}-reset"))
-                .filter(|value| *value > 0.0)
-                .map(seconds_to_ms);
             let limit_id = format!("anthropic:{window}");
             let (label, window_label) = match super::report::anthropic_window_labels(&limit_id) {
                 Some((label, window_label)) => (label.to_string(), window_label.to_string()),
@@ -87,23 +111,20 @@ pub(in crate::providers::adapter) fn limit_readings(
                 limit_id,
                 label,
                 window_label: Some(window_label),
-                used_fraction: used.clamp(0.0, 1.0),
-                resets_at_ms: resets,
+                used_fraction: used,
+                resets_at_ms: reset_ms(headers, &format!("{prefix}-reset")),
                 recorded_at_ms,
             })
         });
     let codex = named_between(headers, "x-codex-", "-used-percent").filter_map(|meter| {
         let percent = header_number(headers, &format!("x-codex-{meter}-used-percent"))?;
         let minutes = header_number(headers, &format!("x-codex-{meter}-window-minutes"));
-        let resets = header_number(headers, &format!("x-codex-{meter}-reset-at"))
-            .filter(|value| *value > 0.0)
-            .map(seconds_to_ms);
         Some(LimitReading {
             limit_id: format!("codex:{meter}"),
             label: format!("Codex {meter} window"),
             window_label: minutes.map(window_label_from_minutes),
-            used_fraction: (percent / 100.0).clamp(0.0, 1.0),
-            resets_at_ms: resets,
+            used_fraction: percent / PERCENT,
+            resets_at_ms: reset_ms(headers, &format!("x-codex-{meter}-reset-at")),
             recorded_at_ms,
         })
     });
