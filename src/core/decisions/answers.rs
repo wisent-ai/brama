@@ -5,6 +5,7 @@
 //! a label, or carries no probability mass is refused by name. A decision
 //! whose answer cannot be trusted to be inside its own schema is worth
 //! nothing, so nothing is guessed and nothing is repaired silently.
+//! Probabilities are returned as computed: no precision is imposed on them.
 
 use serde_json::{json, Map, Value};
 
@@ -16,9 +17,7 @@ pub fn answers_from_text(
     request: &DecisionRequest,
     text: &str,
 ) -> Result<Map<String, Value>, String> {
-    let body = json_object(text).ok_or_else(|| {
-        "the model answered with no JSON object of label probabilities".to_string()
-    })?;
+    let body = json_object(text)?;
     let mut answers = Map::new();
     for (key, question) in &request.questions {
         let declared = body
@@ -26,7 +25,7 @@ pub fn answers_from_text(
             .and_then(Value::as_object)
             .ok_or_else(|| format!("answer for question `{key}` is missing"))?;
         let distribution = distribution(key, question, declared)?;
-        answers.insert(key.clone(), typed_answer(question, &distribution));
+        answers.insert(key.clone(), typed_answer(key, question, &distribution)?);
     }
     Ok(answers)
 }
@@ -41,11 +40,17 @@ pub fn answers_from_native(
     let object = body
         .as_object()
         .ok_or_else(|| "the provider answered with no object of answers".to_string())?;
-    // A provider may wrap its answers; both shapes are read the same way.
-    let answered = object
-        .get("answers")
-        .and_then(Value::as_object)
-        .unwrap_or(object);
+    // A provider either wraps its answers in `answers` or sends them bare; an
+    // `answers` that is not an object is refused rather than read as bare.
+    let answered = match object.get("answers") {
+        Some(Value::Object(wrapped)) => wrapped,
+        Some(other) => {
+            return Err(format!(
+                "the provider's `answers` is {other}, not an object of answers"
+            ))
+        }
+        None => object,
+    };
     let mut answers = Map::new();
     for (key, question) in &request.questions {
         let answer = answered
@@ -69,10 +74,13 @@ fn native_answer(
                 format!("answer for question `{key}` carries no `noul` probability")
             })?;
             normalized.insert("noul".to_string(), json!(value));
-            normalized.insert(
-                "confidence".to_string(),
-                json!(probability(answer.get("confidence")).unwrap_or(value.max(1.0 - value))),
-            );
+            // A yes-or-no answer's confidence is the mass on the side it
+            // leans to; a provider that states one is taken at its word.
+            let confidence = match probability(answer.get("confidence")) {
+                Some(stated) => stated,
+                None => value.max(complement(value)),
+            };
+            normalized.insert("confidence".to_string(), json!(confidence));
         }
         Question::Choice { options, .. } => {
             let choice = answer
@@ -92,7 +100,17 @@ fn native_answer(
                 .get("score")
                 .and_then(Value::as_f64)
                 .ok_or_else(|| format!("answer for question `{key}` carries no `score`"))?;
-            if !score.is_finite() || score < 0.0 || score > (levels.len() - 1) as f64 {
+            // A score indexes the rubric's levels, so it lies between the
+            // first level's index and the last's.
+            let Some(highest) = levels
+                .iter()
+                .enumerate()
+                .last()
+                .map(|(index, _)| index as f64)
+            else {
+                return Err(format!("question `{key}` declares no rubric levels"));
+            };
+            if !score.is_finite() || score.is_sign_negative() || score > highest {
                 return Err(format!(
                     "answer for question `{key}` scores outside the rubric it was given"
                 ));
@@ -145,71 +163,76 @@ fn distribution(
             ));
         }
     }
-    let answered = &named;
     let mut mass = Vec::with_capacity(labels.len());
-    let mut total = 0.0;
     for label in &labels {
-        // A label the model left out carries no mass. Refusing the whole
-        // answer over it made the engine reject exactly the answers it asked
-        // for: a model certain of one label writes that label alone, and the
-        // distribution it means -- all of the mass on what it named, none on
-        // the rest -- is the one computed here. An undeclared label is still
-        // refused above, and an answer that names no declared label at all
-        // carries no mass and is refused below.
-        // A label written with something that is not a number is refused:
-        // read as zero it would move the model's mass silently.
-        let value = match answered.get(label) {
-            None => 0.0,
-            Some(written) => written.as_f64().ok_or_else(|| {
+        // A label the model left out carries no mass: a model certain of one
+        // label writes that label alone, and the distribution it means puts
+        // all of the mass on what it named. A label written with something
+        // that is not a number is refused: read as no mass it would move the
+        // model's mass silently.
+        let value = match named.get(label) {
+            None => None,
+            Some(written) => Some(written.as_f64().ok_or_else(|| {
                 format!("answer for question `{key}` gives label `{label}` {written}, which is not a number")
-            })?,
+            })?),
         };
-        if !value.is_finite() || value < 0.0 {
-            return Err(format!(
-                "answer for question `{key}` gives label `{label}` a probability that is not a number between zero and one"
-            ));
+        if let Some(value) = value {
+            if !value.is_finite() || value.is_sign_negative() {
+                return Err(format!(
+                    "answer for question `{key}` gives label `{label}` a probability that is not a non-negative number"
+                ));
+            }
         }
-        total += value;
         mass.push((label.clone(), value));
     }
-    if total <= 0.0 {
+    let total: f64 = mass.iter().filter_map(|(_, value)| *value).sum();
+    if !total.is_normal() {
         return Err(format!(
             "answer for question `{key}` carries no probability mass"
         ));
     }
-    for entry in mass.iter_mut() {
-        entry.1 /= total;
-    }
-    Ok(mass)
+    Ok(mass
+        .into_iter()
+        .map(|(label, value)| {
+            let share = match value {
+                Some(value) => value / total,
+                None => 0.0, // https://en.wikipedia.org/wiki/Probability_axioms "P(∅) = 0": a label the model did not name is one it gave no mass
+            };
+            (label, share)
+        })
+        .collect())
 }
 
 /// The typed answer that follows from one distribution.
-fn typed_answer(question: &Question, distribution: &[(String, f64)]) -> Value {
+fn typed_answer(
+    key: &str,
+    question: &Question,
+    distribution: &[(String, f64)],
+) -> Result<Value, String> {
     let probabilities = distribution
         .iter()
-        .map(|(label, value)| (label.clone(), json!(round(*value))))
+        .map(|(label, value)| (label.clone(), json!(value)))
         .collect::<Map<String, Value>>();
     let (top_label, top_mass) = distribution
         .iter()
         .max_by(|left, right| left.1.total_cmp(&right.1))
-        .map(|(label, value)| (label.clone(), *value))
-        .unwrap_or_default();
-    match question {
+        .ok_or_else(|| format!("question `{key}` declares no label to answer with"))?;
+    Ok(match question {
         Question::Noul { .. } => {
             let truth = distribution
                 .iter()
                 .find(|(label, _)| label == "true")
                 .map(|(_, value)| *value)
-                .unwrap_or_default();
+                .ok_or_else(|| format!("yes-or-no question `{key}` has no `true` label"))?;
             json!({
-                "noul": round(truth),
-                "confidence": round(truth.max(1.0 - truth)),
+                "noul": truth,
+                "confidence": truth.max(complement(truth)),
             })
         }
         Question::Choice { .. } => json!({
             "choice": top_label,
             "probabilities": probabilities,
-            "confidence": round(top_mass),
+            "confidence": top_mass,
         }),
         Question::Score { levels, .. } => {
             let score = distribution
@@ -218,62 +241,47 @@ fn typed_answer(question: &Question, distribution: &[(String, f64)]) -> Value {
                 .map(|(index, (_, value))| index as f64 * value)
                 .sum::<f64>();
             json!({
-                "score": round(score),
+                "score": score,
                 "probabilities": probabilities,
-                "confidence": round(top_mass),
+                "confidence": top_mass,
                 "legend": levels,
             })
         }
-    }
+    })
 }
 
+/// The probability of the other outcome of a yes-or-no question.
+fn complement(probability: f64) -> f64 {
+    1.0 - probability // https://en.wikipedia.org/wiki/Complementary_event "P(A') = 1 - P(A)"
+}
+
+/// A stated probability: a finite number in [0, 1].
 fn probability(value: Option<&Value>) -> Option<f64> {
+    let certain = 1.0; // https://en.wikipedia.org/wiki/Probability_axioms "P(Ω) = 1" bounds every probability
     value
         .and_then(Value::as_f64)
-        .filter(|number| number.is_finite() && *number >= 0.0 && *number <= 1.0)
+        .filter(|number| number.is_finite() && !number.is_sign_negative() && *number <= certain)
 }
 
-fn round(value: f64) -> f64 {
-    (value * 10_000.0).round() / 10_000.0
-}
-
-/// The first complete JSON object in a model's reply.
+/// The first JSON object in a model's reply, read by serde from the first
+/// brace on.
 ///
 /// Models wrap JSON in prose or a code fence often enough that refusing the
 /// answer for its packaging would refuse decisions that are perfectly well
-/// formed inside. Braces are counted outside string literals, so a brace in a
-/// label cannot end the object early.
-fn json_object(text: &str) -> Option<Map<String, Value>> {
-    let bytes = text.as_bytes();
-    let start = bytes.iter().position(|byte| *byte == b'{')?;
-    let mut depth = 0usize;
-    let mut in_string = false;
-    let mut escaped = false;
-    for (offset, byte) in bytes.iter().enumerate().skip(start) {
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if *byte == b'\\' {
-                escaped = true;
-            } else if *byte == b'"' {
-                in_string = false;
-            }
-            continue;
-        }
-        match byte {
-            b'"' => in_string = true,
-            b'{' => depth += 1,
-            b'}' => {
-                depth -= 1;
-                if depth == 0 {
-                    return serde_json::from_str::<Map<String, Value>>(
-                        text.get(start..=offset).unwrap_or_default(),
-                    )
-                    .ok();
-                }
-            }
-            _ => {}
-        }
+/// formed inside. What follows the object is not read; an object that does
+/// not parse is refused with serde's reason and position.
+fn json_object(text: &str) -> Result<Map<String, Value>, String> {
+    let start = text.find('{').ok_or_else(|| {
+        "the model answered with no JSON object of label probabilities".to_string()
+    })?;
+    match serde_json::Deserializer::from_str(&text[start..])
+        .into_iter::<Map<String, Value>>()
+        .next()
+    {
+        Some(Ok(object)) => Ok(object),
+        Some(Err(error)) => Err(format!(
+            "the model's JSON object of label probabilities does not parse: {error}"
+        )),
+        None => Err("the model answered with no JSON object of label probabilities".to_string()),
     }
-    None
 }

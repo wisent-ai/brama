@@ -114,7 +114,10 @@ the whitespace around it, because a text model writes a label the way its
 tokenizer spells it (<code>" acknowledgement"</code>), and a label the model leaves
 out carries no mass. An answer naming a label the question did not declare,
 naming one label twice, or carrying no probability mass at all is refused
-<code>decision_contract_violated</code> rather than repaired.</p>
+<code>decision_contract_violated</code> rather than repaired, and so is a reply
+whose JSON object does not parse, with the parser's reason and position.
+Probabilities, confidences and scores are returned as computed, with no
+precision imposed on them.</p>
 <p>The shape of that answer travels with the request. Brama sends the chat
 route a JSON Schema in which every question is a required key whose value
 holds exactly that question's labels as numbers and nothing else; on the
