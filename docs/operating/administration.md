@@ -105,6 +105,17 @@ to the operational journal, and no credential value is returned. Reading and
 repairing the pool is described in
 [subscription-pool.md](subscription-pool.md).
 
+Three console verbs change membership, each with
+`{"subscription_id":"<id>","reason":"<operator reason>"}`:
+`POST /v1/admin/subscription-pool/disown` retires a member the console
+adopted and removes its stored credential,
+`POST /v1/admin/subscription-pool/reinstate` returns a retired member to the
+rotation (it still needs a grant of this gateway's own), and
+`POST /v1/admin/subscription-pool/forget` drops a member only the usage ledger
+remembers. A missing or blank reason is refused with HTTP 400 and
+`reason is required: say why you <disown|reinstate|forget> this member`;
+nothing is written in its place.
+
 The complete state, error, retry, authorization, and resource contract is in
 [`CORE.md`](https://brama.wisent.com/docs/core). Provider capability and lifecycle contracts are in
 [`INTEGRATIONS.md`](https://brama.wisent.com/docs/integrations).

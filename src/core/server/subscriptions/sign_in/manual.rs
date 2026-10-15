@@ -144,16 +144,15 @@ pub(in crate::core::server) async fn complete_admin_manual_sign_in(
 /// `POST /v1/admin/subscription-pool/disown`: the console takes back a grant
 /// it adopted.
 ///
-/// The agent-facing `retire` accepts only the agent that banked a member, and
-/// a grant the console adopted was banked by nobody, so accounts imported
-/// from a workstation could be given back by no caller while the provider
-/// kept revoking that workstation's own session because two machines held
-/// one pair. What the console created, the console can retire.
+/// The agent-facing `retire` accepts only the agent that banked a member; a
+/// grant the console adopted was banked by no agent, so the console is the
+/// one caller that retires it. The reason is the caller's and is required.
 pub(in crate::core::server) async fn disown_admin_grant(
     Extension(client_identity): Extension<ModelClientIdentity>,
     Json(request): Json<DisownRequest>,
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
+    let reason = request.stated_reason("disown")?;
     let subscription_id = request.subscription_id.trim();
     if subscription_id.is_empty() {
         return Err(api_error(
@@ -178,12 +177,7 @@ pub(in crate::core::server) async fn disown_admin_grant(
     crate::subscription_dispatch::usage::record_credential_disabled(
         subscription_id,
         &provider,
-        request
-            .reason
-            .as_deref()
-            .map(str::trim)
-            .filter(|reason| !reason.is_empty())
-            .unwrap_or("disowned by the console that adopted it"),
+        reason,
     );
     crate::gateway::broker::donated_remove(subscription_id)
         .map_err(|detail| api_error(StatusCode::CONFLICT, &detail))?;
@@ -200,23 +194,16 @@ pub(in crate::core::server) async fn disown_admin_grant(
 /// `POST /v1/admin/subscription-pool/reinstate`: a member this deployment
 /// uses after all.
 ///
-/// The mirror of `disown`, and the reason it exists: a retirement was
-/// permanent, so a member given back could never be used again by any
-/// command, and a pool could report itself empty while the accounts sat in
-/// the vault. Reinstating is not a credential: the member returns to the
-/// rotation and still needs a grant of
-/// this gateway's own, so the answer names the sign-in that obtains one.
+/// The mirror of `disown`: the member returns to the rotation. Reinstating
+/// is not a credential, so the member still needs a grant of this gateway's
+/// own, and the answer names the sign-in that obtains one. The reason is the
+/// caller's and is required.
 pub(in crate::core::server) async fn reinstate_admin_grant(
     Extension(client_identity): Extension<ModelClientIdentity>,
     Json(request): Json<DisownRequest>,
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
-    let reason = request
-        .reason
-        .as_deref()
-        .map(str::trim)
-        .filter(|reason| !reason.is_empty())
-        .unwrap_or("reinstated by the console; this deployment uses that account");
+    let reason = request.stated_reason("reinstate")?;
     crate::subscription_dispatch::pool::reinstate_member(&request.subscription_id, reason)
         .await
         .map(|verdict| {
@@ -246,24 +233,14 @@ pub(in crate::core::server) async fn reinstate_admin_grant(
 /// longer returns is no pool member and is not listed, but its row stays.
 /// `disown` refuses it (`the pool holds no member with that id`). This is
 /// the verb that takes the row out; a member the vault lists is
-/// refused back to `disown`. The reason is the caller's: a request without
-/// one is refused, because the journal keeps it as the operator's words.
+/// refused back to `disown`. The reason is the caller's and is required,
+/// because the journal keeps it as the operator's words.
 pub(in crate::core::server) async fn forget_admin_member(
     Extension(client_identity): Extension<ModelClientIdentity>,
     Json(request): Json<DisownRequest>,
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
-    let Some(reason) = request
-        .reason
-        .as_deref()
-        .map(str::trim)
-        .filter(|reason| !reason.is_empty())
-    else {
-        return Err(api_error(
-            StatusCode::BAD_REQUEST,
-            "reason is required: say why this member is forgotten",
-        ));
-    };
+    let reason = request.stated_reason("forget")?;
     crate::subscription_dispatch::forget::forget_member(&request.subscription_id, reason)
         .await
         .map(|verdict| {
@@ -286,9 +263,25 @@ pub(in crate::core::server) async fn forget_admin_member(
         })
 }
 
-/// What the console names when it gives a member back.
+/// What the console names when it gives a member back, takes it again or
+/// forgets it.
 #[derive(serde::Deserialize)]
 pub(in crate::core::server) struct DisownRequest {
     pub subscription_id: String,
     pub reason: Option<String>,
+}
+
+impl DisownRequest {
+    /// The reason the caller states for `change`. The journal and the usage
+    /// ledger keep it as the operator's words, so a missing or blank one is
+    /// refused instead of written in their place.
+    fn stated_reason(&self, change: &str) -> Result<&str, ApiError> {
+        match self.reason.as_deref().map(str::trim) {
+            Some(reason) if !reason.is_empty() => Ok(reason),
+            _ => Err(api_error(
+                StatusCode::BAD_REQUEST,
+                &format!("reason is required: say why you {change} this member"),
+            )),
+        }
+    }
 }
