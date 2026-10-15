@@ -90,11 +90,19 @@ fn cache_path() -> Result<PathBuf, String> {
     })
 }
 
-pub(super) async fn read_cache() -> Result<String, String> {
+/// The last fetched copy and when it was written (RFC 3339, from the file's
+/// modification time).
+pub(super) async fn read_cache() -> Result<(String, String), String> {
     let path = cache_path()?;
-    tokio::fs::read_to_string(&path)
+    let raw = tokio::fs::read_to_string(&path)
         .await
-        .map_err(|error| format!("cannot read {}: {error}", path.display()))
+        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let written = tokio::fs::metadata(&path)
+        .await
+        .and_then(|metadata| metadata.modified())
+        .map_err(|error| format!("cannot read when {} was written: {error}", path.display()))?;
+    let written_at = chrono::DateTime::<chrono::Utc>::from(written).to_rfc3339();
+    Ok((raw, written_at))
 }
 
 pub(super) async fn write_cache(raw: &str) -> Result<(), String> {

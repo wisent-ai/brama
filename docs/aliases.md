@@ -87,5 +87,9 @@ gateway that guessed would be publishing an opinion as metadata.
 `GET /v1/models` narrows on `kind`, `weights`, `category` and `provider`,
 `GET /v1/categories` reports each declaration with how many models it holds,
 and `brama models` and `brama categories` are the same surface from a shell.
+`brama models` also says where the catalogue it listed came from: read live on
+this load, or the copy last written to disk with the time it was written and
+why the live read failed (`catalogSource` in `--json`, `kind` `live` or
+`last_fetched_copy`).
 See [`/docs/concepts/category`](https://brama.wisent.com/docs/concepts/category).
 

@@ -79,6 +79,7 @@ pub(crate) async fn models(args: ModelsArgs) {
             crate::cli::fail();
         }
     };
+    let source = model_catalog::source().await;
     let declared_categories = declared();
     let matched = snapshot
         .models
@@ -98,10 +99,14 @@ pub(crate) async fn models(args: ModelsArgs) {
             )
         })
         .collect::<Vec<_>>();
-    let shown = limit.map_or(matched.len(), |limit| matched.len().min(limit));
+    let shown = match limit {
+        Some(limit) => matched.len().min(limit),
+        None => matched.len(),
+    };
     if as_json {
         super::print_json(&json!({
             "catalogRevision": snapshot.revision,
+            "catalogSource": source,
             "matched": matched.len(),
             "models": matched
                 .iter()
@@ -130,6 +135,18 @@ pub(crate) async fn models(args: ModelsArgs) {
         matched.len(),
         snapshot.revision
     );
+    match source {
+        Some(model_catalog::CatalogSource::Live) => {
+            println!("catalogue read live from its source on this load")
+        }
+        Some(model_catalog::CatalogSource::LastFetchedCopy {
+            written_at,
+            live_error,
+        }) => println!(
+            "catalogue is the copy written {written_at}; the live source could not be read: {live_error}"
+        ),
+        None => println!("catalogue source was not recorded for this load"),
+    }
 }
 
 #[derive(Subcommand)]

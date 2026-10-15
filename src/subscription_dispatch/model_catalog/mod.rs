@@ -36,9 +36,24 @@ pub struct CatalogSnapshot {
     pub revision: String,
 }
 
+/// Where the catalog in memory came from.
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum CatalogSource {
+    /// Read on this load from models.dev, its configured mirror or file.
+    Live,
+    /// The copy last written to disk, because the live read failed; when the
+    /// copy was written and why the live read failed.
+    LastFetchedCopy {
+        written_at: String,
+        live_error: String,
+    },
+}
+
 struct CachedSnapshot {
     loaded_at: Instant,
     snapshot: Arc<CatalogSnapshot>,
+    source: CatalogSource,
 }
 
 static MEMORY_CACHE: LazyLock<RwLock<Option<CachedSnapshot>>> = LazyLock::new(|| RwLock::new(None));
@@ -60,22 +75,29 @@ pub async fn snapshot() -> Result<Arc<CatalogSnapshot>, String> {
         return Ok(fresh);
     }
 
-    let raw = match read_live_catalog().await {
+    let (raw, source) = match read_live_catalog().await {
         Ok(raw) => {
             if let Err(error) = write_cache(&raw).await {
                 tracing::warn!(%error, "could not update models.dev cache");
             }
-            raw
+            (raw, CatalogSource::Live)
         }
         Err(live_error) => {
-            let raw = read_cache().await.map_err(|cache_error| {
+            let (raw, written_at) = read_cache().await.map_err(|cache_error| {
                 format!("models.dev unavailable ({live_error}); cache unavailable ({cache_error})")
             })?;
             tracing::warn!(
                 %live_error,
+                %written_at,
                 "models.dev could not be read; the catalog is the last fetched copy"
             );
-            raw
+            (
+                raw,
+                CatalogSource::LastFetchedCopy {
+                    written_at,
+                    live_error,
+                },
+            )
         }
     };
     let parsed = Arc::new(parse_catalog(&raw)?);
@@ -86,8 +108,18 @@ pub async fn snapshot() -> Result<Arc<CatalogSnapshot>, String> {
     *cache = Some(CachedSnapshot {
         loaded_at: Instant::now(),
         snapshot: Arc::clone(&parsed),
+        source,
     });
     Ok(parsed)
+}
+
+/// Where the catalog in memory came from; `None` before the first load.
+pub async fn source() -> Option<CatalogSource> {
+    MEMORY_CACHE
+        .read()
+        .await
+        .as_ref()
+        .map(|cached| cached.source.clone())
 }
 
 async fn cached_within(ttl: Option<Duration>) -> Option<Arc<CatalogSnapshot>> {
