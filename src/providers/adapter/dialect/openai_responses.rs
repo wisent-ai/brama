@@ -7,10 +7,17 @@ use serde_json::{json, Value};
 use super::named_tool_choice;
 use crate::types::ModelRequest;
 
+/// The tool choice the Codex client sends the Responses backend whenever it
+/// sends tools.
+const CODEX_TOOL_CHOICE: &str = "auto"; // https://github.com/openai/codex/blob/main/codex-rs/core/src/client.rs ResponsesApiRequest { tool_choice: "auto", .. }
+
+/// The caller's tool choice in the Responses shape: a named function becomes
+/// the Responses function choice, and any other choice is carried as stated.
 fn responses_tool_choice(choice: &Value) -> Value {
-    named_tool_choice(choice)
-        .map(|name| json!({"type": "function", "name": name}))
-        .unwrap_or_else(|| choice.clone())
+    match named_tool_choice(choice) {
+        Some(name) => json!({"type": "function", "name": name}),
+        None => choice.clone(),
+    }
 }
 
 /// Every tool call and tool result was checked at the door
@@ -96,11 +103,12 @@ pub(super) fn responses_payload(request: &ModelRequest, model_id: &str) -> Value
     }
     if let Some(tools) = responses_tools(request) {
         body["tools"] = json!(tools);
-        body["tool_choice"] = request
-            .tool_choice
-            .as_ref()
-            .map(responses_tool_choice)
-            .unwrap_or_else(|| json!("auto"));
+        // A caller that states no tool choice gets the one the Codex client
+        // itself sends this backend with every tool list.
+        body["tool_choice"] = match request.tool_choice.as_ref() {
+            Some(choice) => responses_tool_choice(choice),
+            None => json!(CODEX_TOOL_CHOICE),
+        };
     }
     body
 }
