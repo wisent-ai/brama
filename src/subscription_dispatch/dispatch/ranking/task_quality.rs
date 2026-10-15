@@ -8,14 +8,16 @@ use crate::gateway::broker;
 use crate::types::{GatewayRefusal, Refusal};
 
 use super::candidates::active_supported_models_for_agent;
-use super::plan_order::{ordered_float_key, route_plan_key, shuffle_within_equal, unretired};
+use super::plan_order::{route_plan_key, shuffle_within_equal, unretired};
 
-fn string_field(row: &Value, key: &str) -> String {
+/// A row field as text, or `None` when the row carries no text, number or
+/// flag under `key`.
+fn string_field(row: &Value, key: &str) -> Option<String> {
     match row.get(key) {
-        Some(Value::String(value)) => value.trim().to_string(),
-        Some(Value::Number(value)) => value.to_string(),
-        Some(Value::Bool(value)) => value.to_string(),
-        _ => String::new(),
+        Some(Value::String(value)) => Some(value.trim().to_string()),
+        Some(Value::Number(value)) => Some(value.to_string()),
+        Some(Value::Bool(value)) => Some(value.to_string()),
+        _ => None,
     }
 }
 
@@ -46,7 +48,9 @@ fn model_field(row: &Value) -> Result<String, String> {
 /// When the check ran. A time that is absent or not RFC 3339 refuses: read
 /// as the epoch, a newer score of the same model lost to an older one.
 fn checked_at_field(row: &Value) -> Result<i64, String> {
-    let value = string_field(row, "checked_at");
+    let Some(value) = string_field(row, "checked_at") else {
+        return Err("it records no checked_at time".to_string());
+    };
     chrono::DateTime::parse_from_rfc3339(&value)
         .map(|dt| dt.timestamp())
         .map_err(|error| format!("its checked_at {value:?} is not an RFC 3339 time: {error}"))
@@ -69,7 +73,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn task_quality_models(
     let mut latest_by_model: HashMap<String, (f64, i64)> = HashMap::new();
     for row in rows
         .iter()
-        .filter(|row| string_field(row, "status") == "active")
+        .filter(|row| string_field(row, "status").as_deref() == Some("active"))
     {
         // An active row that names no model, no score or no time refuses:
         // passed over, the ranking stood on fewer measurements than recorded.
@@ -97,34 +101,19 @@ pub(in crate::subscription_dispatch::dispatch) async fn task_quality_models(
             format!("no active quality check result for task '{task}' and signed agent"),
         ));
     }
-    scored.sort_by(|a, b| {
-        b.1.partial_cmp(&a.1)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| b.2.cmp(&a.2))
-    });
+    // Highest score first; of two checks of equal score, the later first.
+    scored.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| b.2.cmp(&a.2)));
     let subscriptions = unretired(
         broker::routing_subscriptions(agent_id)
             .map_err(|error| Refusal::gateway(GatewayRefusal::DependencyUnavailable, error))?,
     )?;
     let mut ordered = Vec::new();
-    let mut idx = 0;
-    while idx < scored.len() {
-        let score = scored[idx].1;
-        let mut group = Vec::new();
-        while idx < scored.len() && (scored[idx].1 - score).abs() < f64::EPSILON {
-            group.push(scored[idx].0.clone());
-            idx += 1;
-        }
+    for same_score in scored.chunk_by(|left, right| (left.1 - right.1).abs() < f64::EPSILON) {
         // Quality outranks quota: inside one score the freest plan leads, and
         // only two models whose providers are equally spent are shuffled.
-        group.sort_by(|left, right| {
-            route_plan_key(&subscriptions, left)
-                .partial_cmp(&route_plan_key(&subscriptions, right))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        shuffle_within_equal(&mut group, |model| {
-            ordered_float_key(route_plan_key(&subscriptions, model))
-        })?;
+        let mut group: Vec<String> = same_score.iter().map(|(model, ..)| model.clone()).collect();
+        group.sort_by_key(|model| route_plan_key(&subscriptions, model));
+        shuffle_within_equal(&mut group, |model| route_plan_key(&subscriptions, model))?;
         ordered.extend(group);
     }
     Ok(ordered)

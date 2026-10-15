@@ -8,7 +8,7 @@ use crate::types::{GatewayRefusal, ModelRequest, ModelResponse};
 
 use super::super::credential::eligibility::eligible_subscription_entries;
 use super::super::ranking::pin::apply_pin;
-use super::super::ranking::plan_order::shuffle_within_equal;
+use super::super::ranking::plan_order::{shuffle_within_equal, Headroom};
 use super::super::refusal::envelope::{refuse, refuse_as};
 use super::super::refusal::pool_empty::no_active_credential_summary;
 
@@ -59,15 +59,17 @@ pub(super) async fn ordered_candidate_rows(
             request,
             POINT_CREDENTIAL_SELECTION,
             GatewayRefusal::CredentialUnauthorized,
-            request.billing_target.as_ref().map_or_else(
-                || format!("route {}: no live subscription; {}", request.model, no_active_credential_summary(provider)),
-                |target| {
-                    format!(
-                        "selected credential '{}' is not active for provider '{provider}' and agent",
-                        target.subscription_id
-                    )
-                },
-            ),
+            match request.billing_target.as_ref() {
+                Some(target) => format!(
+                    "selected credential '{}' is not active for provider '{provider}' and agent",
+                    target.subscription_id
+                ),
+                None => format!(
+                    "route {}: no live subscription; {}",
+                    request.model,
+                    no_active_credential_summary(provider)
+                ),
+            },
             None,
         ));
     }
@@ -83,16 +85,11 @@ pub(super) async fn ordered_candidate_rows(
             None,
         )
     })?;
-    // Freest plan first, the ledger's own numbers rather than list order; the
-    // agent's pinned credential then leads unless its window says it is full.
-    // Both reorder the same eligible list; an explicit billing target has
-    // only its selected row to reorder.
-    rows.sort_by(|left, right| {
-        usage::used_fraction(&left.id)
-            .unwrap_or(0.0)
-            .partial_cmp(&usage::used_fraction(&right.id).unwrap_or(0.0))
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    // Unmeasured plans first, then the freest, the ledger's own numbers rather
+    // than list order; the agent's pinned credential then leads unless its
+    // window says it is full. Both reorder the same eligible list; an
+    // explicit billing target has only its selected row to reorder.
+    rows.sort_by_key(|row| Headroom::of(&row.id));
     apply_pin(&mut rows, agent_id, provider);
     // Walk unblocked accounts first, retaining every blocked account so the
     // final refusal reflects the whole eligible pool, not a fixed prefix.

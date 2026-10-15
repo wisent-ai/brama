@@ -83,7 +83,8 @@ recorded and the discarded attempt stays `in_progress` forever on the Echo side.
   the subscription pool reports `brama.subscriptions.ledger` with the path and
   cause until the file is repaired. The whole contract, including how older
   ledgers load, is in [the usage ledger page](../usage-ledger.md).
-  `/tmp/brama-perf.json` contains replaceable process telemetry. The
+  `BRAMA_PERF_PATH`, else `perf.json` in Brama's state directory, contains
+  replaceable process telemetry, never in the shared temporary directory. The
   entitlements router owns encrypted subscription credential storage in managed
   deployments.
 - **Subscription discovery:** a provider subscription is a Skarbiec item tagged
@@ -121,8 +122,9 @@ recorded and the discarded attempt stays `in_progress` forever on the Echo side.
   call. Chance still breaks exact ties, so accounts at equal utilization stay
   decorrelated, but an account the provider says is 90 percent spent is no
   longer tried ahead of one at 10 percent. A window whose own reset instant has
-  passed counts as empty; a subscription with no reading counts as free,
-  because its first call writes the reading that corrects the placement.
+  passed counts as empty; a subscription with no reading is tried before any
+  measured one, because its first call writes the reading that ranks it, and
+  a route with no usable subscription is tried last.
 - **One agent, one account, for the length of a window:** the credential that
   served an agent is remembered per provider and tried first on that agent's
   next request, until the tightest window it reported resets, or, when the
