@@ -92,16 +92,15 @@ pub(crate) async fn gateway_for_consumer(consumer: &str) -> Result<String, Strin
     ])
     .await?;
     // The directory prints the origin first and its observation after it.
-    let origin = answer
+    let Some(origin) = answer
         .split_whitespace()
         .next()
-        .unwrap_or_default()
-        .to_string();
-    if !origin.starts_with("http://") && !origin.starts_with("https://") {
+        .filter(|first| first.starts_with("http://") || first.starts_with("https://"))
+    else {
         return Err(format!(
             "Stado's service directory answered `{}` for consumer `{consumer}`, which names no gateway origin",
             answer.as_str()
         ));
-    }
-    Ok(origin)
+    };
+    Ok(origin.to_string())
 }
