@@ -55,22 +55,22 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
         Ok(None) => say!("  {}: absent", policy_path.display()),
         Err(cause) => say!("  {}: {cause}", policy_path.display()),
     }
+    // Where Skarbiec reads the table: the declared file, else beside the
+    // vault, else its documented home location.
     let routes_path = match (
         layout.settings.get("SKARBIEC_CAPABILITY_ROUTES_FILE"),
         layout.settings.get("SKARBIEC_VAULT_FILE"),
     ) {
         (Some(routes), _) => PathBuf::from(routes),
-        (None, Some(vault)) => Path::new(vault)
-            .parent()
-            .unwrap_or(Path::new("/"))
-            .join("capability-routes.json"),
+        (None, Some(vault)) => Path::new(vault).with_file_name("capability-routes.json"),
         (None, None) => layout.home.join(".config/skarbiec/capability-routes.json"),
     };
     let mut routed = BTreeSet::new();
     match read_json(&routes_path) {
-        Ok(Some(document)) => {
-            let table = document.get("routes").cloned().unwrap_or(document);
-            for (resource, coordinate) in table.as_object().into_iter().flatten() {
+        // Skarbiec keeps the table as an object of resources and reads
+        // nothing else, so this reads it the same way.
+        Ok(Some(Value::Object(table))) => {
+            for (resource, coordinate) in &table {
                 if coordinate.get("item").is_some_and(Value::is_string)
                     && coordinate.get("field").is_some_and(Value::is_string)
                 {
@@ -94,6 +94,10 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
                 );
             }
         }
+        Ok(Some(_)) => say!(
+            "  {}: not an object of resources, so Skarbiec routes nothing from it",
+            routes_path.display()
+        ),
         Ok(None) => say!("  {}: absent", routes_path.display()),
         Err(cause) => say!("  {}: {cause}", routes_path.display()),
     }
@@ -111,11 +115,11 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
 /// Every alias route against the providers policy and routes agree on.
 pub(super) fn print_alias_routes(layout: &Layout, providers: &BTreeSet<String>) {
     say!("\n=== alias routes against routed provider grants");
-    let routes_path = layout
-        .settings
-        .get("BRAMA_INFERENCE_ROUTES_FILE")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| layout.home.join(".config/brama/inference-routes.json"));
+    // The installation's declared registry, else the documented home location.
+    let routes_path = match layout.settings.get("BRAMA_INFERENCE_ROUTES_FILE") {
+        Some(declared) => PathBuf::from(declared),
+        None => layout.home.join(".config/brama/inference-routes.json"),
+    };
     let document = match read_json(&routes_path) {
         Ok(Some(document)) => document,
         Ok(None) => {

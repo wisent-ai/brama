@@ -33,10 +33,11 @@ fn configured_provider_grants() -> Result<std::collections::HashSet<String>, Str
         .map_err(|error| format!("read grant routes {}: {error}", path.display()))?;
     let table: serde_json::Value = serde_json::from_str(&raw)
         .map_err(|error| format!("decode grant routes {}: {error}", path.display()))?;
-    let routes = table.get("routes").unwrap_or(&table);
-    let routes = routes.as_object().ok_or_else(|| {
+    // Skarbiec keeps the table as an object of resources and reads nothing
+    // else; a `routes` key would be a resource of that name, not a wrapper.
+    let routes = table.as_object().ok_or_else(|| {
         format!(
-            "read grant routes {}: routes must be an object",
+            "read grant routes {}: the table must be an object of resources, as Skarbiec writes it",
             path.display()
         )
     })?;
