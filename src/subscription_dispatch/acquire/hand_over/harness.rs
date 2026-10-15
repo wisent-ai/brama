@@ -94,6 +94,8 @@ pub(super) async fn held_accounts(
 /// printed and waiting for the redirect on stdin.
 pub(super) struct Login {
     child: tokio::process::Child,
+    /// The login's command line, as the wait for its end names it.
+    command: String,
     pub authorize_url: String,
     transcript: Vec<String>,
 }
@@ -101,6 +103,7 @@ pub(super) struct Login {
 impl Login {
     /// Start the login and read its output up to the authorize URL.
     pub(super) async fn start(harness: Harness, harness_provider: &str) -> Result<Self, String> {
+        let command = format!("{} login {harness_provider}", harness.name());
         let mut child = tokio::process::Command::new(harness.name())
             .args(["login", harness_provider])
             .stdin(Stdio::piped())
@@ -108,43 +111,49 @@ impl Login {
             .stderr(Stdio::piped())
             .kill_on_drop(true)
             .spawn()
-            .map_err(|error| {
-                format!(
-                    "`{} login {harness_provider}` did not start: {error}",
-                    harness.name()
-                )
-            })?;
-        let stdout = child.stdout.take().ok_or_else(|| {
-            format!(
-                "`{} login {harness_provider}` gave no stdout",
-                harness.name()
-            )
-        })?;
+            .map_err(|error| format!("`{command}` did not start: {error}"))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| format!("`{command}` gave no stdout"))?;
+        let place = match child.id() {
+            Some(pid) => format!("pid {pid}"),
+            None => "a login that has already ended".to_string(),
+        };
         let mut lines = BufReader::new(stdout).lines();
         let mut transcript = Vec::new();
-        while let Some(line) = lines
-            .next_line()
-            .await
-            .map_err(|error| format!("reading `{} login`: {error}", harness.name()))?
-        {
-            let trimmed = line.trim().to_owned();
-            transcript.push(trimmed.clone());
-            if trimmed.starts_with("https://") && trimmed.contains("/oauth/authorize?") {
-                // The rest of the output is read when the login ends.
-                child.stdout = None;
-                tokio::spawn(async move { while let Ok(Some(_)) = lines.next_line().await {} });
-                return Ok(Self {
-                    child,
-                    authorize_url: trimmed,
-                    transcript,
-                });
-            }
-        }
-        Err(format!(
-            "`{} login {harness_provider}` ended without printing an authorize URL; it printed: {}",
-            harness.name(),
-            transcript.join(" | ")
-        ))
+        let printed = stado_wait::until(
+            stado_wait::Kind::Process,
+            format!("`{command}` to print its authorize URL"),
+            place,
+            async {
+                while let Some(line) = lines.next_line().await? {
+                    let trimmed = line.trim().to_owned();
+                    transcript.push(trimmed.clone());
+                    if trimmed.starts_with("https://") && trimmed.contains("/oauth/authorize?") {
+                        return Ok(Some(trimmed));
+                    }
+                }
+                Ok::<_, std::io::Error>(None)
+            },
+        )
+        .await
+        .map_err(|error| format!("reading `{command}`: {error}"))?;
+        let Some(authorize_url) = printed else {
+            return Err(format!(
+                "`{command}` ended without printing an authorize URL; it printed: {}",
+                transcript.join(" | ")
+            ));
+        };
+        // The rest of the output is read when the login ends.
+        child.stdout = None;
+        tokio::spawn(async move { while let Ok(Some(_)) = lines.next_line().await {} });
+        Ok(Self {
+            child,
+            command,
+            authorize_url,
+            transcript,
+        })
     }
 
     /// Hand the provider's redirect to the login and wait for it to end.
@@ -159,11 +168,12 @@ impl Login {
             .await
             .map_err(|error| format!("writing the redirect to the harness login: {error}"))?;
         drop(stdin);
-        let output = self
-            .child
-            .wait_with_output()
-            .await
-            .map_err(|error| format!("waiting for the harness login: {error}"))?;
+        let output = stado_wait::child_output_async(
+            self.child,
+            format!("`{}` after the redirect was handed to it", self.command),
+        )
+        .await
+        .map_err(|error| format!("waiting for the harness login: {error}"))?;
         if output.status.success() {
             return Ok(());
         }
