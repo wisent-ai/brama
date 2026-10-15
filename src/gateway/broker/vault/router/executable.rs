@@ -25,17 +25,14 @@ fn executable_mode(mode: u32) -> bool {
 /// write with `No such file or directory (os error 2)` and named no program.
 pub(crate) fn entitlements_router_bin() -> Result<String, String> {
     for declaration in [ENTITLEMENTS_ROUTER_BIN_ENV, SKARBIEC_BIN_ENV] {
-        match std::env::var(declaration) {
-            Ok(value) if value.trim().is_empty() => {
+        let declared = crate::environment::declared_text(declaration)
+            .map_err(|refusal| format!("read vault executable declaration: {refusal}"))?;
+        match declared {
+            Some(value) if value.trim().is_empty() => {
                 return Err(format!("resolve vault executable: {declaration} is empty"));
             }
-            Ok(value) => return Ok(value.trim().to_owned()),
-            Err(std::env::VarError::NotPresent) => {}
-            Err(error) => {
-                return Err(format!(
-                    "read vault executable declaration {declaration}: {error}"
-                ))
-            }
+            Some(value) => return Ok(value.trim().to_owned()),
+            None => {}
         }
     }
     if let Some(found) = VAULT_PROGRAM_NAMES.iter().copied().find_map(on_path) {
@@ -43,11 +40,18 @@ pub(crate) fn entitlements_router_bin() -> Result<String, String> {
     }
     let installed = match std::env::var_os("HOME").filter(|home| !home.is_empty()) {
         Some(home) => {
+            use std::os::unix::fs::PermissionsExt;
             let installed = std::path::Path::new(&home).join(VAULT_HOME_RELATIVE);
-            if is_executable_file(&installed) {
-                return Ok(installed.display().to_string());
+            match std::fs::metadata(&installed) {
+                Ok(info) if info.is_file() && executable_mode(info.permissions().mode()) => {
+                    return Ok(installed.display().to_string());
+                }
+                Ok(_) => format!("{} is not an executable file", installed.display()),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    format!("{} does not exist", installed.display())
+                }
+                Err(error) => format!("{} cannot be examined: {error}", installed.display()),
             }
-            format!("{} is not an executable file", installed.display())
         }
         None => format!("HOME is not set, so ~/{VAULT_HOME_RELATIVE} cannot be looked at"),
     };
