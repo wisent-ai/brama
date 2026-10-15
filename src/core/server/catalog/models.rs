@@ -32,7 +32,12 @@ pub(in crate::core::server) async fn list_models(
     headers: axum::http::HeaderMap,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let filters = CatalogFilters::from_query(query)?.validated()?;
-    let account_agent = account_agent_id(&client_identity).ok();
+    // Only a request carrying a signed-in Wisent user has an account agent;
+    // for one that carries a user, the id is derived, never refused.
+    let account_agent = match client_identity.human_context() {
+        Some(_) => Some(account_agent_id(&client_identity)?),
+        None => None,
+    };
     let signed_catalog_agent = if account_agent.is_none() && has_caller_auth_headers(&headers) {
         Some(authorize_caller(&client_identity, &headers, &[], None).await?)
     } else {
@@ -57,10 +62,12 @@ pub(in crate::core::server) async fn list_models(
 
     let mut registry_metadata = HashMap::new();
     let mut catalog_revision = None;
+    let mut catalog_source = None;
     let mut degraded = false;
     match crate::subscription_dispatch::model_catalog::snapshot().await {
         Ok(catalog) => {
             catalog_revision = Some(catalog.revision.clone());
+            catalog_source = crate::subscription_dispatch::model_catalog::source().await;
             for model in &catalog.models {
                 model_ids.push(model.route_id.clone());
                 if catalog_agent.is_some() && configured_providers.contains(&model.provider_id) {
@@ -167,19 +174,22 @@ pub(in crate::core::server) async fn list_models(
     // asking for the uncensored models and being shown the alias that reaches
     // one is the answer the caller wanted.
     let declared_categories = declared();
+    let alias_routes = alias_routes(&aliases, &model_ids, &registry_metadata)?;
     let categories = model_categories(
         &declared_categories,
         &model_ids,
         &registry_metadata,
-        &aliases,
+        &alias_routes,
     );
     if filters.any() {
         model_ids.retain(|id| {
+            let carried: &[String] = match categories.get(id) {
+                Some(names) => names,
+                None => &[],
+            };
             filters.matches(
-                registry_metadata.get(id).or_else(|| {
-                    alias_route(&aliases, id).and_then(|route| registry_metadata.get(&route))
-                }),
-                categories.get(id).map(Vec::as_slice).unwrap_or_default(),
+                catalogue_model(id, &registry_metadata, &alias_routes),
+                carried,
             )
         });
     }
@@ -193,36 +203,72 @@ pub(in crate::core::server) async fn list_models(
         caller_known,
     };
     if headers.contains_key("x-jeden-schema-min") {
-        return Ok(Json(views::jeden(view, catalog_revision, degraded)));
+        let mut answer = views::jeden(view, catalog_revision, degraded);
+        // Where the public catalogue behind this answer came from: read live,
+        // or the copy last written to disk with its time and the live error.
+        if let Some(source) = catalog_source {
+            answer["catalogSource"] = serde_json::json!(source);
+        }
+        return Ok(Json(answer));
     }
     Ok(Json(views::openai(view)))
 }
 
-/// The route one declared alias points at, when it points at a catalogue
-/// route rather than at delegation.
-fn alias_route(aliases: &ModelAliases, alias: &str) -> Option<String> {
-    aliases
-        .declared_route(alias)
-        .ok()
-        .flatten()
-        .filter(|route| crate::providers::adapter::provider_id_from_route(route).is_some())
+/// The catalogue route each listed alias points at, for every listed id the
+/// catalogue does not hold itself. An alias that points at delegation rather
+/// than a catalogue route has none; a routes file that cannot be read refuses
+/// the listing with its reason instead of dropping the alias's categories.
+fn alias_routes(
+    aliases: &ModelAliases,
+    model_ids: &[String],
+    registry_metadata: &HashMap<String, RegistryModel>,
+) -> Result<HashMap<String, String>, ApiError> {
+    let mut routes = HashMap::new();
+    for id in model_ids
+        .iter()
+        .filter(|id| !registry_metadata.contains_key(*id))
+    {
+        let declared = aliases.declared_route(id).map_err(|error| {
+            api_error(
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                &format!("the route registry could not resolve {id}: {error}"),
+            )
+        })?;
+        if let Some(route) = declared
+            .filter(|route| crate::providers::adapter::provider_id_from_route(route).is_some())
+        {
+            routes.insert(id.clone(), route);
+        }
+    }
+    Ok(routes)
+}
+
+/// The catalogue model an id names, directly or through the alias pointing at it.
+fn catalogue_model<'a>(
+    id: &str,
+    registry_metadata: &'a HashMap<String, RegistryModel>,
+    alias_routes: &HashMap<String, String>,
+) -> Option<&'a RegistryModel> {
+    match registry_metadata.get(id) {
+        Some(model) => Some(model),
+        None => alias_routes
+            .get(id)
+            .and_then(|route| registry_metadata.get(route)),
+    }
 }
 
 fn model_categories(
     declared_categories: &Categories,
     model_ids: &[String],
     registry_metadata: &HashMap<String, RegistryModel>,
-    aliases: &ModelAliases,
+    alias_routes: &HashMap<String, String>,
 ) -> HashMap<String, Vec<String>> {
     if declared_categories.is_empty() {
         return HashMap::new();
     }
     let mut carried = HashMap::new();
     for id in model_ids {
-        let model = registry_metadata
-            .get(id)
-            .or_else(|| alias_route(aliases, id).and_then(|route| registry_metadata.get(&route)));
-        let Some(model) = model else {
+        let Some(model) = catalogue_model(id, registry_metadata, alias_routes) else {
             continue;
         };
         let names = categories_for(declared_categories, model);
