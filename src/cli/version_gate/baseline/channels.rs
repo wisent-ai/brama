@@ -67,17 +67,16 @@ fn output(program: &str, root: &Path, arguments: &[&str]) -> Result<Option<Answe
     }
 }
 
+/// The order of a `vMAJOR.MINOR.PATCH` tag (the `v` is optional); any other
+/// tag is not a release and has none.
 fn semver_order(tag: &str) -> Option<(u64, u64, u64)> {
     let number = match tag.strip_prefix('v') {
         Some(rest) => rest,
         None => tag,
     };
-    let parts: Vec<u64> = number
-        .split('.')
-        .map(|part| part.parse().ok())
-        .collect::<Option<_>>()?;
-    match parts.as_slice() {
-        [major, minor, patch] => Some((*major, *minor, *patch)),
+    let mut parts = number.split('.').map(str::parse::<u64>);
+    match (parts.next(), parts.next(), parts.next(), parts.next()) {
+        (Some(Ok(major)), Some(Ok(minor)), Some(Ok(patch)), None) => Some((major, minor, patch)),
         _ => None,
     }
 }
@@ -88,10 +87,11 @@ fn semver_order(tag: &str) -> Option<(u64, u64, u64)> {
 /// stdout is read whatever the exit status and only a reply that is not JSON
 /// is refused.
 pub(super) fn stado_release(root: &Path) -> Result<Option<(String, String, String)>, String> {
-    let stado = match std::env::var("STADO_BIN") {
-        Ok(program) => program,
-        Err(std::env::VarError::NotPresent) => String::from("stado"),
-        Err(error) => return Err(format!("STADO_BIN cannot be read: {error}")),
+    // Unset is the `stado` on the search path; a value that cannot be read is
+    // refused by name rather than read as unset.
+    let stado = match brama::environment::declared_setting("STADO_BIN")? {
+        Some(program) => program,
+        None => String::from("stado"),
     };
     let Some(answer) = output(&stado, root, &["release", "status", PRODUCT, "--json"])? else {
         return Ok(None);
