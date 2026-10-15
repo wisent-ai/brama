@@ -145,12 +145,16 @@ pub(super) async fn route_model_call(
                 state = diagnosis.state,
                 "refusing a declared alias that has no serviceable route"
             );
+            let reason = match diagnosis.reason.clone() {
+                Some(reason) => reason,
+                None => format!(
+                    "alias `{requested_model}` has no serviceable route, and its diagnosis states no cause"
+                ),
+            };
             return Err(api_error_with_details(
                 StatusCode::SERVICE_UNAVAILABLE,
                 "alias_unserviceable",
-                &diagnosis.reason.clone().unwrap_or_else(|| {
-                    format!("alias `{requested_model}` has no serviceable route")
-                }),
+                &reason,
                 json!({
                     "alias": diagnosis.alias,
                     "state": diagnosis.state,
@@ -171,10 +175,12 @@ pub(super) async fn route_model_call(
         || alias_source
             .as_deref()
             .is_some_and(|route| route == BEST_ALIAS);
-    let selected_model = alias_source
-        .as_deref()
-        .unwrap_or(requested_model)
-        .to_string();
+    // Without an alias the request names its route itself.
+    let selected_model = match alias_source.as_deref() {
+        Some(route) => route,
+        None => requested_model,
+    }
+    .to_string();
     // A route that delegates to `best` again names no provider, so it is a
     // preference nothing can be preferred to.
     let preferred_route = Some(selected_model.as_str())
@@ -229,7 +235,7 @@ pub(super) async fn route_model_call(
     } else {
         "direct"
     };
-    let request_id = format!("chatcmpl-{}", uuid_v4());
+    let request_id = format!("chatcmpl-{}", uuid::Uuid::new_v4().simple());
     info!(
         event = "routing_decision",
         request_id = %request_id,
@@ -271,13 +277,4 @@ pub(super) async fn route_model_call(
     .await;
     admission.settle(settled(&dispatched));
     Ok((dispatched, meta))
-}
-
-fn uuid_v4() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let t = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    format!("{t:032x}")
 }
