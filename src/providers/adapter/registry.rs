@@ -183,7 +183,7 @@ pub fn provider(id: &str) -> Option<&'static ProviderDescriptor> {
 pub fn provider_endpoint(provider_id: &str) -> Result<Option<String>, String> {
     let descriptor =
         provider(provider_id).ok_or_else(|| format!("provider `{provider_id}` is not declared"))?;
-    if address::provider_base_url_override(descriptor.id).is_none()
+    if address::provider_base_url_override(descriptor.id)?.is_none()
         && descriptor.id == LOCAL_MODEL_SERVER
     {
         return Ok(None);

@@ -9,6 +9,7 @@ pub mod config_adoption;
 pub mod core;
 pub mod crypto;
 pub mod detection;
+pub mod environment;
 pub mod gateway;
 pub mod journal;
 pub mod mcp;

@@ -58,7 +58,7 @@ pub(in crate::providers::adapter) fn catalog_provider_base_url(
 ) -> Result<String, String> {
     let declared = trusted_catalog_base_url(&descriptor.id)
         .ok_or_else(|| format!("provider `{}` has no trusted endpoint", descriptor.id))?;
-    if let Some(configured) = provider_base_url_override(&descriptor.id) {
+    if let Some(configured) = provider_base_url_override(&descriptor.id)? {
         return validated_provider_base_url(&descriptor.id, &configured, declared, true);
     }
     validated_provider_base_url(&descriptor.id, declared, declared, false)

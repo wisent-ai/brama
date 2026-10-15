@@ -68,11 +68,7 @@ pub(super) fn installation() -> Result<Installation, String> {
     let settings = service_settings(&home)?;
     // Set and not UTF-8 is a broken value, not an absent one: passing over it
     // would register from a path the launcher did not name.
-    let env = |name: &str| match std::env::var(name) {
-        Ok(value) => Ok(Some(value).filter(|value| !value.is_empty())),
-        Err(std::env::VarError::NotPresent) => Ok(None),
-        Err(std::env::VarError::NotUnicode(raw)) => Err(format!("{name} is not UTF-8: {raw:?}")),
-    };
+    let env = brama::environment::declared_setting;
     let setting = |name: &str| {
         settings
             .get(name)

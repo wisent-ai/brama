@@ -11,12 +11,36 @@ use super::super::identity::{valid_agent_id, ModelClientIdentity, ModelClientKin
 use super::WorkloadAuthorityAnswer;
 
 pub(super) async fn ask_authority(bearer: &str) -> WorkloadAuthorityAnswer {
-    let (Ok(base), Ok(consumer), Ok(token_file)) = (
-        std::env::var("WC_SKARBIEC_URL"),
-        std::env::var("BRAMA_SKARBIEC_CONSUMER"),
-        std::env::var("BRAMA_SKARBIEC_TOKEN_FILE"),
-    ) else {
-        return WorkloadAuthorityAnswer::NotConfigured;
+    // None of the three declared is a gateway without this authority. Some of
+    // them, or one that cannot be read, is a broken declaration the caller is
+    // told about by name, not one quietly read as no authority at all.
+    let read = |name: &str| crate::environment::declared_setting(name);
+    let declared = (
+        read("WC_SKARBIEC_URL"),
+        read("BRAMA_SKARBIEC_CONSUMER"),
+        read("BRAMA_SKARBIEC_TOKEN_FILE"),
+    );
+    let (base, consumer, token_file) = match declared {
+        (Ok(Some(base)), Ok(Some(consumer)), Ok(Some(token_file))) => (base, consumer, token_file),
+        (Ok(None), Ok(None), Ok(None)) => return WorkloadAuthorityAnswer::NotConfigured,
+        (base, consumer, token_file) => {
+            let mut broken = Vec::new();
+            for (name, value) in [
+                ("WC_SKARBIEC_URL", base),
+                ("BRAMA_SKARBIEC_CONSUMER", consumer),
+                ("BRAMA_SKARBIEC_TOKEN_FILE", token_file),
+            ] {
+                match value {
+                    Ok(Some(_)) => {}
+                    Ok(None) => broken.push(format!("{name} is not set")),
+                    Err(refusal) => broken.push(refusal),
+                }
+            }
+            return WorkloadAuthorityAnswer::Unavailable(format!(
+                "the Skarbiec token authority is declared incompletely: {}",
+                broken.join("; ")
+            ));
+        }
     };
     let own = match std::fs::read_to_string(&token_file) {
         Ok(own) => own,

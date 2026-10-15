@@ -11,6 +11,8 @@
 
 use serde_json::Value;
 
+use crate::environment::{declared_setting as setting, stado_binary};
+
 /// Where Weles is, and what Stado knows about that placement.
 ///
 /// A forwarded loopback URL does not identify the host serving Weles.
@@ -139,19 +141,6 @@ pub(crate) async fn worker_api_base() -> Result<WelesEndpoint, String> {
 /// one `BRAMA_WELES_ADMISSION_CONSUMER` replaces for a launcher of its own.
 const OPERATOR_CONSUMER: &str = "operator";
 
-/// `key`, trimmed, when it names something: `None` when it is unset or
-/// blank, and a refusal naming it when it is set to text that is not Unicode.
-fn setting(key: &str) -> Result<Option<String>, String> {
-    match std::env::var(key) {
-        Ok(value) if value.trim().is_empty() => Ok(None),
-        Ok(value) => Ok(Some(value.trim().to_string())),
-        Err(std::env::VarError::NotPresent) => Ok(None),
-        Err(std::env::VarError::NotUnicode(_)) => {
-            Err(format!("{key} is set to text that is not Unicode"))
-        }
-    }
-}
-
 /// Brama's Weles admission credential. It is deliberately distinct from
 /// Weles's general worker API token.
 ///
@@ -219,16 +208,4 @@ fn vault_reauth_token() -> Result<String, String> {
         return Err(format!("role {REAUTH_ROLE} has an empty token"));
     }
     Ok(token)
-}
-
-/// The Stado binary: `BRAMA_STADO_BIN`, else `.stado/bin/stado` under the
-/// user's home, never under the working directory.
-fn stado_binary() -> Result<std::path::PathBuf, String> {
-    Ok(match setting("BRAMA_STADO_BIN")? {
-        Some(value) => std::path::PathBuf::from(value),
-        None => crate::journal::home_dir()
-            .join(".stado")
-            .join("bin")
-            .join("stado"),
-    })
 }

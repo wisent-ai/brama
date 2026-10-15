@@ -60,20 +60,19 @@ impl Placement {
     }
 }
 
-/// The Stado binary that answers placement, the same resolution the sign-in
-/// path uses to find Weles.
-fn stado_binary() -> std::path::PathBuf {
-    match std::env::var("BRAMA_STADO_BIN") {
-        Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
-        _ => crate::journal::home_dir()
-            .join(".stado")
-            .join("bin")
-            .join("stado"),
-    }
-}
-
 async fn read_placement() -> Placement {
-    let stado = stado_binary();
+    let stado = match crate::environment::stado_binary() {
+        Ok(stado) => stado,
+        Err(refusal) => {
+            return Placement {
+                placed_on: None,
+                this_host: None,
+                detail: Some(format!(
+                    "the Stado CLI that reads brama's placement is not named: {refusal}"
+                )),
+            }
+        }
+    };
     let output = stado_wait::output_async(
         tokio::process::Command::new(&stado)
             .kill_on_drop(true)
@@ -141,25 +140,29 @@ static PLACEMENT: LazyLock<tokio::sync::OnceCell<Placement>> =
 /// The placement this process has already learned, or nothing yet.
 ///
 /// Readiness never waits for it. The lookup runs a `stado` child process, and
-/// a readiness answer that pays for one is a readiness answer that can miss
-/// its deadline: 0.3.6 was quarantined on the mini with `/readyz did not
-/// answer within 3s` for exactly that reason. So the answer is filled in by
-/// [`learn`] in the background and read here without awaiting anything.
+/// a readiness answer that paid for one could miss the deadline the caller
+/// reading readiness holds it to. So the answer is filled in by [`learn`] in
+/// the background and read here without awaiting anything.
 pub(super) fn placement() -> Placement {
-    PLACEMENT.get().cloned().unwrap_or(Placement {
-        placed_on: None,
-        this_host: None,
-        detail: Some(
-            "this gateway has not yet read its own placement from the registry; the answer \
-             arrives without holding up a readiness reply"
-                .to_string(),
-        ),
-    })
+    match PLACEMENT.get() {
+        Some(learned) => learned.clone(),
+        None => Placement {
+            placed_on: None,
+            this_host: None,
+            detail: Some(
+                "this gateway has not yet read its own placement from the registry; the answer \
+                 arrives without holding up a readiness reply"
+                    .to_string(),
+            ),
+        },
+    }
 }
 
 /// Learn this gateway's placement once, off the readiness path.
 pub(in crate::core::server) fn learn() {
     tokio::spawn(async {
-        let _ = PLACEMENT.set(read_placement().await);
+        if let Err(error) = PLACEMENT.set(read_placement().await) {
+            tracing::warn!(%error, "brama's placement was already learned; this later reading is not kept");
+        }
     });
 }

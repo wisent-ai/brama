@@ -23,23 +23,28 @@ use super::tags::subscription_tags_for_write;
 
 const DONATED_SUBSCRIPTIONS_FILE_ENV: &str = "BRAMA_DONATED_SUBSCRIPTIONS_FILE";
 
-/// Path of the donated-subscriptions overlay file.
-pub fn donated_subscriptions_path() -> PathBuf {
-    match std::env::var(DONATED_SUBSCRIPTIONS_FILE_ENV) {
-        Ok(value) if !value.trim().is_empty() => PathBuf::from(value),
-        _ => crate::journal::home_dir()
-            .join(".stado")
-            .join("var")
-            .join("brama")
-            .join("donated-subscriptions.json"),
-    }
+/// Path of the donated-subscriptions overlay file: the one
+/// `BRAMA_DONATED_SUBSCRIPTIONS_FILE` names, else the one under the user's
+/// Stado state. A name that cannot be read is refused, not passed over for
+/// the home copy, which would read and write another overlay.
+pub fn donated_subscriptions_path() -> Result<PathBuf, String> {
+    Ok(
+        match crate::environment::declared_setting(DONATED_SUBSCRIPTIONS_FILE_ENV)? {
+            Some(value) => PathBuf::from(value),
+            None => crate::journal::home_dir()
+                .join(".stado")
+                .join("var")
+                .join("brama")
+                .join("donated-subscriptions.json"),
+        },
+    )
 }
 
 /// Overlay entries, for routing (`owner: None`) or for the agent that banked
 /// them (`owner: Some`). A missing file is an empty overlay; every other read
 /// or decode failure remains visible to the caller.
 pub(super) fn donated_subscriptions(owner: Option<&str>) -> Result<Vec<SubscriptionEntry>, String> {
-    let path = donated_subscriptions_path();
+    let path = donated_subscriptions_path()?;
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -60,7 +65,7 @@ pub(super) fn donated_subscriptions(owner: Option<&str>) -> Result<Vec<Subscript
 
 /// Read-modify-write the overlay file atomically (temp + rename, mode 0600).
 fn update_donated_items(update: impl FnOnce(&mut Vec<Value>)) -> Result<(), String> {
-    let path = donated_subscriptions_path();
+    let path = donated_subscriptions_path()?;
     #[derive(serde::Deserialize)]
     struct Overlay {
         items: Vec<Value>,
@@ -99,7 +104,7 @@ fn update_donated_items(update: impl FnOnce(&mut Vec<Value>)) -> Result<(), Stri
             .create(true)
             .write(true)
             .truncate(true)
-            .mode(0o600)
+            .mode(u32::from(libc::S_IRUSR | libc::S_IWUSR))
             .open(&tmp)
             .map_err(|error| format!("write donated subscriptions file: {error}"))?;
         file.write_all(payload.as_bytes())

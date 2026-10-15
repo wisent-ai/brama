@@ -45,16 +45,17 @@ impl ModelIngressAuth {
         // gateway could not start on a host that was not provisioned to decrypt
         // other clients' items. A bearer that is not here is resolved against
         // Skarbiec, which is where it was issued.
-        let Ok(encoded) = std::env::var(MODEL_ROUTER_CLIENT_IDENTITIES_ENV) else {
+        // Set to text that is not Unicode is a broken table, refused by name
+        // rather than read as absent.
+        let Some(encoded) = crate::environment::declared_setting(
+            MODEL_ROUTER_CLIENT_IDENTITIES_ENV,
+        )
+        .map_err(|refusal| std::io::Error::new(std::io::ErrorKind::InvalidInput, refusal))?
+        else {
             return Ok(Self {
                 credentials: Vec::new(),
             });
         };
-        if encoded.trim().is_empty() {
-            return Ok(Self {
-                credentials: Vec::new(),
-            });
-        }
         let configured: Vec<ModelClientCredential> =
             serde_json::from_str(&encoded).map_err(|error| {
                 std::io::Error::new(

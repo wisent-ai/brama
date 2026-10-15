@@ -20,13 +20,25 @@ enum WebScheme {
     Https,
 }
 
-fn web_scheme(url: &reqwest::Url) -> Option<WebScheme> {
-    serde_json::from_value(serde_json::Value::String(url.scheme().to_owned())).ok()
+/// The scheme `url` is reached by, refused with the scheme it names when it
+/// is neither HTTP nor HTTPS.
+fn web_scheme(provider_id: &str, url: &reqwest::Url) -> Result<WebScheme, String> {
+    serde_json::from_value(serde_json::Value::String(url.scheme().to_owned())).map_err(|_| {
+        format!(
+            "provider `{provider_id}` base URL uses the scheme `{}`; a provider is reached over https, or http on a loopback override",
+            url.scheme()
+        )
+    })
 }
 
+/// The address a deployment points `provider_id` at instead of its declared
+/// one, `BRAMA_PROVIDER_<ID>_BASE_URL`: `None` when unset or blank, refused
+/// by name when it cannot be read, since reading it as unset would send the
+/// request past the proxy the deployment named. Surrounding whitespace is
+/// kept, so the validation below refuses it.
 pub(in crate::providers::adapter) fn provider_base_url_override(
     provider_id: &str,
-) -> Option<String> {
+) -> Result<Option<String>, String> {
     let suffix = provider_id
         .chars()
         .map(|character| {
@@ -37,9 +49,10 @@ pub(in crate::providers::adapter) fn provider_base_url_override(
             }
         })
         .collect::<String>();
-    std::env::var(format!("BRAMA_PROVIDER_{suffix}_BASE_URL"))
-        .ok()
-        .filter(|value| !value.trim().is_empty())
+    Ok(
+        crate::environment::declared_text(&format!("BRAMA_PROVIDER_{suffix}_BASE_URL"))?
+            .filter(|value| !value.trim().is_empty()),
+    )
 }
 
 /// `candidate` as the base URL `provider_id` may be sent to. The trusted
@@ -74,8 +87,13 @@ pub(in crate::providers::adapter) fn validated_provider_base_url(
         .host_str()
         .ok_or_else(|| format!("provider `{provider_id}` base URL has no host"))?;
     let trusted = reqwest::Url::parse(declared)
-        .ok()
-        .and_then(|declared| declared.host_str().map(str::to_owned))
+        .map_err(|error| {
+            format!(
+                "provider `{provider_id}` is declared with {declared}, which is not a URL: {error}"
+            )
+        })?
+        .host_str()
+        .map(str::to_owned)
         .ok_or_else(|| {
             format!("provider `{provider_id}` is declared with {declared}, which names no host")
         })?;
@@ -83,15 +101,15 @@ pub(in crate::providers::adapter) fn validated_provider_base_url(
         || host
             .parse::<std::net::IpAddr>()
             .is_ok_and(|address| address.is_loopback());
-    let scheme = web_scheme(&url);
+    let scheme = web_scheme(provider_id, &url)?;
     if loopback {
-        if !allow_explicit_loopback || scheme.is_none() {
+        if !allow_explicit_loopback {
             return Err(format!(
                 "provider `{provider_id}` loopback endpoint requires an explicit deployment override"
             ));
         }
     } else {
-        if scheme != Some(WebScheme::Https) {
+        if scheme != WebScheme::Https {
             return Err(format!("provider `{provider_id}` base URL must use HTTPS"));
         }
         if !host.eq_ignore_ascii_case(&trusted) {
@@ -106,7 +124,7 @@ pub(in crate::providers::adapter) fn validated_provider_base_url(
 pub(in crate::providers::adapter) fn provider_base_url(
     descriptor: &ProviderDescriptor,
 ) -> Result<String, String> {
-    if let Some(configured) = provider_base_url_override(descriptor.id) {
+    if let Some(configured) = provider_base_url_override(descriptor.id)? {
         return validated_provider_base_url(descriptor.id, &configured, descriptor.base_url, true);
     }
     validated_provider_base_url(
@@ -124,7 +142,7 @@ pub(in crate::providers::adapter) fn provider_base_url_for(
     if descriptor.id != "local-openai" {
         return provider_base_url(descriptor);
     }
-    if let Some(configured) = provider_base_url_override(descriptor.id) {
+    if let Some(configured) = provider_base_url_override(descriptor.id)? {
         return validated_provider_base_url(descriptor.id, &configured, descriptor.base_url, true);
     }
     let path = crate::core::inference_routes::configured_path()
