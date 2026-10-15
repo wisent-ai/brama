@@ -133,16 +133,22 @@ fn input_item(item: &Value) -> Result<Option<Message>, String> {
 pub fn responses_request(body: &[u8]) -> Result<InboundCall, String> {
     let raw: Value =
         serde_json::from_slice(body).map_err(|error| format!("invalid JSON: {error}"))?;
-    let model = raw
-        .get("model")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .trim()
-        .to_string();
-    let max_tokens = raw
-        .get("max_output_tokens")
-        .and_then(Value::as_u64)
-        .and_then(|value| u32::try_from(value).ok());
+    let model = match raw.get("model").and_then(Value::as_str) {
+        Some(model) => model.trim().to_string(),
+        None => return Err("missing field `model`: the request names no model".to_string()),
+    };
+    let max_tokens =
+        match raw.get("max_output_tokens") {
+            None | Some(Value::Null) => None,
+            Some(stated) => {
+                let count = stated.as_u64().ok_or_else(|| {
+                    format!("`max_output_tokens` must be a whole number, not {stated}")
+                })?;
+                Some(u32::try_from(count).map_err(|error| {
+                    format!("`max_output_tokens` {count} does not fit: {error}")
+                })?)
+            }
+        };
     let temperature = raw.get("temperature").and_then(Value::as_f64);
     validate(&model, max_tokens, temperature)?;
     let system = raw
@@ -234,9 +240,11 @@ pub fn responses_request(body: &[u8]) -> Result<InboundCall, String> {
             billing_target: None,
             response_schema: None,
         },
-        stream: raw
-            .get("stream")
-            .and_then(Value::as_bool)
-            .unwrap_or_default(),
+        // The format reads an absent `stream` as a buffered answer.
+        stream: match raw.get("stream") {
+            None | Some(Value::Null) => false,
+            Some(Value::Bool(stream)) => *stream,
+            Some(other) => return Err(format!("`stream` must be true or false, not {other}")),
+        },
     })
 }
