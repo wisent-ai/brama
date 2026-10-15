@@ -172,11 +172,7 @@ async fn post(
     body: &Value,
     action: &str,
 ) -> Result<Value, String> {
-    let response = client
-        .post(url)
-        .bearer_auth(bearer)
-        .json(body)
-        .send()
+    let response = stado_wait::request(client.post(url).bearer_auth(bearer).json(body))
         .await
         .map_err(|error| format!("the gateway at {url} did not answer: {error}"))?;
     let status = response.status();

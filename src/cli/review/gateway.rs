@@ -27,7 +27,7 @@ impl Gateway {
         messages: &[Value],
         tools: &Value,
     ) -> Result<Value, String> {
-        let response = self
+        let request = self
             .client
             .post(&self.url)
             .bearer_auth(&self.token)
@@ -37,8 +37,8 @@ impl Gateway {
                 "tools": tools,
                 "tool_choice": "auto",
                 "stream": false,
-            }))
-            .send()
+            }));
+        let response = stado_wait::request(request)
             .await
             .map_err(|error| format!("{} could not be reached: {error}", self.url))?;
         let status = response.status();

@@ -60,7 +60,7 @@ async fn on_gateway(
     provider: &str,
     reason: &str,
 ) -> Result<Value, String> {
-    let response = reqwest::Client::builder()
+    let request = reqwest::Client::builder()
         .build()
         .map_err(|error| format!("gateway client: {error}"))?
         .post(format!(
@@ -68,8 +68,8 @@ async fn on_gateway(
             gateway.trim_end_matches('/')
         ))
         .bearer_auth(bearer)
-        .json(&json!({"provider": provider, "reason": reason}))
-        .send()
+        .json(&json!({"provider": provider, "reason": reason}));
+    let response = stado_wait::request(request)
         .await
         .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
     let status = response.status();

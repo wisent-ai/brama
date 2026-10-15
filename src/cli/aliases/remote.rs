@@ -103,9 +103,7 @@ async fn send(destination: Destination, change: &Change) -> Result<(String, Valu
             format!("remove {alias}"),
         ),
     };
-    let response = request
-        .bearer_auth(bearer.trim())
-        .send()
+    let response = stado_wait::request(request.bearer_auth(bearer.trim()))
         .await
         .map_err(|error| format!("the gateway at {url} did not answer: {error}"))?;
     let status = response.status();
