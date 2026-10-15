@@ -67,9 +67,16 @@ pub async fn snapshot() -> Result<Arc<CatalogSnapshot>, String> {
             }
             raw
         }
-        Err(live_error) => read_cache().await.map_err(|cache_error| {
-            format!("models.dev unavailable ({live_error}); cache unavailable ({cache_error})")
-        })?,
+        Err(live_error) => {
+            let raw = read_cache().await.map_err(|cache_error| {
+                format!("models.dev unavailable ({live_error}); cache unavailable ({cache_error})")
+            })?;
+            tracing::warn!(
+                %live_error,
+                "models.dev could not be read; the catalog is the last fetched copy"
+            );
+            raw
+        }
     };
     let parsed = Arc::new(parse_catalog(&raw)?);
     let mut cache = MEMORY_CACHE.write().await;
