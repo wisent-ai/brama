@@ -16,14 +16,6 @@ use super::event::{
 /// Translate one OpenAI Responses event into neutral items.
 pub(super) fn responses_items(event: Option<&str>, data: &str) -> (Vec<StreamItem>, bool) {
     let mut items = Vec::new();
-    let kind = event
-        .map(str::to_string)
-        .or_else(|| {
-            serde_json::from_str::<Value>(data)
-                .ok()
-                .and_then(|body| body.get("type").and_then(Value::as_str).map(str::to_string))
-        })
-        .unwrap_or_default();
     // An event that is not JSON ends the stream with the event named: dropped,
     // what it carried vanished from an answer that still finished as complete.
     let body: Value = match serde_json::from_str(data) {
@@ -35,7 +27,17 @@ pub(super) fn responses_items(event: Option<&str>, data: &str) -> (Vec<StreamIte
             return (items, true);
         }
     };
-    match kind.as_str() {
+    // The SSE event name, or the type the body states. An event that names
+    // neither carries nothing this translator reads, as an event of a type
+    // it does not read carries nothing.
+    let kind = match event {
+        Some(event) => event,
+        None => match body.get("type").and_then(Value::as_str) {
+            Some(kind) => kind,
+            None => return (items, false),
+        },
+    };
+    match kind {
         "response.output_text.delta" => {
             if let Some(text) = body.get("delta").and_then(Value::as_str) {
                 if !text.is_empty() {
@@ -84,31 +86,33 @@ pub(super) fn responses_items(event: Option<&str>, data: &str) -> (Vec<StreamIte
             }
         }
         "response.completed" | "response.incomplete" => {
-            let response = body.get("response").cloned().unwrap_or(Value::Null);
-            let usage = response.get("usage").cloned().unwrap_or(Value::Null);
             // Usage is passed on only when the provider stated both counts;
             // a stream without it is recorded as carrying no measurement.
             if let (Some(input_tokens), Some(output_tokens)) = (
-                json_u32(usage.get("input_tokens")),
-                json_u32(usage.get("output_tokens")),
+                json_u32(body.pointer("/response/usage/input_tokens")),
+                json_u32(body.pointer("/response/usage/output_tokens")),
             ) {
                 items.push(StreamItem::Delta(StreamDelta::Usage {
                     input_tokens,
                     output_tokens,
                 }));
             }
+            // An incomplete answer carries the provider's reason when it
+            // states one; without one, the event itself is the reason.
             let reason = if kind == "response.incomplete" {
-                Some(
-                    response
-                        .pointer("/incomplete_details/reason")
-                        .and_then(Value::as_str)
-                        .map(|reason| format!("incomplete:{reason}"))
-                        .unwrap_or_else(|| "incomplete".to_string()),
-                )
+                match body
+                    .pointer("/response/incomplete_details/reason")
+                    .and_then(Value::as_str)
+                {
+                    Some(reason) => format!("incomplete:{reason}"),
+                    None => "incomplete".to_string(),
+                }
             } else {
-                Some("stop".to_string())
+                "stop".to_string()
             };
-            items.push(StreamItem::Delta(StreamDelta::Finish { reason }));
+            items.push(StreamItem::Delta(StreamDelta::Finish {
+                reason: Some(reason),
+            }));
             return (items, true);
         }
         "response.failed" | "error" => {
