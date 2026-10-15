@@ -4,7 +4,7 @@
 
 use serde_json::{json, Value};
 
-use super::{answer, client, refusal, HTTP_SUCCESS};
+use super::{answer, client, refusal};
 
 /// Give one member back: the gateway retires it and forgets its credential.
 ///
@@ -24,18 +24,18 @@ pub(crate) async fn disown(
     if reason.trim().is_empty() {
         return Err("--reason must say why this member is given back".into());
     }
-    let response = client()?
+    let request = client()?
         .post(format!(
             "{}/v1/admin/subscription-pool/disown",
             gateway.trim_end_matches('/')
         ))
         .bearer_auth(bearer)
-        .json(&json!({"subscription_id": subscription_id, "reason": reason}))
-        .send()
+        .json(&json!({"subscription_id": subscription_id, "reason": reason}));
+    let response = stado_wait::request(request)
         .await
         .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
     let (status, body) = answer(response, gateway).await?;
-    if !HTTP_SUCCESS.contains(&status) {
+    if !status.is_success() {
         return Err(format!(
             "the gateway refused to retire {subscription_id}: HTTP {status}: {}",
             refusal(&body)
@@ -74,7 +74,7 @@ pub(crate) async fn forget(
         .await
         .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
     let (status, body) = answer(response, gateway).await?;
-    if !HTTP_SUCCESS.contains(&status) {
+    if !status.is_success() {
         return Err(format!(
             "the gateway refused to forget {subscription_id}: HTTP {status}: {}",
             refusal(&body)
@@ -109,18 +109,18 @@ pub(crate) async fn reinstate(
     if reason.trim().is_empty() {
         return Err("--reason must say why this member is used again".into());
     }
-    let response = client()?
+    let request = client()?
         .post(format!(
             "{}/v1/admin/subscription-pool/reinstate",
             gateway.trim_end_matches('/')
         ))
         .bearer_auth(bearer)
-        .json(&json!({"subscription_id": subscription_id, "reason": reason}))
-        .send()
+        .json(&json!({"subscription_id": subscription_id, "reason": reason}));
+    let response = stado_wait::request(request)
         .await
         .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
     let (status, body) = answer(response, gateway).await?;
-    if !HTTP_SUCCESS.contains(&status) {
+    if !status.is_success() {
         return Err(format!(
             "the gateway refused to reinstate {subscription_id}: HTTP {status}: {}",
             refusal(&body)

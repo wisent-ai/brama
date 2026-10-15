@@ -18,8 +18,6 @@ pub(crate) mod pool;
 
 pub(crate) use membership::{disown, forget, reinstate};
 
-const HTTP_SUCCESS: std::ops::Range<u16> = 200..300;
-
 /// Which gateway a command speaks to, and what it authenticates with.
 #[derive(Clone, Default)]
 pub(crate) struct Destination {
@@ -88,8 +86,11 @@ fn client() -> Result<reqwest::Client, String> {
 /// The gateway's status and JSON body. A body that cannot be read or is not
 /// JSON is refused with what it carried, rather than read as `null`: a 2xx
 /// verdict printed as `null` and a refusal "with no reason" both hid it.
-async fn answer(response: reqwest::Response, gateway: &str) -> Result<(u16, Value), String> {
-    let status = response.status().as_u16();
+async fn answer(
+    response: reqwest::Response,
+    gateway: &str,
+) -> Result<(reqwest::StatusCode, Value), String> {
+    let status = response.status();
     let text = response.text().await.map_err(|error| {
         format!(
             "the gateway {gateway} answered HTTP {status} but its body could not be read: {}",
@@ -108,8 +109,8 @@ async fn answer(response: reqwest::Response, gateway: &str) -> Result<(u16, Valu
 /// A refresh run in an operator shell refreshes that shell's own view. The
 /// block that empties a pool lives in the gateway's journal, so a local
 /// refresh cannot clear it: a gateway's pool can hold a live credential while
-/// every request answers `503 subscription_reauthorization_required` with
-/// `attempts: 0` — every candidate skipped unasked inside a recorded block —
+/// every request answers `503 subscription_reauthorization_required` having
+/// asked nobody — every candidate skipped unasked inside a recorded block —
 /// and a refresh run from a laptop changes only the laptop's view. The gateway has exposed
 /// `POST /v1/admin/subscription-pool/refresh` all along; this is the verb
 /// that reaches it.
@@ -126,18 +127,18 @@ pub(crate) async fn refresh(
     if reason.trim().is_empty() {
         return Err("--reason must say why this refresh is being run".into());
     }
-    let response = client()?
+    let request = client()?
         .post(format!(
             "{}/v1/admin/subscription-pool/refresh",
             gateway.trim_end_matches('/')
         ))
         .bearer_auth(bearer)
-        .json(&json!({"provider": provider, "reason": reason}))
-        .send()
+        .json(&json!({"provider": provider, "reason": reason}));
+    let response = stado_wait::request(request)
         .await
         .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
     let (status, body) = answer(response, gateway).await?;
-    if !HTTP_SUCCESS.contains(&status) {
+    if !status.is_success() {
         return Err(format!(
             "the gateway refused to refresh {provider}: HTTP {status}: {}",
             refusal(&body)
@@ -164,18 +165,18 @@ pub(crate) async fn attribute(
     if provider.is_empty() {
         return Err("name the provider whose members should be attributed".into());
     }
-    let response = client()?
+    let request = client()?
         .post(format!(
             "{}/v1/admin/subscription-pool/attribute",
             gateway.trim_end_matches('/')
         ))
         .bearer_auth(bearer)
-        .json(&json!({"provider": provider}))
-        .send()
+        .json(&json!({"provider": provider}));
+    let response = stado_wait::request(request)
         .await
         .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
     let (status, body) = answer(response, gateway).await?;
-    if !HTTP_SUCCESS.contains(&status) {
+    if !status.is_success() {
         return Err(format!(
             "the gateway refused to attribute {provider}: HTTP {status}: {}",
             refusal(&body)
@@ -204,7 +205,7 @@ pub(crate) async fn second_factor(
         .await
         .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
     let (status, body) = answer(response, gateway).await?;
-    if !HTTP_SUCCESS.contains(&status) {
+    if !status.is_success() {
         return Err(format!(
             "the gateway refused the second-factor report: HTTP {status}: {}",
             refusal(&body)
@@ -227,7 +228,7 @@ pub(crate) async fn maintain(gateway: &str, bearer: &str) -> Result<Value, Strin
         .await
         .map_err(|error| format!("the gateway {gateway} did not answer: {error}"))?;
     let (status, body) = answer(response, gateway).await?;
-    if !HTTP_SUCCESS.contains(&status) {
+    if !status.is_success() {
         return Err(format!(
             "the gateway refused the maintenance pass: HTTP {status}: {}",
             refusal(&body)
@@ -236,11 +237,15 @@ pub(crate) async fn maintain(gateway: &str, bearer: &str) -> Result<Value, Strin
     Ok(body)
 }
 
-/// What a refused answer says, wherever the gateway put it.
+/// What a refused answer says, wherever the gateway put it; an answer that
+/// carries no message is quoted whole, so the refusal is never reasonless.
 fn refusal(body: &Value) -> String {
-    body.pointer("/error/message")
+    match body
+        .pointer("/error/message")
         .or_else(|| body.get("error"))
         .and_then(Value::as_str)
-        .unwrap_or("no reason given")
-        .to_owned()
+    {
+        Some(message) => message.to_owned(),
+        None => format!("the answer carries no error message: {body}"),
+    }
 }
