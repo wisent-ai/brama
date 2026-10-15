@@ -17,18 +17,28 @@ use super::router::{entitlements_router_bin, raw_listing, router_output, router_
 // Serialize metadata registration, grant publication and membership removal.
 static MUTATIONS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-/// One vault item row from the entitlements router's bare `list` command.
+/// One vault item row from the entitlements router's bare `list` command:
+/// the one reading of a listing row, for the broker and the launcher alike.
 #[derive(Debug, Deserialize)]
-pub(in crate::gateway::broker) struct VaultListItem {
+pub struct VaultListItem {
     /// The coordinate the item lives at. Discovery reads tags, not ids -- but
     /// an item that has lost every tag still has this, and it is the only
-    /// thing left to recognise a subscription account by.
+    /// thing left to recognise a subscription account by. A row without one
+    /// is no item and refuses the listing.
+    pub id: String,
+    /// An item that carries no tags lists none.
     #[serde(default)]
-    pub(in crate::gateway::broker) id: String,
+    pub tags: Vec<String>,
+    /// A live row omits the flag.
     #[serde(default)]
-    pub(in crate::gateway::broker) tags: Vec<String>,
-    #[serde(default)]
-    pub(in crate::gateway::broker) deleted: bool,
+    pub deleted: bool,
+}
+
+/// The rows of one listing the router printed, or why they do not read;
+/// `purpose` names the caller's question in the refusal.
+pub fn decode_listing(stdout: &[u8], purpose: &str) -> Result<Vec<VaultListItem>, String> {
+    serde_json::from_slice(stdout)
+        .map_err(|error| format!("decode the listing to {purpose}: {error}"))
 }
 
 /// Every row the entitlements router lists, decoded. `purpose` names the
@@ -37,8 +47,7 @@ pub(in crate::gateway::broker) async fn listed_items(
     purpose: &str,
 ) -> Result<Vec<VaultListItem>, String> {
     let stdout = raw_listing(&entitlements_router_bin()?, purpose).await?;
-    serde_json::from_slice(&stdout)
-        .map_err(|error| format!("decode the listing to {purpose}: {error}"))
+    decode_listing(&stdout, purpose)
 }
 
 /// The tags one live vault item carries right now; none when no live item

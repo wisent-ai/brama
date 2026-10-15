@@ -14,16 +14,8 @@ const ITEM_SCHEMA: &str = "skarbiec.item.v2";
 /// The tag an item carries to play a role.
 const ROLE_TAG: &str = "stado:role:";
 
-/// One row of the router's bare `list`.
-#[derive(serde::Deserialize)]
-struct Listed {
-    #[serde(default)]
-    id: String,
-    #[serde(default)]
-    tags: Vec<String>,
-    #[serde(default)]
-    deleted: bool,
-}
+/// What the listing below is read for, named in a refusal.
+const ROLE_LISTING: &str = "find the items that play each role";
 
 /// Every live item id carrying each role tag, from one listing. `envs` is the
 /// environment the router runs with: empty inside the launcher, which already
@@ -44,8 +36,7 @@ pub(super) fn role_holders(
             String::from_utf8_lossy(&output.stderr).trim()
         ));
     }
-    let rows: Vec<Listed> = serde_json::from_slice(&output.stdout)
-        .map_err(|error| format!("the vault listing is not a list of items: {error}"))?;
+    let rows = brama::gateway::broker::decode_listing(&output.stdout, ROLE_LISTING)?;
     let mut holders: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for row in rows.into_iter().filter(|row| !row.deleted) {
         for role in row.tags.iter().filter_map(|tag| tag.strip_prefix(ROLE_TAG)) {
