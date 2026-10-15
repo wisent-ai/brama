@@ -81,22 +81,19 @@ fn append(record: Value) -> Result<(), String> {
         .map_err(|error| format!("cannot open the journal {}: {error}", path.display()))?;
     file.write_all(line.as_bytes())
         .map_err(|error| format!("cannot append to the journal {}: {error}", path.display()))?;
-    let status = std::process::Command::new("chmod")
-        .arg("600")
-        .arg(path)
-        .status()
-        .map_err(|error| {
-            format!(
-                "cannot run chmod on the journal {}: {error}",
-                path.display()
-            )
-        })?;
-    if !status.success() {
-        return Err(format!(
-            "chmod could not restrict the journal {} to its owner: {status}",
+    // Owner read and write only, as the C library names those bits, set on
+    // the file itself after every append.
+    let owner_only = u32::from(libc::S_IRUSR | libc::S_IWUSR);
+    std::fs::set_permissions(
+        path,
+        std::os::unix::fs::PermissionsExt::from_mode(owner_only),
+    )
+    .map_err(|error| {
+        format!(
+            "cannot restrict the journal {} to its owner: {error}",
             path.display()
-        ));
-    }
+        )
+    })?;
     Ok(())
 }
 
