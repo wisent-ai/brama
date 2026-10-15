@@ -35,12 +35,14 @@ pub(super) fn model_router(
     let backend: Vec<String> =
         serde_json::from_str(backend_models).map_err(|error| format!("backend models: {error}"))?;
     // The renewal caller's routes are derived from the same closed allowlist:
-    // each provider's own route is what a reauth trajectory probes, and `best`
-    // is the subscription alias those grants serve.
-    let renewal_providers = ["claude-code", "codex", "kimi"];
+    // each route whose provider is one of the pool's subscription providers
+    // is what a reauth trajectory probes, and `best` is the subscription
+    // alias those grants serve.
     let mut renewal: Vec<String> = allowed
         .split(',')
-        .filter(|model| renewal_providers.contains(&model.split('/').next().unwrap_or("")))
+        .filter(|model| {
+            brama::subscription_dispatch::dispatch::provider_requires_caller_identity(model)
+        })
         .map(str::to_string)
         .chain(["best".to_string()])
         .collect();
@@ -100,13 +102,7 @@ pub(super) fn model_router(
                 })
             })
             .collect();
-        reads
-            .into_iter()
-            .map(|read| {
-                read.join()
-                    .unwrap_or_else(|_| Err("a router read panicked".into()))
-            })
-            .collect()
+        reads.into_iter().map(|read| joined(read.join())).collect()
     });
     let mut identities = Vec::new();
     for (client, answer) in clients.iter().zip(answers) {
@@ -127,7 +123,23 @@ pub(super) fn model_router(
         }
         identities.push(entry);
     }
-    Ok(serde_json::to_string(&identities).expect("identities serialise"))
+    serde_json::to_string(&identities)
+        .map_err(|error| format!("the model-router client table cannot be written: {error}"))
+}
+
+/// What one router read answered, or what it panicked with: a panic is a
+/// refusal naming its message, not a bare "panicked".
+fn joined<T>(answer: std::thread::Result<Result<T, String>>) -> Result<T, String> {
+    match answer {
+        Ok(answer) => answer,
+        Err(payload) => Err(match payload.downcast_ref::<&str>() {
+            Some(message) => format!("a router read panicked: {message}"),
+            None => match payload.downcast_ref::<String>() {
+                Some(message) => format!("a router read panicked: {message}"),
+                None => "a router read panicked with a payload that is not text".to_string(),
+            },
+        }),
+    }
 }
 
 /// The request-sign identities of every product, as a JSON object.
@@ -168,17 +180,12 @@ pub(super) fn request_sign(router: &Path) -> Result<String, String> {
                 })
             })
             .collect();
-        reads
-            .into_iter()
-            .map(|read| {
-                read.join()
-                    .unwrap_or_else(|_| Err("a router read panicked".into()))
-            })
-            .collect()
+        reads.into_iter().map(|read| joined(read.join())).collect()
     });
     let identities: Map<String, Value> = answers
         .into_iter()
         .map(|answer| answer.map(|(id, secret)| (id, Value::String(secret))))
         .collect::<Result<_, _>>()?;
-    Ok(serde_json::to_string(&identities).expect("identities serialise"))
+    serde_json::to_string(&identities)
+        .map_err(|error| format!("the request-sign identity table cannot be written: {error}"))
 }
