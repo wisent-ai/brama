@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
 
 use crate::gateway::broker;
+use crate::subscription_dispatch::acquire::at_limit;
 use crate::subscription_dispatch::usage;
 
 /// One agent's pinned credential for one provider, process-local.
@@ -31,11 +32,10 @@ struct Pin {
 static PINS: LazyLock<Mutex<HashMap<(String, String), Pin>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+/// This machine's clock in epoch milliseconds; a clock set before the epoch
+/// reads as the negative instant it is, not as the epoch.
 fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX))
-        .unwrap_or_default()
+    chrono::Utc::now().timestamp_millis()
 }
 
 /// The pins, through a poisoned lock: each entry is written whole, so a panic
@@ -94,10 +94,15 @@ pub(in crate::subscription_dispatch::dispatch) fn apply_pin(
     let Some(pinned) = pinned_credential(agent_id, provider) else {
         return;
     };
-    if usage::used_fraction(&pinned).is_some_and(|fraction| fraction >= 1.0) {
+    if usage::used_fraction(&pinned).is_some_and(at_limit) {
         return;
     }
+    // The pinned row trades places with the one that led.
     if let Some(position) = rows.iter().position(|entry| entry.id == pinned) {
-        rows.swap(0, position);
+        if let Some((lead, after)) = rows[..=position].split_first_mut() {
+            if let Some(pinned_row) = after.last_mut() {
+                std::mem::swap(lead, pinned_row);
+            }
+        }
     }
 }
