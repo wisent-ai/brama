@@ -23,8 +23,16 @@ impl ModelAliases {
     ) -> Result<Self, std::io::Error> {
         let encoded = match std::env::var(MODEL_ALIASES_ENV) {
             Ok(encoded) => encoded,
-            Err(_) if !require_exact_aliases => "{}".to_owned(),
-            Err(_) => {
+            // Absent and not required is the stated empty table; a value that
+            // is present but not UTF-8 is a broken declaration either way.
+            Err(std::env::VarError::NotPresent) if !require_exact_aliases => "{}".to_owned(),
+            Err(std::env::VarError::NotUnicode(raw)) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("{MODEL_ALIASES_ENV} is not UTF-8: {raw:?}"),
+                ));
+            }
+            Err(std::env::VarError::NotPresent) => {
                 // A bare "is required" sent one supervised process into 3869
                 // restarts against a cause no amount of retrying reaches: the
                 // aliases are assembled by the launcher, so the binary started
@@ -202,14 +210,18 @@ impl ModelAliases {
         names
     }
 
+    /// Whether `alias` is one this gateway was told about. An alias the route
+    /// registry cannot be read for counts as declared, so the request reaches
+    /// [`Self::diagnose`], which names the registry's failure, instead of being
+    /// answered as a model nobody declared.
     pub(in crate::core::server) fn is_declared(&self, alias: &str) -> bool {
         MODEL_ALIASES.contains(&alias)
             || self.routes.contains_key(alias)
             || self.routes_file.as_deref().is_some_and(|path| {
-                crate::core::inference_routes::resolve(path, alias)
-                    .ok()
-                    .flatten()
-                    .is_some()
+                !matches!(
+                    crate::core::inference_routes::resolve(path, alias),
+                    Ok(None)
+                )
             })
     }
 
