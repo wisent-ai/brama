@@ -14,16 +14,23 @@ pub(crate) fn render_current_step<T: Transport, S: wisent_onboarding_client::Sto
         .iter()
         .find(|screen| screen.screen_id == progress.current_screen_id)
         .ok_or_else(|| JourneyError::Invalid("Brama current screen".into()))?;
-    let title = screen
-        .presentation
-        .get("title")
-        .and_then(Value::as_str)
-        .unwrap_or(&screen.title_key);
-    let body = screen
-        .presentation
-        .get("body")
-        .and_then(Value::as_str)
-        .unwrap_or(&screen.body_key);
+    // Every screen of Brama's journey presents its own title and body; one
+    // that does not is a malformed journey, and printing its translation key
+    // in their place would show the operator an identifier, not a step.
+    let presented = |field: &str| {
+        screen
+            .presentation
+            .get(field)
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                JourneyError::Invalid(format!(
+                    "Brama journey screen {} presents no {field}",
+                    screen.screen_id
+                ))
+            })
+    };
+    let title = presented("title")?;
+    let body = presented("body")?;
     println!("{title}");
     println!("{body}");
     for key in ["request_example", "response_example"] {

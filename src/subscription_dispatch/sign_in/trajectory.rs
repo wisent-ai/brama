@@ -3,14 +3,22 @@
 //! This is separate because reading the answer is the one place where the
 //! sign-in stops being Brama's decision and becomes a report about someone
 //! else's run. Two questions are asked of it: whose account came back, and
-//! whether the run Weles finished is a run this request may claim. A failed
-//! trajectory used to return its exact stderr here and Brama replaced it with
-//! an attribution sentence that hid the cause, so the sentence this module
-//! builds carries the run, the status, the exit code and Weles's own words.
+//! whether the run Weles finished is a run this request may claim. A refusal
+//! carries the run, the status, the exit code and Weles's own words, so the
+//! cause of a failed trajectory reaches whoever reads it.
 
 use serde_json::Value;
 
 use super::worker::account::{HTTP_OK, LOGIN_ITEM_SELECTOR};
+
+/// A field of Weles's answer as text, or the statement that the answer
+/// carried none: the refusal names what is missing instead of omitting it.
+fn reported(value: Option<String>) -> String {
+    match value {
+        Some(value) => value,
+        None => "unreported".to_string(),
+    }
+}
 
 /// Why this reauth answer is not a sign-in of the row that was asked for, or
 /// `None` when it is.
@@ -25,15 +33,19 @@ pub(super) fn refusal(answer: &Value, status: u16, login_item: &str) -> Option<S
     if attributed && succeeded {
         return None;
     }
-    let run_id = answer
-        .get("run_id")
-        .and_then(Value::as_str)
-        .unwrap_or("unreported");
-    let exit_code = answer
-        .get("exitCode")
-        .and_then(Value::as_i64)
-        .map(|code| code.to_string())
-        .unwrap_or_else(|| "unreported".to_string());
+    let run_id = reported(
+        answer
+            .get("run_id")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+    );
+    let exit_code = reported(
+        answer
+            .get("exitCode")
+            .and_then(Value::as_i64)
+            .map(|code| code.to_string()),
+    );
+    let echoed = reported(echoed.map(str::to_string));
     let said = ["error", "message", "stderr_tail", "stdout_tail"]
         .iter()
         .filter_map(|field| answer.get(field).and_then(Value::as_str))
@@ -41,8 +53,7 @@ pub(super) fn refusal(answer: &Value, status: u16, login_item: &str) -> Option<S
         .collect::<Vec<_>>()
         .join(" | ");
     Some(format!(
-        "Weles sign-in run {run_id} answered HTTP {status}, exit {exit_code}, login_item={}; {}",
-        echoed.unwrap_or("unreported"),
+        "Weles sign-in run {run_id} answered HTTP {status}, exit {exit_code}, login_item={echoed}; {}",
         if said.is_empty() {
             "the trajectory reported no stderr or message"
         } else {
