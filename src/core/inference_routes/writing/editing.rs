@@ -67,27 +67,26 @@ pub fn migrate(path: &Path) -> Result<Value, String> {
     let document = value
         .as_object()
         .ok_or_else(|| "inference routes must be a JSON object".to_string())?;
+    // Each member the current shape defines, as the file states it; a member
+    // the older shape lacked is written as the current shape declares it
+    // empty, and a file without a version is the version this migration
+    // writes.
+    let member = |name: &str, absent: Value| match document.get(name) {
+        Some(stated) => stated.clone(),
+        None => absent,
+    };
     let mut migrated = serde_json::Map::new();
     migrated.insert(
         "schema_version".to_string(),
-        document
-            .get("schema_version")
-            .cloned()
-            .unwrap_or_else(|| Value::from(SCHEMA_VERSION)),
+        member("schema_version", Value::from(SCHEMA_VERSION)),
     );
     migrated.insert(
         "deployments".to_string(),
-        document
-            .get("deployments")
-            .cloned()
-            .unwrap_or_else(|| Value::Array(Vec::new())),
+        member("deployments", Value::Array(Vec::new())),
     );
     migrated.insert(
         "routes".to_string(),
-        document
-            .get("routes")
-            .cloned()
-            .unwrap_or_else(|| Value::Object(Default::default())),
+        member("routes", Value::Object(serde_json::Map::new())),
     );
     // A member the current document defines is carried across, never dropped:
     // the migration exists to move a file onto this shape, and a declared
