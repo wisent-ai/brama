@@ -43,12 +43,18 @@ impl SseFramer {
                 }
                 continue;
             }
-            if let Some(comment) = line.strip_prefix(':') {
-                let _ = comment;
+            // A line that starts with a colon is a comment, which the event
+            // stream format says carries nothing for the reader.
+            if line.starts_with(':') {
                 continue;
             }
+            // The format strips one space after the colon, and a line without
+            // a colon names a field whose value is empty.
             let (field, value) = match line.split_once(':') {
-                Some((field, value)) => (field, value.strip_prefix(' ').unwrap_or(value)),
+                Some((field, value)) => match value.strip_prefix(' ') {
+                    Some(spaced) => (field, spaced),
+                    None => (field, value),
+                },
                 None => (line.as_str(), ""),
             };
             match field {

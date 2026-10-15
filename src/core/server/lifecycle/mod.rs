@@ -19,7 +19,8 @@ use crate::core::server::readiness::spawn_readiness_probe;
 use crate::core::server::telemetry::STARTED_AT;
 
 pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Error> {
-    let _ = STARTED_AT.elapsed();
+    // Uptime counts from here, not from the first request that reads it.
+    std::sync::LazyLock::force(&STARTED_AT);
     let ingress_auth = ModelIngressAuth::from_env()?;
     if !standalone {
         ingress_auth.requires_aliases("wisent-backend", WISENT_MODEL_ALIASES)?;
