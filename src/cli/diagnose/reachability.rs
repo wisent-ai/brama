@@ -3,7 +3,10 @@
 //! can refuse to start for a reason written down only once, in the stream
 //! nothing reads.
 
+use std::net::Ipv4Addr;
 use std::process::Command;
+
+use serde_json::Value;
 
 use super::Layout;
 
@@ -13,11 +16,60 @@ const ANNOUNCEMENT: &str = "Starting brama server on ";
 /// any stage runs: the current attempt is everything from its last occurrence.
 const BOOT_MARKER: &str = "brama launcher: boot attempt of ";
 
+/// The HTTPS origins `tailscale serve status --json` publishes: each key of
+/// its `Web` map is a `host:port` the tailnet serves, with the handlers it
+/// forwards to. Printed as they stand; an answer without a `Web` map
+/// publishes nothing over HTTPS.
+fn served_origins(status: &Value) -> Vec<String> {
+    let Some(web) = status.get("Web").and_then(Value::as_object) else {
+        say!("  tailscale serve publishes no HTTPS origin: {status}");
+        return Vec::new();
+    };
+    web.iter()
+        .map(|(host_port, served)| {
+            say!("  serve: https://{host_port} -> {}", served["Handlers"]);
+            format!("https://{host_port}/health")
+        })
+        .collect()
+}
+
+/// The tailnet origins this host's tailscale serves, or nothing, said why.
+fn tailnet_targets() -> Vec<String> {
+    let mut serve_status = Command::new("tailscale");
+    serve_status.args(["serve", "status", "--json"]);
+    match stado_wait::output(&mut serve_status) {
+        // A status that failed publishes nothing; its error says why.
+        Ok(served) if !served.status.success() => {
+            say!(
+                "  tailscale serve status exited {}: {}; the tailnet origin is not probed",
+                served.status,
+                String::from_utf8_lossy(&served.stderr).trim()
+            );
+            Vec::new()
+        }
+        Ok(served) => match serde_json::from_slice::<Value>(&served.stdout) {
+            Ok(status) => served_origins(&status),
+            Err(error) => {
+                say!(
+                    "  tailscale serve status --json answered something that is not JSON ({error}); the tailnet origin is not probed"
+                );
+                Vec::new()
+            }
+        },
+        Err(error) => {
+            say!(
+                "  tailscale serve status could not run ({error}); the tailnet origin is not probed"
+            );
+            Vec::new()
+        }
+    }
+}
+
 pub(super) async fn print_reachability(layout: &Layout) {
     say!("\n=== reachability");
     let mut targets = Vec::new();
     match layout.settings.get("PORT") {
-        Some(port) => targets.push(format!("http://127.0.0.1:{port}/health")),
+        Some(port) => targets.push(format!("http://{}:{port}/health", Ipv4Addr::LOCALHOST)),
         None => {
             say!("  service.env names no PORT; only the address the gateway announced is probed")
         }
@@ -42,47 +94,7 @@ pub(super) async fn print_reachability(layout: &Layout) {
             layout.log.display()
         ),
     }
-    let tailscale = [
-        "/usr/local/bin/tailscale",
-        "/opt/homebrew/bin/tailscale",
-        "/Applications/Tailscale.app/Contents/MacOS/tailscale",
-    ]
-    .into_iter()
-    .find(|path| std::path::Path::new(path).exists());
-    if let Some(tailscale) = tailscale {
-        let mut serve_status = Command::new(tailscale);
-        serve_status.args(["serve", "status"]);
-        match stado_wait::output(&mut serve_status) {
-            // A status that failed publishes nothing; scanning its error
-            // text for origins found none and said nothing.
-            Ok(served) if !served.status.success() => say!(
-                "  {tailscale} serve status exited {}: {}; the tailnet origin is not probed",
-                served.status,
-                String::from_utf8_lossy(&served.stderr).trim()
-            ),
-            Ok(served) => {
-                let text = String::from_utf8_lossy(&served.stdout);
-                for line in text
-                    .lines()
-                    .map(str::trim)
-                    .filter(|line| line.contains("proxy") || line.contains("https://"))
-                {
-                    say!("  serve: {line}");
-                    // Each published origin is probed as published; no port is
-                    // assumed for the tailnet proxy.
-                    for origin in line
-                        .split_whitespace()
-                        .filter(|word| word.starts_with("https://"))
-                    {
-                        targets.push(format!("{}/health", origin.trim_end_matches('/')));
-                    }
-                }
-            }
-            Err(error) => say!(
-                "  {tailscale} serve status could not run ({error}); the tailnet origin is not probed"
-            ),
-        }
-    }
+    targets.extend(tailnet_targets());
     // The tailnet certificate is private to the fleet; reachability, not
     // trust, is the question here.
     let client = match reqwest::Client::builder()
@@ -100,8 +112,8 @@ pub(super) async fn print_reachability(layout: &Layout) {
         if seen.contains(&target) {
             continue;
         }
-        match client.get(&target).send().await {
-            Ok(answer) => say!("  {target} -> {}", answer.status().as_u16()),
+        match stado_wait::request(client.get(&target)).await {
+            Ok(answer) => say!("  {target} -> {}", answer.status()),
             Err(error) => say!("  {target} -> {error}"),
         }
         seen.push(target);
