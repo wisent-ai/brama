@@ -42,13 +42,11 @@ pub async fn discover_models(
             &key,
         );
         let listing = listed_rows(provider_id, request).await;
-        if let Ok(dynamic) = &listing {
-            models.extend(
-                dynamic
-                    .iter()
-                    .filter_map(|row| catalog_model_from_value(provider_id, row)),
-            );
-        }
+        models.extend(
+            answered_rows(provider_id, &listing)
+                .iter()
+                .filter_map(|row| catalog_model_from_value(provider_id, row)),
+        );
         models.sort_by(|left, right| left.route_id.cmp(&right.route_id));
         models.dedup_by(|left, right| left.route_id == right.route_id);
         if models.is_empty() {
@@ -72,11 +70,7 @@ pub async fn discover_models(
         secret,
     );
     let listing = listed_rows(provider_id, request).await;
-    let dynamic = match &listing {
-        Ok(rows) => rows.as_slice(),
-        Err(_) => &[],
-    };
-    let mut models = dynamic
+    let mut models = answered_rows(provider_id, &listing)
         .iter()
         .filter_map(|row| model_from_value(descriptor, row))
         .collect::<Vec<_>>();
@@ -100,6 +94,29 @@ pub async fn discover_models(
         ));
     }
     Ok(models)
+}
+
+/// The rows a listing answered. A failed listing contributes none; the models
+/// already known (the catalog's, or this build's own list) still answer, so
+/// the failure is logged with its cause and a shortened model list says why
+/// the provider's live models are missing. With nothing known at all, the
+/// caller refuses with the same cause.
+fn answered_rows<'listing>(
+    provider_id: &str,
+    listing: &'listing Result<Vec<Value>, String>,
+) -> &'listing [Value] {
+    match listing {
+        Ok(rows) => rows.as_slice(),
+        Err(cause) => {
+            tracing::warn!(
+                event = "provider_model_listing_failed",
+                provider = provider_id,
+                %cause,
+                "the provider's model listing failed; only the models already known answer"
+            );
+            &[]
+        }
+    }
 }
 
 /// The model rows a provider's listing endpoint answered, or why it gave
