@@ -4,8 +4,8 @@ use serde_json::{json, Value};
 use super::super::blocked::{Blocked, SignInError};
 
 pub(crate) const LOGIN_ITEM_SELECTOR: &str = "login_item";
-/// Weles answers a finished resolution or trajectory with 200 and `ok: true`.
-pub(in crate::subscription_dispatch::sign_in) const HTTP_OK: u16 = 200;
+/// Weles answers a finished resolution or trajectory with 200 OK and `ok: true`.
+pub(in crate::subscription_dispatch::sign_in) const HTTP_OK: u16 = reqwest::StatusCode::OK.as_u16();
 
 /// Only opaque vault coordinates and non-secret account provenance cross here.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -28,18 +28,19 @@ pub(crate) async fn resolve(
     subscription_id: &str,
     requested_login: Option<&str>,
 ) -> Result<ResolvedAccount, SignInError> {
-    let response = client
-        .post(format!("{base}/reauth/resolve"))
-        .bearer_auth(token)
-        .json(
-            &json!({"provider": provider, "subscription_id": subscription_id,
-            "login_item": requested_login}),
-        )
-        .send()
-        .await
-        .map_err(|error| Blocked::WelesUnreachable {
-            detail: format!("POST {base}/reauth/resolve: {error:?}"),
-        })?;
+    let response = stado_wait::request(
+        client
+            .post(format!("{base}/reauth/resolve"))
+            .bearer_auth(token)
+            .json(
+                &json!({"provider": provider, "subscription_id": subscription_id,
+                "login_item": requested_login}),
+            ),
+    )
+    .await
+    .map_err(|error| Blocked::WelesUnreachable {
+        detail: format!("POST {base}/reauth/resolve: {error:?}"),
+    })?;
     let status = response.status().as_u16();
     // The body is read as text first so an undecodable answer is reported
     // with what Weles (or the Stado adapter in front of it) actually sent.
@@ -59,19 +60,24 @@ pub(crate) async fn resolve(
         status: Some(status),
     })?;
     if status != HTTP_OK || answer.get("ok").and_then(Value::as_bool) != Some(true) {
+        // A refusal that names no code or message is reported with what Weles
+        // sent, not with a sentence written here on its behalf.
+        let code = match answer.get("error").and_then(Value::as_str) {
+            Some(code) => code.to_string(),
+            None => "account_resolution_refused_unnamed".to_string(),
+        };
+        let detail = match answer.get("message").and_then(Value::as_str) {
+            Some(message) => message.to_string(),
+            None => format!(
+                "POST {base}/reauth/resolve HTTP {status} refused without a message: {}",
+                body.trim()
+            ),
+        };
         return Err(Blocked::Operation {
-            code: answer
-                .get("error")
-                .and_then(Value::as_str)
-                .unwrap_or("account_resolution_failed")
-                .into(),
+            code,
             stage: "identity".into(),
             status: Some(status),
-            detail: answer
-                .get("message")
-                .and_then(Value::as_str)
-                .unwrap_or("Weles could not resolve the subscription from Skarbiec")
-                .into(),
+            detail,
         }
         .into());
     }
