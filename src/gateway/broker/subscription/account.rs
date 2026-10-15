@@ -10,7 +10,7 @@
 
 use serde::Deserialize;
 
-use super::super::vault::VaultListItem;
+use super::super::vault::{decode_listing, VaultListItem};
 
 const SUBSCRIPTION_CATALOG_ENV: &str = "BRAMA_SUBSCRIPTION_CATALOG";
 
@@ -149,8 +149,7 @@ pub(super) fn parse_owned_subscriptions(
     agent_id: &str,
 ) -> Result<Vec<SubscriptionEntry>, String> {
     let agent_tag = format!("brama:agent:{agent_id}");
-    let items: Vec<VaultListItem> = serde_json::from_slice(output)
-        .map_err(|error| format!("subscription listing returned malformed JSON: {error}"))?;
+    let items = decode_listing(output, "list the subscriptions an agent banked")?;
     let mut entries = Vec::new();
     for item in items.into_iter().filter(|item| {
         !item.deleted
@@ -181,11 +180,7 @@ fn subscription_tag_value<'a>(tags: &'a [String], prefix: &str) -> Option<&'a st
 /// tags lag behind the vault. `brama:agent:` tags remain as provenance of
 /// who banked an account; they gate nothing.
 fn live_subscription_entry(item: &VaultListItem) -> Result<SubscriptionEntry, String> {
-    let coordinate = if item.id.trim().is_empty() {
-        "<unnamed vault item>"
-    } else {
-        item.id.as_str()
-    };
+    let coordinate = item.id.as_str();
     let id = subscription_tag_value(&item.tags, "brama:id:").ok_or_else(|| {
         format!("subscription vault item `{coordinate}` is missing tag `brama:id:<id>`")
     })?;
@@ -203,8 +198,7 @@ fn live_subscription_entry(item: &VaultListItem) -> Result<SubscriptionEntry, St
 }
 
 pub(super) fn parse_live_subscriptions(output: &[u8]) -> Result<Vec<SubscriptionEntry>, String> {
-    let items: Vec<VaultListItem> = serde_json::from_slice(output)
-        .map_err(|error| format!("subscription listing returned malformed JSON: {error}"))?;
+    let items = decode_listing(output, "list the subscription pool")?;
     let mut entries = Vec::new();
     for item in items
         .into_iter()
@@ -228,8 +222,7 @@ pub(super) fn normalized_provider(value: &str) -> String {
 /// the mark; those items are included so automatic renewal can restore their
 /// metadata. Items with no Brama id remain unrelated vault data.
 pub(super) fn parse_unroutable_accounts(output: &[u8]) -> Result<Vec<UnroutableAccount>, String> {
-    let items: Vec<VaultListItem> = serde_json::from_slice(output)
-        .map_err(|error| format!("vault account listing returned malformed JSON: {error}"))?;
+    let items = decode_listing(output, "list the accounts that cannot be routed")?;
     let mut accounts: Vec<UnroutableAccount> = items
         .into_iter()
         .filter(|item| !item.deleted)
