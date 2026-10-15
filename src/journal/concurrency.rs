@@ -96,15 +96,19 @@ impl Admission {
         let beside = route.in_flight();
         match how {
             Settled::Answered => {
-                route.carried = Some(
-                    route
-                        .carried
-                        .map_or(with_this_one, |carried| carried.max(with_this_one)),
-                );
+                // The first answer is the first measurement; later ones raise it.
+                route.carried = Some(match route.carried {
+                    Some(carried) => carried.max(with_this_one),
+                    None => with_this_one,
+                });
             }
             Settled::RefusedForCapacity => {
+                // A refusal before any answer is the first measurement too.
                 route.refused_beside = Some(beside);
-                route.carried = Some(route.carried.map_or(beside, |carried| carried.min(beside)));
+                route.carried = Some(match route.carried {
+                    Some(carried) => carried.min(beside),
+                    None => beside,
+                });
             }
             Settled::Other => {}
         }
