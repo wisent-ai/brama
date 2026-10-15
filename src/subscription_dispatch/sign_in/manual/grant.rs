@@ -121,16 +121,22 @@ async fn account_already_named(
     provider: &str,
     subscription_id: &str,
     account: Option<&str>,
-) -> bool {
+) -> Result<bool, String> {
     let Some(account) = account.map(str::trim).filter(|account| !account.is_empty()) else {
-        return true;
+        return Ok(true);
     };
     if broker::local_provider_credentials_enabled() {
-        return true;
+        return Ok(true);
     }
+    // An account that cannot be read is said, not taken for one that names
+    // nobody: the vault that cannot answer this read is the one the store
+    // would write to.
     match broker::subscription_account(subscription_id, provider).await {
-        Ok(Some(named)) => named == account,
-        Ok(None) | Err(_) => false,
+        Ok(Some(named)) => Ok(named == account),
+        Ok(None) => Ok(false),
+        Err(error) => Err(format!(
+            "which account subscription {subscription_id} names could not be read: {error}"
+        )),
     }
 }
 
@@ -149,12 +155,17 @@ pub async fn adopt(
         return Err("--reason must say why this sign-in is being run".into());
     }
     let source = origin.sentence();
-    let who = account.clone().unwrap_or_else(|| "the account".to_owned());
+    // The verdict's sentences name the account the operator gave, and say
+    // "the account" when the sign-in named none.
+    let who = match &account {
+        Some(account) => account.clone(),
+        None => "the account".to_owned(),
+    };
     // A previously refused independent grant must be proved again, not skipped.
     let disowned = crate::subscription_dispatch::usage::needs_reauthorization(subscription_id);
     if !disowned
         && already_stored(provider, subscription_id, &document).await
-        && account_already_named(provider, subscription_id, account.as_deref()).await
+        && account_already_named(provider, subscription_id, account.as_deref()).await?
     {
         return Ok(ManualSignIn {
             provider: provider.to_owned(),
@@ -185,10 +196,14 @@ pub async fn adopt(
         ),
         Ok(probe) => (
             "failed",
-            format!(
-                "the grant from {source} is stored, but the provider would not serve it: {}",
-                probe.detail.unwrap_or_else(|| "the provider gave no reason".to_owned())
-            ),
+            match probe.detail {
+                Some(reason) => format!(
+                    "the grant from {source} is stored, but the provider would not serve it: {reason}"
+                ),
+                None => format!(
+                    "the grant from {source} is stored, but the provider would not serve it and gave no reason"
+                ),
+            },
         ),
         Err(detail) => (
             "failed",
@@ -210,10 +225,20 @@ pub async fn adopt(
         "detail": verdict.detail,
         "reason": reason.trim(),
     });
-    if let (Some(record), Ok(Value::Object(origin))) =
-        (record.as_object_mut(), serde_json::to_value(origin))
-    {
-        record.extend(origin);
+    // The origin is part of the journal line; one that does not serialize to
+    // fields is refused rather than journaled without it.
+    match (record.as_object_mut(), serde_json::to_value(origin)) {
+        (Some(record), Ok(Value::Object(origin))) => record.extend(origin),
+        (_, Ok(other)) => {
+            return Err(format!(
+                "the grant from {source} is stored, but its origin is not a set of fields: {other}"
+            ))
+        }
+        (_, Err(error)) => {
+            return Err(format!(
+                "the grant from {source} is stored, but its origin could not be written: {error}"
+            ))
+        }
     }
     crate::journal::record_subscription_sign_in(&record).map_err(|error| {
         format!(
