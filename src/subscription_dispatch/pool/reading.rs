@@ -40,10 +40,12 @@ pub(super) fn reading_error(
     {
         cause
     } else if let Some(check) = check.filter(|check| !check.ok) {
-        check
-            .detail
-            .as_deref()
-            .unwrap_or("usage refresh failed without a stated reason")
+        // A failed check the ledger recorded no reason for says that it
+        // failed and nothing more.
+        match check.detail.as_deref() {
+            Some(reason) => reason,
+            None => "usage refresh failed without a stated reason",
+        }
     } else if windows.stale {
         "the last usage reading is no longer current; refresh usage to obtain a new report"
     } else if windows.limits.is_empty() {
@@ -60,18 +62,19 @@ pub(super) fn reading_error(
     } else {
         return None;
     };
-    Some(failure_json(
-        &failure::envelope(
-            "brama.subscriptions.usage",
-            failure::code_for_message(detail, "provider_failure"),
-            "one subscription usage report",
-            detail,
-        )
-        .with_context("subscription", &entry.id)
-        .with_context("provider", &entry.provider)
-        .with_context(
-            "attempted_at_ms",
-            check.map_or(now, |check| check.attempted_at_ms).to_string(),
-        ),
-    ))
+    let refused = failure::envelope(
+        "brama.subscriptions.usage",
+        failure::code_for_message(detail, "provider_failure"),
+        "one subscription usage report",
+        detail,
+    )
+    .with_context("subscription", &entry.id)
+    .with_context("provider", &entry.provider);
+    // The time of the read this row describes, or, for a subscription never
+    // read, the time this document observed that it was not.
+    let refused = match check {
+        Some(check) => refused.with_context("attempted_at_ms", check.attempted_at_ms.to_string()),
+        None => refused.with_context("observed_at_ms", now.to_string()),
+    };
+    Some(failure_json(&refused))
 }
