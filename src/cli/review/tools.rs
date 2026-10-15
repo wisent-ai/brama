@@ -7,6 +7,9 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 
+/// The number the first line of a file is given.
+const FIRST_LINE: usize = 1; // https://www.gnu.org/prep/standards/html_node/Errors.html "Line numbers should start from 1 at the beginning of the file"
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Verdict {
     Approve,
@@ -44,7 +47,7 @@ pub(super) fn schema() -> Value {
             "description": "Find a non-empty literal string in every file under the review root; answers path:line:text for each matching line.",
             "parameters": {"type": "object", "additionalProperties": false, "required": ["query"], "properties": {
                 "query": {"type": "string"},
-                "case_sensitive": {"type": "boolean"},
+                "case_sensitive": {"type": "boolean", "description": "Match case exactly; without it, case is ignored"},
             }},
         }},
         {"type": "function", "function": {
@@ -120,7 +123,10 @@ impl Tree {
             "search" => self.search(&arguments),
             other => Err(format!("unknown tool {other}")),
         });
-        outcome.unwrap_or_else(|reason| format!("tool refused: {reason}"))
+        match outcome {
+            Ok(answer) => answer,
+            Err(reason) => format!("tool refused: {reason}"),
+        }
     }
 
     fn inside(&self, relative: &str) -> Result<PathBuf, String> {
@@ -135,11 +141,13 @@ impl Tree {
         Ok(candidate)
     }
 
+    /// A path under the review root as the model names it. Every path this
+    /// tree hands out was resolved inside the root, so it always has one.
     fn relative(&self, path: &Path) -> String {
-        path.strip_prefix(&self.root)
-            .unwrap_or(path)
-            .display()
-            .to_string()
+        match path.strip_prefix(&self.root) {
+            Ok(relative) => relative.display().to_string(),
+            Err(_outside) => path.display().to_string(),
+        }
     }
 
     fn read(&self, arguments: &Value) -> Result<String, String> {
@@ -150,22 +158,29 @@ impl Tree {
         let text = std::fs::read(self.inside(relative)?)
             .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
             .map_err(|error| format!("{relative}: {error}"))?;
-        let line = |key| {
-            arguments
-                .get(key)
-                .and_then(Value::as_u64)
-                .map(|value| value as usize)
+        // A range the call leaves open runs to that end of the file.
+        let line = |key: &str| -> Result<Option<usize>, String> {
+            match arguments.get(key) {
+                None => Ok(None),
+                Some(value) => value
+                    .as_u64()
+                    .map(|number| Some(number as usize))
+                    .ok_or_else(|| format!("{key} must be a whole number, not {value}")),
+            }
         };
-        let start = line("start_line").unwrap_or(1).max(1);
-        let end = line("end_line").unwrap_or(usize::MAX);
-        if end < start {
-            return Err("end_line is before start_line".to_string());
+        let (start, end) = (line("start_line")?, line("end_line")?);
+        if let (Some(start), Some(end)) = (start, end) {
+            if end < start {
+                return Err("end_line is before start_line".to_string());
+            }
         }
         let selected = text
             .lines()
             .enumerate()
-            .map(|(index, text)| (index + 1, text))
-            .filter(|(number, _)| (start..=end).contains(number))
+            .map(|(index, text)| (index + FIRST_LINE, text))
+            .filter(|(number, _)| {
+                start.is_none_or(|start| *number >= start) && end.is_none_or(|end| *number <= end)
+            })
             .map(|(number, text)| format!("{number}:{text}"))
             .collect::<Vec<_>>();
         Ok(if selected.is_empty() {
@@ -181,10 +196,11 @@ impl Tree {
             .and_then(Value::as_str)
             .filter(|query| !query.is_empty())
             .ok_or("query is required")?;
-        let exact = arguments
-            .get("case_sensitive")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
+        let exact = match arguments.get("case_sensitive") {
+            None => false,
+            Some(Value::Bool(exact)) => *exact,
+            Some(other) => return Err(format!("case_sensitive must be a boolean, not {other}")),
+        };
         let fold = |text: &str| {
             if exact {
                 text.to_string()
@@ -203,7 +219,11 @@ impl Tree {
             let text = String::from_utf8_lossy(&bytes);
             for (index, line) in text.lines().enumerate() {
                 if fold(line).contains(&needle) {
-                    matches.push(format!("{}:{}:{line}", self.relative(&path), index + 1));
+                    matches.push(format!(
+                        "{}:{}:{line}",
+                        self.relative(&path),
+                        index + FIRST_LINE
+                    ));
                 }
             }
         }
