@@ -105,19 +105,15 @@ fn publish(report: ReadinessReport) {
     *crate::core::sync::write_held(&READINESS_REPORT, "readiness report") = report;
 }
 
-/// The last `brama maintain` pass this process ran: when it finished, in Unix
-/// seconds, and whether every step succeeded. `None` until the first pass.
-static LAST_MAINTENANCE: LazyLock<std::sync::RwLock<Option<(u64, bool)>>> =
+/// The last `brama maintain` pass this process ran: when it finished, and
+/// whether every step succeeded. `None` until the first pass.
+static LAST_MAINTENANCE: LazyLock<std::sync::RwLock<Option<(std::time::SystemTime, bool)>>> =
     LazyLock::new(|| std::sync::RwLock::new(None));
 
 /// Record one finished maintenance pass for `/readyz`.
 pub(in crate::core::server) fn record_maintenance(ok: bool) {
-    let finished = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_secs())
-        .unwrap_or_default();
     let mut last = crate::core::sync::write_held(&LAST_MAINTENANCE, "last maintenance pass");
-    *last = Some((finished, ok));
+    *last = Some((std::time::SystemTime::now(), ok));
 }
 
 /// What `/readyz` says about maintenance. The gateway keeps no timer, so it
@@ -128,7 +124,14 @@ pub(in crate::core::server) fn record_maintenance(ok: bool) {
 fn maintenance_state() -> Value {
     let last = *crate::core::sync::read_held(&LAST_MAINTENANCE, "last maintenance pass");
     match last {
-        Some((finished, ok)) => json!({"last_pass_unix": finished, "last_pass_ok": ok}),
+        Some((finished, ok)) => match finished.duration_since(std::time::UNIX_EPOCH) {
+            Ok(elapsed) => json!({"last_pass_unix": elapsed.as_secs(), "last_pass_ok": ok}),
+            Err(error) => json!({
+                "last_pass_unix": null,
+                "last_pass_ok": ok,
+                "detail": format!("this host's clock put the last pass before the Unix epoch: {error}"),
+            }),
+        },
         None => json!({
             "last_pass_unix": null,
             "detail": "no maintenance pass has run since this process started: one runs when the \
@@ -152,7 +155,13 @@ pub(in crate::core::server) async fn readyz() -> impl IntoResponse {
     let mut body = report.body;
     if let Some(object) = body.as_object_mut() {
         object.insert("maintenance".to_string(), maintenance_state());
-        if let Some(refusal) = standing::refusal() {
+        // Calls that stand and cannot be measured, because the resolver's
+        // declaration is unreadable, refuse the same way with that cause.
+        let refusal = match standing::refusal() {
+            Ok(refusal) => refusal,
+            Err(cause) => Some(cause),
+        };
+        if let Some(refusal) = refusal {
             status = StatusCode::SERVICE_UNAVAILABLE;
             object.insert("ready".to_string(), Value::Bool(false));
             object.insert("reason".to_string(), Value::String(refusal.clone()));

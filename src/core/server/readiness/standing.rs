@@ -57,12 +57,16 @@ impl Standing {
         Self { marker, ended }
     }
 
-    /// Resolves once a readiness reading ends this call, with its sentence;
-    /// a call no reading ends never resolves here.
+    /// Resolves once a readiness reading ends this call, with its sentence.
+    /// The sender lives in the standing record until this call drops, so a
+    /// closed channel means the record was lost; that is answered with a
+    /// sentence naming it rather than a wait that never resolves.
     pub(crate) async fn ended(&mut self) -> String {
         match (&mut self.ended).await {
             Ok(sentence) => sentence,
-            Err(_) => std::future::pending().await,
+            Err(closed) => format!(
+                "the standing-call record was lost before any readiness reading ended it: {closed}"
+            ),
         }
     }
 }
@@ -86,45 +90,83 @@ pub(in crate::core::server) fn resolver_state_file() -> Option<PathBuf> {
     }
 }
 
+/// One JSON document of the resolver's: `None` when the file is absent, an
+/// error naming the file when it cannot be read or is not JSON.
+fn resolver_document(path: &PathBuf) -> Result<Option<serde_json::Value>, String> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("cannot read {}: {error}", path.display())),
+    };
+    serde_json::from_str(&text)
+        .map(Some)
+        .map_err(|error| format!("{} is not JSON: {error}", path.display()))
+}
+
 /// The refresh interval, in seconds, this host's resolver declares: the
 /// target its state names, looked up in Stado's last-known-good registry
-/// copy beside it. `None` when either is absent or declares none, which
-/// leaves no measure to read a standing call by.
-fn declared_refresh() -> Option<u64> {
-    let state_file = resolver_state_file()?;
-    let read = |path: &PathBuf| -> Option<serde_json::Value> {
-        serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()
+/// copy beside it. `None` when either file is absent or the target declares
+/// no interval, which leaves no measure to read a standing call by; a file
+/// that cannot be read, or a state and registry that do not name the target,
+/// is an error naming which.
+fn declared_refresh() -> Result<Option<u64>, String> {
+    let Some(state_file) = resolver_state_file() else {
+        return Ok(None);
     };
-    let state = read(&state_file)?;
-    let target = state["target"].as_str()?.to_string();
-    let registry = read(
-        &state_file
-            .with_file_name("cache")
-            .join("registry-last-good.json"),
-    )?;
-    registry["targets"]
-        .as_array()?
+    let Some(state) = resolver_document(&state_file)? else {
+        return Ok(None);
+    };
+    let target = state["target"].as_str().ok_or_else(|| {
+        format!("{} names no target text", state_file.display())
+    })?;
+    let registry_file = state_file
+        .with_file_name("cache")
+        .join("registry-last-good.json");
+    let Some(registry) = resolver_document(&registry_file)? else {
+        return Ok(None);
+    };
+    let targets = registry["targets"].as_array().ok_or_else(|| {
+        format!("{} holds no targets list", registry_file.display())
+    })?;
+    let entry = targets
         .iter()
-        .find(|entry| entry["name"].as_str() == Some(target.as_str()))?["service_resolver"]
-        ["refresh_seconds"]
-        .as_u64()
+        .find(|entry| entry["name"].as_str() == Some(target))
+        .ok_or_else(|| {
+            format!(
+                "{} lists no target {target}, the one {} names",
+                registry_file.display(),
+                state_file.display()
+            )
+        })?;
+    Ok(entry["service_resolver"]["refresh_seconds"].as_u64())
 }
 
 /// Why the gateway does not serve now, when a credential call has stood
 /// longer than the declared refresh interval; every such call is ended with
-/// the same sentence. `None` when nothing stands that long, or when no
-/// interval is declared to read a standing call by.
-pub(in crate::core::server) fn refusal() -> Option<String> {
+/// the same sentence. `Ok(None)` when nothing stands that long, or when no
+/// interval is declared to read a standing call by; an error when the
+/// resolver's declaration cannot be read, so the calls cannot be measured.
+pub(in crate::core::server) fn refusal() -> Result<Option<String>, String> {
     let mut calls = standing();
     if calls.is_empty() {
-        return None;
+        return Ok(None);
     }
-    let refresh = declared_refresh()?;
+    let Some(refresh) = declared_refresh().map_err(|cause| {
+        format!(
+            "{} credential call(s) stand and cannot be measured: the resolver's refresh interval is unreadable: {cause}",
+            calls.len()
+        )
+    })?
+    else {
+        return Ok(None);
+    };
     let stale: Vec<&mut Call> = calls
         .values_mut()
         .filter(|call| call.since.elapsed().as_secs() > refresh)
         .collect();
-    let oldest = stale.iter().max_by_key(|call| call.since.elapsed())?;
+    let Some(oldest) = stale.iter().max_by_key(|call| call.since.elapsed()) else {
+        return Ok(None);
+    };
     let sentence = format!(
         "the credential source has not answered: {} call(s) stand longer than the {refresh}s refresh interval this host's resolver declares, the oldest to {} for {}s; Brama serves no chat until it answers",
         stale.len(),
@@ -133,9 +175,10 @@ pub(in crate::core::server) fn refusal() -> Option<String> {
     );
     for call in stale {
         if let Some(end) = call.end.take() {
-            // A waiter that already went away leaves nobody to tell.
-            let _ = end.send(sentence.clone());
+            if let Err(unsent) = end.send(sentence.clone()) {
+                tracing::warn!(standing_call = %call.target, "a standing call's waiter went away before its refusal reached it: {unsent}");
+            }
         }
     }
-    Some(sentence)
+    Ok(Some(sentence))
 }

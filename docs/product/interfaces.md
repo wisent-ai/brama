@@ -11,7 +11,10 @@ to the [README](../../README.md).
   requires is never sent upstream blank or guessed: on Anthropic Messages a
   message without `role` or `content`, a `tool_use` block without `id`,
   `name` or `input`, a `tool_result` without `tool_use_id`, an image without
-  a base64 `media_type` and `data` or a `url`, and a tool without `name`; on
+  a base64 `media_type` and `data` or a `url`, a tool without `name`, a
+  content block of a type other than text, image, tool use, tool result or
+  thinking, a `system` or `tool_result` content holding a non-text block, and
+  a `system`, `tools` or `stream` of the wrong JSON type; on
   Responses a message item without `role` or `content`, a `function_call`
   without `call_id`, `name` or `arguments`, a `function_call_output` without
   `call_id` or `output`, an `input_image` without `image_url`, a content part
@@ -145,9 +148,14 @@ to the [README](../../README.md).
   serves no chat until it answers", whatever the last sweep found, and that
   same reading ends each such admission with the sentence (`503`,
   `workload_authority_unavailable`) instead of letting it stand. A host whose
-  resolver declares no interval reads no standing call. Qualification:
-  `tests/readiness/standing.rs` against a stand-in that accepts and never
-  answers.
+  resolver declares no interval reads no standing call. A resolver state or
+  registry copy that exists but cannot be read, is not JSON, or does not name
+  the target the state names leaves the calls unmeasurable: while any call
+  stands, `/readyz` answers 503 the same way with `reason` and
+  `credential_source` saying "<n> credential call(s) stand and cannot be
+  measured: the resolver's refresh interval is unreadable: <cause naming the
+  file>". Qualification: `tests/readiness/standing.rs` against a stand-in that
+  accepts and never answers.
 - **Error contract:** a refused redemption is `503 authorization_error` with
   code `credential_unauthorized` and `retryable: false`, never a `429
   capacity_error`. Waiting does not repair an authorization id that does not

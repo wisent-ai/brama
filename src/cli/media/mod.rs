@@ -83,7 +83,7 @@ pub(crate) async fn image(args: ImageArgs) {
     } = args;
     if !allow_provider_cost {
         eprintln!("refusing a billable image generation without explicit --allow-provider-cost");
-        std::process::exit(2);
+        crate::cli::fail();
     }
     let route = resolve_media_route(&model);
     let mut payload = Map::new();
@@ -128,6 +128,7 @@ pub(crate) async fn image(args: ImageArgs) {
     // gateway's answer, never as "Rendered 0 image(s)".
     let answered = dispatch_direct_image(&route, payload)
         .await
+        .map_err(|refused| refused.to_string())
         .and_then(
             |body| match as_json || body.get("data").is_some_and(Value::is_array) {
                 true => Ok(body),
@@ -183,12 +184,12 @@ pub(super) fn resolve_media_route(model: &str) -> String {
     match alias_routing(model) {
         Ok((Some(route), _)) => route,
         Ok((None, diagnosis)) => {
-            eprintln!(
-                "{}",
-                diagnosis
-                    .reason
-                    .unwrap_or_else(|| format!("alias `{model}` has no serviceable route"))
-            );
+            match diagnosis.reason {
+                Some(reason) => eprintln!("{reason}"),
+                None => eprintln!(
+                    "alias `{model}` has no serviceable route, and the alias table stated no reason"
+                ),
+            }
             crate::cli::fail();
         }
         Err(error) => {
