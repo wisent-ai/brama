@@ -112,13 +112,24 @@ pub(in crate::core::server) async fn refresh_admin_subscription_pool(
     Json(request): Json<RefreshSubscriptionPoolRequest>,
 ) -> Result<Json<Value>, ApiError> {
     require_brama_desktop(&client_identity)?;
-    crate::subscription_dispatch::pool::refresh_provider(
-        &request.provider.unwrap_or_default(),
-        &request.reason.unwrap_or_default(),
-    )
-    .await
-    .map(Json)
-    .map_err(|message| api_error(StatusCode::BAD_REQUEST, &message))
+    // Both are the operator's to state: a refresh names the provider whose
+    // grants it renews and why, and the audit record keeps both.
+    let Some(provider) = request.provider else {
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            "a pool refresh names the provider whose grants it renews: provider is missing",
+        ));
+    };
+    let Some(reason) = request.reason else {
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            "a pool refresh says why it runs: reason is missing",
+        ));
+    };
+    crate::subscription_dispatch::pool::refresh_provider(&provider, &reason)
+        .await
+        .map(Json)
+        .map_err(|message| api_error(StatusCode::BAD_REQUEST, &message))
 }
 
 /// Record which account each member of one provider belongs to, in the vault
