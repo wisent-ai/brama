@@ -28,9 +28,7 @@ static COLLECTED: std::sync::Mutex<Option<Vec<String>>> = std::sync::Mutex::new(
 
 /// One diagnosis line, printed now or kept for the JSON document.
 pub(super) fn emit(line: String) {
-    let mut collected = COLLECTED
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut collected = brama::core::sync::held(&COLLECTED, "diagnosis lines");
     match collected.as_mut() {
         Some(lines) => lines.push(line),
         None => println!("{line}"),
@@ -159,9 +157,7 @@ pub(super) fn read_json(path: &Path) -> Result<Option<Value>, String> {
 
 pub(crate) async fn run(json: bool) {
     if json {
-        *COLLECTED
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Vec::new());
+        *brama::core::sync::held(&COLLECTED, "diagnosis lines") = Some(Vec::new());
     }
     match Layout::read() {
         Ok(layout) => {
@@ -187,11 +183,7 @@ pub(crate) async fn run(json: bool) {
         }
         Err(cause) => emit(format!("=== installation\n{cause}")),
     }
-    let Some(lines) = COLLECTED
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .take()
-    else {
+    let Some(lines) = brama::core::sync::held(&COLLECTED, "diagnosis lines").take() else {
         return;
     };
     // A line `=== title` opens a section; every other line belongs to the
