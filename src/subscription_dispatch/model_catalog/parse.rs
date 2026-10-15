@@ -2,8 +2,9 @@
 //!
 //! Every row is read defensively, because the document is public metadata from
 //! another project: a provider or model whose identifier could not be used in a
-//! route is skipped rather than carried, and the numbers a route needs carry
-//! the catalog's own conservative shape when a row omits them.
+//! route is skipped rather than carried, and a fact a row does not state (a
+//! price, tool use, reasoning, a modality) is carried as unstated, never as a
+//! zero, a `false` or text.
 
 use std::collections::HashMap;
 
@@ -11,8 +12,25 @@ use serde_json::Value;
 
 use crate::providers::adapter::{valid_model_id, valid_provider_id, RegistryModel};
 
-use super::provider::{protocol_for, CatalogProvider};
+use super::provider::{protocol_for, CatalogAuth, CatalogProtocol, CatalogProvider};
 use super::CatalogSnapshot;
+
+/// A row's identifier: models.dev keys every provider and model by its id,
+/// and a row that also states `id` is read by that.
+fn row_id<'a>(row: &'a Value, key: &'a str) -> &'a str {
+    match row.get("id").and_then(Value::as_str) {
+        Some(id) => id.trim(),
+        None => key.trim(),
+    }
+}
+
+/// What a row calls itself, or its id when it states no name.
+fn row_name(row: &Value, id: &str) -> String {
+    match row.get("name").and_then(Value::as_str) {
+        Some(name) => name.to_string(),
+        None => id.to_string(),
+    }
+}
 
 pub(super) fn parse_catalog(raw: &str) -> Result<CatalogSnapshot, String> {
     let root: Value = serde_json::from_str(raw).map_err(|error| error.to_string())?;
@@ -24,25 +42,21 @@ pub(super) fn parse_catalog(raw: &str) -> Result<CatalogSnapshot, String> {
     let mut latest_update = String::new();
 
     for (catalog_key, row) in rows {
-        let id = row
-            .get("id")
-            .and_then(Value::as_str)
-            .unwrap_or(catalog_key)
-            .trim();
+        let id = row_id(row, catalog_key);
         if !valid_provider_id(id) {
             continue;
         }
-        let npm = row.get("npm").and_then(Value::as_str).unwrap_or_default();
-        let (protocol, auth) = protocol_for(npm);
+        // The SDK package a provider names decides its wire; a provider that
+        // names none has no wire this gateway can speak.
+        let (protocol, auth) = match row.get("npm").and_then(Value::as_str) {
+            Some(npm) => protocol_for(npm),
+            None => (CatalogProtocol::Unsupported, CatalogAuth::Bearer),
+        };
         providers.insert(
             id.to_string(),
             CatalogProvider {
                 id: id.to_string(),
-                display_name: row
-                    .get("name")
-                    .and_then(Value::as_str)
-                    .unwrap_or(id)
-                    .to_string(),
+                display_name: row_name(row, id),
                 protocol,
                 auth,
             },
@@ -53,11 +67,7 @@ pub(super) fn parse_catalog(raw: &str) -> Result<CatalogSnapshot, String> {
         };
         models.reserve(model_rows.len());
         for (model_key, model) in model_rows {
-            let model_id = model
-                .get("id")
-                .and_then(Value::as_str)
-                .unwrap_or(model_key)
-                .trim();
+            let model_id = row_id(model, model_key);
             if !valid_model_id(model_id) {
                 continue;
             }
@@ -66,34 +76,21 @@ pub(super) fn parse_catalog(raw: &str) -> Result<CatalogSnapshot, String> {
                     latest_update = updated.to_string();
                 }
             }
-            let input_modalities = modalities(model, "input", &["text".to_string()]);
-            let output_modalities = modalities(model, "output", &["text".to_string()]);
             models.push(RegistryModel {
                 route_id: format!("{id}/{model_id}"),
                 provider_id: id.to_string(),
                 model_id: model_id.to_string(),
-                display_name: model
-                    .get("name")
-                    .and_then(Value::as_str)
-                    .unwrap_or(model_id)
-                    .to_string(),
+                display_name: row_name(model, model_id),
                 context_window: model.pointer("/limit/context").and_then(Value::as_u64),
                 max_output_tokens: model.pointer("/limit/output").and_then(Value::as_u64),
-                input_modalities,
-                output_modalities,
-                // models.dev states this per model and states it for every
-                // model it carries. A row that omits it says nothing, and
-                // `None` is that answer rather than a claim of proprietary
-                // weights.
+                input_modalities: modalities(model, "input"),
+                output_modalities: modalities(model, "output"),
+                // models.dev states these per model. A row that omits one
+                // says nothing, and `None` is that answer rather than a claim
+                // of proprietary weights, of no tools or of no reasoning.
                 open_weights: model.get("open_weights").and_then(Value::as_bool),
-                tools: model
-                    .get("tool_call")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false),
-                reasoning: model
-                    .get("reasoning")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false),
+                tools: model.get("tool_call").and_then(Value::as_bool),
+                reasoning: model.get("reasoning").and_then(Value::as_bool),
                 input_price: cost(model, "input"),
                 output_price: cost(model, "output"),
                 cache_read_price: cost(model, "cache_read"),
@@ -116,29 +113,29 @@ pub(super) fn parse_catalog(raw: &str) -> Result<CatalogSnapshot, String> {
     })
 }
 
-/// One side of a row's `modalities` block, or the fallback when the row says
+/// One side of a row's `modalities` block, empty when the row states
 /// nothing. Both sides are read the same way, so an image model that states
 /// its output cannot end up described by whatever the input side happened to
 /// carry.
-fn modalities(model: &Value, side: &str, fallback: &[String]) -> Vec<String> {
-    model
+fn modalities(model: &Value, side: &str) -> Vec<String> {
+    match model
         .pointer(&format!("/modalities/{side}"))
         .and_then(Value::as_array)
-        .map(|values| {
-            values
-                .iter()
-                .filter_map(Value::as_str)
-                .map(str::to_string)
-                .collect::<Vec<_>>()
-        })
-        .filter(|values| !values.is_empty())
-        .unwrap_or_else(|| fallback.to_vec())
+    {
+        Some(values) => values
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect(),
+        None => Vec::new(),
+    }
 }
 
-fn cost(model: &Value, key: &str) -> f64 {
+/// The price models.dev publishes for one token kind, or `None` when it
+/// publishes none: an unpublished price is not a price of zero.
+fn cost(model: &Value, key: &str) -> Option<f64> {
     model
         .get("cost")
         .and_then(|cost| cost.get(key))
         .and_then(Value::as_f64)
-        .unwrap_or(0.0)
 }

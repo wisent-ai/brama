@@ -144,12 +144,17 @@ pub struct RegistryModel {
     /// for a source that does not say; it is not the same claim as `false`,
     /// and no filter treats it as one.
     pub open_weights: Option<bool>,
-    pub tools: bool,
-    pub reasoning: bool,
-    pub input_price: f64,
-    pub output_price: f64,
-    pub cache_read_price: f64,
-    pub cache_write_price: f64,
+    /// Whether the model calls tools and whether it reasons, as its source
+    /// states them; `None` when the source does not say, which no reader
+    /// takes for `false`.
+    pub tools: Option<bool>,
+    pub reasoning: Option<bool>,
+    /// Prices per token as the source publishes them; `None` when it
+    /// publishes none, which is not a price of zero.
+    pub input_price: Option<f64>,
+    pub output_price: Option<f64>,
+    pub cache_read_price: Option<f64>,
+    pub cache_write_price: Option<f64>,
 }
 
 impl RegistryModel {

@@ -46,26 +46,26 @@ pub(super) fn jeden(view: CatalogView, catalog_revision: Option<String>, degrade
         .into_iter()
         .map(|id| {
             let registry = registry_metadata.get(&id);
+            // What the model takes and emits, from the catalogue rather than
+            // from a constant. These fields read `["text"]` for every id,
+            // including the image and video models the catalogue has always
+            // carried, so a console could not tell a renderer from a chat
+            // model; a side the source does not state is `null`, not text.
             let input_modalities = registry
                 .map(|model| model.input_modalities.clone())
-                .filter(|modalities| !modalities.is_empty())
-                .unwrap_or_else(|| vec!["text".to_string()]);
-            // What the model emits, from the catalogue rather than from a
-            // constant. This field read `["text"]` for every id, including
-            // the image and video models the catalogue has always carried, so
-            // a console could not tell a renderer from a chat model.
+                .filter(|modalities| !modalities.is_empty());
             let output_modalities = registry
                 .map(|model| model.output_modalities.clone())
-                .filter(|modalities| !modalities.is_empty())
-                .unwrap_or_else(|| vec!["text".to_string()]);
+                .filter(|modalities| !modalities.is_empty());
             let context_window = registry.and_then(|model| model.context_window);
             let max_output_tokens = registry.and_then(|model| model.max_output_tokens);
-            // Tools, reasoning and price come from the registry or are
-            // `null`: an id with no registry metadata was answered as free,
+            // Tools, reasoning and price are what the registry's source
+            // stated, or `null`: an id with no registry metadata, or a source
+            // that publishes no price or capability, was answered as free,
             // without tools and without reasoning, which a budget, a filter
             // or a console then read as facts about the model.
-            let tools = registry.map(|model| model.tools);
-            let reasoning = registry.map(|model| model.reasoning);
+            let tools = registry.and_then(|model| model.tools);
+            let reasoning = registry.and_then(|model| model.reasoning);
             let price = registry.map(|model| {
                 json!({
                     "input": model.input_price,
@@ -83,12 +83,16 @@ pub(super) fn jeden(view: CatalogView, catalog_revision: Option<String>, degrade
                 "outputModalities": output_modalities,
                 // Which endpoint shape answers this id: `text` on the chat
                 // endpoints, `image` on POST /v1/images/generations, `video`
-                // on POST /v1/videos.
-                "kind": crate::providers::adapter::kind_from_output(&output_modalities).as_str(),
+                // on POST /v1/videos. An unstated output side is a chat
+                // listing's, which answers on the chat endpoints.
+                "kind": match registry {
+                    Some(model) => model.kind().as_str(),
+                    None => crate::providers::adapter::kind_from_output(&[]).as_str(),
+                },
                 // Whether the weights are published. `null` is the catalogue
                 // saying nothing, which is a different answer from `false`.
                 "openWeights": registry.and_then(|model| model.open_weights),
-                "categories": categories.get(&id).cloned().unwrap_or_default(),
+                "categories": declared_categories(&categories, &id),
                 "tools": tools,
                 "reasoning": reasoning,
                 "price": price,
@@ -143,9 +147,12 @@ pub(super) fn openai(view: CatalogView) -> Value {
         .into_iter()
         .map(|id| {
             let registry = registry_metadata.get(&id);
-            let owner = registry
-                .map(|model| model.provider_id.as_str())
-                .unwrap_or("brama");
+            // An id with no registry row is one this gateway declares itself
+            // (an alias or a route of its configuration), so it is Brama's.
+            let owner = match registry {
+                Some(model) => model.provider_id.as_str(),
+                None => "brama",
+            };
             let mut entry = json!({
                 "id": id,
                 "object": "model",
@@ -161,7 +168,7 @@ pub(super) fn openai(view: CatalogView) -> Value {
                 entry["output_modalities"] = json!(model.output_modalities);
                 entry["open_weights"] = json!(model.open_weights);
             }
-            let names = categories.get(&id).cloned().unwrap_or_default();
+            let names = declared_categories(&categories, &id);
             if !names.is_empty() {
                 entry["categories"] = json!(names);
             }
@@ -194,4 +201,13 @@ pub(super) fn openai(view: CatalogView) -> Value {
         "object": "list",
         "data": models,
     })
+}
+
+/// The operator's categories an id carries: the declared list, or none when
+/// no category names it.
+fn declared_categories(categories: &HashMap<String, Vec<String>>, id: &str) -> Vec<String> {
+    match categories.get(id) {
+        Some(names) => names.clone(),
+        None => Vec::new(),
+    }
 }

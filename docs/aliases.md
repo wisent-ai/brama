@@ -75,10 +75,13 @@ Every model carries what it produces — `kind` is `text`, `image`, `video` or
 `audio`, decided from the output modalities its source declares — and whether
 its weights are published: `openWeights` is the catalogue's own flag, and
 `null` where the source said nothing, which is not the same claim as `false`.
-`tools`, `reasoning` and `price` follow the same rule: an id the route registry
-holds no metadata for answers `null` for each, never `false` or a price of
-zero, so no budget or filter reads an unpriced model as free or an undeclared
-one as incapable.
+`tools`, `reasoning` and each `price` field follow the same rule: an id the
+route registry holds no metadata for, or a model whose source does not state
+one of them, answers `null` for it, never `false` or a price of zero, so no
+budget or filter reads an unpriced model as free or an undeclared one as
+incapable. `inputModalities` and `outputModalities` are `null` where the
+source states no side; `kind` is then `text`, the endpoint an unannotated chat
+listing answers on.
 
 Categories are the operator's own grouping, declared in the route registry by
 provider, by exact route, or by a term the publisher put in the model's name.

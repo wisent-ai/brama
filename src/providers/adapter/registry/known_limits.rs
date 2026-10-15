@@ -82,7 +82,7 @@ pub(in crate::providers::adapter) fn apply_omp_model_metadata(
         if let Some(metadata) = table.get(&model.model_id) {
             model.context_window = Some(metadata.context_window);
             model.max_output_tokens = Some(metadata.max_output_tokens);
-            model.reasoning = metadata.reasoning;
+            model.reasoning = Some(metadata.reasoning);
             model.input_modalities = metadata.input_modalities.clone();
         }
     }
