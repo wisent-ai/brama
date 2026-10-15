@@ -142,13 +142,15 @@ impl ModelAliases {
             }
             Ok(false) => {}
         }
-        let provider =
-            crate::providers::adapter::provider_id_from_route(&route).unwrap_or_default();
+        let holder = match crate::providers::adapter::provider_id_from_route(&route) {
+            Some(provider) => provider.to_string(),
+            None => format!("the provider of {route}, which names none this gateway knows"),
+        };
         AliasDiagnosis {
             alias: alias.to_string(),
             state: ALIAS_CAPABILITY_ABSENT,
             reason: Some(format!(
-                "alias `{alias}` routes to {route} but this gateway holds no provider credential for {provider}; issue the provider capability on this host or point the alias at a route it can reach, such as `best`"
+                "alias `{alias}` routes to {route} but this gateway holds no provider credential for {holder}; issue the provider capability on this host or point the alias at a route it can reach, such as `best`"
             )),
             route: Some(route),
             subscription_resolved: false,
