@@ -43,5 +43,8 @@ pub(crate) async fn serve(args: ServeArgs) {
 }
 
 pub(crate) fn mcp() {
-    brama::mcp::serve();
+    if let Err(error) = brama::mcp::serve() {
+        eprintln!("MCP server error: {error}");
+        crate::cli::fail();
+    }
 }

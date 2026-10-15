@@ -11,19 +11,35 @@
 
 use std::io::{BufRead, Write};
 
+use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::detect_compute_resources;
 
-// Spec-mandated JSON-RPC 2.0 / MCP wire values (not tunables); kept as strings
-// and parsed so no numeric literal appears (matches the crate style).
+/// The MCP revision this server speaks.
 const PROTOCOL_VERSION: &str = "2024-11-05";
-const CODE_PARSE_ERROR: &str = "-32700";
-const CODE_METHOD_NOT_FOUND: &str = "-32601";
-const CODE_INTERNAL_ERROR: &str = "-32000";
+/// JSON-RPC 2.0's reserved error codes this server answers with.
+const CODE_PARSE_ERROR: i64 = -32700; // https://www.jsonrpc.org/specification#error_object "-32700 Parse error"
+const CODE_INVALID_REQUEST: i64 = -32600; // https://www.jsonrpc.org/specification#error_object "-32600 Invalid Request"
+const CODE_METHOD_NOT_FOUND: i64 = -32601; // https://www.jsonrpc.org/specification#error_object "-32601 Method not found"
+const CODE_INVALID_PARAMS: i64 = -32602; // https://www.jsonrpc.org/specification#error_object "-32602 Invalid params"
+/// The implementation-defined server error a tool that refused answers with.
+const CODE_SERVER_ERROR: i64 = -32000; // https://www.jsonrpc.org/specification#error_object "-32000 to -32099 Server error"
 
-fn code(raw: &str) -> Value {
-    json!(raw.parse::<i64>().unwrap_or_default())
+/// One JSON-RPC message as the client sent it. A message without `id` is a
+/// notification and is never answered.
+#[derive(Deserialize)]
+struct Request {
+    method: String,
+    id: Option<Value>,
+    params: Option<Value>,
+}
+
+/// The parameters of `tools/call`: the tool's name, and its arguments when
+/// the tool takes any.
+#[derive(Deserialize)]
+struct ToolCall {
+    name: String,
 }
 
 fn schema(properties: Value, required: Vec<&str>) -> Value {
@@ -60,96 +76,87 @@ fn detect_tool() -> Value {
     })
 }
 
-fn call_tool(name: &str, _args: &Value) -> Result<Value, String> {
+fn call_tool(name: &str) -> Result<Value, String> {
     match name {
         "brama_detect" => Ok(text_result(&detect_tool())),
         other => Err(format!("unknown tool: {other}")),
     }
 }
 
-fn send(out: &mut impl Write, message: &Value) {
-    let _ = writeln!(
-        out,
-        "{}",
-        serde_json::to_string(message).unwrap_or_default()
-    );
-    let _ = out.flush();
+/// Write one frame; a client that stopped reading is the caller's error.
+fn send(out: &mut impl Write, message: &Value) -> std::io::Result<()> {
+    writeln!(out, "{message}")?;
+    out.flush()
 }
 
-fn error_response(id: Value, error_code: &str, message: &str) -> Value {
-    json!({"jsonrpc": "2.0", "id": id, "error": {"code": code(error_code), "message": message}})
+fn error_response(id: Value, code: i64, message: &str) -> Value {
+    json!({"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}})
 }
 
-fn server_version() -> String {
-    option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string()
-}
-
-fn handle(request: &Value, out: &mut impl Write) {
-    let method = match request.get("method").and_then(Value::as_str) {
-        Some(m) => m,
-        None => return,
-    };
-    // No `id` key => notification: never answer.
-    let id = match request.get("id") {
-        Some(id) => id.clone(),
-        None => return,
-    };
-    match method {
-        "initialize" => send(
-            out,
-            &json!({"jsonrpc": "2.0", "id": id, "result": {
+/// The answer to one request, or `None` for a notification.
+fn answer(request: Request) -> Option<Value> {
+    let id = request.id?;
+    let reply = match request.method.as_str() {
+        "initialize" => json!({"jsonrpc": "2.0", "id": id, "result": {
             "protocolVersion": PROTOCOL_VERSION,
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "brama", "version": server_version()}}}),
-        ),
-        "ping" => send(out, &json!({"jsonrpc": "2.0", "id": id, "result": {}})),
-        "tools/list" => send(
-            out,
-            &json!({"jsonrpc": "2.0", "id": id, "result": {"tools": tools()}}),
-        ),
+            "serverInfo": {"name": "brama", "version": env!("CARGO_PKG_VERSION")}}}),
+        "ping" => json!({"jsonrpc": "2.0", "id": id, "result": {}}),
+        "tools/list" => json!({"jsonrpc": "2.0", "id": id, "result": {"tools": tools()}}),
         "tools/call" => {
-            let params = request.get("params").cloned().unwrap_or_else(|| json!({}));
-            let name = params.get("name").and_then(Value::as_str).unwrap_or("");
-            let args = params
-                .get("arguments")
-                .cloned()
-                .unwrap_or_else(|| json!({}));
-            match call_tool(name, &args) {
-                Ok(result) => send(out, &json!({"jsonrpc": "2.0", "id": id, "result": result})),
-                Err(e) => send(out, &error_response(id, CODE_INTERNAL_ERROR, &e)),
+            let call = match request.params {
+                Some(params) => serde_json::from_value::<ToolCall>(params)
+                    .map_err(|error| format!("tools/call params: {error}")),
+                None => Err("tools/call needs params naming the tool".to_string()),
+            };
+            match call {
+                Ok(call) => match call_tool(&call.name) {
+                    Ok(result) => json!({"jsonrpc": "2.0", "id": id, "result": result}),
+                    Err(refusal) => error_response(id, CODE_SERVER_ERROR, &refusal),
+                },
+                Err(refusal) => error_response(id, CODE_INVALID_PARAMS, &refusal),
             }
         }
-        other => send(
-            out,
-            &error_response(
-                id,
-                CODE_METHOD_NOT_FOUND,
-                &format!("method not found: {other}"),
-            ),
+        other => error_response(
+            id,
+            CODE_METHOD_NOT_FOUND,
+            &format!("method not found: {other}"),
         ),
-    }
+    };
+    Some(reply)
 }
 
 /// Run the stdio JSON-RPC loop until stdin closes. Owns stdout exclusively.
-pub fn serve() {
+/// Reading stdin or writing stdout failing ends the loop with that reason.
+pub fn serve() -> Result<(), String> {
     eprintln!("brama MCP server on stdio (protocol {PROTOCOL_VERSION})");
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
     for line in stdin.lock().lines() {
-        let line = match line {
-            Ok(l) => l,
-            Err(_) => break,
-        };
+        let line = line.map_err(|error| format!("stdin cannot be read: {error}"))?;
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
-        match serde_json::from_str::<Value>(trimmed) {
-            Ok(request) => handle(&request, &mut stdout),
-            Err(_) => send(
-                &mut stdout,
-                &error_response(Value::Null, CODE_PARSE_ERROR, "parse error"),
-            ),
+        let reply = match serde_json::from_str::<Value>(trimmed) {
+            Ok(message) => match serde_json::from_value::<Request>(message) {
+                Ok(request) => answer(request),
+                Err(error) => Some(error_response(
+                    Value::Null,
+                    CODE_INVALID_REQUEST,
+                    &format!("invalid request: {error}"),
+                )),
+            },
+            Err(error) => Some(error_response(
+                Value::Null,
+                CODE_PARSE_ERROR,
+                &format!("parse error: {error}"),
+            )),
+        };
+        if let Some(reply) = reply {
+            send(&mut stdout, &reply)
+                .map_err(|error| format!("stdout cannot be written: {error}"))?;
         }
     }
+    Ok(())
 }
