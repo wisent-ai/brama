@@ -11,20 +11,21 @@ use std::io::Read;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::Path;
 
-use ed25519_dalek::SigningKey;
+use ed25519_dalek::{SigningKey, SECRET_KEY_LENGTH};
 use zeroize::Zeroizing;
-
-/// Mode bits that would let the group or others touch the key.
-const GROUP_OR_OTHER_ACCESS: u32 = 0o077;
-/// An Ed25519 seed is 32 raw bytes, or those bytes as 64 hex characters.
-const SEED_BYTES: usize = 32;
-const SEED_HEX_CHARS: usize = 64;
 
 use super::purpose::CapabilityError;
 
+/// Mode bits that would let the group or others touch the key.
+const GROUP_OR_OTHER_ACCESS: u32 = 0o077; // https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/sys_stat.h.html S_IRWXG | S_IRWXO
+/// The signing seed is the curve library's secret key length in raw bytes,
+/// or those bytes written as hexadecimal digits.
+const HEX_DIGITS_PER_BYTE: usize = 2; // https://www.rfc-editor.org/rfc/rfc4648#section-8 "each octet ... as two hexadecimal digits"
+const SEED_HEX_CHARS: usize = SECRET_KEY_LENGTH * HEX_DIGITS_PER_BYTE; // https://www.rfc-editor.org/rfc/rfc4648#section-8 base16 doubles the octet count
+
 /// The longest file a valid key can be: the hex seed and a CRLF ending.
 /// Anything longer is refused before it is read, because it cannot parse.
-const MAX_KEY_BYTES: u64 = (SEED_HEX_CHARS + b"\r\n".len()) as u64;
+const MAX_KEY_BYTES: u64 = (SEED_HEX_CHARS + b"\r\n".len()) as u64; // https://www.rfc-editor.org/rfc/rfc5234#appendix-B.1 CRLF = CR LF
 
 pub(super) fn read_owner_key(path: &Path) -> Result<SigningKey, CapabilityError> {
     let mut file = OpenOptions::new()
@@ -51,7 +52,7 @@ pub(super) fn read_owner_key(path: &Path) -> Result<SigningKey, CapabilityError>
             metadata.uid()
         )));
     }
-    if metadata.mode() & GROUP_OR_OTHER_ACCESS != 0 {
+    if metadata.mode() & GROUP_OR_OTHER_ACCESS > 0 {
         return Err(CapabilityError::InvalidConfiguration(format!(
             "workload signing key {} permits group or other access; observed mode {:o}",
             path.display(),
@@ -76,28 +77,32 @@ pub(super) fn read_owner_key(path: &Path) -> Result<SigningKey, CapabilityError>
     })
 }
 
+/// The seed a key file holds. A file of exactly the seed's length is the raw
+/// seed, every byte of it key material, a byte that happens to be a newline
+/// included; any other file is the seed in lowercase hexadecimal, with the
+/// line ending a text editor leaves after it.
 fn parse_signing_key(encoded: &[u8]) -> Result<SigningKey, CapabilityError> {
-    let trimmed = encoded
-        .strip_suffix(b"\n")
-        .unwrap_or(encoded)
-        .strip_suffix(b"\r")
-        .unwrap_or_else(|| encoded.strip_suffix(b"\n").unwrap_or(encoded));
-    let mut raw = Zeroizing::new([0_u8; SEED_BYTES]);
-    if trimmed.len() == SEED_BYTES {
-        raw.copy_from_slice(trimmed);
-    } else if trimmed.len() == SEED_HEX_CHARS
-        && trimmed
-            .iter()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
-    {
-        hex::decode_to_slice(trimmed, raw.as_mut_slice()).map_err(|error| {
-            CapabilityError::InvalidConfiguration(format!("decode hexadecimal seed: {error}"))
-        })?;
-    } else {
+    if let Ok(raw) = <[u8; SECRET_KEY_LENGTH]>::try_from(encoded) {
+        let raw = Zeroizing::new(raw);
+        return Ok(SigningKey::from_bytes(&raw));
+    }
+    let text = encoded.trim_ascii_end();
+    let lowercase_hex = text
+        .iter()
+        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte));
+    if text.len() != SEED_HEX_CHARS || !lowercase_hex {
         return Err(CapabilityError::InvalidConfiguration(format!(
-            "seed must be {SEED_BYTES} raw bytes or {SEED_HEX_CHARS} lowercase hexadecimal characters; observed {} bytes",
-            trimmed.len()
+            "seed must be {SECRET_KEY_LENGTH} raw bytes or {SEED_HEX_CHARS} lowercase hexadecimal characters; observed {} bytes",
+            encoded.len()
         )));
     }
+    let decoded = Zeroizing::new(hex::decode(text).map_err(|error| {
+        CapabilityError::InvalidConfiguration(format!("decode hexadecimal seed: {error}"))
+    })?);
+    let raw = Zeroizing::new(
+        <[u8; SECRET_KEY_LENGTH]>::try_from(decoded.as_slice()).map_err(|error| {
+            CapabilityError::InvalidConfiguration(format!("hexadecimal seed length: {error}"))
+        })?,
+    );
     Ok(SigningKey::from_bytes(&raw))
 }
