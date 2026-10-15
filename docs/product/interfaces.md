@@ -50,10 +50,13 @@ to the [README](../../README.md).
   `response.incomplete`, and a tool call without its id, name or arguments
   each fail the attempt as a provider failure whose message names the missing
   field and quotes what the provider sent. On a stream, a tool call fragment
-  without an `index`, or a first fragment without `id` or `name`, ends the
+  without an `index`, a first fragment without `id` or `name`, or an event
+  that names its kind neither as the SSE event nor as its `type` ends the
   stream the same way. A provider error that states no message is reported
   with the error event itself. Usage is recorded only when the provider stated
-  both the input and the output count.
+  both the input and the output count, on a stream as in a buffered answer:
+  an Anthropic stream whose `message_start` states no input count records no
+  usage rather than zero input tokens.
 - **Authentication:** static and Skarbiec-issued workload/model-client bearers
   remain workload identities and do not send an organization header. A bearer
   validated by Wisent Supabase is a human identity on account, discovery, and

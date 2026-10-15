@@ -16,11 +16,12 @@ use super::event::{
 /// Mutable state for the Anthropic messages wire: the input meter arrives at
 /// the start of the stream and the output meter only at its end.
 ///
-/// A stream begins having been told no input tokens, which is what an unread
-/// meter means and what `Default` gives.
+/// A stream begins having been told no input meter. `None` is "not stated",
+/// never zero tokens: a usage line is sent only when both meters were stated,
+/// so a stream that did not state them is recorded as carrying no measurement.
 #[derive(Default)]
 pub(super) struct AnthropicState {
-    input_tokens: u32,
+    input_tokens: Option<u32>,
 }
 
 /// Translate one Anthropic messages event into neutral items.
@@ -41,10 +42,21 @@ pub(super) fn anthropic_items(
             return (items, true);
         }
     };
-    match event.unwrap_or_else(|| body.get("type").and_then(Value::as_str).unwrap_or("")) {
+    // Every event names its kind, as the SSE event or the body's type. One
+    // that names neither cannot be read, and ignoring it would drop what it
+    // carried from an answer that still finished as complete.
+    let kind = match (event, body.get("type").and_then(Value::as_str)) {
+        (Some(kind), _) | (None, Some(kind)) => kind,
+        (None, None) => {
+            items.push(StreamItem::Failed(format!(
+                "provider stream event names no type: {data}"
+            )));
+            return (items, true);
+        }
+    };
+    match kind {
         "message_start" => {
-            state.input_tokens =
-                json_u32(body.pointer("/message/usage/input_tokens")).unwrap_or_default();
+            state.input_tokens = json_u32(body.pointer("/message/usage/input_tokens"));
         }
         "content_block_start" => {
             if body.pointer("/content_block/type").and_then(Value::as_str) == Some("tool_use") {
@@ -91,11 +103,13 @@ pub(super) fn anthropic_items(
             _ => {}
         },
         "message_delta" => {
-            let output = json_u32(body.pointer("/usage/output_tokens")).unwrap_or_default();
-            if state.input_tokens > 0 || output > 0 {
+            if let (Some(input_tokens), Some(output_tokens)) = (
+                state.input_tokens,
+                json_u32(body.pointer("/usage/output_tokens")),
+            ) {
                 items.push(StreamItem::Delta(StreamDelta::Usage {
-                    input_tokens: state.input_tokens,
-                    output_tokens: output,
+                    input_tokens,
+                    output_tokens,
                 }));
             }
             if let Some(reason) = body.pointer("/delta/stop_reason").and_then(Value::as_str) {
