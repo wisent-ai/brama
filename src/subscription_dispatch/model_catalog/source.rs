@@ -1,45 +1,65 @@
 //! Where the catalog document comes from, and what address Brama will fetch.
 //!
-//! The address is operator-configurable, so it is checked before it is used:
-//! HTTPS, or explicit loopback HTTP for a local mirror, and never credentials
-//! embedded in the URL. The on-disk copy is written next to its own path and
-//! renamed into place, so a reader never sees half a document.
+//! The document is models.dev's published API unless `BRAMA_MODEL_CATALOG_URL`
+//! names a mirror, or `BRAMA_MODEL_CATALOG_PATH` a file. A configured address
+//! is checked before it is used: HTTPS, or plain HTTP to a loopback IP address
+//! for a local mirror, and never credentials embedded in the URL. The on-disk
+//! copy (`BRAMA_MODEL_CATALOG_CACHE`, else Brama's state directory) is written
+//! next to its own path and renamed into place, so a reader never sees half a
+//! document.
 
+use std::env::VarError;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
-const DEFAULT_CATALOG_URL: &str = "https://models.dev/api.json";
+/// Where models.dev publishes its catalog: https://models.dev ("api.json").
+const MODELS_DEV_CATALOG_URL: &str = "https://models.dev/api.json";
 /// The catalog copy's file name inside Brama's state directory
 /// (`journal::state_dir`); `/tmp` is shared by every program on the host and
 /// is not where a product keeps its state.
 const CACHE_FILE: &str = "models-dev-cache.json";
 
+/// The value of `name` when the operator set it; a value that is not UTF-8 is
+/// refused by name rather than read as unset.
+fn configured(name: &str) -> Result<Option<String>, String> {
+    match std::env::var(name) {
+        Ok(value) => Ok(Some(value)),
+        Err(VarError::NotPresent) => Ok(None),
+        Err(VarError::NotUnicode(_)) => Err(format!("{name} is not valid UTF-8")),
+    }
+}
+
 fn catalog_url() -> Result<reqwest::Url, String> {
-    let raw = std::env::var("BRAMA_MODEL_CATALOG_URL")
-        .unwrap_or_else(|_| DEFAULT_CATALOG_URL.to_string());
+    let raw = match configured("BRAMA_MODEL_CATALOG_URL")? {
+        Some(raw) => raw,
+        None => MODELS_DEV_CATALOG_URL.to_string(),
+    };
     let url = reqwest::Url::parse(raw.trim())
-        .map_err(|error| format!("invalid model catalog URL: {error}"))?;
+        .map_err(|error| format!("invalid model catalog URL {raw:?}: {error}"))?;
     if !url.username().is_empty() || url.password().is_some() {
         return Err("model catalog URL must not contain user info".into());
     }
-    let host = url
-        .host_str()
-        .ok_or_else(|| "model catalog URL must contain a host".to_string())?;
-    let loopback = host.eq_ignore_ascii_case("localhost")
-        || host
-            .parse::<std::net::IpAddr>()
-            .is_ok_and(|address| address.is_loopback());
-    if url.scheme() != "https" && !(url.scheme() == "http" && loopback) {
-        return Err("model catalog URL must use HTTPS or explicit loopback HTTP".into());
+    let loopback = match url.host() {
+        Some(url::Host::Ipv4(address)) => address.is_loopback(),
+        Some(url::Host::Ipv6(address)) => address.is_loopback(),
+        Some(url::Host::Domain(_)) => false,
+        None => return Err(format!("model catalog URL {raw:?} names no host")),
+    };
+    let secure = url.scheme() == "https";
+    let local = url.scheme() == "http" && loopback;
+    if !secure && !local {
+        return Err(format!(
+            "model catalog URL {raw:?} must use HTTPS, or plain HTTP to a loopback IP address"
+        ));
     }
     Ok(url)
 }
 
 pub(super) async fn read_live_catalog() -> Result<String, String> {
-    if let Ok(path) = std::env::var("BRAMA_MODEL_CATALOG_PATH") {
-        return tokio::fs::read_to_string(path)
+    if let Some(path) = configured("BRAMA_MODEL_CATALOG_PATH")? {
+        return tokio::fs::read_to_string(&path)
             .await
-            .map_err(|error| error.to_string());
+            .map_err(|error| format!("cannot read model catalog {path}: {error}"));
     }
     let url = catalog_url()?;
     // One client for the refresh, not one per refresh: each `Client` carries its
@@ -52,30 +72,33 @@ pub(super) async fn read_live_catalog() -> Result<String, String> {
             .map_err(|error| error.to_string())
     });
     let client = CATALOG_CLIENT.clone()?;
-    let response = client
-        .get(url)
-        .send()
+    let response = stado_wait::request(client.get(url.clone()))
         .await
-        .map_err(|error| error.to_string())?
+        .map_err(|error| format!("model catalog {url}: {error}"))?
         .error_for_status()
-        .map_err(|error| error.to_string())?;
-    response.text().await.map_err(|error| error.to_string())
+        .map_err(|error| format!("model catalog {url}: {error}"))?;
+    response
+        .text()
+        .await
+        .map_err(|error| format!("model catalog {url}: {error}"))
 }
 
-fn cache_path() -> PathBuf {
-    std::env::var("BRAMA_MODEL_CATALOG_CACHE")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| crate::journal::state_dir().join(CACHE_FILE))
+fn cache_path() -> Result<PathBuf, String> {
+    Ok(match configured("BRAMA_MODEL_CATALOG_CACHE")? {
+        Some(path) => PathBuf::from(path),
+        None => crate::journal::state_dir().join(CACHE_FILE),
+    })
 }
 
 pub(super) async fn read_cache() -> Result<String, String> {
-    tokio::fs::read_to_string(cache_path())
+    let path = cache_path()?;
+    tokio::fs::read_to_string(&path)
         .await
-        .map_err(|error| error.to_string())
+        .map_err(|error| format!("cannot read {}: {error}", path.display()))
 }
 
 pub(super) async fn write_cache(raw: &str) -> Result<(), String> {
-    let path = cache_path();
+    let path = cache_path()?;
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent)
             .await

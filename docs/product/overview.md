@@ -163,4 +163,8 @@ allowlisted bearer and the HMAC identity that owns the eligible subscription.
 It does not infer quality from prompt text or unlock a direct provider
 credential. Brama's journal stores only retirement markers and task-quality
 observations; provider credentials are forbidden. Public model metadata is read
-from models.dev and is never credential authority.
+from models.dev (`https://models.dev/api.json`) and is never credential
+authority. `BRAMA_MODEL_CATALOG_URL` names a mirror instead (HTTPS, or plain
+HTTP to a loopback IP address; no credentials in the URL),
+`BRAMA_MODEL_CATALOG_PATH` a file, and `BRAMA_MODEL_CATALOG_CACHE` where the
+last fetched copy is kept (Brama's state directory when unset).
