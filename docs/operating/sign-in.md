@@ -65,6 +65,10 @@ that follow it up: `weles runs show <run>` prints what the run last wrote and
 next sign-in: Weles admits a sign-in of the same account into the run already
 under way and replays its events, so asking again reattaches to it, and a run
 the operator cancelled (`run_cancelled`) leaves the account to a new run.
+A refusal is recorded with the failure Weles reported for its run, or, for a
+refusal before any run, with Weles's error code and stage; one that carries
+neither is recorded as `weles_refusal_unclassified` at stage `weles_response`
+rather than given a classification Weles did not make.
 Brama Desktop shows the
 same lines while its sign-in runs (the gateway's sign-in routes answer them as
 `application/x-ndjson`, ending in `verdict` or `refused`), and the gateway's
