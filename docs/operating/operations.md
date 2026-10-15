@@ -102,8 +102,11 @@ recorded and the discarded attempt stays `in_progress` forever on the Echo side.
   reset instant), `codex` publishes `GET /backend-api/wham/usage` on
   `chatgpt.com` (`rate_limit.primary_window` and `.secondary_window`, each a
   used percentage with its window length and reset), and `kimi` publishes
-  `GET /coding/v1/usages` on `api.kimi.com` (a `usage` object and a `limits`
-  array of limit/used/remaining counts with their windows). Every other provider
+  `GET /coding/v1/usages` on `api.kimi.com` (a `usage` object with the plan's
+  `used`, `limit` and `resetTime`, and a `limits` array whose entries carry a
+  `window` of `duration` and `timeUnit`, a `detail` with the same counters and
+  an optional `name`, as Moonshot's own Kimi Code client reads it; any other
+  shape is refused by its JSON path). Every other provider
   publishes nothing, and that absence is recorded as the provider's own answer
   rather than left as an unexplained blank. A subscription's report is read on
   a `brama maintain` pass when it has no reading, a reading whose window has

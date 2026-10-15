@@ -35,16 +35,14 @@ pub(super) fn claimed_number(value: Option<&Value>, path: &str) -> Result<f64, S
     Ok(number)
 }
 
-pub(super) fn optional_number(value: Option<&Value>, path: &str) -> Result<Option<f64>, String> {
-    match value {
-        None | Some(Value::Null) => Ok(None),
-        value => claimed_number(value, path).map(Some),
-    }
+/// Whether a finite claim lies above zero: a positive sign and not a zero.
+fn above_zero(number: f64) -> bool {
+    number.is_sign_positive() && number.classify() != std::num::FpCategory::Zero
 }
 
 pub(super) fn percentage(value: Option<&Value>, path: &str) -> Result<f64, String> {
     let percent = claimed_number(value, path)?;
-    if !(0.0..=PERCENT_SCALE).contains(&percent) {
+    if percent.is_sign_negative() || percent > PERCENT_SCALE {
         return Err(format!("`{path}` must be between 0 and 100"));
     }
     Ok(percent / PERCENT_SCALE)
@@ -52,7 +50,7 @@ pub(super) fn percentage(value: Option<&Value>, path: &str) -> Result<f64, Strin
 
 pub(super) fn positive_number(value: Option<&Value>, path: &str) -> Result<f64, String> {
     let number = claimed_number(value, path)?;
-    if number <= 0.0 {
+    if !above_zero(number) {
         return Err(format!("`{path}` must be greater than zero"));
     }
     Ok(number)
@@ -60,14 +58,14 @@ pub(super) fn positive_number(value: Option<&Value>, path: &str) -> Result<f64, 
 
 pub(super) fn nonnegative_number(value: Option<&Value>, path: &str) -> Result<f64, String> {
     let number = claimed_number(value, path)?;
-    if number < 0.0 {
+    if number.is_sign_negative() {
         return Err(format!("`{path}` must not be negative"));
     }
     Ok(number)
 }
 
 fn epoch_number_ms(number: f64, path: &str) -> Result<i64, String> {
-    if !number.is_finite() || number <= 0.0 {
+    if !number.is_finite() || !above_zero(number) {
         return Err(format!("`{path}` must be a positive finite instant"));
     }
     let milliseconds = if number >= EPOCH_MILLISECONDS_FLOOR {
@@ -97,7 +95,7 @@ pub(super) fn optional_instant_ms(
         let text = text.trim();
         if let Ok(instant) = chrono::DateTime::parse_from_rfc3339(text) {
             let milliseconds = instant.timestamp_millis();
-            if milliseconds <= 0 {
+            if !milliseconds.is_positive() {
                 return Err(format!("`{path}` must be a positive instant"));
             }
             return Ok(Some(milliseconds));
@@ -115,7 +113,7 @@ pub(super) fn delayed_reset_ms(
     recorded_at_ms: i64,
     path: &str,
 ) -> Result<i64, String> {
-    if !seconds.is_finite() || seconds < 0.0 {
+    if !seconds.is_finite() || seconds.is_sign_negative() {
         return Err(format!("`{path}` must be a nonnegative finite duration"));
     }
     let milliseconds = seconds * MS_PER_SECOND;

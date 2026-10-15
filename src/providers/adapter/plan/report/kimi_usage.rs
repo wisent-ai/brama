@@ -1,21 +1,19 @@
-//! Kimi's report, which states counters instead of percentages and carries its
-//! own reset aliases.
+//! Kimi Code's `/usages` report, read in the shape Moonshot's own client reads
+//! it (https://github.com/MoonshotAI/kimi-code/blob/5efca0c3116743855c28426000073bfe34a4862f/packages/oauth/src/managed-usage.ts):
+//! `$.usage` holds the plan's `used`, `limit` and `resetTime`; each entry of
+//! `$.limits` holds a `window` (`duration` and the proto enum `timeUnit`), a
+//! `detail` with the same three counters, and may hold a `name` for its label.
+//! Counters arrive as decimal strings. Any other shape is refused by path.
 
 use serde_json::{Map, Value};
 
 use super::super::window::window_label_from_minutes;
-use super::claim::{
-    delayed_reset_ms, nonnegative_number, optional_instant_ms, optional_number, positive_number,
-    required_object,
-};
-use super::{DAYS_PER_WEEK, MINUTES_PER_DAY, MINUTES_PER_HOUR, SECONDS_PER_MINUTE};
+use super::claim::{nonnegative_number, optional_instant_ms, positive_number, required_object};
+use super::{DAYS_PER_WEEK, MINUTES_PER_DAY, MINUTES_PER_HOUR};
 use crate::types::LimitReading;
 
-/// `used` and `limit - remaining` may differ by a few ulps of floating-point rounding.
-const COUNTER_TOLERANCE_ULPS: f64 = 8.0;
-
-/// Kimi states quotas as counts. Its top-level usage may explicitly be null and
-/// its limits array may be empty; every object it does publish must be complete.
+/// The plan's own quota (`$.usage`, which may be null) and every windowed
+/// limit (`$.limits`, which may be empty).
 pub(super) fn kimi_usage_readings(
     body: &Value,
     recorded_at_ms: i64,
@@ -30,201 +28,90 @@ pub(super) fn kimi_usage_readings(
         .as_array()
         .ok_or_else(|| "`$.limits` must be an array".to_string())?;
     let mut readings = Vec::new();
-    if let Some(reading) = kimi_reading(
-        usage,
-        "kimi:usage",
-        "Kimi plan quota",
-        "$.usage",
-        recorded_at_ms,
-    )? {
-        readings.push(reading);
+    if !usage.is_null() {
+        let counters = required_object(Some(usage), "$.usage")?;
+        readings.push(reading(
+            "kimi:usage".to_string(),
+            "Kimi plan quota".to_string(),
+            None,
+            counters,
+            "$.usage",
+            recorded_at_ms,
+        )?);
     }
     for (index, entry) in limits.iter().enumerate() {
         let path = format!("$.limits[{index}]");
-        let object = required_object(Some(entry), &path)?;
+        let entry = required_object(Some(entry), &path)?;
+        let window_path = format!("{path}.window");
+        let window = window_label(
+            required_object(entry.get("window"), &window_path)?,
+            &window_path,
+        )?;
+        let label = match entry.get("name") {
+            None | Some(Value::Null) => format!("Kimi {window} quota"),
+            Some(Value::String(name)) if !name.trim().is_empty() => name.trim().to_string(),
+            Some(_) => return Err(format!("`{path}.name` must be a non-empty string")),
+        };
+        let detail_path = format!("{path}.detail");
+        let counters = required_object(entry.get("detail"), &detail_path)?;
         // The position is the id because the report names its windows in prose:
         // keying on that prose would turn a reworded label into a second row.
-        let label = ["name", "title", "scope"]
-            .into_iter()
-            .filter_map(|field| object.get(field).and_then(Value::as_str))
-            .map(str::trim)
-            .find(|label| !label.is_empty())
-            .map(str::to_string)
-            .unwrap_or_else(|| format!("Kimi quota {}", index + 1));
-        let reading = kimi_reading(
-            entry,
-            &format!("kimi:limit-{index}"),
-            &label,
-            &path,
+        readings.push(reading(
+            format!("kimi:limit-{index}"),
+            label,
+            Some(window),
+            counters,
+            &detail_path,
             recorded_at_ms,
-        )?
-        .ok_or_else(|| format!("`{path}` cannot be null"))?;
-        readings.push(reading);
+        )?);
     }
     Ok(readings)
 }
 
-fn kimi_reading(
-    value: &Value,
-    limit_id: &str,
-    label: &str,
+/// One quota from its `used`, `limit` and optional `resetTime`.
+fn reading(
+    limit_id: String,
+    label: String,
+    window_label: Option<String>,
+    counters: &Map<String, Value>,
     path: &str,
     recorded_at_ms: i64,
-) -> Result<Option<LimitReading>, String> {
-    if value.is_null() {
-        return Ok(None);
+) -> Result<LimitReading, String> {
+    let limit = positive_number(counters.get("limit"), &format!("{path}.limit"))?;
+    let used = nonnegative_number(counters.get("used"), &format!("{path}.used"))?;
+    if used > limit {
+        return Err(format!("`{path}.used` exceeds `{path}.limit`"));
     }
-    let object = required_object(Some(value), path)?;
-    // Counters sit either directly on the entry or one level under `detail`.
-    // A claimed non-object detail is not silently treated as absent.
-    let (counters, counters_path) = match object.get("detail") {
-        None | Some(Value::Null) => (object, path.to_string()),
-        Some(Value::Object(detail)) => (detail, format!("{path}.detail")),
-        Some(_) => return Err(format!("`{path}.detail` must be an object")),
-    };
-    let limit = positive_number(counters.get("limit"), &format!("{counters_path}.limit"))?;
-    let claimed_used = optional_number(counters.get("used"), &format!("{counters_path}.used"))?;
-    let claimed_remaining = optional_number(
-        counters.get("remaining"),
-        &format!("{counters_path}.remaining"),
-    )?;
-    let used = match (claimed_used, claimed_remaining) {
-        (None, None) => {
-            return Err(format!(
-                "`{counters_path}` must contain either `used` or `remaining`"
-            ));
-        }
-        (Some(used), None) => used,
-        (None, Some(remaining)) => limit - remaining,
-        (Some(used), Some(remaining)) => {
-            let derived = limit - remaining;
-            let tolerance = f64::EPSILON * limit.abs().max(1.0) * COUNTER_TOLERANCE_ULPS;
-            if (used - derived).abs() > tolerance {
-                return Err(format!(
-                    "`{counters_path}.used` and `{counters_path}.remaining` disagree with `{counters_path}.limit`"
-                ));
-            }
-            used
-        }
-    };
-    if !(0.0..=limit).contains(&used) {
-        return Err(format!(
-            "`{counters_path}.used` must be between zero and `{counters_path}.limit`"
-        ));
-    }
-    if let Some(remaining) = claimed_remaining {
-        if !(0.0..=limit).contains(&remaining) {
-            return Err(format!(
-                "`{counters_path}.remaining` must be between zero and `{counters_path}.limit`"
-            ));
-        }
-    }
-    let window = match object.get("window") {
-        None | Some(Value::Null) => None,
-        Some(Value::Object(window)) => Some(window),
-        Some(_) => return Err(format!("`{path}.window` must be an object")),
-    };
-    Ok(Some(LimitReading {
-        limit_id: limit_id.to_string(),
-        label: label.to_string(),
-        window_label: match window {
-            Some(window) => kimi_window_label(window, &format!("{path}.window"))?,
-            None => None,
-        },
+    Ok(LimitReading {
+        limit_id,
+        label,
+        window_label,
         used_fraction: used / limit,
-        resets_at_ms: kimi_resets_at_ms(object, window, path, recorded_at_ms)?,
+        resets_at_ms: optional_instant_ms(counters.get("resetTime"), &format!("{path}.resetTime"))?,
         recorded_at_ms,
-    }))
+    })
 }
 
-/// Read Kimi's optional reset. A present malformed alias is rejected rather
-/// than skipped in favor of a later field.
-fn kimi_resets_at_ms(
-    entry: &Map<String, Value>,
-    window: Option<&Map<String, Value>>,
-    path: &str,
-    recorded_at_ms: i64,
-) -> Result<Option<i64>, String> {
-    const RESET_INSTANT_FIELDS: &[&str] = &["reset_at", "resetAt", "reset_time", "resetTime"];
-    const RESET_DELAY_FIELDS: &[&str] = &["reset_in", "resetIn", "ttl"];
-    let mut absolute_reset = None;
-    let mut delayed_reset = None;
-    for (source, source_path) in [
-        (window, format!("{path}.window")),
-        (Some(entry), path.to_string()),
-    ] {
-        let Some(source) = source else {
-            continue;
-        };
-        for field in RESET_INSTANT_FIELDS {
-            if let Some(value) = source.get(*field) {
-                let parsed = optional_instant_ms(Some(value), &format!("{source_path}.{field}"))?;
-                if absolute_reset.is_none() {
-                    absolute_reset = parsed;
-                }
-            }
+/// The window's length as a label, from its `duration` and its `timeUnit`.
+fn window_label(window: &Map<String, Value>, path: &str) -> Result<String, String> {
+    let duration = positive_number(window.get("duration"), &format!("{path}.duration"))?;
+    let unit = window
+        .get("timeUnit")
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("`{path}.timeUnit` must be a string"))?;
+    let minutes = match unit {
+        "TIME_UNIT_MINUTE" => duration,
+        "TIME_UNIT_HOUR" => duration * MINUTES_PER_HOUR,
+        "TIME_UNIT_DAY" => duration * MINUTES_PER_DAY,
+        "TIME_UNIT_WEEK" => duration * DAYS_PER_WEEK * MINUTES_PER_DAY,
+        other => {
+            return Err(format!(
+                "`{path}.timeUnit` is `{other}`, which Kimi does not define"
+            ));
         }
-        for field in RESET_DELAY_FIELDS {
-            if let Some(value) = source.get(*field) {
-                if value.is_null() {
-                    continue;
-                }
-                let delay = nonnegative_number(Some(value), &format!("{source_path}.{field}"))?;
-                let parsed =
-                    delayed_reset_ms(delay, recorded_at_ms, &format!("{source_path}.{field}"))?;
-                if delayed_reset.is_none() {
-                    delayed_reset = Some(parsed);
-                }
-            }
-        }
-    }
-    Ok(absolute_reset.or(delayed_reset))
-}
-
-/// The optional human label for a Kimi window. If either half of a claimed
-/// duration is present, both must be valid.
-fn kimi_window_label(window: &Map<String, Value>, path: &str) -> Result<Option<String>, String> {
-    let duration_value = window.get("duration");
-    let read_unit = |value: Option<&Value>, field: &str| -> Result<Option<String>, String> {
-        let Some(value) = value else {
-            return Ok(None);
-        };
-        let unit = value
-            .as_str()
-            .map(str::trim)
-            .filter(|unit| !unit.is_empty())
-            .ok_or_else(|| format!("`{path}.{field}` must be a non-empty string"))?;
-        Ok(Some(unit.to_ascii_uppercase()))
-    };
-    let camel_unit = read_unit(window.get("timeUnit"), "timeUnit")?;
-    let snake_unit = read_unit(window.get("time_unit"), "time_unit")?;
-    if duration_value.is_none() && camel_unit.is_none() && snake_unit.is_none() {
-        return Ok(None);
-    }
-    if let (Some(camel), Some(snake)) = (&camel_unit, &snake_unit) {
-        if camel != snake {
-            return Err(format!("`{path}.timeUnit` and `{path}.time_unit` disagree"));
-        }
-    }
-    let duration = positive_number(duration_value, &format!("{path}.duration"))?;
-    let unit = camel_unit
-        .or(snake_unit)
-        .ok_or_else(|| format!("missing `{path}.timeUnit`"))?;
-    let minutes = if unit.contains("MINUTE") {
-        duration
-    } else if unit.contains("HOUR") {
-        duration * MINUTES_PER_HOUR
-    } else if unit.contains("DAY") {
-        duration * MINUTES_PER_DAY
-    } else if unit.contains("WEEK") {
-        duration * DAYS_PER_WEEK * MINUTES_PER_DAY
-    } else if unit.contains("SECOND") {
-        duration / SECONDS_PER_MINUTE
-    } else {
-        return Err(format!("`{path}.timeUnit` has unsupported value `{unit}`"));
     };
     if !minutes.is_finite() || minutes >= i64::MAX as f64 {
         return Err(format!("`{path}.duration` is outside the supported range"));
     }
-    Ok(Some(window_label_from_minutes(minutes)))
+    Ok(window_label_from_minutes(minutes))
 }
