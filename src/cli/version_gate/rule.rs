@@ -13,9 +13,9 @@ use serde_json::Value;
 
 /// The value a version slot resets to when a higher slot advances, and the
 /// value of an unstable major (SPEC.md, "What moves").
-const SLOT_RESET: u64 = 0;
+const SLOT_RESET: u64 = 0; // https://github.com/lbartoszcze/AutoVersion/blob/v0.1.0/SPEC.md "What moves"
 /// How far one change advances one slot (SPEC.md, "What moves").
-const SLOT_STEP: u64 = 1;
+const SLOT_STEP: u64 = 1; // https://github.com/lbartoszcze/AutoVersion/blob/v0.1.0/SPEC.md "What moves"
 
 /// A refusal, named the way the rule's fixtures name it.
 #[derive(Debug)]
@@ -87,12 +87,20 @@ impl Version {
                 format!("{value:?} is not a major.minor.patch triple, so there is no slot to advance; name the next version explicitly"),
             ));
         };
-        let numeric = |slot: &str| {
-            (!slot.is_empty() && slot.bytes().all(|byte| byte.is_ascii_digit()))
-                .then(|| slot.parse::<u64>().ok())
-                .flatten()
+        // A slot of digits that does not fit is still refused as not
+        // numeric, the SPEC's name, with the parser's cause in the message.
+        let numeric = |slot: &str| -> Result<Option<u64>, Refusal> {
+            if slot.is_empty() || !slot.bytes().all(|byte| byte.is_ascii_digit()) {
+                return Ok(None);
+            }
+            slot.parse::<u64>().map(Some).map_err(|error| {
+                refuse(
+                    "not-numeric",
+                    format!("{value:?} has the slot {slot:?}, which no unsigned 64-bit slot holds: {error}"),
+                )
+            })
         };
-        match (numeric(major), numeric(minor), numeric(patch)) {
+        match (numeric(major)?, numeric(minor)?, numeric(patch)?) {
             (Some(major), Some(minor), Some(patch)) => Ok(Self { major, minor, patch }),
             _ => Err(refuse(
                 "not-numeric",
@@ -189,20 +197,23 @@ struct Fixtures {
     refuse: Vec<Value>,
 }
 
-/// The fixtures between the first pair of ``` fences of FIXTURES.md, or the
-/// whole text when it is already JSON.
+/// The fixtures of FIXTURES.md: a text that opens with `{` is the JSON
+/// document itself; any other is read between the first pair of ``` fences,
+/// after the opening fence's info line.
 fn cases(text: &str) -> Result<Fixtures, String> {
-    if let Ok(fixtures) = serde_json::from_str(text) {
-        return Ok(fixtures);
+    if text.trim_start().starts_with('{') {
+        return serde_json::from_str(text)
+            .map_err(|error| format!("the fixtures JSON document is not valid: {error}"));
     }
     let (_, after) = text
         .split_once("```")
-        .ok_or("the fixtures file has no fenced block")?;
-    let block = match after.split_once("```") {
-        Some((block, _)) => block,
-        None => after,
-    };
-    let body = block.split_once('\n').map_or(block, |(_, rest)| rest);
+        .ok_or("the fixtures file is neither a JSON document nor holds a fenced block")?;
+    let (block, _) = after
+        .split_once("```")
+        .ok_or("the fixtures file's fenced block is never closed")?;
+    let (_info, body) = block
+        .split_once('\n')
+        .ok_or("the fixtures file's fenced block has no line after its opening fence")?;
     serde_json::from_str(body)
         .map_err(|error| format!("the fenced fixtures are not valid: {error}"))
 }
