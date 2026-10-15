@@ -38,7 +38,9 @@ pub(super) async fn create_subscription(
             )
         })?;
     let login_item = donation_login_item(request.login_item.as_deref())?;
-    let api_key = request.api_key.as_deref().unwrap_or("");
+    let Some(api_key) = request.api_key.as_deref() else {
+        return Err(api_error(StatusCode::BAD_REQUEST, "api_key is missing"));
+    };
     if api_key.is_empty() {
         return Err(api_error(
             StatusCode::BAD_REQUEST,
