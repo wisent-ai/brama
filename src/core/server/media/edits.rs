@@ -42,17 +42,16 @@ pub(in crate::core::server) async fn image_edits(
 /// The edit form, read into the generation request it asks for. An option
 /// the generation request does not take is refused by name, as it is there.
 fn edit_request(headers: &HeaderMap, body: &[u8]) -> Result<ImageRequest, String> {
-    let content_type = headers
-        .get(header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or_default();
-    let boundary = boundary(content_type).ok_or_else(|| {
-        format!(
-            "POST /v1/images/edits takes multipart/form-data with a boundary, not \
-             `{content_type}`; JSON with input images as data: URLs in `image` goes to \
-             POST /v1/images/generations"
-        )
-    })?;
+    let multipart = "POST /v1/images/edits takes multipart/form-data with a boundary; JSON with \
+                     input images as data: URLs in `image` goes to POST /v1/images/generations";
+    let Some(value) = headers.get(header::CONTENT_TYPE) else {
+        return Err(format!("the request carries no Content-Type: {multipart}"));
+    };
+    let content_type = value
+        .to_str()
+        .map_err(|error| format!("its Content-Type is not visible ASCII ({error}): {multipart}"))?;
+    let boundary = boundary(content_type)
+        .ok_or_else(|| format!("its Content-Type is `{content_type}`: {multipart}"))?;
     let mut fields = Map::new();
     let mut images = Vec::new();
     for part in parts(body, boundary)? {
@@ -72,7 +71,7 @@ fn edit_request(headers: &HeaderMap, body: &[u8]) -> Result<ImageRequest, String
             }
             (name, false) => {
                 let text = std::str::from_utf8(part.body)
-                    .map_err(|_| format!("`{name}` is not UTF-8 text"))?;
+                    .map_err(|error| format!("`{name}` is not UTF-8 text: {error}"))?;
                 fields.insert(name.to_string(), field_value(name, text)?);
             }
         }
