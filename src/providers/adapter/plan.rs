@@ -13,10 +13,10 @@ use tracing::warn;
 
 use super::call::control_client;
 use super::call::credential::{authorize_provider, credential_key};
-use super::call::outcome::refusal::{provider_refusal, transport_refusal};
+use super::call::outcome::refusal::{provider_refusal, refusal_class, transport_refusal};
 use super::call::outcome::response_body::response_text;
 use super::registry::{provider, provider_base_url, ProviderDescriptor};
-use crate::types::{LimitReading, Refusal};
+use crate::types::{LimitReading, ProviderRefusal};
 use endpoint::{plan_tier_endpoint, plan_usage_endpoint, PlanUsageEndpoint};
 use headers::observed_at_ms;
 use report::plan_usage_readings;
@@ -31,10 +31,14 @@ pub enum PlanUsage {
     /// Brama supports no free usage-report endpoint for this provider
     /// credential. Separately privileged billing APIs are outside this flow.
     Unpublished,
-    /// The provider call or its response was refused. The string retains the
-    /// contract kind prefix and the exact endpoint, operation, status (when an
-    /// HTTP response existed), vault item, and underlying cause.
-    Refused(String),
+    /// The provider call or its response was refused: the class it reads as,
+    /// the HTTP status when a response existed, and a detail that names the
+    /// endpoint, operation, vault item and underlying cause.
+    Refused {
+        class: ProviderRefusal,
+        status: Option<reqwest::StatusCode>,
+        detail: String,
+    },
 }
 
 /// Whether Brama supports a free usage report for this provider credential.
@@ -76,40 +80,28 @@ fn plan_usage_url(
             )
         })
 }
+
 fn plan_usage_refusal(
-    kind: &str,
+    class: ProviderRefusal,
     provider_id: &str,
     item: &str,
     url: &str,
     status: Option<reqwest::StatusCode>,
     cause: &str,
 ) -> PlanUsage {
-    let status = status
-        .map(|status| format!(" returned HTTP {}", status.as_u16()))
-        .unwrap_or_else(|| " failed before an HTTP response".to_string());
-    PlanUsage::Refused(format!(
-        "{kind}: provider `{provider_id}` usage GET `{url}` for credential `{item}`{status}: \
-         {cause}"
-    ))
-}
-
-/// A refusal that stated its own class, carried into the usage report with
-/// the kind that class reads as.
-fn classified_plan_usage_refusal(
-    provider_id: &str,
-    item: &str,
-    url: &str,
-    status: Option<reqwest::StatusCode>,
-    refused: &Refusal,
-) -> PlanUsage {
-    plan_usage_refusal(
-        refused.class.contract_kind(),
-        provider_id,
-        item,
-        url,
+    let answered = match status {
+        Some(status) => format!(" returned HTTP {}", status.as_u16()),
+        None => " failed before an HTTP response".to_string(),
+    };
+    let detail = format!(
+        "{}: provider `{provider_id}` usage GET `{url}` for credential `{item}`{answered}: {cause}",
+        class.contract_kind()
+    );
+    PlanUsage::Refused {
+        class,
         status,
-        &refused.message,
-    )
+        detail,
+    }
 }
 
 /// Read one subscription's plan windows from the provider's own usage report.
@@ -121,68 +113,50 @@ pub async fn read_plan_usage(provider_id: &str, item: &str, secret: &str) -> Pla
     let Some(endpoint) = plan_usage_endpoint(provider_id) else {
         return PlanUsage::Unpublished;
     };
+    let failure = ProviderRefusal::ProviderFailure;
     let Some(descriptor) = provider(provider_id) else {
-        return plan_usage_refusal(
-            "provider_failure",
-            provider_id,
-            item,
-            endpoint.url,
-            None,
-            "the provider publishes a usage report but is not registered",
-        );
+        let cause = "the provider publishes a usage report but is not registered";
+        return plan_usage_refusal(failure, provider_id, item, endpoint.url, None, cause);
     };
     let url = match plan_usage_url(descriptor, endpoint) {
         Ok(url) => url,
         Err(message) => {
-            return plan_usage_refusal(
-                "provider_failure",
-                provider_id,
-                item,
-                endpoint.url,
-                None,
-                &message,
-            );
+            return plan_usage_refusal(failure, provider_id, item, endpoint.url, None, &message);
         }
     };
     let key = match credential_key(item, secret) {
         Ok(key) => key,
         Err(message) => {
-            return plan_usage_refusal(
-                "provider_authentication",
-                provider_id,
-                item,
-                &url,
-                None,
-                &message,
-            );
+            let class = ProviderRefusal::Authentication;
+            return plan_usage_refusal(class, provider_id, item, &url, None, &message);
         }
     };
     let client = match control_client() {
         Ok(client) => client,
         Err(message) => {
-            return plan_usage_refusal(
-                "provider_failure",
-                provider_id,
-                item,
-                &url,
-                None,
-                &format!("provider client configuration failed: {message}"),
-            );
+            let cause = format!("provider client configuration failed: {message}");
+            return plan_usage_refusal(failure, provider_id, item, &url, None, &cause);
         }
     };
     let builder = client.get(&url).header("accept", "application/json");
-    let response = match authorize_provider(builder, descriptor, &key, secret)
-        .send()
-        .await
-    {
+    let sent = stado_wait::until(
+        stado_wait::Kind::Network,
+        "read provider usage report",
+        url.as_str(),
+        authorize_provider(builder, descriptor, &key, secret).send(),
+    )
+    .await;
+    let response = match sent {
         Ok(response) => response,
         Err(error) => {
-            return classified_plan_usage_refusal(
+            let refused = transport_refusal(&error);
+            return plan_usage_refusal(
+                refused.class,
                 provider_id,
                 item,
                 &url,
                 None,
-                &transport_refusal(&error),
+                &refused.message,
             );
         }
     };
@@ -190,16 +164,19 @@ pub async fn read_plan_usage(provider_id: &str, item: &str, secret: &str) -> Pla
     let (status, _plan, text) = match response_text(response).await {
         Ok(parts) => parts,
         Err(refused) => {
-            return classified_plan_usage_refusal(
+            let status = Some(response_status);
+            return plan_usage_refusal(
+                refused.class,
                 provider_id,
                 item,
                 &url,
-                Some(response_status),
-                &refused,
+                status,
+                &refused.message,
             );
         }
     };
     if !status.is_success() {
+        let class = refusal_class(status, &text);
         let (kind, detail) = provider_refusal(status, &text);
         warn!(
             event = "plan_usage_refused",
@@ -208,31 +185,21 @@ pub async fn read_plan_usage(provider_id: &str, item: &str, secret: &str) -> Pla
             contract_kind = kind,
             "the provider refused its own usage report: {detail}"
         );
-        return plan_usage_refusal(kind, provider_id, item, &url, Some(status), &detail);
+        return plan_usage_refusal(class, provider_id, item, &url, Some(status), &detail);
     }
     let body = match serde_json::from_str::<Value>(&text) {
         Ok(body) => body,
         Err(error) => {
-            return plan_usage_refusal(
-                "provider_failure",
-                provider_id,
-                item,
-                &url,
-                Some(status),
-                &format!("usage response is not valid JSON: {error}"),
-            );
+            let cause = format!("usage response is not valid JSON: {error}");
+            return plan_usage_refusal(failure, provider_id, item, &url, Some(status), &cause);
         }
     };
     match plan_usage_readings(endpoint.shape, &body, observed_at_ms()) {
         Ok(readings) => PlanUsage::Report(readings),
-        Err(error) => plan_usage_refusal(
-            "provider_failure",
-            provider_id,
-            item,
-            &url,
-            Some(status),
-            &format!("usage response schema is invalid: {error}"),
-        ),
+        Err(error) => {
+            let cause = format!("usage response schema is invalid: {error}");
+            plan_usage_refusal(failure, provider_id, item, &url, Some(status), &cause)
+        }
     }
 }
 
@@ -254,15 +221,19 @@ pub async fn read_plan_tier(provider_id: &str, item: &str, secret: &str) -> Resu
     let client = control_client()
         .map_err(|message| format!("provider client configuration failed: {message}"))?;
     let builder = client.get(&url).header("accept", "application/json");
-    let response = authorize_provider(builder, descriptor, &key, secret)
-        .send()
-        .await
-        .map_err(|error| {
-            format!(
-                "profile GET `{url}` for credential `{item}` failed before an HTTP response: {}",
-                transport_refusal(&error).message
-            )
-        })?;
+    let response = stado_wait::until(
+        stado_wait::Kind::Network,
+        "read provider plan tier",
+        url.as_str(),
+        authorize_provider(builder, descriptor, &key, secret).send(),
+    )
+    .await
+    .map_err(|error| {
+        format!(
+            "profile GET `{url}` for credential `{item}` failed before an HTTP response: {}",
+            transport_refusal(&error).message
+        )
+    })?;
     let (status, _plan, text) = response_text(response).await.map_err(|refused| {
         format!(
             "profile GET `{url}` for credential `{item}`: {}",

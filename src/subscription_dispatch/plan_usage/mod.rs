@@ -32,7 +32,6 @@ mod in_flight;
 mod refusal;
 mod sweep;
 
-use futures_util::{stream, StreamExt};
 use serde_json::Value;
 use tracing::{info, warn};
 use wisent_errors::{Code, Failure};
@@ -42,10 +41,9 @@ use crate::gateway::broker;
 use crate::providers::adapter::{self as provider_registry, PlanUsage};
 use crate::subscription_dispatch::{pool, usage};
 
+use crate::types::ProviderRefusal;
 use in_flight::{join_refresh, shared_refresh, RefreshResult};
-use refusal::{
-    invalid_credential_failure, is_provider_authentication, provider_failure, UNPUBLISHED_DETAIL,
-};
+use refusal::{invalid_credential_failure, provider_failure, reset_failure, UNPUBLISHED_DETAIL};
 
 pub(crate) use sweep::sweep;
 
@@ -68,10 +66,18 @@ async fn refresh_once(subscription_id: &str, provider: &str) -> RefreshResult {
         .map_err(|error| invalid_credential_failure(subscription_id, provider, &item, error))?;
     let first = provider_registry::read_plan_usage(provider, &item, token).await;
     let outcome = match first {
-        PlanUsage::Refused(detail)
-            if is_provider_authentication(&detail) && broker::supports_oauth_refresh(provider) =>
-        {
-            let rejected = provider_failure(subscription_id, provider, detail);
+        PlanUsage::Refused {
+            class: ProviderRefusal::Authentication,
+            status,
+            detail,
+        } if broker::supports_oauth_refresh(provider) => {
+            let rejected = provider_failure(
+                subscription_id,
+                provider,
+                ProviderRefusal::Authentication,
+                status,
+                detail,
+            );
             drop(credential);
             let fresh = broker::refresh_subscription_credential(subscription_id, provider)
                 .await
@@ -94,7 +100,7 @@ async fn refresh_once(subscription_id: &str, provider: &str) -> RefreshResult {
             {
                 crate::subscription_dispatch::acquire::resets::refresh(subscription_id, provider)
                     .await
-                    .map_err(|detail| provider_failure(subscription_id, provider, detail))?;
+                    .map_err(|detail| reset_failure(subscription_id, provider, detail))?;
             }
             info!(
                 event = "plan_usage_recorded",
@@ -108,7 +114,11 @@ async fn refresh_once(subscription_id: &str, provider: &str) -> RefreshResult {
         PlanUsage::Unpublished => {
             usage::record_plan_usage_unpublished(subscription_id, provider, UNPUBLISHED_DETAIL)
         }
-        PlanUsage::Refused(detail) => {
+        PlanUsage::Refused {
+            class,
+            status,
+            detail,
+        } => {
             warn!(
                 event = "plan_usage_refused",
                 subscription = %subscription_id,
@@ -117,7 +127,13 @@ async fn refresh_once(subscription_id: &str, provider: &str) -> RefreshResult {
                 "the provider would not state this subscription's usage; the last good reading \
                  is retained and stale"
             );
-            Err(provider_failure(subscription_id, provider, detail))
+            Err(provider_failure(
+                subscription_id,
+                provider,
+                class,
+                status,
+                detail,
+            ))
         }
     }
 }
@@ -184,14 +200,14 @@ pub async fn report(scope: &pool::PoolScope) -> Value {
                 .with_context("attempted_at_ms", now_ms().to_string()),
             );
         }
-        // Bounded fan-out: several accounts on one host share one source
+        // One read at a time: several accounts on one host share one source
         // address, and a provider that rate-limits per address refuses the
         // burst that asking about all of them at once would produce.
-        let results = stream::iter(attempts)
-            .buffer_unordered(4)
-            .collect::<Vec<_>>()
-            .await;
-        errors.extend(results.into_iter().filter_map(Result::err));
+        for attempt in attempts {
+            if let Err(refused) = attempt.await {
+                errors.push(refused);
+            }
+        }
     }
     pool::document(scope, &entries, errors)
 }
