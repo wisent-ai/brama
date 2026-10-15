@@ -39,12 +39,14 @@ impl WelesEndpoint {
                 self.url
             );
         };
-        let freshness = self
+        let freshness = match self
             .observed
             .as_deref()
             .filter(|observed| !observed.is_empty())
-            .map(|observed| format!(", placement last observed {observed}"))
-            .unwrap_or_default();
+        {
+            Some(observed) => format!(", placement last observed {observed}"),
+            None => ", and Stado states no observation of that placement".to_string(),
+        };
         format!("{} is a forward to Weles on {host}{freshness}", self.url)
     }
 }
@@ -53,7 +55,7 @@ impl WelesEndpoint {
 /// change while Brama keeps serving model traffic; baking loopback into the
 /// launcher made the renewal path silently keep the old host forever.
 pub(crate) async fn worker_api_base() -> Result<WelesEndpoint, String> {
-    if let Ok(configured) = std::env::var("BRAMA_WELES_URL") {
+    if let Some(configured) = setting("BRAMA_WELES_URL")? {
         let configured = configured.trim();
         if !configured.is_empty() {
             reqwest::Url::parse(configured)
@@ -65,7 +67,7 @@ pub(crate) async fn worker_api_base() -> Result<WelesEndpoint, String> {
             });
         }
     }
-    let stado = stado_binary();
+    let stado = stado_binary()?;
     // A host may declare one resolver adapter per consumer, and Stado refuses
     // to guess between them: without a named consumer `brama subscription
     // sign-in` dies on "<host> declares 3 resolver adapters for
@@ -73,7 +75,10 @@ pub(crate) async fn worker_api_base() -> Result<WelesEndpoint, String> {
     // --consumer", so no account can be signed in from the command line at
     // all. The sibling lookup in `cli::subscriptions::sync` already names its
     // consumer; this one did not.
-    let consumer = env_or("BRAMA_WELES_ADMISSION_CONSUMER", "operator");
+    let consumer = match setting("BRAMA_WELES_ADMISSION_CONSUMER")? {
+        Some(consumer) => consumer,
+        None => OPERATOR_CONSUMER.to_string(),
+    };
     let output = stado_wait::output_async(
         tokio::process::Command::new(&stado)
             .kill_on_drop(true)
@@ -130,10 +135,20 @@ pub(crate) async fn worker_api_base() -> Result<WelesEndpoint, String> {
     })
 }
 
-fn env_or(key: &str, default: &str) -> String {
+/// The consumer an operator's own shell is to Stado's service directory, the
+/// one `BRAMA_WELES_ADMISSION_CONSUMER` replaces for a launcher of its own.
+const OPERATOR_CONSUMER: &str = "operator";
+
+/// `key`, trimmed, when it names something: `None` when it is unset or
+/// blank, and a refusal naming it when it is set to text that is not Unicode.
+fn setting(key: &str) -> Result<Option<String>, String> {
     match std::env::var(key) {
-        Ok(value) if !value.trim().is_empty() => value.trim().to_string(),
-        _ => default.to_string(),
+        Ok(value) if value.trim().is_empty() => Ok(None),
+        Ok(value) => Ok(Some(value.trim().to_string())),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            Err(format!("{key} is set to text that is not Unicode"))
+        }
     }
 }
 
@@ -145,14 +160,10 @@ fn env_or(key: &str, default: &str) -> String {
 /// `brama subscription sign-in` has no launcher, so the command reads the
 /// same role itself.
 pub(crate) fn worker_api_token() -> Result<String, String> {
-    let declared = std::env::var("BRAMA_WELES_REAUTH_TOKEN")
-        .unwrap_or_default()
-        .trim()
-        .to_string();
-    if !declared.is_empty() {
-        return Ok(declared);
+    match setting("BRAMA_WELES_REAUTH_TOKEN")? {
+        Some(declared) => Ok(declared),
+        None => vault_reauth_token(),
     }
-    vault_reauth_token()
 }
 
 /// The role the Weles sign-in worker's bearer plays in the vault. The one
@@ -175,7 +186,7 @@ const REAUTH_ROLE: &str = "brama-weles-reauth";
 /// once per sign-in, before any HTTP exchange, and both callers are already
 /// waiting on a child process for the length of a browser login.
 fn vault_reauth_token() -> Result<String, String> {
-    let stado = stado_binary();
+    let stado = stado_binary()?;
     let output = stado_wait::output(std::process::Command::new(&stado).args([
         "credentials",
         "get",
@@ -192,11 +203,11 @@ fn vault_reauth_token() -> Result<String, String> {
         )
     })?;
     if !output.status.success() {
-        let said: String = String::from_utf8_lossy(&output.stderr)
-            .lines()
-            .find(|line| line.starts_with("Error:"))
-            .unwrap_or_default()
-            .to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let said = match stderr.lines().find(|line| line.starts_with("Error:")) {
+            Some(line) => line.to_string(),
+            None => stderr.trim().to_string(),
+        };
         return Err(format!(
             "cannot read role {REAUTH_ROLE} through {}: {} {said}",
             stado.display(),
@@ -212,12 +223,12 @@ fn vault_reauth_token() -> Result<String, String> {
 
 /// The Stado binary: `BRAMA_STADO_BIN`, else `.stado/bin/stado` under the
 /// user's home, never under the working directory.
-fn stado_binary() -> std::path::PathBuf {
-    match std::env::var("BRAMA_STADO_BIN") {
-        Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
-        _ => crate::journal::home_dir()
+fn stado_binary() -> Result<std::path::PathBuf, String> {
+    Ok(match setting("BRAMA_STADO_BIN")? {
+        Some(value) => std::path::PathBuf::from(value),
+        None => crate::journal::home_dir()
             .join(".stado")
             .join("bin")
             .join("stado"),
-    }
+    })
 }
