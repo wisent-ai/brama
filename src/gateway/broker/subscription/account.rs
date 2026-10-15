@@ -133,12 +133,11 @@ pub(super) fn parse_subscriptions(
 }
 
 pub(super) fn configured_subscriptions() -> Option<Result<Vec<SubscriptionEntry>, String>> {
-    let encoded = match std::env::var(SUBSCRIPTION_CATALOG_ENV) {
-        Ok(encoded) => encoded,
-        Err(std::env::VarError::NotPresent) => return None,
-        Err(error) => return Some(Err(format!("read {SUBSCRIPTION_CATALOG_ENV}: {error}"))),
-    };
-    Some(parse_subscriptions(encoded.as_bytes(), None))
+    match crate::environment::declared_text(SUBSCRIPTION_CATALOG_ENV) {
+        Ok(Some(encoded)) => Some(parse_subscriptions(encoded.as_bytes(), None)),
+        Ok(None) => None,
+        Err(refusal) => Some(Err(format!("read {SUBSCRIPTION_CATALOG_ENV}: {refusal}"))),
+    }
 }
 
 /// The subscriptions one agent banked itself: vault items tagged

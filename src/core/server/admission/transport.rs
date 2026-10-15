@@ -49,10 +49,8 @@ fn forwarded_proto_is_https(headers: &HeaderMap) -> Option<bool> {
 /// text, is a configuration fault named with the variable, never a peer
 /// quietly dropped from the list.
 fn declared_addresses(variable: &str) -> Result<Vec<IpAddr>, String> {
-    let configured = match std::env::var(variable) {
-        Ok(configured) => configured,
-        Err(std::env::VarError::NotPresent) => return Ok(Vec::new()),
-        Err(error) => return Err(format!("{variable} cannot be read: {error}")),
+    let Some(configured) = crate::environment::declared_text(variable)? else {
+        return Ok(Vec::new());
     };
     configured
         .split(',')

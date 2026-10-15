@@ -4,10 +4,10 @@ use std::collections::HashMap;
 use crate::capability::{CapabilityClient, CapabilityError};
 
 pub(super) fn capability_map(name: &str) -> Result<HashMap<String, String>, String> {
-    let encoded = match std::env::var(name) {
-        Ok(encoded) => encoded,
-        Err(std::env::VarError::NotPresent) => return Ok(HashMap::new()),
-        Err(error) => return Err(format!("read capability declaration {name}: {error}")),
+    let Some(encoded) = crate::environment::declared_text(name)
+        .map_err(|refusal| format!("read capability declaration {name}: {refusal}"))?
+    else {
+        return Ok(HashMap::new());
     };
     serde_json::from_str(&encoded)
         .map_err(|error| format!("decode capability declaration {name}: {error}"))

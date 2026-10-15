@@ -21,22 +21,19 @@ impl ModelAliases {
     pub(in crate::core::server) fn from_env(
         require_exact_aliases: bool,
     ) -> Result<Self, std::io::Error> {
-        let encoded = match std::env::var(MODEL_ALIASES_ENV) {
-            Ok(encoded) => encoded,
-            // Absent and not required is the stated empty table; a value that
-            // is present but not UTF-8 is a broken declaration either way.
-            Err(std::env::VarError::NotPresent) if !require_exact_aliases => "{}".to_owned(),
-            Err(std::env::VarError::NotUnicode(raw)) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    format!("{MODEL_ALIASES_ENV} is not UTF-8: {raw:?}"),
-                ));
-            }
-            Err(std::env::VarError::NotPresent) => {
-                // A bare "is required" sent one supervised process into 3869
-                // restarts against a cause no amount of retrying reaches: the
-                // aliases are assembled by the launcher, so the binary started
-                // on its own can never find them. Name the path that works.
+        // A value that is present but not UTF-8 is a broken declaration
+        // either way, refused by name.
+        let declared = crate::environment::declared_text(MODEL_ALIASES_ENV)
+            .map_err(|refusal| std::io::Error::new(std::io::ErrorKind::InvalidInput, refusal))?;
+        let encoded = match declared {
+            Some(encoded) => encoded,
+            // Absent and not required is the stated empty table.
+            None if !require_exact_aliases => "{}".to_owned(),
+            None => {
+                // A bare "is required" leaves a supervised process restarting
+                // against a cause no retry reaches: the aliases are assembled
+                // by the launcher, so the binary started on its own can never
+                // find them. Name the path that works.
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidInput,
                     format!(

@@ -18,16 +18,8 @@ pub(super) fn capabilities(
     // An environment value that is not UTF-8 is a broken naming of the table,
     // not an absent one: falling through to the settings would grant from a
     // table nobody asked for.
-    let from_env = match std::env::var("SKARBIEC_CAPABILITY_ROUTES_FILE") {
-        Ok(value) => Some(value),
-        Err(std::env::VarError::NotPresent) => None,
-        Err(std::env::VarError::NotUnicode(raw)) => {
-            return Err(format!(
-                "SKARBIEC_CAPABILITY_ROUTES_FILE is not UTF-8: {raw:?}"
-            ))
-        }
-    };
-    let named = from_env.filter(|value| !value.is_empty()).or_else(|| {
+    let from_env = brama::environment::declared_setting("SKARBIEC_CAPABILITY_ROUTES_FILE")?;
+    let named = from_env.or_else(|| {
         settings
             .get("SKARBIEC_CAPABILITY_ROUTES_FILE")
             .cloned()
