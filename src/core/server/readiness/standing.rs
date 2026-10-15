@@ -78,15 +78,19 @@ impl Drop for Standing {
 }
 
 /// Where Stado's resolver keeps its state on this machine: Stado's own
-/// contract, overridable the way Stado's readers override it.
-pub(in crate::core::server) fn resolver_state_file() -> Option<PathBuf> {
-    match std::env::var_os("STADO_RESOLVER_STATE_FILE").filter(|path| !path.is_empty()) {
-        Some(path) => Some(PathBuf::from(path)),
-        None => Some(
-            PathBuf::from(std::env::var_os("HOME")?)
-                .join(".stado")
-                .join("resolver-state.json"),
-        ),
+/// contract, overridable the way Stado's readers override it. A process
+/// with neither the override nor a home cannot say where that is.
+pub(in crate::core::server) fn resolver_state_file() -> Result<PathBuf, String> {
+    if let Some(path) =
+        std::env::var_os("STADO_RESOLVER_STATE_FILE").filter(|path| !path.is_empty())
+    {
+        return Ok(PathBuf::from(path));
+    }
+    match std::env::var_os("HOME").filter(|home| !home.is_empty()) {
+        Some(home) => Ok(PathBuf::from(home).join(".stado").join("resolver-state.json")),
+        None => Err("neither STADO_RESOLVER_STATE_FILE nor HOME names where this host's \
+                     Stado resolver keeps its state"
+            .to_string()),
     }
 }
 
@@ -110,9 +114,7 @@ fn resolver_document(path: &PathBuf) -> Result<Option<serde_json::Value>, String
 /// that cannot be read, or a state and registry that do not name the target,
 /// is an error naming which.
 fn declared_refresh() -> Result<Option<u64>, String> {
-    let Some(state_file) = resolver_state_file() else {
-        return Ok(None);
-    };
+    let state_file = resolver_state_file()?;
     let Some(state) = resolver_document(&state_file)? else {
         return Ok(None);
     };

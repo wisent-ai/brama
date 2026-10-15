@@ -68,7 +68,10 @@ to the [README](../../README.md).
   `workload_authority_unavailable` diagnostic names the held wait — its
   service, consumer, phase, endpoint, host and start — and `stado resolver
   status`. A waiting list that cannot be read refuses the same way with its
-  cause.
+  cause, and so does a gateway whose environment names neither
+  `STADO_RESOLVER_STATE_FILE` nor `HOME`, since it cannot say where the list
+  is; the same unlocatable state makes `/readyz` refuse while a credential
+  call stands.
 - **Account API keys and subscriptions:** authenticated Wisent users use
   `GET|POST /v1/account/subscriptions` and
   `DELETE /v1/account/subscriptions/:subscription_id`. Every human request sends

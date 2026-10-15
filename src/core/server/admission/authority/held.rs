@@ -26,19 +26,17 @@ struct PendingChannel {
 
 /// Where the resolver publishes its waits: beside its state, whose place is
 /// Stado's own contract (`readiness::standing::resolver_state_file`).
-fn waiting_file() -> Option<PathBuf> {
-    Some(
-        crate::core::server::readiness::standing::resolver_state_file()?
-            .with_file_name("resolver-waiting.json"),
-    )
+fn waiting_file() -> Result<PathBuf, String> {
+    Ok(crate::core::server::readiness::standing::resolver_state_file()?
+        .with_file_name("resolver-waiting.json"))
 }
 
 /// Why a call to `url` would stand, when this machine's resolver already
 /// holds a connection on that bind unanswered: every such wait named with
 /// its service, consumer, phase, endpoint, host and start. `Ok(None)` when
-/// the bind holds nothing, or this machine has no resolver state; `Err`
-/// when the published list is there and cannot be read, because then nobody
-/// can say whether the call would be answered.
+/// the bind holds nothing, or the resolver has published no list; `Err`
+/// when the list's place cannot be named, or it is there and cannot be
+/// read, because then nobody can say whether the call would be answered.
 pub(super) fn held_at(url: &str) -> Result<Option<String>, String> {
     let Some(authority) = url
         .strip_prefix("http://")
@@ -46,9 +44,7 @@ pub(super) fn held_at(url: &str) -> Result<Option<String>, String> {
     else {
         return Ok(None);
     };
-    let Some(path) = waiting_file() else {
-        return Ok(None);
-    };
+    let path = waiting_file()?;
     let bytes = match std::fs::read(&path) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
