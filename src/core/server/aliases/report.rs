@@ -105,28 +105,29 @@ pub fn alias_routing(alias: &str) -> Result<(Option<String>, AliasDiagnosis), st
 /// launcher's path so an operator shell reads the file the gateway reads.
 fn aliases_as_configured() -> Result<ModelAliases, std::io::Error> {
     if std::env::var_os(crate::core::inference_routes::ROUTES_FILE_ENV).is_none() {
-        if let Some(home) = std::env::var_os("HOME") {
-            let default_path = PathBuf::from(home).join(".config/brama/inference-routes.json");
-            // Only a file that does not exist leaves the registry unset; one
-            // that cannot be examined is refused, not read as no routes.
-            match std::fs::metadata(&default_path) {
-                Ok(metadata) if metadata.is_file() => {
-                    // Set only for this process: the CLI is reading, not serving.
-                    std::env::set_var(crate::core::inference_routes::ROUTES_FILE_ENV, default_path);
-                }
-                Ok(_) => {
-                    return Err(std::io::Error::other(format!(
-                        "{} is not a file",
-                        default_path.display()
-                    )))
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => {
-                    return Err(std::io::Error::new(
-                        error.kind(),
-                        format!("cannot examine {}: {error}", default_path.display()),
-                    ))
-                }
+        // The registry an undeclared host keeps, from the one place that says
+        // where it is; a home that cannot be named is refused there by name.
+        let default_path =
+            crate::config_adoption::default_destination().map_err(std::io::Error::other)?;
+        // Only a file that does not exist leaves the registry unset; one
+        // that cannot be examined is refused, not read as no routes.
+        match std::fs::metadata(&default_path) {
+            Ok(metadata) if metadata.is_file() => {
+                // Set only for this process: the CLI is reading, not serving.
+                std::env::set_var(crate::core::inference_routes::ROUTES_FILE_ENV, default_path);
+            }
+            Ok(_) => {
+                return Err(std::io::Error::other(format!(
+                    "{} is not a file",
+                    default_path.display()
+                )))
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(std::io::Error::new(
+                    error.kind(),
+                    format!("cannot examine {}: {error}", default_path.display()),
+                ))
             }
         }
     }
