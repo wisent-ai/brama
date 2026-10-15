@@ -66,7 +66,13 @@ fn running_root(home: &Path) -> Result<Option<PathBuf>, String> {
 pub(super) fn installation() -> Result<Installation, String> {
     let home = home()?;
     let settings = service_settings(&home)?;
-    let env = |name: &str| std::env::var(name).ok().filter(|value| !value.is_empty());
+    // Set and not UTF-8 is a broken value, not an absent one: passing over it
+    // would register from a path the launcher did not name.
+    let env = |name: &str| match std::env::var(name) {
+        Ok(value) => Ok(Some(value).filter(|value| !value.is_empty())),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(raw)) => Err(format!("{name} is not UTF-8: {raw:?}")),
+    };
     let setting = |name: &str| {
         settings
             .get(name)
@@ -86,11 +92,11 @@ pub(super) fn installation() -> Result<Installation, String> {
         .as_ref()
         .map(|root| root.join("etc/brama-skarbiec"))
         .filter(|path| path.is_dir());
-    let router = env("ENTITLEMENTS_ROUTER_BIN")
+    let router = env("ENTITLEMENTS_ROUTER_BIN")?
         .or_else(|| current_router.map(|path| path.display().to_string()))
         .or_else(|| setting("ENTITLEMENTS_ROUTER_BIN"));
-    let vault = env("SKARBIEC_VAULT_FILE").or_else(|| setting("SKARBIEC_VAULT_FILE"));
-    let config_dir = env("BRAMA_SKARBIEC_CONFIG_DIR")
+    let vault = env("SKARBIEC_VAULT_FILE")?.or_else(|| setting("SKARBIEC_VAULT_FILE"));
+    let config_dir = env("BRAMA_SKARBIEC_CONFIG_DIR")?
         .or_else(|| current_config.map(|path| path.display().to_string()))
         .or_else(|| setting("BRAMA_SKARBIEC_CONFIG_DIR"));
     let (Some(router), Some(vault), Some(config_dir)) = (router, vault, config_dir) else {
