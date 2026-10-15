@@ -18,10 +18,15 @@ to the [README](../../README.md).
   Responses a message item without `role` or `content`, a `function_call`
   without `call_id`, `name` or `arguments`, a `function_call_output` without
   `call_id` or `output`, an `input_image` without `image_url`, a content part
-  the gateway cannot carry, and a function tool without `name` -- each is
+  the gateway cannot carry, and a function tool without `name`; on chat
+  completions a message without `content` that calls no tool -- each is
   refused as a bad request naming the message, item or tool position and the
   missing field, e.g. ``message 2: a `tool_use` content block carries no `id`
-  text``. On every format, a tool call the history carries must have an
+  text``. All three formats hold `model`, `max_tokens` and `temperature` to
+  one set of bounds: a model that is missing or blank, `max_tokens` of zero,
+  and a temperature outside the chat-completions range of 0 to 2 are refused
+  with the same sentence whichever format carried them. On every format, a
+  tool call the history carries must have an
   `id`, a `function.name` and `function.arguments` that are JSON text, and a
   tool result (a `tool` message, a `tool_result` block or a
   `function_call_output` item) must name by its call id a tool call an
@@ -143,25 +148,33 @@ to the [README](../../README.md).
   unredeemable, or unroutable account visible without blocking a release that
   contains its repair; HTTP 503 means no configured route can serve. Deploy
   checks and uptime monitors should read `/readyz`; `/health` only proves the
-  process is running. Every call to the credential source (Skarbiec's token
-  introspection on each workload admission) is recorded while it stands;
-  when one has stood longer than the refresh interval this host's Stado
-  resolver declares (its state's target in `~/.stado/cache/registry-last-good.json`,
-  `service_resolver.refresh_seconds`), `/readyz` answers 503 with
-  `ready: false` and `reason` and `credential_source` set to "the credential
-  source has not answered: <n> call(s) stand longer than the <s>s refresh
-  interval this host's resolver declares, the oldest to <url> for <s>s; Brama
-  serves no chat until it answers", whatever the last sweep found, and that
-  same reading ends each such admission with the sentence (`503`,
-  `workload_authority_unavailable`) instead of letting it stand. A host whose
-  resolver declares no interval reads no standing call. A resolver state or
-  registry copy that exists but cannot be read, is not JSON, or does not name
-  the target the state names leaves the calls unmeasurable: while any call
-  stands, `/readyz` answers 503 the same way with `reason` and
-  `credential_source` saying "<n> credential call(s) stand and cannot be
-  measured: the resolver's refresh interval is unreadable: <cause naming the
-  file>". Qualification: `tests/readiness/standing.rs` against a stand-in that
-  accepts and never answers.
+  process is running. Every answer carries `digest`, the SHA-256 of its
+  status and body. `GET /readyz?after=<digest>` answers once the readiness
+  answer differs from the one that digest names: at once when it already
+  does, otherwise when a sweep or maintenance pass publishes, a credential
+  call begins or ends, or a standing call reaches the declared refresh
+  interval below. A client watching Brama while it waits on a request (Tama's
+  judge) asks with the digest of the answer it last read and makes one
+  request per change, not one per answer. Every call to the credential source
+  (Skarbiec's token introspection on each workload admission) is recorded
+  while it stands; when one has stood the refresh interval this host's Stado
+  resolver declares or longer (its state's target in
+  `~/.stado/cache/registry-last-good.json`, `service_resolver.refresh_seconds`),
+  `/readyz` answers 503 with `ready: false` and `reason` and
+  `credential_source` set to "the credential source has not answered: <n>
+  call(s) have stood the <s>s refresh interval this host's resolver declares
+  or longer, the oldest to <url> for <s>s; Brama serves no chat until it
+  answers", whatever the last sweep found, and that same reading ends each
+  such admission with the sentence (`503`, `workload_authority_unavailable`)
+  instead of letting it stand. A host whose resolver declares no interval
+  reads no standing call. A resolver state or registry copy that exists but
+  cannot be read, is not JSON, or does not name the target the state names
+  leaves the calls unmeasurable: while any call stands, `/readyz` answers 503
+  the same way with `reason` and `credential_source` saying "<n> credential
+  call(s) stand and cannot be measured: the resolver's refresh interval is
+  unreadable: <cause naming the file>". Qualification:
+  `tests/readiness/standing.rs` against a stand-in that accepts and never
+  answers, asking with each answer's digest.
 - **Error contract:** a refused redemption is `503 authorization_error` with
   code `credential_unauthorized` and `retryable: false`, never a `429
   capacity_error`. Waiting does not repair an authorization id that does not

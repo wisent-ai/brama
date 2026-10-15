@@ -24,9 +24,7 @@ use crate::core::server::streaming::{chunks::ChatChunkStream, sse_response};
 use crate::types::{Message, ModelRequest};
 
 use outcome::{failure_response, log_stream_commit, tally_and_log_buffered};
-use request::{
-    ChatCompletionRequest, ChatCompletionResponse, Choice, ChoiceMessage, Usage, MAX_TEMPERATURE,
-};
+use request::{ChatCompletionRequest, ChatCompletionResponse, Choice, ChoiceMessage, Usage};
 use routing::{route_model_call, DispatchedCall};
 
 pub(in crate::core::server) async fn chat_completions(
@@ -45,41 +43,44 @@ pub(in crate::core::server) async fn chat_completions(
     if req.messages.is_empty() {
         return api_error(StatusCode::BAD_REQUEST, "messages must not be empty").into_response();
     }
-    if req.max_tokens == Some(0) {
-        return api_error(
-            StatusCode::BAD_REQUEST,
-            "max_tokens must be at least one when it is set",
-        )
-        .into_response();
+    let requested_model = match req.model.as_deref() {
+        Some(model) => model.trim().to_string(),
+        None => return api_error(StatusCode::BAD_REQUEST, "missing field `model`").into_response(),
+    };
+    if let Err(message) =
+        crate::core::wire::validate(&requested_model, req.max_tokens, req.temperature)
+    {
+        return api_error(StatusCode::BAD_REQUEST, &message).into_response();
     }
-    if req.temperature.is_some_and(|temperature| {
-        !temperature.is_finite() || temperature < 0.0 || temperature > MAX_TEMPERATURE
-    }) {
-        return api_error(
-            StatusCode::BAD_REQUEST,
-            &format!("temperature must be finite and between zero and {MAX_TEMPERATURE}"),
-        )
-        .into_response();
-    }
-    let messages: Vec<Message> = req
-        .messages
-        .into_iter()
-        .map(|m| Message {
+    let mut messages: Vec<Message> = Vec::with_capacity(req.messages.len());
+    for (position, m) in req.messages.into_iter().enumerate() {
+        // The chat-completions format lets only a turn that calls tools leave
+        // its content out; the provider adapters read that turn as no text.
+        let calls_tools = m.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty());
+        let content = match m.content {
+            Some(content) => content,
+            None if calls_tools => serde_json::Value::String(String::new()),
+            None => {
+                return api_error(
+                    StatusCode::BAD_REQUEST,
+                    &format!(
+                        "message {position} ({}) has no content and calls no tool",
+                        m.role
+                    ),
+                )
+                .into_response();
+            }
+        };
+        messages.push(Message {
             role: m.role,
-            content: m
-                .content
-                .unwrap_or_else(|| serde_json::Value::String(String::new())),
+            content,
             tool_call_id: m.tool_call_id,
             name: m.name,
             tool_calls: m.tool_calls,
-        })
-        .collect();
+        });
+    }
     if let Err(message) = crate::core::wire::validate_history_tool_calls(&messages) {
         return api_error(StatusCode::BAD_REQUEST, &message).into_response();
-    }
-    let requested_model = req.model.as_deref().unwrap_or("").trim().to_string();
-    if requested_model.is_empty() {
-        return api_error(StatusCode::BAD_REQUEST, "missing field `model`").into_response();
     }
     let (system, non_system_messages) = split_system_message(messages);
     let request = ModelRequest {
@@ -123,7 +124,7 @@ pub(in crate::core::server) async fn chat_completions(
                 object: "chat.completion".into(),
                 model: response_model,
                 choices: vec![Choice {
-                    index: 0,
+                    index: 0, // https://platform.openai.com/docs/api-reference/chat/object#chat/object-choices the one choice Brama returns
                     message: ChoiceMessage {
                         role: "assistant".into(),
                         content: resp.content,

@@ -5,10 +5,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::{BillingTarget, Tool, ToolCall};
 
-/// A temperature runs from zero to 2, the range the chat-completions format
-/// defines. A request names no answer length unless the caller does, and it
-/// runs until the provider answers or refuses; no clock ends it.
-pub(crate) const MAX_TEMPERATURE: f64 = 2.0;
+/// A temperature runs over the range the chat-completions format defines. A
+/// request names no answer length unless the caller does, and it runs until
+/// the provider answers or refuses; no clock ends it.
+pub(crate) const MIN_TEMPERATURE: f64 = 0.0; // https://platform.openai.com/docs/api-reference/chat/create#chat-create-temperature
+pub(crate) const MAX_TEMPERATURE: f64 = 2.0; // https://platform.openai.com/docs/api-reference/chat/create#chat-create-temperature
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

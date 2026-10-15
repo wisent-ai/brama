@@ -55,22 +55,25 @@ pub struct InboundCall {
     pub stream: bool,
 }
 
-/// Shared inbound bounds, identical to the chat-completions contract so the
-/// answer does not depend on which format the caller speaks.
-fn validate(model: &str, max_tokens: Option<u32>, temperature: Option<f64>) -> Result<(), String> {
+/// Shared inbound bounds for all three formats a caller may speak, so the
+/// answer does not depend on which one it uses.
+pub(crate) fn validate(
+    model: &str,
+    max_tokens: Option<u32>,
+    temperature: Option<f64>,
+) -> Result<(), String> {
+    use crate::core::server::{MAX_TEMPERATURE, MIN_TEMPERATURE};
     if model.trim().is_empty() {
         return Err("missing field `model`".to_string());
     }
-    if max_tokens == Some(0) {
+    if max_tokens.is_some_and(|tokens| std::num::NonZeroU32::new(tokens).is_none()) {
         return Err("max_tokens must be at least one when it is set".to_string());
     }
     if temperature.is_some_and(|temperature| {
-        !temperature.is_finite()
-            || !(0.0..=crate::core::server::MAX_TEMPERATURE).contains(&temperature)
+        !temperature.is_finite() || !(MIN_TEMPERATURE..=MAX_TEMPERATURE).contains(&temperature)
     }) {
         return Err(format!(
-            "temperature must be finite and between zero and {}",
-            crate::core::server::MAX_TEMPERATURE
+            "temperature must be finite and between {MIN_TEMPERATURE} and {MAX_TEMPERATURE}"
         ));
     }
     Ok(())
@@ -130,8 +133,13 @@ pub fn validate_history_tool_calls(messages: &[crate::types::Message]) -> Result
 // Buffered egress.
 // ---------------------------------------------------------------------------
 
-fn tool_calls_from_response(response: &ModelResponse) -> Vec<ToolCall> {
-    response.tool_calls.clone().unwrap_or_default()
+/// The tool calls a response carries; a response that made none carries an
+/// empty list, which is what `None` states.
+fn tool_calls_from_response(response: &ModelResponse) -> &[ToolCall] {
+    match response.tool_calls.as_deref() {
+        Some(calls) => calls,
+        None => &[],
+    }
 }
 
 /// Shape one buffered internal response as an Anthropic message.
@@ -154,7 +162,7 @@ pub fn anthropic_response(
     if !response.content.is_empty() {
         content.push(json!({ "type": "text", "text": response.content }));
     }
-    for call in &tool_calls {
+    for call in tool_calls {
         let arguments = call.function.arguments.trim();
         let input = if arguments.is_empty() {
             json!({})

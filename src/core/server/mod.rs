@@ -54,7 +54,7 @@ pub use administration::{route_shape_writable, valid_alias};
 pub(crate) use aliases::{
     alias_requires_direct_capability, alias_route_shape_supported, DECISION_ALIASES, MEDIA_ALIASES,
 };
-pub(crate) use chat::request::MAX_TEMPERATURE;
+pub(crate) use chat::request::{MAX_TEMPERATURE, MIN_TEMPERATURE};
 pub(crate) use readiness::standing::Standing;
 
 /// Apply one pool membership document from the local vault-owning CLI.
