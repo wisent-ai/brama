@@ -2,7 +2,7 @@
 //! own bound address, a declared mesh peer and a trusted HTTPS proxy are the
 //! four ways the answer is yes; everything else is asked to upgrade.
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 
 use axum::extract::ConnectInfo;
 use axum::http::{HeaderMap, StatusCode};
@@ -13,7 +13,7 @@ use crate::core::server::refusal::api_error;
 
 fn forwarded_proto_is_https(headers: &HeaderMap) -> Option<bool> {
     let forwarded = headers.get("forwarded").map(|value| {
-        value.to_str().ok().is_some_and(|value| {
+        value.to_str().is_ok_and(|value| {
             value
                 .split(',')
                 .next()
@@ -27,7 +27,7 @@ fn forwarded_proto_is_https(headers: &HeaderMap) -> Option<bool> {
         })
     });
     let x_forwarded = headers.get("x-forwarded-proto").map(|value| {
-        value.to_str().ok().is_some_and(|value| {
+        value.to_str().is_ok_and(|value| {
             value
                 .split(',')
                 .next()
@@ -41,53 +41,50 @@ fn forwarded_proto_is_https(headers: &HeaderMap) -> Option<bool> {
     }
 }
 
-/// Peers whose hop is already encrypted before it reaches this process.
-///
-/// The fleet's mesh authenticates and encrypts node to node, so a request
-/// arriving from one of those nodes has had exactly the protection this guard
-/// exists to demand -- it simply cannot be seen from inside the request. That
-/// is a narrow statement about named peers, not a general exemption for plain
-/// HTTP: the list is written out by whoever renders this unit, from the hosts
-/// the registry declares, and an address that is not on it is refused like any
-/// other.
-fn encrypted_transport_peer(peer: std::net::IpAddr) -> bool {
-    std::env::var("BRAMA_ENCRYPTED_PEER_IPS")
-        .ok()
-        .is_some_and(|configured| {
-            configured
-                .split(',')
-                .filter_map(|value| value.trim().parse::<std::net::IpAddr>().ok())
-                .any(|trusted| trusted == peer)
+/// The addresses `variable` lists, comma-separated: the address this
+/// process bound (`BRAMA_BIND_ADDRESS`), the TLS terminators whose forwarded
+/// headers are trusted (`BRAMA_TRUSTED_PROXY_IPS`), and the mesh peers whose
+/// hop is already encrypted (`BRAMA_ENCRYPTED_PEER_IPS`). Unset or blank
+/// lists none. An entry that is not an IP address, or a value that is not
+/// text, is a configuration fault named with the variable, never a peer
+/// quietly dropped from the list.
+fn declared_addresses(variable: &str) -> Result<Vec<IpAddr>, String> {
+    let configured = match std::env::var(variable) {
+        Ok(configured) => configured,
+        Err(std::env::VarError::NotPresent) => return Ok(Vec::new()),
+        Err(error) => return Err(format!("{variable} cannot be read: {error}")),
+    };
+    configured
+        .split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .map(|entry| {
+            entry.parse::<IpAddr>().map_err(|error| {
+                format!("{variable} lists {entry:?}, which is not an IP address: {error}")
+            })
         })
+        .collect()
 }
 
-fn trusted_forwarded_peer(peer: std::net::IpAddr) -> bool {
-    std::env::var("BRAMA_TRUSTED_PROXY_IPS")
-        .ok()
-        .is_some_and(|configured| {
-            configured
-                .split(',')
-                .filter_map(|value| value.trim().parse::<std::net::IpAddr>().ok())
-                .any(|trusted| trusted == peer)
-        })
+/// The three lists the guard reads, or the first one that cannot be read.
+fn declared_peers() -> Result<(Vec<IpAddr>, Vec<IpAddr>, Vec<IpAddr>), String> {
+    Ok((
+        declared_addresses("BRAMA_BIND_ADDRESS")?,
+        declared_addresses("BRAMA_TRUSTED_PROXY_IPS")?,
+        declared_addresses("BRAMA_ENCRYPTED_PEER_IPS")?,
+    ))
 }
 
-/// The address this process itself bound.
+/// Loopback, the address the gateway itself bound, a declared mesh peer
+/// whose hop is already encrypted, and a trusted TLS terminator whose
+/// forwarded headers say `https` pass; anything else is asked to upgrade.
 ///
-/// A request whose source is the address the gateway listens on came from this
-/// machine and never crossed a network, so it has the protection this guard
-/// demands for the same reason a loopback request does. Without this, a
-/// gateway placed on a routable address cannot be exercised from the host it
-/// runs on at all: `/health` answers, every other path returns 426, and an
-/// operator diagnosing it concludes the gateway is broken. That is not a
-/// hypothetical - it is where this comment came from.
-fn own_bound_address(peer: std::net::IpAddr) -> bool {
-    std::env::var("BRAMA_BIND_ADDRESS")
-        .ok()
-        .and_then(|configured| configured.trim().parse::<std::net::IpAddr>().ok())
-        .is_some_and(|bound| bound == peer)
-}
-
+/// A request from the bound address came from this machine and never
+/// crossed a network, so it has the protection a loopback request has;
+/// without it a gateway on a routable address cannot be exercised from its
+/// own host. A mesh peer's hop is encrypted node to node, which cannot be
+/// seen from inside the request; the list is written by whoever renders
+/// this unit, from the hosts the registry declares.
 pub(in crate::core::server) async fn require_secure_transport(
     request: axum::extract::Request,
     next: Next,
@@ -96,11 +93,24 @@ pub(in crate::core::server) async fn require_secure_transport(
     let peer = request
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
-        .map(|connect_info| connect_info.0.ip());
-    let loopback = peer.is_some_and(|address| address.is_loopback() || own_bound_address(address));
-    let trusted_https_proxy = peer.is_some_and(trusted_forwarded_peer) && forwarded == Some(true);
-    let already_encrypted = peer.is_some_and(encrypted_transport_peer);
-    if loopback || trusted_https_proxy || already_encrypted {
+        .map(|ConnectInfo(address)| address.ip());
+    if peer.is_some_and(|address| address.is_loopback()) {
+        return next.run(request).await;
+    }
+    let (bound, proxies, encrypted) = match declared_peers() {
+        Ok(lists) => lists,
+        Err(fault) => {
+            return api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                &format!(
+                    "the transport guard's configuration cannot be read, so only loopback is served: {fault}"
+                ),
+            )
+            .into_response();
+        }
+    };
+    let named = |list: &[IpAddr]| peer.is_some_and(|address| list.contains(&address));
+    if named(&bound) || named(&encrypted) || (named(&proxies) && forwarded == Some(true)) {
         return next.run(request).await;
     }
     api_error(

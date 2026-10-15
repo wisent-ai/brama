@@ -31,8 +31,8 @@
         <table><thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
           <tr><td><code>--port</code> (serve flag)</td><td><code>8080</code></td><td>listen port</td></tr>
           <tr><td><code>BRAMA_BIND_ADDRESS</code></td><td>loopback</td><td>bind IP; must parse as an IP address. Requests from this address count as local for the transport guard</td></tr>
-          <tr><td><code>BRAMA_TRUSTED_PROXY_IPS</code></td><td>unset</td><td>comma-separated TLS-terminator peer IPs whose <code>https</code> forwarded headers are trusted; an empty value trusts none of them</td></tr>
-          <tr><td><code>BRAMA_ENCRYPTED_PEER_IPS</code></td><td>unset</td><td>comma-separated peer IPs whose hop is already encrypted (mesh nodes); accepted without forwarded headers</td></tr>
+          <tr><td><code>BRAMA_TRUSTED_PROXY_IPS</code></td><td>unset</td><td>comma-separated TLS-terminator peer IPs whose <code>https</code> forwarded headers are trusted; an empty value trusts none of them. An entry that is not an IP address is not skipped: every non-loopback request is then refused with <code>500 internal_error</code> naming the variable and the entry</td></tr>
+          <tr><td><code>BRAMA_ENCRYPTED_PEER_IPS</code></td><td>unset</td><td>comma-separated peer IPs whose hop is already encrypted (mesh nodes); accepted without forwarded headers. A malformed entry is refused the same way</td></tr>
         </tbody></table>
 
         <h2 id="identity-and-policy">Identity and policy<a class="headerlink" href="#identity-and-policy" title="Link to this section">&para;</a></h2>
