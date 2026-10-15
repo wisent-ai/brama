@@ -20,6 +20,7 @@ use super::super::standalone::{
 use super::super::vault::put_credential;
 use super::account::{parse_subscriptions, SubscriptionEntry};
 use super::tags::subscription_tags_for_write;
+use crate::gateway::oauth_refresh;
 
 const DONATED_SUBSCRIPTIONS_FILE_ENV: &str = "BRAMA_DONATED_SUBSCRIPTIONS_FILE";
 
@@ -260,11 +261,14 @@ pub async fn put_donated_credential(
         return Err(DonationRefusal::Unusable(detail));
     }
     // A donated API key is a bare key, not a JSON grant, and states no
-    // account; only a JSON grant is read for the address it names.
-    let grant_account = match crate::gateway::oauth_refresh::stated_account_text(api_key, provider)
-    {
+    // account; a JSON grant is read for the address it names, and one whose
+    // identity token is damaged is refused.
+    let grant_account = match oauth_refresh::stated_account_text(api_key, provider) {
         Ok(stated) => stated,
-        Err(_not_a_grant) => None,
+        Err(oauth_refresh::GrantText::NotJson(_bare_key)) => None,
+        Err(oauth_refresh::GrantText::Damaged(detail)) => {
+            return Err(DonationRefusal::Unusable(detail));
+        }
     };
     if let (Some(stated), Some(granted)) = (account, grant_account.as_deref()) {
         if !stated.eq_ignore_ascii_case(granted) {

@@ -26,6 +26,7 @@ use refusal::{refresh_failure, rejection_failure};
 // The surface `gateway` has always used, named one by one so the module's
 // callers keep their exact paths and nothing else leaks with them.
 pub(super) use expiry::{access_token_expiry_ms, needs_refresh};
+pub(super) use principal::{stated_account, stated_account_text, GrantText};
 pub(super) use provider::supports_refresh;
 pub(super) use refusal::{classify_refusal, RefreshRefusal};
 
@@ -142,11 +143,27 @@ async fn request_refresh_grant(
     let request = client
         .post(config.token_endpoint)
         .header(reqwest::header::ACCEPT, "application/json");
-    let mut response = match config.wire {
+    let request = match config.wire {
         provider::OAuthWire::Json => request.json(&parameters),
         provider::OAuthWire::Form => request.form(&parameters),
     }
-    .send()
+    .build()
+    .map_err(|error| {
+        refresh_failure(
+            Code::Config,
+            format!(
+                "OAuth refresh POST {} cannot be assembled: {}",
+                config.token_endpoint,
+                failure::error_chain(&error),
+            ),
+        )
+    })?;
+    let mut response = stado_wait::send_built(
+        stado_wait::Kind::Network,
+        "OAuth refresh",
+        client.clone(),
+        request,
+    )
     .await
     .map_err(|error| {
         refresh_failure(
@@ -158,10 +175,8 @@ async fn request_refresh_grant(
             ),
         )
     })?;
-    // The status alone was all this returned, and the status alone is what a
-    // day went into supplementing by hand. The body says which of
-    // `invalid_grant`, a revoked client or a throttle it was, so it travels
-    // with the failure.
+    // The body says which of `invalid_grant`, a revoked client or a throttle
+    // the provider answered, so it travels with the failure.
     let status = response.status();
     let mut encoded = response_body(&mut response, config.token_endpoint).await?;
     if !status.is_success() {
@@ -250,32 +265,4 @@ pub(super) async fn refresh(
     .await;
     zeroize_json_strings(&mut blob);
     result
-}
-
-/// The account a stored grant states, according to the provider that issued
-/// it, leaving no parsed copy of the credential behind.
-///
-/// The one source of a member's account that is not a name: an id, a label
-/// and a login row are names, and one Google login row backs both the Claude
-/// Code and the Codex subscription of one person. `None` is a grant that
-/// states no address; a credential that is not UTF-8 or not JSON is refused
-/// with that cause, since "states no account" would be untrue of it.
-pub(super) fn stated_account(secret: &Secret, provider: &str) -> Result<Option<String>, String> {
-    let raw = secret
-        .expose_utf8()
-        .map_err(|error| format!("the stored grant is not UTF-8: {error}"))?;
-    stated_account_text(raw, provider)
-        .map_err(|error| format!("the stored grant is not a JSON document: {error}"))
-}
-
-/// [`stated_account`] for a credential text; its JSON error is the caller's
-/// to read, since a bare API key is no JSON grant and states no account.
-pub(super) fn stated_account_text(
-    raw: &str,
-    provider: &str,
-) -> Result<Option<String>, serde_json::Error> {
-    let mut blob: Value = serde_json::from_str(raw)?;
-    let stated = principal::credential_account(&blob, provider);
-    zeroize_json_strings(&mut blob);
-    Ok(stated)
 }
