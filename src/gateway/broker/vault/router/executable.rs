@@ -10,17 +10,19 @@ const VAULT_PROGRAM_NAMES: &[&str] = &[DEFAULT_ENTITLEMENTS_ROUTER_BIN, "skarbie
 /// Where the fleet installs it when nothing is on `PATH`, relative to `$HOME`.
 const VAULT_HOME_RELATIVE: &str = ".stado/bin/skarbiec";
 
+/// Whether a file mode carries any execute bit, as the C library names them.
+fn executable_mode(mode: u32) -> bool {
+    let execute = u32::from(libc::S_IXUSR | libc::S_IXGRP | libc::S_IXOTH);
+    std::num::NonZeroU32::new(mode & execute).is_some()
+}
+
 /// The vault binary this gateway shells for every credential operation.
 ///
 /// Four places, in this order: the router's own declaration, the vault's
 /// declaration, an executable of either name on `PATH`, and the path the
-/// fleet installs it at. The bare word `entitlements-router` used to be the
-/// whole answer, and on a machine where the vault is installed as
-/// `~/.stado/bin/skarbiec` and nothing exports either variable, every
-/// credential write fails with `No such file or directory (os error 2)` and
-/// names no program — `brama subscription sync` answers that for every
-/// grant the machine holds, while nothing that needs a working subscription
-/// can be served.
+/// fleet installs it at. When none holds one the answer is the refusal
+/// naming all four: shelling the bare word instead failed every credential
+/// write with `No such file or directory (os error 2)` and named no program.
 pub(crate) fn entitlements_router_bin() -> Result<String, String> {
     for declaration in [ENTITLEMENTS_ROUTER_BIN_ENV, SKARBIEC_BIN_ENV] {
         match std::env::var(declaration) {
@@ -39,20 +41,28 @@ pub(crate) fn entitlements_router_bin() -> Result<String, String> {
     if let Some(found) = VAULT_PROGRAM_NAMES.iter().copied().find_map(on_path) {
         return Ok(found);
     }
-    if let Some(home) = std::env::var_os("HOME") {
-        let installed = std::path::Path::new(&home).join(VAULT_HOME_RELATIVE);
-        if is_executable_file(&installed) {
-            return Ok(installed.display().to_string());
+    let installed = match std::env::var_os("HOME").filter(|home| !home.is_empty()) {
+        Some(home) => {
+            let installed = std::path::Path::new(&home).join(VAULT_HOME_RELATIVE);
+            if is_executable_file(&installed) {
+                return Ok(installed.display().to_string());
+            }
+            format!("{} is not an executable file", installed.display())
         }
-    }
-    Ok(DEFAULT_ENTITLEMENTS_ROUTER_BIN.to_owned())
+        None => format!("HOME is not set, so ~/{VAULT_HOME_RELATIVE} cannot be looked at"),
+    };
+    Err(format!(
+        "resolve vault executable: neither {ENTITLEMENTS_ROUTER_BIN_ENV} nor {SKARBIEC_BIN_ENV} \
+         is set, no {} is an executable on PATH, and {installed}",
+        VAULT_PROGRAM_NAMES.join(" or ")
+    ))
 }
 
 /// Is `path` a file this process could execute?
 fn is_executable_file(path: &std::path::Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
     std::fs::metadata(path)
-        .is_ok_and(|info| info.is_file() && info.permissions().mode() & 0o111 != 0)
+        .is_ok_and(|info| info.is_file() && executable_mode(info.permissions().mode()))
 }
 
 /// The first executable named `program` on `PATH`.
