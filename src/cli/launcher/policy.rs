@@ -10,11 +10,11 @@ use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 
 /// The aliases every Brama gateway answers to; a control document that does
 /// not route each of them is incomplete.
-const REQUIRED_ALIASES: [&str; 6] = [
+const REQUIRED_ALIASES: &[&str] = &[
     "best",
     "wisent-backend",
     "wisent-backend/evaluation",
@@ -24,17 +24,14 @@ const REQUIRED_ALIASES: [&str; 6] = [
 ];
 /// The alias family served by the Wisent backend.
 const BACKEND_ALIAS: &str = "wisent-backend";
-/// Owner read and write only.
-const OWNER_ONLY: u32 = 0o600;
-/// The inference-route registry schema the gateway's reader accepts
-/// (`core::inference_routes::document::SCHEMA_VERSION`).
-const ROUTES_SCHEMA_VERSION: u32 = 1;
 
 fn write_new(path: &Path, text: &str) -> Result<(), String> {
+    // Owner read and write only, as the platform spells it.
+    let owner_only = u32::from(libc::S_IRUSR | libc::S_IWUSR);
     std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .mode(OWNER_ONLY)
+        .mode(owner_only)
         .open(path)
         .and_then(|mut file| file.write_all(text.as_bytes()))
         .map_err(|error| format!("{}: {error}", path.display()))
@@ -57,10 +54,10 @@ pub(super) fn check(config: &Path, out: &Outputs) -> Result<(), String> {
         .map_err(|error| error.to_string())
         .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|error| error.to_string()))
         .map_err(|error| format!("{}: {error}", config.display()))?;
-    let policy = document
-        .pointer("/services/brama")
-        .cloned()
-        .unwrap_or(Value::Null);
+    let file = config.display();
+    let Some(policy) = document.pointer("/services/brama") else {
+        return Err(format!("{file} declares no services.brama policy"));
+    };
     let field = |name: &str| {
         policy
             .get(name)
@@ -70,7 +67,6 @@ pub(super) fn check(config: &Path, out: &Outputs) -> Result<(), String> {
     let allowed_models = field("allowed_models")?;
     let aliases = field("model_aliases")?;
     let providers = field("required_provider_capabilities")?;
-    let file = config.display();
     let Some(allowed_models) = allowed_models.as_array() else {
         return Err(format!(
             "services.brama.allowed_models must be a list in {file}"
@@ -86,13 +82,18 @@ pub(super) fn check(config: &Path, out: &Outputs) -> Result<(), String> {
         .collect();
     let names: Vec<&str> = allowed_models.iter().filter_map(Value::as_str).collect();
     let allowed: BTreeSet<String> = names.iter().map(|name| name.to_string()).collect();
+    // A name seen again is a duplicate.
+    let mut seen = BTreeSet::new();
     let duplicated: BTreeSet<&str> = names
         .iter()
-        .filter(|name| names.iter().filter(|other| other == name).count() > 1)
         .copied()
+        .filter(|name| !seen.insert(*name))
         .collect();
-    let empty = Map::new();
-    let alias_map = aliases.as_object().unwrap_or(&empty);
+    let Some(alias_map) = aliases.as_object() else {
+        return Err(format!(
+            "services.brama.model_aliases must be an object of alias to route in {file}"
+        ));
+    };
     let alias_names: BTreeSet<String> = alias_map.keys().cloned().collect();
     if !malformed.is_empty()
         || !duplicated.is_empty()
@@ -119,7 +120,11 @@ pub(super) fn check(config: &Path, out: &Outputs) -> Result<(), String> {
             Value::Object(malformed_routes)
         ));
     }
-    let provider_list = providers.as_array().cloned().unwrap_or_default();
+    let Some(provider_list) = providers.as_array() else {
+        return Err(format!(
+            "services.brama.required_provider_capabilities must be a list in {file}"
+        ));
+    };
     let distinct: BTreeSet<&str> = provider_list.iter().filter_map(clean).collect();
     if provider_list.is_empty() || distinct.len() != provider_list.len() {
         return Err("services.brama.required_provider_capabilities must be a non-empty unique provider list".into());
@@ -146,8 +151,7 @@ pub(super) fn check(config: &Path, out: &Outputs) -> Result<(), String> {
 pub(super) fn seed_routes(path: &Path, aliases: &str) -> Result<(), String> {
     let routes: Value =
         serde_json::from_str(aliases).map_err(|error| format!("BRAMA_MODEL_ALIASES: {error}"))?;
-    let document =
-        json!({ "deployments": [], "routes": routes, "schema_version": ROUTES_SCHEMA_VERSION });
+    let document = brama::core::inference_routes::fresh_registry(routes);
     let text = serde_json::to_string_pretty(&document).expect("routes serialise") + "\n";
     write_new(path, &text)
 }

@@ -34,6 +34,17 @@ pub struct RouteImportResult {
     pub detail: String,
 }
 
+/// A registry document holding exactly `routes` and no deployments, at the
+/// schema this reader accepts: the launcher's first registry, and where an
+/// import into a file that does not exist yet starts.
+pub fn fresh_registry(routes: Value) -> Value {
+    serde_json::json!({
+        "schema_version": SCHEMA_VERSION,
+        "deployments": [],
+        "routes": routes,
+    })
+}
+
 /// Merge selected aliases from a previously validated import in one atomic
 /// destination rewrite. Existing aliases and deployments win by default.
 ///
@@ -49,11 +60,7 @@ pub fn import_routes(
     let mut value = if route_file_exists(path)? {
         snapshot(path)?
     } else {
-        serde_json::json!({
-            "schema_version": SCHEMA_VERSION,
-            "deployments": [],
-            "routes": {},
-        })
+        fresh_registry(serde_json::json!({}))
     };
     validate_document(&value)?;
     let document = value
