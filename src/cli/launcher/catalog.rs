@@ -33,13 +33,13 @@ fn tag_value<'a>(tags: &'a [&'a str], prefix: &str) -> Option<&'a str> {
 }
 
 pub(super) fn build(available: &Path, policy: &Path, output: &Path) -> Result<(), String> {
-    let items = read(available)?;
-    let items = items.as_array().ok_or_else(|| {
-        format!(
-            "{}: the available items are not a list",
-            available.display()
-        )
-    })?;
+    // The listing is read by the broker's one decoder, so the catalog and the
+    // gateway agree on which rows are live items: a row without an id, or a
+    // listing that is not a list of rows, refuses the build naming the file.
+    let listing =
+        std::fs::read(available).map_err(|error| format!("{}: {error}", available.display()))?;
+    let items = brama::gateway::broker::decode_listing(&listing, "build the subscription catalog")
+        .map_err(|error| format!("{}: {error}", available.display()))?;
     let policy_document = read(policy)?;
     // A policy without the runtime role allows nothing, which would skip every
     // subscription with a reason about one missing rule; it is refused whole.
@@ -62,21 +62,9 @@ pub(super) fn build(available: &Path, policy: &Path, output: &Path) -> Result<()
         .collect();
     let mut catalog = Vec::new();
     let mut unnamed = Vec::new();
-    for item in items {
-        if !item.is_object() || item.get("deleted") == Some(&Value::Bool(true)) {
-            continue;
-        }
-        let Some(name) = item.get("id").and_then(Value::as_str) else {
-            eprintln!("skipping an item without a text id: {item}");
-            continue;
-        };
-        let tags: Vec<&str> = item
-            .get("tags")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(Value::as_str)
-            .collect();
+    for item in items.iter().filter(|item| !item.deleted) {
+        let name = item.id.as_str();
+        let tags: Vec<&str> = item.tags.iter().map(String::as_str).collect();
         if !tags.contains(&SUBSCRIPTION_TAG) {
             continue;
         }
