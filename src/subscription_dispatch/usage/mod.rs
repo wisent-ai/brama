@@ -48,7 +48,6 @@ mod standing;
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
@@ -177,18 +176,14 @@ struct LedgerState {
     persist_blocked: bool,
 }
 
+/// This host's clock in signed milliseconds since the epoch: an instant
+/// before it reads as the negative count it is, never as the epoch itself.
 fn now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|elapsed| i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX))
-        .unwrap_or_default()
+    chrono::Utc::now().timestamp_millis()
 }
 
 fn ledger_state(guard: &mut Option<LedgerState>) -> &mut LedgerState {
-    if guard.is_none() {
-        *guard = Some(load());
-    }
-    guard.as_mut().unwrap_or_else(|| unreachable!())
+    guard.get_or_insert_with(load)
 }
 
 /// Mutate the process ledger and attempt to commit the resulting whole state.
@@ -200,10 +195,12 @@ fn write_ledger<T>(apply: impl FnOnce(&mut Ledger) -> T) -> (T, Result<(), Strin
     let state = ledger_state(&mut guard);
     let outcome = apply(&mut state.ledger);
     let stored = if state.persist_blocked {
-        Err(state.storage_error.clone().unwrap_or_else(|| {
-            "subscription usage ledger persistence is blocked by an earlier load failure"
-                .to_string()
-        }))
+        Err(match state.storage_error.clone() {
+            Some(error) => error,
+            None => "subscription usage ledger persistence is blocked by an earlier load failure, \
+                     whose cause this process no longer holds"
+                .to_string(),
+        })
     } else {
         persist(&state.ledger)
     };
