@@ -21,10 +21,12 @@ months, not process lifetimes.
 
 - **No file:** a new, empty ledger.
 - **A ledger written by an older gateway:** it loads. Readings that carry no
-  instant of their own are given the ledger file's modification time, the
-  tightest upper bound available. The usage-report verdict an older gateway kept
-  in the completion probe's field is moved to its own field in memory only; a
-  read never rewrites the file.
+  observation instant stay visible and stale; the file's later modification
+  time may be from another account and cannot prove when the provider measured
+  this window. The usage-report verdict an older gateway kept in the completion
+  probe's field is moved to its own field in memory only; a read never rewrites
+  the file. `brama subscription list --refresh-usage` asks the provider for a
+  new reading without discarding history if that request fails.
 - **A file that exists but cannot be read or will not parse:** it is never
   replaced. The gateway keeps serving from memory, refuses every write to the
   file, and the subscription pool reports `brama.subscriptions.ledger` with the

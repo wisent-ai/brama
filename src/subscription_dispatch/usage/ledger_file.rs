@@ -9,15 +9,14 @@
 //! in the same directory, so a reader never sees half a ledger and a crash
 //! never truncates one.
 //!
-//! Reading also brings older copies forward: readings written before they
-//! carried their own instant, and the usage-report verdict that lived in the
-//! completion probe's field before it had one of its own. Both are done in
-//! memory on load, so a pure read never rewrites somebody's history.
+//! Reading also brings the usage-report verdict from older copies forward
+//! in memory, so a pure read never rewrites somebody's history. Readings
+//! without an observation instant remain without one: the file's later
+//! modification time is not evidence that a provider reported them then.
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
-use std::time::UNIX_EPOCH;
 
 use super::{now_ms, CheckSource, Ledger, LedgerState};
 
@@ -84,7 +83,6 @@ pub(super) fn load() -> LedgerState {
             };
         }
     };
-    backfill_reading_times(&mut ledger, &path);
     // Before `usage_check` existed the usage-report verdict occupied `probe`.
     // Copy it into the dedicated field in memory so a later completion probe
     // cannot erase it. Pure reads do not rewrite the legacy file.
@@ -105,32 +103,6 @@ pub(super) fn load() -> LedgerState {
     }
 }
 
-/// Give readings written before `recorded_at_ms` existed the ledger file's own
-/// timestamp.
-///
-/// Those readings were observed at some point before the file was last written,
-/// so the file's modification time is the tightest upper bound available and is
-/// closer to the truth than the epoch. It is an upper bound, not a measurement,
-/// which is why it is only ever applied to a reading that carries no instant of
-/// its own.
-fn backfill_reading_times(ledger: &mut Ledger, path: &std::path::Path) {
-    let file_written_at_ms = fs::metadata(path)
-        .and_then(|metadata| metadata.modified())
-        .ok()
-        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
-        .and_then(|elapsed| i64::try_from(elapsed.as_millis()).ok())
-        .unwrap_or_default();
-    if file_written_at_ms == 0 {
-        return;
-    }
-    for usage in ledger.subscriptions.values_mut() {
-        for reading in usage.limits.values_mut() {
-            if reading.recorded_at_ms == 0 {
-                reading.recorded_at_ms = file_written_at_ms;
-            }
-        }
-    }
-}
 
 /// Write through a private temporary file in the same directory and rename, so
 /// a reader never sees a half-written ledger and a crash never truncates one.
@@ -163,7 +135,7 @@ pub(super) fn persist(ledger: &Ledger) -> Result<(), String> {
         #[cfg(unix)]
         {
             use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
+            options.mode(u32::from(libc::S_IRUSR | libc::S_IWUSR));
         }
         let mut file = options.open(&staging)?;
         file.write_all(&bytes)?;

@@ -98,6 +98,11 @@ attempt. It is not a cache. Older ledgers remain readable; malformed or
 unreadable history is reported with its path and actual reason rather than
 silently replaced with an empty file. Failed writes remain visible together
 with last-good in-memory readings.</p>
+<p>A legacy window with no observation instant stays visible but stale.
+The ledger file's modification time may be from another account or a later
+credential update, so it is never presented as the time that provider usage
+was measured. <strong>Refresh usage</strong> obtains a new provider report
+without replacing the historical reading on failure.</p>
 <p>Plan windows come from each provider's own free usage report
 (<a href="/docs/concepts/provider">provider</a> lists the three supported endpoints).
 Other providers are reported as unsupported by this free-report path with the
