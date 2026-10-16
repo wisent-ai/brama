@@ -58,9 +58,10 @@ operator looking for a sign-in nothing needs.</p>
 <p>Without <code>--json</code> the same report is printed as lines, led by how many credentials
 are live -- which is the question that gets the command run.</p>
 <h2 id="brama-subscription-refresh-provider-reason-text"><code>brama subscription refresh &lt;provider&gt; --reason &lt;text&gt;</code><a class="headerlink" href="#brama-subscription-refresh-provider-reason-text" title="Link to this section">&para;</a></h2>
-<p>Runs the refresh the gateway's own timer runs, for one provider, now. A burnt or
-expired grant is never inside the timer's skew window, and a timer that will not
-try it is exactly why an empty pool stays empty. <code>--reason</code> is required because
+<p>Runs the refresh a <code>brama maintain</code> pass runs, for one provider, now, and
+presents every attempted grant again, including one the ledger holds as
+disowned: no pass and no request presents that grant until a sign-in stores a
+new one, which is why an empty pool stays empty without this. <code>--reason</code> is required because
 this rotates a grant -- the provider invalidates the previous refresh token the
 moment it issues a new one -- and the reason is appended to the journal beside
 the verdict.</p>
@@ -68,9 +69,9 @@ the verdict.</p>
 </code></pre>
 <pre><code class="language-json">{
   "provider": "codex",
-  "attempted": 2,
+  "attempted": &lt;subscriptions tried&gt;,
   "result": "failed",
-  "detail": "refreshed no `codex` grant out of 2 tried; &lt;subscription id&gt;: invalid_grant: refresh token is no longer accepted"
+  "detail": "refreshed no `codex` grant out of &lt;subscriptions tried&gt; tried; &lt;subscription id&gt;: invalid_grant: refresh token is no longer accepted"
 }
 </code></pre>
 <p><code>attempted</code> counts the subscriptions a refresh was tried for, so <code>0</code> means the

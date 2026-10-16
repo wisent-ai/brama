@@ -79,9 +79,10 @@ that among the report's errors and leaves the object out; the line then reads
 
 ## `brama subscription refresh <provider> --reason <text>`
 
-Runs the refresh the gateway's own timer runs, for one provider, now. A burnt or
-expired grant is never inside the timer's skew window, and a timer that will not
-try it is exactly why an empty pool stays empty. `--reason` is required because
+Runs the refresh a `brama maintain` pass runs, for one provider, now, and
+presents every attempted grant again, including one the ledger holds as
+disowned: no pass and no request presents that grant until a sign-in stores a
+new one, which is why an empty pool stays empty without this. `--reason` is required because
 this rotates a grant -- the provider invalidates the previous refresh token the
 moment it issues a new one -- and the reason is appended to the journal beside
 the verdict.
@@ -93,9 +94,9 @@ brama subscription refresh codex --reason 'pool empty; every best call answered 
 ```json
 {
   "provider": "codex",
-  "attempted": 2,
+  "attempted": <subscriptions tried>,
   "result": "failed",
-  "detail": "refreshed no `codex` grant out of 2 tried; <subscription-id>: invalid_grant: refresh token is no longer accepted"
+  "detail": "refreshed no `codex` grant out of <subscriptions tried> tried; <subscription-id>: invalid_grant: refresh token is no longer accepted"
 }
 ```
 

@@ -48,7 +48,7 @@
   write until the file is repaired, and the subscription pool reports
   <code>brama.subscriptions.ledger</code> with the path and the cause; only a missing file
   starts a new ledger (see <a href="https://github.com/wisent-ai/brama/blob/main/docs/usage-ledger.md"><code>docs/usage-ledger.md</code></a>).
-  <code>/tmp/brama-perf.json</code>
+  <code>BRAMA_PERF_PATH</code>, else <code>perf.json</code> in Brama's state directory,
   contains replaceable process telemetry. The entitlements router owns encrypted
   subscription credential storage in managed deployments.</li>
 <li><strong>Subscription discovery:</strong> a provider subscription is a Skarbiec item tagged

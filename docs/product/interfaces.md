@@ -62,6 +62,10 @@ to the [README](../../README.md).
   both the input and the output count, on a stream as in a buffered answer:
   an Anthropic stream whose `message_start` states no input count records no
   usage rather than zero input tokens.
+  A present stream meter that is not a nonnegative count in the supported
+  width ends the committed stream with its field and value; an absent meter
+  remains unmeasured. A chat stream choice with no `delta` also ends with the
+  choice named rather than treating missing content as a successful answer.
 - **Authentication:** static and Skarbiec-issued workload/model-client bearers
   remain workload identities and do not send an organization header. A bearer
   validated by Wisent Supabase is a human identity on account, discovery, and
