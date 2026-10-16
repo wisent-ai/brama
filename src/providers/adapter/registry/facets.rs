@@ -80,6 +80,15 @@ impl Weights {
     pub fn of(open_weights: Option<bool>) -> Option<Weights> {
         open_weights.map(|open| if open { Weights::Open } else { Weights::Closed })
     }
+
+    /// A filter left unset keeps every row. A stated filter keeps only the
+    /// source's matching answer; an unstated source answer matches neither.
+    pub fn matches(filter: Option<Weights>, open_weights: Option<bool>) -> bool {
+        match filter {
+            None => true,
+            Some(wanted) => Self::of(open_weights) == Some(wanted),
+        }
+    }
 }
 
 /// A model that emits video is a video model even when it also emits text, and

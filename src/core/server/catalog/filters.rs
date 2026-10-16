@@ -144,10 +144,8 @@ impl ValidCatalogFilters {
                 return false;
             }
         }
-        if let Some(weights) = self.weights {
-            if Weights::of(model.open_weights) != Some(weights) {
-                return false;
-            }
+        if !Weights::matches(self.weights, model.open_weights) {
+            return false;
         }
         if let Some(provider) = self.provider.as_deref() {
             if !model.provider_id.eq_ignore_ascii_case(provider) {

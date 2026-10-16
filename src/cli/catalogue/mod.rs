@@ -65,13 +65,16 @@ pub(crate) async fn models(args: ModelsArgs) {
             crate::cli::fail();
         }
     }
-    if weights
-        .as_deref()
-        .is_some_and(|value| Weights::parse(value).is_none())
-    {
-        eprintln!("weights must be open or closed");
-        crate::cli::fail();
-    }
+    let weights = match weights.as_deref() {
+        Some(value) => match Weights::parse(value) {
+            Some(weights) => Some(weights),
+            None => {
+                eprintln!("weights must be open or closed");
+                crate::cli::fail();
+            }
+        },
+        None => None,
+    };
     let snapshot = match model_catalog::snapshot().await {
         Ok(snapshot) => snapshot,
         Err(error) => {
@@ -92,7 +95,7 @@ pub(crate) async fn models(args: ModelsArgs) {
             matches_filters(
                 row,
                 kind.as_deref(),
-                weights.as_deref(),
+                weights,
                 category.as_deref(),
                 provider.as_deref(),
                 search.as_deref(),

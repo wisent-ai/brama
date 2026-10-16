@@ -52,7 +52,7 @@ pub(super) fn row_json(row: &ModelRow) -> Value {
 pub(super) fn matches_filters(
     row: &ModelRow,
     kind: Option<&str>,
-    weights: Option<&str>,
+    weights: Option<Weights>,
     category: Option<&str>,
     provider: Option<&str>,
     search: Option<&str>,
@@ -62,10 +62,8 @@ pub(super) fn matches_filters(
             return false;
         }
     }
-    if let Some(weights) = weights.and_then(Weights::parse) {
-        if Weights::of(row.model.open_weights) != Some(weights) {
-            return false;
-        }
+    if !Weights::matches(weights, row.model.open_weights) {
+        return false;
     }
     if let Some(category) = category {
         if !row.categories.iter().any(|name| name == category) {
