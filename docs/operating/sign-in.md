@@ -20,6 +20,17 @@ brama subscription sign-in codex --by weles \
   --json
 ```
 
+For a Codex grant, a provider request uses `tokens.account_id` when the grant
+states it, otherwise the `chatgpt_account_id` claim in `tokens.id_token`.
+An absent claim does not invent an account header. A present but empty or
+wrongly typed account id, or a malformed identity token, refuses the request
+as `credential_unauthorized` with the field or token defect before contacting
+OpenAI. The refusal names the damaged field or token on the request path;
+sign the affected account in again through the normal flow above rather
+than editing a stored grant. `brama subscriptions list --json` and Brama
+Desktop's Subscription Pool report the credential state last recorded by
+the gateway, which may not yet include a request refused before OpenAI.
+
 `--by hand` signs one `claude-code` subscription in through the operator's own
 browser: Brama prints the provider's authorize page, reads the pasted
 `code#state` (or the whole redirect URL) on stdin, stores the grant and proves
