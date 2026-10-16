@@ -38,13 +38,12 @@ pub async fn collect() -> DiscoveryReport {
 }
 
 async fn read(report: &mut DiscoveryReport) -> Result<(), String> {
-    let organization = std::env::var("SKRZYNKA_ORGANIZATION").map_err(|error| {
-        format!("receipt discovery cannot select a Skrzynka organization: SKRZYNKA_ORGANIZATION is unavailable on the gateway: {error}")
-    })?;
-    let organization = organization.trim();
-    if organization.is_empty() {
-        return Err("receipt discovery requires nonempty SKRZYNKA_ORGANIZATION on the gateway; no mailbox command was run".to_owned());
-    }
+    let declared = crate::environment::declared_setting("SKRZYNKA_ORGANIZATION")
+        .map_err(|refusal| {
+            format!("receipt discovery cannot select a Skrzynka organization: {refusal}")
+        })?
+        .ok_or("receipt discovery requires SKRZYNKA_ORGANIZATION declared on the gateway; no mailbox command was run")?;
+    let organization = declared.as_str();
     let mailboxes = command(organization, &["mailbox", "list"]).await?;
     let mailboxes = mailboxes
         .as_array()

@@ -60,12 +60,16 @@ struct Register {
 }
 
 /// `$BRAMA_SUBSCRIPTION_LEASES_FILE`, or `leases.json` in Brama's state
-/// directory.
-fn path() -> PathBuf {
-    match std::env::var("BRAMA_SUBSCRIPTION_LEASES_FILE") {
-        Ok(declared) if !declared.trim().is_empty() => PathBuf::from(declared.trim()),
-        _ => crate::journal::state_dir().join("leases.json"),
-    }
+/// directory. A declaration that is not Unicode is refused by name: read as
+/// unset, leases were taken in another register than the one the operator
+/// named, and two gateways could lease the same member.
+fn path() -> Result<PathBuf, String> {
+    Ok(
+        match crate::environment::declared_setting("BRAMA_SUBSCRIPTION_LEASES_FILE")? {
+            Some(declared) => PathBuf::from(declared),
+            None => crate::journal::state_dir().join("leases.json"),
+        },
+    )
 }
 
 static LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
@@ -79,7 +83,7 @@ fn now_ms() -> Result<i64, String> {
 }
 
 fn load() -> Result<Register, String> {
-    let path = path();
+    let path = path()?;
     match std::fs::read(&path) {
         Ok(bytes) => serde_json::from_slice(&bytes).map_err(|error| {
             format!(
@@ -96,7 +100,7 @@ fn load() -> Result<Register, String> {
 }
 
 fn persist(register: &Register) -> Result<(), String> {
-    let path = path();
+    let path = path()?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|error| {
             format!(
