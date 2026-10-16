@@ -28,8 +28,8 @@ model discovery, OAuth refresh, retry, error handling, and access policy.</p>
   their own provider credentials or subscriptions.
 - <strong>Wisent service developers</strong> use one OpenAI-compatible API and stable logical
   aliases instead of provider credentials and provider-specific clients.
-- <strong>Jeden runtimes</strong> use an agent-bound HMAC identity to discover and spend only
-  subscriptions delegated to that exact agent.
+- <strong>Jeden runtimes</strong> use an agent-bound HMAC identity that authenticates and
+  attributes each request they spend from the shared subscription pool.
 - <strong>Operators</strong> publish immutable runtimes, grant finite Skarbiec capabilities,
   configure aliases and client allowlists, and diagnose routing without exposing
   secret material.</p>
@@ -167,7 +167,8 @@ advertised by the API, MCP server, examples, or release notes.</p>
 <p>Skarbiec is authoritative for secret capability redemption. The entitlements
 router is authoritative for live subscription resources. <code>-best</code> is an explicit
 deployment alias for <code>codex/gpt-5.3-codex-spark</code>; a caller still needs both an
-allowlisted bearer and the HMAC identity that owns the eligible subscription.
+allowlisted bearer and a signed HMAC identity, and the subscription comes from
+the shared pool.
 It does not infer quality from prompt text or unlock a direct provider
 credential. Brama's journal stores only retirement markers and task-quality
 observations; provider credentials are forbidden. Public model metadata is read

@@ -15,8 +15,8 @@ Brama serves four audiences:
   their own provider credentials or subscriptions.
 - **Wisent service developers** use one OpenAI-compatible API and stable logical
   aliases instead of provider credentials and provider-specific clients.
-- **Jeden runtimes** use an agent-bound HMAC identity to discover and spend only
-  subscriptions delegated to that exact agent.
+- **Jeden runtimes** use an agent-bound HMAC identity that authenticates and
+  attributes each request they spend from the shared subscription pool.
 - **Operators** publish immutable runtimes, grant finite Skarbiec capabilities,
   configure aliases and client allowlists, and diagnose routing without exposing
   secret material.
@@ -159,7 +159,8 @@ Wisent service / Jeden
 Skarbiec is authoritative for secret capability redemption. The entitlements
 router is authoritative for live subscription resources. `-best` is an explicit
 deployment alias for `codex/gpt-5.3-codex-spark`; a caller still needs both an
-allowlisted bearer and the HMAC identity that owns the eligible subscription.
+allowlisted bearer and a signed HMAC identity, and the subscription comes from
+the shared pool.
 It does not infer quality from prompt text or unlock a direct provider
 credential. Brama's journal stores only retirement markers and task-quality
 observations; provider credentials are forbidden. Public model metadata is read
