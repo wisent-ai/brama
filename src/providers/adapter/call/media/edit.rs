@@ -109,7 +109,7 @@ fn data_url<'a>(value: &'a Value, field: &str) -> Result<(&'a str, Vec<u8>), Ref
     }
     let bytes = BASE64
         .decode(data.as_bytes())
-        .map_err(|_| invalid(format!("{field} data: URL is not valid base64")))?;
+        .map_err(|error| invalid(format!("{field} data: URL is not valid base64: {error}")))?;
     if bytes.is_empty() {
         return Err(invalid(format!("{field} holds no image")));
     }
