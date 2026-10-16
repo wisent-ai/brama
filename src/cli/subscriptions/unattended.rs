@@ -13,20 +13,8 @@
 
 use zeroize::Zeroizing;
 
-/// The Stado binary that answers both lookups, resolved exactly as the
-/// readiness path resolves it.
-fn stado_binary() -> std::path::PathBuf {
-    match std::env::var("BRAMA_STADO_BIN") {
-        Ok(value) if !value.trim().is_empty() => std::path::PathBuf::from(value),
-        _ => brama::journal::home_dir()
-            .join(".stado")
-            .join("bin")
-            .join("stado"),
-    }
-}
-
 async fn stado(arguments: &[&str]) -> Result<Zeroizing<String>, String> {
-    let binary = stado_binary();
+    let binary = brama::environment::stado_binary()?;
     let output = stado_wait::output_async(
         tokio::process::Command::new(&binary)
             .kill_on_drop(true)
@@ -47,6 +35,22 @@ async fn stado(arguments: &[&str]) -> Result<Zeroizing<String>, String> {
     ))
 }
 
+/// Read one field of the vault item playing `role` at the moment of use.
+pub(crate) async fn field_from_role(role: &str, field: &str) -> Result<Zeroizing<String>, String> {
+    let role = role.trim();
+    let field = field.trim();
+    if role.is_empty() || field.is_empty() {
+        return Err("a credential lookup needs a nonempty role and field".into());
+    }
+    let value = stado(&["credentials", "get", "--role", role, "--field", field]).await?;
+    if value.trim().is_empty() {
+        return Err(format!(
+            "the item playing role {role} holds no value in its {field} field"
+        ));
+    }
+    Ok(value)
+}
+
 /// The field of a bearer item that holds the bearer itself.
 const BEARER_FIELD: &str = "token";
 
@@ -63,21 +67,7 @@ pub(crate) async fn bearer_from_role(role: &str) -> Result<Zeroizing<String>, St
             "--bearer-role names the role the console's bearer item plays, and `{role}` is not one"
         ));
     }
-    let bearer = stado(&[
-        "credentials",
-        "get",
-        "--role",
-        role,
-        "--field",
-        BEARER_FIELD,
-    ])
-    .await?;
-    if bearer.trim().is_empty() {
-        return Err(format!(
-            "the item playing role {role} holds no value in its {BEARER_FIELD} field"
-        ));
-    }
-    Ok(bearer)
+    field_from_role(role, BEARER_FIELD).await
 }
 
 /// The gateway origin Stado's service directory gives this consumer.

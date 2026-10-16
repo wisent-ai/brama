@@ -16,6 +16,8 @@ pub(super) async fn run(command: LeaseCommand) {
             gateway,
             gateway_consumer,
             bearer_role,
+            agent,
+            signing_role,
             json,
         } => {
             leases::take(
@@ -27,6 +29,7 @@ pub(super) async fn run(command: LeaseCommand) {
                 &provider,
                 &session_id,
                 &holder,
+                agent.as_deref().zip(signing_role.as_deref()),
                 json,
             )
             .await
@@ -37,6 +40,8 @@ pub(super) async fn run(command: LeaseCommand) {
             gateway,
             gateway_consumer,
             bearer_role,
+            agent,
+            signing_role,
             json,
         } => {
             leases::release(
@@ -47,6 +52,7 @@ pub(super) async fn run(command: LeaseCommand) {
                 },
                 lease_id.as_deref(),
                 session_id.as_deref(),
+                agent.as_deref().zip(signing_role.as_deref()),
                 json,
             )
             .await
@@ -55,6 +61,8 @@ pub(super) async fn run(command: LeaseCommand) {
             gateway,
             gateway_consumer,
             bearer_role,
+            agent,
+            signing_role,
             json,
         } => {
             leases::list(
@@ -63,6 +71,7 @@ pub(super) async fn run(command: LeaseCommand) {
                     gateway_consumer,
                     bearer_role,
                 },
+                agent.as_deref().zip(signing_role.as_deref()),
                 json,
             )
             .await
@@ -92,6 +101,12 @@ pub(crate) enum LeaseCommand {
         /// Read the console's bearer from the vault item playing this role (its `token` field) instead of from stdin
         #[arg(long, value_name = "ROLE")]
         bearer_role: Option<String>,
+        /// Sign the request as this agent; requires --signing-role
+        #[arg(long, value_parser = NonEmptyStringValueParser::new(), requires = "signing_role")]
+        agent: Option<String>,
+        /// Vault role and field of this agent's request-signing secret (ROLE#FIELD)
+        #[arg(long, value_name = "ROLE#FIELD", value_parser = NonEmptyStringValueParser::new(), requires = "agent")]
+        signing_role: Option<String>,
         /// Print the lease as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,
@@ -117,6 +132,12 @@ pub(crate) enum LeaseCommand {
         /// Read the console's bearer from the vault item playing this role (its `token` field) instead of from stdin
         #[arg(long, value_name = "ROLE")]
         bearer_role: Option<String>,
+        /// Sign the request as this agent; requires --signing-role
+        #[arg(long, value_parser = NonEmptyStringValueParser::new(), requires = "signing_role")]
+        agent: Option<String>,
+        /// Vault role and field of this agent's request-signing secret (ROLE#FIELD)
+        #[arg(long, value_name = "ROLE#FIELD", value_parser = NonEmptyStringValueParser::new(), requires = "agent")]
+        signing_role: Option<String>,
         /// Print the released leases as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,
@@ -133,6 +154,12 @@ pub(crate) enum LeaseCommand {
         /// Read the console's bearer from the vault item playing this role (its `token` field) instead of from stdin
         #[arg(long, value_name = "ROLE")]
         bearer_role: Option<String>,
+        /// Sign the request as this agent; requires --signing-role
+        #[arg(long, value_parser = NonEmptyStringValueParser::new(), requires = "signing_role")]
+        agent: Option<String>,
+        /// Vault role and field of this agent's request-signing secret (ROLE#FIELD)
+        #[arg(long, value_name = "ROLE#FIELD", value_parser = NonEmptyStringValueParser::new(), requires = "agent")]
+        signing_role: Option<String>,
         /// Print the leases as JSON instead of lines
         #[arg(long, default_value_t = false)]
         json: bool,

@@ -11,6 +11,8 @@ mod authenticator_identity;
 mod borrowed_grant;
 #[path = "leases/concurrency.rs"]
 mod concurrent_leases;
+#[path = "leases/ownership.rs"]
+mod lease_ownership;
 #[path = "identity/decoding.rs"]
 mod credential_decoding;
 #[path = "discovery/sources/receipt.rs"]

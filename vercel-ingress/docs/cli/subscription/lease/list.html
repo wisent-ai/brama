@@ -21,16 +21,18 @@
       <article class="doc"><h1 id="brama-subscription-lease-list"><code>brama subscription lease list</code><a class="headerlink" href="#brama-subscription-lease-list" title="Link to this section">&para;</a></h1>
 <p>Every live lease the gateway holds, and how many sessions each subscription carries, read from the gateway's register; the same counts <a href="/docs/cli/subscription/accounts/list"><code>brama subscription list</code></a> shows as each member's <code>live_sessions</code>.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
-<pre><code class="language-console">brama subscription lease list (--gateway &lt;ORIGIN&gt; | --gateway-consumer &lt;NAME&gt;) [--bearer-role &lt;ROLE&gt;] [--json]</code></pre>
+<pre><code class="language-console">brama subscription lease list (--gateway &lt;ORIGIN&gt; | --gateway-consumer &lt;NAME&gt;) [--bearer-role &lt;ROLE&gt;] [--agent &lt;AGENT&gt; --signing-role &lt;ROLE#FIELD&gt;] [--json]</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>--gateway &lt;ORIGIN&gt;</code> or <code>--gateway-consumer &lt;NAME&gt;</code></td><td>one required</td><td>The gateway that holds the pool (<code>GET /v1/subscription-pool/leases</code>). The console bearer is read from stdin, or from the vault item playing <code>--bearer-role</code>.</td></tr>
+<tr><td><code>--agent &lt;AGENT&gt; --signing-role &lt;ROLE#FIELD&gt;</code></td><td>optional pair; neither defaults</td><td>Prove the agent and see only its leases. The signing secret is read through Stado credentials for this request; the console bearer without agent signing sees all leases.</td></tr>
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print <code>{scope, limits: {provider: n}, unstated: {provider: refusal}, leases: [lease...], counts: {subscription_id: n}}</code> instead of lines. The console bearer is answered every lease; a signed agent or account holder only the leases it took, with <code>scope</code> naming it.</td></tr>
 </tbody></table>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
 <p><code>&lt;provider&gt;: at most &lt;n&gt; sessions per subscription</code> for each provider <code>src/subscription_dispatch/acquire/providers.json</code> declares with a stated limit, <code>&lt;provider&gt;: no lease is given: &lt;refusal&gt;</code> for each whose limit is not stated, one line per live lease, then <code>&lt;subscription&gt; carries &lt;n&gt;</code> per subscription with a lease. Nothing is written.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
-<p>A gateway refusal exits 1 and prints its error document: <code>503</code> with the cause when the register cannot be read. Without a gateway: <code>a lease lives on the gateway that holds the pool: name --gateway or --gateway-consumer</code>.</p>
-<p>The real test is <code>tests/subscriptions/journeys/leases.sh</code>. See <a href="/docs/cli/subscription">the command group</a> or <a href="/docs/cli">the CLI tree</a>.</p></article>
+<p>A gateway refusal exits 1 and prints the HTTP status, request path and full response body, including a non-JSON error; <code>503</code> includes the cause when the register cannot be read. An unreadable body is reported as such. Without a gateway: <code>a lease lives on the gateway that holds the pool: name --gateway or --gateway-consumer</code>.</p>
+<p>Signing requires both <code>--agent</code> and <code>--signing-role ROLE#FIELD</code>. A malformed coordinate or failed Stado credential lookup is refused before the request; the gateway refuses an invalid signature rather than returning console-scope inventory.</p>
+<p>The real console journey is <code>tests/subscriptions/journeys/leases.sh</code>; agent-scoped visibility is exercised by <code>tests/subscriptions/leases/ownership.rs</code>. See <a href="/docs/cli/subscription">the command group</a> or <a href="/docs/cli">the CLI tree</a>.</p></article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>
   </div>

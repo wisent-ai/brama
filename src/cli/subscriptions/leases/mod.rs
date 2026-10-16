@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use super::remote;
+use super::{remote, unattended};
 use brama::subscription_dispatch::leases::{Lease, Taken};
 
 use crate::cli::fail;
@@ -36,6 +36,7 @@ async fn call(
     method: reqwest::Method,
     path: &str,
     body: Option<Value>,
+    signing: Option<(&str, &str)>,
 ) -> Result<Value, String> {
     let (origin, bearer) = destination.resolve_reading_stdin().await?;
     let origin = origin.ok_or_else(|| {
@@ -46,34 +47,57 @@ async fn call(
     let client = reqwest::Client::builder()
         .build()
         .map_err(|error| format!("gateway client: {error}"))?;
+    let bytes = body.map(|value| serde_json::to_vec(&value))
+        .transpose().map_err(|error| format!("encoding the lease request: {error}"))?;
     let mut request = client
         .request(method, format!("{}{path}", origin.trim_end_matches('/')))
         .bearer_auth(bearer.trim());
-    if let Some(body) = body {
-        request = request.json(&body);
+    if let Some((agent, coordinate)) = signing {
+        let (role, field) = coordinate.split_once('#').ok_or_else(|| {
+            format!("--signing-role names ROLE#FIELD, got {coordinate}")
+        })?;
+        let secret = unattended::field_from_role(role, field).await
+            .map_err(|error| format!("cannot read {coordinate} to sign as {agent}: {error}"))?;
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|error| format!("the clock reads before the Unix epoch: {error}"))?
+            .as_secs();
+        let stamp = i64::try_from(stamp)
+            .map_err(|error| format!("the clock cannot be signed as an agent timestamp: {error}"))?;
+        // A GET has no body; the shared verifier signs an empty hash field,
+        // not the digest of an empty byte slice.
+        let signed_body = match bytes.as_deref() {
+            Some(body) => body,
+            None => &[],
+        };
+        let signature = brama::crypto::hmac_auth::compute_signature(
+            agent, stamp, signed_body, secret.as_bytes(),
+        ).map_err(|error| format!("cannot sign the lease request: {error}"))?;
+        request = request.header("x-agent-id", agent)
+            .header("x-agent-timestamp", stamp.to_string())
+            .header("x-agent-signature", signature);
+    }
+    if let Some(bytes) = bytes {
+        request = request.header("Content-Type", "application/json").body(bytes);
     }
     let response = stado_wait::request(request)
         .await
         .map_err(|error| format!("the gateway {origin} did not answer: {error}"))?;
     let status = response.status();
-    let answer: Value = stado_wait::until(
+    let answer = stado_wait::until(
         stado_wait::Kind::Network,
         format!("the body of the gateway's HTTP {status} answer to {path}"),
         origin.clone(),
-        response.json(),
+        response.text(),
     )
     .await
-    .map_err(|error| {
-        format!("the gateway {origin} answered HTTP {status} with an unreadable body: {error}")
-    })?;
+    .map_err(|error| format!("the gateway {origin} answered HTTP {status} but its body could not be read: {error}"))?;
     if !status.is_success() {
-        return Err(format!(
-            "the gateway refused: HTTP {}: {}",
-            status.as_u16(),
-            answer["error"]
-        ));
+        return Err(format!("the gateway refused HTTP {} at {path}: {answer}", status.as_u16()));
     }
-    Ok(answer)
+    serde_json::from_str(&answer).map_err(|error| {
+        format!("the gateway {origin} answered HTTP {status} at {path} with invalid JSON: {error}; body: {answer}")
+    })
 }
 
 fn answered<T: serde::de::DeserializeOwned>(answer: Value, what: &str) -> T {
@@ -109,6 +133,7 @@ pub(crate) async fn take(
     provider: &str,
     session_id: &str,
     holder: &str,
+    signing: Option<(&str, &str)>,
     json: bool,
 ) {
     let taken = call(
@@ -116,8 +141,8 @@ pub(crate) async fn take(
         reqwest::Method::POST,
         "/v1/subscription-pool/leases",
         Some(json!({"provider": provider, "session_id": session_id, "holder": holder})),
-    )
-    .await;
+        signing,
+    ).await;
     let taken = match taken {
         Ok(taken) => taken,
         Err(error) => {
@@ -150,6 +175,7 @@ pub(crate) async fn release(
     destination: remote::Destination,
     lease_id: Option<&str>,
     session_id: Option<&str>,
+    signing: Option<(&str, &str)>,
     json: bool,
 ) {
     let released = call(
@@ -157,8 +183,8 @@ pub(crate) async fn release(
         reqwest::Method::DELETE,
         "/v1/subscription-pool/leases",
         Some(json!({"lease_id": lease_id, "session_id": session_id})),
-    )
-    .await;
+        signing,
+    ).await;
     let released = match released {
         Ok(released) => released,
         Err(error) => {
@@ -181,14 +207,14 @@ pub(crate) async fn release(
     println!("released {}", released.released.len());
 }
 
-pub(crate) async fn list(destination: remote::Destination, json: bool) {
+pub(crate) async fn list(destination: remote::Destination, signing: Option<(&str, &str)>, json: bool) {
     let listed = call(
         destination,
         reqwest::Method::GET,
         "/v1/subscription-pool/leases",
         None,
-    )
-    .await;
+        signing,
+    ).await;
     let listed = match listed {
         Ok(listed) => listed,
         Err(error) => {

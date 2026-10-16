@@ -29,6 +29,19 @@ impl Run {
             .current_dir(env!("CARGO_MANIFEST_DIR"));
         let revision = stado_wait::output(&mut command).expect("read source revision");
         assert!(revision.status.success());
+        let mut tracked = Command::new("git");
+        tracked.args(["diff", "--quiet", "HEAD"]).current_dir(env!("CARGO_MANIFEST_DIR"));
+        let tracked = stado_wait::output(&mut tracked).expect("inspect tested source");
+        assert!(tracked.status.success(),
+            "tested checkout differs from HEAD: {}", String::from_utf8_lossy(&tracked.stderr));
+        let mut untracked = Command::new("git");
+        untracked.args(["ls-files", "--others", "--exclude-standard"])
+            .current_dir(env!("CARGO_MANIFEST_DIR"));
+        let untracked = stado_wait::output(&mut untracked).expect("inspect untracked source");
+        assert!(untracked.status.success(), "cannot inspect untracked source: {}",
+            String::from_utf8_lossy(&untracked.stderr));
+        assert!(untracked.stdout.is_empty(), "tested checkout holds untracked source: {}",
+            String::from_utf8_lossy(&untracked.stdout));
         let bytes = std::fs::read(&binary).expect("read tested binary for checksum");
         let checksum = hex::encode(Sha256::digest(bytes));
         let report = json!({"source_revision": String::from_utf8_lossy(&revision.stdout).trim(),
