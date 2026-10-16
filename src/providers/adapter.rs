@@ -83,17 +83,18 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
         Err(error) => return client_unavailable(request, error),
     };
     let payload = chat_payload(descriptor, model_id.as_ref(), request);
+    let authorized = match authorize_provider(
+        client.post(endpoint(&base_url, descriptor.chat_path)),
+        descriptor,
+        &key,
+        secret,
+    ) {
+        Ok(builder) => builder,
+        Err(error) => return credential_refused(request, error),
+    };
     let started = Instant::now();
     let response = match send_once_more_if_unsent(provider_body(
-        authorize_provider(
-            client.post(endpoint(&base_url, descriptor.chat_path)),
-            descriptor,
-            &key,
-            secret,
-        ),
-        descriptor,
-        payload,
-        request,
+        authorized, descriptor, payload, request,
     ))
     .await
     {
@@ -114,7 +115,7 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
         }
         return with_limits(provider_error(&request.model, status, &text), limits);
     }
-    let elapsed_ms = started.elapsed().as_secs_f64() * 1_000.0;
+    let elapsed_ms = started.elapsed().as_secs_f64() * plan::headers::MS_PER_SECOND;
     if descriptor.wire == WireProtocol::OpenAiResponses {
         return with_limits(
             model_response_from_responses_stream(&request.model, &text, elapsed_ms),
@@ -193,16 +194,17 @@ pub async fn dispatch_stream(
         Err(error) => return Err(client_unavailable(request, error)),
     };
     let payload = streaming_chat_payload(descriptor, model_id.as_ref(), request);
-    let response = match send_once_more_if_unsent(provider_body(
-        authorize_provider(
-            client.post(endpoint(&base_url, descriptor.chat_path)),
-            descriptor,
-            &key,
-            secret,
-        ),
+    let authorized = match authorize_provider(
+        client.post(endpoint(&base_url, descriptor.chat_path)),
         descriptor,
-        payload,
-        request,
+        &key,
+        secret,
+    ) {
+        Ok(builder) => builder,
+        Err(error) => return Err(credential_refused(request, error)),
+    };
+    let response = match send_once_more_if_unsent(provider_body(
+        authorized, descriptor, payload, request,
     ))
     .await
     {

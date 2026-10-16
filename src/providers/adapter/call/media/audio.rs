@@ -11,7 +11,7 @@ use super::super::super::registry::{
     supports_music_route, supports_speech_route, supports_voices_route, MediaWire,
     ProviderDescriptor,
 };
-use super::super::outcome::refusal::{provider_refused, transport_refusal};
+use super::super::outcome::refusal::provider_refused;
 use super::super::outcome::response_body::response_text;
 use super::super::outcome::typed::{typed_route, typed_transport};
 use super::call::Call;
@@ -70,27 +70,17 @@ pub async fn dispatch_speech(
         ));
     }
     let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
-    let call = Call {
-        route_id,
-        descriptor,
-        model_id: &model_id,
-        key: &key,
-        base_url: &base_url,
-        client: &client,
-        secret,
-    };
+    let call = Call::new(route_id, descriptor, &model_id, &key, &base_url, &client, secret)?;
     match descriptor.media_wire {
         MediaWire::ElevenLabs => return elevenlabs::speak(&call, payload).await,
         MediaWire::MiniMax => return minimax::speak(&call, payload).await,
         MediaWire::OpenAi | MediaWire::Gemini | MediaWire::OpenRouter => {}
     }
     payload.insert("model".to_string(), Value::String(model_id.clone()));
-    let response = call
+    let builder = call
         .post(descriptor.speech_path)
-        .json(&Value::Object(payload))
-        .send()
-        .await
-        .map_err(|error| transport_refusal(&error))?;
+        .json(&Value::Object(payload));
+    let response = call.send(builder, "send provider speech").await?;
     audio_answer(route_id, response).await
 }
 
@@ -110,15 +100,7 @@ pub async fn dispatch_music(
     }
     let (descriptor, model_id) = typed_route(route_id)?;
     let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
-    let call = Call {
-        route_id,
-        descriptor,
-        model_id: &model_id,
-        key: &key,
-        base_url: &base_url,
-        client: &client,
-        secret,
-    };
+    let call = Call::new(route_id, descriptor, &model_id, &key, &base_url, &client, secret)?;
     match descriptor.media_wire {
         MediaWire::MiniMax => minimax::compose(&call, payload).await,
         MediaWire::OpenAi | MediaWire::ElevenLabs | MediaWire::Gemini | MediaWire::OpenRouter => {
@@ -131,15 +113,7 @@ pub async fn dispatch_music(
 pub async fn dispatch_voices(route_id: &str, item: &str, secret: &str) -> Result<Value, Refusal> {
     let (descriptor, model_id) = voices_route(route_id)?;
     let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
-    let call = Call {
-        route_id,
-        descriptor,
-        model_id: &model_id,
-        key: &key,
-        base_url: &base_url,
-        client: &client,
-        secret,
-    };
+    let call = Call::new(route_id, descriptor, &model_id, &key, &base_url, &client, secret)?;
     match descriptor.media_wire {
         MediaWire::ElevenLabs => elevenlabs::voices(&call).await,
         MediaWire::OpenAi | MediaWire::MiniMax | MediaWire::Gemini | MediaWire::OpenRouter => {
@@ -159,15 +133,7 @@ pub async fn dispatch_voice_clone(
 ) -> Result<Value, Refusal> {
     let (descriptor, model_id) = voices_route(route_id)?;
     let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
-    let call = Call {
-        route_id,
-        descriptor,
-        model_id: &model_id,
-        key: &key,
-        base_url: &base_url,
-        client: &client,
-        secret,
-    };
+    let call = Call::new(route_id, descriptor, &model_id, &key, &base_url, &client, secret)?;
     match descriptor.media_wire {
         MediaWire::ElevenLabs => elevenlabs::clone_voice(&call, name, description, samples).await,
         MediaWire::OpenAi | MediaWire::MiniMax | MediaWire::Gemini | MediaWire::OpenRouter => {
@@ -185,15 +151,7 @@ pub async fn dispatch_voice_delete(
 ) -> Result<Value, Refusal> {
     let (descriptor, model_id) = voices_route(route_id)?;
     let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
-    let call = Call {
-        route_id,
-        descriptor,
-        model_id: &model_id,
-        key: &key,
-        base_url: &base_url,
-        client: &client,
-        secret,
-    };
+    let call = Call::new(route_id, descriptor, &model_id, &key, &base_url, &client, secret)?;
     match descriptor.media_wire {
         MediaWire::ElevenLabs => elevenlabs::delete_voice(&call, voice_id).await,
         MediaWire::OpenAi | MediaWire::MiniMax | MediaWire::Gemini | MediaWire::OpenRouter => {
@@ -225,26 +183,36 @@ pub(super) async fn audio_answer(
     response: reqwest::Response,
 ) -> Result<SpokenAudio, Refusal> {
     let status = response.status();
-    let content_type = response
-        .headers()
-        .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("application/octet-stream")
-        .to_string();
     if !status.is_success() {
-        // A refused audio request answers JSON, not audio, so the ordinary
-        // provider refusal reader applies to exactly this branch - read
-        // through the one body reader, so a body that breaks off or is not
-        // UTF-8 is refused with that cause instead of an empty sentence.
+        // The provider refusal body is JSON, not audio.
         let (status, _plan, text) = response_text(response).await?;
         return Err(provider_refused(route_id, status, &text));
     }
-    let bytes = response.bytes().await.map_err(|error| {
-        Refusal::new(
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .ok_or_else(|| Refusal::new(
             ProviderRefusal::ProviderFailure,
-            format!("provider_failure: audio was not delivered: {error}"),
-        )
-    })?;
+            "provider_failure: successful audio response has no Content-Type",
+        ))?
+        .to_str()
+        .map_err(|error| Refusal::new(
+            ProviderRefusal::ProviderFailure,
+            format!("provider_failure: audio Content-Type is not text: {error}"),
+        ))?
+        .to_string();
+    let url = response.url().to_string();
+    let bytes = stado_wait::until(
+        stado_wait::Kind::Network,
+        "read provider audio",
+        &url,
+        response.bytes(),
+    )
+    .await
+    .map_err(|error| Refusal::new(
+        ProviderRefusal::ProviderFailure,
+        format!("provider_failure: audio was not delivered: {error}"),
+    ))?;
     audio(content_type, bytes.to_vec())
 }
 

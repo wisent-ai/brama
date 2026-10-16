@@ -8,8 +8,9 @@ use tracing::warn;
 use super::window::window_label_from_minutes;
 use crate::types::{LimitReading, ModelResponse};
 
-/// Milliseconds in a second, for the reset instants headers state in seconds.
-const MS_PER_SECOND: f64 = 1_000.0; // https://www.bipm.org/en/measurement-units/si-prefixes milli = 10^-3
+/// Milliseconds in a second, for the reset instants headers state in seconds
+/// and the latency a provider call is reported with.
+pub(in crate::providers::adapter) const MS_PER_SECOND: f64 = 1_000.0; // https://www.bipm.org/en/measurement-units/si-prefixes milli = 10^-3
 /// The share a percentage states per unit.
 const PERCENT: f64 = 100.0; // https://www.iso.org/standard/64973.html ISO 80000-1: % = 0.01
 

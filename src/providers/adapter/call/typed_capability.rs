@@ -32,14 +32,15 @@ pub async fn dispatch_openai_typed(
     let (descriptor, model_id) = typed_route(route_id)?;
     let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
     payload.insert("model".to_string(), Value::String(model_id));
-    let response = authorize_provider(
-        client.post(endpoint(&base_url, path)),
-        descriptor,
-        &key,
-        secret,
+    let url = endpoint(&base_url, path);
+    let builder = authorize_provider(client.post(&url), descriptor, &key, secret)
+        .map_err(|error| Refusal::gateway(GatewayRefusal::CredentialUnauthorized, error))?;
+    let response = stado_wait::until(
+        stado_wait::Kind::Network,
+        "send provider typed capability",
+        &url,
+        builder.json(&Value::Object(payload)).send(),
     )
-    .json(&Value::Object(payload))
-    .send()
     .await
     .map_err(|error| transport_refusal(&error))?;
     let (status, _plan, text) = response_text(response).await?;
@@ -76,14 +77,15 @@ pub async fn dispatch_decision(
     }
     let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
     payload.insert("model".to_string(), Value::String(model_id));
-    let response = authorize_provider(
-        client.post(endpoint(&base_url, descriptor.decision_path)),
-        descriptor,
-        &key,
-        secret,
+    let url = endpoint(&base_url, descriptor.decision_path);
+    let builder = authorize_provider(client.post(&url), descriptor, &key, secret)
+        .map_err(|error| Refusal::gateway(GatewayRefusal::CredentialUnauthorized, error))?;
+    let response = stado_wait::until(
+        stado_wait::Kind::Network,
+        "send provider typed decision",
+        &url,
+        builder.json(&Value::Object(payload)).send(),
     )
-    .json(&Value::Object(payload))
-    .send()
     .await
     .map_err(|error| transport_refusal(&error))?;
     let (status, _plan, text) = response_text(response).await?;

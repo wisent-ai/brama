@@ -8,7 +8,7 @@
 
 use serde_json::{json, Map, Value};
 
-use super::super::super::outcome::refusal::{provider_refused, transport_refusal};
+use super::super::super::outcome::refusal::provider_refused;
 use super::super::super::outcome::response_body::response_text;
 use super::super::super::outcome::typed::typed_object;
 use super::super::call::Call;
@@ -51,12 +51,10 @@ pub(in super::super) async fn generate_image(
         "contents": [{"role": "user", "parts": parts}],
         "generationConfig": generation,
     });
-    let response = call
+    let builder = call
         .post(&call.descriptor.image_path.replace("{model}", call.model_id))
-        .json(&body)
-        .send()
-        .await
-        .map_err(|error| transport_refusal(&error))?;
+        .json(&body);
+    let response = call.send(builder, "send Gemini image generation").await?;
     let (status, _plan, text) = response_text(response).await?;
     if !status.is_success() {
         return Err(provider_refused(call.route_id, status, &text));
@@ -73,7 +71,10 @@ pub(in super::super) async fn generate_image(
             .pointer("/promptFeedback/blockReason")
             .or_else(|| answer.pointer("/candidates/0/finishReason"))
             .and_then(Value::as_str)
-            .unwrap_or("no reason stated");
+            .ok_or_else(|| Refusal::new(
+                ProviderRefusal::ProviderFailure,
+                "provider_failure: gemini returned no image and stated no block or finish reason",
+            ))?;
         return Err(Refusal::new(
             ProviderRefusal::ProviderFailure,
             format!("provider_failure: gemini returned no image ({reason})"),

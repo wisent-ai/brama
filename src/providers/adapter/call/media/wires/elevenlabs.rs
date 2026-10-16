@@ -10,7 +10,7 @@
 
 use serde_json::{json, Map, Value};
 
-use super::super::super::outcome::refusal::{provider_refused, transport_refusal};
+use super::super::super::outcome::refusal::provider_refused;
 use super::super::super::outcome::response_body::response_text;
 use super::super::super::outcome::typed::typed_object;
 use super::super::audio::{audio, audio_answer, SpokenAudio, VoiceSample};
@@ -66,11 +66,9 @@ pub(in super::super) async fn speak(
     if let Some(format) = payload.get("response_format").and_then(Value::as_str) {
         request = request.query(&[("output_format", format)]);
     }
-    let response = request
-        .json(&body)
-        .send()
-        .await
-        .map_err(|error| transport_refusal(&error))?;
+    let response = call
+        .send(request.json(&body), "send ElevenLabs speech")
+        .await?;
     if !timed {
         return audio_answer(call.route_id, response).await;
     }
@@ -91,10 +89,8 @@ pub(in super::super) async fn speak(
 /// The account's voices, as ElevenLabs lists them under `voices`.
 pub(in super::super) async fn voices(call: &Call<'_>) -> Result<Value, Refusal> {
     let response = call
-        .get(call.descriptor.voices_path)
-        .send()
-        .await
-        .map_err(|error| transport_refusal(&error))?;
+        .send(call.get(call.descriptor.voices_path), "list ElevenLabs voices")
+        .await?;
     answered(call.route_id, response).await
 }
 
@@ -119,13 +115,11 @@ pub(in super::super) async fn clone_voice(
         )?;
     }
     let (content_type, body) = form.finish();
-    let response = call
+    let builder = call
         .post(&format!("{}/add", call.descriptor.voices_path))
         .header(reqwest::header::CONTENT_TYPE, content_type)
-        .body(body)
-        .send()
-        .await
-        .map_err(|error| transport_refusal(&error))?;
+        .body(body);
+    let response = call.send(builder, "clone ElevenLabs voice").await?;
     answered(call.route_id, response).await
 }
 
@@ -143,10 +137,11 @@ pub(in super::super) async fn delete_voice(
         )));
     }
     let response = call
-        .delete(&format!("{}/{voice_id}", call.descriptor.voices_path))
-        .send()
-        .await
-        .map_err(|error| transport_refusal(&error))?;
+        .send(
+            call.delete(&format!("{}/{voice_id}", call.descriptor.voices_path)),
+            "delete ElevenLabs voice",
+        )
+        .await?;
     answered(call.route_id, response).await
 }
 

@@ -13,7 +13,6 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine as _;
 use serde_json::{Map, Value};
 
-use super::super::outcome::refusal::transport_refusal;
 use super::answered;
 use super::call::Call;
 use super::form::Form;
@@ -55,7 +54,7 @@ pub(super) async fn edit_image(
     }
     // One image is the `image` field every edit model reads; several are
     // `image[]`, which only the models that take several accept.
-    let field = if images.len() == 1 {
+    let field = if matches!(images.as_slice(), [_]) {
         "image"
     } else {
         "image[]"
@@ -64,7 +63,7 @@ pub(super) async fn edit_image(
         let (content_type, bytes) = data_url(image, &format!("image[{index}]"))?;
         form.file(
             field,
-            &format!("image-{index}.{}", extension(content_type)),
+            &format!("image-{index}.{}", extension(content_type)?),
             content_type,
             &bytes,
         )?;
@@ -73,19 +72,17 @@ pub(super) async fn edit_image(
         let (content_type, bytes) = data_url(mask, "mask")?;
         form.file(
             "mask",
-            &format!("mask.{}", extension(content_type)),
+            &format!("mask.{}", extension(content_type)?),
             content_type,
             &bytes,
         )?;
     }
     let (content_type, body) = form.finish();
-    let response = call
+    let builder = call
         .post(call.descriptor.image_edit_path)
         .header(reqwest::header::CONTENT_TYPE, content_type)
-        .body(body)
-        .send()
-        .await
-        .map_err(|error| transport_refusal(&error))?;
+        .body(body);
+    let response = call.send(builder, "send provider image edit").await?;
     answered(call.route_id, response).await
 }
 
@@ -121,11 +118,16 @@ fn data_url<'a>(value: &'a Value, field: &str) -> Result<(&'a str, Vec<u8>), Ref
 
 /// The file extension a vendor reads the type from, where the form's
 /// filename is all it looks at.
-fn extension(content_type: &str) -> &str {
-    match content_type {
-        "image/jpeg" => "jpg",
-        other => other.strip_prefix("image/").unwrap_or("png"),
+fn extension(content_type: &str) -> Result<&str, Refusal> {
+    if content_type == "image/jpeg" {
+        return Ok("jpg");
     }
+    content_type
+        .strip_prefix("image/")
+        .filter(|subtype| !subtype.is_empty())
+        .ok_or_else(|| invalid(format!(
+            "image content type {content_type:?} has no image subtype for its filename"
+        )))
 }
 
 fn invalid(reason: String) -> Refusal {

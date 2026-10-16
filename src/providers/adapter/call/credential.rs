@@ -11,7 +11,9 @@ use super::super::registry::{AuthKind, ProviderDescriptor};
 use crate::types::ModelRequest;
 use document::{credential_document, credential_shape};
 
-pub(in crate::providers::adapter) use authorization::{authorize_catalog, authorize_provider};
+pub(in crate::providers::adapter) use authorization::{
+    authorize_catalog, authorize_provider, authorize_with_account,
+};
 
 /// Attach the request body in the shape the credential's provider honours:
 /// a Claude Code grant travels in Claude Code's own attested body, every
@@ -110,30 +112,42 @@ pub(in crate::providers::adapter) fn provider_credential_key(
 /// the document names it, otherwise the `chatgpt_account_id` claim OpenAI
 /// puts in the grant's `tokens.id_token`. Weles banks the grant as OpenAI
 /// returned it, so this is the one place its identity token is read.
-fn credential_account_id(secret: &str) -> Option<String> {
-    let document = credential_document(secret)?;
-    let named = document
-        .pointer("/tokens/account_id")
-        .and_then(Value::as_str)
-        .map(str::to_string);
-    named
-        .or_else(|| id_token_account_id(&document))
-        .filter(|value| !value.trim().is_empty())
-}
-
-fn id_token_account_id(document: &Value) -> Option<String> {
-    use base64::Engine as _;
-    let token = document.pointer("/tokens/id_token")?.as_str()?;
-    let payload = token.split('.').nth(1)?;
-    let claims: Value = serde_json::from_slice(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .decode(payload.trim_end_matches('='))
-            .ok()?,
-    )
-    .ok()?;
-    claims
-        .get("https://api.openai.com/auth")?
-        .get("chatgpt_account_id")?
-        .as_str()
-        .map(str::to_string)
+pub(in crate::providers::adapter) fn credential_account_id(
+    secret: &str,
+) -> Result<Option<String>, String> {
+    let Some(document) = credential_document(secret) else {
+        return Ok(None);
+    };
+    let Some(tokens) = document.get("tokens") else {
+        return Ok(None);
+    };
+    if !tokens.is_object() {
+        return Err("the Codex grant's tokens field is not a JSON object".to_string());
+    }
+    if let Some(named) = tokens.get("account_id") {
+        let id = named.as_str().filter(|id| !id.trim().is_empty()).ok_or_else(|| {
+            "the Codex grant's tokens.account_id is not a nonempty string".to_string()
+        })?;
+        return Ok(Some(id.to_string()));
+    }
+    let Some(token) = tokens.get("id_token") else {
+        return Ok(None);
+    };
+    let token = token.as_str().ok_or_else(|| {
+        "the Codex grant's tokens.id_token is not a string".to_string()
+    })?;
+    let claims = crate::gateway::jwt_claims(token)?;
+    let Some(auth) = claims.get("https://api.openai.com/auth") else {
+        return Ok(None);
+    };
+    if !auth.is_object() {
+        return Err("the Codex grant's OpenAI auth claim is not a JSON object".to_string());
+    }
+    let Some(account) = auth.get("chatgpt_account_id") else {
+        return Ok(None);
+    };
+    let id = account.as_str().filter(|id| !id.trim().is_empty()).ok_or_else(|| {
+        "the Codex grant's chatgpt_account_id claim is not a nonempty string".to_string()
+    })?;
+    Ok(Some(id.to_string()))
 }

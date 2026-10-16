@@ -68,7 +68,7 @@ pub async fn discover_models(
         descriptor,
         &key,
         secret,
-    );
+    )?;
     let listing = listed_rows(provider_id, request).await;
     let mut models = answered_rows(provider_id, &listing)
         .iter()

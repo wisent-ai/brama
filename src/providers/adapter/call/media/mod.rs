@@ -55,15 +55,7 @@ pub async fn dispatch_image(
     let edits = !descriptor.image_edit_path.is_empty() && edit::asks_for_edit(&payload);
     if descriptor.media_wire == MediaWire::Gemini || edits {
         let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
-        let call = call::Call {
-            route_id,
-            descriptor,
-            model_id: &model_id,
-            key: &key,
-            base_url: &base_url,
-            client: &client,
-            secret,
-        };
+        let call = call::Call::new(route_id, descriptor, &model_id, &key, &base_url, &client, secret)?;
         if edits {
             return edit::edit_image(&call, payload).await;
         }
@@ -115,13 +107,15 @@ pub async fn dispatch_video_status(
     let (descriptor, _) = typed_route(route_id)?;
     let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
     let path = descriptor.video_status_path.replace("{id}", job_id);
-    let response = authorize_provider(
-        client.get(endpoint(&base_url, &path)),
-        descriptor,
-        &key,
-        secret,
+    let url = endpoint(&base_url, &path);
+    let builder = authorize_provider(client.get(&url), descriptor, &key, secret)
+        .map_err(|error| Refusal::gateway(GatewayRefusal::CredentialUnauthorized, error))?;
+    let response = stado_wait::until(
+        stado_wait::Kind::Network,
+        "read provider video status",
+        &url,
+        builder.send(),
     )
-    .send()
     .await
     .map_err(|error| transport_refusal(&error))?;
     answered(route_id, response).await
@@ -137,14 +131,15 @@ async fn generate(
     let (descriptor, model_id) = typed_route(route_id)?;
     let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
     payload.insert("model".to_string(), Value::String(model_id));
-    let response = authorize_provider(
-        client.post(endpoint(&base_url, path)),
-        descriptor,
-        &key,
-        secret,
+    let url = endpoint(&base_url, path);
+    let builder = authorize_provider(client.post(&url), descriptor, &key, secret)
+        .map_err(|error| Refusal::gateway(GatewayRefusal::CredentialUnauthorized, error))?;
+    let response = stado_wait::until(
+        stado_wait::Kind::Network,
+        "send provider media generation",
+        &url,
+        builder.json(&Value::Object(payload)).send(),
     )
-    .json(&Value::Object(payload))
-    .send()
     .await
     .map_err(|error| transport_refusal(&error))?;
     answered(route_id, response).await

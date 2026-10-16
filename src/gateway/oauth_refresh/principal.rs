@@ -41,19 +41,32 @@ fn stated(value: Option<&Value>) -> Option<String> {
 /// whose claims are not base64url or not JSON, is refused with what it
 /// lacks: the grant carrying it is damaged, which "states no account" would
 /// hide.
-fn identity_claim(token: &str) -> Result<Option<String>, String> {
-    let segments = token
-        .split_once('.')
-        .and_then(|(_header, rest)| rest.split_once('.'));
-    let Some((payload, _signature)) = segments else {
+pub(crate) fn jwt_claims(token: &str) -> Result<Value, String> {
+    let mut segments = token.split('.');
+    let (Some(header), Some(payload), Some(signature), None) = (
+        segments.next(),
+        segments.next(),
+        segments.next(),
+        segments.next(),
+    ) else {
         return Err("the grant's identity token is not three dot-separated segments".to_string());
     };
+    if header.is_empty() || payload.is_empty() || signature.is_empty() {
+        return Err("the grant's identity token has an empty compact segment".to_string());
+    }
     let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(payload)
         .map_err(|error| format!("the grant's identity token claims are not base64url: {error}"))?;
     let claims: Value = serde_json::from_slice(&decoded)
         .map_err(|error| format!("the grant's identity token claims are not JSON: {error}"))?;
-    Ok(stated(claims.get("email")))
+    if !claims.is_object() {
+        return Err("the grant's identity token claims are not a JSON object".to_string());
+    }
+    Ok(claims)
+}
+
+fn identity_claim(token: &str) -> Result<Option<String>, String> {
+    Ok(stated(jwt_claims(token)?.get("email")))
 }
 
 /// The address an identity token held in `value` claims, when it holds one.

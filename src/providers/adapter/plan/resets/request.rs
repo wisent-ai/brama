@@ -32,7 +32,7 @@ pub fn prepare(
         descriptor,
         &key,
         secret,
-    );
+    )?;
     let (client, built) = request.build_split();
     let request =
         built.map_err(|error| format!("prepare reset {operation} {url} for {item}: {error}"))?;
