@@ -112,12 +112,18 @@ normalized distribution, with the rubric as its legend.</li>
 numbers, so it cannot contradict its own distribution. A label is read without
 the whitespace around it, because a text model writes a label the way its
 tokenizer spells it (<code>" acknowledgement"</code>), and a label the model leaves
-out carries no mass. An answer naming a label the question did not declare,
-naming one label twice, or carrying no probability mass at all is refused
-<code>decision_contract_violated</code> rather than repaired, and so is a reply
-whose JSON object does not parse, with the parser's reason and position.
-Probabilities, confidences and scores are returned as computed, with no
-precision imposed on them.</p>
+out carries no mass. The complete reply must be one JSON object, with no prose
+or code fence. A malformed reply is refused as
+<code>decision_contract_violated</code> with the JSON parser's reason and position.
+An answer naming an undeclared question or label, naming one label twice, or
+carrying no probability mass is refused by name. Probabilities, confidences
+and scores are returned as computed, with no precision imposed on them. A
+native decision provider must return an <code>answers</code> object; a missing or
+non-object <code>answers</code> is a contract refusal, not a bare answer.
+Its typed answer must name a declared choice or a score inside the rubric.
+Optional probability maps must use declared labels and carry mass; malformed
+confidence or probability fields are refused with the question and field
+rather than silently discarded.</p>
 <p>The shape of that answer travels with the request. Brama sends the chat
 route a JSON Schema in which every question is a required key whose value
 holds exactly that question's labels as numbers and nothing else; on the

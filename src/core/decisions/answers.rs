@@ -11,6 +11,8 @@ use serde_json::{json, Map, Value};
 
 use super::question::{DecisionRequest, Question};
 
+mod native;
+
 /// The typed answers a text model's reply carries, or the exact sentence it is
 /// refused with.
 pub fn answers_from_text(
@@ -18,6 +20,7 @@ pub fn answers_from_text(
     text: &str,
 ) -> Result<Map<String, Value>, String> {
     let body = json_object(text)?;
+    check_question_keys(request, &body)?;
     let mut answers = Map::new();
     for (key, question) in &request.questions {
         let declared = body
@@ -40,101 +43,34 @@ pub fn answers_from_native(
     let object = body
         .as_object()
         .ok_or_else(|| "the provider answered with no object of answers".to_string())?;
-    // A provider either wraps its answers in `answers` or sends them bare; an
-    // `answers` that is not an object is refused rather than read as bare.
-    let answered = match object.get("answers") {
-        Some(Value::Object(wrapped)) => wrapped,
-        Some(other) => {
-            return Err(format!(
-                "the provider's `answers` is {other}, not an object of answers"
-            ))
-        }
-        None => object,
-    };
+    let answered = object
+        .get("answers")
+        .ok_or_else(|| "the provider answered without `answers`".to_string())?
+        .as_object()
+        .ok_or_else(|| "the provider's `answers` is not an object of answers".to_string())?;
+    check_question_keys(request, answered)?;
     let mut answers = Map::new();
     for (key, question) in &request.questions {
         let answer = answered
             .get(key)
             .and_then(Value::as_object)
             .ok_or_else(|| format!("answer for question `{key}` is missing"))?;
-        answers.insert(key.clone(), native_answer(key, question, answer)?);
+        answers.insert(key.clone(), native::native_answer(key, question, answer)?);
     }
     Ok(answers)
 }
 
-fn native_answer(
-    key: &str,
-    question: &Question,
-    answer: &Map<String, Value>,
-) -> Result<Value, String> {
-    let mut normalized = Map::new();
-    match question {
-        Question::Noul { .. } => {
-            let value = probability(answer.get("noul")).ok_or_else(|| {
-                format!("answer for question `{key}` carries no `noul` probability")
-            })?;
-            normalized.insert("noul".to_string(), json!(value));
-            // A yes-or-no answer's confidence is the mass on the side it
-            // leans to; a provider that states one is taken at its word.
-            let confidence = match probability(answer.get("confidence")) {
-                Some(stated) => stated,
-                None => value.max(complement(value)),
-            };
-            normalized.insert("confidence".to_string(), json!(confidence));
-        }
-        Question::Choice { options, .. } => {
-            let choice = answer
-                .get("choice")
-                .and_then(Value::as_str)
-                .ok_or_else(|| format!("answer for question `{key}` carries no `choice`"))?;
-            if !options.iter().any(|(label, _)| label == choice) {
-                return Err(format!(
-                    "answer for question `{key}` names option `{choice}`, which this question does not declare"
-                ));
-            }
-            normalized.insert("choice".to_string(), json!(choice));
-            carry_over(answer, &mut normalized);
-        }
-        Question::Score { levels, .. } => {
-            let score = answer
-                .get("score")
-                .and_then(Value::as_f64)
-                .ok_or_else(|| format!("answer for question `{key}` carries no `score`"))?;
-            // A score indexes the rubric's levels, so it lies between the
-            // first level's index and the last's.
-            let Some(highest) = levels
-                .iter()
-                .enumerate()
-                .last()
-                .map(|(index, _)| index as f64)
-            else {
-                return Err(format!("question `{key}` declares no rubric levels"));
-            };
-            if !score.is_finite() || score.is_sign_negative() || score > highest {
-                return Err(format!(
-                    "answer for question `{key}` scores outside the rubric it was given"
-                ));
-            }
-            normalized.insert("score".to_string(), json!(score));
-            carry_over(answer, &mut normalized);
-            normalized.insert("legend".to_string(), json!(levels));
+/// A structured answer cannot add questions the caller did not ask.
+fn check_question_keys(
+    request: &DecisionRequest,
+    answered: &Map<String, Value>,
+) -> Result<(), String> {
+    for key in answered.keys() {
+        if request.question(key).is_none() {
+            return Err(format!("answer names undeclared question `{key}`"));
         }
     }
-    Ok(Value::Object(normalized))
-}
-
-/// The distribution and confidence a decision provider published, kept as it
-/// answered them.
-fn carry_over(answer: &Map<String, Value>, normalized: &mut Map<String, Value>) {
-    if let Some(probabilities) = answer.get("probabilities").and_then(Value::as_object) {
-        normalized.insert(
-            "probabilities".to_string(),
-            Value::Object(probabilities.clone()),
-        );
-    }
-    if let Some(confidence) = probability(answer.get("confidence")) {
-        normalized.insert("confidence".to_string(), json!(confidence));
-    }
+    Ok(())
 }
 
 /// The probabilities one question was answered with, normalized to sum to one.
@@ -149,7 +85,7 @@ fn distribution(
     // the declared one all the same, so keys are read without surrounding
     // whitespace; a key that is still not declared is refused, and so are two
     // keys that name one label, because which mass the model meant is unknown.
-    let mut named = Map::with_capacity(answered.len());
+    let mut named = std::collections::HashMap::with_capacity(answered.len());
     for (written, value) in answered {
         let label = written.trim();
         if !labels.iter().any(|declared| declared == label) {
@@ -157,7 +93,7 @@ fn distribution(
                 "answer for question `{key}` names label `{written}`, which this question does not declare"
             ));
         }
-        if named.insert(label.to_string(), value.clone()).is_some() {
+        if named.insert(label, value).is_some() {
             return Err(format!(
                 "answer for question `{key}` names label `{label}` more than once"
             ));
@@ -170,7 +106,7 @@ fn distribution(
         // all of the mass on what it named. A label written with something
         // that is not a number is refused: read as no mass it would move the
         // model's mass silently.
-        let value = match named.get(label) {
+        let value = match named.get(label.as_str()) {
             None => None,
             Some(written) => Some(written.as_f64().ok_or_else(|| {
                 format!("answer for question `{key}` gives label `{label}` {written}, which is not a number")
@@ -209,10 +145,6 @@ fn typed_answer(
     question: &Question,
     distribution: &[(String, f64)],
 ) -> Result<Value, String> {
-    let probabilities = distribution
-        .iter()
-        .map(|(label, value)| (label.clone(), json!(value)))
-        .collect::<Map<String, Value>>();
     let (top_label, top_mass) = distribution
         .iter()
         .max_by(|left, right| left.1.total_cmp(&right.1))
@@ -231,7 +163,7 @@ fn typed_answer(
         }
         Question::Choice { .. } => json!({
             "choice": top_label,
-            "probabilities": probabilities,
+            "probabilities": probability_map(distribution),
             "confidence": top_mass,
         }),
         Question::Score { levels, .. } => {
@@ -242,12 +174,19 @@ fn typed_answer(
                 .sum::<f64>();
             json!({
                 "score": score,
-                "probabilities": probabilities,
+                "probabilities": probability_map(distribution),
                 "confidence": top_mass,
                 "legend": levels,
             })
         }
     })
+}
+
+fn probability_map(distribution: &[(String, f64)]) -> Map<String, Value> {
+    distribution
+        .iter()
+        .map(|(label, value)| (label.clone(), json!(value)))
+        .collect()
 }
 
 /// The probability of the other outcome of a yes-or-no question.
@@ -263,25 +202,9 @@ fn probability(value: Option<&Value>) -> Option<f64> {
         .filter(|number| number.is_finite() && !number.is_sign_negative() && *number <= certain)
 }
 
-/// The first JSON object in a model's reply, read by serde from the first
-/// brace on.
-///
-/// Models wrap JSON in prose or a code fence often enough that refusing the
-/// answer for its packaging would refuse decisions that are perfectly well
-/// formed inside. What follows the object is not read; an object that does
-/// not parse is refused with serde's reason and position.
+/// The complete JSON object of label probabilities a structured-output model
+/// answered, or serde's cause and position when it did not.
 fn json_object(text: &str) -> Result<Map<String, Value>, String> {
-    let start = text.find('{').ok_or_else(|| {
-        "the model answered with no JSON object of label probabilities".to_string()
-    })?;
-    match serde_json::Deserializer::from_str(&text[start..])
-        .into_iter::<Map<String, Value>>()
-        .next()
-    {
-        Some(Ok(object)) => Ok(object),
-        Some(Err(error)) => Err(format!(
-            "the model's JSON object of label probabilities does not parse: {error}"
-        )),
-        None => Err("the model answered with no JSON object of label probabilities".to_string()),
-    }
+    serde_json::from_str(text)
+        .map_err(|error| format!("the model's JSON object of label probabilities does not parse: {error}"))
 }
