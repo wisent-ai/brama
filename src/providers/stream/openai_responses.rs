@@ -88,17 +88,22 @@ pub(super) fn responses_items(event: Option<&str>, data: &str) -> (Vec<StreamIte
         "response.completed" | "response.incomplete" => {
             // Usage is passed on only when the provider stated both counts;
             // a stream without it is recorded as carrying no measurement.
-            if let (Some(input_tokens), Some(output_tokens)) = (
-                json_u32(body.pointer("/response/usage/input_tokens")),
-                json_u32(body.pointer("/response/usage/output_tokens")),
+            match (
+                json_u32(body.pointer("/response/usage/input_tokens"), "response.usage.input_tokens"),
+                json_u32(body.pointer("/response/usage/output_tokens"), "response.usage.output_tokens"),
             ) {
-                items.push(StreamItem::Delta(StreamDelta::Usage {
-                    input_tokens,
-                    output_tokens,
-                }));
+                (Ok(Some(input_tokens)), Ok(Some(output_tokens))) => {
+                    items.push(StreamItem::Delta(StreamDelta::Usage {
+                        input_tokens,
+                        output_tokens,
+                    }));
+                }
+                (Err(cause), _) | (_, Err(cause)) => {
+                    items.push(StreamItem::Failed(cause));
+                    return (items, true);
+                }
+                _ => {}
             }
-            // An incomplete answer carries the provider's reason when it
-            // states one; without one, the event itself is the reason.
             let reason = if kind == "response.incomplete" {
                 match body
                     .pointer("/response/incomplete_details/reason")

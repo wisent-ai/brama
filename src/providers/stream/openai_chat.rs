@@ -54,19 +54,31 @@ pub(super) fn openai_chat_items(
     // Usage is passed on only when the provider stated both counts, as on
     // the Responses wire; a missing count read as 0 was a measurement nobody
     // made, and a chunk carrying `usage: null` states none.
-    if let (Some(input_tokens), Some(output_tokens)) = (
-        json_u32(body.pointer("/usage/prompt_tokens")),
-        json_u32(body.pointer("/usage/completion_tokens")),
+    match (
+        json_u32(body.pointer("/usage/prompt_tokens"), "usage.prompt_tokens"),
+        json_u32(body.pointer("/usage/completion_tokens"), "usage.completion_tokens"),
     ) {
-        items.push(StreamItem::Delta(StreamDelta::Usage {
-            input_tokens,
-            output_tokens,
-        }));
+        (Ok(Some(input_tokens)), Ok(Some(output_tokens))) => {
+            items.push(StreamItem::Delta(StreamDelta::Usage {
+                input_tokens,
+                output_tokens,
+            }));
+        }
+        (Err(cause), _) | (_, Err(cause)) => {
+            items.push(StreamItem::Failed(cause));
+            return (items, true);
+        }
+        _ => {}
     }
     let Some(choice) = body.pointer("/choices/0") else {
         return (items, false);
     };
-    let delta = choice.get("delta").cloned().unwrap_or(Value::Null);
+    let Some(delta) = choice.get("delta") else {
+        items.push(StreamItem::Failed(format!(
+            "provider chat stream choice carries no delta: {choice}"
+        )));
+        return (items, true);
+    };
     if let Some(text) = delta.get("content").and_then(Value::as_str) {
         if !text.is_empty() {
             items.push(StreamItem::Delta(StreamDelta::Text(text.to_string())));

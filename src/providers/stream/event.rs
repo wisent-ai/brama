@@ -58,15 +58,21 @@ pub struct ProviderStream {
     pub events: mpsc::Receiver<StreamItem>,
 }
 
-/// Read a wire number as the width this vocabulary counts in.
-///
-/// Token meters and content indices are `u32` here while JSON carries them as
-/// `u64`, so every dialect narrows the same way and a count that would not fit
-/// is reported absent rather than wrapped.
-pub(super) fn json_u32(value: Option<&Value>) -> Option<u32> {
-    value
-        .and_then(Value::as_u64)
-        .and_then(|number| u32::try_from(number).ok())
+/// Read a wire number as the width this vocabulary counts in. An absent
+/// meter stays absent; a present malformed or oversized one ends the stream
+/// with its field and value rather than disappearing from the reading.
+pub(super) fn json_u32(value: Option<&Value>, field: &str) -> Result<Option<u32>, String> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let number = value.as_u64().ok_or_else(|| {
+        format!("provider stream field `{field}` is not a nonnegative integer: {value}")
+    })?;
+    u32::try_from(number).map(Some).map_err(|error| {
+        format!(
+            "provider stream field `{field}` does not fit a token count or index ({number}): {error}"
+        )
+    })
 }
 
 /// A tool call's position, id and name as one stream event states them, or
@@ -80,7 +86,7 @@ pub(super) fn tool_call_start(
     id: Option<&Value>,
     name: Option<&Value>,
 ) -> Result<StreamDelta, String> {
-    let index = json_u32(index).ok_or_else(|| {
+    let index = json_u32(index, "index")?.ok_or_else(|| {
         format!("provider stream event `{event}` starts a tool call with no index")
     })?;
     let text = |value: Option<&Value>, field: &str| {
@@ -101,7 +107,7 @@ pub(super) fn tool_call_start(
 /// The position a tool call's argument fragment belongs to, or the failure
 /// that ends the stream: a fragment without one was appended to call 0.
 pub(super) fn tool_call_index(event: &str, index: Option<&Value>) -> Result<u32, String> {
-    json_u32(index).ok_or_else(|| {
+    json_u32(index, "index")?.ok_or_else(|| {
         format!("provider stream event `{event}` carries tool call arguments with no index")
     })
 }
