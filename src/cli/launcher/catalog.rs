@@ -52,14 +52,22 @@ pub(super) fn build(available: &Path, policy: &Path, output: &Path) -> Result<()
                 policy.display()
             )
         })?;
+    // A rule without its purpose or resource grants nothing it can be read
+    // as; passed over, the subscription it was written for was skipped with
+    // a reason blaming a missing rule.
     let allowed: BTreeSet<(&str, &str)> = rules
         .iter()
-        .filter_map(|rule| {
-            let purpose = rule.get("purpose").and_then(Value::as_str)?;
-            let resource = rule.get("resource").and_then(Value::as_str)?;
-            Some((purpose, resource))
+        .map(|rule| {
+            let field = |name: &str| rule.get(name).and_then(Value::as_str);
+            match (field("purpose"), field("resource")) {
+                (Some(purpose), Some(resource)) => Ok((purpose, resource)),
+                _ => Err(format!(
+                    "{}: a roles.brama-runtime rule names no purpose or resource: {rule}",
+                    policy.display()
+                )),
+            }
         })
-        .collect();
+        .collect::<Result<_, _>>()?;
     let mut catalog = Vec::new();
     let mut unnamed = Vec::new();
     for item in items.iter().filter(|item| !item.deleted) {
