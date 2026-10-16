@@ -25,6 +25,18 @@ fn block_text<'a>(block: &'a Value, kind: &str, field: &str) -> Result<&'a str, 
         .ok_or_else(|| format!("a `{kind}` content block carries no `{field}` text"))
 }
 
+/// The texts of a block list that may hold only text blocks: a system prompt
+/// or a tool result. Another block is refused rather than dropped unread.
+fn text_blocks<'a>(blocks: &'a [Value], place: &str) -> Result<Vec<&'a str>, String> {
+    blocks
+        .iter()
+        .map(|block| match block.get("type").and_then(Value::as_str) {
+            Some("text") => block_text(block, "text", "text"),
+            _ => Err(format!("{place} may hold only text blocks, not {block}")),
+        })
+        .collect()
+}
+
 /// What one Anthropic content block list becomes in the internal shape.
 struct ContentIn {
     content: Value,
@@ -103,12 +115,9 @@ fn anthropic_content_in(content: &Value) -> Result<ContentIn, String> {
                 let result_text = match block.get("content") {
                     None => String::new(),
                     Some(Value::String(plain)) => plain.clone(),
-                    Some(Value::Array(blocks)) => blocks
-                        .iter()
-                        .filter(|b| b.get("type").and_then(Value::as_str) == Some("text"))
-                        .filter_map(|b| b.get("text").and_then(Value::as_str))
-                        .collect::<Vec<_>>()
-                        .join(""),
+                    Some(Value::Array(blocks)) => {
+                        text_blocks(blocks, "a `tool_result` content block's content")?.join("")
+                    }
                     Some(other) => {
                         return Err(format!(
                             "a `tool_result` content block's content must be text or blocks, not {other}"
@@ -125,7 +134,8 @@ fn anthropic_content_in(content: &Value) -> Result<ContentIn, String> {
                     tool_calls: None,
                 });
             }
-            _ => {}
+            Some("thinking") | Some("redacted_thinking") => {}
+            _ => return Err(format!("a content block this gateway cannot hold: {block}")),
         }
     }
     let has_images = parts
@@ -153,44 +163,39 @@ fn anthropic_content_in(content: &Value) -> Result<ContentIn, String> {
 /// `max_tokens` is required by the format and must be at least one; no other
 /// bound is put on it. `metadata`, `stop_sequences`, `cache_control` and
 /// `thinking` blocks are accepted and dropped: the internal request has no
-/// field that could hold them honestly. A field the format requires --
-/// a message's role and content, a tool's name, a tool call's id, name and
-/// input, a tool result's tool_use_id, an image's source -- is refused by
-/// position and name rather than sent upstream empty or guessed.
+/// field that could hold them honestly. A field the format requires (a
+/// message's role and content, a tool's name, a tool call's id, name and input,
+/// a tool result's tool_use_id, an image's source) and a block it cannot carry,
+/// a non-text system or tool result block among them, is refused by position.
 pub fn anthropic_request(body: &[u8]) -> Result<InboundCall, String> {
     let raw: Value =
         serde_json::from_slice(body).map_err(|error| format!("invalid JSON: {error}"))?;
-    let model = raw
-        .get("model")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .trim()
-        .to_string();
+    let model = match raw.get("model").and_then(Value::as_str) {
+        Some(model) => model.trim().to_string(),
+        None => return Err("missing field `model`: the request names no model".to_string()),
+    };
     let max_tokens = raw
         .get("max_tokens")
         .and_then(Value::as_u64)
-        .and_then(|value| u32::try_from(value).ok())
         .ok_or_else(|| {
             "missing field `max_tokens`: the Anthropic Messages format requires it".to_string()
         })?;
+    let max_tokens = u32::try_from(max_tokens)
+        .map_err(|error| format!("`max_tokens` {max_tokens} does not fit: {error}"))?;
     let temperature = raw.get("temperature").and_then(Value::as_f64);
     validate(&model, Some(max_tokens), temperature)?;
     let system = match raw.get("system") {
+        None | Some(Value::Null) => None,
         Some(Value::String(text)) => Some(text.clone()),
         Some(Value::Array(blocks)) => {
-            let joined = blocks
-                .iter()
-                .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
-                .filter_map(|block| block.get("text").and_then(Value::as_str))
-                .collect::<Vec<_>>()
-                .join("\n");
+            let joined = text_blocks(blocks, "`system`")?.join("\n");
             if joined.is_empty() {
                 None
             } else {
                 Some(joined)
             }
         }
-        _ => None,
+        Some(other) => return Err(format!("`system` must be text or text blocks, not {other}")),
     };
     let raw_messages = raw
         .get("messages")
@@ -198,8 +203,6 @@ pub fn anthropic_request(body: &[u8]) -> Result<InboundCall, String> {
         .ok_or("missing field `messages`: the Anthropic Messages format requires a list")?;
     let mut messages = Vec::new();
     for (index, raw_message) in raw_messages.iter().enumerate() {
-        // A message without a role was sent as the user's; one without
-        // content as an empty one. Both are refused by position instead.
         let role = raw_message
             .get("role")
             .and_then(Value::as_str)
@@ -222,9 +225,9 @@ pub fn anthropic_request(body: &[u8]) -> Result<InboundCall, String> {
     if messages.is_empty() {
         return Err("messages must not be empty".to_string());
     }
-    let tools = match raw.get("tools").and_then(Value::as_array) {
-        None => None,
-        Some(declared) => {
+    let tools = match raw.get("tools") {
+        None | Some(Value::Null) => None,
+        Some(Value::Array(declared)) => {
             let mut tools = Vec::new();
             for (index, tool) in declared.iter().enumerate() {
                 let name = tool
@@ -248,6 +251,7 @@ pub fn anthropic_request(body: &[u8]) -> Result<InboundCall, String> {
             }
             Some(tools).filter(|tools: &Vec<Tool>| !tools.is_empty())
         }
+        Some(other) => return Err(format!("`tools` must be a list of tools, not {other}")),
     };
     let tool_choice = match raw.get("tool_choice") {
         None => None,
@@ -271,6 +275,12 @@ pub fn anthropic_request(body: &[u8]) -> Result<InboundCall, String> {
             }
         }),
     };
+    // The format reads an absent `stream` as a buffered answer.
+    let stream = match raw.get("stream") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(stream)) => *stream,
+        Some(other) => return Err(format!("`stream` must be true or false, not {other}")),
+    };
     super::validate_history_tool_calls(&messages)?;
     Ok(InboundCall {
         model,
@@ -285,9 +295,6 @@ pub fn anthropic_request(body: &[u8]) -> Result<InboundCall, String> {
             billing_target: None,
             response_schema: None,
         },
-        stream: raw
-            .get("stream")
-            .and_then(Value::as_bool)
-            .unwrap_or_default(),
+        stream,
     })
 }
