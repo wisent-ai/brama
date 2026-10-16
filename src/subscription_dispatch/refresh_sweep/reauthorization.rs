@@ -106,10 +106,11 @@ pub(super) fn schedule_sign_in(subscription_id: String, provider: String) -> boo
                     },
                     subscription = %subscription_id,
                     provider = %provider,
-                    blocked_by = blocked.map(super::super::sign_in::Blocked::code).unwrap_or("none"),
+                    // A preflight failure carries no block: both fields are
+                    // left out of the event rather than written as none and "".
+                    blocked_by = blocked.map(super::super::sign_in::Blocked::code),
                     envelope = blocked
-                        .map(|blocked| blocked.failure(Some(&subscription_id)).to_string())
-                        .unwrap_or_default(),
+                        .map(|blocked| blocked.failure(Some(&subscription_id)).to_string()),
                     detail = %error
                 );
             }
