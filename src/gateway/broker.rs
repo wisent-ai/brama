@@ -4,18 +4,17 @@
 //! for managed installations. A standalone desktop installation may instead
 //! install an in-memory provider credential map before the server starts.
 //!
-//! This file owns the redemption itself: the coordinate a credential is read
-//! from, the order the two request paths are tried in, and the failure a
-//! caller is told when neither produced one. Everything it needs to do that is
-//! its own module, because each changes for its own reason -- `vault` is the
-//! seam to Skarbiec, `binding` is what this deployment was configured to
-//! authenticate, `identity` is the agent secret a signed request is verified
-//! against, `standalone` is the desktop map that replaces the vault entirely,
-//! and `subscription` is everything about a paid account behind one call.
+//! This module owns credential coordinates, the order of final-use paths, and
+//! the failure returned when neither produces a secret. `redemption` runs the
+//! blocking authority exchange and classifies its errors; `vault` issues
+//! capabilities and reads grants; `binding` reads deployment declarations;
+//! `identity` resolves request-sign secrets; `standalone` owns the desktop
+//! credential map; and `subscription` manages paid accounts.
 
 mod binding;
 mod configuration;
 mod identity;
+mod redemption;
 mod standalone;
 mod subscription;
 mod vault;
@@ -25,12 +24,13 @@ pub use vault::{decode_listing, VaultListItem};
 
 use tracing::{info, warn};
 
-use crate::capability::{CapabilityRef, Secret};
+use crate::capability::Secret;
 use crate::core::failure::{self, POINT_CREDENTIAL_REDEEM};
 use wisent_errors::{Code, Failure};
 
 use binding::PROVIDER_CAPABILITIES_ENV;
 use configuration::{capability_map, client, configured_capability};
+use redemption::redeem_provider_resource;
 use standalone::{local_provider_credential, LOCAL_SUBSCRIPTION_CREDENTIALS};
 use subscription::refresh_subscription_credential_inner;
 use vault::{credential_by_grant, issue_capability, PROVIDER_PURPOSE};
@@ -204,44 +204,6 @@ fn append_failure_cause(failure: Failure, cause: Option<Failure>) -> Failure {
         Some(cause) => failure.caused_by(cause),
         None => failure,
     }
-}
-
-async fn redeem_provider_resource(capability_id: &str, resource: &str) -> Result<Secret, Failure> {
-    let id = capability_id.to_owned();
-    let owned_resource = resource.to_owned();
-    // Skarbiec uses blocking Unix I/O. Waiting for decryption must not occupy
-    // Tokio's HTTP workers and starve /readyz during a credential sweep.
-    tokio::task::spawn_blocking(move || {
-        let binding = CapabilityRef::provider(&id, &owned_resource).map_err(|error| {
-            credential_failure(
-                format!("capability does not bind to `{owned_resource}`: {error}"),
-                &owned_resource,
-                Code::Config,
-            )
-        })?;
-        let broker = client().map_err(|error| {
-            credential_failure(
-                format!("construct capability client: {error}"),
-                &owned_resource,
-                Code::Config,
-            )
-        })?;
-        broker.redeem(&binding).map_err(|error| {
-            credential_failure(
-                format!("authority refused capability redemption: {error}"),
-                &owned_resource,
-                failure::code_for("credential_unauthorized"),
-            )
-        })
-    })
-    .await
-    .map_err(|error| {
-        credential_failure(
-            format!("credential redemption worker failed: {error}"),
-            resource,
-            Code::Unknown,
-        )
-    })?
 }
 
 pub async fn redeem_subscription_credential(
