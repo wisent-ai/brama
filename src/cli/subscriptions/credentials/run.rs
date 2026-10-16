@@ -66,14 +66,17 @@ pub(crate) async fn run(command: SubscriptionCommand) {
             json,
         } => {
             if let Some(login_item) = login_item {
-                refuse_usage(format!(
-                    "--login-item {login_item} names a Weles sign-in row, and --by hand signs in through your own browser; drop it or sign in --by weles"
-                ));
+                crate::cli::refuse_usage(
+                    clap::error::ErrorKind::ArgumentConflict,
+                    format!(
+                        "--login-item {login_item} names a Weles sign-in row, and --by hand signs in through your own browser; drop it or sign in --by weles"
+                    ),
+                );
             }
             let Some(subscription_id) = subscription_id else {
-                refuse_usage(
-                    "--by hand replaces one subscription's grant; name it with --subscription-id"
-                        .to_string(),
+                crate::cli::refuse_usage(
+                    clap::error::ErrorKind::MissingRequiredArgument,
+                    "--by hand replaces one subscription's grant; name it with --subscription-id",
                 );
             };
             manual::finish(
@@ -259,13 +262,4 @@ pub(crate) async fn run(command: SubscriptionCommand) {
         } => acquisition::hand_over(&provider, harness, json).await,
         SubscriptionCommand::Lease(command) => super::lease::run(command).await,
     }
-}
-
-/// Refuse flags that contradict a sign-in's method the way clap refuses any
-/// usage error: the sentence, the usage, and clap's usage exit status.
-fn refuse_usage(sentence: String) -> ! {
-    use clap::CommandFactory;
-    crate::Cli::command()
-        .error(clap::error::ErrorKind::ArgumentConflict, sentence)
-        .exit()
 }
