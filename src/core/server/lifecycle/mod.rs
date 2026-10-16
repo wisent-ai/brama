@@ -49,18 +49,19 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
     // Loopback unless this host is told otherwise. A gateway that binds a
     // routable address by default is one that can be reached before anybody
     // decided it should be, so the placed host declares its own address and
-    // every other host keeps the old behaviour.
-    let addr = match std::env::var("BRAMA_BIND_ADDRESS") {
-        Ok(configured) if !configured.trim().is_empty() => {
-            let parsed: std::net::IpAddr = configured.trim().parse().map_err(|_| {
-                std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    format!("BRAMA_BIND_ADDRESS is not an IP address: {configured}"),
-                )
+    // every other host binds loopback. A declaration that is not Unicode, or
+    // not an IP address, is refused by name rather than bound as loopback.
+    let refused = |reason: String| std::io::Error::new(std::io::ErrorKind::InvalidInput, reason);
+    let addr = match crate::environment::declared_setting("BRAMA_BIND_ADDRESS").map_err(refused)? {
+        Some(configured) => {
+            let parsed: std::net::IpAddr = configured.parse().map_err(|error| {
+                refused(format!(
+                    "BRAMA_BIND_ADDRESS is not an IP address: {configured}: {error}"
+                ))
             })?;
             SocketAddr::from((parsed, port))
         }
-        _ => SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
+        None => SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
     };
     info!("Starting brama server on {addr}");
 
