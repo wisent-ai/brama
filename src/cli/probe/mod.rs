@@ -13,9 +13,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use clap::Args;
-use hmac::{Hmac, Mac};
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 
 use super::launcher::role_field_in;
 use super::workload::{home, service_settings};
@@ -190,23 +188,11 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
             .bearer_auth(&token)
             .header("Content-Type", "application/json");
         if let Some((agent, secret)) = &signing {
-            let stamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|elapsed| elapsed.as_secs())
-                .map_err(|error| format!("the clock reads before the Unix epoch: {error}"))?
-                .to_string();
-            let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
-                .map_err(|error| error.to_string())?;
-            mac.update(
-                format!("{agent}:{stamp}:{}", hex::encode(Sha256::digest(&body))).as_bytes(),
-            );
-            request = request
-                .header("x-agent-id", agent.as_str())
-                .header("x-agent-timestamp", stamp)
-                .header(
-                    "x-agent-signature",
-                    hex::encode(mac.finalize().into_bytes()),
-                );
+            let headers = brama::crypto::hmac_auth::agent_headers(agent, &body, secret.as_bytes())
+                .map_err(|error| format!("cannot sign the probe request: {error}"))?;
+            for (name, value) in headers {
+                request = request.header(name, value);
+            }
         }
         match stado_wait::request(request.body(body)).await {
             Ok(answer) => {

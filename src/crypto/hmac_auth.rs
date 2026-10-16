@@ -24,6 +24,8 @@ pub enum HmacAuthError {
     BadSignature,
     #[error("hmac init: {0}")]
     HmacInit(String),
+    #[error("the clock cannot stamp a signed request: {0}")]
+    Clock(String),
 }
 
 /// The three headers that carry the agent's identity and signature.
@@ -83,7 +85,7 @@ pub fn verify_agent_hmac(
     if sig.len() != exp.len() {
         return Err(HmacAuthError::BadSignature);
     }
-    if sig.ct_eq(exp).unwrap_u8() != 1 {
+    if !bool::from(sig.ct_eq(exp)) {
         return Err(HmacAuthError::BadSignature);
     }
     Ok(())
@@ -109,4 +111,29 @@ pub fn compute_signature(
         HmacSha256::new_from_slice(secret).map_err(|e| HmacAuthError::HmacInit(e.to_string()))?;
     mac.update(message.as_bytes());
     Ok(hex::encode(mac.finalize().into_bytes()))
+}
+
+/// The headers a client sends to sign `body` as `agent_id` with `secret`,
+/// stamped now in seconds since the Unix epoch: `x-agent-id`,
+/// `x-agent-timestamp` and `x-agent-signature`, the trio
+/// [`verify_agent_hmac`] checks. Every Brama caller that signs a request
+/// signs it here.
+pub fn agent_headers(
+    agent_id: &str,
+    body: &[u8],
+    secret: &[u8],
+) -> Result<Vec<(&'static str, String)>, HmacAuthError> {
+    let elapsed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| HmacAuthError::Clock(format!("it reads before the Unix epoch: {error}")))?;
+    let timestamp = i64::try_from(elapsed.as_secs())
+        .map_err(|error| HmacAuthError::Clock(format!("its seconds exceed a timestamp: {error}")))?;
+    Ok(vec![
+        ("x-agent-id", agent_id.to_string()),
+        ("x-agent-timestamp", timestamp.to_string()),
+        (
+            "x-agent-signature",
+            compute_signature(agent_id, timestamp, body, secret)?,
+        ),
+    ])
 }

@@ -58,24 +58,18 @@ async fn call(
         })?;
         let secret = unattended::field_from_role(role, field).await
             .map_err(|error| format!("cannot read {coordinate} to sign as {agent}: {error}"))?;
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|error| format!("the clock reads before the Unix epoch: {error}"))?
-            .as_secs();
-        let stamp = i64::try_from(stamp)
-            .map_err(|error| format!("the clock cannot be signed as an agent timestamp: {error}"))?;
         // A GET has no body; the shared verifier signs an empty hash field,
         // not the digest of an empty byte slice.
         let signed_body = match bytes.as_deref() {
             Some(body) => body,
             None => &[],
         };
-        let signature = brama::crypto::hmac_auth::compute_signature(
-            agent, stamp, signed_body, secret.as_bytes(),
-        ).map_err(|error| format!("cannot sign the lease request: {error}"))?;
-        request = request.header("x-agent-id", agent)
-            .header("x-agent-timestamp", stamp.to_string())
-            .header("x-agent-signature", signature);
+        let headers =
+            brama::crypto::hmac_auth::agent_headers(agent, signed_body, secret.as_bytes())
+                .map_err(|error| format!("cannot sign the lease request: {error}"))?;
+        for (name, value) in headers {
+            request = request.header(name, value);
+        }
     }
     if let Some(bytes) = bytes {
         request = request.header("Content-Type", "application/json").body(bytes);
