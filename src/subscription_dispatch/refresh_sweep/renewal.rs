@@ -101,7 +101,7 @@ async fn refresh_subscription(subscription_id: String, provider: String) -> Swep
                 event = "credential_refresh_unavailable",
                 subscription = %subscription_id,
                 provider = %provider,
-                error = refused.detail.as_deref().unwrap_or_default(),
+                error = ?refused.detail,
                 envelope = %refused.to_json(),
                 "no credential could be read for this subscription; its declared Weles account \
                  will be asked to restore the grant"
