@@ -93,6 +93,7 @@ Subscription Pool. Both use the same Brama function, which obtains credentials
 from Skarbiec and reads the provider's own report without sending a model
 request. Expired OAuth grants are renewed when possible; sign-in is never
 opened as a side effect.</p>
+<p>To inspect or manage live session leases, open <strong>Leases → Manage session leases</strong> in Brama Desktop. The window reads the serving gateway's lease register, names the proven scope and any read refusal, and offers take and release with confirmation. Taking a lease can buy an account when the pool has no room; the resulting lease or purchase refusal is shown before the inventory is read again. The Desktop bearer has console scope. Automation that must act as a particular agent uses <code>brama subscription lease take|list|release --agent &lt;agent&gt; --signing-role &lt;role#field&gt;</code> so the gateway enforces ownership on every operation.</p>
 <p>Each successful report replaces that account's previous limit windows.
 An explicitly empty provider report means no windows were published, not
 zero percent used. Failed reads retain the last successful windows with
