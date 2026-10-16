@@ -5,6 +5,17 @@
 //! provider discovery, so [`check`] runs it once when the gateway starts and
 //! again on every `brama maintain` pass, and `/readyz` returns the last
 //! completed answer.
+//!
+//! A client waiting on a request Brama is answering asks whether Brama
+//! still serves. Asking again the moment each answer returned ran one
+//! request per answer for as long as the wait lasted, on the same adapter
+//! as the request it watched. `GET /readyz?after=<digest>` answers instead
+//! when the readiness answer differs from the one the client names by its
+//! digest: at once when it already does, otherwise when something changes
+//! it — a sweep or a maintenance pass publishing, a credential call
+//! beginning or ending, or a standing call reaching the refresh interval
+//! this host's resolver declares, the one change time alone makes. Every
+//! answer carries its own `digest`, to be named on the next question.
 
 mod accounts;
 pub(in crate::core::server) mod check;
@@ -13,10 +24,21 @@ pub(in crate::core::server) mod standing;
 
 use std::sync::LazyLock;
 
+use axum::extract::Query;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
+use tokio::sync::Notify;
+
+/// Told whenever something the readiness answer reads changes.
+static CHANGED: LazyLock<Notify> = LazyLock::new(Notify::new);
+
+/// Wake every readiness question waiting for the answer to change.
+fn changed() {
+    CHANGED.notify_waiters();
+}
 
 pub(in crate::core::server) async fn health() -> impl IntoResponse {
     Json(json!({
@@ -103,6 +125,7 @@ static READINESS_REPORT: LazyLock<std::sync::RwLock<ReadinessReport>> =
 
 fn publish(report: ReadinessReport) {
     *crate::core::sync::write_held(&READINESS_REPORT, "readiness report") = report;
+    changed();
 }
 
 /// The last `brama maintain` pass this process ran: when it finished, and
@@ -112,8 +135,11 @@ static LAST_MAINTENANCE: LazyLock<std::sync::RwLock<Option<(std::time::SystemTim
 
 /// Record one finished maintenance pass for `/readyz`.
 pub(in crate::core::server) fn record_maintenance(ok: bool) {
-    let mut last = crate::core::sync::write_held(&LAST_MAINTENANCE, "last maintenance pass");
-    *last = Some((std::time::SystemTime::now(), ok));
+    {
+        let mut last = crate::core::sync::write_held(&LAST_MAINTENANCE, "last maintenance pass");
+        *last = Some((std::time::SystemTime::now(), ok));
+    }
+    changed();
 }
 
 /// What `/readyz` says about maintenance. The gateway keeps no timer, so it
@@ -142,11 +168,65 @@ fn maintenance_state() -> Value {
     }
 }
 
-/// Return the last completed credential and routing check, with the last
-/// maintenance pass beside it. A credential call standing unanswered past
-/// the declared refresh interval overrides it: the gateway declares it
-/// serves nothing and names the source (`standing`).
-pub(in crate::core::server) async fn readyz() -> impl IntoResponse {
+/// What `/readyz` asks for: with `after`, the digest of the answer the
+/// client last read, the answer once it differs from that one.
+#[derive(serde::Deserialize)]
+pub(in crate::core::server) struct ReadinessQuestion {
+    after: Option<String>,
+}
+
+/// The last completed credential and routing check, with the last
+/// maintenance pass beside it and the `digest` that names this answer. A
+/// question naming the digest of the current answer is answered when the
+/// answer changes.
+pub(in crate::core::server) async fn readyz(
+    Query(question): Query<ReadinessQuestion>,
+) -> impl IntoResponse {
+    let (status, body) = answer_after(question.after.as_deref()).await;
+    (status, Json(body))
+}
+
+/// The digest that names one readiness answer: its status and its body.
+fn digest(status: StatusCode, body: &Value) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(status.as_str().as_bytes());
+    hasher.update(body.to_string().as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+/// The readiness answer, with its `digest`, once it is not the answer
+/// `after` names; with no `after`, the answer now.
+async fn answer_after(after: Option<&str>) -> (StatusCode, Value) {
+    loop {
+        // Registered before the answer is read, so a change between the
+        // reading and the wait wakes this question instead of passing it.
+        let notified = CHANGED.notified();
+        tokio::pin!(notified);
+        notified.as_mut().enable();
+        let (status, mut body) = answer();
+        let named = digest(status, &body);
+        if after != Some(named.as_str()) {
+            if let Some(object) = body.as_object_mut() {
+                object.insert("digest".to_string(), Value::String(named));
+            }
+            return (status, body);
+        }
+        match standing::next_reading() {
+            Some(due) => {
+                tokio::select! {
+                    () = &mut notified => {}
+                    () = tokio::time::sleep_until(tokio::time::Instant::from_std(due)) => {}
+                }
+            }
+            None => notified.await,
+        }
+    }
+}
+
+/// The readiness answer now. A credential call standing unanswered past the
+/// declared refresh interval overrides the last check: the gateway declares
+/// it serves nothing and names the source (`standing`).
+fn answer() -> (StatusCode, Value) {
     let report = {
         let current = crate::core::sync::read_held(&READINESS_REPORT, "readiness report");
         current.clone()
@@ -168,7 +248,7 @@ pub(in crate::core::server) async fn readyz() -> impl IntoResponse {
             object.insert("credential_source".to_string(), Value::String(refusal));
         }
     }
-    (status, Json(body))
+    (status, body)
 }
 
 /// Learn this host's placement and take the first readiness reading, once.

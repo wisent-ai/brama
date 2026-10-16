@@ -5,11 +5,13 @@
 //! resolver state whose registry copy declares the refresh interval. The
 //! stand-in accepts each connection, reads the request and never answers.
 //! A workload admission is sent through the real CLI; while it stands,
-//! `/readyz` is asked again as each answer comes back. Once the admission has
-//! stood past the declared interval, readiness declares the gateway serves
-//! nothing (503, `ready: false`) naming the credential source, and the same
-//! reading ends the admission, which the CLI reports as 503 with that
-//! sentence instead of standing on.
+//! `/readyz?after=<digest>` is asked with the digest of the last answer, so
+//! each answer is a change: no two readings carry one digest. Once the
+//! admission has stood the declared interval, readiness declares the
+//! gateway serves nothing (503, `ready: false`) naming the credential
+//! source without being asked again, and the same reading ends the
+//! admission, which the CLI reports as 503 with that sentence instead of
+//! standing on.
 #[path = "../subscriptions/support.rs"]
 mod support;
 
@@ -64,15 +66,25 @@ async fn a_credential_source_that_never_answers_ends_readiness_and_the_standing_
 
     let client = reqwest::Client::new();
     let mut readings = Vec::new();
+    let mut after: Option<String> = None;
     let declared = loop {
-        let response = client
-            .get(&readiness)
-            .send()
-            .await
-            .expect("readiness answers");
+        let mut question = client.get(&readiness);
+        if let Some(digest) = &after {
+            question = question.query(&[("after", digest)]);
+        }
+        let response = question.send().await.expect("readiness answers");
         let status = response.status();
         let body: Value = response.json().await.expect("readiness JSON");
         readings.push(json!({ "status": status.as_u16(), "body": body }));
+        let digest = body["digest"]
+            .as_str()
+            .expect("every readiness answer names its digest")
+            .to_string();
+        assert_ne!(
+            after.as_deref(),
+            Some(digest.as_str()),
+            "readiness answered a question with the answer it named: {readings:?}"
+        );
         if body["credential_source"].is_string() {
             break (status, body);
         }
@@ -80,6 +92,7 @@ async fn a_credential_source_that_never_answers_ends_readiness_and_the_standing_
             !admission.is_finished(),
             "the admission ended before readiness named the credential source: {readings:?}"
         );
+        after = Some(digest);
     };
     run.report["readings"] = json!(readings);
     run.save();

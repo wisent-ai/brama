@@ -4,18 +4,20 @@
 //! Skarbiec accepts the call and never answers, `/readyz` still returned the
 //! last sweep's verdict, so a client that waits only while Brama declares it
 //! serves waited without end. Each call to the credential source is recorded
-//! here while it stands. A call standing longer than the refresh interval
-//! this host's Stado resolver declares (the measure the resolver reads its
-//! own waits by) makes `/readyz` declare that the gateway does not serve,
-//! naming the source and how long it has stood; the same reading ends every
-//! such call with that sentence, so a request already accepted is answered
-//! with the refusal instead of standing on. Nothing here keeps a clock of
-//! its own: the reading happens when readiness is asked.
+//! here while it stands. A call that has stood the refresh interval this
+//! host's Stado resolver declares (the measure the resolver reads its own
+//! waits by) makes `/readyz` declare that the gateway does not serve, naming
+//! the source and how long it has stood; the same reading ends every such
+//! call with that sentence, so a request already accepted is answered with
+//! the refusal instead of standing on. A reading happens when readiness is
+//! asked, and a question waiting for the answer to change is woken when a
+//! call begins or ends and at the moment the oldest call reaches the
+//! interval ([`next_reading`]).
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use tokio::sync::oneshot;
 
@@ -54,6 +56,7 @@ impl Standing {
             end: Some(end),
         };
         standing().insert(Arc::as_ptr(&marker) as usize, call);
+        super::changed();
         Self { marker, ended }
     }
 
@@ -74,6 +77,7 @@ impl Standing {
 impl Drop for Standing {
     fn drop(&mut self) {
         standing().remove(&(Arc::as_ptr(&self.marker) as usize));
+        super::changed();
     }
 }
 
@@ -87,10 +91,14 @@ pub(in crate::core::server) fn resolver_state_file() -> Result<PathBuf, String> 
         return Ok(PathBuf::from(path));
     }
     match std::env::var_os("HOME").filter(|home| !home.is_empty()) {
-        Some(home) => Ok(PathBuf::from(home).join(".stado").join("resolver-state.json")),
-        None => Err("neither STADO_RESOLVER_STATE_FILE nor HOME names where this host's \
+        Some(home) => Ok(PathBuf::from(home)
+            .join(".stado")
+            .join("resolver-state.json")),
+        None => Err(
+            "neither STADO_RESOLVER_STATE_FILE nor HOME names where this host's \
                      Stado resolver keeps its state"
-            .to_string()),
+                .to_string(),
+        ),
     }
 }
 
@@ -118,18 +126,18 @@ fn declared_refresh() -> Result<Option<u64>, String> {
     let Some(state) = resolver_document(&state_file)? else {
         return Ok(None);
     };
-    let target = state["target"].as_str().ok_or_else(|| {
-        format!("{} names no target text", state_file.display())
-    })?;
+    let target = state["target"]
+        .as_str()
+        .ok_or_else(|| format!("{} names no target text", state_file.display()))?;
     let registry_file = state_file
         .with_file_name("cache")
         .join("registry-last-good.json");
     let Some(registry) = resolver_document(&registry_file)? else {
         return Ok(None);
     };
-    let targets = registry["targets"].as_array().ok_or_else(|| {
-        format!("{} holds no targets list", registry_file.display())
-    })?;
+    let targets = registry["targets"]
+        .as_array()
+        .ok_or_else(|| format!("{} holds no targets list", registry_file.display()))?;
     let entry = targets
         .iter()
         .find(|entry| entry["name"].as_str() == Some(target))
@@ -143,8 +151,30 @@ fn declared_refresh() -> Result<Option<u64>, String> {
     Ok(entry["service_resolver"]["refresh_seconds"].as_u64())
 }
 
-/// Why the gateway does not serve now, when a credential call has stood
-/// longer than the declared refresh interval; every such call is ended with
+/// When the oldest call still standing reaches the declared refresh
+/// interval: the one moment a reading changes the readiness answer with
+/// nothing else changing. `None` when no call stands unended or no interval
+/// is declared to measure one by. A declaration that cannot be read is the
+/// readiness answer's own refusal already, so it sets no moment either; the
+/// cause is said in the log.
+pub(in crate::core::server) fn next_reading() -> Option<Instant> {
+    let oldest = standing()
+        .values()
+        .filter(|call| call.end.is_some())
+        .map(|call| call.since)
+        .min()?;
+    match declared_refresh() {
+        Ok(Some(refresh)) => Some(oldest + Duration::from_secs(refresh)),
+        Ok(None) => None,
+        Err(cause) => {
+            tracing::warn!("no moment to read standing credential calls by: {cause}");
+            None
+        }
+    }
+}
+
+/// Why the gateway does not serve now, when a credential call has stood the
+/// declared refresh interval or longer; every such call is ended with
 /// the same sentence. `Ok(None)` when nothing stands that long, or when no
 /// interval is declared to read a standing call by; an error when the
 /// resolver's declaration cannot be read, so the calls cannot be measured.
@@ -162,15 +192,16 @@ pub(in crate::core::server) fn refusal() -> Result<Option<String>, String> {
     else {
         return Ok(None);
     };
+    let interval = Duration::from_secs(refresh);
     let stale: Vec<&mut Call> = calls
         .values_mut()
-        .filter(|call| call.since.elapsed().as_secs() > refresh)
+        .filter(|call| call.since.elapsed() >= interval)
         .collect();
     let Some(oldest) = stale.iter().max_by_key(|call| call.since.elapsed()) else {
         return Ok(None);
     };
     let sentence = format!(
-        "the credential source has not answered: {} call(s) stand longer than the {refresh}s refresh interval this host's resolver declares, the oldest to {} for {}s; Brama serves no chat until it answers",
+        "the credential source has not answered: {} call(s) have stood the {refresh}s refresh interval this host's resolver declares or longer, the oldest to {} for {}s; Brama serves no chat until it answers",
         stale.len(),
         oldest.target,
         oldest.since.elapsed().as_secs()
