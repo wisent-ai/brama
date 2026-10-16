@@ -51,20 +51,21 @@ pub(crate) async fn decide(args: DecideArgs) {
         allow_provider_cost,
     } = args;
     if !allow_provider_cost {
-        eprintln!("refusing a billable decision without explicit --allow-provider-cost");
-        std::process::exit(2);
+        crate::cli::refuse_unacknowledged_cost("a billable decision");
     }
     if model != DECISION_ALIAS && model != BEST_DECISION_ALIAS {
-        eprintln!("--model must be `{DECISION_ALIAS}` or `{BEST_DECISION_ALIAS}`");
-        std::process::exit(2);
+        crate::cli::refuse_usage(
+            clap::error::ErrorKind::InvalidValue,
+            format!("--model must be `{DECISION_ALIAS}` or `{BEST_DECISION_ALIAS}`"),
+        );
     }
     let state = read_argument("state", &state);
     let questions: Value = match serde_json::from_str(&read_argument("questions", &questions)) {
         Ok(value) => value,
-        Err(error) => {
-            eprintln!("--questions is not JSON: {error}");
-            std::process::exit(2);
-        }
+        Err(error) => crate::cli::refuse_usage(
+            clap::error::ErrorKind::InvalidValue,
+            format!("--questions is not JSON: {error}"),
+        ),
     };
     let request = match DecisionRequest::parse(&json!({
         "model": model,

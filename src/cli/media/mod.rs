@@ -82,8 +82,7 @@ pub(crate) async fn image(args: ImageArgs) {
         allow_provider_cost,
     } = args;
     if !allow_provider_cost {
-        eprintln!("refusing a billable image generation without explicit --allow-provider-cost");
-        crate::cli::fail();
+        crate::cli::refuse_unacknowledged_cost("a billable image generation");
     }
     let route = resolve_media_route(&model);
     let mut payload = Map::new();

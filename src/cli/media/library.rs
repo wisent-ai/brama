@@ -94,8 +94,7 @@ pub(crate) enum VoicesCommand {
 
 pub(crate) async fn music(args: MusicArgs) {
     if !args.allow_provider_cost {
-        eprintln!("refusing a billable music request without explicit --allow-provider-cost");
-        std::process::exit(2);
+        crate::cli::refuse_unacknowledged_cost("a billable music request");
     }
     let route = resolve_media_route(&args.model);
     let mut payload = Map::new();
@@ -106,12 +105,10 @@ pub(crate) async fn music(args: MusicArgs) {
     if let Some(format) = args.response_format {
         payload.insert("response_format".to_string(), Value::String(format));
     }
-    let song = dispatch_direct_music(&route, payload)
-        .await
-        .unwrap_or_else(|refused| {
-            eprintln!("{refused}");
-            crate::cli::fail();
-        });
+    let song = match dispatch_direct_music(&route, payload).await {
+        Ok(song) => song,
+        Err(refused) => crate::cli::refused(refused),
+    };
     if let Err(error) = std::fs::write(&args.output, &song.bytes) {
         eprintln!("cannot write {}: {error}", args.output);
         crate::cli::fail();
@@ -129,12 +126,10 @@ pub(crate) async fn voices(command: VoicesCommand) {
     match command {
         VoicesCommand::List { model, json } => {
             let route = resolve_media_route(&model);
-            let body = dispatch_direct_voices(&route)
-                .await
-                .unwrap_or_else(|refused| {
-                    eprintln!("{refused}");
-                    crate::cli::fail();
-                });
+            let body = match dispatch_direct_voices(&route).await {
+                Ok(body) => body,
+                Err(refused) => crate::cli::refused(refused),
+            };
             super::super::print_answer(&body, json);
         }
         VoicesCommand::Clone {
@@ -147,37 +142,35 @@ pub(crate) async fn voices(command: VoicesCommand) {
             json,
         } => {
             if !allow_provider_cost {
-                eprintln!("refusing a billable voice clone without explicit --allow-provider-cost");
-                std::process::exit(2);
+                crate::cli::refuse_unacknowledged_cost("a billable voice clone");
             }
             let route = resolve_media_route(&model);
             let mut recordings = Vec::with_capacity(samples.len());
             for path in samples {
-                let bytes = std::fs::read(&path).unwrap_or_else(|error| {
-                    eprintln!("cannot read {path}: {error}");
-                    crate::cli::fail();
-                });
-                let filename = std::path::Path::new(&path)
+                let bytes = match std::fs::read(&path) {
+                    Ok(bytes) => bytes,
+                    Err(error) => crate::cli::refused(format!("cannot read {path}: {error}")),
+                };
+                let Some(filename) = std::path::Path::new(&path)
                     .file_name()
                     .and_then(|name| name.to_str())
                     .map(str::to_string)
-                    .unwrap_or_else(|| {
-                        eprintln!("{path} names no file");
-                        crate::cli::fail();
-                    });
+                else {
+                    crate::cli::refused(format!("{path} names no file"));
+                };
                 recordings.push(VoiceSample {
                     filename,
                     content_type: content_type.clone(),
                     bytes,
                 });
             }
-            let body =
+            let cloned =
                 dispatch_direct_voice_clone(&route, &name, description.as_deref(), recordings)
-                    .await
-                    .unwrap_or_else(|refused| {
-                        eprintln!("{refused}");
-                        crate::cli::fail();
-                    });
+                    .await;
+            let body = match cloned {
+                Ok(body) => body,
+                Err(refused) => crate::cli::refused(refused),
+            };
             super::super::print_answer(&body, json);
         }
         VoicesCommand::Remove {
@@ -187,18 +180,18 @@ pub(crate) async fn voices(command: VoicesCommand) {
             json,
         } => {
             if !confirm {
-                eprintln!(
-                    "refusing to delete voice {voice_id} without --confirm: the provider keeps no copy"
+                crate::cli::refuse_usage(
+                    clap::error::ErrorKind::MissingRequiredArgument,
+                    format!(
+                        "refusing to delete voice {voice_id} without --confirm: the provider keeps no copy"
+                    ),
                 );
-                std::process::exit(2);
             }
             let route = resolve_media_route(&model);
-            let body = dispatch_direct_voice_delete(&route, &voice_id)
-                .await
-                .unwrap_or_else(|refused| {
-                    eprintln!("{refused}");
-                    crate::cli::fail();
-                });
+            let body = match dispatch_direct_voice_delete(&route, &voice_id).await {
+                Ok(body) => body,
+                Err(refused) => crate::cli::refused(refused),
+            };
             super::super::print_answer(&body, json);
         }
     }

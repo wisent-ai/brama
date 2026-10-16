@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use brama::subscription_dispatch::{collect_task_quality as run_task_quality, TaskQualityOptions};
 
 use super::super::print_answer;
-use super::fail;
+use crate::cli::refused as fail;
 
 /// The named tasks `task:<KEY>` selection serves: measure one, and read back
 /// the checks it reads.
@@ -99,10 +99,7 @@ async fn measure(args: MeasureArgs) {
         json,
     } = args;
     if !allow_provider_cost {
-        eprintln!(
-            "refusing billable task-quality collection without explicit --allow-provider-cost"
-        );
-        std::process::exit(2);
+        crate::cli::refuse_unacknowledged_cost("billable task-quality collection");
     }
     match run_task_quality(TaskQualityOptions {
         agent_id,

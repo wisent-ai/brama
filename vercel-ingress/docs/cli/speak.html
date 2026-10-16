@@ -42,6 +42,7 @@ provider_rate_limited: You have no credits remaining. Add credits to continue us
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <table><thead><tr><th>Sentence</th><th>Meaning</th></tr></thead><tbody>
 <tr><td><code>refusing a billable speech request without explicit --allow-provider-cost</code></td><td>Nothing was sent.</td></tr>
+<tr><td><code>--speed must be a finite number, not NaN</code> (likewise <code>--stability</code> and <code>--similarity-boost</code>)</td><td>A usage error, exit 2; the setting cannot be carried as JSON, so nothing was sent rather than a request with the setting dropped.</td></tr>
 <tr><td><code>alias `voice-model` is a media alias this gateway knows but no route is declared for it; declare one with `brama routes set voice-model &lt;provider/model&gt;` or `PUT /v1/admin/routes`</code></td><td>The alias has no route here.</td></tr>
 <tr><td><code>invalid_request: route `together/…` does not generate speech</code></td><td>The named route's provider serves no speech endpoint.</td></tr>
 <tr><td><code>provider_failure: provider returned no audio</code></td><td>The provider answered success with an empty body; no file was written.</td></tr>

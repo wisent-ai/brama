@@ -30,6 +30,30 @@ pub(crate) fn fail() -> ! {
     std::process::exit(1) // https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/stdlib.h.html
 }
 
+/// Print `refusal` on standard error as it is and end the command
+/// unsuccessfully: the one ending of a verb whose operation was refused.
+pub(crate) fn refused(refusal: impl std::fmt::Display) -> ! {
+    eprintln!("{refusal}");
+    fail()
+}
+
+/// Refuse an invocation the argument parser could not judge by itself, as it
+/// refuses one it can: a usage error of `kind` carrying `message`, with the
+/// parser's own usage status, before anything is sent.
+pub(crate) fn refuse_usage(kind: clap::error::ErrorKind, message: impl std::fmt::Display) -> ! {
+    clap::Error::raw(kind, format!("{message}\n")).exit()
+}
+
+/// Refuse a billable command run without `--allow-provider-cost`: the
+/// acknowledgement is a required argument the caller left out, refused the
+/// same way on every billable verb; `what` names what would have been billed.
+pub(crate) fn refuse_unacknowledged_cost(what: &str) -> ! {
+    refuse_usage(
+        clap::error::ErrorKind::MissingRequiredArgument,
+        format!("refusing {what} without explicit --allow-provider-cost"),
+    )
+}
+
 /// One answer as `--json` prints it, or `key: value` lines for a person: a
 /// string as itself, null as `-`, anything nested as compact JSON; a list
 /// prints one compact item per line.

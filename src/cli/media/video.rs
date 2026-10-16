@@ -73,8 +73,7 @@ async fn start(args: StartArgs) {
         allow_provider_cost,
     } = args;
     if !allow_provider_cost {
-        eprintln!("refusing a billable video job without explicit --allow-provider-cost");
-        std::process::exit(2);
+        crate::cli::refuse_unacknowledged_cost("a billable video job");
     }
     let route = resolve_media_route(&model);
     let mut payload = Map::new();

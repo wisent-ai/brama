@@ -65,8 +65,7 @@ pub(crate) async fn speak(args: SpeakArgs) {
         json,
     } = args;
     if !allow_provider_cost {
-        eprintln!("refusing a billable speech request without explicit --allow-provider-cost");
-        std::process::exit(2);
+        crate::cli::refuse_unacknowledged_cost("a billable speech request");
     }
     let route = resolve_media_route(&model);
     let mut payload = Map::new();
@@ -75,21 +74,22 @@ pub(crate) async fn speak(args: SpeakArgs) {
     if let Some(format) = response_format {
         payload.insert("response_format".to_string(), Value::String(format));
     }
-    if let Some(speed) = speed {
-        payload.insert(
-            "speed".to_string(),
-            serde_json::Number::from_f64(f64::from(speed)).map_or(Value::Null, Value::Number),
-        );
-    }
-    for (key, value) in [
-        ("stability", stability),
-        ("similarity_boost", similarity_boost),
+    // A setting JSON cannot carry (NaN or an infinity) is refused by name:
+    // sent as null, the provider applied its own value for a setting the
+    // caller stated.
+    for (key, flag, value) in [
+        ("speed", "--speed", speed),
+        ("stability", "--stability", stability),
+        ("similarity_boost", "--similarity-boost", similarity_boost),
     ] {
         if let Some(value) = value {
-            payload.insert(
-                key.to_string(),
-                serde_json::Number::from_f64(f64::from(value)).map_or(Value::Null, Value::Number),
-            );
+            let Some(number) = serde_json::Number::from_f64(f64::from(value)) else {
+                crate::cli::refuse_usage(
+                    clap::error::ErrorKind::InvalidValue,
+                    format!("{flag} must be a finite number, not {value}"),
+                );
+            };
+            payload.insert(key.to_string(), Value::Number(number));
         }
     }
     if let Some(emotion) = emotion {

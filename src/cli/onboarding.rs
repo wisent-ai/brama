@@ -87,10 +87,10 @@ pub(crate) async fn onboard(args: OnboardArgs) {
         || !adopt_selected_aliases.is_empty()
         || adopt_into.is_some()
     {
-        eprintln!(
-            "Configuration adoption error: --adopt-from is required for every adoption option"
+        crate::cli::refuse_usage(
+            clap::error::ErrorKind::MissingRequiredArgument,
+            "Configuration adoption error: --adopt-from is required for every adoption option",
         );
-        std::process::exit(2);
     }
 
     match brama::onboarding::run_first_use(model, agent_id, allow_provider_cost, reset).await {

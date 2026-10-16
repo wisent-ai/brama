@@ -27,11 +27,7 @@ pub(crate) struct TestArgs {
     json: bool,
 }
 
-/// A refusal printed as it is, ending the command unsuccessfully.
-fn fail(detail: impl std::fmt::Display) -> ! {
-    eprintln!("{detail}");
-    crate::cli::fail()
-}
+use crate::cli::refused as fail;
 
 /// One JSON line by default, which release tooling and the docs read; with
 /// `--text`, the same fields as `key: value` lines for a person.
@@ -84,8 +80,7 @@ pub(crate) async fn test_inference(args: TestArgs) {
         json,
     } = args;
     if !allow_provider_cost {
-        eprintln!("refusing billable inference without explicit --allow-provider-cost");
-        std::process::exit(2);
+        crate::cli::refuse_unacknowledged_cost("billable inference");
     }
     let request = ModelRequest {
         messages: vec![Message {
