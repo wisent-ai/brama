@@ -75,7 +75,7 @@ fn vault_field(
 fn candidates(settings: &BTreeMap<String, String>, home: &Path) -> Result<Vec<String>, String> {
     let mut candidates: Vec<String> = settings
         .get("PORT")
-        .map(|port| format!("127.0.0.1:{port}"))
+        .map(|port| format!("{}:{port}", std::net::Ipv4Addr::LOCALHOST))
         .into_iter()
         .collect();
     let path = home
@@ -145,7 +145,7 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
         "signing": signing.as_ref().map(|(agent, _)| json!({ "agent": agent })),
         "aliases": [],
     });
-    let mut unserved = 0usize;
+    let mut unserved: Vec<String> = Vec::new();
     let mut say = |line: String, section: &str, entry: Value| {
         if !args.json {
             println!("{line}");
@@ -157,11 +157,7 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
     };
     let mut base = None;
     for authority in candidates(&settings, &home)? {
-        match client
-            .get(format!("http://{authority}/health"))
-            .send()
-            .await
-        {
+        match stado_wait::request(client.get(format!("http://{authority}/health"))).await {
             Ok(answer) => {
                 let status = answer.status().as_u16();
                 say(
@@ -212,7 +208,7 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
                     hex::encode(mac.finalize().into_bytes()),
                 );
         }
-        match request.body(body).send().await {
+        match stado_wait::request(request.body(body)).await {
             Ok(answer) => {
                 let status = answer.status();
                 // An answer whose body cannot be read, or a success that is not
@@ -235,8 +231,8 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
                         .and_then(Value::as_str)
                         .map(|said| said.trim().to_string());
                     match said {
-                        Some(said) => Ok((said, payload)),
-                        None => Err(format!("answer carries no text content: {payload}")),
+                        Some(said) if !said.is_empty() => Ok((said, payload)),
+                        _ => Err(format!("answer carries no nonblank text content: {payload}")),
                     }
                 });
                 match outcome {
@@ -253,7 +249,7 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
                         );
                     }
                     Err(refusal) => {
-                        unserved += 1;
+                        unserved.push(alias.clone());
                         say(
                             format!("{alias} {} {refusal}", status.as_u16()),
                             "aliases",
@@ -263,7 +259,7 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
                 }
             }
             Err(error) => {
-                unserved += 1;
+                unserved.push(alias.clone());
                 say(
                     format!("{alias} unreachable {error}"),
                     "aliases",
@@ -275,9 +271,11 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
     if args.json {
         crate::cli::print_json(&report);
     }
-    if unserved > 0 {
+    if !unserved.is_empty() {
         return Err(format!(
-            "{unserved} of {requested} alias(es) were not served; each line above names the refusal or the transport error"
+            "{} of {requested} alias(es) were not served ({}); each line above names the refusal or the transport error",
+            unserved.len(),
+            unserved.join(", ")
         ));
     }
     Ok(())
@@ -285,11 +283,9 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
 
 pub(crate) async fn run(args: ProbeArgs) {
     if !args.allow_provider_cost {
-        eprintln!("refusing billable probe requests without explicit --allow-provider-cost");
-        std::process::exit(2);
+        crate::cli::refuse_unacknowledged_cost("billable probe requests");
     }
     if let Err(detail) = probe(args).await {
-        eprintln!("{detail}");
-        crate::cli::fail();
+        crate::cli::refused(detail);
     }
 }
