@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::types::{BillingTarget, Tool, ToolCall};
+use crate::types::{BillingTarget, ResponseSchema, Tool, ToolCall};
 
 /// A temperature runs over the range the chat-completions format defines. A
 /// request names no answer length unless the caller does, and it runs until
@@ -30,6 +30,58 @@ pub(super) struct ChatCompletionRequest {
     /// Ask for server-sent events instead of one buffered completion.
     #[serde(default)]
     pub(super) stream: bool,
+    /// The shape the answer must take; see [`ResponseFormat`].
+    #[serde(default)]
+    pub(super) response_format: Option<ResponseFormat>,
+}
+
+/// The chat-completions `response_format`. Only `json_schema` is taken: it
+/// names the schema the answer is held to, the same [`ResponseSchema`] the
+/// decisions endpoint asks with. A provider that decodes under a schema is
+/// sent it; every answer is refused unless it is one JSON object. `text`
+/// asks for nothing, and `json_object` names no schema, so both are refused
+/// by name rather than read as a schema.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct ResponseFormat {
+    #[serde(rename = "type")]
+    kind: String,
+    #[serde(default)]
+    json_schema: Option<JsonSchemaFormat>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct JsonSchemaFormat {
+    name: String,
+    schema: serde_json::Value,
+    #[serde(default)]
+    strict: Option<bool>,
+}
+
+impl ResponseFormat {
+    /// The schema the answer is held to, or why this format names none.
+    pub(super) fn schema(self) -> Result<ResponseSchema, String> {
+        if self.kind != "json_schema" {
+            return Err(format!(
+                "response_format type `{}` is not taken: only `json_schema`, which names the schema the answer is held to",
+                self.kind
+            ));
+        }
+        let Some(format) = self.json_schema else {
+            return Err("response_format `json_schema` carries no `json_schema` object".into());
+        };
+        if format.strict == Some(false) {
+            return Err(
+                "response_format `json_schema` with `strict: false` is not taken: Brama holds an answer to its schema strictly or not at all"
+                    .into(),
+            );
+        }
+        Ok(ResponseSchema {
+            name: format.name,
+            schema: format.schema,
+        })
+    }
 }
 
 pub(super) fn is_any_subscription_selector(model: &str) -> bool {

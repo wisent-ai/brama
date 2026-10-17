@@ -52,6 +52,24 @@ pub(in crate::core::server) async fn chat_completions(
     {
         return api_error(StatusCode::BAD_REQUEST, &message).into_response();
     }
+    let response_schema = match req
+        .response_format
+        .map(request::ResponseFormat::schema)
+        .transpose()
+    {
+        Ok(schema) => schema,
+        Err(message) => return api_error(StatusCode::BAD_REQUEST, &message).into_response(),
+    };
+    // A streamed answer is sent before it is complete, so it cannot be held
+    // to a schema; the format is answered buffered only.
+    if response_schema.is_some() && req.stream {
+        return api_error(
+            StatusCode::BAD_REQUEST,
+            "response_format is answered buffered only: a streamed answer is sent before it can be held to its schema",
+        )
+        .into_response();
+    }
+    let holds_schema = response_schema.is_some();
     let mut messages: Vec<Message> = Vec::with_capacity(req.messages.len());
     for (position, m) in req.messages.into_iter().enumerate() {
         // The chat-completions format lets only a turn that calls tools leave
@@ -92,7 +110,7 @@ pub(in crate::core::server) async fn chat_completions(
         tools: req.tools,
         tool_choice: req.tool_choice,
         billing_target: req.billing_target,
-        response_schema: None,
+        response_schema,
     };
     let (dispatched, meta) = match route_model_call(
         &client_identity,
@@ -113,6 +131,21 @@ pub(in crate::core::server) async fn chat_completions(
             tally_and_log_buffered(&mut resp, &client_identity, &meta, &requested_model);
             if !resp.success {
                 return failure_response(&mut resp);
+            }
+            // Not every provider decodes under the schema, so every answer
+            // to a `response_format` is one JSON object or it is refused.
+            if holds_schema
+                && serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&resp.content)
+                    .is_err()
+            {
+                return api_error(
+                    StatusCode::BAD_GATEWAY,
+                    &format!(
+                        "the model's answer is not the one JSON object response_format asked for: {}",
+                        resp.content
+                    ),
+                )
+                .into_response();
             }
             // Alias telemetry stays attached to the stable logical selector.
             crate::core::perf::record(&requested_model, resp.latency_ms, resp.output_tokens);

@@ -119,6 +119,21 @@ advertised by the API, MCP server, examples, or release notes.
 - **Cost boundary:** selectors may invoke more than one provider attempt; limits
   are defined in [`CORE.md`](https://brama.wisent.com/docs/core). They never retry without a finite bound.
 
+### Ask for an answer in a declared shape
+
+- **Actor:** any caller of `POST /v1/chat/completions`.
+- **Initial state:** the caller names the shape in `response_format`:
+  `{"type": "json_schema", "json_schema": {"name": ..., "schema": ..., "strict": true}}`.
+- **Outcome:** a provider that decodes under a schema is sent it; every
+  answer, from any provider, must be one JSON object or the call answers
+  `502` quoting what the model wrote.
+- **Refusals:** `400` for another `type` (`text`, `json_object`), a
+  `json_schema` without its object, `strict: false`, or `stream: true`,
+  since a streamed answer is sent before it can be checked.
+- **Proof:** `tests/chat/response_format.sh` asks a running Brama for one
+  schema-bound answer and checks the four refusals, keeping every request
+  and answer in its report.
+
 ### Operate and recover the gateway
 
 - **Actor:** a Brama operator.
