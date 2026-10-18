@@ -134,18 +134,21 @@ pub(in crate::core::server) async fn chat_completions(
             }
             // Not every provider decodes under the schema, so every answer
             // to a `response_format` is one JSON object or it is refused.
-            if holds_schema
-                && serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&resp.content)
-                    .is_err()
-            {
-                return api_error(
-                    StatusCode::BAD_GATEWAY,
-                    &format!(
-                        "the model's answer is not the one JSON object response_format asked for: {}",
-                        resp.content
-                    ),
-                )
-                .into_response();
+            if holds_schema {
+                let parsed = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(
+                    &resp.content,
+                );
+                if let Err(error) = parsed {
+                    return api_error(
+                        StatusCode::BAD_GATEWAY,
+                        &format!(
+                            "the model's answer is not the one JSON object response_format asked \
+                             for ({error}): {}",
+                            resp.content
+                        ),
+                    )
+                    .into_response();
+                }
             }
             // Alias telemetry stays attached to the stable logical selector.
             crate::core::perf::record(&requested_model, resp.latency_ms, resp.output_tokens);
