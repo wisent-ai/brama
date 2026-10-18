@@ -28,27 +28,35 @@ pub(crate) struct Destination {
     pub bearer_role: Option<String>,
 }
 
+/// Where a named gateway is: its origin as given, or the consumer whose
+/// gateway Stado's service directory gives.
+enum Target<'a> {
+    Origin(&'a str),
+    Consumer(&'a str),
+}
+
 impl Destination {
     /// The origin and console bearer this call uses, or nothing when the
-    /// caller means this process's own pool.
+    /// caller means this process's own pool. The bearer is settled before a
+    /// consumer's gateway is asked of Stado, so a call that carries none is
+    /// refused at once instead of after that answer.
     pub(crate) async fn resolve(
         &self,
         stdin_bearer: &Zeroizing<String>,
     ) -> Result<(Option<String>, Zeroizing<String>), String> {
-        let gateway = match (&self.gateway, &self.gateway_consumer) {
+        let target = match (&self.gateway, &self.gateway_consumer) {
             (Some(_), Some(_)) => {
                 return Err("name --gateway or --gateway-consumer, not both".into())
             }
-            (Some(gateway), None) => Some(gateway.clone()),
-            (None, Some(consumer)) => Some(unattended::gateway_for_consumer(consumer).await?),
-            (None, None) => None,
-        };
-        if gateway.is_none() {
-            if self.bearer_role.is_some() {
-                return Err("--bearer-role is for a gateway; name one".into());
+            (Some(gateway), None) => Target::Origin(gateway),
+            (None, Some(consumer)) => Target::Consumer(consumer),
+            (None, None) => {
+                if self.bearer_role.is_some() {
+                    return Err("--bearer-role is for a gateway; name one".into());
+                }
+                return Ok((None, Zeroizing::new(String::new())));
             }
-            return Ok((None, Zeroizing::new(String::new())));
-        }
+        };
         let bearer = match &self.bearer_role {
             Some(role) => unattended::bearer_from_role(role).await?,
             None => stdin_bearer.clone(),
@@ -58,7 +66,11 @@ impl Destination {
                 "a gateway needs the console's bearer: --bearer-role, or the token on stdin".into(),
             );
         }
-        Ok((gateway, bearer))
+        let gateway = match target {
+            Target::Origin(gateway) => gateway.to_string(),
+            Target::Consumer(consumer) => unattended::gateway_for_consumer(consumer).await?,
+        };
+        Ok((Some(gateway), bearer))
     }
 
     /// The same, reading stdin itself when no bearer role was named.

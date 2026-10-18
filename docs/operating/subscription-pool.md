@@ -124,8 +124,15 @@ bearer from the vault item that plays the role, read with
 is the role Brama Desktop reads its gateway bearer by, and the one the
 gateway's console verbs accept (`list` and `attribute` answer with it); a
 bearer read by another role is refused with HTTP 401. A refusal exits nonzero
-with the gateway's own sentence. A missing or stale provider usage report is not
-zero usage; read each window's observation and reset times.
+with the gateway's own sentence. The bearer is settled before the gateway's
+origin is asked of Stado: a call that names a gateway with neither
+`--bearer-role` nor a token on stdin is refused at once with `a gateway needs
+the console's bearer: --bearer-role, or the token on stdin`, without a
+service-directory lookup, and `--bearer-role` without `--gateway` or
+`--gateway-consumer` is refused by the parser naming them;
+`tests/subscriptions/gateway_bearer.sh` checks both through the built binary.
+A missing or stale provider usage report is not zero usage; read each window's
+observation and reset times.
 
 ## What each account has left
 
