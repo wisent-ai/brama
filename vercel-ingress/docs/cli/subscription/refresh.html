@@ -43,6 +43,13 @@ of bytes received before the failure. Brama does not classify a partial 401 or
 state unchanged. A complete provider refusal still determines whether the
 credential needs a new sign-in. Malformed successful responses retain the JSON
 parser's error or name the missing <code>access_token</code>.</p>
+<p>Each provider's expiry is read where that provider stores it: Claude Code's
+<code>claudeAiOauth.expiresAt</code> in milliseconds, Kimi's <code>expires_at</code>
+in seconds, and Codex's access token's JWT <code>exp</code>. A stored grant whose
+expiry cannot be read (not UTF-8, not JSON, or a token whose claims cannot be
+decoded) is refused with <code>&lt;provider&gt; credential expiry cannot be read:
+&lt;cause&gt;</code> on the refresh path and on a request, instead of being treated
+as stating no expiry and used until the provider refuses it.</p>
 <p>The HTTP refresh verdict carries the same <code>detail</code>. Brama Desktop's
 <strong>Subscription Pool</strong> screen, under <strong>Credential refresh</strong>,
 puts that verdict in its operation result bar rather than replacing the cause

@@ -11,10 +11,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde_json::Value;
-use tracing::warn;
+use wisent_errors::{Code, Failure};
 use zeroize::{Zeroize, Zeroizing};
 
 use super::provider::{access_token, oauth_provider, zeroize_json_strings};
+use super::refusal::refresh_failure;
 use crate::capability::Secret;
 
 pub(super) const MILLIS_PER_SECOND: i64 = 1000; // https://www.bipm.org/en/measurement-units/si-prefixes milli = 10^-3
@@ -77,44 +78,43 @@ fn provider_expiry(blob: &Value, provider: &str) -> Result<Option<i64>, String> 
 }
 
 /// The instant this credential says its access token stops working, in epoch
-/// seconds, or `None` when it states none. A credential whose expiry cannot be
-/// read is named in the gateway log and answered as stating none, so the
-/// provider's own refusal of the token forces the refresh.
-fn expiry_epoch(secret: &Secret, provider: &str) -> Option<i64> {
-    oauth_provider(provider)?;
-    let read = secret
-        .expose_utf8()
-        .map_err(|error| format!("the credential is not UTF-8: {error}"))
-        .and_then(|raw| {
-            serde_json::from_str::<Value>(raw)
-                .map_err(|error| format!("the credential is not JSON: {error}"))
-        })
-        .and_then(|mut blob| {
-            let expiry = provider_expiry(&blob, provider);
-            zeroize_json_strings(&mut blob);
-            expiry
-        });
-    match read {
-        Ok(expiry) => expiry,
-        Err(reason) => {
-            warn!(
-                event = "oauth_expiry_unreadable",
-                provider, "{provider} credential expiry cannot be read: {reason}"
-            );
-            None
-        }
+/// seconds, or `None` when it states none (a provider that issues no OAuth
+/// grant, or a grant without an expiry). A credential whose expiry cannot be
+/// read -- not UTF-8, not JSON, or a token whose claims are unreadable -- is
+/// refused with that cause on the refresh path rather than answered as
+/// stating none.
+fn expiry_epoch(secret: &Secret, provider: &str) -> Result<Option<i64>, Failure> {
+    if oauth_provider(provider).is_none() {
+        return Ok(None);
     }
+    let unreadable = |reason: String| {
+        refresh_failure(
+            Code::Config,
+            format!("{provider} credential expiry cannot be read: {reason}"),
+        )
+    };
+    let raw = secret
+        .expose_utf8()
+        .map_err(|error| unreadable(format!("the credential is not UTF-8: {error}")))?;
+    let mut blob = serde_json::from_str::<Value>(raw)
+        .map_err(|error| unreadable(format!("the credential is not JSON: {error}")))?;
+    let expiry = provider_expiry(&blob, provider);
+    zeroize_json_strings(&mut blob);
+    expiry.map_err(unreadable)
 }
 
 /// Whether this access token has expired. A token is used until the instant
 /// its credential states; a request it no longer authorizes is answered by
 /// the provider, and that rejection forces a refresh on the request path.
-pub(in crate::gateway) fn needs_refresh(secret: &Secret, provider: &str) -> bool {
-    expiry_epoch(secret, provider).is_some_and(|expiry| now_seconds() >= expiry)
+pub(in crate::gateway) fn needs_refresh(secret: &Secret, provider: &str) -> Result<bool, Failure> {
+    Ok(expiry_epoch(secret, provider)?.is_some_and(|expiry| now_seconds() >= expiry))
 }
 
 /// The instant this credential's access token stops working, in epoch
 /// milliseconds, so a reader can compare it against its own clock.
-pub(in crate::gateway) fn access_token_expiry_ms(secret: &Secret, provider: &str) -> Option<i64> {
-    expiry_epoch(secret, provider).map(|expiry| expiry.saturating_mul(millis_per_second_i64()))
+pub(in crate::gateway) fn access_token_expiry_ms(
+    secret: &Secret,
+    provider: &str,
+) -> Result<Option<i64>, Failure> {
+    Ok(expiry_epoch(secret, provider)?.map(|expiry| expiry.saturating_mul(millis_per_second_i64())))
 }

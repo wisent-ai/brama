@@ -243,7 +243,11 @@ pub async fn subscription_credential(
 ) -> Result<Secret, Failure> {
     let credential = redeem_subscription_credential(subscription_id, provider).await?;
     if !subscription::is_borrowed(&credential)
-        && !super::oauth_refresh::needs_refresh(&credential, provider)
+        && !super::oauth_refresh::needs_refresh(&credential, provider).map_err(|refused| {
+            refused
+                .with_context("subscription", subscription_id)
+                .with_context("provider", provider)
+        })?
     {
         return Ok(credential);
     }

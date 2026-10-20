@@ -65,7 +65,12 @@ async fn refresh_presented(
         .with_context("provider", provider);
         return Err(refused);
     }
-    if !force && !oauth_refresh::needs_refresh(&credential, provider) {
+    let in_context = |refused: Failure| {
+        refused
+            .with_context("subscription", subscription_id)
+            .with_context("provider", provider)
+    };
+    if !force && !oauth_refresh::needs_refresh(&credential, provider).map_err(in_context)? {
         return Ok(credential);
     }
     let mut fresh = match oauth_refresh::refresh(&credential, provider).await {
@@ -126,7 +131,7 @@ async fn refresh_presented(
     // What the vault now holds, said in the ledger rather than left to be
     // rediscovered: a reader asking why a token died early needs the instant it
     // was rotated and the instant it expires, and neither is in the vault.
-    let expires_at_ms = oauth_refresh::access_token_expiry_ms(&refreshed, provider);
+    let expires_at_ms = oauth_refresh::access_token_expiry_ms(&refreshed, provider).map_err(in_context)?;
     crate::subscription_dispatch::usage::record_credential_active(
         subscription_id,
         provider,
@@ -229,7 +234,11 @@ pub async fn refresh_subscription_credential_ahead(
             "the account this grant states could not be recorded on its vault item"
         );
     }
-    let expires_at_ms = oauth_refresh::access_token_expiry_ms(&credential, provider);
+    let in_context = |refused: Failure| {
+        refused
+            .with_context("subscription", subscription_id)
+            .with_context("provider", provider)
+    };
     // Ask what the document is before asking when it dies. A document that is
     // not a credential has no expiry either, and "no expiry" read as "nothing
     // to do": five of this fleet's accounts held sign-in metadata instead of a
@@ -255,15 +264,22 @@ pub async fn refresh_subscription_credential_ahead(
             .with_context("provider", provider),
         );
     }
-    if !oauth_refresh::needs_refresh(&credential, provider) {
-        return RefreshAhead::NotDue { expires_at_ms };
+    let expires_at_ms = match oauth_refresh::access_token_expiry_ms(&credential, provider) {
+        Ok(expires_at_ms) => expires_at_ms,
+        Err(refused) => return RefreshAhead::Unavailable(in_context(refused)),
+    };
+    match oauth_refresh::needs_refresh(&credential, provider) {
+        Ok(false) => return RefreshAhead::NotDue { expires_at_ms },
+        Ok(true) => {}
+        Err(refused) => return RefreshAhead::Unavailable(in_context(refused)),
     }
     // Dropped before the refresh so this token is not held in memory across the
     // wait for the rotation lock and the provider's answer.
     drop(credential);
     match refresh_subscription_credential_inner(subscription_id, provider, true).await {
-        Ok(refreshed) => RefreshAhead::Refreshed {
-            expires_at_ms: oauth_refresh::access_token_expiry_ms(&refreshed, provider),
+        Ok(refreshed) => match oauth_refresh::access_token_expiry_ms(&refreshed, provider) {
+            Ok(expires_at_ms) => RefreshAhead::Refreshed { expires_at_ms },
+            Err(refused) => RefreshAhead::Unavailable(in_context(refused)),
         },
         Err(refused) => RefreshAhead::Refused(refused),
     }
