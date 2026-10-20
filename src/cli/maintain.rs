@@ -120,6 +120,21 @@ fn print_report(report: &Value) {
             );
         }
     }
+    if let Some(error) = report.pointer("/attribution/error") {
+        println!("account attribution: {error}");
+    }
+    for provider in report
+        .pointer("/attribution/failed")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+    {
+        println!(
+            "account attribution failed for {provider}: {}",
+            report["attribution"]["providers"][provider]["error"]
+        );
+    }
     match report.pointer("/credentials/error").and_then(Value::as_str) {
         Some(error) => println!("credentials: {error}"),
         None => println!(

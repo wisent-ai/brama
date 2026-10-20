@@ -36,6 +36,9 @@ pub(in crate::core::server) async fn pass(supplied: Option<DiscoveryReport>) -> 
     };
     let discovery = crate::subscription_dispatch::discovery::enroll(observed).await;
     let plan_usage = crate::subscription_dispatch::plan_usage::sweep().await;
+    // A member imported without its account cannot be resolved for a sign-in;
+    // its own grant usually states the account, so it is recorded first.
+    let attribution = attribute_accounts().await;
     let credentials = crate::subscription_dispatch::refresh_sweep::sweep().await;
     let resets = crate::subscription_dispatch::acquire::resets::maintenance::run().await;
     let acquisition = if discovery["ok"].as_bool() == Some(true)
@@ -53,6 +56,7 @@ pub(in crate::core::server) async fn pass(supplied: Option<DiscoveryReport>) -> 
         .is_some_and(|failed| !failed.is_empty());
     let ready = readiness.get("ready").and_then(Value::as_bool) == Some(true);
     let ok = discovery["ok"].as_bool() == Some(true)
+        && attribution["ok"].as_bool() == Some(true)
         && resets["ok"].as_bool() == Some(true)
         && !usage_failed
         && credentials.is_ok()
@@ -62,6 +66,7 @@ pub(in crate::core::server) async fn pass(supplied: Option<DiscoveryReport>) -> 
         "ok": ok,
         "discovery": discovery,
         "plan_usage": plan_usage,
+        "attribution": attribution,
         "resets": resets,
         "credentials": match credentials {
             Ok(report) => report,
@@ -70,6 +75,41 @@ pub(in crate::core::server) async fn pass(supplied: Option<DiscoveryReport>) -> 
         "acquisition": acquisition,
         "readiness": readiness,
     })
+}
+
+/// Record, for every provider the vault lists an active renewable member of,
+/// the account each member's own grant states
+/// ([`crate::subscription_dispatch::pool::record_accounts`]). A member whose
+/// grant states none stays unattributed and is reported with the reason; only
+/// an inventory or provider pass that could not be read is a failure.
+async fn attribute_accounts() -> Value {
+    let entries = match crate::gateway::broker::list_all_subscriptions().await {
+        Ok(entries) => entries,
+        Err(error) => {
+            return json!({"ok": false,
+                "error": format!("the Skarbiec subscription inventory could not be read: {error}")})
+        }
+    };
+    let providers: std::collections::BTreeSet<String> = entries
+        .into_iter()
+        .filter(|entry| {
+            entry.status == "active"
+                && crate::gateway::broker::supports_oauth_refresh(&entry.provider)
+        })
+        .map(|entry| entry.provider)
+        .collect();
+    let mut reports = serde_json::Map::new();
+    let mut failed = Vec::new();
+    for provider in providers {
+        match crate::subscription_dispatch::pool::record_accounts(&provider).await {
+            Ok(report) => reports.insert(provider, report),
+            Err(error) => {
+                failed.push(provider.clone());
+                reports.insert(provider, json!({"error": error}))
+            }
+        };
+    }
+    json!({"ok": failed.is_empty(), "failed": failed, "providers": reports})
 }
 
 /// Run the serving process's maintenance: a pass now, then one at each next

@@ -30,9 +30,10 @@
 </tbody></table>
 <p>The command can still be run on a schedule, for example <code>stado schedule create --pinned-host &lt;gateway host&gt; --cron '* * * * *' 'brama maintain --gateway-consumer &lt;consumer&gt; --bearer-role brama-desktop-model-router'</code>, but nothing depends on one.</p>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
-<p>The pass reads every plan usage report that is due (no reading, a reset window, a reading naming no reset, or a failed last read), renews every grant whose stated expiry has passed, decides whether a spent pool needs a new account (see <a href="/docs/cli/subscription/acquire"><code>brama subscription acquire</code></a>; when it does, the purchase starts and the pass does not wait for it), and takes a fresh readiness reading for <code>/readyz</code>. Lines read:</p>
+<p>The pass reads every plan usage report that is due (no reading, a reset window, a reading naming no reset, or a failed last read), records for every renewable provider the account each member's own grant states (the same work as <a href="/docs/cli/subscription/attribute"><code>brama subscription attribute</code></a>, so a member imported without its account can be signed in through Weles), renews every grant whose stated expiry has passed and schedules a Weles sign-in for each member that needs one, decides whether a spent pool needs a new account (see <a href="/docs/cli/subscription/acquire"><code>brama subscription acquire</code></a>; when it does, the purchase starts and the pass does not wait for it), and takes a fresh readiness reading for <code>/readyz</code>. Lines read:</p>
 <pre><code class="language-text">plan usage: &lt;N&gt; subscription(s), &lt;N&gt; read
   failed &lt;subscription&gt; (&lt;provider&gt;): &lt;error envelope&gt;
+account attribution failed for &lt;provider&gt;: &lt;error&gt;
 credentials: &lt;N&gt; subscription(s), &lt;N&gt; refreshed, &lt;N&gt; refused, &lt;N&gt; sign-in check(s) scheduled
 acquisition: "&lt;provider&gt;" "refused"|"started" ("&lt;code&gt;"): "&lt;sentence&gt;"
 readiness: ready=&lt;bool&gt; &lt;reason&gt;</code></pre>
