@@ -21,7 +21,8 @@ months, not process lifetimes.
 
 - **No file:** a new, empty ledger.
 - **A ledger written by an older gateway:** it loads. Readings that carry no
-  observation instant have no `recorded_at_ms`: they stay visible, the pool
+  observation instant, or the `0` an older format wrote for one not recorded,
+  have no `recorded_at_ms`: they stay visible, the pool
   report shows their instant as not stated, and they are read as stale; the
   file's later modification time may be from another account and cannot prove
   when the provider measured this window. The usage-report verdict an older gateway kept in the completion

@@ -185,10 +185,27 @@ pub struct LimitReading {
     /// A fraction without an instant cannot be aged: "100% used" is a different
     /// fact five minutes and five days after the provider said it, and a reader
     /// that cannot tell them apart shows a stale window as the current one.
-    /// Ledgers written before this field existed carry none, and a reading
-    /// without one is reported as unrecorded and read as stale, never dated.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Ledgers written before this field existed carry none, and ledgers
+    /// written while it was a plain integer carry zero for "not recorded";
+    /// both read as `None` ([`unrecorded_as_none`]). A reading without one is
+    /// reported as unrecorded and read as stale, never dated.
+    #[serde(
+        default,
+        deserialize_with = "unrecorded_as_none",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub recorded_at_ms: Option<i64>,
+}
+
+/// A reading's stored instant: absent, or the zero an earlier ledger format
+/// wrote for "not recorded", is `None`; any other value is the instant.
+fn unrecorded_as_none<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(Option::<i64>::deserialize(deserializer)?
+        .and_then(std::num::NonZeroI64::new)
+        .map(std::num::NonZeroI64::get))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
