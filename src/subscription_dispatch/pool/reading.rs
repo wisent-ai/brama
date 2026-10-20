@@ -34,20 +34,27 @@ pub(super) fn reading_error(
         }
     }
     let credential = recorded.and_then(|recorded| recorded.credential.as_ref());
-    let detail = if let Some(cause) = credential
+    // The code follows from which recorded state answers, never from the
+    // sentence: a grant the provider disowned is authentication; every other
+    // state below recorded no class, so it is unattributed.
+    let (code, detail) = if let Some(cause) = credential
         .filter(|credential| credential.state == CredentialState::NeedsReauthorization)
         .and_then(|credential| credential.cause.as_deref())
     {
-        cause
+        (wisent_errors::Code::Auth, cause)
     } else if let Some(check) = check.filter(|check| !check.ok) {
         // A failed check the ledger recorded no reason for says that it
         // failed and nothing more.
-        match check.detail.as_deref() {
+        let reason = match check.detail.as_deref() {
             Some(reason) => reason,
             None => "usage refresh failed without a stated reason",
-        }
+        };
+        (wisent_errors::Code::Unknown, reason)
     } else if windows.stale {
-        "the last usage reading is no longer current; refresh usage to obtain a new report"
+        (
+            wisent_errors::Code::Unknown,
+            "the last usage reading is no longer current; refresh usage to obtain a new report",
+        )
     } else if windows.limits.is_empty() {
         if check.is_some_and(|check| check.ok)
             && !crate::providers::adapter::publishes_plan_usage(&entry.provider)
@@ -55,16 +62,19 @@ pub(super) fn reading_error(
             return None;
         }
         if check.is_some() {
-            "no current plan windows are available from the last usage reading"
+            (
+                wisent_errors::Code::Unknown,
+                "no current plan windows are available from the last usage reading",
+            )
         } else {
-            "usage has not been read for this subscription"
+            (wisent_errors::Code::Unknown, "usage has not been read for this subscription")
         }
     } else {
         return None;
     };
     let refused = failure::envelope(
         "brama.subscriptions.usage",
-        failure::code_for_message(detail, "provider_failure"),
+        code,
         "one subscription usage report",
         detail,
     )

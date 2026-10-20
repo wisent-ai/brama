@@ -8,20 +8,19 @@
 /// rather than a second one. Without this, that class of failure reaches a
 /// person as "Assistant response failed. Please try again." while the
 /// gateway's own record says `attempts=1` and `retryable=true` — a retry the
-/// envelope promises with no implementation behind it.
-///
-/// A timeout is deliberately NOT retried. The provider may have accepted that
-/// request and be generating against it, and a duplicate would bill twice and
-/// could answer twice.
+/// envelope promises with no implementation behind it. Brama's client sets no
+/// deadline, so no send ends for want of time; a failure after the provider
+/// answered is a response, not an error here, and is never sent again. Each
+/// send is announced while it waits.
 pub(in crate::providers::adapter) async fn send_once_more_if_unsent(
     builder: reqwest::RequestBuilder,
 ) -> Result<reqwest::Response, reqwest::Error> {
     let Some(retry) = builder.try_clone() else {
-        return builder.send().await;
+        return stado_wait::request(builder).await;
     };
-    match builder.send().await {
-        Err(error) if !error.is_timeout() && (error.is_connect() || error.is_request()) => {
-            retry.send().await
+    match stado_wait::request(builder).await {
+        Err(error) if error.is_connect() || error.is_request() => {
+            stado_wait::request(retry).await
         }
         result => result,
     }

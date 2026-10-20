@@ -56,11 +56,11 @@ pub(super) fn provider_failure(
 }
 
 /// A reset offer that could not be read after a good usage report. The reset
-/// reader states its refusal as one sentence led by its kind, which is what
-/// the code is read from.
+/// reader states its refusal as one sentence (the request, the provider's
+/// status and body as sent) and records no class, so the code is the fleet's
+/// word for unattributed; the sentence carries what happened.
 pub(super) fn reset_failure(subscription_id: &str, provider: &str, detail: String) -> Failure {
-    let code = failure::code_for_message(&detail, "provider_failure");
-    scoped_failure(POINT_PROVIDER_CALL, code, subscription_id, provider, detail)
+    scoped_failure(POINT_PROVIDER_CALL, Code::Unknown, subscription_id, provider, detail)
 }
 
 pub(super) fn invalid_credential_failure(

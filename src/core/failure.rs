@@ -74,7 +74,6 @@ pub fn code_for_kind(kind: &str) -> Option<Code> {
         | "credential_unauthorized"
         | "subscription_reauthorization_required" => Some(Code::Auth),
         "provider_rate_limited" | "subscription_unavailable" => Some(Code::RateLimit),
-        "dependency_timeout" => Some(Code::Timeout),
         "dependency_unavailable" => Some(Code::InfraDown),
         // A quota that is spent is not a busy provider: no wait repairs it, and
         // the account it names is ours, which is what `config` says.
@@ -90,19 +89,13 @@ pub fn code_for_kind(kind: &str) -> Option<Code> {
     }
 }
 
-/// The fleet code for a kind, unattributed when the kind is not one of Brama's.
+/// The fleet code for a kind: `unknown`, the fleet's word for unattributed,
+/// when the kind is not one of Brama's.
 pub fn code_for(kind: &str) -> Code {
-    code_for_kind(kind).unwrap_or(Code::Unknown)
-}
-
-/// The fleet code for a failure message, read from the kind prefix Brama's
-/// provider layer writes in front of it and falling back to the contract code
-/// the edge already derived from the whole sentence.
-pub fn code_for_message(message: &str, contract_code: &str) -> Code {
-    message
-        .split_once(':')
-        .and_then(|(prefix, _)| code_for_kind(prefix.trim()))
-        .unwrap_or_else(|| code_for(contract_code))
+    match code_for_kind(kind) {
+        Some(code) => code,
+        None => Code::Unknown,
+    }
 }
 
 /// Build one envelope. `detail` is the reason the layer below gave, verbatim.
