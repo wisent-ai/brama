@@ -1,42 +1,34 @@
 //! Bringing a tool schema into the shape providers actually accept.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Some providers (e.g. Moonshot/Kimi) reject JSON Schemas whose nodes lack an
 /// explicit `type`. Recursively infer a conservative `type` where it is
 /// missing: object when `properties` is present, array when `items` is
 /// present, the enum's first value kind, otherwise string.
-/// Keys whose presence marks an object as a JSON Schema node (as opposed to a
-/// plain map like the `properties` object itself).
-const SCHEMA_HINT_KEYS: &[&str] = &[
-    "enum",
-    "const",
-    "items",
-    "properties",
-    "required",
-    "additionalProperties",
-    "anyOf",
-    "oneOf",
-    "allOf",
-    "not",
-    "patternProperties",
-    "description",
-    "format",
-    "pattern",
-    "default",
-    "examples",
-    "minimum",
-    "maximum",
-    "minLength",
-    "maxLength",
-    "minItems",
-    "maxItems",
-    "uniqueItems",
-    "multipleOf",
-];
+///
+/// A node is a schema by where it stands, not by which keys it carries: the
+/// tool's `parameters`, each value of `properties`, each value of a map of
+/// named schemas (`patternProperties`, `$defs`, `definitions`), and the
+/// subschemas of the applicators. A map of named schemas is never itself
+/// given a type. An empty schema accepts anything and a `$ref` takes its
+/// type from the schema it names, so neither is given one.
+fn needs_type(map: &serde_json::Map<String, Value>) -> bool {
+    !map.is_empty() && !map.contains_key("type") && !map.contains_key("$ref")
+}
 
-fn is_schema_node(map: &serde_json::Map<String, Value>) -> bool {
-    SCHEMA_HINT_KEYS.iter().any(|key| map.contains_key(*key))
+/// Hand `visit` the value each of `keys` holds in `map`, skipping a key the
+/// map does not hold.
+fn visit_values(
+    map: &mut serde_json::Map<String, Value>,
+    keys: &[&str],
+    mut visit: impl FnMut(&mut Value),
+) {
+    for key in keys {
+        if let Some(child) = map.get_mut(*key) {
+            visit(child);
+        }
+    }
 }
 
 fn normalize_json_schema(value: &mut Value) {
@@ -56,7 +48,7 @@ fn normalize_json_schema(value: &mut Value) {
                 normalize_json_schema(property);
             }
         }
-        if !map.contains_key("type") && is_schema_node(map) {
+        if needs_type(map) {
             let inferred = if map.contains_key("properties") {
                 "object"
             } else if map.contains_key("items") {
@@ -74,21 +66,27 @@ fn normalize_json_schema(value: &mut Value) {
             };
             map.insert("type".into(), Value::String(inferred.into()));
         }
-        for key in [
-            "items",
-            "additionalProperties",
-            "anyOf",
-            "oneOf",
-            "allOf",
-            "not",
-            "patternProperties",
-            "$defs",
-            "definitions",
-        ] {
-            if let Some(child) = map.get_mut(key) {
-                normalize_json_schema(child);
-            }
-        }
+        visit_values(
+            map,
+            &[
+                "items",
+                "additionalProperties",
+                "anyOf",
+                "oneOf",
+                "allOf",
+                "not",
+            ],
+            normalize_json_schema,
+        );
+        visit_values(
+            map,
+            &["patternProperties", "$defs", "definitions"],
+            |schemas| {
+                if let Some(schemas) = schemas.as_object_mut() {
+                    schemas.values_mut().for_each(normalize_json_schema);
+                }
+            },
+        );
     }
     if let Some(items) = value.as_array_mut() {
         for item in items {
@@ -100,7 +98,10 @@ fn normalize_json_schema(value: &mut Value) {
 pub(in crate::providers::adapter) fn normalized_tools_value<T: serde::Serialize>(
     tools: &T,
 ) -> Value {
-    let mut value = serde_json::to_value(tools).unwrap_or(Value::Null);
+    let mut value = match serde_json::to_value(tools) {
+        Ok(value) => value,
+        Err(error) => unreachable!("a tool list serializes to JSON, yet: {error}"),
+    };
     if let Some(array) = value.as_array_mut() {
         for tool in array {
             if let Some(parameters) = tool.pointer_mut("/function/parameters") {
