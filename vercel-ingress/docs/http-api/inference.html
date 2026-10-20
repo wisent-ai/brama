@@ -90,7 +90,10 @@ and <code>stream</code>. An unknown field is refused with the deserializer's own
  &quot;usage&quot;:{&quot;completion_tokens&quot;:7,&quot;prompt_tokens&quot;:9,&quot;total_tokens&quot;:16}}
 </code></pre>
 <p>The <code>model</code> in the answer is the route that served the request, which is the
-one route the named alias resolves to.</p>
+one route the named alias resolves to. <code>usage</code> is the provider's stated meter;
+an answer whose provider stated no usage has no <code>usage</code> member, never zeros,
+and a stated count that is not a whole number is refused as a provider failure. The same
+holds for the buffered <code>/v1/messages</code> and <code>/v1/responses</code> answers below.</p>
 <p>With <code>"stream": true</code> the answer is a <code>text/event-stream</code> of
 <code>chat.completion.chunk</code> frames: a role delta first, then content deltas, a
 <code>finish_reason</code> frame, a usage frame, closed by <code>data: [DONE]</code>.

@@ -170,10 +170,13 @@ pub async fn run_first_use(
 
     println!("Model: {}", response.model);
     println!("Response: {}", response.content);
-    println!(
-        "Tokens: {} in / {} out",
-        response.input_tokens, response.output_tokens
-    );
+    match response.usage {
+        Some(usage) => println!(
+            "Tokens: {} in / {} out",
+            usage.input_tokens, usage.output_tokens
+        ),
+        None => println!("Tokens: the provider stated no usage for this answer"),
+    }
     let mut evidence = BTreeMap::new();
     evidence.insert(FIRST_SUCCESS_FACT.into(), Value::Bool(true));
     let completed = journey.complete(&evidence, STATE_REVISION).await?;

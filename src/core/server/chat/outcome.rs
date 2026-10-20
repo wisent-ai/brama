@@ -31,8 +31,10 @@ pub(super) fn tally_and_log_buffered(
     requested_model: &str,
 ) {
     TOTAL_REQUESTS.fetch_add(ONE_CALL, Ordering::Relaxed);
-    TOTAL_INPUT_TOKENS.fetch_add(resp.input_tokens as u64, Ordering::Relaxed);
-    TOTAL_OUTPUT_TOKENS.fetch_add(resp.output_tokens as u64, Ordering::Relaxed);
+    if let Some(usage) = resp.usage {
+        TOTAL_INPUT_TOKENS.fetch_add(u64::from(usage.input_tokens), Ordering::Relaxed);
+        TOTAL_OUTPUT_TOKENS.fetch_add(u64::from(usage.output_tokens), Ordering::Relaxed);
+    }
     TOTAL_PROVIDER_ATTEMPTS.fetch_add(resp.attempts as u64, Ordering::Relaxed);
     if !resp.success() {
         TOTAL_FAILURES.fetch_add(ONE_CALL, Ordering::Relaxed);
@@ -65,8 +67,8 @@ pub(super) fn tally_and_log_buffered(
         elapsed_ms = meta.started.elapsed().as_millis() as u64,
         error_code,
         retryable = failure_contract.is_some_and(|contract| contract.retryable),
-        input_tokens = resp.input_tokens,
-        output_tokens = resp.output_tokens,
+        input_tokens = resp.usage.map(|usage| usage.input_tokens),
+        output_tokens = resp.usage.map(|usage| usage.output_tokens),
         operator_action_required = failure_contract.is_some_and(|contract| !contract.retryable),
         envelope = %failure_envelope,
         "routing request completed"

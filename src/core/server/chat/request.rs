@@ -120,7 +120,9 @@ pub(super) struct ChatCompletionResponse {
     pub(super) object: String,
     pub(super) model: String,
     pub(super) choices: Vec<Choice>,
-    pub(super) usage: Usage,
+    /// The provider's stated usage; absent when it stated none, never zeros.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) usage: Option<Usage>,
 }
 
 #[derive(Debug, Serialize)]
@@ -141,7 +143,6 @@ pub(super) struct ChoiceMessage {
 #[derive(Debug, Serialize)]
 pub(super) struct Usage {
     pub(super) prompt_tokens: u32,
-
     pub(super) completion_tokens: u32,
-    pub(super) total_tokens: u32,
+    pub(super) total_tokens: u64,
 }

@@ -128,13 +128,14 @@ pub(crate) async fn test_inference(args: TestArgs) {
     };
     match &resp.refusal {
         None => {
+            // Counts the provider did not state are null, and no cost is
+            // printed: a subscription call states no price.
             let answer = serde_json::json!({
                 "model": resp.model,
                 "response": resp.content,
-                "input_tokens": resp.input_tokens,
-                "output_tokens": resp.output_tokens,
+                "input_tokens": resp.usage.map(|usage| usage.input_tokens),
+                "output_tokens": resp.usage.map(|usage| usage.output_tokens),
                 "latency_ms": resp.latency_ms,
-                "cost_usd": resp.cost,
             });
             super::print_answer(&answer, json);
         }

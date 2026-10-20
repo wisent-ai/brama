@@ -152,8 +152,11 @@ pub(in crate::core::server) async fn chat_completions(
                     .into_response();
                 }
             }
-            // Alias telemetry stays attached to the stable logical selector.
-            crate::core::perf::record(&requested_model, resp.latency_ms, resp.output_tokens);
+            // Alias telemetry stays attached to the stable logical selector;
+            // throughput needs a stated output count.
+            if let Some(usage) = resp.usage {
+                crate::core::perf::record(&requested_model, resp.latency_ms, usage.output_tokens);
+            }
             let has_tool_calls = resp.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty());
             let finish_reason = if has_tool_calls { "tool_calls" } else { "stop" };
             let response_model = meta.reported_model(&requested_model, &resp.model);
@@ -170,11 +173,11 @@ pub(in crate::core::server) async fn chat_completions(
                     },
                     finish_reason: finish_reason.into(),
                 }],
-                usage: Usage {
-                    prompt_tokens: resp.input_tokens,
-                    completion_tokens: resp.output_tokens,
-                    total_tokens: resp.input_tokens + resp.output_tokens,
-                },
+                usage: resp.usage.map(|usage| Usage {
+                    prompt_tokens: usage.input_tokens,
+                    completion_tokens: usage.output_tokens,
+                    total_tokens: usage.total(),
+                }),
             });
             // An answer that cannot be written as JSON is not sent as a
             // successful `null`: the caller is told the generation was lost.

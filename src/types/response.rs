@@ -7,19 +7,29 @@
 
 use super::{GatewayRefusal, LimitReading, ProviderRefusal, Refusal, ToolCall};
 
+/// The tokens a provider stated it read and wrote for one answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenUsage {
+    pub input_tokens: u32,
+    pub output_tokens: u32,
+}
+
+impl TokenUsage {
+    /// Both counts together, wide enough that the sum cannot overflow.
+    pub fn total(self) -> u64 {
+        u64::from(self.input_tokens) + u64::from(self.output_tokens)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ModelResponse {
     pub content: String,
     pub model: String,
-    /// Zero unless `usage_stated`: a count the provider did not state is no
-    /// measurement, and readers that total tokens skip such an answer and
-    /// count it apart instead of adding its zeros.
-    pub input_tokens: u32,
-    pub output_tokens: u32,
-    /// Whether the provider stated this answer's token usage.
-    pub usage_stated: bool,
+    /// The provider's stated token usage; `None` when it stated none, which
+    /// is no measurement: readers that total tokens skip such an answer and
+    /// never add a zero for it.
+    pub usage: Option<TokenUsage>,
     pub latency_ms: f64,
-    pub cost: f64,
     /// Number of provider HTTP calls consumed by this routed request.
     pub attempts: u32,
     pub tool_calls: Option<Vec<ToolCall>>,
@@ -37,25 +47,20 @@ pub struct ModelResponse {
 }
 
 impl ModelResponse {
-    /// The provider's answer to one HTTP call. A subscription call states no
-    /// price, so its cost is none; `usage` is the provider's stated
-    /// (input, output, stated) token reading.
+    /// The provider's answer to one HTTP call; `usage` is the provider's
+    /// stated reading.
     pub fn answered(
         model: &str,
         content: String,
-        usage: (u32, u32, bool),
+        usage: Option<TokenUsage>,
         latency_ms: f64,
         tool_calls: Option<Vec<ToolCall>>,
     ) -> Self {
-        let (input_tokens, output_tokens, usage_stated) = usage;
         Self {
             content,
             model: model.to_string(),
-            input_tokens,
-            output_tokens,
-            usage_stated,
+            usage,
             latency_ms,
-            cost: Default::default(),
             // The one call that produced this answer.
             attempts: std::num::NonZeroU32::MIN.get(),
             tool_calls,
@@ -81,12 +86,9 @@ impl ModelResponse {
         Self {
             content: String::new(),
             model: model.to_string(),
-            // A failed answer carries no usage: usage_stated says none was stated.
-            input_tokens: Default::default(),
-            output_tokens: Default::default(),
-            usage_stated: false,
+            // A failed answer carries no usage.
+            usage: None,
             latency_ms: Default::default(),
-            cost: Default::default(),
             attempts: Default::default(),
             tool_calls: None,
             limits: Vec::new(),

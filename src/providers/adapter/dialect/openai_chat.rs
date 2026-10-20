@@ -108,9 +108,14 @@ pub(in crate::providers::adapter) fn model_response_from_openai(
             ),
         );
     }
-    let usage = stated_usage(
+    match stated_usage(
         body.pointer("/usage/prompt_tokens"),
         body.pointer("/usage/completion_tokens"),
-    );
-    ModelResponse::answered(route_id, content, usage, elapsed_ms, tool_calls)
+    ) {
+        Ok(usage) => ModelResponse::answered(route_id, content, usage, elapsed_ms, tool_calls),
+        Err(cause) => attempted_failure(
+            route_id,
+            Refusal::new(ProviderRefusal::ProviderFailure, cause),
+        ),
+    }
 }

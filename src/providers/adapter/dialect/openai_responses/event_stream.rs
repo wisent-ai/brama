@@ -166,10 +166,13 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
         }
     }
     let usage = completed.get("usage");
-    let stated = stated_usage(
+    let stated = match stated_usage(
         usage.and_then(|usage| usage.get("input_tokens")),
         usage.and_then(|usage| usage.get("output_tokens")),
-    );
+    ) {
+        Ok(stated) => stated,
+        Err(cause) => return provider_failure(route_id, cause),
+    };
     ModelResponse::answered(
         route_id,
         content,

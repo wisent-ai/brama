@@ -182,7 +182,7 @@ pub fn anthropic_response(
             "input": input,
         }));
     }
-    Ok(json!({
+    let mut message = json!({
         "id": id,
         "type": "message",
         "role": "assistant",
@@ -190,11 +190,15 @@ pub fn anthropic_response(
         "content": content,
         "stop_reason": if tool_calls.is_empty() { "end_turn" } else { "tool_use" },
         "stop_sequence": Value::Null,
-        "usage": {
-            "input_tokens": response.input_tokens,
-            "output_tokens": response.output_tokens,
-        },
-    }))
+    });
+    // The provider's stated meter, absent when it stated none, never zeros.
+    if let Some(usage) = response.usage {
+        message["usage"] = json!({
+            "input_tokens": usage.input_tokens,
+            "output_tokens": usage.output_tokens,
+        });
+    }
+    Ok(message)
 }
 
 /// Shape one buffered internal response as an OpenAI Responses object.
@@ -219,19 +223,23 @@ pub fn responses_response(id: &str, model: &str, created: u64, response: &ModelR
             "status": "completed",
         }));
     }
-    json!({
+    let mut document = json!({
         "id": id,
         "object": "response",
         "created_at": created,
         "status": "completed",
         "model": model,
         "output": output,
-        "usage": {
-            "input_tokens": response.input_tokens,
-            "output_tokens": response.output_tokens,
-            "total_tokens": response.input_tokens + response.output_tokens,
-        },
-    })
+    });
+    // The provider's stated meter, absent when it stated none, never zeros.
+    if let Some(usage) = response.usage {
+        document["usage"] = json!({
+            "input_tokens": usage.input_tokens,
+            "output_tokens": usage.output_tokens,
+            "total_tokens": usage.total(),
+        });
+    }
+    document
 }
 
 // ---------------------------------------------------------------------------

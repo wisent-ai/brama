@@ -53,7 +53,9 @@ pub(in crate::core::server) async fn anthropic_messages(
             if let Some(refusal) = resp.refusal.take() {
                 return failure_response(refusal, resp.attempts);
             }
-            crate::core::perf::record(&requested_model, resp.latency_ms, resp.output_tokens);
+            if let Some(usage) = resp.usage {
+                crate::core::perf::record(&requested_model, resp.latency_ms, usage.output_tokens);
+            }
             let model = meta.reported_model(&requested_model, &resp.model);
             match crate::core::wire::anthropic_response(&message_id, &model, &resp) {
                 Ok(message) => (StatusCode::OK, Json(message)).into_response(),
@@ -107,7 +109,9 @@ pub(in crate::core::server) async fn openai_responses(
             if let Some(refusal) = resp.refusal.take() {
                 return failure_response(refusal, resp.attempts);
             }
-            crate::core::perf::record(&requested_model, resp.latency_ms, resp.output_tokens);
+            if let Some(usage) = resp.usage {
+                crate::core::perf::record(&requested_model, resp.latency_ms, usage.output_tokens);
+            }
             let model = meta.reported_model(&requested_model, &resp.model);
             let created = match epoch_seconds() {
                 Ok(created) => created,

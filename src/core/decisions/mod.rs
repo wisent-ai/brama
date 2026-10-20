@@ -205,8 +205,8 @@ pub fn outcome_from_chat(
         } else {
             response.model.clone()
         },
-        input_tokens: response.usage_stated.then_some(response.input_tokens),
-        output_tokens: response.usage_stated.then_some(response.output_tokens),
+        input_tokens: response.usage.map(|usage| usage.input_tokens),
+        output_tokens: response.usage.map(|usage| usage.output_tokens),
         latency_ms: response.latency_ms,
     })
 }

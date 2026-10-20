@@ -24,6 +24,15 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-stated-usage">Unreleased: token usage is stated or absent, never zero<a class="headerlink" href="#unreleased-stated-usage" title="Link to this section">&para;</a></h2>
+<p>A routed answer now holds its token usage only as the provider stated it. A buffered
+chat completion, Messages or Responses answer whose provider stated no usage has no
+<code>usage</code> member instead of zero counts; request totals, throughput and the
+subscription ledger skip it, and decisions report the counts as absent. A count the
+provider stated that is not a whole number is refused as a provider failure naming it.
+<code>brama test</code> prints an unstated count as <code>null</code> and no longer prints a
+<code>cost_usd</code> of zero, since a subscription call states no price
+(<a href="/docs/http-api/inference">Inference</a>, <a href="/docs/cli/test">brama test</a>).</p>
 <h2 id="unreleased-one-refusal">Unreleased: a failed answer always carries its class and sentence<a class="headerlink" href="#unreleased-one-refusal" title="Link to this section">&para;</a></h2>
 <p>A routed answer is either the generation or one refusal holding both its
 class and its sentence; a failure without either can no longer be built, so

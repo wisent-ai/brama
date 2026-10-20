@@ -213,4 +213,4 @@ mod refusal;
 mod response;
 pub use declared_age::{declared_age, still_fresh};
 pub use refusal::{GatewayRefusal, ProviderRefusal, Refusal};
-pub use response::ModelResponse;
+pub use response::{ModelResponse, TokenUsage};

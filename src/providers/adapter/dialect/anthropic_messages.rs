@@ -180,10 +180,18 @@ pub(in crate::providers::adapter) fn model_response_from_anthropic(
             _ => {}
         }
     }
-    let usage = stated_usage(
+    let usage = match stated_usage(
         body.pointer("/usage/input_tokens"),
         body.pointer("/usage/output_tokens"),
-    );
+    ) {
+        Ok(usage) => usage,
+        Err(cause) => {
+            return attempted_failure(
+                route_id,
+                Refusal::new(ProviderRefusal::ProviderFailure, cause),
+            )
+        }
+    };
     ModelResponse::answered(
         route_id,
         text,

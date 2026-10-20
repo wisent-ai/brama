@@ -5,7 +5,7 @@ use tokio::sync::mpsc;
 
 use crate::providers::stream::{ProviderStream, StreamDelta, StreamItem};
 use crate::subscription_dispatch::usage;
-use crate::types::{ModelResponse, ProviderRefusal, Refusal};
+use crate::types::{ModelResponse, ProviderRefusal, Refusal, TokenUsage};
 
 /// Milliseconds in a second, for a latency read off a monotonic clock.
 const MS_PER_SECOND: f64 = 1_000.0; // https://www.bipm.org/en/measurement-units/si-prefixes milli = 10^-3
@@ -87,10 +87,10 @@ pub(in crate::subscription_dispatch::dispatch) fn spawn_stream_recorder(
             None if finished => None,
             None => Some("provider stream ended without a verdict".to_string()),
         };
-        let stated = match usage {
-            Some((input, output)) => (input, output, true),
-            None => (Default::default(), Default::default(), false),
-        };
+        let stated = usage.map(|(input_tokens, output_tokens)| TokenUsage {
+            input_tokens,
+            output_tokens,
+        });
         let latency_ms = started.elapsed().as_secs_f64() * MS_PER_SECOND;
         // What was generated and measured is kept on a failure too: it is
         // spend the subscription paid for.

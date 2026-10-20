@@ -8,9 +8,9 @@ provider's usage report was last checked, any block, and the newest check
 verdict.
 
 The token counters add only usage a provider stated. An answer whose provider
-stated no usage adds nothing to them and sets `last_unmeasured_call_ms`, so a
-reader of the totals knows they leave answers out. The ledger never counts such
-an answer as zero tokens.
+stated no usage adds nothing to them, adds one to `unmeasured_calls` and sets
+`last_unmeasured_call_ms`, so a reader of the totals knows how many answers they
+leave out. The ledger never counts such an answer as zero tokens.
 
 It is written atomically, through a private staging file in the same directory
 that is renamed over the ledger, so a reader never sees half a ledger and a

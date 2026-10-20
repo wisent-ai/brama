@@ -186,10 +186,13 @@ pub(super) fn model_response_from_google(
             });
         }
     }
-    let usage = stated_usage(
+    let usage = match stated_usage(
         body.pointer("/usageMetadata/promptTokenCount"),
         body.pointer("/usageMetadata/candidatesTokenCount"),
-    );
+    ) {
+        Ok(usage) => usage,
+        Err(cause) => return failed(cause),
+    };
     ModelResponse::answered(
         route_id,
         content,
