@@ -84,7 +84,10 @@ declared version may run ahead of the required one within the same series only w
 coordinate it skips was declared by an earlier commit on the branch: the Stado release plane
 never reuses a coordinate, so a build that failed at one patch makes the following patch the
 next honest one, and the gate says which coordinates were consumed. A jump nothing accounts
-for is refused, naming the first coordinate that was never declared. With
+for is refused, naming the first coordinate that was never declared. An earlier commit whose
+<code>Cargo.toml</code> cannot be shown or names no version refuses the comparison with that
+commit and the cause, rather than being left out of the history, so a coordinate it declared
+is never reported as undeclared. With
 <code>--self-check</code> the gate proves it can still refuse before it trusts its own verdict.</p>
 <p>Two entries in the list above — the release archive layout and the launcher's
 behavior — are contract that no extractor can see, so a release owner declares

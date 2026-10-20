@@ -22,24 +22,42 @@ use super::surface::{git_show, manifest_version};
 pub(super) const BASELINE: &str = "released-surface.json";
 const BREAKAGE: &str = "declared-breakage.json";
 const MANIFEST: &str = "Cargo.toml";
-/// The self-check's required version is one patch past the released one; its
-/// unaccounted jump skips the two patches after that.
-const REQUIRED_STEP: u64 = 1;
-const UNACCOUNTED_STEP: u64 = 3;
 
 pub(super) fn read_json(path: &Path) -> Result<Value, String> {
     let bytes = std::fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
     serde_json::from_slice(&bytes).map_err(|error| format!("{}: {error}", path.display()))
 }
 
-fn triple(version: &str) -> Result<[u64; 3], String> {
-    let invalid = || format!("{version} is not MAJOR.MINOR.PATCH");
-    let parts: Vec<u64> = version
-        .split('.')
-        .map(|part| part.parse::<u64>())
-        .collect::<Result<_, _>>()
-        .map_err(|_| invalid())?;
-    <[u64; 3]>::try_from(parts).map_err(|_| invalid())
+/// A `MAJOR.MINOR.PATCH` version, the only form the gate compares.
+struct Version {
+    major: u64,
+    minor: u64,
+    patch: u64,
+}
+
+impl Version {
+    fn parse(version: &str) -> Result<Self, String> {
+        let mut parts = version.split('.');
+        let (Some(major), Some(minor), Some(patch), None) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
+        else {
+            return Err(format!("{version} is not MAJOR.MINOR.PATCH"));
+        };
+        let number = |part: &str| {
+            part.parse::<u64>()
+                .map_err(|error| format!("{version} is not MAJOR.MINOR.PATCH: `{part}`: {error}"))
+        };
+        Ok(Self {
+            major: number(major)?,
+            minor: number(minor)?,
+            patch: number(patch)?,
+        })
+    }
+
+    /// This series at `patch`.
+    fn at_patch(&self, patch: u64) -> String {
+        format!("{}.{}.{patch}", self.major, self.minor)
+    }
 }
 
 /// The surface list of a surface document (`what` names it: the committed
@@ -94,25 +112,41 @@ fn declared_breakage(root: &Path, declared: &str) -> Result<bool, String> {
 }
 
 /// Every version an earlier commit on this branch committed to Cargo.toml.
+/// A commit whose manifest cannot be shown or names no version is refused
+/// by name: read with such commits dropped, a skipped coordinate they
+/// declared was reported as never declared.
 fn versions_declared_in_history(root: &Path) -> Result<BTreeSet<String>, String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(["log", "--format=%H", "--", MANIFEST])
-        .output()
-        .map_err(|error| format!("git log: {error}"))?;
+    let output = stado_wait::output(
+        Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["log", "--format=%H", "--", MANIFEST]),
+    )
+    .map_err(|error| format!("git log -- {MANIFEST}: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "git log -- {MANIFEST} failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
     let commits: Vec<String> = String::from_utf8_lossy(&output.stdout)
         .split_whitespace()
         .map(str::to_string)
         .collect();
-    if !output.status.success() || commits.len() <= 1 {
-        return Err("the manifest history is one commit deep; fetch the full history before comparing versions".into());
-    }
-    Ok(commits[1..]
+    let earlier = match commits.split_first() {
+        Some((_, earlier)) if !earlier.is_empty() => earlier,
+        _ => {
+            return Err("the manifest history is one commit deep; fetch the full history before comparing versions".into())
+        }
+    };
+    earlier
         .iter()
-        .filter_map(|commit| git_show(root, commit, MANIFEST).ok())
-        .filter_map(|text| manifest_version(&text).ok())
-        .collect())
+        .map(|commit| {
+            let text = git_show(root, commit, MANIFEST)
+                .map_err(|error| format!("commit {commit}: {error}"))?;
+            manifest_version(&text).map_err(|error| format!("commit {commit}: {error}"))
+        })
+        .collect()
 }
 
 fn compare(
@@ -135,19 +169,19 @@ fn compare(
     if declared == required {
         return Ok(format!("{satisfied}."));
     }
-    let (want, have) = (triple(required)?, triple(declared)?);
-    if have[..2] != want[..2] || have[2] <= want[2] {
+    let (want, have) = (Version::parse(required)?, Version::parse(declared)?);
+    if (have.major, have.minor) != (want.major, want.minor) || have.patch <= want.patch {
         return Err(format!("Cargo.toml commits {declared}, but the {class} change from {released} requires {required}."));
     }
-    let skipped: Vec<String> = (want[2]..have[2])
-        .map(|patch| format!("{}.{}.{patch}", want[0], want[1]))
-        .collect();
-    if let Some(coordinate) = skipped
-        .iter()
-        .find(|coordinate| !history.contains(*coordinate))
+    // The first coordinate nothing consumed refuses; the range is walked
+    // lazily, so a jump of any size costs one coordinate past the last held.
+    if let Some(coordinate) = (want.patch..have.patch)
+        .map(|patch| want.at_patch(patch))
+        .find(|coordinate| !history.contains(coordinate))
     {
         return Err(format!("Cargo.toml commits {declared}, but the {class} change from {released} requires {required}, and {coordinate} was never declared by an earlier commit on this branch, so nothing consumed it."));
     }
+    let skipped: Vec<String> = (want.patch..have.patch).map(|patch| want.at_patch(patch)).collect();
     Ok(format!(
         "{satisfied}: {required} is required and {} were consumed by earlier commits.",
         skipped.join(", ")
@@ -163,24 +197,29 @@ fn decision(
     decide(released, published, candidate, breaking).map_err(|refusal| refusal.to_string())
 }
 
-/// Prove the rule and the comparison can both refuse before trusting either.
+/// Prove the rule and the comparison can both refuse before trusting either:
+/// an unchanged surface is internal, the surface less its first command is
+/// breaking, and the furthest patch of the required series is refused when
+/// no earlier commit consumed the coordinates before it.
 fn self_check(released: &str, published: &[String]) -> Result<(), String> {
-    let unchanged = decision(released, published, published, false)?.change;
-    let broken = decision(released, published, &published[1..], false)?.change;
-    if unchanged != Change::Internal || broken != Change::Breaking {
+    let unchanged = decision(released, published, published, false)?;
+    let (_, shortened) = published
+        .split_first()
+        .ok_or(format!("{BASELINE} lists no command to remove in the self-check"))?;
+    let broken = decision(released, published, shortened, false)?.change;
+    if unchanged.change != Change::Internal || broken != Change::Breaking {
         return Err(format!(
             "self-check returned identical={} removed={}",
-            unchanged.name(),
+            unchanged.change.name(),
             broken.name()
         ));
     }
-    let [major, minor, patch] = triple(released)?;
-    let required = format!("{major}.{minor}.{}", patch + REQUIRED_STEP);
-    let far = format!("{major}.{minor}.{}", patch + UNACCOUNTED_STEP);
-    match compare(&far, released, Change::Internal, &required, &BTreeSet::new()) {
-        Err(_) => Ok(()),
-        Ok(_) => Err(format!("the comparison accepted {far} against a required {required} with nothing consuming the gap.")),
+    let required = unchanged.next;
+    let far = Version::parse(&required)?.at_patch(u64::MAX);
+    if let Ok(accepted) = compare(&far, released, Change::Internal, &required, &BTreeSet::new()) {
+        return Err(format!("the comparison accepted {far} against a required {required} with nothing consuming the gap: {accepted}"));
     }
+    Ok(())
 }
 
 /// The whole gate: prints the verdict JSON and the comparison, or refuses.
