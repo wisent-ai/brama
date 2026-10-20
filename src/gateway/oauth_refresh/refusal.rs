@@ -32,21 +32,25 @@ const DEFINITIVE_OAUTH_ERRORS: &[&str] = &["invalid_grant", "invalid_token"];
 /// account for re-authorization.
 const CLIENT_OAUTH_ERRORS: &[&str] = &["invalid_client", "unauthorized_client"];
 
-/// What this module itself says when the *stored* document, not the provider,
-/// is why a refresh cannot happen.
-///
-/// These are not blips and no wait changes them: the vault holds a document
-/// with no refresh token in it, so every future sweep will read the same
-/// document and fail the same way. Only a sign-in replaces it. Treating them
-/// as transient is what kept `brama-sub-wisent-app-codex-primary` alive-looking
-/// on the mini for three days -- every sweep logged `the credential is left as
-/// it stands for the next sweep` about a document that could never refresh --
-/// while every request for that account was refused. The sentences are
-/// declared here and used by the reader below, so a reword cannot silently
-/// reclassify them.
+/// The failure point of a refresh that cannot happen because of the *stored*
+/// document, not the provider: the vault holds a document that is not an
+/// object, or one with no refresh token in it. No wait changes that, since
+/// every later sweep reads the same document; only a sign-in replaces it.
+/// Classified by this point, never by the sentence the failure carries.
+pub(in crate::gateway) const POINT_OAUTH_STORED_DOCUMENT: &str =
+    "brama.gateway.oauth-refresh.stored-document";
 pub(super) const NO_REFRESH_TOKEN: &str = "OAuth credential has no refresh token";
 pub(super) const NOT_AN_OBJECT: &str = "OAuth credential is not an object";
-const STORED_DOCUMENT_REFUSALS: &[&str] = &[NO_REFRESH_TOKEN, NOT_AN_OBJECT];
+
+/// A refresh the stored document makes impossible, at its own failure point.
+pub(super) fn stored_document_failure(detail: impl Into<String>) -> Failure {
+    failure::envelope(
+        POINT_OAUTH_STORED_DOCUMENT,
+        Code::Config,
+        IMPACT_CREDENTIAL_REFRESH,
+        detail,
+    )
+}
 
 /// Whether a refused refresh is the provider disowning the grant, or a blip.
 pub(in crate::gateway) enum RefreshRefusal {
@@ -59,21 +63,10 @@ pub(in crate::gateway) enum RefreshRefusal {
 
 /// Classify one refused refresh.
 pub(in crate::gateway) fn classify_refusal(failure: &Failure) -> RefreshRefusal {
-    // A transport failure carries no opinion about the grant: the request never
-    // reached the provider, so the provider disowned nothing. Timeouts,
-    // refused connections and DNS failures all arrive here.
-    if matches!(failure.code, Code::Timeout | Code::InfraDown) {
-        return RefreshRefusal::Transient;
-    }
     // Brama's own reading of the stored document. A document with no refresh
     // token cannot be refreshed by anybody, so this is a sign-in case even
-    // though no provider said anything. Compared whole: these are sentences
-    // this module wrote, not provider text.
-    if failure
-        .detail
-        .as_deref()
-        .is_some_and(|detail| STORED_DOCUMENT_REFUSALS.contains(&detail))
-    {
+    // though no provider said anything.
+    if failure.failure_point == POINT_OAUTH_STORED_DOCUMENT {
         return RefreshRefusal::Definitive;
     }
     // A provider that disowned the grant was classified as Auth when its answer
@@ -82,55 +75,58 @@ pub(in crate::gateway) fn classify_refusal(failure: &Failure) -> RefreshRefusal 
     if matches!(failure.code, Code::Auth) {
         return RefreshRefusal::Definitive;
     }
-    // What is left is Brama's own configuration and shape refusals, and a body
-    // that named nothing recognisable. None of them is the provider saying the
-    // grant is dead, and a subscription that stores a plain API key reaches
-    // exactly here, so none of them may demand a sign-in.
+    // What is left is a transport failure that never reached the provider,
+    // Brama's own configuration and shape refusals, and a body that named
+    // nothing recognisable. None of them is the provider saying the grant is
+    // dead, and a subscription that stores a plain API key reaches exactly
+    // here, so none of them may demand a sign-in.
     RefreshRefusal::Transient
 }
 
-/// The OAuth `error` code of a refusal body, when it has one.
-fn oauth_error_code(body: &str) -> Option<String> {
-    serde_json::from_str::<Value>(body)
-        .ok()?
-        .get("error")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|code| !code.is_empty())
-        .map(str::to_owned)
+/// What a refusal body states, read once: its OAuth `error` code and the
+/// provider's own description. A body that is not a JSON object states
+/// neither, and is carried as it stands by the caller.
+struct StatedRefusal {
+    code: Option<String>,
+    description: Option<String>,
 }
 
-/// The provider's own words for a refused refresh.
-///
-/// OAuth 2.0 states the reason in `error` and `error_description`, and that
-/// pair is the sentence an operator needs: `invalid_grant -- Refresh token not
-/// found or invalid` says the grant is gone, which no retry repairs. A body
-/// shaped some other way is carried through as it stands. Nothing here is
-/// paraphrased; the provider's text is data.
-fn provider_rejection_text(body: &str) -> Option<String> {
-    let parsed = serde_json::from_str::<Value>(body).ok()?;
-    let field = |key: &str| {
-        parsed
-            .get(key)
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|text| !text.is_empty())
-            .map(str::to_owned)
-    };
-    let code = oauth_error_code(body);
-    let description = field("error_description")
-        .or_else(|| {
+impl StatedRefusal {
+    /// OAuth 2.0 states the reason in `error` and `error_description`, and that
+    /// pair is the sentence an operator needs: `invalid_grant -- Refresh token
+    /// not found or invalid` says the grant is gone, which no retry repairs.
+    /// Nothing here is paraphrased; the provider's text is data.
+    fn read(body: &str) -> Self {
+        let Ok(parsed) = serde_json::from_str::<Value>(body) else {
+            return Self {
+                code: None,
+                description: None,
+            };
+        };
+        let field = |pointer: &str| {
             parsed
-                .pointer("/error/message")
+                .pointer(pointer)
                 .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|text| !text.is_empty())
                 .map(str::to_owned)
-        })
-        .or_else(|| field("message"));
-    match (code, description) {
-        (Some(code), Some(description)) => Some(format!("{code} -- {description}")),
-        (Some(code), None) => Some(code),
-        (None, Some(description)) => Some(description),
-        (None, None) => None,
+        };
+        Self {
+            code: field("/error"),
+            description: field("/error_description")
+                .or_else(|| field("/error/message"))
+                .or_else(|| field("/message")),
+        }
+    }
+
+    /// The provider's own words, when the body stated any.
+    fn text(&self) -> Option<String> {
+        match (&self.code, &self.description) {
+            (Some(code), Some(description)) => Some(format!("{code} -- {description}")),
+            (Some(code), None) => Some(code.clone()),
+            (None, Some(description)) => Some(description.clone()),
+            (None, None) => None,
+        }
     }
 }
 
@@ -141,15 +137,15 @@ fn provider_rejection_text(body: &str) -> Option<String> {
 /// went into supplementing by hand. The body says which of `invalid_grant`, a
 /// revoked client or a throttle it was, so it travels with the failure.
 pub(super) fn rejection_failure(status: u16, body: &str) -> Failure {
-    let stated = provider_rejection_text(body).unwrap_or_else(|| body.trim().to_owned());
-    let detail = if stated.is_empty() {
-        format!("OAuth refresh rejected with HTTP {status}")
-    } else {
-        format!("OAuth refresh rejected with HTTP {status}: {stated}")
+    let stated = StatedRefusal::read(body);
+    let detail = match stated.text() {
+        Some(text) => format!("OAuth refresh rejected with HTTP {status}: {text}"),
+        None if body.trim().is_empty() => format!("OAuth refresh rejected with HTTP {status}"),
+        None => format!("OAuth refresh rejected with HTTP {status}: {}", body.trim()),
     };
-    let stated_code = oauth_error_code(body);
     let is = |codes: &[&str]| {
-        stated_code
+        stated
+            .code
             .as_deref()
             .is_some_and(|code| codes.contains(&code))
     };

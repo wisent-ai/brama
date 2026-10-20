@@ -85,10 +85,12 @@ fn parse_refresh_grant(body: &Value) -> Option<RefreshGrant> {
             .and_then(Value::as_str)
             .filter(|token| !token.is_empty())
             .map(str::to_owned),
+        // A stated lifetime of zero seconds states none.
         expires_in: body
             .get("expires_in")
             .and_then(Value::as_u64)
-            .filter(|seconds| *seconds > 0),
+            .and_then(std::num::NonZeroU64::new)
+            .map(std::num::NonZeroU64::get),
     })
 }
 
@@ -232,13 +234,13 @@ pub(super) async fn refresh(
     })?;
     if !blob.is_object() {
         zeroize_json_strings(&mut blob);
-        return Err(refresh_failure(Code::Config, refusal::NOT_AN_OBJECT));
+        return Err(refusal::stored_document_failure(refusal::NOT_AN_OBJECT));
     }
     let refresh_token = match oauth_refresh_token(&blob, provider) {
         Some(token) => token,
         None => {
             zeroize_json_strings(&mut blob);
-            return Err(refresh_failure(Code::Config, refusal::NO_REFRESH_TOKEN));
+            return Err(refusal::stored_document_failure(refusal::NO_REFRESH_TOKEN));
         }
     };
     let result = async {
