@@ -44,9 +44,9 @@ pub(super) struct Installation {
     pub(super) workload: Value,
 }
 
-/// The running installation's root, when one is installed: `current`
-/// resolved, and its `darwin-arm` tree when it carries one. An installation
-/// that is not there is no answer; one that cannot be resolved is refused.
+/// The running installation's file root, when one is installed: `current`
+/// resolved, then its generation root. An installation that is not there is
+/// no answer; one that cannot be resolved is refused.
 fn running_root(home: &Path) -> Result<Option<PathBuf>, String> {
     let current = home.join(".stado/services/brama/current");
     let running = match std::fs::canonicalize(&current) {
@@ -59,8 +59,7 @@ fn running_root(home: &Path) -> Result<Option<PathBuf>, String> {
             ))
         }
     };
-    let arm = running.join("darwin-arm");
-    Ok(Some(if arm.is_dir() { arm } else { running }))
+    crate::cli::generation::generation_root(&running).map(Some)
 }
 
 pub(super) fn installation() -> Result<Installation, String> {

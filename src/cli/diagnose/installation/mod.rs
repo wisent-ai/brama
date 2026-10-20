@@ -37,9 +37,6 @@ const RUNNABLE_FILES: &[&str] = &[
 ];
 /// The execute permission for owner, group and others.
 const EXECUTE_BITS: u32 = 0o111; // https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/sys_stat.h.html S_IXUSR | S_IXGRP | S_IXOTH
-/// The platform directories a multi-platform generation holds its files in;
-/// a generation without one holds them at its root.
-const PLATFORM_DIRECTORIES: &[&str] = &["darwin-arm64", "darwin-arm"];
 
 /// Every generation directory, oldest first by modification time; one whose
 /// time cannot be read is said and listed after the rest.
@@ -84,17 +81,6 @@ fn installed_generations(layout: &Layout) -> Vec<PathBuf> {
     dated.into_iter().map(|(_, path)| path).collect()
 }
 
-fn architecture_root(generation: &Path) -> PathBuf {
-    let platform = PLATFORM_DIRECTORIES
-        .iter()
-        .map(|platform| generation.join(platform))
-        .find(|path| path.is_dir());
-    match platform {
-        Some(root) => root,
-        None => generation.to_path_buf(),
-    }
-}
-
 /// The roles the release state records, each with the release directory it
 /// resolves to; a role whose directory does not resolve is said once.
 fn recorded_roles(layout: &Layout) -> Vec<(String, PathBuf)> {
@@ -123,10 +109,13 @@ pub(super) fn print_generations(layout: &Layout, resolved: Option<&Path>) {
     say!("\n=== installed generations");
     let roles_recorded = recorded_roles(layout);
     for generation in installed_generations(layout) {
-        let root = architecture_root(&generation);
-        if !root.join("bin").is_dir() {
-            continue;
-        }
+        let root = match crate::cli::generation::generation_root(&generation) {
+            Ok(root) => root,
+            Err(reason) => {
+                say!("  {}: not a generation: {reason}", generation.display());
+                continue;
+            }
+        };
         let mut roles: Vec<String> = match resolved_or_said(&root, "generation") {
             Some(canonical) => roles_recorded
                 .iter()
