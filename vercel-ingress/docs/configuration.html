@@ -40,13 +40,13 @@
         <ul>
           <li>the non-secret service policy document
           <code>BRAMA_CONTROL_CONFIG</code>, which declares allowed models, model
-          aliases, and required provider capabilities;</li>
+          aliases, required provider capabilities, and the request capability
+          lifetime in whole seconds;</li>
           <li>the service environment file <code>BRAMA_SERVICE_ENV_FILE</code>
           (default <code>~/.config/brama/service.env</code>), which carries paths and
           feature switches but never capability IDs or provider credentials;</li>
-          <li>the route registry document
-          (<code>BRAMA_INFERENCE_ROUTES_FILE</code>, launcher default
-          <code>~/.config/brama/inference-routes.json</code>), which is also written
+          <li>the route registry document at the required
+          <code>BRAMA_INFERENCE_ROUTES_FILE</code> path, which is also written
           by Brama's own admin route and CLI.</li>
         </ul>
         <p>Everything else — capability IDs, request-sign identities, provider

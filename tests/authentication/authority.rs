@@ -2,6 +2,8 @@
 //! Run on an isolated fixture host with its actual gateway log readable locally.
 #[path = "capability-configuration.rs"]
 mod capability_configuration;
+#[path = "launcher-policy.rs"]
+mod launcher_policy;
 #[path = "../subscriptions/support.rs"]
 mod support;
 

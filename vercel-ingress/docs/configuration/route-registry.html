@@ -20,8 +20,8 @@
       <article class="doc">
         <h1 id="route-registry">Route registry<a class="headerlink" href="#route-registry" title="Link to this section">&para;</a></h1>
         <p>The route registry is the one file that decides where an alias is served.
-        Its path is <code>BRAMA_INFERENCE_ROUTES_FILE</code>, launcher default
-        <code>~/.config/brama/inference-routes.json</code>. The gateway re-reads it per
+        Its path is the required <code>BRAMA_INFERENCE_ROUTES_FILE</code> declaration;
+        a missing path refuses launcher startup. The gateway re-reads it per
         request, so a committed edit takes effect on the next completion without a
         restart. It is owner-only, it is written atomically, and it is validated whole
         before it is used or replaced.</p>

@@ -35,16 +35,27 @@
           <li><code>SKARBIEC_VAULT_FILE</code> — the authorized encrypted vault.</li>
           <li><code>BRAMA_CONTROL_CONFIG</code> — the authoritative non-secret service
           policy document. The launcher reads
-          <code>services.brama.{allowed_models,model_aliases,required_provider_capabilities}</code>
+          <code>services.brama.{allowed_models,model_aliases,required_provider_capabilities,capability_lifetime_seconds}</code>
           and rejects policy that is absent, malformed, or inconsistent with
-          itself.</li>
+          itself. <code>capability_lifetime_seconds</code> is a positive whole number
+          the operator declares for the lifetime of one request-path vault
+          capability; the launcher chooses no value for it.</li>
+          <li><code>BRAMA_INFERENCE_ROUTES_FILE</code> — the owner-only route
+          registry path declared for this installation. Startup refuses it
+          when absent rather than placing routes under an assumed home.</li>
         </ul>
+        <p>The managed entry point invokes <code>brama launcher policy --config
+        &lt;control&gt; --allowed &lt;new-file&gt; --aliases &lt;new-file&gt;
+        --backend &lt;new-file&gt; --lifetime &lt;new-file&gt;</code>. It validates
+        the whole document before writing owner-only outputs. A missing or
+        invalid lifetime names <code>services.brama.capability_lifetime_seconds</code>
+        in the CLI refusal and prevents the gateway from starting.</p>
         <p>An input that is missing, malformed, duplicated, or contradicted by another
         input ends startup with a message naming it. The launcher does not proceed on
         a partial policy and does not choose a value the operator did not declare.</p>
 
         <h2 id="derived-and-provisioned">What it derives and provisions<a class="headerlink" href="#derived-and-provisioned" title="Link to this section">&para;</a></h2>
-        <p>From those three inputs the launcher derives the identity and policy
+        <p>From these declarations the launcher derives the identity and policy
         variables the gateway reads, including the <code>wisent-backend</code> client's
         exact four-alias grant, and it provisions or verifies this installation's trust
         material.</p>
@@ -53,9 +64,11 @@
           <tr><td><code>BRAMA_PROOF_KEY_FILE</code></td><td><code>~/.stado/brama-proof.key</code></td><td>the installation proof key, provisioned or verified at startup</td></tr>
           <tr><td><code>BRAMA_CAP_SOCKET</code></td><td><code>SKARBIEC_CAP_SOCKET</code>, then <code>~/.stado/skarbiec.vault.sock</code></td><td>the shared host Skarbiec service's owner-only socket; Brama connects to it and never replaces it</td></tr>
           <tr><td><code>BRAMA_RUNTIME_DIR</code></td><td><code>~/.stado/run/brama-skarbiec-&lt;installation&gt;</code></td><td>holds generation-specific GnuPG and receipt material, not a separate broker socket</td></tr>
+          <tr><td><code>BRAMA_CAPABILITY_LIFETIME_SECONDS</code></td><td>from <code>services.brama.capability_lifetime_seconds</code>; no default</td><td>the validated lifetime exported to the gateway; a missing, zero or malformed value refuses launcher policy before the gateway starts</td></tr>
         </tbody></table>
         <p>The launcher also seeds the route registry file when it is absent, creating
-        it owner-only and empty rather than guessing routes. Its path and shape are on
+        it owner-only from the validated alias table rather than guessing routes.
+        Its path and shape are on
         <a href="/docs/configuration/route-registry">Route registry</a>; an existing
         file written against an older shape is moved to the current one by
         <a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a>, which

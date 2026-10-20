@@ -1,5 +1,5 @@
 # Canonical public Brama ingress on the registered Linux service host.
-# BRAMA_UPSTREAM is the loopback listener assembled by the deployment workflow.
+# BRAMA_UPSTREAM must match the service declaration's loopback PORT.
 https://brama.wisent.ai {
     tls {
         issuer acme {

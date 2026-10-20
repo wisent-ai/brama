@@ -7,6 +7,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
+use std::num::NonZeroU64;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
@@ -47,6 +48,7 @@ pub(super) struct Outputs<'a> {
     pub(super) allowed: &'a Path,
     pub(super) aliases: &'a Path,
     pub(super) backend: &'a Path,
+    pub(super) lifetime: &'a Path,
 }
 
 pub(super) fn check(config: &Path, out: &Outputs) -> Result<(), String> {
@@ -67,6 +69,15 @@ pub(super) fn check(config: &Path, out: &Outputs) -> Result<(), String> {
     let allowed_models = field("allowed_models")?;
     let aliases = field("model_aliases")?;
     let providers = field("required_provider_capabilities")?;
+    let lifetime = field("capability_lifetime_seconds")?;
+    let lifetime = lifetime
+        .as_u64()
+        .and_then(NonZeroU64::new)
+        .ok_or_else(|| {
+            format!(
+                "services.brama.capability_lifetime_seconds must be a positive whole number of seconds in {file}"
+            )
+        })?;
     let Some(allowed_models) = allowed_models.as_array() else {
         return Err(format!(
             "services.brama.allowed_models must be a list in {file}"
@@ -143,7 +154,8 @@ pub(super) fn check(config: &Path, out: &Outputs) -> Result<(), String> {
     write_new(
         out.backend,
         &serde_json::to_string(&backend).expect("list serialises"),
-    )
+    )?;
+    write_new(out.lifetime, &lifetime.to_string())
 }
 
 /// The first route registry: exactly the validated launch aliases, in the

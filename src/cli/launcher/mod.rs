@@ -30,8 +30,8 @@ pub(crate) enum LauncherCommand {
         output: PathBuf,
     },
     /// Validate `services.brama` of the control document and write the
-    /// allowed models, the alias routes and the backend aliases, each to a
-    /// new owner-only file
+    /// allowed models, alias routes, backend aliases and capability lifetime,
+    /// each to a new owner-only file
     Policy {
         /// The control document holding `services.brama`
         #[arg(long)]
@@ -45,6 +45,9 @@ pub(crate) enum LauncherCommand {
         /// File the backend aliases are written to
         #[arg(long)]
         backend: PathBuf,
+        /// File the declared capability lifetime in whole seconds is written to
+        #[arg(long)]
+        lifetime: PathBuf,
     },
     /// Create the first inference-route registry at PATH from
     /// BRAMA_MODEL_ALIASES
@@ -106,12 +109,14 @@ pub(crate) fn run(command: LauncherCommand) {
             allowed,
             aliases,
             backend,
+            lifetime,
         } => policy::check(
             &config,
             &policy::Outputs {
                 allowed: &allowed,
                 aliases: &aliases,
                 backend: &backend,
+                lifetime: &lifetime,
             },
         ),
         LauncherCommand::SeedRoutes { path } => std::env::var("BRAMA_MODEL_ALIASES")

@@ -40,11 +40,15 @@ verdict; Brama owns only the seam.</p>
   (deliberately not <code>brama-service</code>, which holds only a <code>read</code> capability
   and can never redeem).</li>
 </ul>
-<p>No lifetime or use count is requested at issue time, and that is the point:
-Skarbiec refuses a TTL over an hour and a use count over sixteen, and the
-broker's defaults are a short life and a single use. Nothing is cached — a
-single-use capability has nothing worth keeping, and an id the launcher put
-in the environment of a running process cannot be refreshed at all.</p>
+<p>Each request-path issue states one permitted redemption and a lifetime from
+<code>BRAMA_CAPABILITY_LIFETIME_SECONDS</code>. The managed launcher validates
+<code>services.brama.capability_lifetime_seconds</code> in its control document
+as a positive whole number and exports it to the gateway; a direct gateway
+must receive the variable explicitly. Missing, malformed or zero lifetime
+refuses the managed launch or the direct capability issue before Skarbiec is
+asked. Skarbiec supplies neither a default nor a ceiling for either value.
+Nothing is cached: the request redeems its capability once, and an id placed
+in a process environment could not be refreshed for a later request.</p>
 <h2 id="lifecycle">Lifecycle<a class="headerlink" href="#lifecycle" title="Link to this section">&para;</a></h2>
 <ol>
 <li>The launcher builds trusted subscription metadata and starts the owner-bound
@@ -91,12 +95,18 @@ the in-memory map without contacting the provider.</p>
 <li>A direct route whose provider has no capability, read grant, or in-memory
   credential: <code>direct '&lt;provider&gt;' credential is unavailable</code> — surfaced as
   <code>503</code> <code>dependency_unavailable</code> at the HTTP edge (observed against 0.2.38).</li>
-<li>A refused redemption on the request path is <code>503 credential_unauthorized</code>
-  with <code>retryable: false</code>, never a <code>429</code>: waiting does not repair an
-  authorization that does not match (<a href="/docs/errors">errors</a>).</li>
-<li>The operator envelope for a capability that yielded no usable credential
-  carries the failure point <code>brama.gateway.credential-redeem</code>
-  (<a href="/docs/concepts/failure-point">failure-point</a>).</li>
+<li>When the authority answers a refusal, the capability attempt is
+  <code>credential_unauthorized</code>, not a rate limit; waiting does not
+  repair its authorization (<a href="/docs/errors">errors</a>).</li>
+<li>A failed connection, write or read of the authority socket is
+  <code>InfraDown</code> at <code>brama.gateway.credential-redeem</code>, with the
+  socket operation and operating-system cause. An unreadable workload proof key
+  names its file operation and cause as <code>InfraDown</code>; a malformed or
+  unsafe key declaration remains <code>Config</code>. These are not authority
+  denials.</li>
+<li>If the field-scoped read grant also refuses, its failure is the final answer
+  and the earlier capability failure remains in its cause chain. A working read
+  grant may still serve the request.</li>
 </ul>
 <h2 id="client-configuration">Client configuration diagnostics</h2>
 <p>The capability client names the missing or invalid <code>SKARBIEC_CAP_SOCKET</code>, <code>SKARBIEC_WORKLOAD_ID</code> or <code>SKARBIEC_WORKLOAD_SIGNING_KEY_FILE</code> declaration. Socket and declared signing-key paths must be absolute. Key-file refusals distinguish opening, metadata inspection, regular-file type, effective-user ownership, group/other permissions, length, reading and seed decoding. Diagnostics contain the path and observed metadata, never the key bytes. The accepted Ed25519 seed formats and owner-only checks are unchanged. An entropy-read failure names the proof nonce operation and its operating-system cause.</p>
