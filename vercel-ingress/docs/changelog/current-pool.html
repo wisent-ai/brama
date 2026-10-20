@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Unreleased: pool membership — Brama Docs</title>
-  <meta name="description" content="Unreleased Brama changes to which ids the subscription pool counts as members.">
+  <meta name="description" content="Unreleased Brama changes to which ids the subscription pool counts as members, and how a call for a member's credential ends.">
   <link rel="canonical" href="https://brama.wisent.com/docs/changelog/current-pool">
   <link rel="stylesheet" href="/docs/assets/site.css">
 </head>
@@ -18,10 +18,12 @@
     <main>
       <p class="source-note">Brama changelog: unreleased pool membership changes</p>
       <article class="doc"><h1 id="unreleased-pool-membership">Unreleased: pool membership<a class="headerlink" href="#unreleased-pool-membership" title="Link to this section">&para;</a></h1>
-<p>Committed changes that carry no release coordinate yet and decide which ids the subscription pool counts as its members. The other unreleased subscription changes are on <a href="/docs/changelog/current-subscriptions">unreleased subscription changes</a>.</p>
+<p>Committed changes that carry no release coordinate yet and decide which ids the subscription pool counts as its members, and how a call for a member&rsquo;s credential ends. The other unreleased subscription changes are on <a href="/docs/changelog/current-subscriptions">unreleased subscription changes</a>.</p>
 <h2 id="unreleased-remembered">Unreleased: the pool lists only the vault's members<a class="headerlink" href="#unreleased-remembered" title="Link to this section">&para;</a></h2>
 <p>Every id that ever served a request through the gateway, test and renamed ones included, stood in <a href="/docs/cli/subscription/list"><code>brama subscription list</code></a> beside the operator&rsquo;s real accounts as <code>undiscovered</code>. The pool now holds what the vault lists, plus retired members, which still say why they left. An id only the usage history remembers is answered apart under <code>remembered</code> (<code>{id, provider}</code>), counted by no lease, session limit or purchase shortage, printed under <code>remembered by the usage history only, not pool members</code> and dropped with <a href="/docs/cli/subscription/forget"><code>brama subscription forget</code></a>.</p>
 <p>Brama Desktop&rsquo;s Subscription Pool screen lists them under the purchase panel in <strong>Remembered by the usage history only</strong>, each with <strong>Forget</strong>, which takes a typed reason and runs the same forget; the member inspector no longer has a <strong>Not discovered</strong> state, and an incomplete pool read no longer keeps such an id among the members. Real test: <code>tests/subscriptions/journeys/forget_remembered_member.sh</code>.</p>
+<h2 id="unreleased-vault-call-standing">Unreleased: a credential call that stands ends the request with its cause<a class="headerlink" href="#unreleased-vault-call-standing" title="Link to this section">&para;</a></h2>
+<p>A chat request whose vault child (<code>read credential account</code>, <code>inspect credential account</code>, <code>list subscriptions</code>) never ended was never answered: the client got an empty reply minutes later, and the gateway logged no end, no refusal and no standing child. Every call to the credential source is now recorded while it stands. Once one has stood the refresh interval this host&rsquo;s Stado resolver declares, <a href="/docs/http-api/administration-and-operations"><code>GET /readyz</code></a> answers <code>503</code> with <code>ready: false</code> and <code>credential_source</code> naming the oldest call, its pid and how long it stood; the same reading ends the vault child, logs <code>vault child abandoned by the readiness reading</code>, and refuses the request that waited on it with that sentence. Real test: <code>cargo test --test readiness-vault-standing -- --ignored</code>, against a vault executable that accepts and never answers.</p>
 </article>
       <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
     </main>
