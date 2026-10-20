@@ -13,6 +13,7 @@ mod provider;
 mod source;
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
@@ -58,8 +59,19 @@ struct CachedSnapshot {
 
 static MEMORY_CACHE: LazyLock<RwLock<Option<CachedSnapshot>>> = LazyLock::new(|| RwLock::new(None));
 static LOAD_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+/// Whether a refresh started beside the requests is running now.
+static REFRESHING: AtomicBool = AtomicBool::new(false);
 
-/// The catalog as of no longer ago than the configured TTL.
+/// The catalog to route a request by.
+///
+/// A request waits for a load only when no catalog has been loaded yet. A
+/// loaded catalog older than the configured TTL is answered as it is, and
+/// one refresh starts beside the requests: the fetch reads models.dev, a
+/// site this gateway does not control, and every request that waited on it
+/// stood for as long as that site held the connection, while the routes the
+/// loaded catalog names were there all along. The refresh replaces the
+/// snapshot when it lands; a failed refresh is logged with its cause and the
+/// loaded catalog stays, its source unchanged.
 ///
 /// The load lock is why a cold start under concurrent traffic fetches the
 /// document once instead of once per caller, and every waiter re-reads the
@@ -67,14 +79,39 @@ static LOAD_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 /// all get.
 pub async fn snapshot() -> Result<Arc<CatalogSnapshot>, String> {
     let ttl = crate::types::declared_age(TTL_ENV)?;
-    if let Some(fresh) = cached_within(ttl).await {
-        return Ok(fresh);
+    if let Some((held, current)) = loaded(ttl).await {
+        if !current {
+            refresh_beside(ttl);
+        }
+        return Ok(held);
     }
     let _load_guard = LOAD_LOCK.lock().await;
-    if let Some(fresh) = cached_within(ttl).await {
-        return Ok(fresh);
+    if let Some((held, _)) = loaded(ttl).await {
+        return Ok(held);
     }
+    load(ttl).await
+}
 
+/// Start one refresh beside the requests, unless one is running.
+fn refresh_beside(ttl: Option<Duration>) {
+    if REFRESHING.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    tracing::info!("the model catalog is older than its TTL; one refresh runs beside the requests");
+    tokio::spawn(async move {
+        let refreshed = {
+            let _load_guard = LOAD_LOCK.lock().await;
+            load(ttl).await
+        };
+        REFRESHING.store(false, Ordering::Release);
+        if let Err(error) = refreshed {
+            tracing::warn!(%error, "the model catalog refresh failed; the loaded catalog is kept");
+        }
+    });
+}
+
+/// Read the document, live or the last fetched copy, and hold it.
+async fn load(ttl: Option<Duration>) -> Result<Arc<CatalogSnapshot>, String> {
     let (raw, source) = match read_live_catalog().await {
         Ok(raw) => {
             if let Err(error) = write_cache(&raw).await {
@@ -122,12 +159,13 @@ pub async fn source() -> Option<CatalogSource> {
         .map(|cached| cached.source.clone())
 }
 
-async fn cached_within(ttl: Option<Duration>) -> Option<Arc<CatalogSnapshot>> {
+/// The loaded catalog and whether it is within its TTL; `None` before the
+/// first load.
+async fn loaded(ttl: Option<Duration>) -> Option<(Arc<CatalogSnapshot>, bool)> {
     let cache = MEMORY_CACHE.read().await;
     cache
         .as_ref()
-        .filter(|cached| fresh(cached, ttl))
-        .map(|cached| Arc::clone(&cached.snapshot))
+        .map(|cached| (Arc::clone(&cached.snapshot), fresh(cached, ttl)))
 }
 
 fn fresh(cached: &CachedSnapshot, ttl: Option<Duration>) -> bool {
