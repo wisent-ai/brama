@@ -4,26 +4,20 @@ use std::borrow::Cow;
 
 use super::{provider, ProviderDescriptor};
 
-const OPENAI_EMBEDDING_MODEL: &str = "text-embedding-3-small";
-const OPENAI_MODERATION_MODEL: &str = "omni-moderation-latest";
-
 pub fn provider_id_from_route(value: &str) -> Option<&str> {
     let (provider_id, model_id) = value.split_once('/')?;
     (valid_provider_id(provider_id) && valid_model_id(model_id)).then_some(provider_id)
 }
 
+/// The provider a `provider/model` route names and the model id it sends,
+/// exactly as written: no route stands for a model Brama chose.
 pub fn route(value: &str) -> Option<(&'static ProviderDescriptor, Cow<'_, str>)> {
     let (provider_id, model_id) = value.split_once('/')?;
     let descriptor = provider(provider_id)?;
     if !valid_model_id(model_id) {
         return None;
     }
-    let concrete = match value {
-        "openai/embeddings" => OPENAI_EMBEDDING_MODEL,
-        "openai/moderation" => OPENAI_MODERATION_MODEL,
-        _ => return Some((descriptor, Cow::Borrowed(model_id))),
-    };
-    Some((descriptor, Cow::Borrowed(concrete)))
+    Some((descriptor, Cow::Borrowed(model_id)))
 }
 
 pub fn supports_chat_route(value: &str) -> bool {
@@ -47,12 +41,16 @@ pub fn supports_decision_route(value: &str) -> bool {
     native_decision_route(value) || supports_chat_route(value)
 }
 
+/// Embeddings and moderation are OpenAI's endpoints here: a concrete OpenAI
+/// route (`openai/text-embedding-3-small`, `openai/omni-moderation-latest`)
+/// is sent as written, and a model that is not one of them is refused by
+/// OpenAI in its own words.
 pub fn supports_embedding_route(value: &str) -> bool {
-    value == "openai/embeddings" && route(value).is_some()
+    provider_id_from_route(value) == Some("openai") && route(value).is_some()
 }
 
 pub fn supports_moderation_route(value: &str) -> bool {
-    value == "openai/moderation" && route(value).is_some()
+    provider_id_from_route(value) == Some("openai") && route(value).is_some()
 }
 
 /// Whether this route reaches a provider that generates images, which is the
