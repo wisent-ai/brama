@@ -24,6 +24,16 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-launcher-grammar">Unreleased: the release check reads launcher scripts with the shell grammar<a class="headerlink" href="#unreleased-launcher-grammar" title="Link to this section">&para;</a></h2>
+<p>The release step that checks every broker verb the launcher calls against the pinned
+broker's inventory now reads the launcher and its stage files with the POSIX shell
+grammar: a call is a simple command whose command word is the router literal, wherever
+it stands (after reserved words, assignments, <code>exec</code>, inside command
+substitutions), and the literal as an operand, test operand, assignment value, redirection
+target or case pattern is no call. A script the grammar cannot read is refused naming the
+file and the construct it ends inside, and a launcher or router path that names no file
+inside a directory is refused by name. Installed generations are also read from their
+layout (<a href="/docs/cli/host/diagnose">brama diagnose</a>).</p>
 <h2 id="unreleased-stated-usage">Unreleased: token usage is stated or absent, never zero<a class="headerlink" href="#unreleased-stated-usage" title="Link to this section">&para;</a></h2>
 <p>A routed answer now holds its token usage only as the provider stated it. A buffered
 chat completion, Messages or Responses answer whose provider stated no usage has no

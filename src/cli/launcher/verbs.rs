@@ -3,10 +3,13 @@
 //! verb the broker does not have.
 //!
 //! The paths come from two places: the literal `"$ENTITLEMENTS_ROUTER_BIN"
-//! verb …` calls in the launcher and every stage file it sources, and the
-//! calls this binary's own launcher steps make ([`OWN_CALLS`]). Only help
-//! inventories are executed; a group name alone cannot prove that the
-//! subcommand exists.
+//! verb …` calls in the launcher and every stage file it sources, read with
+//! the shell grammar ([`shell`]), and the calls this binary's own launcher
+//! steps make ([`own_calls`]). Only help inventories are executed; a group
+//! name alone cannot prove that the subcommand exists.
+
+mod lexer;
+mod shell;
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -16,68 +19,6 @@ use serde_json::Value;
 
 /// How the launcher names the broker binary in a literal call.
 const ROUTER_CALL: &str = "\"$ENTITLEMENTS_ROUTER_BIN\"";
-
-/// A command word: a lowercase letter, then lowercase letters and dashes.
-fn is_word(token: &str) -> bool {
-    let mut chars = token.chars();
-    chars.next().is_some_and(|first| first.is_ascii_lowercase())
-        && chars.all(|c| c.is_ascii_lowercase() || c == '-')
-}
-
-/// Shell keywords after which the next word is a command.
-const COMMAND_KEYWORDS: [&str; 9] = [
-    "then", "do", "else", "exec", "!", "time", "if", "while", "until",
-];
-
-/// Whether the router literal that follows `before` is the command of a
-/// simple command, rather than an argument (`--router "$…"`), a test operand
-/// (`[ -x "$…" ]`) or an assignment value (`NAME="$…"`). Only a command runs
-/// a broker verb; an argument is read by whatever program it is handed to.
-fn in_command_position(before: &str) -> bool {
-    let line = before.rsplit('\n').next().unwrap_or_default();
-    let trimmed = line.trim_end();
-    if trimmed.is_empty() {
-        return true;
-    }
-    if trimmed.ends_with(['(', '|', ';', '&', '{', '`']) {
-        return true;
-    }
-    if trimmed.len() == line.len() {
-        return false;
-    }
-    let last = trimmed
-        .rsplit(char::is_whitespace)
-        .next()
-        .unwrap_or_default();
-    COMMAND_KEYWORDS.contains(&last) || is_assignment(last)
-}
-
-/// `NAME=value`: an environment prefix of the command that follows it.
-fn is_assignment(token: &str) -> bool {
-    token.split_once('=').is_some_and(|(name, _)| {
-        let mut chars = name.chars();
-        chars
-            .next()
-            .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
-            && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
-    })
-}
-
-/// The command words after each literal router call in command position:
-/// every whitespace-separated word up to the first token that is not one.
-fn shell_calls(text: &str) -> Vec<Vec<String>> {
-    text.match_indices(ROUTER_CALL)
-        .filter(|(at, _)| in_command_position(&text[..*at]))
-        .map(|(at, _)| {
-            text[at + ROUTER_CALL.len()..]
-                .split_whitespace()
-                .take_while(|token| is_word(token))
-                .map(str::to_string)
-                .collect::<Vec<_>>()
-        })
-        .filter(|words| !words.is_empty())
-        .collect()
-}
 
 /// The command line `brama launcher` sends the router for an item.
 const GET_CALL: &str = "get";
@@ -126,10 +67,33 @@ fn strings(value: Option<&Value>) -> Vec<String> {
         .collect()
 }
 
+/// A command path as the broker's inventory spells it: the verb, or, under a
+/// group, the group and its verb. A grouped call that names no verb is the
+/// group alone, which no inventory lists, so the check names it missing.
+fn command_path<S: AsRef<str>>(words: &[S], grouped: bool) -> String {
+    match words {
+        [group, verb, ..] if grouped => format!("{} {}", group.as_ref(), verb.as_ref()),
+        [verb, ..] => verb.as_ref().to_string(),
+        [] => String::new(),
+    }
+}
+
+/// The directory `path` lies in (empty, the working directory, for a bare
+/// file name), refused by name when it has none, since the files beside it
+/// are what the check reads.
+fn directory_of<'a>(path: &'a Path, what: &str) -> Result<&'a Path, String> {
+    path.parent().ok_or_else(|| {
+        format!(
+            "the {what} {} names no file inside a directory; pass the path to the file",
+            path.display()
+        )
+    })
+}
+
 /// The launcher and every stage file beside it that `sh` sources. An absent
 /// stage directory holds none; one that cannot be listed, or an entry that
-/// cannot be read, refuses - it used to be skipped, so the check passed the
-/// launcher against fewer calls than it makes.
+/// cannot be read, refuses, so the launcher is never checked against fewer
+/// calls than it makes.
 fn family(launcher: &Path) -> Result<Vec<PathBuf>, String> {
     fn walk(directory: &Path, into: &mut Vec<PathBuf>) -> Result<(), String> {
         let entries = match std::fs::read_dir(directory) {
@@ -155,78 +119,67 @@ fn family(launcher: &Path) -> Result<Vec<PathBuf>, String> {
         Ok(())
     }
     let mut files = vec![launcher.to_path_buf()];
-    walk(
-        &launcher.parent().unwrap_or(Path::new(".")).join("launcher"),
-        &mut files,
-    )?;
+    walk(&directory_of(launcher, "launcher")?.join("launcher"), &mut files)?;
     Ok(files)
 }
 
 pub(super) fn check(router: &Path, launcher: &Path) -> Result<(), String> {
-    let vault = router
-        .parent()
-        .unwrap_or(Path::new("."))
-        .join("no-such-vault.json");
+    let vault = directory_of(router, "router")?.join("no-such-vault.json");
     let root = inventory(router, &["help"], &vault)?;
-    let groups = strings(root.get("groups"));
     if root.get("groups").and_then(Value::as_array).is_none() {
         return Err(
             "the pinned broker does not declare CLI groups; use Skarbiec 0.3.2 or newer".into(),
         );
     }
-    let first = |command: &str, words: usize| {
-        command
-            .split_whitespace()
-            .take(words)
-            .collect::<Vec<_>>()
-            .join(" ")
+    let groups = strings(root.get("groups"));
+    let words = |command: &str| -> Vec<String> {
+        command.split_whitespace().map(str::to_string).collect()
     };
     let mut available: BTreeSet<String> = strings(root.get("commands"))
         .iter()
-        .map(|command| first(command, 1))
+        .map(|command| command_path(&words(command), false))
         .collect();
     for group in &groups {
         let document = inventory(router, &[group, "help"], &vault)?;
         available.extend(
             strings(document.get("commands"))
                 .iter()
-                .map(|command| first(command, 2)),
+                .map(|command| command_path(&words(command), true)),
         );
     }
     let mut calls: Vec<Vec<String>> = own_calls();
     for path in family(launcher)? {
-        let text = std::fs::read(&path)
-            .map_err(|error| format!("{}: {error}", path.display()))
-            .and_then(|bytes| {
-                String::from_utf8(bytes).map_err(|_| {
-                    format!("{} is not a launcher: it is not UTF-8 text; the launcher and router arguments are in the wrong order", path.display())
-                })
-            })?;
-        let text = text.replace("\\\n", " ");
-        calls.extend(shell_calls(&text));
+        let bytes = std::fs::read(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+        let text = String::from_utf8(bytes).map_err(|error| {
+            format!(
+                "{} is not a launcher: it is not UTF-8 text ({error}); the launcher and router arguments are in the wrong order",
+                path.display()
+            )
+        })?;
+        calls.extend(
+            shell::router_calls(&text, ROUTER_CALL)
+                .map_err(|error| format!("{}: {error}", path.display()))?,
+        );
     }
     let required: BTreeSet<String> = calls
         .iter()
-        .map(|words| {
-            let take = if groups.contains(&words[0]) { 2 } else { 1 };
-            words
-                .iter()
-                .take(take)
-                .cloned()
-                .collect::<Vec<_>>()
-                .join(" ")
+        .map(|call| {
+            let grouped = call.first().is_some_and(|word| groups.contains(word));
+            command_path(call, grouped)
         })
         .collect();
     println!(
         "launcher requires: {}",
         required.iter().cloned().collect::<Vec<_>>().join(", ")
     );
-    let missing: Vec<&String> = required.difference(&available).collect();
+    let missing: Vec<&str> = required
+        .difference(&available)
+        .map(String::as_str)
+        .collect();
     if !missing.is_empty() {
-        let names: Vec<&str> = missing.iter().map(|name| name.as_str()).collect();
         return Err(format!(
             "the pinned broker does not implement: {}",
-            names.join(", ")
+            missing.join(", ")
         ));
     }
     println!("the pinned broker advertises every literal command path the launcher invokes");
