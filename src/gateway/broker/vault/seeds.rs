@@ -12,11 +12,15 @@ use super::entitlements_router_bin;
 /// Asked of the vault, never read from it: `totp-seed-state` reports the
 /// state of the field and never its value, which is exactly what a caller
 /// confirming an enrolment needs. One call answers for every login, because
-/// a reader that asks per member pays a full vault pass per member.
+/// a reader that asks per member pays a full vault pass per member. It runs
+/// as every vault child does, standing in the readiness register while it
+/// runs (`router::child_output_blocking`).
 pub fn login_seed_states() -> Result<std::collections::BTreeMap<String, String>, String> {
     let program = entitlements_router_bin()?;
-    let output = stado_wait::output(std::process::Command::new(&program).arg("totp-seed-state"))
-        .map_err(|error| format!("{program} totp-seed-state could not start: {error}"))?;
+    let operation = format!("{program} totp-seed-state");
+    let output = super::router::child_output_blocking(&program, &operation, |command| {
+        command.arg("totp-seed-state");
+    })?;
     if !output.status.success() {
         let detail = String::from_utf8_lossy(&output.stderr);
         let detail = detail.trim();

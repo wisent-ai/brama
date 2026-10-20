@@ -139,20 +139,21 @@ static GRANT_ROUTED: LazyLock<RwLock<HashMap<String, bool>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// One `route resolve` for one resource, run to its exit, reading only
-/// whether the vault answers a complete coordinate for it.
+/// whether the vault answers a complete coordinate for it. It runs as every
+/// other vault child does: it stands in the readiness register while it
+/// runs ([`super::vault::router::child_output_blocking`]), so a vault that
+/// accepts it and never answers makes `/readyz` say so and ends this call
+/// with the same sentence, instead of holding the request and the worker it
+/// runs on.
 fn resolve_grant_route(resource: &str) -> Result<bool, String> {
     let binary = super::vault::entitlements_router_bin()?;
-    let mut command = std::process::Command::new(&binary);
-    command
-        .arg("route")
-        .arg("resolve")
-        .arg(resource)
-        .stdin(std::process::Stdio::null());
-    let output = stado_wait::output(&mut command)
-        .map_err(|error| format!("execute `{binary} route resolve {resource}`: {error}"))?;
+    let operation = format!("`{binary} route resolve {resource}`");
+    let output = super::vault::router::child_output_blocking(&binary, &operation, |command| {
+        command.arg("route").arg("resolve").arg(resource);
+    })?;
     if !output.status.success() {
         return Err(format!(
-            "`{binary} route resolve {resource}` exited with {}: stdout: {}; stderr: {}",
+            "{operation} exited with {}: stdout: {}; stderr: {}",
             output.status,
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),

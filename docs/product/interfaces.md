@@ -161,8 +161,11 @@ to the [README](../../README.md).
   interval below. A client watching Brama while it waits on a request (Tama's
   judge) asks with the digest of the answer it last read and makes one
   request per change, not one per answer. Every call to the credential source
-  (Skarbiec's token introspection on each workload admission) is recorded
-  while it stands; when one has stood the refresh interval this host's Stado
+  is recorded while it stands: Skarbiec's token introspection on each
+  workload admission, and every vault child the gateway runs — the credential
+  reads and writes, the grant-route check an alias asks before it serves a
+  provider, and the authenticator seed state. When one has stood the refresh
+  interval this host's Stado
   resolver declares or longer (its state's target in
   `~/.stado/cache/registry-last-good.json`, `service_resolver.refresh_seconds`),
   `/readyz` answers 503 with `ready: false` and `reason` and

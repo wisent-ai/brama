@@ -124,6 +124,22 @@ pub(in crate::gateway::broker) async fn child_output(
     }
 }
 
+/// [`child_output`] for a caller that asks synchronously from inside the
+/// gateway's runtime: the child still stands in the readiness register, and
+/// the wait hands this worker's other tasks on while it stands
+/// (`block_in_place`) instead of holding them behind a vault that does not
+/// answer.
+pub(in crate::gateway::broker) fn child_output_blocking(
+    binary: &str,
+    operation: &str,
+    configure: impl FnOnce(&mut tokio::process::Command),
+) -> Result<std::process::Output, String> {
+    let runtime = tokio::runtime::Handle::try_current().map_err(|error| {
+        format!("{operation} must stand in the readiness register, which only the gateway's runtime keeps: {error}")
+    })?;
+    tokio::task::block_in_place(|| runtime.block_on(child_output(binary, operation, configure)))
+}
+
 /// The resident memory, in bytes, past which a vault child is ended, when the
 /// operator declares one. A router child that had run for over a day under
 /// this gateway once held 3 GiB while the control host refused all work for
