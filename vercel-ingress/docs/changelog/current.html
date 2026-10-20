@@ -56,6 +56,14 @@ meter of zeros. Argument fragments for a tool call that never started end the
 stream instead of landing in the open block, and an answer's creation time is
 refused, not written as zero, on a host whose clock reads before the epoch
 (<a href="/docs/http-api/inference">Inference</a>).</p>
+<h2 id="unreleased-environment-reads">Unreleased: an unreadable declaration is refused, not unset<a class="headerlink" href="#unreleased-environment-reads" title="Link to this section">&para;</a></h2>
+<p>The Wisent Identity declaration, the vault child resident ceiling and the
+model catalog's address, file and copy path are read through Brama's one
+environment reader: a value that is not Unicode is refused by name instead of
+read as unset, a Wisent Identity declaration with only one of its two halves
+is refused as incomplete naming the missing one, and both Wisent Identity calls
+announce what they wait for (<a href="/docs/configuration/gateway-inputs">Gateway
+inputs</a>).</p>
 <h2 id="unreleased-tasks">Unreleased: <code>brama tasks</code> replaces <code>collect-task-quality</code><a class="headerlink" href="#unreleased-tasks" title="Link to this section">&para;</a></h2>
 <p>Measuring a named task and reading back what <code>task:&lt;KEY&gt;</code>
 selection uses are one command family: <code>brama tasks measure &lt;KEY&gt;</code>

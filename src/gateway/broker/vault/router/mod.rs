@@ -135,13 +135,14 @@ const RESIDENT_CEILING_ENV: &str = "BRAMA_VAULT_CHILD_RESIDENT_CEILING_BYTES";
 const FOOTPRINT_CHECK_ENV: &str = "BRAMA_VAULT_CHILD_FOOTPRINT_CHECK_SECONDS";
 
 /// The declared ceiling and the cadence it is read at, or `None` when no
-/// ceiling is declared; a ceiling without a cadence is refused by name.
+/// ceiling is declared; a ceiling that is not Unicode, not a number, or
+/// declared without a cadence is refused by name.
 fn declared_ceiling() -> Result<Option<(u64, std::time::Duration)>, String> {
-    let Ok(value) = std::env::var(RESIDENT_CEILING_ENV) else {
+    let Some(value) = crate::environment::declared_setting(RESIDENT_CEILING_ENV)? else {
         return Ok(None);
     };
-    let ceiling = value.trim().parse::<u64>().map_err(|_| {
-        format!("{RESIDENT_CEILING_ENV} must be a whole number of bytes; it is {value:?}")
+    let ceiling = value.parse::<u64>().map_err(|error| {
+        format!("{RESIDENT_CEILING_ENV} must be a whole number of bytes; it is {value:?}: {error}")
     })?;
     let cadence = crate::types::declared_age(FOOTPRINT_CHECK_ENV)?.ok_or_else(|| {
         format!("{RESIDENT_CEILING_ENV} is declared, so {FOOTPRINT_CHECK_ENV} must say how often it is read")

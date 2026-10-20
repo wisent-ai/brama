@@ -8,7 +8,6 @@
 //! next to its own path and renamed into place, so a reader never sees half a
 //! document.
 
-use std::env::VarError;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
@@ -19,18 +18,8 @@ const MODELS_DEV_CATALOG_URL: &str = "https://models.dev/api.json";
 /// is not where a product keeps its state.
 const CACHE_FILE: &str = "models-dev-cache.json";
 
-/// The value of `name` when the operator set it; a value that is not UTF-8 is
-/// refused by name rather than read as unset.
-fn configured(name: &str) -> Result<Option<String>, String> {
-    match std::env::var(name) {
-        Ok(value) => Ok(Some(value)),
-        Err(VarError::NotPresent) => Ok(None),
-        Err(VarError::NotUnicode(_)) => Err(format!("{name} is not valid UTF-8")),
-    }
-}
-
 fn catalog_url() -> Result<reqwest::Url, String> {
-    let raw = match configured("BRAMA_MODEL_CATALOG_URL")? {
+    let raw = match crate::environment::declared_text("BRAMA_MODEL_CATALOG_URL")? {
         Some(raw) => raw,
         None => MODELS_DEV_CATALOG_URL.to_string(),
     };
@@ -56,7 +45,7 @@ fn catalog_url() -> Result<reqwest::Url, String> {
 }
 
 pub(super) async fn read_live_catalog() -> Result<String, String> {
-    if let Some(path) = configured("BRAMA_MODEL_CATALOG_PATH")? {
+    if let Some(path) = crate::environment::declared_text("BRAMA_MODEL_CATALOG_PATH")? {
         return tokio::fs::read_to_string(&path)
             .await
             .map_err(|error| format!("cannot read model catalog {path}: {error}"));
@@ -84,7 +73,7 @@ pub(super) async fn read_live_catalog() -> Result<String, String> {
 }
 
 fn cache_path() -> Result<PathBuf, String> {
-    Ok(match configured("BRAMA_MODEL_CATALOG_CACHE")? {
+    Ok(match crate::environment::declared_text("BRAMA_MODEL_CATALOG_CACHE")? {
         Some(path) => PathBuf::from(path),
         None => crate::journal::state_dir().join(CACHE_FILE),
     })

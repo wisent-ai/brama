@@ -19,25 +19,33 @@ struct OrganizationAuthorization {
 /// Where the Wisent Identity authority answers, and the anon key it is asked
 /// with: `BRAMA_WISENT_AUTH_URL` and `BRAMA_WISENT_AUTH_ANON_KEY`, which the
 /// Stado service catalog sets for the gateway. No authority is compiled in: a
-/// deployment that names none cannot resolve a person, and says so.
-fn wisent_identity() -> Option<(String, String)> {
-    let configured = |name: &str| {
-        std::env::var(name)
-            .ok()
-            .map(|value| value.trim().trim_end_matches('/').to_owned())
-            .filter(|value| !value.is_empty())
-    };
-    Some((
-        configured("BRAMA_WISENT_AUTH_URL")?,
-        configured("BRAMA_WISENT_AUTH_ANON_KEY")?,
-    ))
+/// deployment that names none cannot resolve a person, one that names only
+/// half of it is incomplete, and a value that is not Unicode is refused by
+/// name; each says so.
+fn wisent_identity() -> Result<(String, String), String> {
+    let url = crate::environment::declared_setting("BRAMA_WISENT_AUTH_URL")?
+        .map(|value| value.trim_end_matches('/').to_owned());
+    let anon_key = crate::environment::declared_setting("BRAMA_WISENT_AUTH_ANON_KEY")?;
+    match (url, anon_key) {
+        (Some(url), Some(anon_key)) => Ok((url, anon_key)),
+        (None, None) => Err(
+            "BRAMA_WISENT_AUTH_URL and BRAMA_WISENT_AUTH_ANON_KEY are unset; no Wisent Identity authority is declared".into(),
+        ),
+        (Some(_), None) => Err(
+            "the Wisent Identity declaration is incomplete: BRAMA_WISENT_AUTH_URL is set but BRAMA_WISENT_AUTH_ANON_KEY is unset".into(),
+        ),
+        (None, Some(_)) => Err(
+            "the Wisent Identity declaration is incomplete: BRAMA_WISENT_AUTH_ANON_KEY is set but BRAMA_WISENT_AUTH_URL is unset".into(),
+        ),
+    }
 }
 
 pub(super) async fn ask_wisent_identity(bearer: &str) -> WisentIdentityAnswer {
-    let Some((origin, anon_key)) = wisent_identity() else {
-        return WisentIdentityAnswer::Unavailable(
-            "BRAMA_WISENT_AUTH_URL or BRAMA_WISENT_AUTH_ANON_KEY is unset; no person can be resolved".into(),
-        );
+    let (origin, anon_key) = match wisent_identity() {
+        Ok(declared) => declared,
+        Err(cause) => {
+            return WisentIdentityAnswer::Unavailable(format!("{cause}; no person can be resolved"))
+        }
     };
     let user = format!("{origin}/auth/v1/user");
     let client = match crate::providers::adapter::control_client() {
@@ -48,12 +56,13 @@ pub(super) async fn ask_wisent_identity(bearer: &str) -> WisentIdentityAnswer {
             ))
         }
     };
-    let response = match client
-        .get(&user)
-        .header("apikey", &anon_key)
-        .bearer_auth(bearer)
-        .send()
-        .await
+    let response = match stado_wait::until(
+        stado_wait::Kind::Network,
+        "ask Wisent Identity who the bearer is",
+        &user,
+        client.get(&user).header("apikey", &anon_key).bearer_auth(bearer).send(),
+    )
+    .await
     {
         Ok(response) => response,
         Err(error) => return WisentIdentityAnswer::Unavailable(format!("GET {user}: {error}")),
@@ -91,18 +100,16 @@ pub(super) async fn authorize_organization(
     expected_user_id: uuid::Uuid,
     expected_organization_id: uuid::Uuid,
 ) -> Result<HumanOrganizationContext, IdentityResolutionError> {
-    let Some((origin, anon_key)) = wisent_identity() else {
-        return Err(organization_unavailable(
-            "BRAMA_WISENT_AUTH_URL or BRAMA_WISENT_AUTH_ANON_KEY is unset; no organization can be authorized".into(),
-        ));
-    };
+    let (origin, anon_key) = wisent_identity().map_err(|cause| {
+        organization_unavailable(format!("{cause}; no organization can be authorized"))
+    })?;
     let authorize = format!("{origin}/rest/v1/rpc/authorize_organization");
     let client = crate::providers::adapter::control_client().map_err(|error| {
         organization_unavailable(format!(
             "cannot build the Wisent Identity organization client: {error}"
         ))
     })?;
-    let response = client
+    let request = client
         .post(&authorize)
         .header("apikey", &anon_key)
         .header("Accept", "application/vnd.pgrst.object+json")
@@ -111,10 +118,15 @@ pub(super) async fn authorize_organization(
             expected_organization_id.to_string(),
         )
         .bearer_auth(bearer)
-        .json(&json!({"target_org_id": expected_organization_id}))
-        .send()
-        .await
-        .map_err(|error| organization_unavailable(format!("POST {authorize}: {error}")))?;
+        .json(&json!({"target_org_id": expected_organization_id}));
+    let response = stado_wait::until(
+        stado_wait::Kind::Network,
+        "ask Wisent Identity to authorize the organization",
+        &authorize,
+        request.send(),
+    )
+    .await
+    .map_err(|error| organization_unavailable(format!("POST {authorize}: {error}")))?;
     let status = response.status();
     if status == StatusCode::UNAUTHORIZED {
         return Err(IdentityResolutionError::Unauthorized);
