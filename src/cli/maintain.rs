@@ -1,10 +1,10 @@
 //! `brama maintain`: one maintenance pass of a serving gateway.
 //!
-//! The gateway no longer keeps its own timers. Plan usage reports, credential
-//! renewal and the readiness reading are each taken when this command asks,
-//! and the host's Stado schedule decides how often it asks. The pass runs in
-//! the serving process because that process holds the usage ledger, the
-//! journal and the credentials the launcher installed.
+//! The serving gateway runs its own maintenance passes (one when it starts,
+//! one at each moment its ledger states something becomes due, one after a
+//! refusal for want of a signed-in subscription); this command asks for one
+//! more now. The pass runs in the serving process because that process holds
+//! the usage ledger, the journal and the credentials the launcher installed.
 
 use clap::{ArgGroup, Args};
 use serde_json::Value;
@@ -68,7 +68,12 @@ async fn pass(destination: Destination) -> Result<Value, String> {
 }
 
 fn print_report(report: &Value) {
-    let count = |pointer: &str| report.pointer(pointer).cloned().unwrap_or(Value::Null);
+    // A field the gateway's report left out is named as missing, not printed
+    // as a value.
+    let count = |pointer: &str| match report.pointer(pointer) {
+        Some(value) => value.to_string(),
+        None => format!("(the gateway did not report {pointer})"),
+    };
     if let Some(accounts) = report
         .pointer("/discovery/accounts")
         .and_then(Value::as_array)

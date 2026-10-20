@@ -56,9 +56,9 @@ impl UsageSource {
 /// A reading is current until the window it describes resets, which is the
 /// provider's own statement. A subscription is due when it has no reading, a
 /// reading without a reset instant (it cannot say how long it holds, so every
-/// maintenance pass the operator's schedule runs reads it again), a reading
-/// whose window has reset, or a last report attempt that failed. How often
-/// passes run is the host's Stado schedule; no cache window is chosen here.
+/// maintenance pass reads it again), a reading whose window has reset, or a
+/// last report attempt that failed. When passes run is the serving process's
+/// own maintenance ([`super::next_due_ms`]); no cache window is chosen here.
 pub fn plan_usage_due(subscription_id: &str) -> bool {
     let now = now_ms();
     read_ledger(|ledger| {

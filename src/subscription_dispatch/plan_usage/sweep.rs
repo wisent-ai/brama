@@ -4,8 +4,8 @@
 //! subscription two agents share is still one account with one plan and is
 //! visited once, and that one refused account does not stop the accounts after
 //! it. Whether a visit becomes a request is the cache window's decision, not
-//! this file's. When the pass runs is the host's Stado schedule's decision:
-//! `brama maintain` runs it once.
+//! this file's. Each maintenance pass of the serving process runs it once,
+//! and so does `brama maintain`.
 
 use std::collections::BTreeSet;
 
@@ -20,7 +20,7 @@ use crate::subscription_dispatch::usage;
 /// and report each read that failed with its error envelope.
 pub(crate) async fn sweep() -> Value {
     let mut seen = BTreeSet::new();
-    let mut read = 0_usize;
+    let mut read = Vec::new();
     let mut failed = Vec::new();
     // Members whose grant the provider disowned: their plan cannot be read
     // with that grant and its refresh is not asked again until a sign-in, so
@@ -67,7 +67,7 @@ pub(crate) async fn sweep() -> Value {
                 }));
                 continue;
             }
-            read = read.saturating_add(1);
+            read.push(entry.id.clone());
             if let Err(error) = refresh(&entry.id, &entry.provider).await {
                 warn!(
                     event = "plan_usage_refresh_failed",
@@ -87,13 +87,13 @@ pub(crate) async fn sweep() -> Value {
     info!(
         event = "plan_usage_swept",
         subscriptions = seen.len(),
-        read,
+        read = read.len(),
         failed = failed.len(),
         "finished one provider usage report sweep"
     );
     json!({
         "subscriptions": seen.len(),
-        "read": read,
+        "read": read.len(),
         "failed": failed,
         "awaiting_sign_in": awaiting_sign_in,
     })

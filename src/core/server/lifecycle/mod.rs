@@ -39,10 +39,12 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
         "perf registry loaded"
     );
     // Readiness crosses the local capability broker and provider discovery. Its
-    // first reading is taken out of band so the listener opens at once; later
-    // readings, plan usage reports and credential renewal are each one pass of
-    // `brama maintain`, run by the host's Stado schedule.
+    // first reading is taken out of band so the listener opens at once. Plan
+    // usage reports, grant renewal and sign-in through Weles are the serving
+    // process's own maintenance passes: one now, then one at each moment the
+    // ledger states something becomes due, so no host schedule has to fire.
     spawn_readiness_probe();
+    crate::core::server::subscriptions::maintenance::spawn();
 
     let app = router::app(aliases, ingress_auth);
 

@@ -13,17 +13,17 @@ use std::collections::BTreeSet;
 use tracing::info;
 
 /// One pass over every subscription Skarbiec lists: each expired grant is
-/// renewed, each one that needs a browser gets its sign-in scheduled. How often
-/// passes run is the host's Stado schedule for `brama maintain`.
+/// renewed, each one that needs a browser gets its sign-in scheduled through
+/// Weles. Each maintenance pass of the serving process runs it once.
 /// An unreadable inventory is the failure, named with the broker's own error.
 pub(crate) async fn sweep() -> Result<Value, String> {
     let entries = broker::list_all_subscriptions().await.map_err(|error| {
         format!("the Skarbiec subscription inventory could not be read: {error}")
     })?;
     let mut visited = BTreeSet::new();
-    let mut refreshed = 0usize;
-    let mut refused = 0usize;
-    let mut checks_scheduled = 0usize;
+    let mut refreshed = Vec::new();
+    let mut refused = Vec::new();
+    let mut checks_scheduled = Vec::new();
     for entry in entries {
         if entry.status != "active"
             || crate::journal::is_retired(&entry.id)?
@@ -34,23 +34,23 @@ pub(crate) async fn sweep() -> Result<Value, String> {
         }
         match usage::credential_refresh_hint(&entry.id) {
             RefreshHint::AwaitingSignIn => {
-                if schedule_sign_in(entry.id, entry.provider) {
-                    checks_scheduled += 1;
+                if schedule_sign_in(entry.id.clone(), entry.provider) {
+                    checks_scheduled.push(entry.id);
                 }
                 continue;
             }
             RefreshHint::NotDue => continue,
             RefreshHint::Read => {}
         }
-        match refresh_one(entry.id, entry.provider).await {
-            Swept::Refreshed => refreshed += 1,
-            Swept::Refused => refused += 1,
+        match refresh_one(entry.id.clone(), entry.provider).await {
+            Swept::Refreshed => refreshed.push(entry.id),
+            Swept::Refused => refused.push(entry.id),
             Swept::AwaitingSignIn {
                 subscription_id,
                 provider,
             } => {
-                if schedule_sign_in(subscription_id, provider) {
-                    checks_scheduled += 1;
+                if schedule_sign_in(subscription_id.clone(), provider) {
+                    checks_scheduled.push(subscription_id);
                 }
             }
             Swept::NotDue | Swept::Skipped => {}
@@ -76,9 +76,11 @@ pub(crate) async fn sweep() -> Result<Value, String> {
                 admitted.push(
                     json!({ "id": entry.id, "provider": entry.provider, "item": account.item }),
                 );
-                let scheduled = broker::supports_oauth_refresh(&entry.provider)
-                    && schedule_sign_in(entry.id, entry.provider);
-                checks_scheduled += usize::from(scheduled);
+                if broker::supports_oauth_refresh(&entry.provider)
+                    && schedule_sign_in(entry.id.clone(), entry.provider)
+                {
+                    checks_scheduled.push(entry.id);
+                }
             }
             Ok(None) => {}
             Err(detail) => {
@@ -89,17 +91,17 @@ pub(crate) async fn sweep() -> Result<Value, String> {
     info!(
         event = "credential_refresh_sweep_finished",
         subscriptions = visited.len(),
-        refreshed,
-        refused,
-        sign_in_checks_scheduled = checks_scheduled,
+        refreshed = refreshed.len(),
+        refused = refused.len(),
+        sign_in_checks_scheduled = checks_scheduled.len(),
         recovered = admitted.len(),
         "Finished subscription renewal; scheduled checks are not completed browser logins"
     );
     Ok(json!({
         "subscriptions": visited.len(),
-        "refreshed": refreshed,
-        "refused": refused,
-        "sign_in_checks_scheduled": checks_scheduled,
+        "refreshed": refreshed.len(),
+        "refused": refused.len(),
+        "sign_in_checks_scheduled": checks_scheduled.len(),
         "recovered": admitted,
         "unrecoverable": refused_admission,
     }))

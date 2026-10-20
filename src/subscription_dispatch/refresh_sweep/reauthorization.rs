@@ -23,7 +23,7 @@ use super::claim::InFlight;
 
 /// The age, in whole seconds, before a second browser sign-in may be driven
 /// for one stored credential. Unset, nothing but the verdict gate and the
-/// host's declared `brama maintain` schedule paces sign-ins.
+/// serving process's maintenance passes pace sign-ins.
 const SIGN_IN_COOLDOWN_ENV: &str = "BRAMA_CREDENTIAL_SIGN_IN_COOLDOWN_SECS";
 
 /// Only one remote browser sign-in may own Weles at a time. OAuth refreshes

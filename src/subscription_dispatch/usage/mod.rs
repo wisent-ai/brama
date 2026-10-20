@@ -238,6 +238,32 @@ pub fn usage_for(subscription_id: &str) -> Option<SubscriptionUsage> {
     read_ledger(|ledger| ledger.subscriptions.get(subscription_id).cloned())
 }
 
+/// The next instant after now the ledger states something about a
+/// subscription becomes due: a working grant's stated expiry, a plan window's
+/// stated reset, or a rate block's stated end. `None` when it states no such
+/// instant. The serving process runs its next maintenance pass then, so the
+/// moment comes from what providers stated, never from a clock of Brama's.
+pub fn next_due_ms() -> Option<i64> {
+    let now = now_ms();
+    read_ledger(|ledger| {
+        ledger
+            .subscriptions
+            .values()
+            .flat_map(|entry| {
+                let expiry = entry
+                    .credential
+                    .as_ref()
+                    .filter(|credential| credential.state.usable())
+                    .and_then(|credential| credential.expires_at_ms);
+                let resets = entry.limits.values().filter_map(|reading| reading.resets_at_ms);
+                let block = entry.block.as_ref().map(|block| block.blocked_until_ms);
+                expiry.into_iter().chain(resets).chain(block)
+            })
+            .filter(|at| *at > now)
+            .min()
+    })
+}
+
 /// Every subscription in the current process ledger, without writing it back.
 ///
 /// This uses the same in-memory state as [`usage_for`], including observations

@@ -1,27 +1,29 @@
-//! One maintenance pass of this serving process, and the refusal that starts
+//! The serving process's own maintenance passes, and the refusal that wakes
 //! one.
 //!
 //! A pass reads every plan usage report that is due, renews every grant
 //! whose stated expiry has passed, signs accounts in through Weles, decides
 //! whether a spent pool needs a new account, and takes a fresh readiness
-//! reading. The host's Stado schedule calls it through `brama maintain`.
-//! That schedule runs through the fleet store, and a fleet store whose vault
-//! stops answering fires nothing; a gateway that waited for it would refuse
-//! every request `subscription_reauthorization_required` while nothing
-//! renewed a grant. So the refusal itself starts a pass: a request refused
-//! for want of a signed-in subscription starts one, unless one is already
-//! running, and the gateway repairs itself on the next request instead of
-//! waiting for a schedule that may never fire. No clock decides it.
+//! reading. The serving process runs one when it starts, then one at the next
+//! moment the ledger states something becomes due (a grant's stated expiry, a
+//! plan window's stated reset, a rate block's stated end), and one whenever a
+//! request is refused for want of a signed-in subscription. No host schedule
+//! has to fire for a grant to be renewed or a member to be signed in, and no
+//! clock of Brama's decides when: `brama maintain` is one more pass beside
+//! these, for an operator who wants one now.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::LazyLock;
+use std::time::Duration;
 
 use serde_json::{json, Value};
+use tokio::sync::Notify;
 use tracing::info;
 
 use crate::subscription_dispatch::discovery::harness::DiscoveryReport;
 
-/// Whether a pass a refusal started is running now.
-static REFUSAL_PASS: AtomicBool = AtomicBool::new(false);
+/// Wakes the serving process's maintenance before its next stated moment. A
+/// wake while a pass runs is kept, so the pass after it starts at once.
+static WAKE: LazyLock<Notify> = LazyLock::new(Notify::new);
 
 /// Run one maintenance pass, with the account discovery report `supplied`
 /// when the caller observed one and the harness's own otherwise. `ok` is
@@ -70,24 +72,47 @@ pub(in crate::core::server) async fn pass(supplied: Option<DiscoveryReport>) -> 
     })
 }
 
-/// Start one maintenance pass because a request was just refused for want
-/// of a signed-in subscription, unless a pass a refusal started is still
-/// running. The pass runs beside the refusal, which is answered at once.
-pub(in crate::core::server) fn start_after_refusal() {
-    if REFUSAL_PASS.swap(true, Ordering::AcqRel) {
-        return;
-    }
-    info!(
-        event = "maintenance_started_by_refusal",
-        "a request was refused for want of a signed-in subscription; one maintenance pass starts"
-    );
+/// Run the serving process's maintenance: a pass now, then one at each next
+/// moment the ledger states, or sooner when woken.
+pub(in crate::core::server) fn spawn() {
     tokio::spawn(async {
-        let report = pass(None).await;
-        info!(
-            event = "maintenance_by_refusal_finished",
-            ok = report["ok"].as_bool() == Some(true),
-            "the maintenance pass a refusal started finished"
-        );
-        REFUSAL_PASS.store(false, Ordering::Release);
+        loop {
+            let woken = WAKE.notified();
+            tokio::pin!(woken);
+            woken.as_mut().enable();
+            let report = pass(None).await;
+            let due = crate::subscription_dispatch::usage::next_due_ms();
+            info!(
+                event = "maintenance_pass_finished",
+                ok = report["ok"].as_bool() == Some(true),
+                next_due_ms = due,
+                "the serving process's maintenance pass finished"
+            );
+            let remaining = due.map(|at| at.saturating_sub(chrono::Utc::now().timestamp_millis()));
+            match remaining.filter(|left| left.is_positive()) {
+                Some(left) => {
+                    let moment = tokio::time::Instant::now() + Duration::from_millis(left.unsigned_abs());
+                    tokio::select! {
+                        () = &mut woken => {}
+                        () = tokio::time::sleep_until(moment) => {}
+                    }
+                }
+                // A moment that passed while the pass ran is due now; with
+                // none stated, the next refusal or `brama maintain` wakes it.
+                None if due.is_some() => {}
+                None => woken.await,
+            }
+        }
     });
+}
+
+/// Wake the serving process's maintenance because a request was just
+/// refused for want of a signed-in subscription. The refusal is answered at
+/// once; the pass runs beside it, or right after the one already running.
+pub(in crate::core::server) fn start_after_refusal() {
+    info!(
+        event = "maintenance_woken_by_refusal",
+        "a request was refused for want of a signed-in subscription; a maintenance pass is due"
+    );
+    WAKE.notify_one();
 }

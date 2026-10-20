@@ -128,7 +128,7 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
     // while every request is refused with `no working subscription model for
     // signed agent`.
     let mut untagged = untagged;
-    let mut unnamed = 0usize;
+    let mut unnamed = false;
     if !facts.standalone {
         let entries = match crate::gateway::broker::policy_unnamed_subscriptions().await {
             Ok(entries) => entries,
@@ -149,7 +149,7 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
                     is in neither the policy nor the boot catalogue; install this release again \
                     on this host to serve it",
             }));
-            unnamed += 1;
+            unnamed = true;
         }
     }
 
@@ -166,10 +166,11 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
     // credentials is a command of the release that cannot be promoted. A
     // configured gateway with no live
     // credential is not a broken deployment; it is a deployment waiting for a
-    // sign-in, and it must be allowed to exist in order to run one. It answers
-    // `ready: false` and `operator_action_required`, and `/readyz` answers 200
+    // sign-in it runs itself through Weles, and it must be allowed to exist in
+    // order to run one. It answers `ready: false`, and `/readyz` answers 200
     // so a rollout can replace the build that cannot repair itself.
-    let repairable = !facts.providers.is_empty() || facts.active_subscriptions > 0;
+    let repairable =
+        !facts.providers.is_empty() || facts.active_subscriptions != Default::default();
     // What the automatic loop can and cannot repair, which is a different
     // question from whether a credential is currently good: a deployment can
     // hold nothing but healthy grants and still be unable to replace any of
@@ -201,19 +202,20 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
         axum::http::StatusCode::SERVICE_UNAVAILABLE
     };
     let reason = if facts.providers.is_empty()
-        && facts.active_subscriptions == 0
+        && facts.active_subscriptions == Default::default()
         && untagged.is_empty()
     {
         "no provider capability or subscription is configured"
     } else if !serving {
         "no configured direct provider or subscription route can obtain a credential; this \
-         deployment serves no traffic and is waiting for a sign-in, which is why it is \
-         installable rather than refused"
+         deployment serves no traffic until its own maintenance renews a grant or signs a member \
+         in through Weles, which is why it is installable rather than refused"
     } else if !facts.denied.is_empty() {
         "traffic can be served, but a configured direct-provider credential could not be obtained"
     } else if !facts.unredeemable.is_empty() {
-        "traffic can be served, but an active subscription credential could not be redeemed"
-    } else if unnamed > 0 {
+        "traffic can be served, but an active subscription credential could not be redeemed; \
+         this gateway's own maintenance renews it or signs it in through Weles"
+    } else if unnamed {
         "traffic can be served, but the vault holds a subscription this process was not started \
          with: the runtime policy does not name it"
     } else if !untagged.is_empty() {
@@ -261,7 +263,15 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
                 "host": placement.to_json(),
                 "blocked": blocked,
             }),
-            "operator_action_required": !healthy,
+            // An operator is asked for only what the automatic loop cannot
+            // repair: a direct-provider credential the vault does not hold, a
+            // vault account this process was not started with or cannot route,
+            // or a member whose automatic sign-in is blocked. An unredeemable
+            // subscription is renewed or signed in through Weles by the serving
+            // process's own maintenance, and asks nothing of anyone.
+            "operator_action_required": !facts.denied.is_empty()
+                || !untagged.is_empty()
+                || !blocked.is_empty(),
             "build": crate::build_info::current(),
         }),
     }

@@ -283,19 +283,20 @@ Routing results appear under <code>routing</code>. Rows in <code>subscriptions[]
 secret.</p>
 <p>Every answer also carries <code>maintenance</code>: the last maintenance pass this
 process ran, as <code>{"last_pass_unix": &lt;seconds&gt;, "last_pass_ok": &lt;bool&gt;}</code>.
-A pass runs when the host's Stado schedule calls
-<a href="/docs/cli/maintain"><code>brama maintain</code></a>, and when a request is refused
-<code>subscription_reauthorization_required</code>: that refusal starts one pass in the
-serving process unless one it started is still running, so a gateway whose schedule never
-fires still renews grants and schedules sign-ins. Before the first pass it reads
-<code>{"last_pass_unix": null, "detail": "no maintenance pass has run since this process
-started: one runs when the host's Stado schedule calls brama maintain, and when a request is
-refused for want of a signed-in subscription; a host with no such schedule declares it with
-stado repair brama --step declarations --target &lt;host&gt; --apply"}</code>. That repair
-step declares the schedule the gateway's installation recipe declares, under the
-installation's own id, for a gateway a release update placed without it. The gateway keeps
-no timer, so it does not judge lateness; a monitor compares <code>last_pass_unix</code> with
-the schedule it declared.</p>
+The serving process runs its own passes, with no schedule to declare: one when it starts,
+then one at the next moment its usage ledger states something becomes due (a grant's stated
+expiry, a plan window's stated reset, a rate block's stated end), and one right after a
+request is refused <code>subscription_reauthorization_required</code>; each renews due grants
+and signs members in through Weles by itself. <a href="/docs/cli/maintain"><code>brama
+maintain</code></a> asks for one more. Before the first pass ends it reads
+<code>{"last_pass_unix": null, "detail": "the serving process's first maintenance pass has
+not finished since it started: it renews due grants and signs members in through Weles by
+itself, and its result appears here when it ends"}</code>.
+<code>operator_action_required</code> is true only for what that maintenance cannot
+repair: a direct-provider credential the vault does not hold, a vault account this process
+was not started with or cannot route, or a member listed in
+<code>automatic_sign_in.blocked</code>; an unredeemable subscription alone asks nothing of
+anyone.</p>
 <p>A credential call that stands unanswered overrides the completed report. Each call to
 the credential source — a Skarbiec introspection over HTTP, and each vault child the gateway
 shells (<code>list subscriptions</code>, <code>inspect credential account</code>,

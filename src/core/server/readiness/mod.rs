@@ -128,8 +128,8 @@ fn publish(report: ReadinessReport) {
     changed();
 }
 
-/// The last `brama maintain` pass this process ran: when it finished, and
-/// whether every step succeeded. `None` until the first pass.
+/// The last maintenance pass this process ran: when it finished, and whether
+/// every step succeeded. `None` until the first pass.
 static LAST_MAINTENANCE: LazyLock<std::sync::RwLock<Option<(std::time::SystemTime, bool)>>> =
     LazyLock::new(|| std::sync::RwLock::new(None));
 
@@ -142,11 +142,11 @@ pub(in crate::core::server) fn record_maintenance(ok: bool) {
     changed();
 }
 
-/// What `/readyz` says about maintenance. The gateway keeps no timer, so it
-/// cannot tell a late pass from an early one; it states when the last pass
-/// ended and how, and says plainly when none has run. A pass runs when the
-/// host's Stado schedule calls `brama maintain`, and when a request is
-/// refused for want of a signed-in subscription.
+/// What `/readyz` says about maintenance: when the last pass ended and how,
+/// and plainly when none has finished yet. The serving process runs its own
+/// passes (one when it starts, then one at each moment the ledger states
+/// something becomes due, and one after a request refused for want of a
+/// signed-in subscription); `brama maintain` asks for one more.
 fn maintenance_state() -> Value {
     let last = *crate::core::sync::read_held(&LAST_MAINTENANCE, "last maintenance pass");
     match last {
@@ -160,10 +160,9 @@ fn maintenance_state() -> Value {
         },
         None => json!({
             "last_pass_unix": null,
-            "detail": "no maintenance pass has run since this process started: one runs when the \
-                       host's Stado schedule calls brama maintain, and when a request is refused \
-                       for want of a signed-in subscription; a host with no such schedule \
-                       declares it with stado repair brama --step declarations --target <host> --apply"
+            "detail": "the serving process's first maintenance pass has not finished since it \
+                       started: it renews due grants and signs members in through Weles by itself, \
+                       and its result appears here when it ends"
         }),
     }
 }

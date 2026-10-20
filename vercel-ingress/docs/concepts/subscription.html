@@ -109,8 +109,8 @@ Other providers are reported as unsupported by this free-report path with the
 current credential, not as successfully queried billing APIs. Observed traffic
 counters remain available. A background read is due when a subscription has no
 reading, a reading whose window has reset, a reading that names no reset, or a
-failed last read; due readings are read on each <code>brama maintain</code> pass, run by
-the host's Stado schedule, single-flighted per subscription. A failed read never
+failed last read; due readings are read on each maintenance pass the serving process runs
+itself (and each <code>brama maintain</code> asks for), single-flighted per subscription. A failed read never
 blanks a row: the last good reading is served with <code>stale: true</code> until a newer
 one replaces it.</p>
 <p><code>brama subscription list --refresh-usage</code>, Brama Desktop's

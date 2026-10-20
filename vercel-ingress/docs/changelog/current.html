@@ -24,6 +24,19 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-own-maintenance">Unreleased: the gateway runs its own maintenance and signs members in without anyone<a class="headerlink" href="#unreleased-own-maintenance" title="Link to this section">&para;</a></h2>
+<p>The serving process now runs its own maintenance passes: one when it starts, then one at the
+next moment its usage ledger states something becomes due (a grant's stated expiry, a plan
+window's stated reset, a rate block's stated end), and one right after a request is refused
+<code>subscription_reauthorization_required</code>. Each renews due grants and signs members in
+through Weles. No host schedule has to fire; <code>brama maintain</code> asks for one more. The
+refusal is now <code>retryable: true</code>, <code>/readyz</code>
+<code>operator_action_required</code> is true only for what that maintenance cannot repair
+(a missing direct-provider credential, a vault account the process cannot route, or a member in
+<code>automatic_sign_in.blocked</code>), and an unredeemable subscription alone asks nothing of
+anyone (<a href="/docs/cli/maintain">brama maintain</a>,
+<a href="/docs/http-api/administration-and-operations">Administration</a>,
+<a href="/docs/errors">Errors</a>).</p>
 <h2 id="unreleased-decision-schema">Unreleased: subscription decisions are held to their schema, and a breach names its answer<a class="headerlink" href="#unreleased-decision-schema" title="Link to this section">&para;</a></h2>
 <p>The answer schema of a decision, and of a chat request with <code>response_format</code>,
 now travels on the Responses wire as <code>text.format</code> and on the Anthropic Messages

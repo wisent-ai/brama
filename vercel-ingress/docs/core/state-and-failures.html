@@ -78,7 +78,7 @@ provider and carries no <code>attempts</code> key:</p>
 <tr><td style="text-align: right;">502</td><td><code>provider_failure</code></td><td>the provider returned a permanent or malformed failure</td><td>Inspect the provider classification; retry only if the envelope says so</td></tr>
 <tr><td style="text-align: right;">503</td><td><code>alias_unserviceable</code></td><td>a declared alias cannot serve; <code>details</code> carry <code>state</code> and <code>route</code></td><td>Repair the alias in the registry; this is the caller's answer for that alias</td></tr>
 <tr><td style="text-align: right;">503</td><td><code>credential_unauthorized</code></td><td>redemption was refused, or no capability, read grant, or installation trust material could produce a credential at all</td><td>Repair the authorization chain; waiting does not reach it</td></tr>
-<tr><td style="text-align: right;">503</td><td><code>subscription_reauthorization_required</code></td><td>every credential within the bound was refused by the provider</td><td>Sign the subscription in again</td></tr>
+<tr><td style="text-align: right;">503</td><td><code>subscription_reauthorization_required</code></td><td>every credential within the bound was refused by the provider; retryable, and the refusal wakes the gateway's own maintenance</td><td>Retry once the pass ends: the gateway renews the grant or signs the member in through Weles by itself</td></tr>
 <tr><td style="text-align: right;">503</td><td><code>dependency_unavailable</code></td><td>a required catalogue, broker, vault, or provider is unavailable, or the transport did not carry a provider request; the message retains its cause</td><td>Restore the named dependency</td></tr>
 <tr><td style="text-align: right;">500</td><td><code>internal_error</code></td><td>Brama failed outside a classified dependency</td><td>Operator investigation is required</td></tr>
 </tbody>
@@ -131,8 +131,9 @@ attempt count the envelope reports. The full code list, with examples, is in
 <li>the provider usage report pass spends no plan quota: one read per active
   subscription that has no reading, a reset window, a reading naming no reset or
   a failed last read, single-flighted per subscription, no retry inside a pass,
-  and it runs only when <code>brama maintain</code> asks; a host with no schedule for it
-  reads none;</li>
+  and it runs in each of the serving process's own maintenance passes (one at start,
+  one at each moment the ledger states something becomes due, one after a refusal for
+  want of a signed-in subscription) and when <code>brama maintain</code> asks;</li>
 <li>the completion probe is bounded to what an operator asks for: one attempt
   against one named subscription per request to
   <code>POST /v1/admin/subscriptions/:agent_id/:subscription_id/probe</code>, no retry, no
@@ -140,9 +141,11 @@ attempt count the envelope reports. The full code list, with examples, is in
   recorded block, and never triggered by a timer &mdash; the shipped
   configuration performs no quota-consuming request on any schedule;</li>
 <li>the credential refresh pass makes one refresh attempt per active
-  subscription per <code>brama maintain</code> run, single-flighted per
-  subscription, no retry inside a pass, a definitively refused credential left
-  alone until a sign-in replaces it; the gateway holds no timer that starts it;</li>
+  subscription per maintenance pass, single-flighted per subscription, no retry
+  inside a pass, a definitively refused credential left alone until a sign-in
+  through Weles replaces it; a pass starts at a moment the ledger states (a grant's
+  stated expiry, a plan window's stated reset, a block's stated end), never on a
+  period of Brama's own;</li>
 <li>no unbounded background retry, queue, or provider worker exists;</li>
 <li>append-only journal growth is operator-monitored until a versioned compaction
   contract exists.</li>

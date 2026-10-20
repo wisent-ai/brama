@@ -110,9 +110,11 @@ recorded and the discarded attempt stays `in_progress` forever on the Echo side.
   shape is refused by its JSON path). Every other provider
   publishes nothing, and that absence is recorded as the provider's own answer
   rather than left as an unexplained blank. A subscription's report is read on
-  a `brama maintain` pass when it has no reading, a reading whose window has
-  reset, a reading that names no reset, or a failed last read; how often passes
-  run is the host's Stado schedule. Reads are single-flighted per subscription
+  a maintenance pass when it has no reading, a reading whose window has
+  reset, a reading that names no reset, or a failed last read; the serving process
+  runs its own passes (at start, at each moment its ledger states something becomes
+  due, and after a refusal for want of a signed-in subscription), and
+  `brama maintain` asks for one more. Reads are single-flighted per subscription
   and logged under `plan_usage_*`. A failed read never blanks a row: the last
   good reading is kept and served with `stale` true until a newer one replaces it.
 - **Routing by what the plans have left:** the readings above are not only for
@@ -150,8 +152,8 @@ recorded and the discarded attempt stays `in_progress` forever on the Echo side.
   is what the block exists to prevent. The probe rotates to no other credential,
   retires nothing, and is logged under its own `usage_probe_*` events so it is
   never mistaken for a caller's request.
-- **Refreshing expired grants between requests:** each `brama maintain` pass,
-  run on the host's Stado schedule, refreshes every active subscription
+- **Refreshing expired grants between requests:** each maintenance pass
+  of the serving process refreshes every active subscription
   credential whose stated expiry has passed, single-flighted per subscription so
   a slow refresh is never started twice. A token is used until its stated
   expiry; a request the provider rejects forces a refresh on the request path.

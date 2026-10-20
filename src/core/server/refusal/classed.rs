@@ -66,12 +66,15 @@ pub fn provider_refusal_contract(kind: ProviderRefusal) -> ModelErrorContract {
             code: "credential_unauthorized",
             retryable: false,
         },
+        // The refusal wakes the serving process's maintenance, which renews
+        // the grant or signs the member in through Weles by itself; the same
+        // request can succeed once that pass ends, and nobody has to act.
         ProviderRefusal::Gateway(GatewayRefusal::SubscriptionReauthorizationRequired) => {
             ModelErrorContract {
                 status: StatusCode::SERVICE_UNAVAILABLE,
                 error_type: "authorization_error",
                 code: "subscription_reauthorization_required",
-                retryable: false,
+                retryable: true,
             }
         }
         ProviderRefusal::Gateway(GatewayRefusal::SubscriptionUnavailable) => ModelErrorContract {

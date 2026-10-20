@@ -77,9 +77,11 @@
           <tr><td><code>BRAMA_VAULT_CHILD_RESIDENT_CEILING_BYTES</code>, <code>BRAMA_VAULT_CHILD_FOOTPRINT_CHECK_SECONDS</code></td><td>unset: a vault child runs until it ends</td><td>resident bytes past which a vault command is ended, and how often its footprint is read; a ceiling that is not Unicode or not a whole number, or declared without the cadence, refuses the command by naming the variable. The log names every vault child's operation and pid when it starts and when it ends.</td></tr>
           <tr><td><code>BRAMA_CAPABILITY_LIFETIME_SECONDS</code></td><td>required for every provider request that redeems a vault capability: unset, the request is refused with <code>BRAMA_CAPABILITY_LIFETIME_SECONDS is not declared: state how many whole seconds a capability obtained for one request may wait for its redemption</code>, and zero is refused as less than one second</td><td>whole seconds a capability issued for one request may wait for its redemption. Each request's capability carries one use; Skarbiec drops it once it is spent, so the lifetime bounds only a capability whose request never redeemed it</td></tr>
         </tbody></table>
-        <p>The gateway keeps no timer: usage reports, token refreshes and the
-        readiness reading are each taken by one <code>brama maintain</code> pass, which
-        the host's Stado schedule runs. Usage reports and token refreshes are free, and
+        <p>No schedule is declared for maintenance: usage reports, token refreshes,
+        sign-ins and the readiness reading are each taken by a maintenance pass the
+        serving process runs itself, at start, at each moment its ledger states
+        something becomes due, and after a refusal for want of a signed-in subscription;
+        <code>brama maintain</code> asks for one more. Usage reports and token refreshes are free, and
         the only quota-spending check is the
         explicit admin probe route. Signing an account in is not configurable and not
         an operator action: when a provider refuses a grant, or the stored document is

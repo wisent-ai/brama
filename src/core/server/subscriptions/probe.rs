@@ -167,7 +167,7 @@ pub(in crate::core::server) async fn second_factor_admin_subscription_pool(
 }
 
 /// One maintenance pass of this serving process ([`super::maintenance::pass`]),
-/// asked by `brama maintain` on the host's Stado schedule.
+/// asked by `brama maintain` beside the passes the process runs itself.
 pub(in crate::core::server) async fn maintain_admin(
     Extension(client_identity): Extension<ModelClientIdentity>,
     supplied: Option<Json<crate::subscription_dispatch::discovery::harness::DiscoveryReport>>,
