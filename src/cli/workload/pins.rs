@@ -39,13 +39,14 @@ pub(crate) fn mismatches(registry: &Path, binary: &Path) -> Result<Vec<String>, 
     ];
     Ok(expected
         .into_iter()
-        .filter_map(|(name, actual)| {
-            let pinned = match workload.get(name) {
-                Some(Value::String(text)) => text.clone(),
-                Some(Value::Null) | None => "None".into(),
-                Some(other) => other.to_string(),
-            };
-            (pinned != actual).then(|| format!("{name} pinned={pinned} actual={actual}"))
+        .filter_map(|(name, actual)| match workload.get(name) {
+            Some(Value::String(pinned)) => {
+                (*pinned != actual).then(|| format!("{name} pinned={pinned} actual={actual}"))
+            }
+            Some(Value::Null) | None => Some(format!("{name} is not pinned, actual={actual}")),
+            Some(other) => Some(format!(
+                "{name} is pinned as {other}, which is not text, actual={actual}"
+            )),
         })
         .collect())
 }

@@ -32,8 +32,8 @@
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <p>Each exits 1:</p>
 <ul>
-<li><code>workload registry disagrees on &lt;name&gt; pinned=&lt;value&gt; actual=&lt;value&gt;</code> — the first field that differs: <code>uid</code>, <code>gid</code>, the binary's path or its digest.</li>
-<li><code>workload registry is unreadable: &lt;error&gt;</code></li>
+<li><code>workload registry disagrees on &lt;name&gt; pinned=&lt;value&gt; actual=&lt;value&gt;</code> — the first field that differs: <code>uid</code>, <code>gid</code>, the binary's path or its digest; a field the registry does not pin reads <code>&lt;name&gt; is not pinned, actual=&lt;value&gt;</code>, and one pinned as something other than text <code>&lt;name&gt; is pinned as &lt;value&gt;, which is not text, actual=&lt;value&gt;</code>.</li>
+<li><code>workload registry is unreadable: &lt;error&gt;</code>; <code>workload registry &lt;path&gt; declares no workload</code></li>
 <li><code>&lt;binary&gt;: &lt;error&gt;</code> — the binary could not be read or resolved.</li>
 </ul>
 <p><a href="/docs/cli">Back to the complete CLI command tree</a>.</p></article>
