@@ -10,7 +10,7 @@ use serde_json::{json, Map, Value};
 
 use super::registry::{known_max_output_tokens, ProviderDescriptor, WireProtocol};
 use crate::types::ModelRequest;
-use anthropic_messages::{anthropic_tool_choice, anthropic_tools};
+use anthropic_messages::anthropic_tooling;
 use openai_chat::{openai_messages, response_format};
 use openai_responses::responses_payload;
 use tool_schema::normalized_tools_value;
@@ -96,10 +96,11 @@ pub(in crate::providers::adapter) fn chat_payload(
             if let Some(system) = request.system.as_deref().filter(|value| !value.is_empty()) {
                 body["system"] = json!(system);
             }
-            if let Some(tools) = anthropic_tools(request) {
-                body["tools"] = json!(tools);
+            let (tools, choice) = anthropic_tooling(request);
+            if let Some(tools) = tools {
+                body["tools"] = tools;
             }
-            if let Some(choice) = request.tool_choice.as_ref().and_then(anthropic_tool_choice) {
+            if let Some(choice) = choice {
                 body["tool_choice"] = choice;
             }
             body

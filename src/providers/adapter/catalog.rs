@@ -16,7 +16,7 @@ use super::call::outcome::refusal::{attempted_failure, provider_error, transport
 use super::call::outcome::response_body::response_text;
 use super::call::outcome::retry::send_once_more_if_unsent;
 use super::dialect::anthropic_messages::{
-    anthropic_messages, anthropic_tool_choice, anthropic_tools, model_response_from_anthropic,
+    anthropic_messages, anthropic_tooling, answer_tool, model_response_from_anthropic,
 };
 use super::dialect::openai_chat::{model_response_from_openai, openai_messages, response_format};
 use super::dialect::tool_schema::normalized_tools_value;
@@ -146,10 +146,11 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
             if let Some(system) = request.system.as_deref().filter(|value| !value.is_empty()) {
                 body["system"] = json!(system);
             }
-            if let Some(tools) = anthropic_tools(request) {
-                body["tools"] = json!(tools);
+            let (tools, choice) = anthropic_tooling(request);
+            if let Some(tools) = tools {
+                body["tools"] = tools;
             }
-            if let Some(choice) = request.tool_choice.as_ref().and_then(anthropic_tool_choice) {
+            if let Some(choice) = choice {
                 body["tool_choice"] = choice;
             }
             (catalog_endpoint(&base_url, "/messages"), body)
@@ -216,7 +217,7 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
                 model_response_from_openai(&request.model, body, elapsed_ms)
             }
             CatalogProtocol::AnthropicMessages => {
-                model_response_from_anthropic(&request.model, body, elapsed_ms)
+                model_response_from_anthropic(&request.model, body, elapsed_ms, answer_tool(request))
             }
             CatalogProtocol::GoogleGenerateContent => {
                 model_response_from_google(&request.model, body, elapsed_ms)

@@ -85,7 +85,8 @@ fn responses_tools(request: &ModelRequest) -> Option<Vec<Value>> {
                     "type": "function",
                     "name": tool.function.name,
                     "description": tool.function.description,
-                    "parameters": tool.function.parameters.clone().unwrap_or_else(|| json!({"type": "object"})),
+                    // A tool that declares no parameters states none.
+                    "parameters": tool.function.parameters.clone(),
                 }))
                 .collect()
         })
@@ -109,6 +110,19 @@ pub(super) fn responses_payload(request: &ModelRequest, model_id: &str) -> Value
             Some(choice) => responses_tool_choice(choice),
             None => json!(CODEX_TOOL_CHOICE),
         };
+    }
+    // The answer schema is held by decoding, as the Codex client sends it
+    // for an output schema:
+    // https://platform.openai.com/docs/api-reference/responses/create#responses-create-text
+    if let Some(schema) = &request.response_schema {
+        body["text"] = json!({
+            "format": {
+                "type": "json_schema",
+                "name": schema.name,
+                "schema": schema.schema,
+                "strict": true,
+            }
+        });
     }
     body
 }

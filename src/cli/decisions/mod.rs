@@ -131,8 +131,9 @@ pub(crate) async fn decide(args: DecideArgs) {
                 DecisionFailure::Provider(_) => {
                     eprintln!("provider refused: {}", failure.message())
                 }
-                DecisionFailure::Contract(_) => {
-                    eprintln!("decision_contract_violated: {}", failure.message())
+                DecisionFailure::Contract(breach) => {
+                    eprintln!("decision_contract_violated: {}", breach.sentence());
+                    eprintln!("reply from {}: {}", breach.answered_by, breach.reply);
                 }
             }
             crate::cli::fail();

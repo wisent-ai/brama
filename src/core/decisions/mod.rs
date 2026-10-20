@@ -55,6 +55,28 @@ pub struct DecisionOutcome {
     pub latency_ms: f64,
 }
 
+/// A reply the decision contract refuses, with what gave it.
+#[derive(Clone, Debug)]
+pub struct ContractBreach {
+    /// The route that answered: the subscription model `best` selected, or
+    /// the direct route the alias names.
+    pub answered_by: String,
+    /// Why the reply is outside the schema the caller declared.
+    pub reason: String,
+    /// The reply as the model wrote it; a native answer as its JSON body.
+    pub reply: String,
+}
+
+impl ContractBreach {
+    /// The refusal's sentence: which route answered, and why its reply is refused.
+    pub fn sentence(&self) -> String {
+        format!(
+            "{} answered outside the declared schema: {}",
+            self.answered_by, self.reason
+        )
+    }
+}
+
 /// Why a decision was not answered, and whether the provider was reached.
 #[derive(Clone, Debug)]
 pub enum DecisionFailure {
@@ -64,15 +86,17 @@ pub enum DecisionFailure {
     /// The provider answered, and the answer was not inside the schema the
     /// caller declared. Naming this separately is the point: a model that
     /// invents an option is a different fault from a provider that is down,
-    /// and only one of them is repaired by trying again later.
-    Contract(String),
+    /// and only one of them is repaired by trying again later. It names the
+    /// route that answered and keeps the reply, so the fault can be read
+    /// without reproducing it.
+    Contract(ContractBreach),
 }
 
 impl DecisionFailure {
-    pub fn message(&self) -> &str {
+    pub fn message(&self) -> String {
         match self {
-            DecisionFailure::Provider(refused) => &refused.message,
-            DecisionFailure::Contract(message) => message,
+            DecisionFailure::Provider(refused) => refused.message.clone(),
+            DecisionFailure::Contract(breach) => breach.sentence(),
         }
     }
 }
@@ -121,14 +145,20 @@ async fn decide_natively(
     let body = dispatch_direct_decision(route, payload)
         .await
         .map_err(DecisionFailure::Provider)?;
-    let answers =
-        answers::answers_from_native(request, &body).map_err(DecisionFailure::Contract)?;
+    let breach = |reason: String| {
+        DecisionFailure::Contract(ContractBreach {
+            answered_by: route.to_string(),
+            reason,
+            reply: body.to_string(),
+        })
+    };
+    let answers = answers::answers_from_native(request, &body).map_err(breach)?;
     Ok(DecisionOutcome {
         answers,
         engine: ENGINE_NATIVE,
         route: route.to_string(),
-        input_tokens: usage_field(&body, "input_tokens")?,
-        output_tokens: usage_field(&body, "output_tokens")?,
+        input_tokens: usage_field(&body, "input_tokens").map_err(breach)?,
+        output_tokens: usage_field(&body, "output_tokens").map_err(breach)?,
         latency_ms: started.elapsed().as_secs_f64() * MS_PER_SECOND,
     })
 }
@@ -167,7 +197,7 @@ fn native_questions(request: &DecisionRequest) -> Value {
 
 /// `usage.<field>` of a provider's answer: `None` when it stated none, and a
 /// refusal naming the number when it does not fit the count's width.
-fn usage_field(body: &Value, field: &str) -> Result<Option<u32>, DecisionFailure> {
+fn usage_field(body: &Value, field: &str) -> Result<Option<u32>, String> {
     let Some(stated) = body
         .get("usage")
         .and_then(|usage| usage.get(field))
@@ -176,9 +206,7 @@ fn usage_field(body: &Value, field: &str) -> Result<Option<u32>, DecisionFailure
         return Ok(None);
     };
     u32::try_from(stated).map(Some).map_err(|error| {
-        DecisionFailure::Contract(format!(
-            "the provider stated usage.{field} {stated}, which no count holds: {error}"
-        ))
+        format!("the provider stated usage.{field} {stated}, which no count holds: {error}")
     })
 }
 
@@ -195,16 +223,22 @@ pub fn outcome_from_chat(
     if let Some(refusal) = response.refusal.take() {
         return Err(DecisionFailure::Provider(refusal));
     }
-    let answers = answers::answers_from_text(request, &response.content)
-        .map_err(DecisionFailure::Contract)?;
+    let answered_by = if response.model.is_empty() {
+        route.to_string()
+    } else {
+        response.model.clone()
+    };
+    let answers = answers::answers_from_text(request, &response.content).map_err(|reason| {
+        DecisionFailure::Contract(ContractBreach {
+            answered_by: answered_by.clone(),
+            reason,
+            reply: response.content.clone(),
+        })
+    })?;
     Ok(DecisionOutcome {
         answers,
         engine: ENGINE_CHAT,
-        route: if response.model.is_empty() {
-            route.to_string()
-        } else {
-            response.model.clone()
-        },
+        route: answered_by,
         input_tokens: response.usage.map(|usage| usage.input_tokens),
         output_tokens: response.usage.map(|usage| usage.output_tokens),
         latency_ms: response.latency_ms,

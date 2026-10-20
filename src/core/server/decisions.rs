@@ -68,10 +68,13 @@ pub(in crate::core::server) async fn decisions(
         return Err(api_error_with_details(
             StatusCode::SERVICE_UNAVAILABLE,
             "alias_unserviceable",
-            &diagnosis
-                .reason
-                .clone()
-                .unwrap_or_else(|| format!("alias `{}` has no serviceable route", request.model)),
+            &match &diagnosis.reason {
+                Some(reason) => reason.clone(),
+                None => format!(
+                    "alias `{}` has no serviceable route: it is {}",
+                    request.model, diagnosis.state
+                ),
+            },
             json!({
                 "alias": diagnosis.alias,
                 "state": diagnosis.state,
@@ -132,7 +135,7 @@ fn answered(alias: &str, outcome: &DecisionOutcome) -> Value {
         "usage": {
             "input_tokens": outcome.input_tokens,
             "output_tokens": outcome.output_tokens,
-            "latency_ms": (outcome.latency_ms * 100.0).round() / 100.0,
+            "latency_ms": outcome.latency_ms,
         },
     })
 }
@@ -147,19 +150,22 @@ fn refused(alias: &str, route: &str, failure: DecisionFailure) -> ApiError {
             );
             typed_dispatch_error(&refused)
         }
-        DecisionFailure::Contract(message) => {
+        DecisionFailure::Contract(breach) => {
             warn!(
                 event = "decision_contract_violated",
-                alias, route, error = %message,
+                alias, route, answered_by = %breach.answered_by, error = %breach.reason,
                 "the model answered outside the schema the caller declared"
             );
             api_error_with_details(
                 StatusCode::BAD_GATEWAY,
                 CONTRACT_VIOLATED,
-                &message,
+                &breach.sentence(),
                 json!({
                     "alias": alias,
                     "route": route,
+                    "answered_by": breach.answered_by,
+                    "reason": breach.reason,
+                    "reply": breach.reply,
                     "engine_hint": if alias == DECISION_ALIAS {
                         "point this alias at a stronger decision route"
                     } else {

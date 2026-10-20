@@ -6,9 +6,11 @@ use serde_json::{json, Value};
 use super::named_tool_choice;
 use crate::providers::adapter::call::outcome::refusal::attempted_failure;
 use crate::providers::adapter::stated_usage;
-use crate::types::{Message, ModelRequest, ModelResponse, ProviderRefusal, Refusal, ToolCall};
+use crate::types::{
+    Message, ModelRequest, ModelResponse, ProviderRefusal, Refusal, ResponseSchema, ToolCall,
+};
 
-pub(in crate::providers::adapter) fn anthropic_tool_choice(choice: &Value) -> Option<Value> {
+fn anthropic_tool_choice(choice: &Value) -> Option<Value> {
     if let Some(name) = named_tool_choice(choice) {
         return Some(json!({"type": "tool", "name": name}));
     }
@@ -101,7 +103,7 @@ pub(in crate::providers::adapter) fn anthropic_messages(
         .collect()
 }
 
-pub(in crate::providers::adapter) fn anthropic_tools(request: &ModelRequest) -> Option<Vec<Value>> {
+fn anthropic_tools(request: &ModelRequest) -> Option<Vec<Value>> {
     request.tools.as_ref().map(|tools| {
         tools
             .iter()
@@ -114,10 +116,47 @@ pub(in crate::providers::adapter) fn anthropic_tools(request: &ModelRequest) -> 
     })
 }
 
+/// The answer schema an Anthropic request holds through a tool: the caller's
+/// declared schema when it declared no tools of its own. The Messages wire
+/// holds an answer to a schema with a tool the model must call, whose input
+/// schema is that schema
+/// (https://docs.anthropic.com/en/docs/build-with-claude/tool-use#json-mode).
+pub(in crate::providers::adapter) fn answer_tool(request: &ModelRequest) -> Option<&ResponseSchema> {
+    request
+        .response_schema
+        .as_ref()
+        .filter(|_| request.tools.is_none())
+}
+
+/// The `tools` and `tool_choice` an Anthropic request carries: the answer
+/// tool and a choice that makes the model call it, or the caller's own.
+pub(in crate::providers::adapter) fn anthropic_tooling(
+    request: &ModelRequest,
+) -> (Option<Value>, Option<Value>) {
+    if let Some(schema) = answer_tool(request) {
+        return (
+            Some(json!([{
+                "name": schema.name,
+                "description": "Give the answer as this object.",
+                "input_schema": schema.schema,
+            }])),
+            Some(json!({"type": "tool", "name": schema.name})),
+        );
+    }
+    (
+        anthropic_tools(request).map(Value::from),
+        request.tool_choice.as_ref().and_then(anthropic_tool_choice),
+    )
+}
+
+/// One Messages answer. `answer_tool` is the schema the request held through
+/// a forced tool ([`answer_tool`]): that call's input is the answer text, as
+/// a wire that decodes to a schema would have written it.
 pub(in crate::providers::adapter) fn model_response_from_anthropic(
     route_id: &str,
     body: Value,
     elapsed_ms: f64,
+    answer_tool: Option<&ResponseSchema>,
 ) -> ModelResponse {
     // An answer without a content list is a failure naming what came back:
     // read as no blocks, it passed on as a successful answer that said
@@ -178,6 +217,14 @@ pub(in crate::providers::adapter) fn model_response_from_anthropic(
                 })
             }
             _ => {}
+        }
+    }
+    if let Some(schema) = answer_tool {
+        if let Some(at) = tool_calls
+            .iter()
+            .position(|call| call.function.name == schema.name)
+        {
+            text = tool_calls.remove(at).function.arguments;
         }
     }
     let usage = match stated_usage(

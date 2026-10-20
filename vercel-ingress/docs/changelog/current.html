@@ -24,6 +24,18 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-decision-schema">Unreleased: subscription decisions are held to their schema, and a breach names its answer<a class="headerlink" href="#unreleased-decision-schema" title="Link to this section">&para;</a></h2>
+<p>The answer schema of a decision, and of a chat request with <code>response_format</code>,
+now travels on the Responses wire as <code>text.format</code> and on the Anthropic Messages
+wire as one tool the model is made to call, whose input is read back as the answer; before,
+only the OpenAI chat wire carried it, so <code>best-decision-model</code> served from a Codex
+or Claude subscription could answer without probability mass. A
+<code>decision_contract_violated</code> refusal now names the route that answered — for
+<code>best-decision-model</code>, the subscription model it selected — and carries
+<code>details.answered_by</code>, <code>details.reason</code> and <code>details.reply</code>;
+<code>brama decide</code> prints the reply on a second line. A decision's usage
+<code>latency_ms</code> is the measured value, no longer rounded
+(<a href="/docs/concepts/decision">Decisions</a>, <a href="/docs/errors">Errors</a>).</p>
 <h2 id="unreleased-launcher-grammar">Unreleased: the release check reads launcher scripts with the shell grammar<a class="headerlink" href="#unreleased-launcher-grammar" title="Link to this section">&para;</a></h2>
 <p>The release step that checks every broker verb the launcher calls against the pinned
 broker's inventory now reads the launcher and its stage files with the POSIX shell

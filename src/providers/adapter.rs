@@ -25,7 +25,7 @@ use call::outcome::response_body::response_text;
 use call::outcome::retry::send_once_more_if_unsent;
 use call::{dispatch_client, stream_client};
 use catalog::dispatch_catalog;
-use dialect::anthropic_messages::model_response_from_anthropic;
+use dialect::anthropic_messages::{answer_tool, model_response_from_anthropic};
 use dialect::openai_chat::model_response_from_openai;
 use dialect::openai_responses::event_stream::model_response_from_responses_stream;
 use dialect::{chat_payload, refused_settings, streaming_chat_payload};
@@ -145,7 +145,7 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
                 model_response_from_openai(&request.model, body, elapsed_ms)
             }
             WireProtocol::AnthropicMessages => {
-                model_response_from_anthropic(&request.model, body, elapsed_ms)
+                model_response_from_anthropic(&request.model, body, elapsed_ms, answer_tool(request))
             }
             // Both are refused before a request is built: the Responses wire
             // returns above, and a decision-only provider has no chat path.

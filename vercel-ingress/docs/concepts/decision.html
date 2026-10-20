@@ -128,12 +128,15 @@ rather than silently discarded.</p>
 route a JSON Schema in which every question is a required key whose value
 holds exactly that question's labels as numbers and nothing else; on the
 OpenAI chat wire it is <code>response_format</code> of type
-<code>json_schema</code>, strict, under the name <code>decision</code>. A
-provider that decodes under a schema — OpenAI, and vLLM through its guided
-decoding — then cannot write a label of one question under another, which a
-small model told only in the prompt did. Kimi's coding endpoint, whose accepted
-fields are fixed, and the Anthropic, Responses and Google wires, which have no
-such field here, are sent the prompt alone. The schema does not replace the
+<code>json_schema</code>, strict, under the name <code>decision</code>; on the
+Responses wire (Codex) it is <code>text.format</code> of type
+<code>json_schema</code>, strict, under the same name; on the Anthropic Messages
+wire (Claude) it is the input schema of one tool named <code>decision</code> that
+the request makes the model call, and that call's input is read back as the
+answer text. A provider that decodes under a schema then cannot write a label of
+one question under another, which a small model told only in the prompt did.
+Kimi's coding endpoint, whose accepted fields are fixed, and the Google wire,
+which has no such field here, are sent the prompt alone. The schema does not replace the
 check above: whatever a route answers is still read against what the caller
 declared.</p>
 <h2 id="the-two-aliases">The two aliases<a class="headerlink" href="#the-two-aliases" title="Link to this section">&para;</a></h2>

@@ -194,9 +194,13 @@ provider. A model name that is not one of the two is
 <code>400 model must be `decision-model` or `best-decision-model`</code>. An alias with
 no serviceable route is <code>503 alias_unserviceable</code> carrying
 <code>details.state</code> and <code>details.route</code>. An answer outside the schema the
-caller declared is <code>502 decision_contract_violated</code>, carrying
-<code>details.alias</code> and <code>details.route</code>: the provider answered, and what it
-answered cannot be used.</p>
+caller declared is <code>502 decision_contract_violated</code>, whose message names the
+route that answered and why, carrying <code>details.alias</code>, <code>details.route</code>
+(what the alias resolves to), <code>details.answered_by</code> (the route that answered:
+for <code>best-decision-model</code>, the subscription model it selected),
+<code>details.reason</code> and <code>details.reply</code> (the reply as the model wrote it):
+the provider answered, and what it answered cannot be used. The usage
+<code>latency_ms</code> of an answer is the measured value, unrounded.</p>
 <p>A decision alias is refused on the chat endpoints by name, and a canonical
 route belonging to a decision-only provider is refused there too —
 <code>route `typesafe/jev-latest` serves typed decisions only; call POST
