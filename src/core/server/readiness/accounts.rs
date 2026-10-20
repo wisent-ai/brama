@@ -186,7 +186,18 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
             row
         })
         .collect();
-    if let Some(drift) = placement.blocked() {
+    let placement_drift = placement.blocked();
+    // A sign-in blocked by a dependency that is down or rationing (Weles
+    // unreachable, a provider's rate limit) is retried by the next pass and
+    // asks nothing of an operator; any other block names what is missing.
+    let blocked_for_operator = placement_drift.is_some()
+        || facts.sign_in_blocked.values().any(|(_, blocked)| {
+            !matches!(
+                blocked.failure_code(),
+                wisent_errors::Code::InfraDown | wisent_errors::Code::RateLimit
+            )
+        });
+    if let Some(drift) = placement_drift {
         blocked.push(drift.to_json());
     }
     let healthy = serving
@@ -266,12 +277,13 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
             // An operator is asked for only what the automatic loop cannot
             // repair: a direct-provider credential the vault does not hold, a
             // vault account this process was not started with or cannot route,
-            // or a member whose automatic sign-in is blocked. An unredeemable
-            // subscription is renewed or signed in through Weles by the serving
-            // process's own maintenance, and asks nothing of anyone.
+            // or a member whose automatic sign-in is blocked by something other
+            // than a dependency outage. An unredeemable subscription is renewed
+            // or signed in through Weles by the serving process's own
+            // maintenance, and asks nothing of anyone.
             "operator_action_required": !facts.denied.is_empty()
                 || !untagged.is_empty()
-                || !blocked.is_empty(),
+                || blocked_for_operator,
             "build": crate::build_info::current(),
         }),
     }

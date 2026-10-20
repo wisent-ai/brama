@@ -50,15 +50,35 @@ pub(crate) async fn resolve(
         detail: format!("POST {base}/reauth/resolve HTTP {status}: body unreadable: {error}"),
         status: Some(status),
     })?;
-    let answer: Value = serde_json::from_str(&body).map_err(|error| Blocked::Operation {
-        code: "account_resolution_response_invalid".into(),
-        stage: "identity".into(),
-        detail: format!(
-            "POST {base}/reauth/resolve HTTP {status} returned invalid JSON ({error}): {}",
-            body.trim()
-        ),
-        status: Some(status),
-    })?;
+    let answer: Value = match serde_json::from_str(&body) {
+        Ok(answer) => answer,
+        // A server error whose body is not JSON is the route in front of
+        // Weles saying Weles did not answer (a Stado adapter's `502 upstream
+        // unavailable`): the dependency is down, not the account's identity
+        // wrong, and the next maintenance pass asks again.
+        Err(error) if reqwest::StatusCode::from_u16(status).is_ok_and(|code| code.is_server_error()) => {
+            return Err(Blocked::WelesUnreachable {
+                detail: format!(
+                    "POST {base}/reauth/resolve answered HTTP {status} with no JSON ({error}), \
+                     so Weles behind it did not answer: {}",
+                    body.trim()
+                ),
+            }
+            .into())
+        }
+        Err(error) => {
+            return Err(Blocked::Operation {
+                code: "account_resolution_response_invalid".into(),
+                stage: "identity".into(),
+                detail: format!(
+                    "POST {base}/reauth/resolve HTTP {status} returned invalid JSON ({error}): {}",
+                    body.trim()
+                ),
+                status: Some(status),
+            }
+            .into())
+        }
+    };
     if status != HTTP_OK || answer.get("ok").and_then(Value::as_bool) != Some(true) {
         // A refusal that names no code or message is reported with what Weles
         // sent, not with a sentence written here on its behalf.

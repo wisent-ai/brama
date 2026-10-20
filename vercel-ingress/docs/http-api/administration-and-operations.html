@@ -295,8 +295,11 @@ itself, and its result appears here when it ends"}</code>.
 <code>operator_action_required</code> is true only for what that maintenance cannot
 repair: a direct-provider credential the vault does not hold, a vault account this process
 was not started with or cannot route, or a member listed in
-<code>automatic_sign_in.blocked</code>; an unredeemable subscription alone asks nothing of
-anyone.</p>
+<code>automatic_sign_in.blocked</code> for something other than a dependency outage. A
+member blocked because Weles did not answer (<code>weles_unreachable</code>, including a
+resolver route that answered a server error with no JSON) or because a provider is rate
+limiting is listed there and retried by the next pass without asking anyone; an
+unredeemable subscription alone asks nothing of anyone.</p>
 <p>A credential call that stands unanswered overrides the completed report. Each call to
 the credential source — a Skarbiec introspection over HTTP, and each vault child the gateway
 shells (<code>list subscriptions</code>, <code>inspect credential account</code>,
