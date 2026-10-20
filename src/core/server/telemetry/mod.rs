@@ -13,18 +13,36 @@ use std::time::Instant;
 
 use serde_json::{json, Value};
 
-pub(in crate::core::server) static TOTAL_REQUESTS: AtomicU64 = AtomicU64::new(0);
-pub(in crate::core::server) static TOTAL_INPUT_TOKENS: AtomicU64 = AtomicU64::new(0);
-pub(in crate::core::server) static TOTAL_OUTPUT_TOKENS: AtomicU64 = AtomicU64::new(0);
-pub(in crate::core::server) static TOTAL_PROVIDER_ATTEMPTS: AtomicU64 = AtomicU64::new(0);
-pub(in crate::core::server) static TOTAL_FAILURES: AtomicU64 = AtomicU64::new(0);
+use crate::types::Refusal;
+
+/// A counter that starts with nothing counted when the process does.
+type Counter = LazyLock<AtomicU64>;
+
+pub(in crate::core::server) static TOTAL_REQUESTS: Counter = LazyLock::new(AtomicU64::default);
+pub(in crate::core::server) static TOTAL_INPUT_TOKENS: Counter = LazyLock::new(AtomicU64::default);
+pub(in crate::core::server) static TOTAL_OUTPUT_TOKENS: Counter = LazyLock::new(AtomicU64::default);
+pub(in crate::core::server) static TOTAL_PROVIDER_ATTEMPTS: Counter =
+    LazyLock::new(AtomicU64::default);
+pub(in crate::core::server) static TOTAL_FAILURES: Counter = LazyLock::new(AtomicU64::default);
 pub(in crate::core::server) static STARTED_AT: LazyLock<Instant> = LazyLock::new(Instant::now);
 
-pub(in crate::core::server) fn record_typed_request(attempts: u32, failed: bool) {
-    TOTAL_REQUESTS.fetch_add(1, Ordering::Relaxed);
-    TOTAL_PROVIDER_ATTEMPTS.fetch_add(attempts as u64, Ordering::Relaxed);
-    if failed {
-        TOTAL_FAILURES.fetch_add(1, Ordering::Relaxed);
+/// One request, failure or provider call, as the totals count it.
+const ONE: u64 = std::num::NonZeroU64::MIN.get();
+
+/// One typed call its provider answered: a request and the one provider call
+/// it made.
+pub(in crate::core::server) fn record_typed_answer() {
+    TOTAL_REQUESTS.fetch_add(ONE, Ordering::Relaxed);
+    TOTAL_PROVIDER_ATTEMPTS.fetch_add(ONE, Ordering::Relaxed);
+}
+
+/// One refused typed call: a request and a failure, and the one provider call
+/// it made unless Brama refused it before asking any provider.
+pub(in crate::core::server) fn record_typed_refusal(refused: &Refusal) {
+    TOTAL_REQUESTS.fetch_add(ONE, Ordering::Relaxed);
+    TOTAL_FAILURES.fetch_add(ONE, Ordering::Relaxed);
+    if refused.class.asked_provider() {
+        TOTAL_PROVIDER_ATTEMPTS.fetch_add(ONE, Ordering::Relaxed);
     }
 }
 
@@ -37,8 +55,8 @@ pub(in crate::core::server) fn record_decision_request(
     output_tokens: Option<u32>,
     failed: bool,
 ) {
-    TOTAL_REQUESTS.fetch_add(1, Ordering::Relaxed);
-    TOTAL_PROVIDER_ATTEMPTS.fetch_add(1, Ordering::Relaxed);
+    TOTAL_REQUESTS.fetch_add(ONE, Ordering::Relaxed);
+    TOTAL_PROVIDER_ATTEMPTS.fetch_add(ONE, Ordering::Relaxed);
     if let Some(input_tokens) = input_tokens {
         TOTAL_INPUT_TOKENS.fetch_add(u64::from(input_tokens), Ordering::Relaxed);
     }
@@ -46,28 +64,24 @@ pub(in crate::core::server) fn record_decision_request(
         TOTAL_OUTPUT_TOKENS.fetch_add(u64::from(output_tokens), Ordering::Relaxed);
     }
     if failed {
-        TOTAL_FAILURES.fetch_add(1, Ordering::Relaxed);
+        TOTAL_FAILURES.fetch_add(ONE, Ordering::Relaxed);
     }
 }
 
-fn typed_usage_tokens(body: &Value, keys: &[&str]) -> u64 {
-    let Some(usage) = body.get("usage").and_then(Value::as_object) else {
-        return 0;
-    };
-    keys.iter()
-        .find_map(|key| usage.get(*key).and_then(Value::as_u64))
-        .unwrap_or_default()
-}
-
+/// The tokens a typed answer's `usage` object states: the OpenAI typed wire
+/// names them `prompt_tokens`/`completion_tokens`, a Responses-shaped body
+/// `input_tokens`/`output_tokens`. A count the provider did not state adds
+/// nothing.
 pub(in crate::core::server) fn record_typed_usage(body: &Value) {
-    TOTAL_INPUT_TOKENS.fetch_add(
-        typed_usage_tokens(body, &["prompt_tokens", "input_tokens"]),
-        Ordering::Relaxed,
-    );
-    TOTAL_OUTPUT_TOKENS.fetch_add(
-        typed_usage_tokens(body, &["completion_tokens", "output_tokens"]),
-        Ordering::Relaxed,
-    );
+    let stated = |pointer: &str| body.pointer(pointer).and_then(Value::as_u64);
+    if let Some(input) = stated("/usage/prompt_tokens").or_else(|| stated("/usage/input_tokens")) {
+        TOTAL_INPUT_TOKENS.fetch_add(input, Ordering::Relaxed);
+    }
+    if let Some(output) =
+        stated("/usage/completion_tokens").or_else(|| stated("/usage/output_tokens"))
+    {
+        TOTAL_OUTPUT_TOKENS.fetch_add(output, Ordering::Relaxed);
+    }
 }
 
 /// Optional per-model telemetry block, present only when the route has stats.

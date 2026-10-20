@@ -37,6 +37,13 @@ request deadline of its own. A chat answer with neither text nor a tool call,
 a text block without its text, and a history tool call whose arguments are not
 JSON are refused with the body or call named, instead of passing as an empty
 answer or a call with null input (<a href="/docs/errors">Errors</a>).</p>
+<p>A refusal Brama makes before any dispatch (authentication, transport, a
+malformed request, an alias it cannot serve) asked no provider and its body
+no longer carries <code>"attempts": 0</code>; a refusal a dispatch made states
+the provider calls it counted. A typed or media refusal states one call when a
+provider answered it and none when Brama refused first, read from the
+refusal's class rather than from its contract code, and the process totals
+count it the same way (<a href="/docs/errors">Errors</a>).</p>
 <h2 id="unreleased-tasks">Unreleased: <code>brama tasks</code> replaces <code>collect-task-quality</code><a class="headerlink" href="#unreleased-tasks" title="Link to this section">&para;</a></h2>
 <p>Measuring a named task and reading back what <code>task:&lt;KEY&gt;</code>
 selection uses are one command family: <code>brama tasks measure &lt;KEY&gt;</code>

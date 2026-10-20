@@ -109,9 +109,10 @@ from optional deployment aliases that share the <code>wisent-backend/</code> pre
 <p>A startup refusal reports the required and observed alias lists after
 <code>must give CLIENT every required alias</code>. <code>observed=None</code>
 means that the client or its allowlist is absent; no bearer value is printed.</p>
-<p>Observed against a running gateway (0.2.38):</p>
+<p>A request without a bearer asks no provider, so its refusal carries no
+<code>attempts</code>:</p>
 <pre><code class="language-text">$ curl -s http://127.0.0.1:8080/v1/models        # no bearer
-{&quot;error&quot;:{&quot;attempts&quot;:0,&quot;code&quot;:&quot;unauthenticated&quot;,&quot;message&quot;:&quot;unauthorized&quot;,
+{&quot;error&quot;:{&quot;code&quot;:&quot;unauthenticated&quot;,&quot;message&quot;:&quot;unauthorized&quot;,
  &quot;retryable&quot;:false,&quot;type&quot;:&quot;authentication_error&quot;}}       # HTTP 401
 </code></pre>
 <ul>

@@ -16,9 +16,9 @@ use serde_json::{json, Map, Value};
 use crate::core::server::admission::identity::ModelClientIdentity;
 use crate::core::server::aliases::table::ModelAliases;
 use crate::core::server::aliases::{WISENT_EMBEDDING_ALIAS, WISENT_MODERATION_ALIAS};
-use crate::core::server::refusal::envelope::{typed_dispatch_attempts, typed_dispatch_error};
+use crate::core::server::refusal::envelope::refused_typed;
 use crate::core::server::refusal::{api_error, ApiError};
-use crate::core::server::telemetry::{record_typed_request, record_typed_usage};
+use crate::core::server::telemetry::{record_typed_answer, record_typed_usage};
 use crate::subscription_dispatch::dispatch_direct_openai_typed;
 use crate::types::{ProviderRefusal, Refusal};
 
@@ -32,7 +32,9 @@ pub(in crate::core::server) async fn embeddings(
     if request.model != WISENT_EMBEDDING_ALIAS
         || !client_identity.authorizes_model(&request.model)
         || !request.input.is_valid()
-        || request.dimensions.is_some_and(|value| value == 0)
+        || request
+            .dimensions
+            .is_some_and(|value| std::num::NonZeroU32::new(value).is_none())
     {
         return Err(api_error(
             StatusCode::BAD_REQUEST,
@@ -70,22 +72,17 @@ pub(in crate::core::server) async fn embeddings(
         }
         payload.insert("user".to_string(), Value::String(value));
     }
-    let body = match dispatch_direct_openai_typed(&source, "/v1/embeddings", payload).await {
-        Ok(body) => body,
-        Err(refused) => {
-            record_typed_request(typed_dispatch_attempts(&refused), true);
-            return Err(typed_dispatch_error(&refused));
-        }
-    };
+    let body = dispatch_direct_openai_typed(&source, "/v1/embeddings", payload)
+        .await
+        .map_err(|refused| refused_typed(&refused))?;
     record_typed_usage(&body);
     if !body.get("data").is_some_and(Value::is_array) {
-        record_typed_request(1, true);
-        return Err(typed_dispatch_error(&Refusal::new(
+        return Err(refused_typed(&Refusal::new(
             ProviderRefusal::ProviderFailure,
             "embedding provider returned malformed data",
         )));
     }
-    record_typed_request(1, false);
+    record_typed_answer();
     Ok(Json(body))
 }
 
@@ -119,21 +116,16 @@ pub(in crate::core::server) async fn moderations(
             )
         })?,
     );
-    let body = match dispatch_direct_openai_typed(&source, "/v1/moderations", payload).await {
-        Ok(body) => body,
-        Err(refused) => {
-            record_typed_request(typed_dispatch_attempts(&refused), true);
-            return Err(typed_dispatch_error(&refused));
-        }
-    };
+    let body = dispatch_direct_openai_typed(&source, "/v1/moderations", payload)
+        .await
+        .map_err(|refused| refused_typed(&refused))?;
     record_typed_usage(&body);
     if !body.get("results").is_some_and(Value::is_array) {
-        record_typed_request(1, true);
-        return Err(typed_dispatch_error(&Refusal::new(
+        return Err(refused_typed(&Refusal::new(
             ProviderRefusal::ProviderFailure,
             "moderation provider returned malformed data",
         )));
     }
-    record_typed_request(1, false);
+    record_typed_answer();
     Ok(Json(body))
 }

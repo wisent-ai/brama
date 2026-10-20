@@ -50,7 +50,8 @@ by an owner-only atomic replacement, whether the writer is
 <a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a>.</p>
 <h2 id="failure-contract">Failure contract<a class="headerlink" href="#failure-contract" title="Link to this section">&para;</a></h2>
 <p>Public errors use this envelope, where <code>attempts</code> counts the provider calls
-this request actually made:</p>
+this request actually made; a refusal Brama made before any dispatch asked no
+provider and carries no <code>attempts</code> key:</p>
 <pre><code class="language-json">{
   &quot;error&quot;: {
     &quot;message&quot;: &quot;bounded human-readable detail&quot;,

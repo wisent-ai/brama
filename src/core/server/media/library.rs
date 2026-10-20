@@ -21,7 +21,7 @@ use crate::core::server::admission::identity::ModelClientIdentity;
 use crate::core::server::aliases::table::ModelAliases;
 use crate::core::server::aliases::VOICE_ALIAS;
 use crate::core::server::refusal::{api_error, ApiError};
-use crate::core::server::telemetry::record_typed_request;
+use crate::core::server::telemetry::record_typed_answer;
 use crate::providers::adapter::{supports_music_route, supports_voices_route, VoiceSample};
 use crate::subscription_dispatch::{
     dispatch_direct_music, dispatch_direct_voice_clone, dispatch_direct_voice_delete,
@@ -91,7 +91,7 @@ pub(in crate::core::server) async fn audio_music(
     let song = dispatch_direct_music(&route, payload)
         .await
         .map_err(|refused| refused_typed(&refused))?;
-    record_typed_request(1, false);
+    record_typed_answer();
     Ok((
         [
             (header::CONTENT_TYPE, song.content_type),
@@ -122,7 +122,7 @@ pub(in crate::core::server) async fn audio_voices(
         "list voices",
     )?;
     let body = dispatched(dispatch_direct_voices(&route).await)?;
-    record_typed_request(1, false);
+    record_typed_answer();
     Ok(Json(body))
 }
 
@@ -182,7 +182,7 @@ pub(in crate::core::server) async fn audio_voice_clone(
         )
         .await,
     )?;
-    record_typed_request(1, false);
+    record_typed_answer();
     Ok(Json(body))
 }
 
@@ -210,7 +210,7 @@ pub(in crate::core::server) async fn audio_voice_delete(
         "delete voices",
     )?;
     let body = dispatched(dispatch_direct_voice_delete(&route, &voice_id).await)?;
-    record_typed_request(1, false);
+    record_typed_answer();
     Ok(Json(body))
 }
 

@@ -51,6 +51,13 @@ pub enum GatewayRefusal {
 }
 
 impl ProviderRefusal {
+    /// Whether a provider was asked before this refusal: every class but
+    /// Brama's own is a provider's answer or a call the transport did not
+    /// carry, while a [`Self::Gateway`] refusal was made before asking one.
+    pub fn asked_provider(self) -> bool {
+        !matches!(self, Self::Gateway(_))
+    }
+
     /// The contract kind clients read in the refusal sentence.
     pub fn contract_kind(self) -> &'static str {
         match self {

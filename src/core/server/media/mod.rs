@@ -33,9 +33,9 @@ use serde_json::Value;
 use crate::core::server::admission::identity::ModelClientIdentity;
 use crate::core::server::aliases::table::ModelAliases;
 use crate::core::server::aliases::{IMAGE_ALIAS, VIDEO_ALIAS, VOICE_ALIAS};
-use crate::core::server::refusal::envelope::{typed_dispatch_attempts, typed_dispatch_error};
+use crate::core::server::refusal::envelope::refused_typed;
 use crate::core::server::refusal::{api_error, ApiError};
-use crate::core::server::telemetry::record_typed_request;
+use crate::core::server::telemetry::record_typed_answer;
 use crate::providers::adapter::{
     supports_image_route, supports_speech_route, supports_video_route, ModelKind,
 };
@@ -68,13 +68,12 @@ async fn image(
     let route = media_route(client_identity, aliases, &request.model, Shape::Image).await?;
     let body = dispatched(dispatch_direct_image(&route, request.payload()).await)?;
     if !body.get("data").is_some_and(Value::is_array) {
-        record_typed_request(1, true);
-        return Err(typed_dispatch_error(&Refusal::new(
+        return Err(refused_typed(&Refusal::new(
             ProviderRefusal::ProviderFailure,
             "image provider returned no images",
         )));
     }
-    record_typed_request(1, false);
+    record_typed_answer();
     Ok(Json(body))
 }
 
@@ -92,13 +91,12 @@ pub(in crate::core::server) async fn video_generations(
     let route = media_route(&client_identity, &aliases, &request.model, Shape::Video).await?;
     let body = dispatched(dispatch_direct_video(&route, request.payload()).await)?;
     if !body.get("id").is_some_and(Value::is_string) {
-        record_typed_request(1, true);
-        return Err(typed_dispatch_error(&Refusal::new(
+        return Err(refused_typed(&Refusal::new(
             ProviderRefusal::ProviderFailure,
             "video provider returned no job id",
         )));
     }
-    record_typed_request(1, false);
+    record_typed_answer();
     Ok(Json(body))
 }
 
@@ -112,7 +110,7 @@ pub(in crate::core::server) async fn video_status(
         video_status_model(query).map_err(|reason| api_error(StatusCode::BAD_REQUEST, reason))?;
     let route = media_route(&client_identity, &aliases, &model, Shape::Video).await?;
     let body = dispatched(dispatch_direct_video_status(&route, &video_id).await)?;
-    record_typed_request(1, false);
+    record_typed_answer();
     Ok(Json(body))
 }
 
@@ -132,7 +130,7 @@ pub(in crate::core::server) async fn audio_speech(
     let spoken = dispatch_direct_speech(&route, request.payload())
         .await
         .map_err(|refused| refused_typed(&refused))?;
-    record_typed_request(1, false);
+    record_typed_answer();
     Ok((
         [
             (header::CONTENT_TYPE, spoken.content_type),
@@ -219,8 +217,8 @@ async fn media_route(
         });
     }
     if shape.supported(requested) {
-        if let Some(listed) = catalogue_kind(requested).await {
-            if listed != shape.kind() {
+        match catalogue_kind(requested).await {
+            Ok(Some(listed)) if listed != shape.kind() => {
                 return Err(api_error(
                     StatusCode::BAD_REQUEST,
                     &format!(
@@ -231,6 +229,16 @@ async fn media_route(
                     ),
                 ));
             }
+            Ok(_) => {}
+            // The catalogue only narrows what a provider is asked; the
+            // provider still refuses a route it does not serve, and the
+            // log says the check could not run and why.
+            Err(cause) => tracing::warn!(
+                event = "media_catalogue_unread",
+                route = requested,
+                cause = %cause,
+                "the model catalogue could not be read, so the route's kind was not checked"
+            ),
         }
         return Ok(requested.to_string());
     }
@@ -244,35 +252,28 @@ async fn media_route(
     ))
 }
 
-/// What the public catalogue says this route produces, when it carries it.
-async fn catalogue_kind(route_id: &str) -> Option<ModelKind> {
-    let snapshot = crate::subscription_dispatch::model_catalog::snapshot()
-        .await
-        .ok()?;
-    snapshot
+/// What the public catalogue says this route produces: `None` when it does
+/// not carry the route, and the catalogue's own failure when it cannot be read.
+async fn catalogue_kind(route_id: &str) -> Result<Option<ModelKind>, String> {
+    let snapshot = crate::subscription_dispatch::model_catalog::snapshot().await?;
+    Ok(snapshot
         .models
         .iter()
         .find(|model| model.route_id == route_id)
-        .map(|model| model.kind())
+        .map(|model| model.kind()))
 }
 
 /// An alias this gateway knows and cannot serve is a configuration fault on
 /// this host, so it answers `503` with the repair, exactly as the chat path
 /// does — not `400`, which tells the caller its own request was wrong.
 fn api_error_for_alias(alias: &str, reason: Option<String>) -> ApiError {
-    api_error(
-        StatusCode::SERVICE_UNAVAILABLE,
-        &reason.unwrap_or_else(|| format!("alias `{alias}` is not declared on this gateway")),
-    )
+    let said = match reason {
+        Some(reason) => reason,
+        None => format!("alias `{alias}` is not declared on this gateway"),
+    };
+    api_error(StatusCode::SERVICE_UNAVAILABLE, &said)
 }
 
 fn dispatched(result: Result<Value, Refusal>) -> Result<Value, ApiError> {
     result.map_err(|refused| refused_typed(&refused))
-}
-
-/// A refused typed call: counted with the provider calls it spent, and
-/// answered from its class.
-fn refused_typed(refused: &Refusal) -> ApiError {
-    record_typed_request(typed_dispatch_attempts(refused), true);
-    typed_dispatch_error(refused)
 }

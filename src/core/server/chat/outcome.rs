@@ -92,7 +92,7 @@ pub(super) fn failure_response(refusal: Refusal, attempts: u32) -> Response {
         contract.code,
         &refusal.message,
         contract.retryable,
-        attempts,
+        Some(attempts),
     )
     .into_response()
 }

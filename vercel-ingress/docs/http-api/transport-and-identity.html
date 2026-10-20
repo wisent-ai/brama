@@ -28,8 +28,9 @@ and the shape of the answer when one of them refuses.</p>
 bound, a peer named in <code>BRAMA_ENCRYPTED_PEER_IPS</code> (a mesh hop that is already
 encrypted), or a proxy named in <code>BRAMA_TRUSTED_PROXY_IPS</code> whose
 <code>Forwarded</code>/<code>X-Forwarded-Proto</code> headers state <code>https</code>.
-Anything else receives status <code>426</code> with this body (captured):</p>
-<pre><code class="language-json">{&quot;error&quot;:{&quot;attempts&quot;:0,&quot;code&quot;:&quot;secure_transport_required&quot;,
+Anything else receives status <code>426</code> with this body; it asked no provider, so
+it carries no <code>attempts</code>:</p>
+<pre><code class="language-json">{&quot;error&quot;:{&quot;code&quot;:&quot;secure_transport_required&quot;,
  &quot;message&quot;:&quot;HTTPS is required except for direct loopback requests&quot;,
  &quot;retryable&quot;:false,&quot;type&quot;:&quot;transport_error&quot;}}
 </code></pre>
@@ -115,7 +116,7 @@ resolved route is attempted once, and its answer, including its refusal, is the 
 the request.</p>
 <pre><code class="language-json">{&quot;error&quot;:{&quot;code&quot;:&quot;alias_unserviceable&quot;,&quot;type&quot;:&quot;invalid_request_error&quot;,
  &quot;message&quot;:&quot;alias `ox-alpha` routes to openrouter/stealth/ox-alpha but this gateway holds no provider credential for openrouter&quot;,
- &quot;retryable&quot;:false,&quot;attempts&quot;:0,
+ &quot;retryable&quot;:false,
  &quot;details&quot;:{&quot;state&quot;:&quot;capability_absent&quot;,&quot;route&quot;:&quot;openrouter/stealth/ox-alpha&quot;}}}
 </code></pre>
 <p>Repairing the state an alias is in is an operator action, not a client one: point the

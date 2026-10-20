@@ -5,7 +5,7 @@ use tracing::warn;
 
 use crate::core::failure::{self, IMPACT_MODEL_REQUEST};
 use crate::types::{GatewayRefusal, ModelRequest, ModelResponse, ProviderRefusal};
-use wisent_errors::{Code, Failure};
+use wisent_errors::Failure;
 
 /// The envelope for one refused model request: where it broke, what the caller
 /// loses, the reason verbatim, and the failure underneath it when there is one.
@@ -76,21 +76,25 @@ pub(in crate::subscription_dispatch::dispatch) fn refuse_as(
 }
 
 /// The class a credential the vault would not produce is answered with: a
-/// vault or router that did not answer is a dependency a wait can repair;
-/// every other refusal is a broken authorization chain only an operator
-/// repairs.
+/// vault or router that did not answer (an outage a wait can repair, as the
+/// fleet's code states it) is a dependency; every other refusal is a broken
+/// authorization chain only an operator repairs.
 pub(in crate::subscription_dispatch::dispatch) fn credential_refusal_class(
     failure: &Failure,
 ) -> GatewayRefusal {
-    if matches!(failure.code, Code::Timeout | Code::InfraDown) {
+    if failure.outage() && failure.retryable() {
         GatewayRefusal::DependencyUnavailable
     } else {
         GatewayRefusal::CredentialUnauthorized
     }
 }
 
+/// The reason a failure carries, or its whole rendering when it states none.
 pub(in crate::subscription_dispatch::dispatch) fn failure_detail(failure: &Failure) -> String {
-    failure.detail.clone().unwrap_or_else(|| failure.render())
+    match &failure.detail {
+        Some(detail) => detail.clone(),
+        None => failure.render(),
+    }
 }
 
 pub(in crate::subscription_dispatch::dispatch) fn remember_failure(

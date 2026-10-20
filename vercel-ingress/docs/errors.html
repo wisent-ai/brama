@@ -33,13 +33,16 @@ are on the line; neither stands in for the other.</p>
     &quot;type&quot;: &quot;stable_class&quot;,
     &quot;code&quot;: &quot;stable_code&quot;,
     &quot;retryable&quot;: false,
-    &quot;attempts&quot;: 0
+    &quot;attempts&quot;: &lt;provider calls the dispatch counted&gt;
   }
 }
 </code></pre>
 <p><code>retryable</code> is stated explicitly, and <code>attempts</code> bounds any replay the caller
-considers: selector and credential replay never exceeds it. Message text is
-diagnostic, not the machine contract.</p>
+considers: selector and credential replay never exceeds it. A refusal made by a
+dispatch states the provider calls it counted, zero included; a refusal Brama
+made before any dispatch (authentication, transport, a malformed request, an
+alias it cannot serve) asked no provider and carries no <code>attempts</code> key.
+Message text is diagnostic, not the machine contract.</p>
 <p>Subscription reports also carry <code>ok</code> and <code>errors</code>. These are completed reports, so HTTP 200 can contain <code>ok: false</code> and partial rows. The <code>errors</code> array contains standard Wisent envelopes with <code>failure_point</code>, <code>error_code</code>, <code>detail</code>, and context identifying the account and attempt time. Discovery failures are not empty inventories; expired measurements are not current; missing metrics are not zero. CLI reports exit non-zero and desktop clients show the same errors beside retained stale readings.</p>
 <table>
 <thead>

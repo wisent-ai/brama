@@ -28,18 +28,16 @@ pub(in crate::core::server) fn model_error_envelope(
     .to_json()
 }
 
-/// Provider calls a refused typed call spent: none when the refusal says no
-/// provider or dependency answered, one otherwise.
-pub(in crate::core::server) fn typed_dispatch_attempts(refused: &Refusal) -> u32 {
-    if provider_refusal_contract(refused.class).code == "dependency_unavailable" {
-        0
-    } else {
-        1
-    }
+/// A refused typed call: counted with the provider call it made, and answered
+/// from its class.
+pub(in crate::core::server) fn refused_typed(refused: &Refusal) -> ApiError {
+    crate::core::server::telemetry::record_typed_refusal(refused);
+    typed_dispatch_error(refused)
 }
 
 /// The refusal document one typed call answers with, from the class its
-/// refusal was stated with.
+/// refusal was stated with. A typed call asks its provider once, so it states
+/// one attempt, or none when Brama refused before asking.
 pub(in crate::core::server) fn typed_dispatch_error(refused: &Refusal) -> ApiError {
     let contract = provider_refusal_contract(refused.class);
     error_response(
@@ -48,6 +46,9 @@ pub(in crate::core::server) fn typed_dispatch_error(refused: &Refusal) -> ApiErr
         contract.code,
         &refused.message,
         contract.retryable,
-        typed_dispatch_attempts(refused),
+        refused
+            .class
+            .asked_provider()
+            .then_some(std::num::NonZeroU32::MIN.get()),
     )
 }

@@ -16,26 +16,27 @@ use serde_json::json;
 
 pub(in crate::core::server) type ApiError = (StatusCode, Json<serde_json::Value>);
 
+/// One refusal document. `attempts` is the provider calls the dispatch that
+/// refused counted; a refusal the gateway made before asking any provider has
+/// none to state, and its document carries no `attempts` key.
 pub(in crate::core::server) fn error_response(
     status: StatusCode,
     error_type: &str,
     code: &str,
     message: &str,
     retryable: bool,
-    attempts: u32,
+    attempts: Option<u32>,
 ) -> ApiError {
-    (
-        status,
-        Json(json!({
-            "error": {
-                "message": message,
-                "type": error_type,
-                "code": code,
-                "retryable": retryable,
-                "attempts": attempts,
-            }
-        })),
-    )
+    let mut error = json!({
+        "message": message,
+        "type": error_type,
+        "code": code,
+        "retryable": retryable,
+    });
+    if let Some(attempts) = attempts {
+        error["attempts"] = json!(attempts);
+    }
+    (status, Json(json!({ "error": error })))
 }
 
 pub(in crate::core::server) fn api_error(status: StatusCode, message: &str) -> ApiError {
@@ -48,11 +49,10 @@ pub(in crate::core::server) fn api_error(status: StatusCode, message: &str) -> A
         StatusCode::UPGRADE_REQUIRED => ("transport_error", "secure_transport_required", false),
         StatusCode::TOO_MANY_REQUESTS => ("capacity_error", "subscription_unavailable", true),
         StatusCode::SERVICE_UNAVAILABLE => ("dependency_error", "dependency_unavailable", true),
-        StatusCode::GATEWAY_TIMEOUT => ("dependency_error", "dependency_timeout", true),
         StatusCode::BAD_GATEWAY => ("provider_error", "provider_failure", false),
         _ => ("internal_error", "internal_error", false),
     };
-    error_response(status, error_type, code, message, retryable, 0)
+    error_response(status, error_type, code, message, retryable, None)
 }
 
 /// An error whose code is the fault itself, with the facts a caller needs to
@@ -66,7 +66,7 @@ pub(in crate::core::server) fn api_error_with_details(
     details: serde_json::Value,
 ) -> ApiError {
     let error_type = match status {
-        StatusCode::SERVICE_UNAVAILABLE | StatusCode::GATEWAY_TIMEOUT => "dependency_error",
+        StatusCode::SERVICE_UNAVAILABLE => "dependency_error",
         StatusCode::BAD_REQUEST => "request_error",
         _ => "state_error",
     };
@@ -78,7 +78,6 @@ pub(in crate::core::server) fn api_error_with_details(
                 "type": error_type,
                 "code": code,
                 "retryable": false,
-                "attempts": u32::default(),
                 "details": details,
             }
         })),
