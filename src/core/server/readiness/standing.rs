@@ -16,18 +16,27 @@
 //! watches `/readyz` is refused on time all the same. A question waiting
 //! for the answer to change is woken by the same events.
 
+mod listing;
+
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use tokio::sync::oneshot;
 
-/// One call standing: where it went, since when, and the channel its waiter
-/// is told on when a reading ends it.
+pub(in crate::core::server) use listing::{readings, CallReading};
+
+/// One call standing: where it went, which operation it is and which
+/// process runs it when it is a vault child, since when (measured, and on
+/// the wall clock for a reader), and the channel its waiter is told on when
+/// a reading ends it.
 struct Call {
     target: String,
+    operation: String,
+    pid: Option<u32>,
     since: Instant,
+    began: SystemTime,
     end: Option<oneshot::Sender<String>>,
 }
 
@@ -48,13 +57,17 @@ pub(crate) struct Standing {
 }
 
 impl Standing {
-    /// Record a call to `target` as standing from now.
-    pub(crate) fn begin(target: &str) -> Self {
+    /// Record `operation`, a call to `target`, as standing from now; `pid`
+    /// is the process it runs in when the gateway shelled it.
+    pub(crate) fn begin(target: &str, operation: &str, pid: Option<u32>) -> Self {
         let marker = Arc::new(());
         let (end, ended) = oneshot::channel();
         let call = Call {
             target: target.to_string(),
+            operation: operation.to_string(),
+            pid,
             since: Instant::now(),
+            began: SystemTime::now(),
             end: Some(end),
         };
         standing().insert(Arc::as_ptr(&marker) as usize, call);

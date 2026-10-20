@@ -313,11 +313,21 @@ ended, the gateway's log says <code>vault child abandoned by the readiness readi
 (and, for a reading the gateway took itself, <code>standing credential calls refused by the
 gateway's own reading: &lt;sentence&gt;</code>), and the request that waited on it is refused
 with that sentence instead of standing until the client's transport gives up with an empty
-reply, also when nobody watches <code>/readyz</code>. Qualification against a vault that
+reply, also when nobody watches <code>/readyz</code>. Every answer lists each call standing
+now in <code>standing_calls</code>, the longest-standing first, as
+<code>{"target", "operation", "pid", "since", "refused", "elapsed_seconds"}</code>:
+<code>operation</code> is the vault operation (<code>read credential account</code>, …) or
+<code>Skarbiec token introspection</code>, <code>pid</code> the vault child's process
+(<code>null</code> for an HTTP call), <code>since</code> when it began in RFC 3339,
+<code>refused</code> whether a reading has already ended it while its process is reaped, and
+<code>elapsed_seconds</code> how long it had stood when the answer was read; the list is
+empty while nothing stands. Qualification against a vault that
 never answers: <code>cargo test --test readiness-vault-standing -- --ignored</code>, with the
 isolated gateway started with <code>SKARBIEC_BIN</code> naming that test's executable and
 <code>BRAMA_TEST_VAULT_STANDS</code> set.</p>
-<p>Every answer carries <code>digest</code>, the SHA-256 of its status and body.
+<p>Every answer carries <code>digest</code>, the SHA-256 of its status and body without the
+<code>elapsed_seconds</code> of its standing calls, so it changes when calls begin, end or are
+refused, not every second one stands.
 <code>GET /readyz?after=&lt;digest&gt;</code> answers once the readiness answer differs from
 the one that digest names: at once when it already does, otherwise when a sweep or a
 maintenance pass publishes, a credential call begins or ends, or the oldest standing call
@@ -337,7 +347,10 @@ with per-model <code>count</code>, <code>latencyMs</code>, <code>lastLatencyMs</
 <code>wireProtocol</code> and <code>configured</code>. It also carries the cumulative
 <code>total_requests</code>, <code>total_failures</code>,
 <code>total_provider_attempts</code>, <code>total_input_tokens</code>,
-<code>total_output_tokens</code> and <code>uptimeSeconds</code>.</p>
+<code>total_output_tokens</code> and <code>uptimeSeconds</code>, and
+<code>standingCalls[]</code>, the same records as <code>standing_calls</code> in
+<code>/readyz</code>, so a vault child that never answers is named with its operation,
+process and age by the gateway's diagnostics as well.</p>
 <p><code>configured</code> reports the declared capability or field-scoped route,
 not successful authentication. Neither <code>/stats</code> nor the admin snapshot
 issues credentials; use <code>/readyz</code> for observed redemption failures and

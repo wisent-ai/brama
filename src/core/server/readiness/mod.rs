@@ -203,11 +203,15 @@ async fn answer_after(after: Option<&str>) -> (StatusCode, Value) {
         let notified = CHANGED.notified();
         tokio::pin!(notified);
         notified.as_mut().enable();
-        let (status, mut body) = answer();
+        let (status, mut body, calls) = answer();
         let named = digest(status, &body);
         if after != Some(named.as_str()) {
             if let Some(object) = body.as_object_mut() {
                 object.insert("digest".to_string(), Value::String(named));
+                // How long each call has stood changes every second; it is
+                // added after the digest, which changes only with the calls.
+                let listed = calls.iter().map(|call| call.document(true)).collect();
+                object.insert("standing_calls".to_string(), Value::Array(listed));
             }
             return (status, body);
         }
@@ -223,10 +227,11 @@ async fn answer_after(after: Option<&str>) -> (StatusCode, Value) {
     }
 }
 
-/// The readiness answer now. A credential call standing unanswered past the
-/// declared refresh interval overrides the last check: the gateway declares
-/// it serves nothing and names the source (`standing`).
-fn answer() -> (StatusCode, Value) {
+/// The readiness answer now, and the standing calls it lists. A credential
+/// call standing unanswered past the declared refresh interval overrides
+/// the last check: the gateway declares it serves nothing and names the
+/// source (`standing`). Every call standing is listed in `standing_calls`.
+fn answer() -> (StatusCode, Value, Vec<standing::CallReading>) {
     let report = {
         let current = crate::core::sync::read_held(&READINESS_REPORT, "readiness report");
         current.clone()
@@ -248,7 +253,12 @@ fn answer() -> (StatusCode, Value) {
             object.insert("credential_source".to_string(), Value::String(refusal));
         }
     }
-    (status, body)
+    let calls = standing::readings();
+    if let Some(object) = body.as_object_mut() {
+        let listed = calls.iter().map(|call| call.document(false)).collect();
+        object.insert("standing_calls".to_string(), Value::Array(listed));
+    }
+    (status, body, calls)
 }
 
 /// Learn this host's placement, take the first readiness reading, once, and

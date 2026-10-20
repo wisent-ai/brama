@@ -175,10 +175,17 @@ pub(in crate::gateway::broker) async fn wait_within_footprint(
         Some(pid) => pid.to_string(),
         None => "already reaped".to_string(),
     };
-    let mut standing = crate::core::server::Standing::begin(&format!(
-        "vault child `{operation}` (pid {pid_text})"
-    ));
-    let output = child.wait_with_output();
+    let mut standing = crate::core::server::Standing::begin(
+        &format!("vault child `{operation}` (pid {pid_text})"),
+        operation,
+        pid,
+    );
+    let output = stado_wait::until(
+        stado_wait::Kind::Process,
+        format!("vault child `{operation}`"),
+        format!("pid {pid_text}"),
+        child.wait_with_output(),
+    );
     tokio::pin!(output);
     let Some((ceiling, cadence)) = ceiling else {
         tokio::select! {

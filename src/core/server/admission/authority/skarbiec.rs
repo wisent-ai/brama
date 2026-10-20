@@ -69,7 +69,11 @@ pub(super) async fn ask_authority(bearer: &str) -> WorkloadAuthorityAnswer {
     // The call stands in the readiness register until it is answered; a
     // readiness reading that finds it standing past the declared refresh
     // interval ends it with the sentence `/readyz` gives.
-    let mut standing = crate::core::server::readiness::standing::Standing::begin(&introspect);
+    let mut standing = crate::core::server::readiness::standing::Standing::begin(
+        &introspect,
+        "Skarbiec token introspection",
+        None,
+    );
     let sent = client
         .post(&introspect)
         .header("X-Consumer", consumer)

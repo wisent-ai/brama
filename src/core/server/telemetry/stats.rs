@@ -1,5 +1,6 @@
 //! `GET /stats`: the counters, the provider roster as this build sees it, the
-//! per-model latency history, and the limits every request is held to.
+//! per-model latency history, the limits every request is held to, and every
+//! credential call standing unanswered right now.
 
 use std::sync::atomic::Ordering;
 
@@ -64,6 +65,10 @@ pub(in crate::core::server) async fn get_stats() -> Result<Json<Value>, ApiError
             })
         })
         .collect::<Vec<_>>();
+    let standing_calls = crate::core::server::readiness::standing::readings()
+        .iter()
+        .map(|call| call.document(true))
+        .collect::<Vec<_>>();
 
     Ok(Json(json!({
         "build": crate::build_info::current(),
@@ -77,6 +82,7 @@ pub(in crate::core::server) async fn get_stats() -> Result<Json<Value>, ApiError
         "uptimeSeconds": STARTED_AT.elapsed().as_secs(),
         "providers": providers,
         "models": models,
+        "standingCalls": standing_calls,
         "dependencyPolicy": {
             "catalog": "lazy",
             "capabilityBroker": "final-use",
