@@ -299,16 +299,21 @@ the schedule it declared.</p>
 <p>A credential call that stands unanswered overrides the completed report. Each call to
 the credential source — a Skarbiec introspection over HTTP, and each vault child the gateway
 shells (<code>list subscriptions</code>, <code>inspect credential account</code>,
-<code>read credential account</code>, …) — is recorded while it stands. When a reading finds
-one that has stood the refresh interval this host's Stado resolver declares or longer, the
+<code>read credential account</code>, …) — is recorded while it stands. A reading happens
+when <code>/readyz</code> is asked, and the gateway takes one itself whenever a call begins
+or ends and at the moment the oldest call reaches the refresh interval this host's Stado
+resolver declares, whether or not any client is asking. When a reading finds one that has
+stood that interval or longer, the
 answer is <code>503</code>, <code>ready: false</code>, and <code>reason</code> and
 <code>credential_source</code> carry <code>the credential source has not answered: &lt;N&gt;
 call(s) have stood the &lt;N&gt;s refresh interval this host's resolver declares or longer,
 the oldest to vault child `read credential account` (pid &lt;N&gt;) for &lt;N&gt;s; Brama serves
 no chat until it answers</code>. The same reading ends every such call: the vault child is
-ended, the gateway's log says <code>vault child abandoned by the readiness reading</code>,
-and the request that waited on it is refused with that sentence instead of standing until
-the client's transport gives up with an empty reply. Qualification against a vault that
+ended, the gateway's log says <code>vault child abandoned by the readiness reading</code>
+(and, for a reading the gateway took itself, <code>standing credential calls refused by the
+gateway's own reading: &lt;sentence&gt;</code>), and the request that waited on it is refused
+with that sentence instead of standing until the client's transport gives up with an empty
+reply, also when nobody watches <code>/readyz</code>. Qualification against a vault that
 never answers: <code>cargo test --test readiness-vault-standing -- --ignored</code>, with the
 isolated gateway started with <code>SKARBIEC_BIN</code> naming that test's executable and
 <code>BRAMA_TEST_VAULT_STANDS</code> set.</p>
@@ -316,8 +321,8 @@ isolated gateway started with <code>SKARBIEC_BIN</code> naming that test's execu
 <code>GET /readyz?after=&lt;digest&gt;</code> answers once the readiness answer differs from
 the one that digest names: at once when it already does, otherwise when a sweep or a
 maintenance pass publishes, a credential call begins or ends, or the oldest standing call
-reaches the declared refresh interval — the moment the reading above happens with nobody
-asking. A client that watches Brama while it waits on a request asks with the digest of the
+reaches the declared refresh interval — the moment the gateway's own reading above happens.
+A client that watches Brama while it waits on a request asks with the digest of the
 answer it last read, so it makes one request per change instead of one per answer.
 Qualification: <code>cargo test --test readiness-standing -- --ignored</code>, which asks
 with each answer's digest and refuses two readings carrying one.</p>

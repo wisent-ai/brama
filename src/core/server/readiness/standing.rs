@@ -10,9 +10,11 @@
 //! the source and how long it has stood; the same reading ends every such
 //! call with that sentence, so a request already accepted is answered with
 //! the refusal instead of standing on. A reading happens when readiness is
-//! asked, and a question waiting for the answer to change is woken when a
-//! call begins or ends and at the moment the oldest call reaches the
-//! interval ([`next_reading`]).
+//! asked, and [`watch`] takes one itself whenever a call begins or ends and
+//! at the moment the oldest call reaches the interval ([`next_reading`]),
+//! whether or not any client is asking: a request accepted while nobody
+//! watches `/readyz` is refused on time all the same. A question waiting
+//! for the answer to change is woken by the same events.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -214,4 +216,41 @@ pub(in crate::core::server) fn refusal() -> Result<Option<String>, String> {
         }
     }
     Ok(Some(sentence))
+}
+
+/// The gateway's own readings of the standing calls, run for the life of
+/// the process. It waits for a call to begin or end, or for the moment the
+/// oldest unended call reaches the declared refresh interval, then reads:
+/// every call past the interval is ended with the refusal `/readyz` gives,
+/// so its request is answered with it, and the log says which calls were
+/// refused and why. A reading that cannot measure the calls says that cause
+/// in the log once, until the cause changes.
+pub(in crate::core::server) async fn watch() {
+    let mut said: Option<String> = None;
+    loop {
+        // Registered before the moment is read, so a call beginning between
+        // the reading and the wait wakes this loop instead of passing it.
+        let notified = super::CHANGED.notified();
+        tokio::pin!(notified);
+        notified.as_mut().enable();
+        match next_reading() {
+            Some(due) => {
+                tokio::select! {
+                    () = &mut notified => {}
+                    () = tokio::time::sleep_until(tokio::time::Instant::from_std(due)) => {}
+                }
+            }
+            None => notified.await,
+        }
+        let reading = match refusal() {
+            Ok(reading) => reading,
+            Err(cause) => Some(cause),
+        };
+        if reading != said {
+            if let Some(sentence) = &reading {
+                tracing::warn!("standing credential calls refused by the gateway's own reading: {sentence}");
+            }
+            said = reading;
+        }
+    }
 }

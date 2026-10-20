@@ -251,11 +251,13 @@ fn answer() -> (StatusCode, Value) {
     (status, body)
 }
 
-/// Learn this host's placement and take the first readiness reading, once.
+/// Learn this host's placement, take the first readiness reading, once, and
+/// start the gateway's own readings of standing credential calls.
 pub(in crate::core::server) fn spawn_readiness_probe() {
     // Off the readiness path on purpose: this shells out to Stado.
     placement::learn();
     tokio::spawn(recompute());
+    tokio::spawn(standing::watch());
 }
 
 /// Take one readiness reading, publish it for `/readyz`, and return its body.
