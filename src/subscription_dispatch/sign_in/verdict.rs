@@ -1,3 +1,5 @@
+mod effect;
+pub use effect::effect_unknown;
 use super::blocked::{journal_unreadable, observed_at, with_holds};
 use super::{weles_provider, Blocked, SignInOptions};
 use serde_json::{json, Value};
@@ -191,24 +193,14 @@ fn stops_a_new_attempt(
         code,
         Some("provider_challenge_refused" | "GOOGLE_PASSWORD_REJECTED" | "oauth_identity_mismatch")
     );
-    // Nobody knows what the provider did: the HTTP exchange with Weles died
-    // before an answer, or the answer was unreadable. That is not evidence
-    // that a repeat cannot repair the account, and treating it as evidence
-    // wedges the subscription: one `IncompleteMessage` on POST /reauth, and
-    // every later sign-in - the sweep's and the operator's - replays that
-    // verdict instead of running, while the account revision it is keyed to
-    // has no reason to change. Nor does the cooldown hold it: Weles admits
-    // a sign-in of the same account revision into the run already under way
-    // and answers it with everything that run has reported, so asking again
-    // reattaches to the browser that is still waiting (a laptop's forward
-    // restarting under a 5-minute Google prompt was enough to lose it)
-    // instead of starting another challenge.
-    // The operator ended the run (`weles runs cancel`): the provider was not
-    // asked anything that could be held against the account.
-    let unknown_effect = matches!(
-        code,
-        Some("weles_execution_unconfirmed" | "authentication_response_invalid" | "run_cancelled")
-    );
+    // Nobody knows what the provider did ([`effect_unknown`]). That is no
+    // evidence a repeat cannot repair the account, and treating it as such
+    // wedges the subscription: every later sign-in replays that verdict while
+    // the account revision it is keyed to has no reason to change. Nor does
+    // the cooldown hold it: Weles admits a sign-in of the same account
+    // revision into the run already under way, so asking again reattaches to
+    // the browser that is still waiting instead of starting another challenge.
+    let unknown_effect = code.is_some_and(effect_unknown);
     same_account
         && failed
         && !unknown_effect
@@ -273,28 +265,36 @@ pub fn observed_failure(id: &str) -> Option<Blocked> {
             return None;
         }
     }
+    let recorded = |pointer: &str| previous.pointer(pointer).and_then(Value::as_str);
+    let status = match previous.pointer("/failure/http_status").and_then(Value::as_u64) {
+        Some(value) => match u16::try_from(value) {
+            Ok(status) => Some(status),
+            Err(error) => {
+                return Some(journal_unreadable(format!(
+                    "the last recorded sign-in of {id} names HTTP status {value}: {error}"
+                )))
+            }
+        },
+        None => None,
+    };
+    // A record older than failure codes reads in the documented words for it.
     Some(Blocked::Operation {
-        code: previous
-            .pointer("/failure/code")
-            .and_then(Value::as_str)
-            .unwrap_or("authentication_outcome_unclassified")
-            .into(),
-        stage: previous
-            .pointer("/failure/stage")
-            .and_then(Value::as_str)
-            .unwrap_or("unrecorded")
-            .into(),
+        code: match recorded("/failure/code") {
+            Some(code) => code.into(),
+            None => "authentication_outcome_unclassified".into(),
+        },
+        stage: match recorded("/failure/stage") {
+            Some(stage) => stage.into(),
+            None => "stage not recorded".into(),
+        },
         detail: format!(
             "{} ({})",
-            match previous.get("detail").and_then(Value::as_str) {
+            match recorded("/detail") {
                 Some(detail) => detail,
                 None => "The previous authentication attempt did not retain its outcome",
             },
             observed_at(began, "attempted")
         ),
-        status: previous
-            .pointer("/failure/http_status")
-            .and_then(Value::as_u64)
-            .and_then(|value| u16::try_from(value).ok()),
+        status,
     })
 }

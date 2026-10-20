@@ -26,7 +26,7 @@ pub struct SignInOptions {
     pub progress: Option<Progress>,
 }
 
-pub use verdict::{automatic_sign_in_sentence, observed_failure};
+pub use verdict::{automatic_sign_in_sentence, effect_unknown, observed_failure};
 pub use worker::weles_provider;
 
 pub async fn sign_in_provider(options: SignInOptions) -> Result<Value, SignInError> {

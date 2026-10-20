@@ -116,7 +116,7 @@ pub(super) async fn execute(options: &SignInOptions) -> Result<Value, SignInErro
                     endpoint.whereabouts()
                 ),
                 json!({"code": "weles_execution_unconfirmed", "stage": "weles_response",
-                    "browser_started": null, "retryable": false}),
+                    "browser_started": null, "retryable": true}),
                 Value::Null,
             ));
         }
@@ -147,7 +147,7 @@ pub(super) async fn execute(options: &SignInOptions) -> Result<Value, SignInErro
                                 endpoint.whereabouts()
                             ),
                             json!({"code": "weles_execution_unconfirmed", "stage": "weles_response",
-                                "browser_started": null, "retryable": false}),
+                                "browser_started": null, "retryable": true}),
                             Value::Null,
                         ));
                     }
@@ -170,7 +170,7 @@ pub(super) async fn execute(options: &SignInOptions) -> Result<Value, SignInErro
                         endpoint.whereabouts()
                     ),
                     json!({"code": "weles_execution_unconfirmed", "stage": stage,
-                        "run_id": observed.run_id, "browser_started": null, "retryable": false}),
+                        "run_id": observed.run_id, "browser_started": null, "retryable": true}),
                     Value::Null,
                 ));
             }

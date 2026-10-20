@@ -188,14 +188,16 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
         .collect();
     let placement_drift = placement.blocked();
     // A sign-in blocked by a dependency that is down or rationing (Weles
-    // unreachable, a provider's rate limit) is retried by the next pass and
-    // asks nothing of an operator; any other block names what is missing.
+    // unreachable, a provider's rate limit), or one whose effect is unknown
+    // (the exchange with Weles died before an answer), is retried by the next
+    // pass and asks nothing of an operator; any other block names what is
+    // missing.
     let blocked_for_operator = placement_drift.is_some()
         || facts.sign_in_blocked.values().any(|(_, blocked)| {
             !matches!(
                 blocked.failure_code(),
                 wisent_errors::Code::InfraDown | wisent_errors::Code::RateLimit
-            )
+            ) && !crate::subscription_dispatch::sign_in::effect_unknown(blocked.code())
         });
     if let Some(drift) = placement_drift {
         blocked.push(drift.to_json());
