@@ -14,10 +14,14 @@ mod pump;
 
 use serde_json::{json, Value};
 
-use crate::providers::stream::StreamItem;
+use crate::providers::stream::{StopReason, StreamItem};
 use axum::response::sse::Event;
 
 use super::{sse, StreamAccounting};
+
+/// The position of the one text part a Brama message item carries: the
+/// Responses wire numbers an item's content parts from zero.
+const ONLY_PART: u32 = 0; // https://platform.openai.com/docs/api-reference/responses-streaming content_index
 
 /// One output item the Responses encoder is accumulating for its terminal
 /// `response.completed`, which must carry the whole generation again.
@@ -35,7 +39,38 @@ enum ResponsesOutputItem {
     },
 }
 
+impl ResponsesOutputItem {
+    /// The item as the terminal response lists it.
+    fn completed(&self) -> Value {
+        match self {
+            Self::Message { id, text } => json!({
+                "type": "message",
+                "id": id,
+                "status": "completed",
+                "role": "assistant",
+                "content": [{ "type": "output_text", "text": text, "annotations": [] }],
+            }),
+            Self::FunctionCall {
+                id,
+                call_id,
+                name,
+                arguments,
+            } => json!({
+                "type": "function_call",
+                "id": id,
+                "call_id": call_id,
+                "name": name,
+                "arguments": arguments,
+                "status": "completed",
+            }),
+        }
+    }
+}
+
 /// Encode neutral provider events as an OpenAI Responses event stream.
+///
+/// An item's `output_index` is its position in `items`, the order it was
+/// added in, so no counter can drift from the list it numbers.
 pub struct ResponsesEventStream {
     rx: tokio::sync::mpsc::Receiver<StreamItem>,
     pending: std::collections::VecDeque<Event>,
@@ -43,12 +78,15 @@ pub struct ResponsesEventStream {
     model: String,
     created: u64,
     started: bool,
-    output_index: u32,
-    open_item: Option<u32>,
+    /// The position of the item still open for deltas.
+    open_item: Option<usize>,
     items: Vec<ResponsesOutputItem>,
-    tool_items: std::collections::HashMap<u32, u32>,
-    input_tokens: u32,
-    output_tokens: u32,
+    /// Each provider tool-call index's item position.
+    tool_items: std::collections::HashMap<u32, usize>,
+    /// The provider's (input, output) meter, once it stated one.
+    usage: Option<(u32, u32)>,
+    /// Why the provider stopped, once it stated it.
+    stop: Option<StopReason>,
     terminated: bool,
     failed: bool,
     on_end: Option<StreamAccounting>,
@@ -59,6 +97,7 @@ impl ResponsesEventStream {
         rx: tokio::sync::mpsc::Receiver<StreamItem>,
         response_id: String,
         model: String,
+        created: u64,
         on_end: StreamAccounting,
     ) -> Self {
         Self {
@@ -66,17 +105,13 @@ impl ResponsesEventStream {
             pending: std::collections::VecDeque::new(),
             response_id,
             model,
-            created: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|elapsed| elapsed.as_secs())
-                .unwrap_or_default(),
+            created,
             started: false,
-            output_index: 0,
             open_item: None,
             items: Vec::new(),
             tool_items: std::collections::HashMap::new(),
-            input_tokens: 0,
-            output_tokens: 0,
+            usage: None,
+            stop: None,
             terminated: false,
             failed: false,
             on_end: Some(on_end),
@@ -86,7 +121,7 @@ impl ResponsesEventStream {
     /// Report this stream's end to the layer that owns the statistics, once.
     fn account(&mut self, failed: bool) {
         if let Some(mut report) = self.on_end.take() {
-            report(self.input_tokens, self.output_tokens, failed);
+            report(self.usage, failed);
         }
     }
 
@@ -101,21 +136,45 @@ impl ResponsesEventStream {
         })
     }
 
-    fn current_item_id(&self) -> String {
-        match self.items.last() {
-            Some(ResponsesOutputItem::Message { id, .. }) => id.clone(),
-            Some(ResponsesOutputItem::FunctionCall { id, .. }) => id.clone(),
-            None => String::new(),
+    /// The terminal response: `completed`, or `incomplete` with the reason
+    /// the provider stated when it stopped short, carrying every item and the
+    /// usage only when the provider stated one.
+    fn terminal_response(&self) -> (&'static str, Value) {
+        let incomplete = match &self.stop {
+            Some(StopReason::MaxTokens) => Some(Some("max_output_tokens".to_string())),
+            Some(StopReason::ContentFilter) => Some(Some("content_filter".to_string())),
+            Some(StopReason::Incomplete(reason)) => Some(reason.clone()),
+            _ => None,
+        };
+        let status = match incomplete {
+            Some(_) => "incomplete",
+            None => "completed",
+        };
+        let mut response = self.response_shell(status);
+        response["output"] = Value::Array(self.items.iter().map(ResponsesOutputItem::completed).collect());
+        if let Some(reason) = incomplete {
+            response["incomplete_details"] = json!({ "reason": reason });
         }
+        if let Some((input_tokens, output_tokens)) = self.usage {
+            response["usage"] = json!({
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": u64::from(input_tokens) + u64::from(output_tokens),
+            });
+        }
+        let event = match status {
+            "incomplete" => "response.incomplete",
+            _ => "response.completed",
+        };
+        (event, response)
     }
 
     /// Close the open output item with its own `done` events, per format.
     fn close_open_item(&mut self) {
-        if self.open_item.take().is_none() {
+        let Some(index) = self.open_item.take() else {
             return;
-        }
-        let index = self.output_index.saturating_sub(1);
-        match self.items.last().cloned() {
+        };
+        match self.items.get(index).cloned() {
             Some(ResponsesOutputItem::Message { id, text }) => {
                 self.pending.push_back(sse(
                     "response.output_text.done",
@@ -123,7 +182,7 @@ impl ResponsesEventStream {
                         "type": "response.output_text.done",
                         "item_id": id,
                         "output_index": index,
-                        "content_index": 0,
+                        "content_index": ONLY_PART,
                         "text": text,
                     }),
                 ));
@@ -133,7 +192,7 @@ impl ResponsesEventStream {
                         "type": "response.content_part.done",
                         "item_id": id,
                         "output_index": index,
-                        "content_index": 0,
+                        "content_index": ONLY_PART,
                         "part": { "type": "output_text", "text": text, "annotations": [] },
                     }),
                 ));
@@ -142,44 +201,28 @@ impl ResponsesEventStream {
                     json!({
                         "type": "response.output_item.done",
                         "output_index": index,
-                        "item": {
-                            "type": "message",
-                            "id": id,
-                            "status": "completed",
-                            "role": "assistant",
-                            "content": [{ "type": "output_text", "text": text, "annotations": [] }],
-                        },
+                        "item": ResponsesOutputItem::Message { id, text }.completed(),
                     }),
                 ));
             }
-            Some(ResponsesOutputItem::FunctionCall {
-                id,
-                call_id,
-                name,
-                arguments,
-            }) => {
-                self.pending.push_back(sse(
-                    "response.function_call_arguments.done",
-                    json!({
-                        "type": "response.function_call_arguments.done",
-                        "item_id": id,
-                        "output_index": index,
-                        "arguments": arguments,
-                    }),
-                ));
+            Some(call @ ResponsesOutputItem::FunctionCall { .. }) => {
+                if let ResponsesOutputItem::FunctionCall { id, arguments, .. } = &call {
+                    self.pending.push_back(sse(
+                        "response.function_call_arguments.done",
+                        json!({
+                            "type": "response.function_call_arguments.done",
+                            "item_id": id,
+                            "output_index": index,
+                            "arguments": arguments,
+                        }),
+                    ));
+                }
                 self.pending.push_back(sse(
                     "response.output_item.done",
                     json!({
                         "type": "response.output_item.done",
                         "output_index": index,
-                        "item": {
-                            "type": "function_call",
-                            "id": id,
-                            "call_id": call_id,
-                            "name": name,
-                            "arguments": arguments,
-                            "status": "completed",
-                        },
+                        "item": call.completed(),
                     }),
                 ));
             }

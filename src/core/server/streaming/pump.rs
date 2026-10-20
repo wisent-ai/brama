@@ -53,7 +53,6 @@ impl futures_core::Stream for ChatChunkStream {
                     self.pending.push_back(content);
                 }
                 StreamItem::Delta(StreamDelta::ToolCallStart { index, id, name }) => {
-                    self.saw_tool_calls = true;
                     if !self.sent_role {
                         self.sent_role = true;
                         let role = self.role_chunk();
@@ -81,23 +80,17 @@ impl futures_core::Stream for ChatChunkStream {
                     self.pending.push_back(chunk);
                 }
                 StreamItem::Delta(StreamDelta::Finish { reason }) => {
-                    self.finish_reason =
-                        Some(openai_finish_reason(reason.as_deref(), self.saw_tool_calls));
+                    self.finish_reason = Some(openai_finish_reason(&reason));
                 }
                 StreamItem::Delta(StreamDelta::Usage {
                     input_tokens,
                     output_tokens,
                 }) => {
                     self.usage = Some((input_tokens, output_tokens));
-                    self.input_tokens = input_tokens;
-                    self.output_tokens = output_tokens;
                 }
                 StreamItem::Done => {
-                    let reason = self
-                        .finish_reason
-                        .clone()
-                        .unwrap_or_else(|| openai_finish_reason(None, self.saw_tool_calls));
-                    let finish = self.chunk(json!({}), Some(&reason));
+                    // The provider's own reason, or null when it stated none.
+                    let finish = self.chunk(json!({}), self.finish_reason.as_deref());
                     self.pending.push_back(finish);
                     if let Some((input_tokens, output_tokens)) = self.usage {
                         let usage = self.usage_chunk(input_tokens, output_tokens);

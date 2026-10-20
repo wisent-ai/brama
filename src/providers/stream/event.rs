@@ -29,13 +29,36 @@ pub enum StreamDelta {
         index: u32,
         delta: String,
     },
+    /// Why the provider stopped, as it stated it.
     Finish {
-        reason: Option<String>,
+        reason: StopReason,
     },
     Usage {
         input_tokens: u32,
         output_tokens: u32,
     },
+}
+
+/// Why a provider stopped generating, as it stated it. Each output dialect
+/// maps this once into its own vocabulary; a reason no variant names travels
+/// as the provider wrote it, never as a normal end.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum StopReason {
+    /// The model ended its turn.
+    EndTurn,
+    /// A stop sequence the caller declared matched.
+    StopSequence,
+    /// The output token limit cut the generation.
+    MaxTokens,
+    /// The model stopped to call tools.
+    ToolUse,
+    /// The provider's content filter stopped the generation.
+    ContentFilter,
+    /// The provider ended the response incomplete, with the reason it stated
+    /// when it stated one.
+    Incomplete(Option<String>),
+    /// A reason no variant names, as the provider stated it.
+    Other(String),
 }
 
 /// What the pump delivers.

@@ -20,7 +20,9 @@ use axum::Json;
 use crate::core::server::admission::identity::ModelClientIdentity;
 use crate::core::server::aliases::table::ModelAliases;
 use crate::core::server::refusal::api_error;
-use crate::core::server::streaming::{chunks::ChatChunkStream, sse_response};
+use crate::core::server::streaming::{
+    chunks::ChatChunkStream, epoch_seconds, sse_response, stream_accounting,
+};
 use crate::types::{Message, ModelRequest};
 
 use outcome::{failure_response, log_stream_commit, tally_and_log_buffered};
@@ -188,12 +190,18 @@ pub(in crate::core::server) async fn chat_completions(
         DispatchedCall::Committed(routed) => {
             log_stream_commit(&routed, &client_identity, &meta, &requested_model);
             let model = meta.reported_model(&requested_model, &routed.model);
+            let created = match epoch_seconds() {
+                Ok(created) => created,
+                Err(cause) => {
+                    return api_error(StatusCode::INTERNAL_SERVER_ERROR, &cause).into_response()
+                }
+            };
             sse_response(ChatChunkStream::new(
                 routed.events,
                 meta.request_id.clone(),
                 model,
-                requested_model,
-                meta.started,
+                created,
+                stream_accounting(requested_model, meta.started),
             ))
         }
     }

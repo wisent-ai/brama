@@ -44,6 +44,18 @@ the provider calls it counted. A typed or media refusal states one call when a
 provider answered it and none when Brama refused first, read from the
 refusal's class rather than from its contract code, and the process totals
 count it the same way (<a href="/docs/errors">Errors</a>).</p>
+<h2 id="unreleased-stream-stop">Unreleased: streams state the provider's stop and meter, or nothing<a class="headerlink" href="#unreleased-stream-stop" title="Link to this section">&para;</a></h2>
+<p>A provider's stop reason travels as a typed value from each provider
+stream and is mapped once per dialect: a reason the dialect has no word for
+is passed on as the provider stated it instead of reported as a normal stop,
+a Responses provider that stopped at its output limit or content filter
+ends the Responses stream with <code>response.incomplete</code>, and a stop
+nobody stated is <code>null</code>. A stream whose provider stated no usage
+sends no usage frame or meter and adds nothing to the totals, instead of a
+meter of zeros. Argument fragments for a tool call that never started end the
+stream instead of landing in the open block, and an answer's creation time is
+refused, not written as zero, on a host whose clock reads before the epoch
+(<a href="/docs/http-api/inference">Inference</a>).</p>
 <h2 id="unreleased-tasks">Unreleased: <code>brama tasks</code> replaces <code>collect-task-quality</code><a class="headerlink" href="#unreleased-tasks" title="Link to this section">&para;</a></h2>
 <p>Measuring a named task and reading back what <code>task:&lt;KEY&gt;</code>
 selection uses are one command family: <code>brama tasks measure &lt;KEY&gt;</code>

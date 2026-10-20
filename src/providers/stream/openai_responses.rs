@@ -10,8 +10,19 @@
 use serde_json::Value;
 
 use super::event::{
-    json_u32, stream_error, tool_call_index, tool_call_start, StreamDelta, StreamItem,
+    json_u32, stream_error, tool_call_index, tool_call_start, StopReason, StreamDelta, StreamItem,
 };
+
+/// A Responses `incomplete_details.reason` as a stop reason: the values the
+/// API documents (https://platform.openai.com/docs/api-reference/responses/object),
+/// and any other kept as the provider stated it.
+fn incomplete_reason(stated: Option<&str>) -> StopReason {
+    match stated {
+        Some("max_output_tokens") => StopReason::MaxTokens,
+        Some("content_filter") => StopReason::ContentFilter,
+        other => StopReason::Incomplete(other.map(str::to_string)),
+    }
+}
 
 /// Translate one OpenAI Responses event into neutral items.
 pub(super) fn responses_items(event: Option<&str>, data: &str) -> (Vec<StreamItem>, bool) {
@@ -105,19 +116,26 @@ pub(super) fn responses_items(event: Option<&str>, data: &str) -> (Vec<StreamIte
                 _ => {}
             }
             let reason = if kind == "response.incomplete" {
-                match body
-                    .pointer("/response/incomplete_details/reason")
-                    .and_then(Value::as_str)
-                {
-                    Some(reason) => format!("incomplete:{reason}"),
-                    None => "incomplete".to_string(),
-                }
+                incomplete_reason(
+                    body.pointer("/response/incomplete_details/reason")
+                        .and_then(Value::as_str),
+                )
+            } else if body
+                .pointer("/response/output")
+                .and_then(Value::as_array)
+                .is_some_and(|output| {
+                    output
+                        .iter()
+                        .any(|item| item.get("type").and_then(Value::as_str) == Some("function_call"))
+                })
+            {
+                // A completed response whose output holds a function call
+                // stopped to have it run.
+                StopReason::ToolUse
             } else {
-                "stop".to_string()
+                StopReason::EndTurn
             };
-            items.push(StreamItem::Delta(StreamDelta::Finish {
-                reason: Some(reason),
-            }));
+            items.push(StreamItem::Delta(StreamDelta::Finish { reason }));
             return (items, true);
         }
         "response.failed" | "error" => {

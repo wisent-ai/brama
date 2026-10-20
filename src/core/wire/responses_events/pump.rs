@@ -2,18 +2,75 @@
 //!
 //! The Responses wire is the most talkative of the three: a first delta has to
 //! be preceded by `response.created`, an item being added, and a content part
-//! being added, and every terminal state -- completed or failed -- carries a
-//! whole response object again. That ordering is this module's only subject,
-//! kept apart from the state it advances so that a change to the event order
-//! does not have to be read as a change to what the stream remembers.
+//! being added, and every terminal state -- completed, incomplete or failed --
+//! carries a whole response object again. That ordering is this module's only
+//! subject, kept apart from the state it advances so that a change to the event
+//! order does not have to be read as a change to what the stream remembers.
 
-use serde_json::{json, Value};
+use serde_json::json;
 
 use crate::core::wire::sse;
 use crate::providers::stream::{StreamDelta, StreamItem};
 use axum::response::sse::Event;
 
-use super::{ResponsesEventStream, ResponsesOutputItem};
+use super::{ResponsesEventStream, ResponsesOutputItem, ONLY_PART};
+
+impl ResponsesEventStream {
+    /// Open a message item for text, unless the open item already is one,
+    /// and return its position.
+    fn open_message(&mut self) -> usize {
+        if let Some(index) = self.open_item {
+            if matches!(self.items.get(index), Some(ResponsesOutputItem::Message { .. })) {
+                return index;
+            }
+        }
+        self.close_open_item();
+        let id = format!("msg_{}", uuid::Uuid::new_v4().simple());
+        let index = self.items.len();
+        self.open_item = Some(index);
+        self.items.push(ResponsesOutputItem::Message {
+            id: id.clone(),
+            text: String::new(),
+        });
+        self.pending.push_back(sse(
+            "response.output_item.added",
+            json!({
+                "type": "response.output_item.added",
+                "output_index": index,
+                "item": {
+                    "type": "message",
+                    "id": id,
+                    "status": "in_progress",
+                    "role": "assistant",
+                    "content": [],
+                },
+            }),
+        ));
+        self.pending.push_back(sse(
+            "response.content_part.added",
+            json!({
+                "type": "response.content_part.added",
+                "item_id": id,
+                "output_index": index,
+                "content_index": ONLY_PART,
+                "part": { "type": "output_text", "text": "", "annotations": [] },
+            }),
+        ));
+        index
+    }
+
+    /// End the stream as failed, telling the caller in-band why.
+    fn fail(&mut self, message: &str) {
+        let mut response = self.response_shell("failed");
+        response["error"] = json!({ "message": message });
+        self.pending.push_back(sse(
+            "response.failed",
+            json!({ "type": "response.failed", "response": response }),
+        ));
+        self.terminated = true;
+        self.failed = true;
+    }
+}
 
 impl futures_core::Stream for ResponsesEventStream {
     type Item = Result<Event, std::convert::Infallible>;
@@ -51,54 +108,24 @@ impl futures_core::Stream for ResponsesEventStream {
             }
             match item {
                 StreamItem::Delta(StreamDelta::Text(text)) => {
-                    if self.open_item.is_none() {
-                        let id = format!("msg_{}", uuid::Uuid::new_v4().simple());
-                        let index = self.output_index;
-                        self.output_index += 1;
-                        self.open_item = Some(index);
-                        self.items.push(ResponsesOutputItem::Message {
-                            id: id.clone(),
-                            text: String::new(),
-                        });
-                        self.pending.push_back(sse(
-                            "response.output_item.added",
-                            json!({
-                                "type": "response.output_item.added",
-                                "output_index": index,
-                                "item": {
-                                    "type": "message",
-                                    "id": id,
-                                    "status": "in_progress",
-                                    "role": "assistant",
-                                    "content": [],
-                                },
-                            }),
-                        ));
-                        self.pending.push_back(sse(
-                            "response.content_part.added",
-                            json!({
-                                "type": "response.content_part.added",
-                                "item_id": id,
-                                "output_index": index,
-                                "content_index": 0,
-                                "part": { "type": "output_text", "text": "", "annotations": [] },
-                            }),
-                        ));
-                    }
-                    if let Some(ResponsesOutputItem::Message { text: full, .. }) =
-                        self.items.last_mut()
-                    {
-                        full.push_str(&text);
-                    }
-                    let item_id = self.current_item_id();
-                    let index = self.output_index.saturating_sub(1);
+                    let index = self.open_message();
+                    let item_id = match self.items.get_mut(index) {
+                        Some(ResponsesOutputItem::Message { id, text: full }) => {
+                            full.push_str(&text);
+                            id.clone()
+                        }
+                        _ => {
+                            self.fail("a text delta found no open message item to belong to");
+                            continue;
+                        }
+                    };
                     self.pending.push_back(sse(
                         "response.output_text.delta",
                         json!({
                             "type": "response.output_text.delta",
                             "item_id": item_id,
                             "output_index": index,
-                            "content_index": 0,
+                            "content_index": ONLY_PART,
                             "delta": text,
                         }),
                     ));
@@ -106,8 +133,7 @@ impl futures_core::Stream for ResponsesEventStream {
                 StreamItem::Delta(StreamDelta::ToolCallStart { index, id, name }) => {
                     self.close_open_item();
                     let item_id = format!("fc_{}", uuid::Uuid::new_v4().simple());
-                    let out_index = self.output_index;
-                    self.output_index += 1;
+                    let out_index = self.items.len();
                     self.open_item = Some(out_index);
                     self.tool_items.insert(index, out_index);
                     self.items.push(ResponsesOutputItem::FunctionCall {
@@ -133,23 +159,27 @@ impl futures_core::Stream for ResponsesEventStream {
                     ));
                 }
                 StreamItem::Delta(StreamDelta::ToolCallArguments { index, delta }) => {
-                    let out_index = self
-                        .tool_items
-                        .get(&index)
-                        .copied()
-                        .unwrap_or_else(|| self.output_index.saturating_sub(1));
-                    let item_position = self
-                        .items
-                        .iter()
-                        .rposition(|item| matches!(item, ResponsesOutputItem::FunctionCall { .. }));
-                    if let Some(position) = item_position {
-                        if let ResponsesOutputItem::FunctionCall { arguments, .. } =
-                            &mut self.items[position]
-                        {
+                    // Arguments belong to the call the provider index started;
+                    // a fragment for a call never started ends the stream
+                    // instead of being appended to whichever call is last.
+                    let Some(out_index) = self.tool_items.get(&index).copied() else {
+                        self.fail(&format!(
+                            "the provider sent arguments for tool call {index}, which it never started"
+                        ));
+                        continue;
+                    };
+                    let item_id = match self.items.get_mut(out_index) {
+                        Some(ResponsesOutputItem::FunctionCall { id, arguments, .. }) => {
                             arguments.push_str(&delta);
+                            id.clone()
                         }
-                    }
-                    let item_id = self.current_item_id();
+                        _ => {
+                            self.fail(&format!(
+                                "tool call {index} names output item {out_index}, which is not a function call"
+                            ));
+                            continue;
+                        }
+                    };
                     self.pending.push_back(sse(
                         "response.function_call_arguments.delta",
                         json!({
@@ -160,53 +190,20 @@ impl futures_core::Stream for ResponsesEventStream {
                         }),
                     ));
                 }
-                StreamItem::Delta(StreamDelta::Finish { .. }) => {}
+                StreamItem::Delta(StreamDelta::Finish { reason }) => {
+                    self.stop = Some(reason);
+                }
                 StreamItem::Delta(StreamDelta::Usage {
                     input_tokens,
                     output_tokens,
                 }) => {
-                    self.input_tokens = input_tokens;
-                    self.output_tokens = output_tokens;
+                    self.usage = Some((input_tokens, output_tokens));
                 }
                 StreamItem::Done => {
                     self.close_open_item();
-                    let output: Vec<Value> = self
-                        .items
-                        .iter()
-                        .map(|item| match item {
-                            ResponsesOutputItem::Message { id, text } => json!({
-                                "type": "message",
-                                "id": id,
-                                "status": "completed",
-                                "role": "assistant",
-                                "content": [{ "type": "output_text", "text": text, "annotations": [] }],
-                            }),
-                            ResponsesOutputItem::FunctionCall {
-                                id,
-                                call_id,
-                                name,
-                                arguments,
-                            } => json!({
-                                "type": "function_call",
-                                "id": id,
-                                "call_id": call_id,
-                                "name": name,
-                                "arguments": arguments,
-                                "status": "completed",
-                            }),
-                        })
-                        .collect();
-                    let mut response = self.response_shell("completed");
-                    response["output"] = Value::Array(output);
-                    response["usage"] = json!({
-                        "input_tokens": self.input_tokens,
-                        "output_tokens": self.output_tokens,
-                        "total_tokens": self.input_tokens + self.output_tokens,
-                    });
-                    self.pending.push_back(sse(
-                        "response.completed",
-                        json!({ "type": "response.completed", "response": response }),
-                    ));
+                    let (event, response) = self.terminal_response();
+                    self.pending
+                        .push_back(sse(event, json!({ "type": event, "response": response })));
                     self.terminated = true;
                 }
                 StreamItem::Failed(message) => {
@@ -216,14 +213,7 @@ impl futures_core::Stream for ResponsesEventStream {
                         error = %message,
                         "provider stream failed after commit; ending with response.failed"
                     );
-                    let mut response = self.response_shell("failed");
-                    response["error"] = json!({ "message": message });
-                    self.pending.push_back(sse(
-                        "response.failed",
-                        json!({ "type": "response.failed", "response": response }),
-                    ));
-                    self.terminated = true;
-                    self.failed = true;
+                    self.fail(&message);
                 }
             }
         }

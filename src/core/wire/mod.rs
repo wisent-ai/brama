@@ -41,12 +41,13 @@ pub use responses_call::responses_request;
 pub use responses_events::ResponsesEventStream;
 
 /// What an encoder reports once, when its stream ends: the provider's own
-/// token meters and whether the generation completed.
+/// (input, output) token meters when it stated them, `None` when it stated
+/// none, and whether the generation failed.
 ///
 /// The encoders live here, but process statistics belong to the HTTP layer
 /// that owns them, so the layer hands each stream a closure instead of this
 /// module reaching for a static it does not own.
-pub type StreamAccounting = Box<dyn FnMut(u32, u32, bool) + Send>;
+pub type StreamAccounting = Box<dyn FnMut(Option<(u32, u32)>, bool) + Send>;
 
 /// One parsed inbound call, format already erased.
 pub struct InboundCall {

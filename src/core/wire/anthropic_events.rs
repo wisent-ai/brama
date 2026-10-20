@@ -5,38 +5,33 @@
 //! `message_delta` before `message_stop`. None of that ordering is present in
 //! the neutral events this encoder is fed, so the whole choreography -- which
 //! block is open, which index a tool call was given, and which of the format's
-//! stop reasons a neutral finish reason means -- is decided here, in the one
-//! place a change to Anthropic's stream has to be read.
+//! stop reasons a provider's stop means -- is decided here, in the one place a
+//! change to Anthropic's stream has to be read.
 
 use serde_json::{json, Value};
 
-use crate::providers::stream::{StreamDelta, StreamItem};
+use crate::providers::stream::{StopReason, StreamDelta, StreamItem};
 use axum::response::sse::Event;
 
 use super::{sse, StreamAccounting};
 
-/// Map a neutral finish reason onto the Anthropic stop vocabulary.
-fn anthropic_stop_reason(reason: Option<&str>, saw_tool_calls: bool) -> String {
+/// The meter a `message_start` carries: this stream has counted nothing yet
+/// when it opens, and the provider's stated meter follows on `message_delta`.
+const NOTHING_COUNTED_YET: u32 = 0; // https://docs.anthropic.com/en/docs/build-with-claude/streaming message_start usage
+
+/// A provider stop reason in the Anthropic stop vocabulary
+/// (https://docs.anthropic.com/en/api/messages#response-stop-reason); a reason
+/// it has no word for is passed on as the provider stated it.
+fn anthropic_stop_reason(reason: &StopReason) -> String {
     match reason {
-        Some("end_turn") | Some("stop") | Some("stop_sequence") => "end_turn",
-        Some("max_tokens") | Some("length") => "max_tokens",
-        Some("tool_use") | Some("tool_calls") => "tool_use",
-        Some(other) if other.starts_with("incomplete") => {
-            if other.contains("max_output_tokens") {
-                "max_tokens"
-            } else {
-                "end_turn"
-            }
-        }
-        _ => {
-            if saw_tool_calls {
-                "tool_use"
-            } else {
-                "end_turn"
-            }
-        }
+        StopReason::EndTurn => "end_turn".to_string(),
+        StopReason::StopSequence => "stop_sequence".to_string(),
+        StopReason::MaxTokens => "max_tokens".to_string(),
+        StopReason::ToolUse => "tool_use".to_string(),
+        StopReason::ContentFilter => "refusal".to_string(),
+        StopReason::Incomplete(Some(stated)) | StopReason::Other(stated) => stated.clone(),
+        StopReason::Incomplete(None) => "incomplete".to_string(),
     }
-    .to_string()
 }
 
 /// Which kind of content block the Anthropic encoder currently has open.
@@ -48,22 +43,23 @@ enum AnthropicBlock {
 
 /// Encode neutral provider events as an Anthropic Messages event stream.
 ///
-/// Block indices are assigned here, not taken from the provider: the neutral
-/// event's index distinguishes concurrent tool calls, and the map below keeps
-/// each provider index attached to the block it opened.
+/// A block's index is its position among the blocks this stream opened, in
+/// order, as the format numbers them; the map keeps each provider tool-call
+/// index attached to the block it opened, so two interleaved calls stay two.
 pub struct AnthropicEventStream {
     rx: tokio::sync::mpsc::Receiver<StreamItem>,
     pending: std::collections::VecDeque<Event>,
     message_id: String,
     model: String,
     started_message: bool,
-    open_block: Option<(u32, AnthropicBlock)>,
-    block_count: u32,
-    tool_blocks: std::collections::HashMap<u32, u32>,
-    saw_tool_calls: bool,
-    finish_reason: Option<String>,
-    output_tokens: u32,
-    input_tokens: u32,
+    /// Every block opened so far, by index.
+    blocks: Vec<AnthropicBlock>,
+    /// The index of the block still open for deltas.
+    open_block: Option<usize>,
+    tool_blocks: std::collections::HashMap<u32, usize>,
+    stop_reason: Option<String>,
+    /// The provider's (input, output) meter, once it stated one.
+    usage: Option<(u32, u32)>,
     terminated: bool,
     failed: bool,
     on_end: Option<StreamAccounting>,
@@ -82,13 +78,11 @@ impl AnthropicEventStream {
             message_id,
             model,
             started_message: false,
+            blocks: Vec::new(),
             open_block: None,
-            block_count: 0,
             tool_blocks: std::collections::HashMap::new(),
-            saw_tool_calls: false,
-            finish_reason: None,
-            output_tokens: 0,
-            input_tokens: 0,
+            stop_reason: None,
+            usage: None,
             terminated: false,
             failed: false,
             on_end: Some(on_end),
@@ -98,7 +92,7 @@ impl AnthropicEventStream {
     /// Report this stream's end to the layer that owns the statistics, once.
     fn account(&mut self, failed: bool) {
         if let Some(mut report) = self.on_end.take() {
-            report(self.input_tokens, self.output_tokens, failed);
+            report(self.usage, failed);
         }
     }
 
@@ -115,7 +109,7 @@ impl AnthropicEventStream {
                     "content": [],
                     "stop_reason": Value::Null,
                     "stop_sequence": Value::Null,
-                    "usage": { "input_tokens": 0, "output_tokens": 0 },
+                    "usage": { "input_tokens": NOTHING_COUNTED_YET, "output_tokens": NOTHING_COUNTED_YET },
                 },
             }),
         )
@@ -123,7 +117,7 @@ impl AnthropicEventStream {
 
     /// Close whatever block is open, if one is, and remember the event.
     fn close_open_block(&mut self) {
-        if let Some((index, _)) = self.open_block.take() {
+        if let Some(index) = self.open_block.take() {
             self.pending.push_back(sse(
                 "content_block_stop",
                 json!({ "type": "content_block_stop", "index": index }),
@@ -131,14 +125,24 @@ impl AnthropicEventStream {
         }
     }
 
-    fn open_text_block(&mut self) {
-        if self.open_block == Some((self.block_count, AnthropicBlock::Text)) {
-            return;
-        }
+    /// Open a new block of `kind` and return its index.
+    fn open_block_of(&mut self, kind: AnthropicBlock) -> usize {
         self.close_open_block();
-        let index = self.block_count;
-        self.block_count += 1;
-        self.open_block = Some((index, AnthropicBlock::Text));
+        let index = self.blocks.len();
+        self.blocks.push(kind);
+        self.open_block = Some(index);
+        index
+    }
+
+    /// The open text block, opened now when the open block is not one, and
+    /// its index.
+    fn open_text_block(&mut self) -> usize {
+        if let Some(index) = self.open_block {
+            if self.blocks.get(index) == Some(&AnthropicBlock::Text) {
+                return index;
+            }
+        }
+        let index = self.open_block_of(AnthropicBlock::Text);
         self.pending.push_back(sse(
             "content_block_start",
             json!({
@@ -147,6 +151,20 @@ impl AnthropicEventStream {
                 "content_block": { "type": "text", "text": "" },
             }),
         ));
+        index
+    }
+
+    /// End the stream as failed: the caller's transport closes without
+    /// `message_stop`, which is how this format says the message is cut.
+    fn fail(&mut self, cause: &str) {
+        tracing::warn!(
+            event = "stream_failed_mid_flight",
+            format = "anthropic-messages",
+            error = %cause,
+            "provider stream failed after commit; ending without message_stop"
+        );
+        self.terminated = true;
+        self.failed = true;
     }
 }
 
@@ -183,8 +201,7 @@ impl futures_core::Stream for AnthropicEventStream {
             }
             match item {
                 StreamItem::Delta(StreamDelta::Text(text)) => {
-                    self.open_text_block();
-                    let index = self.open_block.map(|(index, _)| index).unwrap_or_default();
+                    let index = self.open_text_block();
                     self.pending.push_back(sse(
                         "content_block_delta",
                         json!({
@@ -195,11 +212,7 @@ impl futures_core::Stream for AnthropicEventStream {
                     ));
                 }
                 StreamItem::Delta(StreamDelta::ToolCallStart { index, id, name }) => {
-                    self.saw_tool_calls = true;
-                    self.close_open_block();
-                    let block_index = self.block_count;
-                    self.block_count += 1;
-                    self.open_block = Some((block_index, AnthropicBlock::ToolUse));
+                    let block_index = self.open_block_of(AnthropicBlock::ToolUse);
                     self.tool_blocks.insert(index, block_index);
                     self.pending.push_back(sse(
                         "content_block_start",
@@ -211,12 +224,15 @@ impl futures_core::Stream for AnthropicEventStream {
                     ));
                 }
                 StreamItem::Delta(StreamDelta::ToolCallArguments { index, delta }) => {
-                    let block_index = self
-                        .tool_blocks
-                        .get(&index)
-                        .copied()
-                        .or(self.open_block.map(|(index, _)| index))
-                        .unwrap_or_default();
+                    // Arguments belong to the block their call opened; a
+                    // fragment for a call never started ends the stream
+                    // instead of landing in whichever block is open.
+                    let Some(block_index) = self.tool_blocks.get(&index).copied() else {
+                        self.fail(&format!(
+                            "the provider sent arguments for tool call {index}, which it never started"
+                        ));
+                        continue;
+                    };
                     self.pending.push_back(sse(
                         "content_block_delta",
                         json!({
@@ -227,47 +243,32 @@ impl futures_core::Stream for AnthropicEventStream {
                     ));
                 }
                 StreamItem::Delta(StreamDelta::Finish { reason }) => {
-                    self.finish_reason = Some(anthropic_stop_reason(
-                        reason.as_deref(),
-                        self.saw_tool_calls,
-                    ));
+                    self.stop_reason = Some(anthropic_stop_reason(&reason));
                 }
                 StreamItem::Delta(StreamDelta::Usage {
                     input_tokens,
                     output_tokens,
                 }) => {
-                    self.input_tokens = input_tokens;
-                    self.output_tokens = output_tokens;
+                    self.usage = Some((input_tokens, output_tokens));
                 }
                 StreamItem::Done => {
                     self.close_open_block();
-                    let reason = self
-                        .finish_reason
-                        .clone()
-                        .unwrap_or_else(|| anthropic_stop_reason(None, self.saw_tool_calls));
-                    let (input_tokens, output_tokens) = (self.input_tokens, self.output_tokens);
-                    self.pending.push_back(sse(
-                        "message_delta",
-                        json!({
-                            "type": "message_delta",
-                            "delta": { "stop_reason": reason, "stop_sequence": Value::Null },
-                            "usage": { "input_tokens": input_tokens, "output_tokens": output_tokens },
-                        }),
-                    ));
+                    // The provider's own reason, or null when it stated none;
+                    // the meter only when it stated one.
+                    let mut delta = json!({
+                        "type": "message_delta",
+                        "delta": { "stop_reason": self.stop_reason, "stop_sequence": Value::Null },
+                    });
+                    if let Some((input_tokens, output_tokens)) = self.usage {
+                        delta["usage"] =
+                            json!({ "input_tokens": input_tokens, "output_tokens": output_tokens });
+                    }
+                    self.pending.push_back(sse("message_delta", delta));
                     self.pending
                         .push_back(sse("message_stop", json!({ "type": "message_stop" })));
                     self.terminated = true;
                 }
-                StreamItem::Failed(message) => {
-                    tracing::warn!(
-                        event = "stream_failed_mid_flight",
-                        format = "anthropic-messages",
-                        error = %message,
-                        "provider stream failed after commit; ending without message_stop"
-                    );
-                    self.terminated = true;
-                    self.failed = true;
-                }
+                StreamItem::Failed(message) => self.fail(&message),
             }
         }
     }

@@ -39,7 +39,7 @@ use frame::SseFramer;
 use openai_chat::openai_chat_items;
 use openai_responses::responses_items;
 
-pub use event::{ProviderStream, StreamDelta, StreamItem};
+pub use event::{ProviderStream, StopReason, StreamDelta, StreamItem};
 
 /// Read one committed provider SSE body to its end and deliver neutral items.
 ///

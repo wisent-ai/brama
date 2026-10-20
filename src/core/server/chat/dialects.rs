@@ -109,12 +109,18 @@ pub(in crate::core::server) async fn openai_responses(
             }
             crate::core::perf::record(&requested_model, resp.latency_ms, resp.output_tokens);
             let model = meta.reported_model(&requested_model, &resp.model);
+            let created = match epoch_seconds() {
+                Ok(created) => created,
+                Err(cause) => {
+                    return api_error(StatusCode::INTERNAL_SERVER_ERROR, &cause).into_response()
+                }
+            };
             (
                 StatusCode::OK,
                 Json(crate::core::wire::responses_response(
                     &response_id,
                     &model,
-                    epoch_seconds(),
+                    created,
                     &resp,
                 )),
             )
@@ -123,10 +129,17 @@ pub(in crate::core::server) async fn openai_responses(
         DispatchedCall::Committed(routed) => {
             log_stream_commit(&routed, &client_identity, &meta, &requested_model);
             let model = meta.reported_model(&requested_model, &routed.model);
+            let created = match epoch_seconds() {
+                Ok(created) => created,
+                Err(cause) => {
+                    return api_error(StatusCode::INTERNAL_SERVER_ERROR, &cause).into_response()
+                }
+            };
             sse_response(crate::core::wire::ResponsesEventStream::new(
                 routed.events,
                 response_id,
                 model,
+                created,
                 stream_accounting(requested_model, meta.started),
             ))
         }

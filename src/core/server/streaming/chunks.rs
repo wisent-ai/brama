@@ -1,38 +1,33 @@
 //! The OpenAI chat-chunk encoder: what one caller-facing SSE frame looks like,
-//! and the single point at which a finished stream is accounted for.
-
-use std::sync::atomic::Ordering;
-use std::time::Instant;
+//! and the stream's end reported once through the layer's accounting.
 
 use serde_json::{json, Value};
 
-use crate::core::server::telemetry::{TOTAL_FAILURES, TOTAL_INPUT_TOKENS, TOTAL_OUTPUT_TOKENS};
+use crate::core::wire::StreamAccounting;
 use crate::providers::stream::StreamItem;
 
-use super::epoch_seconds;
+/// The index of the one choice a Brama stream carries: a request asks for one
+/// generation, and the chunk object numbers its choices from zero.
+const ONLY_CHOICE: u32 = 0; // https://platform.openai.com/docs/api-reference/chat-streaming/streaming choices[].index
 
 /// One caller-facing SSE stream built from neutral provider events.
 ///
-/// Process statistics are accounted here, at the stream's end, because that
-/// is when the numbers exist; the subscription ledger is accounted one layer
-/// down, where the credential that paid is known.
+/// Process statistics are reported at the stream's end, because that is when
+/// the numbers exist; the subscription ledger is accounted one layer down,
+/// where the credential that paid is known.
 pub(in crate::core::server) struct ChatChunkStream {
     pub(super) rx: tokio::sync::mpsc::Receiver<StreamItem>,
     pub(super) pending: std::collections::VecDeque<axum::response::sse::Event>,
     pub(super) request_id: String,
     pub(super) model: String,
-    pub(super) requested_model: String,
     pub(super) created: u64,
-    pub(super) started: Instant,
     pub(super) terminated: bool,
-    pub(super) accounted: bool,
     pub(super) sent_role: bool,
-    pub(super) saw_tool_calls: bool,
     pub(super) finish_reason: Option<String>,
+    /// The provider's (input, output) meter, once it stated one.
     pub(super) usage: Option<(u32, u32)>,
-    pub(super) input_tokens: u32,
-    pub(super) output_tokens: u32,
     pub(super) failed: bool,
+    pub(super) on_end: Option<StreamAccounting>,
 }
 
 impl ChatChunkStream {
@@ -42,26 +37,21 @@ impl ChatChunkStream {
         rx: tokio::sync::mpsc::Receiver<StreamItem>,
         request_id: String,
         model: String,
-        requested_model: String,
-        started: Instant,
+        created: u64,
+        on_end: StreamAccounting,
     ) -> Self {
         Self {
             rx,
             pending: std::collections::VecDeque::new(),
             request_id,
             model,
-            requested_model,
-            created: epoch_seconds(),
-            started,
+            created,
             terminated: false,
-            accounted: false,
             sent_role: false,
-            saw_tool_calls: false,
             finish_reason: None,
             usage: None,
-            input_tokens: 0,
-            output_tokens: 0,
             failed: false,
+            on_end: Some(on_end),
         }
     }
 
@@ -70,11 +60,9 @@ impl ChatChunkStream {
         delta: Value,
         finish_reason: Option<&str>,
     ) -> axum::response::sse::Event {
-        let mut choice = json!({ "index": 0, "delta": delta });
-        match finish_reason {
-            Some(reason) => choice["finish_reason"] = json!(reason),
-            None => choice["finish_reason"] = Value::Null,
-        }
+        // A finish the provider did not state is null, as the chunk object
+        // writes every unfinished choice.
+        let choice = json!({ "index": ONLY_CHOICE, "delta": delta, "finish_reason": finish_reason });
         // A JSON value always writes; its Display is that writing, with no
         // failure to stand an empty frame in for.
         axum::response::sse::Event::default().data(
@@ -108,29 +96,17 @@ impl ChatChunkStream {
                 "usage": {
                     "prompt_tokens": input_tokens,
                     "completion_tokens": output_tokens,
-                    "total_tokens": input_tokens + output_tokens,
+                    "total_tokens": u64::from(input_tokens) + u64::from(output_tokens),
                 },
             })
             .to_string(),
         )
     }
 
-    /// Fold this stream's end into the process statistics, exactly once.
+    /// Report this stream's end to the layer that owns the statistics, once.
     pub(super) fn account(&mut self) {
-        if self.accounted {
-            return;
-        }
-        self.accounted = true;
-        TOTAL_INPUT_TOKENS.fetch_add(u64::from(self.input_tokens), Ordering::Relaxed);
-        TOTAL_OUTPUT_TOKENS.fetch_add(u64::from(self.output_tokens), Ordering::Relaxed);
-        if self.failed {
-            TOTAL_FAILURES.fetch_add(1, Ordering::Relaxed);
-        } else {
-            crate::core::perf::record(
-                &self.requested_model,
-                self.started.elapsed().as_secs_f64() * 1_000.0,
-                self.output_tokens,
-            );
+        if let Some(mut report) = self.on_end.take() {
+            report(self.usage, self.failed);
         }
     }
 }

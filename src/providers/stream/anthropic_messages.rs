@@ -10,8 +10,22 @@
 use serde_json::Value;
 
 use super::event::{
-    json_u32, stream_error, tool_call_index, tool_call_start, StreamDelta, StreamItem,
+    json_u32, stream_error, tool_call_index, tool_call_start, StopReason, StreamDelta, StreamItem,
 };
+
+/// The Messages wire's `stop_reason` as a stop reason: the values the API
+/// documents (https://docs.anthropic.com/en/api/messages#response-stop-reason),
+/// and any other exactly as the provider stated it.
+fn messages_stop_reason(stated: &str) -> StopReason {
+    match stated {
+        "end_turn" => StopReason::EndTurn,
+        "stop_sequence" => StopReason::StopSequence,
+        "max_tokens" => StopReason::MaxTokens,
+        "tool_use" => StopReason::ToolUse,
+        "refusal" => StopReason::ContentFilter,
+        other => StopReason::Other(other.to_string()),
+    }
+}
 
 /// Mutable state for the Anthropic messages wire: the input meter arrives at
 /// the start of the stream and the output meter only at its end.
@@ -130,7 +144,7 @@ pub(super) fn anthropic_items(
             }
             if let Some(reason) = body.pointer("/delta/stop_reason").and_then(Value::as_str) {
                 items.push(StreamItem::Delta(StreamDelta::Finish {
-                    reason: Some(reason.to_string()),
+                    reason: messages_stop_reason(reason),
                 }));
             }
         }

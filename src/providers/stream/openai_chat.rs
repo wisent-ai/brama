@@ -10,7 +10,7 @@
 use serde_json::Value;
 
 use super::event::{
-    json_u32, stream_error, tool_call_index, tool_call_start, StreamDelta, StreamItem,
+    json_u32, stream_error, tool_call_index, tool_call_start, StopReason, StreamDelta, StreamItem,
 };
 
 /// The terminal `data: [DONE]` sentinel of the OpenAI chat wire.
@@ -122,8 +122,21 @@ pub(super) fn openai_chat_items(
     }
     if let Some(reason) = choice.get("finish_reason").and_then(Value::as_str) {
         items.push(StreamItem::Delta(StreamDelta::Finish {
-            reason: Some(reason.to_string()),
+            reason: chat_stop_reason(reason),
         }));
     }
     (items, false)
+}
+
+/// The chat wire's `finish_reason` as a stop reason: the values its chunk
+/// object documents (https://platform.openai.com/docs/api-reference/chat-streaming/streaming),
+/// and any other exactly as the provider stated it.
+fn chat_stop_reason(stated: &str) -> StopReason {
+    match stated {
+        "stop" => StopReason::EndTurn,
+        "length" => StopReason::MaxTokens,
+        "tool_calls" | "function_call" => StopReason::ToolUse,
+        "content_filter" => StopReason::ContentFilter,
+        other => StopReason::Other(other.to_string()),
+    }
 }

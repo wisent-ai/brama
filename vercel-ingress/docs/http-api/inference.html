@@ -93,7 +93,12 @@ and <code>stream</code>. An unknown field is refused with the deserializer's own
 one route the named alias resolves to.</p>
 <p>With <code>"stream": true</code> the answer is a <code>text/event-stream</code> of
 <code>chat.completion.chunk</code> frames: a role delta first, then content deltas, a
-<code>finish_reason</code> frame, a usage frame, closed by <code>data: [DONE]</code>.</p>
+<code>finish_reason</code> frame, a usage frame, closed by <code>data: [DONE]</code>.
+<code>finish_reason</code> is the provider's stop in this vocabulary
+(<code>stop</code>, <code>length</code>, <code>tool_calls</code>,
+<code>content_filter</code>); a reason it has no word for is sent as the provider stated
+it, and <code>null</code> when the provider stated none. The usage frame is sent only when
+the provider stated both counts.</p>
 <h3 id="post-v1messages"><code>POST /v1/messages</code><a class="headerlink" href="#post-v1messages" title="Link to this section">&para;</a></h3>
 <p>The Anthropic Messages dialect over the same routing decision. It accepts the Anthropic
 request shape: <code>model</code>, <code>max_tokens</code>, <code>messages</code>, system,
@@ -107,7 +112,11 @@ on the attempt; no approximation of them is sent in their place. Success (captur
 </code></pre>
 <p>Streaming emits <code>message_start</code>, <code>content_block_*</code>,
 <code>message_delta</code> and <code>message_stop</code> events, with no
-<code>[DONE]</code> sentinel.</p>
+<code>[DONE]</code> sentinel. <code>message_start</code> carries a meter of nothing
+counted yet; <code>message_delta</code> carries the provider's stop as
+<code>end_turn</code>, <code>stop_sequence</code>, <code>max_tokens</code>,
+<code>tool_use</code> or <code>refusal</code> (a content filter), any other reason as the
+provider stated it, and its <code>usage</code> only when the provider stated one.</p>
 <h3 id="post-v1responses"><code>POST /v1/responses</code><a class="headerlink" href="#post-v1responses" title="Link to this section">&para;</a></h3>
 <p>The OpenAI Responses dialect, with <code>input</code> in place of
 <code>messages</code>. Reasoning options and stored-response identifiers are accepted and
@@ -119,7 +128,10 @@ have no effect on the attempt. Success (captured):</p>
  &quot;usage&quot;:{&quot;input_tokens&quot;:9,&quot;output_tokens&quot;:7,&quot;total_tokens&quot;:16}}
 </code></pre>
 <p>Streaming emits <code>response.*</code> events closed by
-<code>response.completed</code>.</p>
+<code>response.completed</code>, or by <code>response.incomplete</code> with
+<code>incomplete_details.reason</code> when the provider stopped short (an output limit,
+a content filter, or the reason it stated); the terminal response carries
+<code>usage</code> only when the provider stated one.</p>
 <h3 id="streaming-commit-rule">Streaming commit rule<a class="headerlink" href="#streaming-commit-rule" title="Link to this section">&para;</a></h3>
 <p>Everything that can change about a request — which credential redeems it, which account
 is billed — is settled before the first byte reaches the caller. Once a byte has been

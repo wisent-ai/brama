@@ -13,12 +13,22 @@ use std::time::Instant;
 use axum::response::{IntoResponse, Response};
 
 use crate::core::server::telemetry::{TOTAL_FAILURES, TOTAL_INPUT_TOKENS, TOTAL_OUTPUT_TOKENS};
+use crate::providers::stream::StopReason;
 
-pub(in crate::core::server) fn epoch_seconds() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_secs())
-        .unwrap_or_default()
+/// Milliseconds in a second, for a latency read off a monotonic clock.
+const MS_PER_SECOND: f64 = 1_000.0; // https://www.bipm.org/en/measurement-units/si-prefixes milli = 10^-3
+
+/// One failed stream, as the failure total counts it.
+const ONE_FAILURE: u64 = std::num::NonZeroU64::MIN.get();
+
+/// This host's clock in whole epoch seconds, the `created` an answer states,
+/// or the refusal a clock set before the epoch earns: no creation time can be
+/// stated from it.
+pub(in crate::core::server) fn epoch_seconds() -> Result<u64, String> {
+    let now = chrono::Utc::now().timestamp();
+    u64::try_from(now).map_err(|error| {
+        format!("this host's clock reads {now}, before the Unix epoch, so no creation time can be stated: {error}")
+    })
 }
 
 /// Wrap one encoder in the SSE response every streaming format shares.
@@ -36,49 +46,40 @@ where
 
 /// The closure a wire encoder reports its stream's end through.
 ///
-/// Statistics belong to this layer; the encoders in [`crate::core::wire`] know
-/// the numbers but not where they are kept, so they are handed this instead of
-/// a static they would have to reach into.
+/// Statistics belong to this layer; the encoders know the numbers but not
+/// where they are kept, so they are handed this instead of a static they would
+/// have to reach into. Tokens are added only when the provider stated them,
+/// and a model's throughput is recorded only from a stated output count.
 pub(in crate::core::server) fn stream_accounting(
     requested_model: String,
     started: Instant,
 ) -> crate::core::wire::StreamAccounting {
-    Box::new(move |input_tokens, output_tokens, failed| {
-        TOTAL_INPUT_TOKENS.fetch_add(u64::from(input_tokens), Ordering::Relaxed);
-        TOTAL_OUTPUT_TOKENS.fetch_add(u64::from(output_tokens), Ordering::Relaxed);
+    Box::new(move |usage, failed| {
+        if let Some((input_tokens, output_tokens)) = usage {
+            TOTAL_INPUT_TOKENS.fetch_add(u64::from(input_tokens), Ordering::Relaxed);
+            TOTAL_OUTPUT_TOKENS.fetch_add(u64::from(output_tokens), Ordering::Relaxed);
+        }
         if failed {
-            TOTAL_FAILURES.fetch_add(1, Ordering::Relaxed);
-        } else {
+            TOTAL_FAILURES.fetch_add(ONE_FAILURE, Ordering::Relaxed);
+        } else if let Some((_, output_tokens)) = usage {
             crate::core::perf::record(
                 &requested_model,
-                started.elapsed().as_secs_f64() * 1_000.0,
+                started.elapsed().as_secs_f64() * MS_PER_SECOND,
                 output_tokens,
             );
         }
     })
 }
 
-/// Map a provider stop reason onto the OpenAI finish vocabulary.
-pub(super) fn openai_finish_reason(reason: Option<&str>, saw_tool_calls: bool) -> String {
+/// A provider stop reason in the OpenAI finish vocabulary; a reason it has no
+/// word for is passed on as the provider stated it.
+pub(super) fn openai_finish_reason(reason: &StopReason) -> String {
     match reason {
-        Some("end_turn") | Some("stop_sequence") | Some("stop") => "stop",
-        Some("max_tokens") => "length",
-        Some("tool_use") | Some("tool_calls") => "tool_calls",
-        Some("length") | Some("content_filter") => reason.unwrap_or("stop"),
-        Some(other) if other.starts_with("incomplete") => {
-            if other.contains("max_output_tokens") {
-                "length"
-            } else {
-                "stop"
-            }
-        }
-        _ => {
-            if saw_tool_calls {
-                "tool_calls"
-            } else {
-                "stop"
-            }
-        }
+        StopReason::EndTurn | StopReason::StopSequence => "stop".to_string(),
+        StopReason::MaxTokens => "length".to_string(),
+        StopReason::ToolUse => "tool_calls".to_string(),
+        StopReason::ContentFilter => "content_filter".to_string(),
+        StopReason::Incomplete(Some(stated)) | StopReason::Other(stated) => stated.clone(),
+        StopReason::Incomplete(None) => "incomplete".to_string(),
     }
-    .to_string()
 }
