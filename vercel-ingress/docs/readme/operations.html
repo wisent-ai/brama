@@ -41,8 +41,9 @@
   usage report was last checked, any block, and the newest check verdict. It is
   written atomically and is not a cache — the
   question it answers spans months, not process lifetimes. A ledger written by
-  an older gateway still loads: readings that carry no instant of their own are
-  given the ledger file's modification time. A ledger that exists but cannot be
+  an older gateway still loads: a reading that carries no instant of its own has
+  no <code>recorded_at_ms</code>, is reported as not stated and is read as stale;
+  it is never dated with the ledger file's modification time. A ledger that exists but cannot be
   read or decoded is never replaced: the gateway starts from an empty ledger in
   memory, keeps new observations visible in that process, refuses every ledger
   write until the file is repaired, and the subscription pool reports

@@ -88,7 +88,7 @@ fn reading(
         window_label,
         used_fraction: used / limit,
         resets_at_ms: optional_instant_ms(counters.get("resetTime"), &format!("{path}.resetTime"))?,
-        recorded_at_ms,
+        recorded_at_ms: Some(recorded_at_ms),
     })
 }
 

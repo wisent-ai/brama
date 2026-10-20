@@ -60,7 +60,7 @@ pub(super) fn windows(
                 .map(str::to_owned),
             used_fraction,
             resets_at_ms: limit.pointer("/window/resetsAt").and_then(Value::as_i64),
-            recorded_at_ms: fetched_at_ms,
+            recorded_at_ms: Some(fetched_at_ms),
         });
     }
     Ok(readings)

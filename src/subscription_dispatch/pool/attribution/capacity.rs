@@ -39,8 +39,9 @@ pub struct Window {
     pub remaining_fraction: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resets_at_ms: Option<i64>,
-    /// When Brama read this window, and off which member.
-    pub read_at_ms: i64,
+    /// When Brama read this window, `null` when that was not recorded, and
+    /// off which member.
+    pub read_at_ms: Option<i64>,
     pub member: String,
     /// Whether the reset instant is still ahead (a window that states none is
     /// current until a newer reading replaces it).
@@ -130,7 +131,8 @@ fn summarize(provider: String, account: String, members: &[&Observed<'_>], now_m
             None => usable_members.push(id.clone()),
         }
         if let Some(until) = usage::blocked_until_ms(id) {
-            blocked_until_ms = Some(blocked_until_ms.map_or(until, |held| held.max(until)));
+            // An absent block orders before any instant, so this keeps the latest.
+            blocked_until_ms = blocked_until_ms.max(Some(until));
         }
         for reading in usage::plan_windows(member.recorded.as_ref()).limits {
             let current = reading.resets_at_ms.is_none_or(|resets| resets > now_ms);

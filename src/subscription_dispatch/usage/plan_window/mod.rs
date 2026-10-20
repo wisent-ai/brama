@@ -110,7 +110,7 @@ pub fn plan_windows(usage: Option<&SubscriptionUsage>) -> PlanWindows {
     }
     let stale = usage.usage_check.as_ref().is_some_and(|check| !check.ok)
         || limits.iter().any(|reading| {
-            reading.recorded_at_ms == 0
+            reading.recorded_at_ms.is_none()
                 || reading
                     .resets_at_ms
                     .is_some_and(|resets_at_ms| resets_at_ms <= now)
@@ -143,32 +143,29 @@ pub fn next_reset_ms(subscription_id: &str) -> Option<i64> {
 ///
 /// This is the routing view of the ledger: the maximum used fraction across
 /// the windows [`plan_windows`] still serves, with one adjustment -- a window
-/// whose own reset instant has passed counts as empty, because the provider's
+/// whose own reset instant has passed is not counted, because the provider's
 /// clock says it rolled and charging its last reading against the account
 /// would freeze a credential that is free again. Readings past the retention
 /// window are already absent from the projection, so they cannot route
 /// anything either.
 ///
 /// `None` means nothing usable is recorded, which is not the same statement as
-/// a known-empty plan: it covers a subscription no traffic ever reached and a
-/// provider that publishes no windows at all. Callers placing candidates treat
-/// it as fully available, because the first real call writes the reading that
+/// a known-empty plan: it covers a subscription no traffic ever reached, a
+/// provider that publishes no windows at all, and an account whose every
+/// window has rolled since it was read. Callers placing candidates treat it as
+/// fully available, because the first real call writes the reading that
 /// corrects the placement.
 pub fn used_fraction(subscription_id: &str) -> Option<f64> {
     let entry = usage_for(subscription_id)?;
     let windows = plan_windows(Some(&entry));
-    if windows.limits.is_empty() {
-        return None;
-    }
     let now = now_ms();
-    Some(
-        windows
-            .limits
-            .iter()
-            .map(|reading| match reading.resets_at_ms {
-                Some(resets_at_ms) if resets_at_ms <= now => 0.0,
-                _ => reading.used_fraction,
-            })
-            .fold(0.0_f64, f64::max),
-    )
+    // A window whose reset has passed holds nothing of what it reported; the
+    // most used of the windows still current decides, and none current reads
+    // as fully available like an account with no windows.
+    windows
+        .limits
+        .iter()
+        .filter(|reading| reading.resets_at_ms.is_none_or(|resets_at_ms| resets_at_ms > now))
+        .map(|reading| reading.used_fraction)
+        .reduce(f64::max)
 }

@@ -52,15 +52,16 @@ pub(super) fn anthropic_window_labels(limit_id: &str) -> Option<(&'static str, &
 
 /// The usage reports state utilization as a percentage, while the ledger stores
 /// it as a fraction.
-const PERCENT_SCALE: f64 = 100.0;
-const MS_PER_SECOND: f64 = 1_000.0;
-const SECONDS_PER_MINUTE: f64 = 60.0;
-const MINUTES_PER_HOUR: f64 = 60.0;
-const MINUTES_PER_DAY: f64 = 24.0 * MINUTES_PER_HOUR;
-const DAYS_PER_WEEK: f64 = 7.0;
+const PERCENT_SCALE: f64 = 100.0; // https://www.iso.org/standard/64973.html ISO 80000-1: % = 0.01
+const MS_PER_SECOND: f64 = 1_000.0; // https://www.bipm.org/en/measurement-units/si-prefixes milli = 10^-3
+const SECONDS_PER_MINUTE: f64 = 60.0; // https://www.bipm.org/en/publications/si-brochure SI Brochure table 8: 1 min = 60 s
+const MINUTES_PER_HOUR: f64 = 60.0; // https://www.bipm.org/en/publications/si-brochure SI Brochure table 8: 1 h = 60 min
+const MINUTES_PER_DAY: f64 = 24.0 * MINUTES_PER_HOUR; // https://www.bipm.org/en/publications/si-brochure SI Brochure table 8: 1 d = 24 h
+const DAYS_PER_WEEK: f64 = 7.0; // https://www.iso.org/standard/70907.html ISO 8601-1: a calendar week is 7 days
 /// Above this an epoch value can only be milliseconds: epoch seconds do not
-/// reach it for another thirty thousand years.
-const EPOCH_MILLISECONDS_FLOOR: f64 = 1e12;
+/// reach it for another thirty thousand years, and epoch milliseconds passed
+/// it early in this century.
+const EPOCH_MILLISECONDS_FLOOR: f64 = 1e12; // https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap04.html#tag_04_19 POSIX seconds since the Epoch
 
 /// Turn one provider's usage report into validated limit readings.
 pub(super) fn plan_usage_readings(
@@ -98,7 +99,7 @@ pub(super) fn plan_usage_readings(
                     window_label: Some((*window_label).to_string()),
                     used_fraction: used,
                     resets_at_ms,
-                    recorded_at_ms,
+                    recorded_at_ms: Some(recorded_at_ms),
                 });
             }
             Ok(readings)
@@ -151,7 +152,7 @@ pub(super) fn plan_usage_readings(
                     window_label: Some(window_label_from_minutes(seconds / SECONDS_PER_MINUTE)),
                     used_fraction: used,
                     resets_at_ms: Some(resets_at_ms),
-                    recorded_at_ms,
+                    recorded_at_ms: Some(recorded_at_ms),
                 });
             }
             Ok(readings)

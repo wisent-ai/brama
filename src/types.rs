@@ -179,15 +179,16 @@ pub struct LimitReading {
     pub used_fraction: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resets_at_ms: Option<i64>,
-    /// When Brama read this window off a provider answer.
+    /// When Brama read this window off a provider answer, or `None` when that
+    /// was not recorded.
     ///
     /// A fraction without an instant cannot be aged: "100% used" is a different
     /// fact five minutes and five days after the provider said it, and a reader
     /// that cannot tell them apart shows a stale window as the current one.
-    /// Absent in ledgers written before this field existed, which deserialize
-    /// to zero and are backfilled from the ledger file's own timestamp.
-    #[serde(default)]
-    pub recorded_at_ms: i64,
+    /// Ledgers written before this field existed carry none, and a reading
+    /// without one is reported as unrecorded and read as stale, never dated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recorded_at_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -235,12 +236,13 @@ impl ModelResponse {
         Self {
             content: String::new(),
             model: model.to_string(),
-            input_tokens: 0,
-            output_tokens: 0,
+            // A failed answer carries no usage: usage_stated says none was stated.
+            input_tokens: Default::default(),
+            output_tokens: Default::default(),
             usage_stated: false,
-            latency_ms: 0.0,
-            cost: 0.0,
-            attempts: 0,
+            latency_ms: Default::default(),
+            cost: Default::default(),
+            attempts: Default::default(),
             success: false,
             error: Some(error),
             tool_calls: None,

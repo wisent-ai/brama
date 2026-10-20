@@ -114,7 +114,7 @@ pub(in crate::providers::adapter) fn limit_readings(
                 window_label: Some(window_label),
                 used_fraction: used,
                 resets_at_ms: reset_ms(headers, &format!("{prefix}-reset")),
-                recorded_at_ms,
+                recorded_at_ms: Some(recorded_at_ms),
             })
         });
     let codex = named_between(headers, "x-codex-", "-used-percent").filter_map(|meter| {
@@ -126,7 +126,7 @@ pub(in crate::providers::adapter) fn limit_readings(
             window_label: minutes.map(window_label_from_minutes),
             used_fraction: percent / PERCENT,
             resets_at_ms: reset_ms(headers, &format!("x-codex-{meter}-reset-at")),
-            recorded_at_ms,
+            recorded_at_ms: Some(recorded_at_ms),
         })
     });
     let mut readings: Vec<LimitReading> = anthropic.chain(codex).collect();

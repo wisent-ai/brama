@@ -21,9 +21,10 @@ months, not process lifetimes.
 
 - **No file:** a new, empty ledger.
 - **A ledger written by an older gateway:** it loads. Readings that carry no
-  observation instant stay visible and stale; the file's later modification
-  time may be from another account and cannot prove when the provider measured
-  this window. The usage-report verdict an older gateway kept in the completion
+  observation instant have no `recorded_at_ms`: they stay visible, the pool
+  report shows their instant as not stated, and they are read as stale; the
+  file's later modification time may be from another account and cannot prove
+  when the provider measured this window. The usage-report verdict an older gateway kept in the completion
   probe's field is moved to its own field in memory only; a read never rewrites
   the file. `brama subscription list --refresh-usage` asks the provider for a
   new reading without discarding history if that request fails.
