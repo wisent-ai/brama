@@ -186,6 +186,16 @@ pub(super) async fn route_model_call(
     let preferred_route = Some(selected_model.as_str())
         .filter(|route| is_subscription_model(route))
         .map(str::to_owned);
+    // `best` declared onto a route no subscription pays for (a local inference
+    // route, or a provider route this deployment pays for itself) is answered
+    // by that route or refused with that route's own error. The pool's
+    // sign-in state says nothing about such a route, and walking the pool
+    // first only spent the caller's time on refusals the route never needed.
+    let declared_route = best_subscription
+        && alias_source
+            .as_deref()
+            .is_some_and(|route| route != BEST_ALIAS)
+        && !provider_requires_caller_identity(&selected_model);
     let canonical_model = is_subscription_model(&selected_model);
     if !(any_subscription
         || any_vision_capable_subscription
@@ -226,6 +236,8 @@ pub(super) async fn route_model_call(
         "any-vision-capable"
     } else if any_subscription {
         "any"
+    } else if declared_route {
+        "best-declared-route"
     } else if best_subscription {
         "best"
     } else if caller_scoped_request {
@@ -269,6 +281,7 @@ pub(super) async fn route_model_call(
         any_subscription,
         any_vision_capable_subscription,
         best_subscription,
+        declared_route,
         preferred_route: preferred_route.as_deref(),
         account_agent: account_agent.as_deref(),
         caller_scoped_request,

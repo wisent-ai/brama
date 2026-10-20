@@ -32,6 +32,9 @@ pub(super) struct DispatchPlan<'a> {
     pub(super) any_subscription: bool,
     pub(super) any_vision_capable_subscription: bool,
     pub(super) best_subscription: bool,
+    /// `best` declared onto a route no subscription pays for: that route
+    /// answers, directly, and nothing else is tried.
+    pub(super) declared_route: bool,
     pub(super) preferred_route: Option<&'a str>,
     pub(super) account_agent: Option<&'a str>,
     pub(super) caller_scoped_request: bool,
@@ -48,6 +51,7 @@ pub(super) async fn dispatch(plan: DispatchPlan<'_>) -> DispatchedCall {
         any_subscription,
         any_vision_capable_subscription,
         best_subscription,
+        declared_route,
         preferred_route,
         account_agent,
         caller_scoped_request,
@@ -65,6 +69,8 @@ pub(super) async fn dispatch(plan: DispatchPlan<'_>) -> DispatchedCall {
                 dispatch_any_vision_capable_subscription_stream(headers, request, raw_body).await
             } else if any_subscription {
                 dispatch_any_subscription_stream(headers, request, raw_body).await
+            } else if declared_route {
+                dispatch_direct_stream(request).await
             } else if best_subscription {
                 if let Some(agent_id) = client_identity.agent_id() {
                     dispatch_best_subscription_stream_for_agent(agent_id, request, preferred_route)
@@ -94,6 +100,8 @@ pub(super) async fn dispatch(plan: DispatchPlan<'_>) -> DispatchedCall {
             )
         } else if any_subscription {
             DispatchedCall::Buffered(dispatch_any_subscription(headers, request, raw_body).await)
+        } else if declared_route {
+            DispatchedCall::Buffered(dispatch_direct(request).await)
         } else if best_subscription {
             DispatchedCall::Buffered(if let Some(agent_id) = client_identity.agent_id() {
                 dispatch_best_subscription_for_agent(agent_id, request, preferred_route).await

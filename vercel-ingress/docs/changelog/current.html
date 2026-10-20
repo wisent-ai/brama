@@ -24,6 +24,14 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-best-declared-route">Unreleased: <code>best</code> declared onto a local route is answered by it<a class="headerlink" href="#unreleased-best-declared-route" title="Link to this section">&para;</a></h2>
+<p>An alias table that points <code>best</code> at a route no subscription pays for, such as a
+local inference route, now has that route answer the request directly, or refuse it with its
+own error. Before, the route was dropped as a preference and the request walked the
+subscription pool, waiting behind its discovery and then refusing
+<code>subscription_reauthorization_required</code> for a route that needed no subscription.
+The routing log names the mode <code>best-declared-route</code>
+(<a href="/docs/concepts/alias#best-is-delegation">Aliases</a>).</p>
 <h2 id="unreleased-own-maintenance">Unreleased: the gateway runs its own maintenance and signs members in without anyone<a class="headerlink" href="#unreleased-own-maintenance" title="Link to this section">&para;</a></h2>
 <p>The serving process now runs its own maintenance passes: one when it starts, then one at the
 next moment its usage ledger states something becomes due (a grant's stated expiry, a plan

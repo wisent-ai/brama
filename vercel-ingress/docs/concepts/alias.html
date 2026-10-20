@@ -157,6 +157,14 @@ subscription that pays. Brama deliberately holds no direct credential for it.
 A destination naming <code>best</code> inside the routes file passes through untouched
 rather than being resolved as a local deployment
 (<code>src/core/inference_routes.rs</code>).</p>
+<p>When the alias table points <code>best</code> at a route no subscription pays for — a local
+inference route such as <code>local-openai/chat-primary</code>, or a provider route this
+deployment pays for itself — that route answers the request directly, or refuses it with its
+own error; the subscription pool is not walked first, so its sign-in state neither delays
+nor refuses the request. The routing log names this mode <code>best-declared-route</code>.
+A route of a subscription provider (<code>claude-code</code>, <code>codex</code>,
+<code>kimi</code>) stays the caller's first choice in subscription dispatch, with the
+caller's other ranked routes behind it.</p>
 <p>A request containing an <code>image_url</code> content part restricts
 <code>best</code> to the caller's active models whose catalogue advertises image
 input. This happens before a configured preference is promoted, on both the
