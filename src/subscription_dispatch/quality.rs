@@ -46,9 +46,9 @@ pub async fn collect_task_quality(opts: TaskQualityOptions) -> Result<Value, Str
                 .into(),
         );
     }
-    if opts.max_models == 0 {
+    let Some(max_models) = std::num::NonZeroUsize::new(opts.max_models) else {
         return Err("max_models must be at least one".into());
-    }
+    };
     if opts.task.trim().is_empty() {
         return Err("task is required".into());
     }
@@ -60,7 +60,7 @@ pub async fn collect_task_quality(opts: TaskQualityOptions) -> Result<Value, Str
     }
 
     let mut models = active_supported_models_for_agent(&opts.agent_id).await?;
-    models.truncate(opts.max_models);
+    models.truncate(max_models.get());
     let mut checks = Vec::new();
     for model in models {
         checks.push(check_model(&opts, &model).await);
@@ -83,10 +83,10 @@ pub async fn collect_task_quality(opts: TaskQualityOptions) -> Result<Value, Str
             .collect(),
         None => Vec::new(),
     };
-    let best_model = if best_models.len() == 1 {
-        best_models.first().cloned()
-    } else {
-        None
+    // One best model only when exactly one passed at the top score.
+    let best_model = match best_models.as_slice() {
+        [only] => Some(only.clone()),
+        _ => None,
     };
     let rows = checks.len();
     let printed: Vec<Value> = checks.into_iter().map(|check| check.row).collect();
@@ -126,8 +126,9 @@ async fn check_model(opts: &TaskQualityOptions, model: &str) -> Check {
     };
     let resp = dispatch_subscription_for_agent(&opts.agent_id, &request).await;
     let content = resp.content.trim().to_string();
-    let passed = resp.success && expected_matches(opts, &content);
-    let score = if passed { 1.0 } else { 0.0 };
+    let passed = resp.success() && expected_matches(opts, &content);
+    // The verdict as the number scores are kept in: one passed, zero did not.
+    let score = f64::from(u8::from(passed));
     // A model no route names a provider for is recorded with no provider: the
     // row was filed under provider "unknown", and the scores then read as a
     // provider's.
@@ -144,8 +145,8 @@ async fn check_model(opts: &TaskQualityOptions, model: &str) -> Check {
         "plan": Value::Null,
         "check_kind": "task_quality",
         "confidence": "observed",
-        // A failure that stated no sentence is null here, not an empty one.
-        "error": if resp.success { Value::Null } else { json!(resp.error) },
+        // A failure carries its sentence; a success is null here.
+        "error": resp.reason(),
         "metadata": {
             "task": opts.task,
             "model": model,
@@ -156,7 +157,7 @@ async fn check_model(opts: &TaskQualityOptions, model: &str) -> Check {
             "output": content,
             "latencyMs": resp.latency_ms,
             "attempts": resp.attempts,
-            "success": resp.success,
+            "success": resp.success(),
         },
         "checked_at": checked_at,
         "updated_at": checked_at,

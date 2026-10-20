@@ -56,9 +56,8 @@ configured direct-provider count without probing dependencies. Per-request
 structured errors and logs carry actual integration state:</p>
 <ul>
 <li><code>dependency_unavailable</code>: the required broker, catalog, or
-  provider seam could not serve that workflow;</li>
-<li><code>dependency_timeout</code>: the transport reported that the provider
-  request timed out; inspect its recorded cause, not an assumed gateway clock;</li>
+  provider seam could not serve that workflow, or the transport did not carry
+  the provider request; inspect its recorded cause;</li>
 <li><code>provider_rate_limited</code> or <code>subscription_unavailable</code>:
   bounded capacity was exhausted;</li>
 <li><code>provider_failure</code>: a permanent or malformed provider result

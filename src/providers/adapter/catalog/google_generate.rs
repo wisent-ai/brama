@@ -29,16 +29,20 @@ fn google_tool_config(choice: &Value) -> Option<Value> {
 /// `functionResponse` is named after the call it answers, found in `names`;
 /// read from the result's own optional `name`, it went out as "tool" for
 /// every caller that sends results the chat-completions way, and Gemini
-/// matched it to no call.
-fn google_parts(message: &Message, names: &std::collections::BTreeMap<&str, &Value>) -> Vec<Value> {
+/// matched it to no call. A history call whose arguments still do not read
+/// as JSON is refused with the call named, never sent with null args.
+fn google_parts(
+    message: &Message,
+    names: &std::collections::BTreeMap<&str, &Value>,
+) -> Result<Vec<Value>, String> {
     if message.role == "tool" {
         let name = message.tool_call_id.as_deref().and_then(|id| names.get(id));
-        return vec![json!({
+        return Ok(vec![json!({
             "functionResponse": {
                 "name": name,
                 "response": {"result": message.content_text()},
             }
-        })];
+        })]);
     }
     let mut parts = match &message.content {
         Value::String(text) => vec![json!({"text": text})],
@@ -61,23 +65,28 @@ fn google_parts(message: &Message, names: &std::collections::BTreeMap<&str, &Val
         _ => Vec::new(),
     };
     if let Some(calls) = &message.tool_calls {
-        parts.extend(calls.iter().map(|call| {
+        for call in calls {
             let arguments = call
                 .pointer("/function/arguments")
                 .and_then(Value::as_str)
-                .and_then(|value| serde_json::from_str::<Value>(value).ok());
-            json!({
+                .ok_or_else(|| format!("history tool call {call} carries no text arguments"))?;
+            let arguments = serde_json::from_str::<Value>(arguments).map_err(|error| {
+                format!("history tool call {call} carries arguments that are not JSON: {error}")
+            })?;
+            parts.push(json!({
                 "functionCall": {
                     "name": call.pointer("/function/name"),
                     "args": arguments,
                 }
-            })
-        }));
+            }));
+        }
     }
-    parts
+    Ok(parts)
 }
 
-pub(super) fn google_payload(request: &ModelRequest) -> Value {
+/// The generateContent body, or the first history message that cannot be
+/// carried on it and why.
+pub(super) fn google_payload(request: &ModelRequest) -> Result<Value, String> {
     // Each history tool call's function name by its id, so a tool result is
     // named after the call it answers.
     let names: std::collections::BTreeMap<&str, &Value> = request
@@ -86,13 +95,18 @@ pub(super) fn google_payload(request: &ModelRequest) -> Value {
         .flat_map(|message| message.tool_calls.iter().flatten())
         .filter_map(|call| Some((call.get("id")?.as_str()?, call.pointer("/function/name")?)))
         .collect();
-    let mut body = json!({
-        "contents": request.messages.iter().map(|message| {
-            json!({
+    let contents = request
+        .messages
+        .iter()
+        .map(|message| -> Result<Value, String> {
+            Ok(json!({
                 "role": if message.role == "assistant" { "model" } else { "user" },
-                "parts": google_parts(message, &names),
-            })
-        }).collect::<Vec<_>>(),
+                "parts": google_parts(message, &names)?,
+            }))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut body = json!({
+        "contents": contents,
         "generationConfig": {},
     });
     if let Some(max_tokens) = request.max_tokens {
@@ -116,7 +130,7 @@ pub(super) fn google_payload(request: &ModelRequest) -> Value {
     if let Some(config) = request.tool_choice.as_ref().and_then(google_tool_config) {
         body["toolConfig"] = config;
     }
-    body
+    Ok(body)
 }
 
 pub(super) fn model_response_from_google(
@@ -160,32 +174,27 @@ pub(super) fn model_response_from_google(
                 call_type: "function".into(),
                 function: crate::types::ToolCallFunction {
                     name: name.to_string(),
-                    arguments: call
-                        .get("args")
-                        .cloned()
-                        .unwrap_or_else(|| json!({}))
-                        .to_string(),
+                    // Gemini states `args` only for a function called with
+                    // parameters (https://ai.google.dev/api/caching#FunctionCall:
+                    // "args: Optional"); a call without it carries none, which
+                    // the chat wire writes as the empty arguments object.
+                    arguments: match call.get("args") {
+                        Some(args) => args.to_string(),
+                        None => json!({}).to_string(),
+                    },
                 },
             });
         }
     }
-    let (input_tokens, output_tokens, usage_stated) = stated_usage(
+    let usage = stated_usage(
         body.pointer("/usageMetadata/promptTokenCount"),
         body.pointer("/usageMetadata/candidatesTokenCount"),
     );
-    ModelResponse {
+    ModelResponse::answered(
+        route_id,
         content,
-        model: route_id.to_string(),
-        input_tokens,
-        output_tokens,
-        usage_stated,
-        latency_ms: elapsed_ms,
-        cost: 0.0,
-        success: true,
-        attempts: 1,
-        error: None,
-        tool_calls: (!tool_calls.is_empty()).then_some(tool_calls),
-        limits: Vec::new(),
-        failure_kind: None,
-    }
+        usage,
+        elapsed_ms,
+        (!tool_calls.is_empty()).then_some(tool_calls),
+    )
 }

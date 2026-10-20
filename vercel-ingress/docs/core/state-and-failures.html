@@ -78,8 +78,7 @@ this request actually made:</p>
 <tr><td style="text-align: right;">503</td><td><code>alias_unserviceable</code></td><td>a declared alias cannot serve; <code>details</code> carry <code>state</code> and <code>route</code></td><td>Repair the alias in the registry; this is the caller's answer for that alias</td></tr>
 <tr><td style="text-align: right;">503</td><td><code>credential_unauthorized</code></td><td>redemption was refused, or no capability, read grant, or installation trust material could produce a credential at all</td><td>Repair the authorization chain; waiting does not reach it</td></tr>
 <tr><td style="text-align: right;">503</td><td><code>subscription_reauthorization_required</code></td><td>every credential within the bound was refused by the provider</td><td>Sign the subscription in again</td></tr>
-<tr><td style="text-align: right;">503</td><td><code>dependency_unavailable</code></td><td>a required catalogue, broker, vault, or provider is unavailable</td><td>Restore the named dependency</td></tr>
-<tr><td style="text-align: right;">504</td><td><code>dependency_timeout</code></td><td>the transport reported that the provider request timed out</td><td>Inspect the recorded cause; retry only when it is safe</td></tr>
+<tr><td style="text-align: right;">503</td><td><code>dependency_unavailable</code></td><td>a required catalogue, broker, vault, or provider is unavailable, or the transport did not carry a provider request; the message retains its cause</td><td>Restore the named dependency</td></tr>
 <tr><td style="text-align: right;">500</td><td><code>internal_error</code></td><td>Brama failed outside a classified dependency</td><td>Operator investigation is required</td></tr>
 </tbody>
 </table>
@@ -92,7 +91,7 @@ receives.</p>
 the machine contract. Credential rotation inside one route never exceeds the
 attempt count the envelope reports. The full code list, with examples, is in
 <a href="/docs/errors">Errors</a>.</p>
-<h2 id="cancellation-timeout-and-retry">Cancellation, timeout, and retry<a class="headerlink" href="#cancellation-timeout-and-retry" title="Link to this section">&para;</a></h2>
+<h2 id="cancellation-and-retry">Cancellation and retry<a class="headerlink" href="#cancellation-and-retry" title="Link to this section">&para;</a></h2>
 <ul>
 <li>Buffered and streaming requests run until the provider answers, refuses, or
   the connection fails. Brama adds no elapsed-time cutoff before the first

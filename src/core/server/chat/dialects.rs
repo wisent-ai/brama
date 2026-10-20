@@ -49,9 +49,9 @@ pub(in crate::core::server) async fn anthropic_messages(
     let message_id = format!("msg_{}", uuid::Uuid::new_v4().simple());
     match dispatched {
         DispatchedCall::Buffered(mut resp) => {
-            tally_and_log_buffered(&mut resp, &client_identity, &meta, &requested_model);
-            if !resp.success {
-                return failure_response(&mut resp);
+            tally_and_log_buffered(&resp, &client_identity, &meta, &requested_model);
+            if let Some(refusal) = resp.refusal.take() {
+                return failure_response(refusal, resp.attempts);
             }
             crate::core::perf::record(&requested_model, resp.latency_ms, resp.output_tokens);
             let model = meta.reported_model(&requested_model, &resp.model);
@@ -103,9 +103,9 @@ pub(in crate::core::server) async fn openai_responses(
     let response_id = format!("resp_{}", uuid::Uuid::new_v4().simple());
     match dispatched {
         DispatchedCall::Buffered(mut resp) => {
-            tally_and_log_buffered(&mut resp, &client_identity, &meta, &requested_model);
-            if !resp.success {
-                return failure_response(&mut resp);
+            tally_and_log_buffered(&resp, &client_identity, &meta, &requested_model);
+            if let Some(refusal) = resp.refusal.take() {
+                return failure_response(refusal, resp.attempts);
             }
             crate::core::perf::record(&requested_model, resp.latency_ms, resp.output_tokens);
             let model = meta.reported_model(&requested_model, &resp.model);

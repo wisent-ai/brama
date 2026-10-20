@@ -30,7 +30,7 @@ use crate::providers::adapter::native_decision_route;
 use crate::subscription_dispatch::{
     dispatch_best_subscription_for_agent, dispatch_direct, dispatch_direct_decision,
 };
-use crate::types::{ModelResponse, ProviderRefusal, Refusal};
+use crate::types::{ModelResponse, Refusal};
 
 pub use question::{DecisionRequest, Question};
 
@@ -38,6 +38,9 @@ pub use question::{DecisionRequest, Question};
 pub const ENGINE_NATIVE: &str = "typesafe-systemone";
 /// A chat model answered the label distribution and Brama typed the answer.
 pub const ENGINE_CHAT: &str = "chat-distribution";
+
+/// Milliseconds in a second, for a latency read off a monotonic clock.
+const MS_PER_SECOND: f64 = 1_000.0; // https://www.bipm.org/en/measurement-units/si-prefixes milli = 10^-3
 
 /// One decision, answered.
 #[derive(Clone, Debug)]
@@ -84,13 +87,8 @@ pub async fn decide_on_direct_route(
         return decide_natively(route, request).await;
     }
     let call = prompt::chat_request(request, route);
-    let started = std::time::Instant::now();
     let response = dispatch_direct(&call).await;
-    let mut outcome = outcome_from_chat(route, request, response)?;
-    if outcome.latency_ms == 0.0 {
-        outcome.latency_ms = started.elapsed().as_secs_f64() * 1_000.0;
-    }
-    Ok(outcome)
+    outcome_from_chat(route, request, response)
 }
 
 /// Answer one decision for a named agent: `best` is served from that agent's
@@ -131,7 +129,7 @@ async fn decide_natively(
         route: route.to_string(),
         input_tokens: usage_field(&body, "input_tokens")?,
         output_tokens: usage_field(&body, "output_tokens")?,
-        latency_ms: started.elapsed().as_secs_f64() * 1_000.0,
+        latency_ms: started.elapsed().as_secs_f64() * MS_PER_SECOND,
     })
 }
 
@@ -150,15 +148,8 @@ fn native_questions(request: &DecisionRequest) -> Value {
             Question::Choice { options, .. } => {
                 let criteria = options
                     .iter()
-                    .map(|(label, rubric)| {
-                        (
-                            label.clone(),
-                            rubric
-                                .as_ref()
-                                .map(|text| Value::String(text.clone()))
-                                .unwrap_or(Value::Null),
-                        )
-                    })
+                    // An option without a rubric is stated as JSON null.
+                    .map(|(label, rubric)| (label.clone(), Value::from(rubric.clone())))
                     .collect::<Map<String, Value>>();
                 declared.insert("criteria".to_string(), Value::Object(criteria));
             }
@@ -199,17 +190,10 @@ fn usage_field(body: &Value, field: &str) -> Result<Option<u32>, DecisionFailure
 pub fn outcome_from_chat(
     route: &str,
     request: &DecisionRequest,
-    response: ModelResponse,
+    mut response: ModelResponse,
 ) -> Result<DecisionOutcome, DecisionFailure> {
-    if !response.success {
-        return Err(DecisionFailure::Provider(Refusal::new(
-            response
-                .failure_kind
-                .unwrap_or(ProviderRefusal::ProviderFailure),
-            response
-                .error
-                .unwrap_or_else(|| "the provider refused without a reason".to_string()),
-        )));
+    if let Some(refusal) = response.refusal.take() {
+        return Err(DecisionFailure::Provider(refusal));
     }
     let answers = answers::answers_from_text(request, &response.content)
         .map_err(DecisionFailure::Contract)?;

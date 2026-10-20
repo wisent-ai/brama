@@ -51,10 +51,10 @@ pub async fn accounts(message: &Value, source: &str) -> Result<Vec<AccountObserv
     let response =
         crate::subscription_dispatch::dispatch_best_subscription_for_agent("brama", &request, None)
             .await;
-    if !response.success {
+    if let Some(refusal) = &response.refusal {
         return Err(Failure::Route(format!(
-            "{source}: receipt extraction failed on Brama route {}: {:?}",
-            response.model, response.error
+            "{source}: receipt extraction failed on Brama route {}: {}",
+            response.model, refusal.message
         )));
     }
     let receipt: Receipt = serde_json::from_str(&response.content).map_err(|error| {

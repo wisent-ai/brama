@@ -15,7 +15,7 @@ use crate::types::{ModelResponse, ProviderRefusal};
 pub(in crate::subscription_dispatch::dispatch) fn refused_credential(
     response: &ModelResponse,
 ) -> bool {
-    response.failure_kind == Some(ProviderRefusal::Authentication)
+    response.failure_class() == Some(ProviderRefusal::Authentication)
 }
 
 /// The provider refused because the credential's rate window or paid balance
@@ -24,7 +24,7 @@ pub(in crate::subscription_dispatch::dispatch) fn exhausted_credential(
     response: &ModelResponse,
 ) -> bool {
     matches!(
-        response.failure_kind,
+        response.failure_class(),
         Some(ProviderRefusal::RateLimited | ProviderRefusal::QuotaExhausted)
     )
 }

@@ -132,14 +132,8 @@ diagnostic, not the machine contract.</p>
 <tr>
 <td style="text-align: right;">503</td>
 <td><code>dependency_unavailable</code></td>
-<td>required catalog, broker, vault, or provider unavailable</td>
+<td>required catalog, broker, vault, or provider unavailable, or a provider request the transport did not carry; the message retains the transport's own cause</td>
 <td>Restore named dependency</td>
-</tr>
-<tr>
-<td style="text-align: right;">504</td>
-<td><code>dependency_timeout</code></td>
-<td>the transport reported that the provider request timed out; the message retains its cause</td>
-<td>Inspect dependency; retry only when safe</td>
 </tr>
 <tr>
 <td style="text-align: right;">500</td>
@@ -224,6 +218,10 @@ and <a href="/docs/concepts/failure-point">concepts/failure-point</a>:</p>
 <td>the provider refused an OAuth refresh</td>
 </tr>
 <tr>
+<td><code>brama.gateway.oauth-refresh.stored-document</code></td>
+<td>the stored credential cannot be refreshed by anybody (not an object, or no refresh token); only a sign-in replaces it</td>
+</tr>
+<tr>
 <td><code>brama.gateway.credential-persist</code></td>
 <td>the vault would not store a refreshed grant</td>
 </tr>
@@ -256,10 +254,6 @@ otherwise Brama's own kind is translated exactly once:</p>
 <tr>
 <td><code>provider_rate_limited</code>, <code>subscription_unavailable</code></td>
 <td><code>RateLimit</code></td>
-</tr>
-<tr>
-<td><code>dependency_timeout</code></td>
-<td><code>Timeout</code></td>
 </tr>
 <tr>
 <td><code>dependency_unavailable</code></td>

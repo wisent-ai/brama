@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Recover from provider or capability unavailability — Brama Docs</title>
-  <meta name="description" content="Recover from provider or capability unavailability Goal: distinguish bounded provider exhaustion, dependency outage, timeout, and permanent provider failure. Status: written agains">
+  <meta name="description" content="Recover from provider or capability unavailability Goal: distinguish bounded provider exhaustion, dependency outage, and permanent provider failure. Status: written agains">
   <link rel="canonical" href="https://brama.wisent.com/docs/examples/failures/provider-unavailable">
   <link rel="stylesheet" href="/docs/assets/site.css">
 </head>
@@ -19,7 +19,7 @@
     <main>
       <p class="source-note">Documentation topic: examples/failures/provider-unavailable.md</p>
       <article class="doc"><h1 id="recover-from-provider-or-capability-unavailability">Recover from provider or capability unavailability<a class="headerlink" href="#recover-from-provider-or-capability-unavailability" title="Link to this section">&para;</a></h1>
-<p><strong>Goal:</strong> distinguish bounded provider exhaustion, dependency outage, timeout, and permanent provider failure.</p>
+<p><strong>Goal:</strong> distinguish bounded provider exhaustion, dependency outage, and permanent provider failure.</p>
 <p><strong>Status:</strong> written against the <code>0.1.0</code> contract and not re-verified against the newest published release.</p>
 <p><strong>Risk:</strong> provider-facing diagnostics may be billable. Do not reproduce against a provider without explicit owner approval.</p>
 <p><strong>Environment:</strong> authenticated Brama service plus redacted routing telemetry.</p>
@@ -47,13 +47,7 @@
 <td>503</td>
 <td><code>dependency_unavailable</code></td>
 <td style="text-align: right;">true</td>
-<td>broker/catalog/provider unavailable before a stable result</td>
-</tr>
-<tr>
-<td>504</td>
-<td><code>dependency_timeout</code></td>
-<td style="text-align: right;">true</td>
-<td>The transport reported that the provider request timed out; inspect the recorded cause</td>
+<td>broker/catalog/provider unavailable before a stable result, or a provider request the transport did not carry; inspect the recorded cause</td>
 </tr>
 <tr>
 <td>502</td>
@@ -69,7 +63,7 @@
 <li>Check <code>/health</code> for build identity only and <code>/stats</code> for redacted counters/limits; neither probes dependencies.</li>
 <li>For attempt count zero, inspect the reported cause: discovery or credential failures require their named repair, while a recorded quota block can refuse without a new provider call.</li>
 <li>For rate limit or retryable outage, honor provider backoff and perform at most one owner-approved replay after state changes.</li>
-<li>For timeout, determine whether the provider may still have completed before replaying; never replay an ambiguous mutation/tool call automatically.</li>
+<li>For a transport failure, determine whether the provider may still have completed before replaying; never replay an ambiguous mutation/tool call automatically.</li>
 <li>For permanent auth rejection, allow retirement workflow to remove that credential from future dispatch, then provision or rotate through the owning capability system.</li>
 <li>For malformed provider data, quarantine that adapter/route and preserve a redacted response classification for maintainers.</li>
 </ol>

@@ -7,20 +7,9 @@ use axum::http::StatusCode;
 use super::contract::ModelErrorContract;
 use crate::types::{GatewayRefusal, ModelResponse, ProviderRefusal};
 
-/// The class of one failed answer. Every failure states one; a response that
-/// arrived failed without it was built by no path this gateway has, and reads
-/// as the unattributed provider failure it would otherwise be guessed as.
-pub fn failure_class(response: &ModelResponse) -> Option<ProviderRefusal> {
-    (!response.success).then(|| {
-        response
-            .failure_kind
-            .unwrap_or(ProviderRefusal::ProviderFailure)
-    })
-}
-
 /// The contract for one failed answer, from its class.
 pub fn response_contract(response: &ModelResponse) -> Option<ModelErrorContract> {
-    failure_class(response).map(provider_refusal_contract)
+    response.failure_class().map(provider_refusal_contract)
 }
 
 /// The contract for a refusal, from its class.
@@ -43,12 +32,6 @@ pub fn provider_refusal_contract(kind: ProviderRefusal) -> ModelErrorContract {
             error_type: "request_error",
             code: "context_length_exceeded",
             retryable: false,
-        },
-        ProviderRefusal::DependencyTimeout => ModelErrorContract {
-            status: StatusCode::GATEWAY_TIMEOUT,
-            error_type: "dependency_error",
-            code: "dependency_timeout",
-            retryable: true,
         },
         ProviderRefusal::DependencyUnavailable
         | ProviderRefusal::Gateway(GatewayRefusal::DependencyUnavailable) => ModelErrorContract {

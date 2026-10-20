@@ -46,7 +46,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
         "bounded credential pool read for one request"
     );
 
-    let mut provider_attempts: u32 = 0;
+    let mut provider_attempts: u32 = Default::default();
     let mut credential_refusal: Option<Failure> = None;
     let mut saw_auth_rejection = false;
     let mut saw_unredeemable_credential = false;
@@ -72,8 +72,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
             saw_rate_limit_block |= !reauthorization && !spent;
             if !reauthorization && !spent {
                 if let Some(until) = usage::blocked_until_ms(credential_id) {
-                    earliest_block_lifts =
-                        Some(earliest_block_lifts.map_or(until, |held: i64| held.min(until)));
+                    earliest_block_lifts = earliest_block_lifts.into_iter().chain([until]).min();
                 }
             }
             warn!(
@@ -140,7 +139,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
                 continue;
             }
         };
-        provider_attempts = provider_attempts.saturating_add(1);
+        provider_attempts = provider_attempts.saturating_add(std::num::NonZeroU32::MIN.get());
         let item = broker::subscription_resource(provider, credential_id);
         let started = Instant::now();
         let mut result = provider_registry::dispatch_stream(request, &item, token).await;
@@ -152,7 +151,8 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
             match broker::refresh_subscription_credential(credential_id, provider).await {
                 Ok(fresh) => match fresh.expose_utf8() {
                     Ok(fresh_token) => {
-                        provider_attempts = provider_attempts.saturating_add(1);
+                        provider_attempts =
+                            provider_attempts.saturating_add(std::num::NonZeroU32::MIN.get());
                         result =
                             provider_registry::dispatch_stream(request, &item, fresh_token).await;
                         rejected_with_fresh_token =
@@ -175,7 +175,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
         }
         let failure = match result {
             Ok(stream) => {
-                if index > 0 {
+                if rows.first().map(|first| &first.id) != Some(credential_id) {
                     info!(
                         event = "credential_rotated",
                         provider,
@@ -200,7 +200,11 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
             Err(failure) => failure,
         };
         usage::record_call(credential_id, provider, &failure);
-        let error = failure.error.clone().unwrap_or_default();
+        // A stream that did not open holds its refusal; one that holds none
+        // is an answer, and goes back as one.
+        let Some(refusal) = failure.refusal.clone() else {
+            return RouteAttempt::refused(failure);
+        };
         if rejected_with_fresh_token {
             // Same loop guard as the buffered path: a refusal of a token the
             // provider had just issued reads as an ordinary auth failure and
@@ -243,7 +247,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription_str
             // one route, which says nothing about its other models.
             return RouteAttempt::refused(failure);
         }
-        usage::record_block(credential_id, provider, &error, &failure);
+        usage::record_block(credential_id, provider, &refusal, &failure.limits);
         warn!(
             event = "credential_exhausted",
             provider,

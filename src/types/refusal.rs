@@ -14,10 +14,9 @@ pub enum ProviderRefusal {
     QuotaExhausted,
     /// 401 or 403: the provider does not accept this credential.
     Authentication,
-    /// 5xx: the provider could not answer.
+    /// 5xx, or a transport that did not carry the call: the provider could
+    /// not answer. The transport's own cause travels in the sentence.
     DependencyUnavailable,
-    /// The provider did not answer inside the transport's deadline.
-    DependencyTimeout,
     /// 413, or a 4xx whose error object's `code` or `type` is
     /// `context_length_exceeded`: the prompt is longer than the model accepts.
     /// Every credential refuses it alike; a larger model or a shorter context
@@ -62,7 +61,6 @@ impl ProviderRefusal {
             Self::DependencyUnavailable | Self::Gateway(GatewayRefusal::DependencyUnavailable) => {
                 "dependency_unavailable"
             }
-            Self::DependencyTimeout => "dependency_timeout",
             Self::ProviderFailure | Self::Gateway(GatewayRefusal::ProviderFailure) => {
                 "provider_failure"
             }

@@ -92,9 +92,8 @@ pub async fn probe_once(subscription_id: &str, provider: &str) -> Result<Probe, 
         response_schema: None,
     };
     let response = probe_subscription_usage(subscription_id, provider, &request).await;
-    let detail = response.error.as_deref();
-    let probe = usage::record_probe(subscription_id, provider, response.success, detail);
-    if response.success {
+    let probe = usage::record_probe(subscription_id, provider, response.success(), response.reason());
+    let Some(refusal) = &response.refusal else {
         info!(
             event = "usage_probe_recorded",
             subscription = %subscription_id,
@@ -103,12 +102,12 @@ pub async fn probe_once(subscription_id: &str, provider: &str) -> Result<Probe, 
             "the provider answered an operator's plan usage probe"
         );
         return Ok(probe);
-    }
+    };
     warn!(
         event = "usage_probe_refused",
         subscription = %subscription_id,
         provider = %provider,
-        detail = detail.unwrap_or("the provider gave no reason"),
+        detail = %refusal.message,
         "an operator's plan usage probe was refused; the row can now say why instead of \
          reporting an empty plan"
     );

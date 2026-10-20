@@ -126,37 +126,33 @@ pub(crate) async fn test_inference(args: TestArgs) {
     } else {
         brama::subscription_dispatch::dispatch_subscription_for_agent(&agent_id, &request).await
     };
-    if resp.success {
-        let answer = serde_json::json!({
-            "model": resp.model,
-            "response": resp.content,
-            "input_tokens": resp.input_tokens,
-            "output_tokens": resp.output_tokens,
-            "latency_ms": resp.latency_ms,
-            "cost_usd": resp.cost,
-        });
-        super::print_answer(&answer, json);
-    } else {
+    match &resp.refusal {
+        None => {
+            let answer = serde_json::json!({
+                "model": resp.model,
+                "response": resp.content,
+                "input_tokens": resp.input_tokens,
+                "output_tokens": resp.output_tokens,
+                "latency_ms": resp.latency_ms,
+                "cost_usd": resp.cost,
+            });
+            super::print_answer(&answer, json);
+        }
         // The refusal as the HTTP edge would answer it: its stable code from
         // the class it was built with, the attempts it cost, and its sentence.
-        let reason = match resp.error.as_deref() {
-            Some(reason) => reason.to_string(),
-            None => "the dispatch refused without a sentence".to_string(),
-        };
-        let code = match resp.failure_kind {
-            Some(class) => class.contract_kind(),
-            None => "unclassified",
-        };
-        if json {
-            let refused = serde_json::json!({
-                "model": resp.model,
-                "code": code,
-                "attempts": resp.attempts,
-                "error": reason,
-            });
-            super::print_answer(&refused, json);
+        Some(refusal) => {
+            let code = refusal.class.contract_kind();
+            if json {
+                let refused = serde_json::json!({
+                    "model": resp.model,
+                    "code": code,
+                    "attempts": resp.attempts,
+                    "error": refusal.message,
+                });
+                super::print_answer(&refused, json);
+            }
+            eprintln!("Error [{code}, attempts {}]: {}", resp.attempts, refusal.message);
+            crate::cli::fail();
         }
-        eprintln!("Error [{code}, attempts {}]: {reason}", resp.attempts);
-        crate::cli::fail();
     }
 }

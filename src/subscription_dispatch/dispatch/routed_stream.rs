@@ -5,7 +5,10 @@ use tokio::sync::mpsc;
 
 use crate::providers::stream::{ProviderStream, StreamDelta, StreamItem};
 use crate::subscription_dispatch::usage;
-use crate::types::{ModelResponse, ProviderRefusal};
+use crate::types::{ModelResponse, ProviderRefusal, Refusal};
+
+/// Milliseconds in a second, for a latency read off a monotonic clock.
+const MS_PER_SECOND: f64 = 1_000.0; // https://www.bipm.org/en/measurement-units/si-prefixes milli = 10^-3
 
 /// One committed, routed generation stream.
 ///
@@ -37,7 +40,9 @@ pub(in crate::subscription_dispatch::dispatch) fn spawn_stream_recorder(
     started: Instant,
     stream: ProviderStream,
 ) -> mpsc::Receiver<StreamItem> {
-    let (forward_tx, forward_rx) = mpsc::channel::<StreamItem>(64);
+    // One item in flight, as the provider stream itself holds: the provider
+    // waits on a caller that reads slowly instead of buffering ahead of it.
+    let (forward_tx, forward_rx) = mpsc::channel::<StreamItem>(std::num::NonZeroUsize::MIN.get());
     let subscription_id = subscription_id.to_string();
     let provider = provider.to_string();
     let model = model.to_string();
@@ -74,26 +79,24 @@ pub(in crate::subscription_dispatch::dispatch) fn spawn_stream_recorder(
                 break;
             }
         }
-        let success = finished && error.is_none();
         // A stream that ended after it committed is recorded for spend only;
-        // no caller is answered from this class.
-        let mut response = ModelResponse::failure(
-            &model,
-            ProviderRefusal::ProviderFailure,
-            error.unwrap_or_else(|| "provider stream ended without a verdict".to_string()),
-        );
-        response.success = success;
-        if success {
-            response.error = None;
-            response.failure_kind = None;
-        }
-        response.content = content;
-        if let Some((input, output)) = usage {
-            response.input_tokens = input;
-            response.output_tokens = output;
-            response.usage_stated = true;
-        }
-        response.latency_ms = started.elapsed().as_secs_f64() * 1_000.0;
+        // no caller is answered from this class. One that closed without
+        // `Done` and without a provider sentence says that it did.
+        let refusal = match error {
+            Some(message) => Some(message),
+            None if finished => None,
+            None => Some("provider stream ended without a verdict".to_string()),
+        };
+        let stated = match usage {
+            Some((input, output)) => (input, output, true),
+            None => (Default::default(), Default::default(), false),
+        };
+        let latency_ms = started.elapsed().as_secs_f64() * MS_PER_SECOND;
+        // What was generated and measured is kept on a failure too: it is
+        // spend the subscription paid for.
+        let mut response = ModelResponse::answered(&model, content, stated, latency_ms, None);
+        response.refusal =
+            refusal.map(|message| Refusal::new(ProviderRefusal::ProviderFailure, message));
         response.attempts = attempts;
         response.limits = limits;
         usage::record_call(&subscription_id, &provider, &response);

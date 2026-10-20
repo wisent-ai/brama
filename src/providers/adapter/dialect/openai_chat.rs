@@ -24,17 +24,19 @@ pub(in crate::providers::adapter) fn openai_messages(request: &ModelRequest) -> 
     if let Some(system) = request.system.as_deref().filter(|value| !value.is_empty()) {
         messages.push(json!({"role": "system", "content": system}));
     }
+    // Built from the message's own fields, so nothing can fail to encode and
+    // nothing is dropped; the tool name is not part of the chat wire.
     messages.extend(request.messages.iter().map(|message| {
-        let mut value = serde_json::to_value(message).unwrap_or_else(|_| {
-            json!({
-                "role": message.role,
-                "content": message.content,
-            })
-        });
-        if let Some(object) = value.as_object_mut() {
-            object.remove("name");
+        let mut object = serde_json::Map::new();
+        object.insert("role".into(), json!(message.role));
+        object.insert("content".into(), message.content.clone());
+        if let Some(id) = &message.tool_call_id {
+            object.insert("tool_call_id".into(), json!(id));
         }
-        value
+        if let Some(calls) = &message.tool_calls {
+            object.insert("tool_calls".into(), Value::Array(calls.clone()));
+        }
+        Value::Object(object)
     }));
     messages
 }
@@ -56,11 +58,21 @@ pub(in crate::providers::adapter) fn model_response_from_openai(
             ),
         );
     };
-    let content = choice
-        .get("content")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_string();
+    // Content is text or absent (null beside tool calls); anything else is
+    // a body this gateway cannot read, and says so.
+    let content = match choice.get("content") {
+        Some(Value::String(text)) => text.clone(),
+        None | Some(Value::Null) => String::new(),
+        Some(other) => {
+            return attempted_failure(
+                route_id,
+                Refusal::new(
+                    ProviderRefusal::ProviderFailure,
+                    format!("the provider answered message content that is not text: {other}"),
+                ),
+            )
+        }
+    };
     // A tool call the model made but this gateway cannot read fails the
     // answer with its cause: dropped, the caller got an answer without a call
     // the model asked for.
@@ -85,23 +97,20 @@ pub(in crate::providers::adapter) fn model_response_from_openai(
             }
         },
     };
-    let (input_tokens, output_tokens, usage_stated) = stated_usage(
+    // Neither text nor a call is an answer that said nothing: a failure
+    // naming the body, not a successful empty answer.
+    if content.is_empty() && tool_calls.is_none() {
+        return attempted_failure(
+            route_id,
+            Refusal::new(
+                ProviderRefusal::ProviderFailure,
+                format!("the provider answered with neither content nor tool calls: {body}"),
+            ),
+        );
+    }
+    let usage = stated_usage(
         body.pointer("/usage/prompt_tokens"),
         body.pointer("/usage/completion_tokens"),
     );
-    ModelResponse {
-        content,
-        model: route_id.to_string(),
-        input_tokens,
-        output_tokens,
-        usage_stated,
-        latency_ms: elapsed_ms,
-        cost: 0.0,
-        success: true,
-        attempts: 1,
-        error: None,
-        tool_calls,
-        limits: Vec::new(),
-        failure_kind: None,
-    }
+    ModelResponse::answered(route_id, content, usage, elapsed_ms, tool_calls)
 }

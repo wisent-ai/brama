@@ -22,7 +22,7 @@ use super::dialect::openai_chat::{model_response_from_openai, openai_messages, r
 use super::dialect::tool_schema::normalized_tools_value;
 use super::plan::headers::{limit_readings, with_limits};
 use super::registry::{known_max_output_tokens, valid_model_id, valid_provider_id};
-use super::{client_unavailable, credential_refused, unconfigured_route};
+use super::{client_unavailable, credential_refused, unconfigured_route, unreadable_conversation};
 use crate::subscription_dispatch::model_catalog::{self, CatalogProtocol};
 use crate::types::{GatewayRefusal, ModelRequest, ModelResponse, ProviderRefusal, Refusal};
 use endpoint::{catalog_endpoint, catalog_provider_base_url};
@@ -123,9 +123,13 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
             )
         }
         CatalogProtocol::AnthropicMessages => {
+            let messages = match anthropic_messages(request) {
+                Ok(messages) => messages,
+                Err(error) => return unreadable_conversation(request, error),
+            };
             let mut body = json!({
                 "model": model_id,
-                "messages": anthropic_messages(request),
+                "messages": messages,
             });
             // The format requires an answer length: the caller's, else the
             // model's own limit.
@@ -169,7 +173,10 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
                     )
                 }
             }
-            (url.to_string(), google_payload(request))
+            match google_payload(request) {
+                Ok(payload) => (url.to_string(), payload),
+                Err(error) => return unreadable_conversation(request, error),
+            }
         }
         CatalogProtocol::Unsupported => unreachable!(),
     };
@@ -202,7 +209,7 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
             )
         }
     };
-    let elapsed_ms = started.elapsed().as_secs_f64() * 1_000.0;
+    let elapsed_ms = started.elapsed().as_secs_f64() * super::plan::headers::MS_PER_SECOND;
     with_limits(
         match descriptor.protocol {
             CatalogProtocol::OpenAiChat => {

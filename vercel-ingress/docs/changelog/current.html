@@ -24,6 +24,19 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-one-refusal">Unreleased: a failed answer always carries its class and sentence<a class="headerlink" href="#unreleased-one-refusal" title="Link to this section">&para;</a></h2>
+<p>A routed answer is either the generation or one refusal holding both its
+class and its sentence; a failure without either can no longer be built, so
+the HTTP edge, the ranked walk, decisions, <code>brama test</code>, task-quality
+rows and the usage ledger read the refusal that was stated instead of each
+inventing a stand-in (<code>failed</code>, <code>unclassified</code>, an
+unattributed <code>provider_failure</code>). A provider request the transport
+did not carry is <code>503 dependency_unavailable</code> with the transport's
+cause, the only class such a failure is answered with, since Brama sets no
+request deadline of its own. A chat answer with neither text nor a tool call,
+a text block without its text, and a history tool call whose arguments are not
+JSON are refused with the body or call named, instead of passing as an empty
+answer or a call with null input (<a href="/docs/errors">Errors</a>).</p>
 <h2 id="unreleased-tasks">Unreleased: <code>brama tasks</code> replaces <code>collect-task-quality</code><a class="headerlink" href="#unreleased-tasks" title="Link to this section">&para;</a></h2>
 <p>Measuring a named task and reading back what <code>task:&lt;KEY&gt;</code>
 selection uses are one command family: <code>brama tasks measure &lt;KEY&gt;</code>

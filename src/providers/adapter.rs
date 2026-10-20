@@ -82,7 +82,10 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
         Ok(client) => client,
         Err(error) => return client_unavailable(request, error),
     };
-    let payload = chat_payload(descriptor, model_id.as_ref(), request);
+    let payload = match chat_payload(descriptor, model_id.as_ref(), request) {
+        Ok(payload) => payload,
+        Err(error) => return unreadable_conversation(request, error),
+    };
     let authorized = match authorize_provider(
         client.post(endpoint(&base_url, descriptor.chat_path)),
         descriptor,
@@ -193,7 +196,10 @@ pub async fn dispatch_stream(
         Ok(client) => client,
         Err(error) => return Err(client_unavailable(request, error)),
     };
-    let payload = streaming_chat_payload(descriptor, model_id.as_ref(), request);
+    let payload = match streaming_chat_payload(descriptor, model_id.as_ref(), request) {
+        Ok(payload) => payload,
+        Err(error) => return Err(unreadable_conversation(request, error)),
+    };
     let authorized = match authorize_provider(
         client.post(endpoint(&base_url, descriptor.chat_path)),
         descriptor,
@@ -252,6 +258,16 @@ fn unconfigured_route(request: &ModelRequest, error: String) -> ModelResponse {
 /// The HTTP client could not be built, so no provider could be asked.
 fn client_unavailable(request: &ModelRequest, error: String) -> ModelResponse {
     ModelResponse::refused(&request.model, GatewayRefusal::DependencyUnavailable, error)
+}
+
+/// The conversation cannot be put on the provider's wire: the caller's
+/// request, refused before any provider is asked.
+fn unreadable_conversation(request: &ModelRequest, error: String) -> ModelResponse {
+    ModelResponse::refused(
+        &request.model,
+        GatewayRefusal::InvalidRequest,
+        format!("invalid_request: {error}"),
+    )
 }
 
 /// The token usage a provider answer states: both counts and `true` when it

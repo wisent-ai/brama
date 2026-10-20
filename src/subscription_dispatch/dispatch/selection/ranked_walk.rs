@@ -4,7 +4,7 @@
 use tracing::{info, warn};
 
 use crate::core::failure::POINT_MODEL_SELECTION;
-use crate::types::{GatewayRefusal, ModelRequest, ModelResponse, ProviderRefusal};
+use crate::types::{GatewayRefusal, ModelRequest, ModelResponse, ProviderRefusal, Refusal};
 
 use super::super::catalogue::cache::discovery_failure;
 use super::super::catalogue::route::provider_for;
@@ -63,23 +63,20 @@ impl RankedWalk {
         &mut self,
         model: &str,
         provider: &str,
-        response: &ModelResponse,
+        refusal: &Refusal,
+        attempts: u32,
         emptied: bool,
         elapsed_ms: u128,
     ) {
-        self.attempts = self.attempts.saturating_add(response.attempts);
-        let reason = response.error.as_deref().unwrap_or("failed");
-        self.classes.push(
-            response
-                .failure_kind
-                .unwrap_or(ProviderRefusal::ProviderFailure),
-        );
+        self.attempts = self.attempts.saturating_add(attempts);
+        let reason = refusal.message.as_str();
+        self.classes.push(refusal.class);
         warn!(
             event = "ranked_candidate_refused",
             model,
             provider,
             pool_emptied = emptied,
-            attempts = response.attempts,
+            attempts,
             elapsed_ms,
             reason,
             "ranked selector walked past a refused candidate"
@@ -188,18 +185,22 @@ fn unreached(agent_id: &str, walked: &[String]) -> Vec<String> {
 /// be dressed as capacity. A walk that saw none of these found nothing that
 /// could serve it right now.
 fn walked_class(classes: &[ProviderRefusal]) -> ProviderRefusal {
-    [
-        ProviderRefusal::QuotaExhausted,
-        ProviderRefusal::RateLimited,
-        ProviderRefusal::Gateway(GatewayRefusal::SubscriptionUnavailable),
-        ProviderRefusal::Gateway(GatewayRefusal::CredentialUnauthorized),
-        ProviderRefusal::Gateway(GatewayRefusal::SubscriptionReauthorizationRequired),
-    ]
-    .into_iter()
-    .find(|class| classes.contains(class))
-    .unwrap_or(ProviderRefusal::Gateway(
-        GatewayRefusal::SubscriptionUnavailable,
-    ))
+    let saw = |class: ProviderRefusal| classes.contains(&class);
+    let unavailable = ProviderRefusal::Gateway(GatewayRefusal::SubscriptionUnavailable);
+    let unauthorized = ProviderRefusal::Gateway(GatewayRefusal::CredentialUnauthorized);
+    let reauthorize =
+        ProviderRefusal::Gateway(GatewayRefusal::SubscriptionReauthorizationRequired);
+    if saw(ProviderRefusal::QuotaExhausted) {
+        ProviderRefusal::QuotaExhausted
+    } else if saw(ProviderRefusal::RateLimited) {
+        ProviderRefusal::RateLimited
+    } else if saw(unavailable) || !(saw(unauthorized) || saw(reauthorize)) {
+        unavailable
+    } else if saw(unauthorized) {
+        unauthorized
+    } else {
+        reauthorize
+    }
 }
 
 /// Walk a ranked candidate list until one of them serves.
@@ -234,13 +235,19 @@ pub(super) async fn dispatch_ranked_models(
                 served.attempts = walk.attempts.saturating_add(served.attempts);
                 return served;
             }
-            Err(response) => walk.refused(
-                &model,
-                provider,
-                &response,
-                attempt.pool_emptied,
-                asking.elapsed().as_millis(),
-            ),
+            // A route is walked past on its refusal; an attempt that holds
+            // none is an answer, and is returned as one.
+            Err(response) => match &response.refusal {
+                Some(refusal) => walk.refused(
+                    &model,
+                    provider,
+                    refusal,
+                    response.attempts,
+                    attempt.pool_emptied,
+                    asking.elapsed().as_millis(),
+                ),
+                None => return response,
+            },
         }
     }
     walk.into_failure(agent_id, request, failure_context)
@@ -276,13 +283,17 @@ pub(super) async fn dispatch_ranked_models_stream(
                 routed.attempts = routed.attempts.saturating_add(walk.attempts);
                 return Ok(routed);
             }
-            Err(response) => walk.refused(
-                &model,
-                provider,
-                &response,
-                attempt.pool_emptied,
-                asking.elapsed().as_millis(),
-            ),
+            Err(response) => match &response.refusal {
+                Some(refusal) => walk.refused(
+                    &model,
+                    provider,
+                    refusal,
+                    response.attempts,
+                    attempt.pool_emptied,
+                    asking.elapsed().as_millis(),
+                ),
+                None => return Err(response),
+            },
         }
     }
     Err(walk.into_failure(agent_id, request, failure_context))

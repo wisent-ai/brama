@@ -166,25 +166,17 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
         }
     }
     let usage = completed.get("usage");
-    let (input_tokens, output_tokens, usage_stated) = stated_usage(
+    let stated = stated_usage(
         usage.and_then(|usage| usage.get("input_tokens")),
         usage.and_then(|usage| usage.get("output_tokens")),
     );
-    ModelResponse {
+    ModelResponse::answered(
+        route_id,
         content,
-        model: route_id.to_string(),
-        input_tokens,
-        output_tokens,
-        usage_stated,
-        latency_ms: elapsed_ms,
-        cost: 0.0,
-        success: true,
-        attempts: 1,
-        error: None,
-        tool_calls: (!tool_calls.is_empty()).then_some(tool_calls),
-        limits: Vec::new(),
-        failure_kind: None,
-    }
+        stated,
+        elapsed_ms,
+        (!tool_calls.is_empty()).then_some(tool_calls),
+    )
 }
 
 /// A Responses `function_call` item as a tool call, or what it lacked. Read

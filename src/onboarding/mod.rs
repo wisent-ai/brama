@@ -161,14 +161,8 @@ pub async fn run_first_use(
     } else {
         dispatch_direct(&request).await
     };
-    if !response.success {
-        match response.error {
-            Some(error) => eprintln!("Model request failed: {error}"),
-            None => eprintln!(
-                "Model request failed after {} attempt(s) without stating a cause",
-                response.attempts
-            ),
-        }
+    if let Some(refusal) = &response.refusal {
+        eprintln!("Model request failed: {}", refusal.message);
         eprintln!("Onboarding remains in progress because no model response was received.");
         journey.flush().await?;
         return Ok(false);

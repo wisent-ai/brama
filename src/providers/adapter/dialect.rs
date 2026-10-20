@@ -23,7 +23,8 @@ pub(in crate::providers::adapter) fn named_tool_choice(choice: &Value) -> Option
         .filter(|name| !name.is_empty())
 }
 
-/// The non-streaming chat payload for one wire protocol.
+/// The non-streaming chat payload for one wire protocol, or why the
+/// conversation cannot be carried on it.
 ///
 /// This is the exact body [`super::dispatch`] has always sent; both dispatch
 /// paths build from it so a streaming request differs from a buffered one only
@@ -32,7 +33,7 @@ pub(in crate::providers::adapter) fn chat_payload(
     descriptor: &ProviderDescriptor,
     model_id: &str,
     request: &ModelRequest,
-) -> Value {
+) -> Result<Value, String> {
     // A model the provider has refused `temperature` for gets the same
     // request without it, on every wire.
     let stripped;
@@ -46,7 +47,7 @@ pub(in crate::providers::adapter) fn chat_payload(
     } else {
         request
     };
-    match descriptor.wire {
+    Ok(match descriptor.wire {
         WireProtocol::OpenAiChat => {
             let mut body = Map::new();
             body.insert("model".into(), json!(model_id));
@@ -78,7 +79,7 @@ pub(in crate::providers::adapter) fn chat_payload(
         WireProtocol::AnthropicMessages => {
             let mut body = json!({
                 "model": model_id,
-                "messages": self::anthropic_messages::anthropic_messages(request),
+                "messages": self::anthropic_messages::anthropic_messages(request)?,
             });
             // The format requires an answer length: the caller's, else the
             // model's own limit.
@@ -108,7 +109,7 @@ pub(in crate::providers::adapter) fn chat_payload(
         // messages. `dispatch` refuses its routes before asking for a chat
         // payload, so nothing is built here.
         WireProtocol::TypeSafeSystemOne => Value::Null,
-    }
+    })
 }
 
 /// The same payload asking the provider to stream.
@@ -122,8 +123,8 @@ pub(in crate::providers::adapter) fn streaming_chat_payload(
     descriptor: &ProviderDescriptor,
     model_id: &str,
     request: &ModelRequest,
-) -> Value {
-    let mut body = chat_payload(descriptor, model_id, request);
+) -> Result<Value, String> {
+    let mut body = chat_payload(descriptor, model_id, request)?;
     match descriptor.wire {
         WireProtocol::OpenAiChat => {
             body["stream"] = json!(true);
@@ -139,5 +140,5 @@ pub(in crate::providers::adapter) fn streaming_chat_payload(
         // provider streams nothing at all.
         WireProtocol::OpenAiResponses | WireProtocol::TypeSafeSystemOne => {}
     }
-    body
+    Ok(body)
 }

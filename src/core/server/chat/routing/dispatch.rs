@@ -118,7 +118,7 @@ pub(super) fn settled(dispatched: &DispatchedCall) -> crate::journal::concurrenc
     match dispatched {
         DispatchedCall::Committed(_) => Settled::Answered,
         DispatchedCall::Buffered(resp) => {
-            match crate::core::server::refusal::classed::failure_class(resp) {
+            match resp.failure_class() {
                 None => Settled::Answered,
                 Some(
                     ProviderRefusal::RateLimited

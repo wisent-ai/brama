@@ -57,7 +57,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
         "bounded credential pool read for one request"
     );
 
-    let mut provider_attempts: u32 = 0;
+    let mut provider_attempts: u32 = Default::default();
     // The newest credential-boundary refusal is the operation that finally
     // stopped this request, whether redemption, refresh, or credential decode.
     let mut credential_refusal: Option<Failure> = None;
@@ -100,8 +100,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
             // it is a wait nobody can plan around.
             if !reauthorization && !spent {
                 if let Some(until) = usage::blocked_until_ms(credential_id) {
-                    earliest_block_lifts =
-                        Some(earliest_block_lifts.map_or(until, |held: i64| held.min(until)));
+                    earliest_block_lifts = earliest_block_lifts.into_iter().chain([until]).min();
                 }
             }
             warn!(
@@ -169,7 +168,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
                 continue;
             }
         };
-        provider_attempts = provider_attempts.saturating_add(1);
+        provider_attempts = provider_attempts.saturating_add(std::num::NonZeroU32::MIN.get());
         let item = broker::subscription_resource(provider, credential_id);
         let mut result = provider_registry::dispatch(request, &item, token).await;
         result.attempts = provider_attempts;
@@ -179,15 +178,16 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
         // refusal cannot say that: the class is the same either way, and only
         // the sequence says the credential is dead rather than stale.
         let mut rejected_with_fresh_token = false;
-        if !result.success && refused_credential(&result) {
+        if refused_credential(&result) {
             match broker::refresh_subscription_credential(credential_id, provider).await {
                 Ok(fresh) => match fresh.expose_utf8() {
                     Ok(fresh_token) => {
-                        provider_attempts = provider_attempts.saturating_add(1);
+                        provider_attempts =
+                            provider_attempts.saturating_add(std::num::NonZeroU32::MIN.get());
                         result = provider_registry::dispatch(request, &item, fresh_token).await;
                         result.attempts = provider_attempts;
                         usage::record_call(credential_id, provider, &result);
-                        if result.success {
+                        if result.success() {
                             info!(
                                 event = "credential_refreshed",
                                 provider,
@@ -214,8 +214,9 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
                 Err(refused) => remember_failure(&mut credential_refusal, refused),
             }
         }
-        if result.success {
-            if index > 0 {
+        // A success holds no refusal; everything below reads the one it holds.
+        let Some(refusal) = result.refusal.clone() else {
+            if rows.first().map(|first| &first.id) != Some(credential_id) {
                 info!(
                     event = "credential_rotated",
                     provider,
@@ -225,8 +226,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
             }
             pin_credential(agent_id, provider, credential_id);
             return RouteAttempt::served(result);
-        }
-        let error = result.error.clone().unwrap_or_default();
+        };
         if rejected_with_fresh_token {
             // Retried forever otherwise: the refusal reads as an ordinary auth
             // failure, so the next request refreshes and is refused again. One
@@ -272,7 +272,7 @@ pub(in crate::subscription_dispatch::dispatch) async fn attempt_subscription(
             // not, so this refusal condemns the route and not the pool.
             return RouteAttempt::refused(result);
         }
-        usage::record_block(credential_id, provider, &error, &result);
+        usage::record_block(credential_id, provider, &refusal, &result.limits);
         warn!(
             event = "credential_exhausted",
             provider,

@@ -128,9 +128,9 @@ pub(in crate::core::server) async fn chat_completions(
     };
     match dispatched {
         DispatchedCall::Buffered(mut resp) => {
-            tally_and_log_buffered(&mut resp, &client_identity, &meta, &requested_model);
-            if !resp.success {
-                return failure_response(&mut resp);
+            tally_and_log_buffered(&resp, &client_identity, &meta, &requested_model);
+            if let Some(refusal) = resp.refusal.take() {
+                return failure_response(refusal, resp.attempts);
             }
             // Not every provider decodes under the schema, so every answer
             // to a `response_format` is one JSON object or it is refused.

@@ -17,9 +17,12 @@
 use serde::{Deserialize, Serialize};
 
 use crate::core::failure::{self, IMPACT_CREDENTIAL_BLOCK, POINT_CREDENTIAL_BLOCK};
-use crate::types::{ModelResponse, ProviderRefusal};
-
+use crate::subscription_dispatch::acquire::at_limit;
+use crate::types::{LimitReading, ModelResponse, ProviderRefusal, Refusal};
 use super::{now_ms, read_ledger, with_ledger, CredentialState, UsageSource};
+
+/// One provider call, as the measured counters count it.
+const ONE_CALL: u64 = std::num::NonZeroU64::MIN.get();
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Measured {
@@ -88,9 +91,9 @@ pub fn record_call_from(
         entry.updated_at_ms = Some(now);
         entry.measured.since_ms.get_or_insert(now);
         entry.measured.last_used_ms = Some(now);
-        entry.measured.requests = entry.measured.requests.saturating_add(1);
-        if !response.success {
-            entry.measured.failures = entry.measured.failures.saturating_add(1);
+        entry.measured.requests = entry.measured.requests.saturating_add(ONE_CALL);
+        if !response.success() {
+            entry.measured.failures = entry.measured.failures.saturating_add(ONE_CALL);
         }
         if response.usage_stated {
             entry.measured.input_tokens = entry
@@ -101,7 +104,7 @@ pub fn record_call_from(
                 .measured
                 .output_tokens
                 .saturating_add(u64::from(response.output_tokens));
-        } else if response.success {
+        } else if response.success() {
             entry.measured.last_unmeasured_call_ms = Some(now);
         }
         for reading in &response.limits {
@@ -117,7 +120,7 @@ pub fn record_call_from(
         // A window that is no longer exhausted clears the block without waiting
         // for its deadline: the provider just answered, which is better evidence
         // than the estimate that produced the block.
-        if response.success {
+        if response.success() {
             entry.block = None;
             // An answer is also proof that the grant behind it is accepted, so a
             // recorded refusal is over. This is what lets a credential repaired
@@ -136,17 +139,25 @@ pub fn record_call_from(
     });
 }
 
-/// Mark a subscription unusable until the instant its provider named.
+/// Mark a subscription unusable until the instant its provider named, for the
+/// refusal it answered with.
 ///
 /// The provider's own reset time is the only source of that instant. An
 /// answer that names no reset records no block: the next request asks the
 /// account again and its refusal answers that request the same way.
-pub fn record_block(subscription_id: &str, provider: &str, reason: &str, response: &ModelResponse) {
+pub fn record_block(
+    subscription_id: &str,
+    provider: &str,
+    refusal: &Refusal,
+    limits: &[LimitReading],
+) {
     let now = now_ms();
-    let from_provider = response
-        .limits
+    // A window at its whole limit names when the block lifts; so does the
+    // only window an answer carried, which is the one that refused.
+    let only_window = matches!(limits, [_]);
+    let from_provider = limits
         .iter()
-        .filter(|reading| reading.used_fraction >= 1.0 || response.limits.len() == 1)
+        .filter(|reading| at_limit(reading.used_fraction) || only_window)
         .filter_map(|reading| reading.resets_at_ms)
         .filter(|resets| *resets > now)
         .min();
@@ -162,13 +173,11 @@ pub fn record_block(subscription_id: &str, provider: &str, reason: &str, respons
     // paid balance and a full rate window are both recorded here, and the
     // next request must answer each the way this one did. The sentence stays
     // in `reason` for the tooling that already reads it.
-    let quota_exhausted = response.failure_kind == Some(ProviderRefusal::QuotaExhausted);
-    let kind = response
-        .failure_kind
-        .map_or("provider_rate_limited", ProviderRefusal::contract_kind);
+    let reason = refusal.message.as_str();
+    let quota_exhausted = refusal.class == ProviderRefusal::QuotaExhausted;
     let blocked = failure::envelope(
         POINT_CREDENTIAL_BLOCK,
-        failure::code_for(kind),
+        failure::code_for(refusal.class.contract_kind()),
         IMPACT_CREDENTIAL_BLOCK,
         reason,
     )

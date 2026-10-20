@@ -208,78 +208,9 @@ where
         .map(std::num::NonZeroI64::get))
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModelResponse {
-    pub content: String,
-    pub model: String,
-    /// Zero unless `usage_stated`: a count the provider did not state is no
-    /// measurement, and readers that total tokens skip such an answer and
-    /// count it apart instead of adding its zeros.
-    pub input_tokens: u32,
-    pub output_tokens: u32,
-    /// Whether the provider stated this answer's token usage. Absent in
-    /// records written before the flag existed.
-    #[serde(default)]
-    pub usage_stated: bool,
-    pub latency_ms: f64,
-    pub cost: f64,
-    pub success: bool,
-    /// Number of provider HTTP calls consumed by this routed request.
-    #[serde(default)]
-    pub attempts: u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_calls: Option<Vec<ToolCall>>,
-    /// Plan windows the provider reported on this exact response, when it
-    /// reports any. Present on rate-limited responses too, which is when it
-    /// matters most.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub limits: Vec<LimitReading>,
-    /// The class of a refusal, stated where it was built: from the provider's
-    /// HTTP status where one answered, and from Brama's own reason where Brama
-    /// refused. Rotation and the HTTP edge decide from this, never from the
-    /// sentence, which is data and changes wording without notice. Absent only
-    /// on a success.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub failure_kind: Option<ProviderRefusal>,
-}
-
-impl ModelResponse {
-    /// A failed answer and its class. There is no failure without one: the
-    /// edge answers from the class, and a refusal whose class nobody stated
-    /// would have to be guessed from its sentence.
-    pub fn failure(model: &str, class: ProviderRefusal, error: String) -> Self {
-        Self {
-            content: String::new(),
-            model: model.to_string(),
-            // A failed answer carries no usage: usage_stated says none was stated.
-            input_tokens: Default::default(),
-            output_tokens: Default::default(),
-            usage_stated: false,
-            latency_ms: Default::default(),
-            cost: Default::default(),
-            attempts: Default::default(),
-            success: false,
-            error: Some(error),
-            tool_calls: None,
-            limits: Vec::new(),
-            failure_kind: Some(class),
-        }
-    }
-
-    /// A refusal Brama builds itself, with its class stated.
-    pub fn refused(model: &str, class: GatewayRefusal, error: String) -> Self {
-        Self::failure(model, ProviderRefusal::Gateway(class), error)
-    }
-
-    /// A failed answer carrying one stated refusal.
-    pub fn from_refusal(model: &str, refusal: Refusal) -> Self {
-        Self::failure(model, refusal.class, refusal.message)
-    }
-}
-
 mod declared_age;
 mod refusal;
+mod response;
 pub use declared_age::{declared_age, still_fresh};
 pub use refusal::{GatewayRefusal, ProviderRefusal, Refusal};
+pub use response::ModelResponse;

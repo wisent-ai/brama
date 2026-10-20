@@ -20,13 +20,15 @@ pub(in crate::providers::adapter) fn anthropic_tool_choice(choice: &Value) -> Op
     }
 }
 
-fn anthropic_content(message: &Message) -> Value {
+/// One history message in the Anthropic shape, or the reason it cannot be
+/// carried: a tool call whose arguments do not read as JSON names the call.
+fn anthropic_content(message: &Message) -> Result<Value, String> {
     if message.role == "tool" {
-        return json!([{
+        return Ok(json!([{
             "type": "tool_result",
             "tool_use_id": message.tool_call_id,
             "content": message.content_text(),
-        }]);
+        }]));
     }
     if let Some(calls) = &message.tool_calls {
         let mut blocks = Vec::new();
@@ -35,13 +37,17 @@ fn anthropic_content(message: &Message) -> Value {
             blocks.push(json!({"type": "text", "text": text}));
         }
         // Every history tool call was checked at the door for an id, a
-        // function name and JSON arguments (wire::validate_history_tool_calls),
-        // so each is carried as stated, with no stand-in for a missing part.
+        // function name and JSON arguments (wire::validate_history_tool_calls);
+        // one that still does not read is refused with its cause, never sent
+        // with a null input.
         for call in calls {
-            let input = call
+            let arguments = call
                 .pointer("/function/arguments")
                 .and_then(Value::as_str)
-                .and_then(|value| serde_json::from_str::<Value>(value).ok());
+                .ok_or_else(|| format!("history tool call {call} carries no text arguments"))?;
+            let input = serde_json::from_str::<Value>(arguments).map_err(|error| {
+                format!("history tool call {call} carries arguments that are not JSON: {error}")
+            })?;
             blocks.push(json!({
                 "type": "tool_use",
                 "id": call.get("id"),
@@ -49,12 +55,12 @@ fn anthropic_content(message: &Message) -> Value {
                 "input": input,
             }));
         }
-        return Value::Array(blocks);
+        return Ok(Value::Array(blocks));
     }
-    match &message.content {
+    Ok(match &message.content {
         Value::Array(parts) => Value::Array(parts.iter().map(anthropic_block).collect()),
         content => content.clone(),
-    }
+    })
 }
 
 fn anthropic_block(part: &Value) -> Value {
@@ -76,17 +82,21 @@ fn anthropic_block(part: &Value) -> Value {
     json!({"type": "image", "source": source})
 }
 
-pub(in crate::providers::adapter) fn anthropic_messages(request: &ModelRequest) -> Vec<Value> {
+/// The conversation in the Anthropic shape, or the first message that cannot
+/// be carried and why.
+pub(in crate::providers::adapter) fn anthropic_messages(
+    request: &ModelRequest,
+) -> Result<Vec<Value>, String> {
     request
         .messages
         .iter()
-        .map(|message| {
+        .map(|message| -> Result<Value, String> {
             let role = if message.role == "assistant" {
                 "assistant"
             } else {
                 "user"
             };
-            json!({"role": role, "content": anthropic_content(message)})
+            Ok(json!({"role": role, "content": anthropic_content(message)?}))
         })
         .collect()
 }
@@ -125,12 +135,18 @@ pub(in crate::providers::adapter) fn model_response_from_anthropic(
     let mut tool_calls = Vec::new();
     for block in blocks {
         match block.get("type").and_then(Value::as_str) {
-            Some("text") => text.push_str(
-                block
-                    .get("text")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default(),
-            ),
+            Some("text") => match block.get("text").and_then(Value::as_str) {
+                Some(part) => text.push_str(part),
+                None => {
+                    return attempted_failure(
+                        route_id,
+                        Refusal::new(
+                            ProviderRefusal::ProviderFailure,
+                            format!("the provider answered a text block without its text: {block}"),
+                        ),
+                    )
+                }
+            },
             Some("tool_use") => {
                 // A tool call without its id, name or input fails the answer
                 // with its cause: sent on as a call named "tool" with id
@@ -164,23 +180,15 @@ pub(in crate::providers::adapter) fn model_response_from_anthropic(
             _ => {}
         }
     }
-    let (input_tokens, output_tokens, usage_stated) = stated_usage(
+    let usage = stated_usage(
         body.pointer("/usage/input_tokens"),
         body.pointer("/usage/output_tokens"),
     );
-    ModelResponse {
-        content: text,
-        model: route_id.to_string(),
-        input_tokens,
-        output_tokens,
-        usage_stated,
-        latency_ms: elapsed_ms,
-        cost: 0.0,
-        success: true,
-        attempts: 1,
-        error: None,
-        tool_calls: (!tool_calls.is_empty()).then_some(tool_calls),
-        limits: Vec::new(),
-        failure_kind: None,
-    }
+    ModelResponse::answered(
+        route_id,
+        text,
+        usage,
+        elapsed_ms,
+        (!tool_calls.is_empty()).then_some(tool_calls),
+    )
 }

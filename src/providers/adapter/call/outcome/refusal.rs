@@ -10,30 +10,19 @@ use crate::types::{ModelResponse, ProviderRefusal, Refusal};
 
 /// The reason a send failed, in the caller's vocabulary and with the cause.
 ///
-/// The bare sentences this used to return said a request failed and nothing
-/// else: every product chat failing with `dependency_unavailable: provider
-/// request failed` while the model host answers other callers in a fraction
-/// of a second, and a gateway log that cannot distinguish a refused
-/// connection, an unroutable address and a TLS refusal, is an outage
-/// entirely inside one hop that takes hours to name. The transport error
-/// carries that answer already; withholding it was the defect.
+/// A bare sentence that a request failed leaves a refused connection, an
+/// unroutable address and a TLS refusal indistinguishable; the transport error
+/// carries that answer, so it travels whole in the sentence.
 ///
 /// The cause carries no request body, only the client's own description of
 /// why the socket did not carry the call.
 pub(in crate::providers::adapter) fn transport_refusal(error: &reqwest::Error) -> Refusal {
     let cause = failure::error_chain(error);
-    let (class, said) = if error.is_timeout() {
-        (
-            ProviderRefusal::DependencyTimeout,
-            "provider request timed out",
-        )
-    } else {
-        (
-            ProviderRefusal::DependencyUnavailable,
-            "provider request failed",
-        )
-    };
-    Refusal::new(class, format!("{}: {said}: {cause}", class.contract_kind()))
+    let class = ProviderRefusal::DependencyUnavailable;
+    Refusal::new(
+        class,
+        format!("{}: provider request failed: {cause}", class.contract_kind()),
+    )
 }
 
 pub(in crate::providers::adapter) fn transport_failure(
@@ -48,24 +37,42 @@ pub(in crate::providers::adapter) fn attempted_failure(
     refusal: Refusal,
 ) -> ModelResponse {
     let mut failure = ModelResponse::from_refusal(route_id, refusal);
-    failure.attempts = 1;
+    // The one provider call this refusal answered.
+    failure.attempts = std::num::NonZeroU32::MIN.get();
     failure
 }
 
 /// A provider's refusal as a typed call carries it, with the class read from
-/// the provider's status and the provider's sentence behind its kind.
+/// the provider's status and the provider's sentence behind its kind, logged
+/// with the fleet's envelope.
 pub(in crate::providers::adapter) fn provider_refused(
     route_id: &str,
     status: reqwest::StatusCode,
     body: &str,
 ) -> Refusal {
-    let failure = provider_error(route_id, status, body);
-    Refusal::new(
-        failure
-            .failure_kind
-            .unwrap_or(ProviderRefusal::ProviderFailure),
-        failure.error.unwrap_or_default(),
+    let (kind, detail) = provider_refusal(status, body);
+    // The envelope code is the fleet's, classified from the status by the
+    // catalogue, so `error_code` means the same thing here as everywhere else.
+    // It is coarser than Brama's kind at five statuses (404, 407, 408, 410 and
+    // 504), and both readings are logged side by side rather than one quietly
+    // standing in for the other.
+    let refused = failure::envelope(
+        POINT_PROVIDER_CALL,
+        Code::from_upstream_status(status.as_u16()),
+        IMPACT_MODEL_REQUEST,
+        detail.as_str(),
     )
+    .with_context("route", route_id)
+    .with_context("status", status.as_u16().to_string());
+    warn!(
+        event = "provider_rejected",
+        route = route_id,
+        contract_kind = kind,
+        envelope = %refused.to_json(),
+        "{}",
+        refused.render()
+    );
+    Refusal::new(refusal_class(status, body), format!("{kind}: {detail}"))
 }
 
 /// Classify one refused provider answer: the contract kind clients read, and the
@@ -79,22 +86,27 @@ pub(in crate::providers::adapter) fn provider_refusal(
     status: reqwest::StatusCode,
     body: &str,
 ) -> (&'static str, String) {
-    let detail = serde_json::from_str::<Value>(body)
-        .ok()
-        .and_then(|value| {
-            value
+    let said = body.trim();
+    // The provider's sentence: its error object's message where the body is
+    // JSON carrying one, else the body as it came, and an empty body said to
+    // be one with the status that carried it.
+    let detail = if said.is_empty() {
+        format!("provider returned HTTP {} with an empty body", status.as_u16())
+    } else {
+        match serde_json::from_str::<Value>(said) {
+            Ok(value) => match value
                 .pointer("/error/message")
                 .or_else(|| value.get("message"))
                 .or_else(|| value.get("detail"))
                 .or_else(|| value.get("error"))
                 .and_then(Value::as_str)
-                .map(str::to_string)
-        })
-        .or_else(|| {
-            let detail = body.trim();
-            (!detail.is_empty()).then(|| detail.to_string())
-        })
-        .unwrap_or_else(|| format!("provider returned HTTP {}", status.as_u16()));
+            {
+                Some(message) => message.to_string(),
+                None => said.to_string(),
+            },
+            Err(not_json) => format!("{said} (the body is not JSON: {not_json})"),
+        }
+    };
     (refusal_class(status, body).contract_kind(), detail)
 }
 
@@ -106,16 +118,13 @@ const INSUFFICIENT_QUOTA: &str = "insufficient_quota";
 /// read from the error object's `code` or `type` field.
 const CONTEXT_LENGTH_EXCEEDED: &str = "context_length_exceeded";
 
-/// Whether the error object's `code` or `type` field names `wanted`.
+/// Whether the OpenAI-shape error object's `code` field or its `type` field
+/// names `wanted`.
 fn error_names(body: &str, wanted: &str) -> bool {
-    serde_json::from_str::<Value>(body)
-        .ok()
-        .and_then(|value| value.get("error").cloned())
-        .is_some_and(|error| {
-            ["code", "type"]
-                .iter()
-                .any(|field| error.get(field).and_then(Value::as_str) == Some(wanted))
-        })
+    serde_json::from_str::<Value>(body).is_ok_and(|value| {
+        let states = |pointer: &str| value.pointer(pointer).and_then(Value::as_str) == Some(wanted);
+        states("/error/code") || states("/error/type")
+    })
 }
 
 /// The class of a refused answer, from its status, and for a 429 from the error
@@ -156,30 +165,5 @@ pub(in crate::providers::adapter) fn provider_error(
     status: reqwest::StatusCode,
     body: &str,
 ) -> ModelResponse {
-    let (kind, detail) = provider_refusal(status, body);
-    // The envelope code is the fleet's, classified from the status by the
-    // catalogue, so `error_code` means the same thing here as everywhere else.
-    // It is coarser in Brama's kind at five statuses -- 404 and 410 are
-    // not-found, 407 is auth, 408 and 504 are timeouts -- and both readings are
-    // logged side by side rather than one quietly standing in for the other.
-    let refused = failure::envelope(
-        POINT_PROVIDER_CALL,
-        Code::from_upstream_status(status.as_u16()),
-        IMPACT_MODEL_REQUEST,
-        detail.as_str(),
-    )
-    .with_context("route", route_id)
-    .with_context("status", status.as_u16().to_string());
-    warn!(
-        event = "provider_rejected",
-        route = route_id,
-        contract_kind = kind,
-        envelope = %refused.to_json(),
-        "{}",
-        refused.render()
-    );
-    attempted_failure(
-        route_id,
-        Refusal::new(refusal_class(status, body), format!("{kind}: {detail}")),
-    )
+    attempted_failure(route_id, provider_refused(route_id, status, body))
 }

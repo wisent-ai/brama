@@ -49,7 +49,7 @@ JSON
 <p>Expected shape contains <code>id</code>, <code>object: "chat.completion"</code>, the logical alias in <code>model</code>, one <code>choices</code> entry, and <code>usage</code>. Provider text is intentionally not predicted here.</p>
 <p>Embeddings and moderation follow the same bearer boundary with their exact configured aliases and the schemas documented by <code>/v1/embeddings</code> and <code>/v1/moderations</code>; run them only under separate provider approval.</p>
 <h2 id="failure-path">Failure path<a class="headerlink" href="#failure-path" title="Link to this section">&para;</a></h2>
-<p><code>400 invalid_request</code> means the body, alias, or limit is unsupported. <code>403 forbidden</code> means the bearer is valid but its closed allowlist does not include the logical model. <code>502 provider_failure</code>, <code>503 dependency_unavailable</code>, and <code>504 dependency_timeout</code> must be handled according to <code>retryable</code>; do not replay an ambiguous provider result automatically.</p>
+<p><code>400 invalid_request</code> means the body, alias, or limit is unsupported. <code>403 forbidden</code> means the bearer is valid but its closed allowlist does not include the logical model. <code>502 provider_failure</code> and <code>503 dependency_unavailable</code> must be handled according to <code>retryable</code>; do not replay an ambiguous provider result automatically.</p>
 <h2 id="cleanup">Cleanup<a class="headerlink" href="#cleanup" title="Link to this section">&para;</a></h2>
 <pre><code class="language-bash">rm -f request.json
 unset BRAMA_BEARER
