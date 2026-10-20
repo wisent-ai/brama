@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>brama detect — Brama CLI Docs</title>
-  <meta name="description" content="Detect local hardware and print Brama’s model and backend recommendation.">
+  <meta name="description" content="Detect local hardware: GPU, dedicated memory, RAM, CPU cores, CUDA and Metal.">
   <link rel="canonical" href="https://brama.wisent.com/docs/cli/detect">
   <link rel="stylesheet" href="/docs/assets/site.css">
 </head>
@@ -19,12 +19,13 @@
     <main>
       <p class="source-note">Brama CLI command reference</p>
       <article class="doc"><h1 id="brama-detect"><code>brama detect</code><a class="headerlink" href="#brama-detect" title="Link to this section">&para;</a></h1>
-<p>Detect local hardware capabilities and select the model and backend Brama recommends for that host.</p>
+<p>Detect local hardware capabilities: the GPU and its dedicated memory, RAM, CPU cores, and CUDA and Metal availability.</p>
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
 <pre><code class="language-console">brama detect [--json]</code></pre>
 <p>The only option is <code>--json</code>.</p>
 <h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
 <p>It prints GPU type and name, VRAM, RAM, CPU core count, and CUDA and Metal availability. With <code>--json</code> it prints the same reading as one document under <code>resources</code>. It recommends no model: which model a host serves is decided by the inference routes, not by its memory size. It performs no network request, reads no credential, writes no state, incurs no provider cost, and exits 0.</p>
+<p>The GPU is read from <code>system_profiler SPDisplaysDataType</code> on Apple Silicon and from <code>nvidia-smi</code> elsewhere; each run is announced on stderr when it starts and when it ends. A run that cannot start or exits unsuccessfully names no GPU, and the log says why; VRAM is reported only when <code>nvidia-smi</code> states a number for it.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <p>There is no product-level refusal. Clap rejects unsupported operands or options before detection runs.</p>
 <p><a href="/docs/cli">Back to the complete CLI command tree</a>.</p></article>

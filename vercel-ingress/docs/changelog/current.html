@@ -64,6 +64,11 @@ read as unset, a Wisent Identity declaration with only one of its two halves
 is refused as incomplete naming the missing one, and both Wisent Identity calls
 announce what they wait for (<a href="/docs/configuration/gateway-inputs">Gateway
 inputs</a>).</p>
+<p><code>brama detect</code> announces its <code>system_profiler</code> and
+<code>nvidia-smi</code> runs on stderr like every other child Brama waits on,
+says why a run that exited unsuccessfully named no GPU, and reads the memory
+column by its position after the name instead of counting fields
+(<a href="/docs/cli/detect"><code>detect</code></a>).</p>
 <h2 id="unreleased-tasks">Unreleased: <code>brama tasks</code> replaces <code>collect-task-quality</code><a class="headerlink" href="#unreleased-tasks" title="Link to this section">&para;</a></h2>
 <p>Measuring a named task and reading back what <code>task:&lt;KEY&gt;</code>
 selection uses are one command family: <code>brama tasks measure &lt;KEY&gt;</code>
