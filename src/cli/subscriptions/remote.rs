@@ -96,8 +96,8 @@ fn client() -> Result<reqwest::Client, String> {
 }
 
 /// The gateway's status and JSON body. A body that cannot be read or is not
-/// JSON is refused with what it carried, rather than read as `null`: a 2xx
-/// verdict printed as `null` and a refusal "with no reason" both hid it.
+/// JSON is refused with what it carried, never read as `null`, so neither a
+/// 2xx verdict nor a refusal's reason is hidden behind it.
 async fn answer(
     response: reqwest::Response,
     gateway: &str,
