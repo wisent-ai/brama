@@ -33,9 +33,9 @@ pub(crate) fn state_dir() -> PathBuf {
 }
 
 /// The path the environment variable `name` declares, trimmed when it is
-/// text. A path that is not Unicode is the one used: read with
-/// `std::env::var`, it was taken for unset and the default state directory
-/// or ledger stood in for the operator's.
+/// text. A path that is not Unicode is the one used, never taken for unset,
+/// so the default state directory or ledger never stands in for the
+/// operator's.
 pub(crate) fn declared_path(name: &str) -> Option<PathBuf> {
     let raw = std::env::var_os(name)?;
     let path = match raw.into_string() {
@@ -46,9 +46,9 @@ pub(crate) fn declared_path(name: &str) -> Option<PathBuf> {
 }
 
 /// The user's home: HOME, else the home the user database records, or the
-/// cause when neither names one. Reading `.` as home put retirement markers,
-/// leases and replay records in whatever directory Brama started from, where
-/// the next start under another directory never saw them.
+/// cause when neither names one. Never the working directory, where
+/// retirement markers, leases and replay records would land wherever Brama
+/// started and a start under another directory would not see them.
 pub fn home() -> Result<PathBuf, String> {
     std::env::home_dir().ok_or_else(|| {
         "neither HOME nor the user database names a home directory, so Brama cannot find its state or the Stado binary".to_string()
