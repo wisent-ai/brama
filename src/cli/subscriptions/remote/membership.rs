@@ -8,9 +8,9 @@ use super::{answer, client, refusal};
 
 /// Give one member back: the gateway retires it and forgets its credential.
 ///
-/// This removes the members left over from the borrowing this product used
-/// to allow: a grant taken from a machine that was also using it, which is
-/// how a provider comes to revoke the session that machine was in.
+/// It is for a member whose grant was taken from a machine that is also
+/// using it: a provider revokes the session one of the two is in, so such a
+/// grant is given back rather than shared.
 pub(crate) async fn disown(
     gateway: &str,
     bearer: &str,
