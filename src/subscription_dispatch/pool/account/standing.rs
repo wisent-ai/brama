@@ -12,8 +12,8 @@ use crate::subscription_dispatch::usage::{CredentialState, SubscriptionUsage};
 /// a subscription somebody retired -- because the pool serves neither and no
 /// retry changes either; `last_redeem_error` says which of the two it was.
 /// `unknown` is the honest answer for a subscription whose grant nothing has
-/// ever looked at, which is not the same statement as a working one; that
-/// distinction is exactly what the burnt-codex morning needed and did not have.
+/// ever looked at, which is not the same statement as a working one, and an
+/// operator needs the two told apart.
 pub(in crate::subscription_dispatch::pool) fn state(
     recorded: Option<&SubscriptionUsage>,
     now_ms: i64,
@@ -57,9 +57,9 @@ pub(in crate::subscription_dispatch::pool) fn expires_at(
 /// a redemption just as effectively for as long as it lasts. A failed check is
 /// last, being a verdict about the account rather than about the grant.
 ///
-/// A lapsed block is deliberately not reported. It was true an hour ago and is
-/// not now, and a stale refusal printed beside a `live` grant is what sends an
-/// operator looking for a sign-in that nothing needs.
+/// A lapsed block is deliberately not reported. It no longer holds, and a
+/// stale refusal printed beside a `live` grant sends an operator looking for
+/// a sign-in that nothing needs.
 pub(in crate::subscription_dispatch::pool) fn last_redeem_error(
     recorded: Option<&SubscriptionUsage>,
     now_ms: i64,

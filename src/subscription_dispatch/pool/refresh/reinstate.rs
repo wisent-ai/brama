@@ -6,8 +6,8 @@
 //! offered to dispatch again and still needs a grant of this gateway's own,
 //! which is what the sign-in commands obtain.
 //!
-//! Why it exists: a retirement was permanent. A member given back was
-//! skipped by every later command, whatever the accounts in the vault were
+//! Without it a retirement would be permanent: a member given back would be
+//! skipped by every later command, whatever the accounts in the vault are
 //! worth, and no command could say it is used again.
 
 use serde_json::{json, Value};
