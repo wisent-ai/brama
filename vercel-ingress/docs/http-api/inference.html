@@ -42,16 +42,17 @@ serve is refused before any provider is contacted, with the <code>503</code>
 <li><code>max_tokens</code> reaches the provider only when the request states one, and a
   stated zero is refused with <code>max_tokens must be at least one when it is set</code>.
   An omitted value is omitted on wires that do not require it. On the Anthropic
-  Messages wire, Brama sends the model's known output limit: the embedded
-  model metadata, or, on a subscription route, the provider-advertised limit in
-  the published discovery inventory when the embedded table has no entry. No
-  numeric substitute is invented.
-  A successful listing without a limit leaves the provider's refusal visible.
-  Discovery that has not completed, a failed discovery, or unreadable routing
-  state instead refuses before dispatch, naming the provider/model and the
-  actual discovery cause. A discovery failure is not replaced by
-  <code>max_tokens: Field required</code>. An explicitly supplied
-  <code>max_tokens</code> does not require this limit lookup.</li>
+  Messages wire, Brama sends the model's stated output limit: on a subscription route,
+  the limit the provider's own listing states in the published discovery inventory, and
+  only when the listing states none (or discovery has not completed or failed) the one
+  in the model table this build carries — the provider's statement wins because a
+  provider changes a limit after a build is cut. On a direct route the table is the
+  source. No numeric substitute is invented: a request no source sizes is refused before
+  dispatch with <code>400</code>, naming the provider/model, what the listing said and
+  that the table holds no limit, and asking for <code>max_tokens</code>, instead of the
+  provider's <code>max_tokens: Field required</code>. A table that does not parse, or a
+  row missing a field, refuses sizing with <code>503</code> naming the row. An explicitly
+  supplied <code>max_tokens</code> does not require this limit lookup.</li>
 <li>Subscription output limits are indexed by provider and model when discovery is
   published. A request reads one immutable publication, including its discovery
   outcome; it neither scans the full model inventory nor joins provider discovery.

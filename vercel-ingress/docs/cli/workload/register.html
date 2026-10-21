@@ -24,8 +24,10 @@
 <pre><code class="language-console">brama workload register [--json]</code></pre>
 <h2 id="what-it-reads-and-writes">What it reads and writes<a class="headerlink" href="#what-it-reads-and-writes" title="Link to this section">&para;</a></h2>
 <p>The entitlements router and vault come from <code>ENTITLEMENTS_ROUTER_BIN</code> and <code>SKARBIEC_VAULT_FILE</code> (environment, then the running installation under <code>~/.stado/services/brama/current</code>, then service env). The public key and agents come from the first workload in <code>&lt;config dir&gt;/registry.json</code>; the capabilities are every <code>acquire:&lt;item&gt;#&lt;field&gt;</code> that <code>capability-routes.json</code> maps. For each agent it runs <code>skarbiec-entitlements-router grant issue --replace-capabilities</code>, so the grant holds exactly those capabilities and nothing more. The private key never leaves the installation and no secret is printed. The launcher runs this on every start; a rerun replaces the same grant.</p>
+<h2 id="lifetime">Lifetime<a class="headerlink" href="#lifetime" title="Link to this section">&para;</a></h2>
+<p>Skarbiec requires an acquire grant to state its lifetime and refuses <code>--until-revoked</code> for one. The lifetime is the operator's: <code>BRAMA_RUNTIME_GRANT_SECONDS</code> in the installation's <code>~/.config/brama/service.env</code>, a whole number of seconds above zero, passed as <code>--ttl-seconds</code>. Brama chooses none. The launcher registers on every start, so the period has to cover the longest the gateway runs between starts; the grant ends when it passes, and every redemption after that is refused by Skarbiec until the next registration.</p>
 <h2 id="output">Output<a class="headerlink" href="#output" title="Link to this section">&para;</a></h2>
-<p><code>routes</code>, <code>registry</code>, <code>granting</code> and <code>granted</code> (each agent with <code>workload_bound</code> and <code>expires_at</code>) as <code>key: value</code> lines, or one document with <code>--json</code>. Exit 0 means every agent's grant was issued.</p>
+<p><code>routes</code>, <code>registry</code>, <code>granting</code>, <code>lifetime_seconds</code> and <code>granted</code> (each agent with <code>workload_bound</code> and <code>expires_at</code>) as <code>key: value</code> lines, or one document with <code>--json</code>. Exit 0 means every agent's grant was issued.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
 <p>Each exits 1 before or at the agent that failed:</p>
 <ul>
@@ -34,6 +36,7 @@
 <li><code>no workload registry at &lt;path&gt;</code>; <code>cannot read workload registry &lt;path&gt;: &lt;error&gt;</code>; <code>workload registry &lt;path&gt; is not JSON: &lt;error&gt;</code>; <code>workload registry &lt;path&gt; declares no workload</code></li>
 <li><code>&lt;registry&gt; names no proof key or agent to bind it to</code></li>
 <li><code>no capability routes table found at &lt;paths tried&gt;</code>; <code>&lt;routes&gt; is not JSON</code>; <code>&lt;routes&gt; maps nothing, so there is nothing to grant</code></li>
+<li><code>&lt;home&gt;/.config/brama/service.env declares no BRAMA_RUNTIME_GRANT_SECONDS: Skarbiec requires the runtime grant to state its lifetime and Brama chooses none, so state the grant period in whole seconds</code>; <code>BRAMA_RUNTIME_GRANT_SECONDS must be a whole number of seconds above zero; it is "&lt;value&gt;": &lt;error&gt;</code></li>
 <li><code>proof key is not base64: &lt;error&gt;</code></li>
 <li><code>grant issue for &lt;agent&gt; could not run: &lt;error&gt;</code>; <code>grant issue refused &lt;agent&gt;: &lt;router's own answer&gt;</code></li>
 </ul>

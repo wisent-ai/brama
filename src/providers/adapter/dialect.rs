@@ -8,7 +8,7 @@ pub(in crate::providers::adapter) mod tool_schema;
 
 use serde_json::{json, Map, Value};
 
-use super::registry::{known_max_output_tokens, ProviderDescriptor, WireProtocol};
+use super::registry::{required_output_limit, ProviderDescriptor, WireProtocol};
 use crate::types::ModelRequest;
 use anthropic_messages::anthropic_tooling;
 use openai_chat::{openai_messages, response_format};
@@ -82,14 +82,9 @@ pub(in crate::providers::adapter) fn chat_payload(
                 "messages": self::anthropic_messages::anthropic_messages(request)?,
             });
             // The format requires an answer length: the caller's, else the
-            // model's own limit.
-            let max_tokens = request
-                .max_tokens
-                .map(u64::from)
-                .or_else(|| known_max_output_tokens(descriptor.id, model_id));
-            if let Some(max_tokens) = max_tokens {
-                body["max_tokens"] = json!(max_tokens);
-            }
+            // model's own stated limit, else a refusal naming that.
+            body["max_tokens"] =
+                json!(required_output_limit(descriptor.id, model_id, request.max_tokens)?);
             if let Some(temperature) = request.temperature {
                 body["temperature"] = json!(temperature);
             }

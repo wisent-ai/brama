@@ -21,7 +21,7 @@ use super::dialect::anthropic_messages::{
 use super::dialect::openai_chat::{model_response_from_openai, openai_messages, response_format};
 use super::dialect::tool_schema::normalized_tools_value;
 use super::plan::headers::{limit_readings, with_limits};
-use super::registry::{known_max_output_tokens, valid_model_id, valid_provider_id};
+use super::registry::{required_output_limit, valid_model_id, valid_provider_id};
 use super::{client_unavailable, credential_refused, unconfigured_route, unreadable_conversation};
 use crate::subscription_dispatch::model_catalog::{self, CatalogProtocol};
 use crate::types::{GatewayRefusal, ModelRequest, ModelResponse, ProviderRefusal, Refusal};
@@ -132,13 +132,16 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
                 "messages": messages,
             });
             // The format requires an answer length: the caller's, else the
-            // model's own limit.
-            let max_tokens = request
-                .max_tokens
-                .map(u64::from)
-                .or_else(|| known_max_output_tokens(provider_id, model_id));
-            if let Some(max_tokens) = max_tokens {
-                body["max_tokens"] = json!(max_tokens);
+            // model's own stated limit, else a refusal naming that.
+            match required_output_limit(provider_id, model_id, request.max_tokens) {
+                Ok(max_tokens) => body["max_tokens"] = json!(max_tokens),
+                Err(error) => {
+                    return ModelResponse::refused(
+                        &request.model,
+                        GatewayRefusal::InvalidRequest,
+                        error,
+                    )
+                }
             }
             if let Some(temperature) = request.temperature {
                 body["temperature"] = json!(temperature);

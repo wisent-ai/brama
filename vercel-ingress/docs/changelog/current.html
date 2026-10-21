@@ -24,6 +24,22 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-grant-lifetime">Unreleased: the runtime grant lasts as long as the operator declares<a class="headerlink" href="#unreleased-grant-lifetime" title="Link to this section">&para;</a></h2>
+<p><code>brama workload register</code> stated the largest integer JSON carries as the runtime
+grant's lifetime, a grant that never ends in practice, where Skarbiec requires one that does.
+It now passes <code>BRAMA_RUNTIME_GRANT_SECONDS</code> from the installation's
+<code>service.env</code> and refuses by name when it is missing or not a whole number of
+seconds above zero; the answer carries <code>lifetime_seconds</code>
+(<a href="/docs/cli/workload/register#lifetime">register</a>).</p>
+<h2 id="unreleased-output-limit-precedence">Unreleased: the provider's stated output limit wins over the build's table<a class="headerlink" href="#unreleased-output-limit-precedence" title="Link to this section">&para;</a></h2>
+<p>A subscription request without <code>max_tokens</code> on the Anthropic wire was sized by the
+model table this build embeds whenever the table knew the model, over the limit the
+provider's own listing stated, and the listing's limit only filled models the table did not
+know; a model neither stated was sent unsized for the provider to refuse. The listing now
+wins and the table fills what it left unsaid, in discovery and in sizing; a request nothing
+sizes is refused before dispatch asking for <code>max_tokens</code>. The table is read
+strictly: one that does not parse, or a row missing a field, is refused naming the row
+instead of emptying itself (<a href="/docs/http-api/inference">inference</a>).</p>
 <h2 id="unreleased-standing-measure">Unreleased: every vault child stands in the register, and each waiter hears its own call<a class="headerlink" href="#unreleased-standing-measure" title="Link to this section">&para;</a></h2>
 <p>The account-discovery registration and routing-mark restoration ran their vault children
 outside the standing-call register, so a vault that never answered held them unlisted and

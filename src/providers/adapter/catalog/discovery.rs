@@ -82,7 +82,7 @@ pub async fn discover_models(
     );
     models.sort_by(|left, right| left.route_id.cmp(&right.route_id));
     models.dedup_by(|left, right| left.route_id == right.route_id);
-    apply_omp_model_metadata(provider_id, &mut models);
+    apply_omp_model_metadata(provider_id, &mut models)?;
     if models.is_empty() {
         let cause = match listing {
             Err(cause) => format!(": {cause}"),
