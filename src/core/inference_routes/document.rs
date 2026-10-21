@@ -53,7 +53,7 @@ pub(super) struct Registry {
 
 /// The only registry schema version Brama reads; a document that never wrote
 /// the member down is such a document, so writers state it explicitly.
-pub(super) const SCHEMA_VERSION: u32 = 1; // https://brama.wisent.com/docs/configuration/route-registry
+pub(crate) const SCHEMA_VERSION: u32 = 1; // https://brama.wisent.com/docs/configuration/route-registry
 
 static ROUTE_WRITE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 

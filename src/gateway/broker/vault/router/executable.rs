@@ -38,10 +38,10 @@ pub(crate) fn entitlements_router_bin() -> Result<String, String> {
     if let Some(found) = VAULT_PROGRAM_NAMES.iter().copied().find_map(on_path) {
         return Ok(found);
     }
-    let installed = match std::env::var_os("HOME").filter(|home| !home.is_empty()) {
-        Some(home) => {
+    let installed = match crate::journal::home() {
+        Ok(home) => {
             use std::os::unix::fs::PermissionsExt;
-            let installed = std::path::Path::new(&home).join(VAULT_HOME_RELATIVE);
+            let installed = home.join(VAULT_HOME_RELATIVE);
             match std::fs::metadata(&installed) {
                 Ok(info) if info.is_file() && executable_mode(info.permissions().mode()) => {
                     return Ok(installed.display().to_string());
@@ -53,7 +53,7 @@ pub(crate) fn entitlements_router_bin() -> Result<String, String> {
                 Err(error) => format!("{} cannot be examined: {error}", installed.display()),
             }
         }
-        None => format!("HOME is not set, so ~/{VAULT_HOME_RELATIVE} cannot be looked at"),
+        Err(cause) => format!("{cause}, so ~/{VAULT_HOME_RELATIVE} cannot be looked at"),
     };
     Err(format!(
         "resolve vault executable: neither {ENTITLEMENTS_ROUTER_BIN_ENV} nor {SKARBIEC_BIN_ENV} \

@@ -45,14 +45,22 @@ pub(crate) fn declared_path(name: &str) -> Option<PathBuf> {
     (!path.as_os_str().is_empty()).then_some(path)
 }
 
-/// The user's home: HOME, else the home the user database records. With
-/// neither, Brama stops with the cause; reading `.` as home put retirement
-/// markers, leases and replay records in whatever directory Brama started
-/// from, where the next start under another directory never saw them.
+/// The user's home: HOME, else the home the user database records, or the
+/// cause when neither names one. Reading `.` as home put retirement markers,
+/// leases and replay records in whatever directory Brama started from, where
+/// the next start under another directory never saw them.
+pub fn home() -> Result<PathBuf, String> {
+    std::env::home_dir().ok_or_else(|| {
+        "neither HOME nor the user database names a home directory, so Brama cannot find its state or the Stado binary".to_string()
+    })
+}
+
+/// [`home`] where Brama cannot run without it: it stops with the cause.
 pub fn home_dir() -> PathBuf {
-    std::env::home_dir().expect(
-        "neither HOME nor the user database names a home directory, so Brama cannot find its state or the Stado binary",
-    )
+    match home() {
+        Ok(home) => home,
+        Err(cause) => panic!("{cause}"),
+    }
 }
 
 fn journal_path() -> PathBuf {

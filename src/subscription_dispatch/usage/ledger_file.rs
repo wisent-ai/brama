@@ -22,16 +22,17 @@ use super::{now_ms, CheckSource, Ledger, LedgerState};
 
 const USAGE_FILE_ENV: &str = "BRAMA_SUBSCRIPTION_USAGE_FILE";
 
-fn usage_path() -> Option<PathBuf> {
+fn usage_path() -> Result<PathBuf, String> {
     if let Some(configured) = crate::journal::declared_path(USAGE_FILE_ENV) {
-        return Some(configured);
+        return Ok(configured);
     }
-    let home = crate::journal::declared_path("HOME")?;
-    Some(
-        home.join(".config")
-            .join("brama")
-            .join("subscription-usage.json"),
-    )
+    let home = crate::journal::home().map_err(|cause| {
+        format!("cannot resolve the subscription usage ledger path: {USAGE_FILE_ENV} is not set and {cause}")
+    })?;
+    Ok(home
+        .join(".config")
+        .join("brama")
+        .join("subscription-usage.json"))
 }
 
 /// Read the ledger once, retaining any failure beside the in-memory state.
@@ -40,15 +41,15 @@ fn usage_path() -> Option<PathBuf> {
 /// decoded is different: serving can continue from memory, but writing an empty
 /// replacement would destroy the only copy of its history.
 pub(super) fn load() -> LedgerState {
-    let Some(path) = usage_path() else {
-        return LedgerState {
-            ledger: Ledger::default(),
-            storage_error: Some(
-                "cannot resolve the subscription usage ledger path because HOME is unavailable"
-                    .to_string(),
-            ),
-            persist_blocked: true,
-        };
+    let path = match usage_path() {
+        Ok(path) => path,
+        Err(cause) => {
+            return LedgerState {
+                ledger: Ledger::default(),
+                storage_error: Some(cause),
+                persist_blocked: true,
+            }
+        }
     };
     let text = match fs::read_to_string(&path) {
         Ok(text) => text,
@@ -107,9 +108,7 @@ pub(super) fn load() -> LedgerState {
 /// Write through a private temporary file in the same directory and rename, so
 /// a reader never sees a half-written ledger and a crash never truncates one.
 pub(super) fn persist(ledger: &Ledger) -> Result<(), String> {
-    let path = usage_path().ok_or_else(|| {
-        "cannot resolve the subscription usage ledger path because HOME is unavailable".to_string()
-    })?;
+    let path = usage_path()?;
     let parent = path.parent().ok_or_else(|| {
         format!(
             "subscription usage ledger `{}` has no parent directory",

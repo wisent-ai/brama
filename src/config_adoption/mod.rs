@@ -29,8 +29,8 @@ pub use preview::{
     AdoptionSubscriptionIdentity,
 };
 
-/// The registry schema this build reads and writes.
-const SCHEMA_VERSION: u32 = 1;
+/// The registry schema this build reads and writes: the registry's own.
+use inference_routes::SCHEMA_VERSION;
 
 /// What adoption decided about one alias.
 ///
@@ -57,12 +57,9 @@ pub fn default_destination() -> Result<std::path::PathBuf, String> {
     if let Some(path) = inference_routes::configured_path() {
         return Ok(path);
     }
-    let home = std::env::var_os("HOME")
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| {
-            "HOME is required when BRAMA_INFERENCE_ROUTES_FILE is not set".to_string()
-        })?;
-    Ok(std::path::PathBuf::from(home)
+    let home = crate::journal::home()
+        .map_err(|cause| format!("BRAMA_INFERENCE_ROUTES_FILE is not set and {cause}"))?;
+    Ok(home
         .join(".config")
         .join("brama")
         .join("inference-routes.json"))

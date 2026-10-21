@@ -24,6 +24,15 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-one-home">Unreleased: one home for every path Brama derives from it<a class="headerlink" href="#unreleased-one-home" title="Link to this section">&para;</a></h2>
+<p>The state directory, the usage ledger, the routes registry Brama adopts into, the Stado
+resolver state readiness reads, the installed vault executable, and the installation
+<code>register</code> reads each found the home directory their own way: some took
+<code>HOME</code> only, one refused a host whose <code>HOME</code> was unset although the user
+database names a home. All of them now take it from one lookup — <code>HOME</code>, else the
+user database's home — and with neither, the refusal names the declaration that would have
+stood in for it where one exists (<code>BRAMA_SUBSCRIPTION_USAGE_FILE</code>,
+<code>BRAMA_INFERENCE_ROUTES_FILE</code>, <code>STADO_RESOLVER_STATE_FILE</code>) and the cause.</p>
 <h2 id="unreleased-docs-one-navigation">Unreleased: the pages say the pool is shared, and wear one navigation<a class="headerlink" href="#unreleased-docs-one-navigation" title="Link to this section">&para;</a></h2>
 <p>The subscription concept, the provider pages, discovery, the integration contracts, the
 runbook and the selector example described subscriptions as delegated to one agent. They

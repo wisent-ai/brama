@@ -105,16 +105,13 @@ pub(in crate::core::server) fn resolver_state_file() -> Result<PathBuf, String> 
     {
         return Ok(PathBuf::from(path));
     }
-    match std::env::var_os("HOME").filter(|home| !home.is_empty()) {
-        Some(home) => Ok(PathBuf::from(home)
-            .join(".stado")
-            .join("resolver-state.json")),
-        None => Err(
-            "neither STADO_RESOLVER_STATE_FILE nor HOME names where this host's \
-                     Stado resolver keeps its state"
-                .to_string(),
-        ),
-    }
+    let home = crate::journal::home().map_err(|cause| {
+        format!(
+            "STADO_RESOLVER_STATE_FILE is not set and {cause}, so nothing names where this \
+             host's Stado resolver keeps its state"
+        )
+    })?;
+    Ok(home.join(".stado").join("resolver-state.json"))
 }
 
 /// One JSON document of the resolver's: `None` when the file is absent, an

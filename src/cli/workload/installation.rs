@@ -6,13 +6,9 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-/// The home directory; an unset HOME is refused, since read as the empty path
-/// every service file would be looked for under the working directory.
-pub(crate) fn home() -> Result<PathBuf, String> {
-    std::env::var("HOME").map(PathBuf::from).map_err(|error| {
-        format!("HOME cannot be read, so the Brama installation cannot be found: {error}")
-    })
-}
+/// The home directory, from the one lookup every Brama path uses: HOME, else
+/// the user database's home, else the cause.
+pub(crate) use brama::journal::home;
 
 /// `~/.config/brama/service.env` as `NAME=value` settings, quotes removed.
 pub(crate) fn service_settings(home: &Path) -> Result<BTreeMap<String, String>, String> {

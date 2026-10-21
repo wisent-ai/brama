@@ -23,6 +23,7 @@ use std::path::PathBuf;
 
 pub use categories::{Categories, Category};
 pub use document::{snapshot, validate_document};
+pub(crate) use document::SCHEMA_VERSION;
 pub use resolution::{base_url, resolve, resolved, validate};
 pub use writing::editing::{delete_route, migrate, update_route};
 pub use writing::importing::{
