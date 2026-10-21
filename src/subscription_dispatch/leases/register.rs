@@ -60,9 +60,9 @@ struct Register {
 }
 
 /// `$BRAMA_SUBSCRIPTION_LEASES_FILE`, or `leases.json` in Brama's state
-/// directory. A declaration that is not Unicode is refused by name: read as
-/// unset, leases were taken in another register than the one the operator
-/// named, and two gateways could lease the same member.
+/// directory. A declaration that is not Unicode is refused by name, so leases
+/// are never taken in another register than the one the operator named and
+/// two gateways never lease the same member.
 fn path() -> Result<PathBuf, String> {
     Ok(
         match crate::environment::declared_setting("BRAMA_SUBSCRIPTION_LEASES_FILE")? {

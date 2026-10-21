@@ -45,8 +45,8 @@ const REQUEST_USES: NonZeroU64 = NonZeroU64::MIN;
 
 /// The `grant capability` request: the agent, purpose, resource and target,
 /// the declared lifetime and the single use. Skarbiec requires both
-/// `--ttl` and `--max-uses`; without them every request was refused at
-/// issuance and no model call reached a provider.
+/// `--ttl` and `--max-uses`, and refuses an issue without them before any
+/// model call reaches a provider.
 fn issue_arguments(purpose: &str, resource: &str) -> Result<Vec<String>, String> {
     let lifetime = crate::types::declared_age(CAPABILITY_LIFETIME_ENV)?.ok_or_else(|| {
         format!(
