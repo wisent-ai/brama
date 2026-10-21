@@ -6,12 +6,17 @@
 //!
 //! The candidate's surface is read from this binary's own clap declaration.
 //! A published revision's surface is read from that revision's `src/main.rs`
-//! through `git show`, by scanning the enum the `#[derive(Parser)]` struct's
-//! `#[command(subcommand)]` field names; `surface` refuses when the scan of
-//! the working tree disagrees with the binary, so the scan stays honest.
+//! through `git show`, parsed as Rust (syn): the struct deriving `Parser`,
+//! its `#[command(subcommand)]` field's type, and that enum's variants with
+//! their `#[command(...)]` attributes, read the way clap's derive reads them.
+//! `surface` refuses when the parse of the working tree disagrees with the
+//! binary, so the reading stays honest.
 
 use std::path::Path;
 use std::process::Command;
+
+use syn::punctuated::Punctuated;
+use syn::{Attribute, Fields, Item, Token};
 
 /// The meta-command every clap binary prints; framework, not product.
 const FRAMEWORK_COMMAND: &str = "help";
@@ -29,21 +34,24 @@ pub(super) fn advertised(command: &clap::Command) -> Vec<String> {
     names
 }
 
-/// `git show REFERENCE:PATH` in `root`.
+/// `git show REFERENCE:PATH` in `root`, announced while it runs. A blob that
+/// is not UTF-8 is refused by name: read lossily it would be parsed as text
+/// it is not.
 pub(super) fn git_show(root: &Path, reference: &str, path: &str) -> Result<String, String> {
-    let output = Command::new("git")
+    let mut command = Command::new("git");
+    command
         .arg("-C")
         .arg(root)
-        .args(["show", &format!("{reference}:{path}")])
-        .output()
-        .map_err(|error| format!("git show: {error}"))?;
+        .args(["show", &format!("{reference}:{path}")]);
+    let output = stado_wait::output(&mut command).map_err(|error| format!("git show: {error}"))?;
     if !output.status.success() {
         return Err(format!(
             "{reference}:{path} is not readable here: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         ));
     }
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    String::from_utf8(output.stdout)
+        .map_err(|error| format!("{reference}:{path} is not UTF-8 text: {error}"))
 }
 
 /// The `[package] version` a manifest text declares.
@@ -61,14 +69,14 @@ pub(super) fn manifest_version(text: &str) -> Result<String, String> {
         .ok_or_else(|| format!("{MANIFEST} declares no package version"))
 }
 
-/// A revision's scanned surface and declared version.
+/// A revision's declared surface and version.
 pub(super) fn of_revision(root: &Path, reference: &str) -> Result<(Vec<String>, String), String> {
     let surface = declared(&git_show(root, reference, MAIN)?)?;
     let version = manifest_version(&git_show(root, reference, MANIFEST)?)?;
     Ok((surface, version))
 }
 
-/// The working tree's scanned surface.
+/// The working tree's declared surface.
 pub(super) fn of_tree(root: &Path) -> Result<Vec<String>, String> {
     let path = root.join(MAIN);
     declared(
@@ -80,134 +88,173 @@ pub(super) fn of_tree(root: &Path) -> Result<Vec<String>, String> {
 /// an uppercase one, and where an uppercase run meets an uppercase letter
 /// followed by a lowercase one.
 fn kebab(variant: &str) -> String {
-    let characters: Vec<char> = variant.chars().collect();
     let mut rendered = String::new();
-    for (index, character) in characters.iter().enumerate() {
-        let previous = index.checked_sub(1).map(|at| characters[at]);
-        let next = characters.get(index + 1);
+    let mut previous: Option<char> = None;
+    let mut characters = variant.chars().peekable();
+    while let Some(character) = characters.next() {
+        let next = characters.peek().copied();
         let boundary = character.is_ascii_uppercase()
             && previous.is_some_and(|before| {
                 before.is_ascii_lowercase()
                     || before.is_ascii_digit()
-                    || (before.is_ascii_uppercase() && next.is_some_and(char::is_ascii_lowercase))
+                    || (before.is_ascii_uppercase()
+                        && next.is_some_and(|after| after.is_ascii_lowercase()))
             });
         if boundary {
             rendered.push('-');
         }
-        rendered.push(if *character == '_' {
+        rendered.push(if character == '_' {
             '-'
         } else {
             character.to_ascii_lowercase()
         });
+        previous = Some(character);
     }
     rendered
 }
 
-/// The type of the `#[command(subcommand)]` field after `#[derive(... Parser ...)]`.
-fn subcommand_enum(source: &str) -> Result<String, String> {
-    let parser = source
-        .match_indices("#[derive(")
-        .find(|(at, _)| {
-            source[*at..]
-                .split(')')
-                .next()
-                .is_some_and(|derive| derive.contains("Parser"))
-        })
-        .map(|(at, _)| at)
-        .ok_or(format!("no #[derive(Parser)] entry point in {MAIN}"))?;
-    let after = &source[parser..];
-    let field = after
-        .find("(subcommand)]")
-        .map(|at| &after[at + "(subcommand)]".len()..])
-        .ok_or(format!(
-            "the Parser struct in {MAIN} declares no subcommand field"
-        ))?;
-    let declaration = field
-        .lines()
-        .map(str::trim)
-        .find(|line| !line.is_empty() && !line.starts_with("//"))
-        .unwrap_or("");
-    let kind = declaration
-        .split_once(':')
-        .map(|(_, kind)| kind)
-        .unwrap_or("");
-    let kind = kind
-        .trim()
-        .trim_start_matches("Option")
-        .trim_start_matches('<')
-        .trim();
-    let name: String = kind
-        .chars()
-        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-        .collect();
-    if name.is_empty() {
-        return Err(format!("the subcommand field in {MAIN} names no type"));
+/// What clap's derive reads from the `#[command(...)]` attributes on one
+/// item: these keys are clap's attribute grammar, not a classification of
+/// ours.
+#[derive(Default)]
+struct CommandAttributes {
+    subcommand: bool,
+    hidden: bool,
+    skipped: bool,
+    name: Option<String>,
+    rename_all: Option<String>,
+}
+
+fn command_attributes(attributes: &[Attribute]) -> Result<CommandAttributes, String> {
+    let mut read = CommandAttributes::default();
+    for attribute in attributes
+        .iter()
+        .filter(|attribute| attribute.path().is_ident("command"))
+    {
+        attribute
+            .parse_nested_meta(|meta| {
+                if meta.path.is_ident("subcommand") {
+                    read.subcommand = true;
+                } else if meta.path.is_ident("hide") {
+                    read.hidden = meta.value()?.parse::<syn::LitBool>()?.value;
+                } else if meta.path.is_ident("skip") {
+                    read.skipped = true;
+                    if meta.input.peek(Token![=]) {
+                        meta.value()?.parse::<syn::Expr>()?;
+                    }
+                } else if meta.path.is_ident("name") {
+                    read.name = Some(meta.value()?.parse::<syn::LitStr>()?.value());
+                } else if meta.path.is_ident("rename_all") {
+                    read.rename_all = Some(meta.value()?.parse::<syn::LitStr>()?.value());
+                } else if meta.input.peek(Token![=]) {
+                    meta.value()?.parse::<syn::Expr>()?;
+                } else if meta.input.peek(syn::token::Paren) {
+                    let content;
+                    syn::parenthesized!(content in meta.input);
+                    content.step(|cursor| {
+                        let mut rest = *cursor;
+                        while let Some((_, next)) = rest.token_tree() {
+                            rest = next;
+                        }
+                        Ok(((), rest))
+                    })?;
+                }
+                Ok(())
+            })
+            .map_err(|error| format!("a #[command] attribute in {MAIN} does not parse: {error}"))?;
     }
-    Ok(name)
+    Ok(read)
+}
+
+/// Whether `attributes` derive the trait `name`.
+fn derives(attributes: &[Attribute], name: &str) -> Result<bool, String> {
+    for attribute in attributes
+        .iter()
+        .filter(|attribute| attribute.path().is_ident("derive"))
+    {
+        let paths = attribute
+            .parse_args_with(Punctuated::<syn::Path, Token![,]>::parse_terminated)
+            .map_err(|error| format!("a #[derive] in {MAIN} does not parse: {error}"))?;
+        if paths
+            .iter()
+            .any(|path| path.segments.last().is_some_and(|segment| segment.ident == name))
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// The type a field names: `Option<Commands>` and `Commands` both name
+/// `Commands`.
+fn field_type_name(kind: &syn::Type) -> Option<String> {
+    let syn::Type::Path(path) = kind else {
+        return None;
+    };
+    let last = path.path.segments.last()?;
+    if last.ident == "Option" {
+        if let syn::PathArguments::AngleBracketed(arguments) = &last.arguments {
+            return arguments.args.iter().find_map(|argument| match argument {
+                syn::GenericArgument::Type(inner) => field_type_name(inner),
+                _ => None,
+            });
+        }
+    }
+    Some(last.ident.to_string())
 }
 
 /// Every command the clap declaration in a `src/main.rs` text advertises.
 pub(super) fn declared(source: &str) -> Result<Vec<String>, String> {
-    let name = subcommand_enum(source)?;
-    let opener = format!("enum {name} {{");
-    let start = source
-        .find(&opener)
-        .ok_or(format!("no `enum {name}` in {MAIN}"))?;
-    let attached: Vec<&str> = source[..start]
-        .lines()
-        .rev()
-        .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with("//"))
-        .take_while(|line| line.starts_with("#["))
-        .collect();
-    if attached
-        .iter()
-        .any(|line| line.contains("rename_all") && !line.contains("kebab-case"))
-    {
-        return Err(format!(
-            "enum {name} overrides rename_all; only clap's default kebab-case is rendered"
-        ));
-    }
-    let body_start = start + opener.len();
-    let mut depth = 1usize;
-    let body_end = source[body_start..]
-        .char_indices()
-        .find_map(|(at, character)| {
-            match character {
-                '{' => depth += 1,
-                '}' => depth -= 1,
-                _ => {}
-            }
-            (depth == 0).then_some(body_start + at)
-        })
-        .ok_or(format!("`enum {name}` is never closed in {MAIN}"))?;
-    let mut names = std::collections::BTreeSet::new();
-    let mut attributes = String::new();
-    let mut nesting = 0i64;
-    for line in source[body_start..body_end].lines().map(str::trim) {
-        if nesting == 0 && !line.is_empty() && !line.starts_with("//") {
-            if line.starts_with("#[") {
-                attributes.push_str(line);
-                attributes.push(' ');
-            } else if line.starts_with(|c: char| c.is_ascii_uppercase()) {
-                let variant: String = line
-                    .chars()
-                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-                    .collect();
-                let hidden = attributes.contains("hide = true") || attributes.contains("skip");
-                if !hidden {
-                    let named = attributes
-                        .split_once("name = \"")
-                        .and_then(|(_, rest)| rest.split('"').next())
-                        .map(str::to_string);
-                    names.insert(named.unwrap_or_else(|| kebab(&variant)));
-                }
-                attributes.clear();
+    let file = syn::parse_file(source)
+        .map_err(|error| format!("{MAIN} does not parse as Rust: {error}"))?;
+    let mut subcommand_type = None;
+    for item in &file.items {
+        let Item::Struct(parser) = item else {
+            continue;
+        };
+        if !derives(&parser.attrs, "Parser")? {
+            continue;
+        }
+        let Fields::Named(fields) = &parser.fields else {
+            return Err(format!("the Parser struct in {MAIN} has no named fields"));
+        };
+        for field in &fields.named {
+            if command_attributes(&field.attrs)?.subcommand {
+                subcommand_type = Some(
+                    field_type_name(&field.ty)
+                        .ok_or_else(|| format!("the subcommand field in {MAIN} names no type"))?,
+                );
             }
         }
-        let opens = line.matches(['{', '(', '[']).count() as i64;
-        let closes = line.matches(['}', ')', ']']).count() as i64;
-        nesting += opens - closes;
+    }
+    let name = subcommand_type.ok_or_else(|| {
+        format!("no #[derive(Parser)] struct with a #[command(subcommand)] field in {MAIN}")
+    })?;
+    let commands = file
+        .items
+        .iter()
+        .find_map(|item| match item {
+            Item::Enum(declared) if declared.ident == name => Some(declared),
+            _ => None,
+        })
+        .ok_or_else(|| format!("no `enum {name}` in {MAIN}"))?;
+    if let Some(rule) = command_attributes(&commands.attrs)?.rename_all {
+        if rule != "kebab-case" {
+            return Err(format!(
+                "enum {name} renames its commands {rule}; only clap's default kebab-case is rendered"
+            ));
+        }
+    }
+    let mut names = std::collections::BTreeSet::new();
+    for variant in &commands.variants {
+        let read = command_attributes(&variant.attrs)?;
+        if read.hidden || read.skipped {
+            continue;
+        }
+        names.insert(match read.name {
+            Some(named) => named,
+            None => kebab(&variant.ident.to_string()),
+        });
     }
     names.remove(FRAMEWORK_COMMAND);
     if names.is_empty() {

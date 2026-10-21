@@ -67,6 +67,8 @@ hex = "0.4"
 url = "2"
 chrono = { version = "0.4", features = ["serde"] }
 subtle = "2.6"
+# The version gate reads a published revision's clap declaration as Rust.
+syn = { version = "2", features = ["full", "parsing"] }
 uuid = { version = "1", features = ["serde", "v4"] }
 wisent-errors = { git = "https://github.com/wisent-ai/wisent-errors", rev = "8947ad21ac852750b118b417f9dfe68f144ad295" }
 wisent-onboarding-client = { git = "https://github.com/wisent-ai/echo-web", rev = "22437b2e8c29291f3db6c4d605d20e7db3bdb2e1", package = "wisent-onboarding-client" }

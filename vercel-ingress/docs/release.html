@@ -72,9 +72,12 @@ all five identities is not releasable.</p>
 <li>documented limits, retry, cost, compatibility, and recovery behavior.</li>
 </ul>
 <p><code>brama version-gate surface</code> prints the mechanically visible part of this contract: the
-command list a caller invokes by name, read from the binary's own declaration and refused when a
-scan of <code>src/main.rs</code> disagrees (the scan is what reads a published revision's surface
-through <code>git show</code>). <code>released-surface.json</code> is the immutable
+command list a caller invokes by name, read from the binary's own declaration and refused when
+<code>src/main.rs</code>, parsed as Rust (the struct deriving <code>Parser</code>, its
+<code>#[command(subcommand)]</code> enum and each variant's <code>#[command(name, hide, skip)]</code>),
+disagrees; that parse is what reads a published revision's surface through
+<code>git show</code>, and a revision whose declaration does not parse is refused with the
+parser's reason. <code>released-surface.json</code> is the immutable
 published baseline, never a candidate regenerated from the same working tree.
 <code>brama version-gate contract</code> asks the AutoVersion rule, through Brama's own port of it,
 what the candidate surface requires and compares that with the version <code>Cargo.toml</code>
