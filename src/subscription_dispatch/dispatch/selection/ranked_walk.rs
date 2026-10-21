@@ -133,9 +133,8 @@ impl RankedWalk {
 /// The members of the routing pool whose provider had no candidate route, each
 /// with why it was not one: its recorded status, its retirement, the ledger's
 /// standing refusal, the last model discovery's refusal, or a discovery that
-/// published no model for it. An exhausted walk used to name only the
-/// providers it walked, so a pool holding accounts of another provider read
-/// as if those accounts had never existed.
+/// published no model for it, so a pool holding accounts of a provider the
+/// walk never reached never reads as if those accounts did not exist.
 fn unreached(agent_id: &str, walked: &[String]) -> Vec<String> {
     let entries = match crate::gateway::broker::routing_subscriptions(agent_id) {
         Ok(entries) => entries,

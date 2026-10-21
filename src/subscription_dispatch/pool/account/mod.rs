@@ -73,7 +73,8 @@ fn automatic_sign_in_view(
     }) {
         Ok(read) => read,
         // Whether it applies and how it last ended both live in the journal;
-        // unreadable, the view says so instead of reporting a state.
+        // unreadable, the view's state is `unknown` and `journal_error` names
+        // why, which Brama Desktop and `brama subscription list` show.
         Err(cause) => return json!({ "state": "unknown", "journal_error": cause }),
     };
     let applies = crate::subscription_dispatch::sign_in::weles_provider(&entry.provider).is_ok()
@@ -98,11 +99,10 @@ fn automatic_sign_in_view(
 /// Whether this member's provider asks for a second factor, and whether the
 /// login it signs in through holds the secret that answers one.
 ///
-/// Asked of an account, "does it need two-factor authentication" had no
-/// answer anywhere: the vault records whether a seed is stored and the
-/// provider's requirement is learned only by trying to sign in, so a pool
-/// could hold accounts nobody could classify. This states both halves and
-/// says `unknown` where nothing was observed, rather than guessing from the
+/// Whether an account needs two-factor authentication has two halves: the
+/// vault records whether a seed is stored, and the provider's requirement is
+/// learned only by trying to sign in. This states both, and leaves
+/// `required` null where nothing was observed rather than guessing from the
 /// absence of a seed -- an account with no seed and no attempt is not an
 /// account without a second factor.
 ///
@@ -127,14 +127,20 @@ fn second_factor_view(entry: &SubscriptionEntry) -> Value {
         .or_else(|| {
             failure
                 .as_ref()
-                .filter(|failure| failure.code() == "google_2fa_material_missing")
-                .map(|_| true)
+                .and_then(|failure| {
+                    (failure.code() == "google_2fa_material_missing").then_some(true)
+                })
         });
     // A refusal carries the whole browser trajectory behind it, which is
     // evidence for reading a failed run and noise in a one-line answer: its
     // first line says what the provider asked for, and it is quoted whole.
-    let sentence =
-        |detail: String| -> String { detail.lines().next().unwrap_or_default().to_owned() };
+    let sentence = |detail: String| -> String {
+        let first = detail.lines().next().map(str::to_owned);
+        match first {
+            Some(first) => first,
+            None => detail,
+        }
+    };
     // The login a sign-in resolved is the one that would answer the
     // challenge; an item that declares none still signs in through whatever
     // Weles resolved for it, and the seed lives on that row.
@@ -144,17 +150,23 @@ fn second_factor_view(entry: &SubscriptionEntry) -> Value {
             .and_then(|attempt| attempt.get("login_item"))
             .and_then(Value::as_str)
     });
+    let evidence = match (required, failure.as_ref(), method) {
+        (Some(true), Some(failure), _) => Some(sentence(failure.detail())),
+        (Some(true), None, Some(method)) => Some(format!(
+            "Weles observed a second-factor challenge; method: {method}"
+        )),
+        (Some(true), None, None) => {
+            Some("Weles observed a second-factor challenge and reported no method".to_owned())
+        }
+        (Some(false), _, _) => Some(
+            "Weles observed no second-factor challenge in this sign-in; this does not mean the account has 2FA disabled".to_owned(),
+        ),
+        (None, _, _) => None,
+    };
     json!({
         "required": required,
         "method": method,
-        "evidence": match required {
-            Some(true) => Some(failure.as_ref().map(|failure| sentence(failure.detail()))
-                .unwrap_or_else(|| format!("Weles observed a second-factor challenge; method: {}", method.unwrap_or("unreported")))),
-            Some(false) => Some(
-                "Weles observed no second-factor challenge in this sign-in; this does not mean the account has 2FA disabled".to_owned()
-            ),
-            None => None,
-        },
+        "evidence": evidence,
         "login_item": login,
     })
 }
