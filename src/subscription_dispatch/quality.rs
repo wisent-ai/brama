@@ -20,8 +20,8 @@ pub struct TaskQualityOptions {
 }
 
 /// One model's check, kept typed until it is printed: the journal and the
-/// best-model choice read these fields, not the printed row read back with
-/// an empty model or a zero score standing in for one it did not find.
+/// best-model choice read these fields, never a printed row read back with a
+/// stand-in model or score.
 struct Check {
     model: String,
     provider: Option<String>,

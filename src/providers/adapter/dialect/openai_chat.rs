@@ -47,8 +47,7 @@ pub(in crate::providers::adapter) fn model_response_from_openai(
     elapsed_ms: f64,
 ) -> ModelResponse {
     // An answer without a first choice's message is a failure naming what
-    // came back: read as an empty message, it passed on as a successful
-    // answer that said nothing.
+    // came back, never a successful answer that says nothing.
     let Some(choice) = body.pointer("/choices/0/message").cloned() else {
         return attempted_failure(
             route_id,

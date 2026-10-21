@@ -45,8 +45,8 @@ fn model_field(row: &Value) -> Result<String, String> {
     }
 }
 
-/// When the check ran. A time that is absent or not RFC 3339 refuses: read
-/// as the epoch, a newer score of the same model lost to an older one.
+/// When the check ran. A time that is absent or not RFC 3339 refuses, so a
+/// newer score of the same model never loses to an older one.
 fn checked_at_field(row: &Value) -> Result<i64, String> {
     let Some(value) = string_field(row, "checked_at") else {
         return Err("it records no checked_at time".to_string());

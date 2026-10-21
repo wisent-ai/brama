@@ -60,10 +60,10 @@ pub(super) fn jeden(view: CatalogView, catalog_revision: Option<String>, degrade
             let context_window = registry.and_then(|model| model.context_window);
             let max_output_tokens = registry.and_then(|model| model.max_output_tokens);
             // Tools, reasoning and price are what the registry's source
-            // stated, or `null`: an id with no registry metadata, or a source
-            // that publishes no price or capability, was answered as free,
-            // without tools and without reasoning, which a budget, a filter
-            // or a console then read as facts about the model.
+            // stated, or `null` for an id with no registry metadata or a
+            // source that publishes no price or capability, so no budget,
+            // filter or console reads free, no tools or no reasoning as facts
+            // about the model.
             let tools = registry.and_then(|model| model.tools);
             let reasoning = registry.and_then(|model| model.reasoning);
             let price = registry.map(|model| {

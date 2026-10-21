@@ -158,9 +158,8 @@ pub(in crate::providers::adapter) fn model_response_from_anthropic(
     elapsed_ms: f64,
     answer_tool: Option<&ResponseSchema>,
 ) -> ModelResponse {
-    // An answer without a content list is a failure naming what came back:
-    // read as no blocks, it passed on as a successful answer that said
-    // nothing.
+    // An answer without a content list is a failure naming what came back,
+    // never a successful answer that says nothing.
     let Some(blocks) = body.get("content").and_then(Value::as_array) else {
         return attempted_failure(
             route_id,

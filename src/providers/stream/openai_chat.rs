@@ -52,8 +52,8 @@ pub(super) fn openai_chat_items(
         return (items, true);
     }
     // Usage is passed on only when the provider stated both counts, as on
-    // the Responses wire; a missing count read as 0 was a measurement nobody
-    // made, and a chunk carrying `usage: null` states none.
+    // the Responses wire; a missing count is no measurement of zero, and a
+    // chunk carrying `usage: null` states none.
     match (
         json_u32(body.pointer("/usage/prompt_tokens"), "usage.prompt_tokens"),
         json_u32(body.pointer("/usage/completion_tokens"), "usage.completion_tokens"),
@@ -86,9 +86,9 @@ pub(super) fn openai_chat_items(
     }
     if let Some(calls) = delta.get("tool_calls").and_then(Value::as_array) {
         for call in calls {
-            // A fragment without an index was appended to call 0, and a first
-            // fragment without an id or name started a call nobody could
-            // answer or run; either ends the stream naming what it lacked.
+            // A fragment without an index, or a first fragment without an id
+            // or name, ends the stream naming what it lacked, so no call is
+            // appended to the wrong one or started that nobody could run.
             let index = match tool_call_index(CHUNK_EVENT, call.get("index")) {
                 Ok(index) => index,
                 Err(cause) => {

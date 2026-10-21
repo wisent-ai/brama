@@ -174,8 +174,8 @@ pub(super) fn decide(
 }
 
 /// One surface list of a fixture case. A case without it, or with an entry
-/// that is not text, is malformed: read as empty it reproduced the
-/// `empty-surface` refusal by accident.
+/// that is not text, is malformed, so it never reproduces the `empty-surface`
+/// refusal by accident.
 fn names(case: &Value, field: &str) -> Result<Vec<String>, String> {
     case[field]
         .as_array()
@@ -219,7 +219,7 @@ fn cases(text: &str) -> Result<Fixtures, String> {
 }
 
 /// The rule's answer to one case, or what makes the case malformed. A case
-/// without `current` was decided on "", so a broken fixture could pass as a
+/// without `current` is malformed, so a broken fixture never passes as a
 /// refusal it never tested. The refuse cases leave the declaration out: an
 /// absent declaration is an unset one, as AutoVersion's fixtures write it.
 fn outcome(case: &Value) -> Result<Value, String> {

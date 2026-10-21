@@ -9,15 +9,22 @@ pub(crate) async fn authenticate_agent(
     headers: &HeaderMap,
     raw_body: &[u8],
 ) -> Result<String, String> {
-    // Each header is required by name: an absent timestamp or signature read
-    // as empty reached the HMAC check and was refused as a mismatch, after
-    // the agent's secret had already been read for nothing.
+    // Each header is required by name before the agent's secret is read, so
+    // an absent or unreadable timestamp or signature is refused for what it
+    // is, never as an HMAC mismatch.
     let header = |name: &str| {
         headers
             .get(name)
-            .and_then(|v| v.to_str().ok())
-            .filter(|s| !s.is_empty())
             .ok_or_else(|| format!("missing {name} header"))
+            .and_then(|value| {
+                value
+                    .to_str()
+                    .map_err(|error| format!("the {name} header is not visible ASCII: {error}"))
+            })
+            .and_then(|text| match text.is_empty() {
+                true => Err(format!("missing {name} header")),
+                false => Ok(text),
+            })
     };
     let agent_id = header("x-agent-id")?.to_string();
     let ts = header("x-agent-timestamp")?;

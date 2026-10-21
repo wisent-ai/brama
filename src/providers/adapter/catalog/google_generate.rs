@@ -140,9 +140,8 @@ pub(super) fn model_response_from_google(
 ) -> ModelResponse {
     // A candidate without content parts (one stopped for safety, recitation
     // or length states only its finishReason) and a functionCall without a
-    // name are failures naming what came back: read as no parts and as a
-    // call named "tool", they passed on as a successful empty answer and a
-    // call the model never made.
+    // name are failures naming what came back, never a successful empty
+    // answer or a call the model never made.
     let failed = |detail: String| {
         crate::providers::adapter::call::outcome::refusal::attempted_failure(
             route_id,

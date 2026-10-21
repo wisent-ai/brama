@@ -90,8 +90,8 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
             Some("response.completed") | Some("response.incomplete") => {
                 completed = event.get("response").cloned();
             }
-            // A failure without a message is reported with the event as sent:
-            // a fixed sentence in its place dropped what the provider said.
+            // A failure without a message is reported with the event as sent,
+            // so what the provider said is never replaced by a fixed sentence.
             Some("response.failed") => {
                 let error = event.pointer("/response/error");
                 let message = match error
