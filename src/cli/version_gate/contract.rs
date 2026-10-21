@@ -62,8 +62,8 @@ impl Version {
 
 /// The surface list of a surface document (`what` names it: the committed
 /// baseline or a candidate file): refused when it is absent or empty, or
-/// when an entry is not text. Read with odd entries dropped, the gate
-/// compared a shortened surface and could miss a removed name.
+/// when an entry is not text, so the gate never compares a shortened surface
+/// and misses a removed name.
 pub(super) fn surface_list(document: &Value, what: &str) -> Result<Vec<String>, String> {
     document["surface"]
         .as_array()

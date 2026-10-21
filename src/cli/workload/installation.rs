@@ -136,8 +136,8 @@ pub(super) fn installation() -> Result<Installation, String> {
 }
 
 /// The agents the registry's workload names. An entry that is not text is
-/// refused: dropped, that agent was neither granted on register nor revoked
-/// on deregister, and nothing said so.
+/// refused, so no agent is silently left ungranted on register or unrevoked
+/// on deregister.
 pub(super) fn agent_ids(workload: &Value) -> Result<Vec<&str>, String> {
     workload
         .get("agent_ids")

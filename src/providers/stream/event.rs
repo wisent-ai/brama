@@ -128,7 +128,8 @@ pub(super) fn tool_call_start(
 }
 
 /// The position a tool call's argument fragment belongs to, or the failure
-/// that ends the stream: a fragment without one was appended to call 0.
+/// that ends the stream, so a fragment without one is never appended to the
+/// first call.
 pub(super) fn tool_call_index(event: &str, index: Option<&Value>) -> Result<u32, String> {
     json_u32(index, "index")?.ok_or_else(|| {
         format!("provider stream event `{event}` carries tool call arguments with no index")

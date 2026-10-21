@@ -20,9 +20,8 @@ static SNAPSHOT: LazyLock<Mutex<Snapshot>> = LazyLock::new(|| Mutex::new(Snapsho
 /// The observed routing pool. The agent names the refresh log, not a separate pool.
 /// Credential redemption remains authoritative at dispatch; metadata grants no access.
 pub fn routing_subscriptions(agent_id: &str) -> InventoryResult {
-    // A poisoned snapshot refused every request and, with `refreshing` left
-    // set, was never refreshed again; the value is replaced whole, so it is
-    // taken back.
+    // The snapshot value is replaced whole, so a poisoned lock is taken back
+    // rather than refusing every request and never refreshing again.
     let mut snapshot = crate::core::sync::held(&SNAPSHOT, "routing inventory snapshot");
     let result = match &snapshot.result {
         Some(result) => result.clone(),

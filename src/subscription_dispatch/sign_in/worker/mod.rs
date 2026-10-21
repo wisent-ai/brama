@@ -9,8 +9,7 @@ pub mod progress;
 /// The Weles provider name the declared subscription provider signs in and
 /// buys through, or why there is none: the provider is not declared at all,
 /// or its declaration names no Weles authorization capability. The one reader
-/// of that declaration field; an undeclared provider had read as one that
-/// declares no capability.
+/// of that declaration field, and the two causes are told apart.
 pub fn weles_provider(provider: &str) -> Result<&'static str, String> {
     let provider = provider.trim();
     crate::subscription_dispatch::acquire::declaration::provider(provider)?
