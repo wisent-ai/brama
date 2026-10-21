@@ -85,6 +85,16 @@ impl Run {
         self.invoke(arguments, true)
     }
 
+    /// The same remote command as `command`, printed as text: the lines an
+    /// operator reads rather than the JSON document.
+    pub(super) fn text_command(&mut self, arguments: &[&str]) -> Output {
+        let destination = self.destination.clone();
+        self.destination.retain(|argument| argument != "--json");
+        let output = self.invoke(arguments, true);
+        self.destination = destination;
+        output
+    }
+
     pub(super) fn standalone(&mut self, arguments: &[&str]) -> Output {
         self.invoke(arguments, false)
     }

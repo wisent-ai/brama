@@ -1,6 +1,8 @@
 //! Rediscovery must not give an owner-retired account a new member identity.
 //! Use an isolated real gateway with a retired legacy-named member and a harness
 //! still reporting that account. This journey does not retire an operator member.
+//! The text listing then counts the retired members apart from the held ones,
+//! as many as the JSON listing marks retired.
 use super::{required, Run};
 use serde_json::{json, Value};
 
@@ -71,6 +73,24 @@ fn rediscovery_cannot_register_a_retired_account_under_another_name() {
         after_ids, before_ids,
         "discovery created a new account identity"
     );
+    let rows = pool["subscriptions"].as_array().expect("real pool subscriptions");
+    let retired = rows
+        .iter()
+        .filter(|row| row["retired"] == true || row["status"] == "retired")
+        .count();
+    let held: Vec<&Value> = rows
+        .iter()
+        .filter(|row| row["retired"] != true && row["status"] != "retired")
+        .collect();
+    let live = held.iter().filter(|row| row["state"] == "live").count();
+    let text = run.text_command(&["subscription", "list"]);
+    assert!(text.status.success(), "{}", String::from_utf8_lossy(&text.stderr));
+    let said = String::from_utf8_lossy(&text.stdout);
+    let counted = format!(
+        "{live} of {} held subscription credentials are live; {retired} retired credential(s) are listed and not counted",
+        held.len()
+    );
+    assert!(said.lines().any(|line| line == counted), "expected `{counted}` in:\n{said}");
     run.report["result"] = json!("passed");
     run.save();
 }

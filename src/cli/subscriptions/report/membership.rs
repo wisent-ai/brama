@@ -7,6 +7,11 @@ use serde_json::Value;
 
 use super::{instant, text};
 
+/// Whether the gateway reports `row` retired, by its flag or its status.
+pub(super) fn is_retired(row: &Value) -> bool {
+    row.get("retired").and_then(Value::as_bool) == Some(true) || text(row, "status") == Some("retired")
+}
+
 /// One member's standing, after its identity line.
 pub(super) fn print_membership(row: &Value) {
     let credential = row.get("credential").filter(|value| value.is_object());
@@ -14,9 +19,7 @@ pub(super) fn print_membership(row: &Value) {
         println!("    membership: unknown; the retirement journal could not be read: {cause}");
         return;
     }
-    let retired = row.get("retired").and_then(Value::as_bool) == Some(true)
-        || text(row, "status") == Some("retired");
-    if retired {
+    if is_retired(row) {
         match credential.and_then(|credential| text(credential, "cause")) {
             Some(cause) => println!(
                 "    retired: {cause} (recorded {})",

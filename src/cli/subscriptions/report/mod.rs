@@ -8,6 +8,7 @@ use serde_json::Value;
 
 mod capacity;
 mod fields;
+mod limits;
 mod membership;
 
 pub(super) use fields::{instant, text};
@@ -76,19 +77,27 @@ pub(super) fn print_pool(report: &Value) {
         );
     }
     // A report without its subscription list is said as such rather than
-    // read as an empty pool.
-    let rows: &[Value] = match report.get("subscriptions").and_then(Value::as_array) {
-        Some(rows) => rows,
-        None => {
-            println!("the report carries no subscription list");
-            &[]
+    // read as an empty pool. A retired credential is listed with its cause
+    // but is no subscription the pool holds, so it is counted apart: read as
+    // one of the pool, a pool of retired members looked like a pool of dead
+    // subscriptions Brama still held.
+    let rows = report.get("subscriptions").and_then(Value::as_array);
+    match rows {
+        Some(rows) => {
+            let (retired, held): (Vec<&Value>, Vec<&Value>) =
+                rows.iter().partition(|row| membership::is_retired(row));
+            let live = held
+                .iter()
+                .filter(|row| text(row, "state") == Some("live"))
+                .count();
+            println!(
+                "{live} of {} held subscription credentials are live; {} retired credential(s) are listed and not counted",
+                held.len(),
+                retired.len()
+            );
         }
-    };
-    let live = rows
-        .iter()
-        .filter(|row| text(row, "state") == Some("live"))
-        .count();
-    println!("{live} of {} subscription credentials are live", rows.len());
+        None => println!("the report carries no subscription list"),
+    }
     print_accounts(report.get("accounts"));
     membership::print_acquisitions(report);
     membership::print_remembered(report);
@@ -101,20 +110,21 @@ pub(super) fn print_pool(report: &Value) {
         }
     );
 
-    for row in rows {
+    for row in rows.into_iter().flatten() {
         // A row field the gateway left out is named as such, not as a value.
         let reported = |field: &str| match text(row, field) {
             Some(value) => value,
             None => "not reported",
         };
+        let label = match text(row, "label") {
+            Some(label) => format!(" ({label})"),
+            None => String::new(),
+        };
         println!(
-            "{:<8} {:<14} {}{}",
+            "{:<8} {:<14} {}{label}",
             reported("state"),
             reported("provider"),
             reported("id"),
-            text(row, "label")
-                .map(|label| format!(" ({label})"))
-                .unwrap_or_default()
         );
         membership::print_membership(row);
         if let Some(expires_at) = text(row, "expires_at") {
@@ -229,45 +239,18 @@ pub(super) fn print_pool(report: &Value) {
                 println!("    usage detail: {detail}");
             }
         }
-        let limits = row
-            .get("limits")
-            .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
-        if limits.is_empty() {
-            println!("    no usage measurement available");
-        }
-        for limit in limits {
-            let amount = limit
-                .get("used_fraction")
-                .and_then(Value::as_f64)
-                .map(|fraction| format!("{:.1}%", fraction * 100.0));
-            let amount = match amount {
-                Some(amount) => format!("{amount} used"),
-                None => "used share not stated".to_string(),
-            };
-            println!(
-                "    {}: {amount}; reset {}; observed {}{}",
-                text(limit, "window_label")
-                    .or_else(|| text(limit, "label"))
-                    .unwrap_or("unnamed window"),
-                instant(limit.get("resets_at_ms")),
-                instant(limit.get("recorded_at_ms")),
-                if row.get("stale").and_then(Value::as_bool) == Some(true) {
-                    " (stale)"
-                } else {
-                    ""
-                }
-            );
-        }
+        limits::print_limits(row);
     }
     if let Some(errors) = report.get("errors").and_then(Value::as_array) {
         for error in errors {
-            let account = error
+            let account = match error
                 .pointer("/context/subscription")
                 .and_then(Value::as_str)
                 .or_else(|| error.pointer("/context/agent").and_then(Value::as_str))
-                .unwrap_or("subscription report");
+            {
+                Some(account) => account,
+                None => "subscription report",
+            };
             let mut current = Some(error);
             let mut prefix = "";
             while let Some(failure) = current {
