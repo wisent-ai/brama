@@ -150,8 +150,8 @@ fn tool_calls_from_response(response: &ModelResponse) -> &[ToolCall] {
 /// anything else as `end_turn` -- the two readings a caller can act on.
 ///
 /// A tool call whose arguments are not JSON is refused with the tool's name
-/// and the arguments as the model wrote them: reading them as `{}` handed
-/// the caller a call to run with none of the arguments the model meant.
+/// and the arguments as the model wrote them, never read as `{}` and handed
+/// to the caller as a call without the arguments the model meant.
 /// Arguments that are empty are a call without arguments.
 pub fn anthropic_response(
     id: &str,
