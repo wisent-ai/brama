@@ -26,3 +26,8 @@ vercel-ingress/docs
 vercel-ingress/docs/cli
 vercel-ingress/docs/concepts
 vercel-ingress/docs/providers
+# A session's local queue of repairs waiting for Oko's register writes: each
+# line must name the register entry and the revision it was repaired at, which
+# is why it carries ids. It lives under the git-ignored .build/ and is never
+# committed or published.
+.build/register
