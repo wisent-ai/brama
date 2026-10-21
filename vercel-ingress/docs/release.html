@@ -250,6 +250,17 @@ are removed; use <code>submit-candidate</code> and Stado's recorded release poli
 <li>exact source revision, platforms, artifact digests, and provenance objects.</li>
 </ul>
 <p>Commit titles alone are not release notes.</p>
+<p>The documentation pages under <code>vercel-ingress/docs</code> are the source; no
+markdown copy is rendered into them. Their navigation has one source too: the
+<em>All topics</em> directory on the docs home page. <code>node
+vercel-ingress/tools/docs-navigation.mjs check</code> names every page whose mobile menu or
+sidebar differs from that directory, every page that wears no navigation, every
+<em>Documentation topic</em> note naming a file the repository does not have, and every
+directory link no <code>vercel.json</code> rewrite serves, exiting 1 when it names any and
+2 when its inputs cannot be read. <code>write</code> renders the directory into every
+routed page, marking the page itself, removes the stale notes, and names only what a
+person must place: a page without navigation lines and a link to nothing. A topic is
+renamed or added in the directory, then <code>write</code> carries it to every page.</p>
 <h2 id="compatibility-and-migrations">Compatibility and migrations<a class="headerlink" href="#compatibility-and-migrations" title="Link to this section">&para;</a></h2>
 <p>Every release declares compatibility for:</p>
 <ul>

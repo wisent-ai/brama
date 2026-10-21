@@ -24,6 +24,15 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-docs-one-navigation">Unreleased: the pages say the pool is shared, and wear one navigation<a class="headerlink" href="#unreleased-docs-one-navigation" title="Link to this section">&para;</a></h2>
+<p>The subscription concept, the provider pages, discovery, the integration contracts, the
+runbook and the selector example described subscriptions as delegated to one agent. They
+now say what the code does: every subscription in the vault serves every caller, and the
+<code>brama:agent:</code> tag records who banked an account and who may retire it. Losing the
+<code>brama:subscription</code> mark, not the agent tag, is what makes an account unroutable.
+The navigation copied into every page had drifted into several versions and was missing from
+others; <code>vercel-ingress/tools/docs-navigation.mjs</code> renders it from the home page's
+directory and checks it (<a href="/docs/release#release-notes">release</a>).</p>
 <h2 id="unreleased-no-pseudo-routes">Unreleased: no route stands for a model Brama chose<a class="headerlink" href="#unreleased-no-pseudo-routes" title="Link to this section">&para;</a></h2>
 <p><code>openai/embeddings</code> and <code>openai/moderation</code> no longer resolve to
 compiled models. Embeddings and moderation name a concrete OpenAI model like chat does

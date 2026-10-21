@@ -19,7 +19,7 @@
     <main>
 <h1 id="codex">Codex (ChatGPT subscription) <code>codex</code><a class="headerlink" href="#codex" title="Link to this section">&para;</a></h1>
 <p>The ChatGPT-account Codex backend — the same one the Codex CLI talks to — spoken with
-an agent-owned ChatGPT subscription. Routes are <code>codex/&lt;model&gt;</code> over
+a ChatGPT subscription from the shared pool. Routes are <code>codex/&lt;model&gt;</code> over
 <code>openai-responses</code> (not <code>openai-chat</code>: this backend serves the Responses
 API only). Who may spend the account is the
 <a href="/docs/concepts/entitlement">entitlement</a> decision; the account itself is a
@@ -56,8 +56,9 @@ token&#x27;s JWT <code>exp</code> claim (<code>src/gateway/oauth_refresh.rs</cod
 the gateway rewrites <code>access_token</code>, <code>refresh_token</code> and
 <code>id_token</code> in place and stamps <code>last_refresh</code>. The item carries the
 discovery tags (<code>brama:subscription</code>, <code>brama:agent:&lt;agent&gt;</code>,
-<code>brama:provider:codex</code>, <code>brama:id:&lt;id&gt;</code>); an item that loses the
-agent tag keeps a working credential and stops existing for every listing —
+<code>brama:provider:codex</code>, <code>brama:id:&lt;id&gt;</code>); the agent tag only records
+who banked the account. An item that loses the <code>brama:subscription</code> mark keeps a
+working credential and stops existing for every listing —
 <code>/readyz</code> reports it under <code>unroutable_accounts</code>.</p>
 <h2 id="how-a-request-presents-it">How a request presents it<a class="headerlink" href="#how-a-request-presents-it" title="Link to this section">&para;</a></h2>
 <p>At final use the gateway redeems the vault item through the local entitlements router

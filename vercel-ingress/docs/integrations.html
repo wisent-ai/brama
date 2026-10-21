@@ -32,7 +32,7 @@ four pages that carry the contracts.</p>
 <div class="card-grid">
   <a class="card" href="/docs/integrations/model-providers"><span>Providers</span><h2>Model providers</h2><p>Registering an existing model bearer, the adapter boundary, capability declaration, and the provider contract itself: identity, reliability, compatibility, disablement.</p></a>
   <a class="card" href="/docs/integrations/catalog"><span>Catalog</span><h2>models.dev catalog</h2><p>Public provider and model metadata: origin, cache, validation, and the exact limits of what advisory metadata may authorise.</p></a>
-  <a class="card" href="/docs/integrations/skarbiec-and-entitlements"><span>Secrets</span><h2>Skarbiec and entitlements</h2><p>Final-use capability redemption over the Unix socket, and the entitlements router that discovers one agent's subscriptions and persists credentials.</p></a>
+  <a class="card" href="/docs/integrations/skarbiec-and-entitlements"><span>Secrets</span><h2>Skarbiec and entitlements</h2><p>Final-use capability redemption over the Unix socket, and the entitlements router that discovers the shared subscription pool and persists credentials.</p></a>
   <a class="card" href="/docs/integrations/publication-and-health"><span>Operations</span><h2>Publication and health</h2><p>GitHub Releases and versioned host installation, what <code>/health</code> and <code>/stats</code> prove, integration error codes, and the change gate.</p></a>
 </div>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Link to this section">&para;</a></h2>
@@ -57,21 +57,21 @@ four pages that carry the contracts.</p>
 <tr>
 <td>Anthropic and Claude Code</td>
 <td>Anthropic Messages</td>
-<td>direct API capability, account-owned Anthropic key, or agent OAuth subscription</td>
+<td>direct API capability, account-owned Anthropic key, or pooled OAuth subscription</td>
 <td>buffered or streamed chat and tool use</td>
 <td>Brama operator / credential owner</td>
 </tr>
 <tr>
 <td>Codex</td>
 <td>OpenAI Responses event stream</td>
-<td>account- or agent-owned OAuth subscription</td>
+<td>account-owned or pooled OAuth subscription</td>
 <td>streamed to the caller, or the same event stream consumed internally for a buffered answer; tool calls either way</td>
 <td>subscription owner</td>
 </tr>
 <tr>
 <td>Google catalog providers</td>
 <td>GenerateContent</td>
-<td>account- or agent-owned API capability</td>
+<td>account-owned or deployment API capability</td>
 <td>buffered chat and tools where advertised</td>
 <td>credential owner</td>
 </tr>

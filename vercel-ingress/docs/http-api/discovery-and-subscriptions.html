@@ -25,7 +25,7 @@ the authenticated account. All of them require a bearer
 <h2 id="get-v1models"><code>GET /v1/models</code><a class="headerlink" href="#get-v1models" title="Link to this section">&para;</a></h2>
 <p>Public catalog metadata combined with what the caller can execute: account discovery
 marks the models executable by that account's stored keys, and signed agent discovery
-includes agent-owned subscriptions. Captured shape:</p>
+includes the shared subscription pool, which serves every caller. Captured shape:</p>
 <pre><code class="language-json">{&quot;data&quot;:[{&quot;id&quot;:&quot;&lt;provider&gt;/&lt;model&gt;&quot;,&quot;object&quot;:&quot;model&quot;,&quot;owned_by&quot;:&quot;&lt;provider&gt;&quot;}, ...]}
 </code></pre>
 <p>A declared alias the caller may name but that cannot serve is listed with
@@ -277,8 +277,8 @@ failure still uses the ordinary HTTP error body.</p>
 <code>attempted_at_ms</code>, <code>ok</code>, <code>detail</code> and
 <code>source</code>, kept separate from a completion <code>probe</code>. An inventory Brama
 could not read stops the reads and is reported instead, because a listing that failed says
-nothing about which accounts exist. A dependency timeout, an invalid response or a storage
-failure appears in the result naming the failed operation and the actual reason.</p>
+nothing about which accounts exist. An unreachable dependency, an invalid response or a
+storage failure appears in the result naming the failed operation and the actual reason.</p>
 <h2 id="sign-in-is-asked-for-explicitly">Sign-in is asked for explicitly<a class="headerlink" href="#sign-in-is-asked-for-explicitly" title="Link to this section">&para;</a></h2>
 <p><code>POST /v1/account/subscription-sign-in/:subscription_id</code> signs in one
 subscription owned by the authenticated account. Neither the pool read nor plan usage ever

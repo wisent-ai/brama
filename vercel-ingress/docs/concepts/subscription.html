@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Subscription — Brama Docs</title>
-  <meta name="description" content="Subscription One provider account delegated to one agent: a Skarbiec vault item whose credential Brama redeems at final use and whose plan state Brama reads from the provider&#x27;s own">
+  <meta name="description" content="Subscription One provider account in the deployment&#x27;s shared pool: a Skarbiec vault item that serves every caller, whose credential Brama redeems at final use and whose plan state Brama reads from the provider&#x27;s own reports.">
   <link rel="canonical" href="https://brama.wisent.com/docs/concepts/subscription">
   <link rel="stylesheet" href="/docs/assets/site.css">
 </head>
@@ -19,9 +19,11 @@
     <main>
       <p class="source-note">Documentation topic: docs/concepts/subscription.md</p>
       <article class="doc"><h1 id="subscription">Subscription<a class="headerlink" href="#subscription" title="Link to this section">&para;</a></h1>
-<p>One provider account delegated to one agent: a Skarbiec vault item whose
-credential Brama redeems at final use and whose plan state Brama reads from
-the provider's own reports. Who may spend it is the
+<p>One provider account in the deployment's shared pool: a Skarbiec vault item
+that serves every caller, whose credential Brama redeems at final use and whose
+plan state Brama reads from the provider's own reports. No agent owns it; the
+<code>brama:agent:&lt;agent&gt;</code> tag only records who banked it and who may
+retire it. Who may spend it on which request is the
 <a href="/docs/concepts/entitlement">entitlement</a> model; this page is the object itself —
 discovery, states, the ledger, and the credential lifecycle.</p>
 <h2 id="shape-and-discovery">Shape and discovery<a class="headerlink" href="#shape-and-discovery" title="Link to this section">&para;</a></h2>

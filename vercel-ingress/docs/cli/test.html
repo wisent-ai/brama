@@ -23,7 +23,7 @@
 <h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
 <pre><code class="language-console">brama test (-m &lt;ROUTE&gt;|--model &lt;ROUTE&gt;) --agent-id &lt;ID&gt; [--json] --allow-provider-cost</code></pre>
 <table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
-<tr><td><code>-m, --model &lt;ROUTE&gt;</code></td><td>required</td><td>Canonical route to test, or <code>best</code>: the ranked walk over the agent's subscriptions the HTTP edge runs for <code>model: "best"</code>, with no preferred route. There is no built-in route; without it the command exits 2.</td></tr>
+<tr><td><code>-m, --model &lt;ROUTE&gt;</code></td><td>required</td><td>Canonical route to test, or <code>best</code>: the ranked walk over the shared subscription pool the HTTP edge runs for <code>model: "best"</code>, with no preferred route. There is no built-in route; without it the command exits 2.</td></tr>
 <tr><td><code>--agent-id &lt;ID&gt;</code></td><td>required</td><td>Agent whose provider credential is used. There is no built-in agent; without it the command exits 2.</td></tr>
 <tr><td><code>--allow-provider-cost</code></td><td>required</td><td>Acknowledge the billable provider request. Without it the command exits 2 before any request.</td></tr>
 <tr><td><code>--json</code></td><td>optional; off</td><td>Print the answer as one JSON document instead of <code>key: value</code> lines.</td></tr>

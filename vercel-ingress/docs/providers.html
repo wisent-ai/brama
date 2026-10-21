@@ -25,7 +25,7 @@ at all, and what it deliberately is not, is defined once in
 that differs per provider: how we authenticate to each one.</p>
 <h2 id="three-ways-in">Three ways in<a class="headerlink" href="#three-ways-in" title="Link to this section">&para;</a></h2>
 <p><strong>Subscriptions (OAuth).</strong> <code>claude-code</code>, <code>codex</code> and
-<code>kimi</code> are agent-owned provider accounts. The credential is an OAuth grant — an
+<code>kimi</code> are provider accounts in the shared subscription pool. The credential is an OAuth grant — an
 access token, a rotating refresh token, and an expiry — minted by a real browser sign-in
 that Weles drives on its own host and writes into the Skarbiec vault at
 <code>provider:&lt;provider&gt;:&lt;subscription&gt;</code>. The gateway refreshes the grant
