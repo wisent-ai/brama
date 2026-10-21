@@ -74,8 +74,8 @@ pub(in crate::providers::adapter) fn model_response_from_openai(
         }
     };
     // A tool call the model made but this gateway cannot read fails the
-    // answer with its cause: dropped, the caller got an answer without a call
-    // the model asked for.
+    // answer with its cause, so the caller never gets an answer without a
+    // call the model asked for.
     let tool_calls = match choice.get("tool_calls").and_then(Value::as_array) {
         None => None,
         Some(calls) => match calls

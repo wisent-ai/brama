@@ -78,9 +78,9 @@ pub(super) fn print_pool(report: &Value) {
     }
     // A report without its subscription list is said as such rather than
     // read as an empty pool. A retired credential is listed with its cause
-    // but is no subscription the pool holds, so it is counted apart: read as
-    // one of the pool, a pool of retired members looked like a pool of dead
-    // subscriptions Brama still held.
+    // but is no subscription the pool holds, so it is counted apart and a
+    // pool of retired members never looks like a pool of dead subscriptions
+    // Brama still holds.
     let rows = report.get("subscriptions").and_then(Value::as_array);
     match rows {
         Some(rows) => {

@@ -129,9 +129,8 @@ async fn check_model(opts: &TaskQualityOptions, model: &str) -> Check {
     let passed = resp.success() && expected_matches(opts, &content);
     // The verdict as the number scores are kept in: one passed, zero did not.
     let score = f64::from(u8::from(passed));
-    // A model no route names a provider for is recorded with no provider: the
-    // row was filed under provider "unknown", and the scores then read as a
-    // provider's.
+    // A model no route names a provider for is recorded with no provider, so
+    // its scores never read as some provider's.
     let provider = provider_for(model).map(str::to_string);
     let row = json!({
         "agent_id": opts.agent_id,

@@ -3,8 +3,8 @@
 
 use serde_json::Value;
 
-/// An instant the report stated, or that it stated none; "unknown" read as
-/// a time.
+/// An instant the report stated, or that it stated none, never a word that
+/// reads as a time.
 pub(in super::super) fn instant(value: Option<&Value>) -> String {
     let stated = value
         .and_then(Value::as_i64)

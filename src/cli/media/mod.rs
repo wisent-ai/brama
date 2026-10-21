@@ -203,8 +203,8 @@ pub(super) fn resolve_media_route(model: &str) -> String {
 pub(super) fn job_lines(model: &str, route: &str, body: &Value) {
     println!("Model: {model}");
     println!("Route: {route}");
-    // The provider's job id and status, or that it answered without one: a
-    // dash read as an id a later `status` call could be given.
+    // The provider's job id and status, or that it answered without one,
+    // never a placeholder a later `status` call could be given as an id.
     match body.get("id").and_then(Value::as_str) {
         Some(id) => println!("Job: {id}"),
         None => println!("Job: (the provider answered with no job id)"),
