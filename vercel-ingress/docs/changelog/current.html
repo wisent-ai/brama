@@ -24,6 +24,16 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-standing-measure">Unreleased: every vault child stands in the register, and each waiter hears its own call<a class="headerlink" href="#unreleased-standing-measure" title="Link to this section">&para;</a></h2>
+<p>The account-discovery registration and routing-mark restoration ran their vault children
+outside the standing-call register, so a vault that never answered held them unlisted and
+unended. They now stand there like every other vault child. A request whose call is ended
+is refused with a sentence naming its own operation, target, process and age, not the
+oldest call's. A gateway whose host has no Stado resolver declaring a refresh interval read
+no measure and ended nothing; <code>BRAMA_CREDENTIAL_CALL_STANDING_SECONDS</code> now declares
+one there, and <code>/readyz</code> says in <code>standing_measure</code> what calls are
+measured by, or that nothing bounds them
+(<a href="/docs/http-api/administration-and-operations">administration and operations</a>).</p>
 <h2 id="unreleased-one-home">Unreleased: one home for every path Brama derives from it<a class="headerlink" href="#unreleased-one-home" title="Link to this section">&para;</a></h2>
 <p>The state directory, the usage ledger, the routes registry Brama adopts into, the Stado
 resolver state readiness reads, the installed vault executable, and the installation

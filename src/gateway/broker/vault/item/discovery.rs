@@ -54,12 +54,11 @@ pub(in crate::gateway::broker) async fn register(
         "register discovered account",
     )
     .await?;
-    let output = stado_wait::child_output_async(
+    let output = super::super::router::wait_within_footprint(
         child,
-        format!("register discovered account {provider} {account}"),
+        &format!("register discovered account {provider} {account}"),
     )
-    .await
-    .map_err(|error| format!("register discovered account: {error}"))?;
+    .await?;
     if !output.status.success() {
         return Err(router_refusal(
             "register discovered account metadata",
@@ -200,12 +199,11 @@ pub(in crate::gateway::broker) async fn restore_mark(
         "restore routing mark",
     )
     .await?;
-    let output = stado_wait::child_output_async(
+    let output = super::super::router::wait_within_footprint(
         child,
-        format!("restore routing mark of subscription {id} on {item_id}"),
+        &format!("restore routing mark of subscription {id} on {item_id}"),
     )
-    .await
-    .map_err(|error| format!("restore routing mark: {error}"))?;
+    .await?;
     if !output.status.success() {
         return Err(router_refusal("restore routing mark", &output));
     }

@@ -227,9 +227,10 @@ async fn answer_after(after: Option<&str>) -> (StatusCode, Value) {
 }
 
 /// The readiness answer now, and the standing calls it lists. A credential
-/// call standing unanswered past the declared refresh interval overrides
-/// the last check: the gateway declares it serves nothing and names the
-/// source (`standing`). Every call standing is listed in `standing_calls`.
+/// call standing unanswered past the declared measure overrides the last
+/// check: the gateway declares it serves nothing and names the source
+/// (`standing`). Every call standing is listed in `standing_calls`, and what
+/// they are measured by in `standing_measure`.
 fn answer() -> (StatusCode, Value, Vec<standing::CallReading>) {
     let report = {
         let current = crate::core::sync::read_held(&READINESS_REPORT, "readiness report");
@@ -256,6 +257,7 @@ fn answer() -> (StatusCode, Value, Vec<standing::CallReading>) {
     if let Some(object) = body.as_object_mut() {
         let listed = calls.iter().map(|call| call.document(false)).collect();
         object.insert("standing_calls".to_string(), Value::Array(listed));
+        object.insert("standing_measure".to_string(), standing::measure_document());
     }
     (status, body, calls)
 }
