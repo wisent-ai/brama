@@ -58,8 +58,8 @@ pub(in crate::core::server) async fn account_agent_for_route(
 
 /// The provider a credential may be banked for: `Ok(None)` when the value
 /// names none Brama supports. A model catalogue that cannot be read is its own
-/// refusal: read as `None`, it told the caller a catalogued provider was
-/// unsupported while the real cause was the catalogue.
+/// refusal, so a catalogued provider is never called unsupported when the
+/// cause is the catalogue.
 pub(in crate::core::server) async fn account_credential_provider(
     value: Option<&str>,
 ) -> Result<Option<String>, ApiError> {
