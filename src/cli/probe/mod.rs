@@ -15,7 +15,7 @@ use std::path::Path;
 use clap::Args;
 use serde_json::{json, Value};
 
-use super::launcher::role_field_in;
+use super::launcher::identities::vault::role_field_in;
 use super::workload::{home, service_settings};
 
 #[derive(Args)]
@@ -210,7 +210,7 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
                     }),
                 };
                 // A success whose first choice carries no text did not serve
-                // the alias either: printed as said="" it read as a quiet model.
+                // the alias either, never a quiet model printed as said="".
                 let outcome = outcome.and_then(|payload| {
                     let said = payload
                         .pointer("/choices/0/message/content")

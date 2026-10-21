@@ -3,11 +3,9 @@
 //! interpreter the host may not have.
 
 mod catalog;
-mod identities;
+pub(crate) mod identities;
 mod policy;
 mod verbs;
-
-pub(crate) use identities::role_field_in;
 
 use std::path::PathBuf;
 
@@ -141,7 +139,7 @@ pub(crate) fn run(command: LauncherCommand) {
             router,
             role,
             field,
-        } => printed(identities::role_field(&router, &role, &field)),
+        } => printed(identities::vault::role_field(&router, &role, &field)),
         LauncherCommand::CheckRouterVerbs { router, launcher } => verbs::check(&router, &launcher),
     };
     if let Err(detail) = result {

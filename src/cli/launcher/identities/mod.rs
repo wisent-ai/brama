@@ -10,9 +10,7 @@ use std::path::Path;
 
 use serde_json::{json, Map, Value};
 
-mod vault;
-pub(super) use vault::role_field;
-pub(crate) use vault::role_field_in;
+pub(crate) mod vault;
 use vault::{field, item_fields, item_for_role, role_holders};
 
 /// One preloaded model-router client: its id, the role whose item holds its
