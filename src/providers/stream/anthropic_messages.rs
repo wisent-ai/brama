@@ -45,8 +45,8 @@ pub(super) fn anthropic_items(
     state: &mut AnthropicState,
 ) -> (Vec<StreamItem>, bool) {
     let mut items = Vec::new();
-    // An event that is not JSON ends the stream with the event named: dropped,
-    // what it carried vanished from an answer that still finished as complete.
+    // An event that is not JSON ends the stream with the event named, so what
+    // it carries never vanishes from an answer that still finishes as complete.
     let body: Value = match serde_json::from_str(data) {
         Ok(body) => body,
         Err(error) => {

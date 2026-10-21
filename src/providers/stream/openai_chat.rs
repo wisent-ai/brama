@@ -32,9 +32,9 @@ pub(super) fn openai_chat_items(
     if data.trim() == OPENAI_DONE {
         return (items, true);
     }
-    // A chunk that is not JSON ends the stream with the chunk named: dropped,
-    // the text or tool call it carried vanished from an answer that still
-    // finished as complete.
+    // A chunk that is not JSON ends the stream with the chunk named, so the
+    // text or tool call it carries never vanishes from an answer that still
+    // finishes as complete.
     let body: Value = match serde_json::from_str(data) {
         Ok(body) => body,
         Err(error) => {

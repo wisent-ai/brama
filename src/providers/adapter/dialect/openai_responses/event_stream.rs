@@ -47,8 +47,8 @@ pub(in crate::providers::adapter) fn model_response_from_responses_stream(
         if data.is_empty() || data == "[DONE]" {
             continue;
         }
-        // An event that is not JSON fails the answer naming it: skipped, the
-        // text or call it carried vanished from an answer read as complete.
+        // An event that is not JSON fails the answer naming it, so the text or
+        // call it carries never vanishes from an answer read as complete.
         let event = match serde_json::from_str::<Value>(data) {
             Ok(event) => event,
             Err(error) => {

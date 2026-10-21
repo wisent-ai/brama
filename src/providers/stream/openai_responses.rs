@@ -27,8 +27,8 @@ fn incomplete_reason(stated: Option<&str>) -> StopReason {
 /// Translate one OpenAI Responses event into neutral items.
 pub(super) fn responses_items(event: Option<&str>, data: &str) -> (Vec<StreamItem>, bool) {
     let mut items = Vec::new();
-    // An event that is not JSON ends the stream with the event named: dropped,
-    // what it carried vanished from an answer that still finished as complete.
+    // An event that is not JSON ends the stream with the event named, so what
+    // it carries never vanishes from an answer that still finishes as complete.
     let body: Value = match serde_json::from_str(data) {
         Ok(body) => body,
         Err(error) => {
