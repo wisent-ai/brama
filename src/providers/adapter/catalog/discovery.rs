@@ -121,8 +121,8 @@ fn answered_rows<'listing>(
 
 /// The model rows a provider's listing endpoint answered, or why it gave
 /// none: unreachable, refused with its body, not JSON, or carrying neither
-/// `data` nor `models`. A listing failure used to be dropped silently, so a
-/// provider left with no models was reported without the reason.
+/// `data` nor `models`, so a provider left with no models is reported with
+/// the reason.
 async fn listed_rows(
     provider_id: &str,
     request: reqwest::RequestBuilder,
