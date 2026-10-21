@@ -67,15 +67,19 @@ account unroutable, and <code>/readyz</code> reports it under
 <p>At final use the gateway redeems the vault item through the local entitlements router,
 reduces the document to the access token, and sends it as
 <code>Authorization: Bearer &lt;accessToken&gt;</code> with
-<code>anthropic-version: 2023-06-01</code>, in the shape Claude Code itself sends: the
-user agent <code>claude-cli/2.1.257 (external, cli)</code>,
-<code>anthropic-beta: claude-code-20250219,oauth-2025-04-20</code>, <code>x-app: cli</code>,
-and a system prompt that opens with Claude Code's billing attestation
-(<code>x-anthropic-billing-header: cc_version=2.1.257.&lt;fingerprint&gt;; cc_entrypoint=cli;
-cch=&lt;checksum&gt;;</code>) and the sentence <em>You are Claude Code, Anthropic's official
-CLI for Claude.</em>, followed by the caller's own system prompt. The checksum is the low
-twenty bits of xxHash64 over the body it travels in; the fingerprint salts the Claude Code
-version with three characters of the first user message. Anthropic honours a subscription
+<code>anthropic-version: 2023-06-01</code>, in the shape the Claude Agent SDK harness sends
+on the operator's account: its <code>claude-cli/&lt;version&gt; (external, local-agent,
+agent-sdk/&lt;sdk version&gt;)</code> user agent, its own <code>anthropic-beta</code> list in its
+own order, the Stainless client headers that SDK sends, and a system prompt that opens with
+the harness's billing attestation (<code>x-anthropic-billing-header:
+cc_version=&lt;version&gt;.&lt;fingerprint&gt;; cc_entrypoint=local-agent; cch=&lt;checksum&gt;;</code>)
+and the sentence <em>You are a Claude agent, built on Anthropic's Claude Agent SDK.</em>,
+followed by the caller's own system prompt. The exact release, beta list and header values
+are the constants in <code>src/providers/adapter/call/credential/claude_code.rs</code>, read
+from that harness's requests; this page names their shape, not their values, so it cannot
+fall behind a release. The checksum is the low twenty bits of xxHash64 over the body it
+travels in; the fingerprint salts the version with three characters of the first user
+message. Anthropic honours a subscription
 grant for its newest models only in this shape: the same grant is answered
 <code>429</code> with the one-word body <code>Error</code> when presented with the OAuth
 beta header alone, while the harness the grant was taken from is being answered on the
