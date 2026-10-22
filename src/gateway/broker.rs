@@ -9,12 +9,14 @@
 //! blocking authority exchange and classifies its errors; `vault` issues
 //! capabilities and reads grants; `binding` reads deployment declarations;
 //! `identity` resolves request-sign secrets; `standalone` owns the desktop
-//! credential map; and `subscription` manages paid accounts.
+//! credential map; `subscription` manages paid accounts; and `rewards` is the
+//! gateway's side of Wisent's contribution ledger.
 
 mod binding;
 mod configuration;
 mod identity;
 mod redemption;
+pub mod rewards;
 mod standalone;
 mod subscription;
 mod vault;

@@ -66,9 +66,14 @@ pub struct Block {
     pub quota_exhausted: bool,
 }
 
-/// Record one provider call against the subscription that paid for it.
+/// Record one provider call against the subscription that paid for it. A
+/// call it answered is also the day's contribution of the agent that donated
+/// it to the pool, reported to the contribution ledger when one is declared.
 pub fn record_call(subscription_id: &str, provider: &str, response: &ModelResponse) {
     record_call_from(subscription_id, provider, response, UsageSource::Traffic);
+    if response.success() {
+        crate::gateway::broker::rewards::note_served(subscription_id, provider);
+    }
 }
 
 /// The same, saying which kind of call this was.

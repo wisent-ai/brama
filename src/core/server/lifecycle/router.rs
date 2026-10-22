@@ -116,6 +116,8 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
             "/v1/decisions",
             post(decisions).layer(DefaultBodyLimit::disable()),
         )
+        // The ledger this gateway declares and an agent's entitlement, for the console.
+        .route("/v1/rewards/status", post(crate::core::server::rewards::report))
         .route("/v1/models", get(list_models))
         .route("/v1/aliases", get(list_aliases))
         .route("/v1/categories", get(list_categories))

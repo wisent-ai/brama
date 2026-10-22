@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>brama rewards — Brama CLI Docs</title>
+  <meta name="description" content="Link this gateway's agents to Wisent accounts and read what the contribution ledger answers about their entitlements.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/cli/rewards">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <div class="layout">
+    <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>brama rewards</h2><a class="active" aria-current="page" href="/docs/cli/rewards">rewards</a><a href="/docs/cli/subscription">subscription</a><a href="/docs/cli">CLI tree</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/http-api">HTTP API</a><a href="/docs/errors">Errors</a></section></nav></aside>
+    <main>
+      <p class="source-note">Brama CLI command reference</p>
+      <article class="doc"><h1 id="brama-rewards"><code>brama rewards</code><a class="headerlink" href="#brama-rewards" title="Link to this section">&para;</a></h1>
+<p>This gateway's side of Wisent's contribution ledger, which lives in compute.wisent.com. The gateway reports the days a donated subscription served the pool, and serves an alias it gates beyond a credential's model scope only to a caller the ledger says holds the entitlement to it. A gateway that declares no ledger reports nothing and gates nothing.</p>
+<h2 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">brama rewards status [--alias &lt;ALIAS&gt; [--agent-id &lt;ID&gt;]] [--json]</code></pre>
+<table><thead><tr><th>Input</th><th>Required/default</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>--alias &lt;ALIAS&gt;</code></td><td>optional</td><td>The alias to report on: whether <code>BRAMA_ENTITLEMENT_GATED_ALIASES</code> gates it, and with <code>--agent-id</code> the ledger's answer about the entitlement.</td></tr>
+<tr><td><code>--agent-id &lt;ID&gt;</code></td><td>with <code>--alias</code></td><td>The identity whose entitlement to ask the ledger about: an agent id, or a client id that signs as no agent.</td></tr>
+<tr><td><code>--json</code></td><td>optional; off</td><td>Print one object instead of <code>key: value</code> lines.</td></tr>
+</tbody></table>
+<h2 id="declarations">What it reads<a class="headerlink" href="#declarations" title="Link to this section">&para;</a></h2>
+<p><code>BRAMA_CONTRIBUTION_LEDGER_URL</code> names the ledger; the bearer the gateway presents as the reporter <code>brama</code> is read through the Skarbiec route for the <code>contribution-ledger</code> resource. Brama links no one: a signed-in Wisent user links their account on the Rewards page of compute.wisent.com (<strong>Link my Brama donations</strong>), which reads the account from that sign-in, and a workload's credential, presented by every process that holds it, links nothing. Brama Desktop's Rewards screen does what <code>status</code> does through <code>POST /v1/rewards/status</code> with <code>{"alias", "agent_id"}</code>, which only the console may ask.</p>
+<h2 id="output-and-state">Output and state<a class="headerlink" href="#output-and-state" title="Link to this section">&para;</a></h2>
+<pre><code class="language-console">$ brama rewards status --alias wisent/sol --agent-id example-agent
+ledger: https://compute.example.test
+alias: wisent/sol
+gated: true
+agent_id: example-agent
+entitlement: {"granted":false,"message":"the account holds no current model.access entitlement for wisent/sol","reason":"entitlement_absent"}</code></pre>
+<p>Exit code is 0 when the report was given.</p>
+<h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
+<table><thead><tr><th>Sentence</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>this gateway declares no contribution ledger (BRAMA_CONTRIBUTION_LEDGER_URL)</code></td><td>Nothing to ask; declare the ledger's origin.</td></tr>
+<tr><td><code>the contribution ledger did not answer: its bearer could not be read: …</code></td><td>The Skarbiec route for <code>contribution-ledger</code> is missing or refused.</td></tr>
+</tbody></table>
+<p>Every refusal exits 1 and prints on standard error. See <a href="/docs/cli">the CLI tree</a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

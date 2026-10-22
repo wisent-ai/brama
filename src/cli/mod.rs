@@ -13,6 +13,7 @@ pub(crate) mod media;
 pub(crate) mod onboarding;
 pub(crate) mod probe;
 pub(crate) mod review;
+pub(crate) mod rewards;
 pub(crate) mod serving;
 pub(crate) mod subscriptions;
 pub(crate) mod version_gate;

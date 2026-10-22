@@ -13,6 +13,7 @@ use cli::media::{ImageArgs, MusicArgs, SpeakArgs, VideoCommand, VoicesCommand};
 use cli::onboarding::OnboardArgs;
 use cli::probe::ProbeArgs;
 use cli::review::ReviewArgs;
+use cli::rewards::RewardsCommand;
 use cli::serving::ServeArgs;
 use cli::subscriptions::credentials::SubscriptionCommand;
 use cli::version_gate::VersionGateCommand;
@@ -83,6 +84,11 @@ enum Commands {
     Routes {
         #[command(subcommand)]
         command: RoutesCommand,
+    },
+    /// Read the contribution ledger this gateway declares and an agent's entitlements
+    Rewards {
+        #[command(subcommand)]
+        command: RewardsCommand,
     },
     /// Act on one provider's subscription credentials
     Subscription {
@@ -155,6 +161,7 @@ async fn main() {
         Commands::Music(args) => cli::media::music(args).await,
         Commands::Voices { command } => cli::media::voices(command).await,
         Commands::Routes { command } => cli::aliases::routes(command).await,
+        Commands::Rewards { command } => cli::rewards::run(command).await,
         Commands::Subscription { command } => cli::subscriptions::credentials::run(command).await,
         Commands::Tasks { command } => cli::diagnostics::tasks(command).await,
         Commands::Workload { command } => cli::workload::run(command),

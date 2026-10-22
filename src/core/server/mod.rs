@@ -32,6 +32,7 @@ mod lifecycle;
 mod media;
 mod readiness;
 mod refusal;
+mod rewards;
 mod streaming;
 mod subscriptions;
 mod telemetry;

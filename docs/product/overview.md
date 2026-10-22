@@ -20,6 +20,9 @@ Brama serves four audiences:
 - **Operators** publish immutable runtimes, grant finite Skarbiec capabilities,
   configure aliases and client allowlists, and diagnose routing without exposing
   secret material.
+- **Contributors** donate subscriptions to the pool and earn credits on Wisent's
+  contribution ledger, which buy entitlements such as gated aliases
+  ([rewards](rewards.md)).
 
 Brama is preferable to direct integrations when the required outcome is one
 least-privilege enforcement point with explicit billing ownership, bounded

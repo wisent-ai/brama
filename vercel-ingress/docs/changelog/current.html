@@ -24,6 +24,17 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-rewards">Unreleased: Brama reports pooled subscriptions to Wisent's contribution ledger and gates aliases on its entitlements<a class="headerlink" href="#unreleased-rewards" title="Link to this section">&para;</a></h2>
+<p>A gateway that declares <code>BRAMA_CONTRIBUTION_LEDGER_URL</code> reports, once per UTC day,
+each donated subscription that answered a caller from the pool as a <code>subscription.pooled</code>
+contribution of its donor (the Wisent account id of a signed-in donor), and serves an alias named in
+<code>BRAMA_ENTITLEMENT_GATED_ALIASES</code> beyond a credential's model scope only to a caller the
+ledger says holds the <code>model.access</code> entitlement to it, refusing others with
+<code>entitlement_required</code> and the ledger's reason, and a ledger that did not answer with
+<code>contribution_ledger_unanswered</code>. Brama links no identity: a signed-in user links
+their account on the Rewards page of compute.wisent.com. An operator reads an agent's entitlement with
+<a href="/docs/cli/rewards"><code>brama rewards status</code></a>. A gateway
+with no ledger serves as before.</p>
 <h2 id="unreleased-grant-lifetime">Unreleased: the runtime grant lasts as long as the operator declares<a class="headerlink" href="#unreleased-grant-lifetime" title="Link to this section">&para;</a></h2>
 <p><code>brama workload register</code> stated the largest integer JSON carries as the runtime
 grant's lifetime, a grant that never ends in practice, where Skarbiec requires one that does.

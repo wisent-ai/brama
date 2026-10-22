@@ -31,7 +31,11 @@ pub(in crate::core::server) fn presented_bearer(headers: &HeaderMap) -> Option<&
     if values.next().is_some() {
         return None;
     }
-    let value = value.to_str().ok()?;
+    // RFC 9110's credentials are visible ASCII; a value that is not cannot
+    // carry a bearer at all.
+    let Ok(value) = value.to_str() else {
+        return None;
+    };
     let (scheme, token) = value.split_once(' ')?;
     if !scheme.eq_ignore_ascii_case("bearer")
         || token.is_empty()
@@ -48,8 +52,7 @@ fn exact_agent_header(headers: &HeaderMap, expected: &str) -> bool {
     let mut values = headers.get_all("x-agent-id").iter();
     values
         .next()
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|value| value == expected)
+        .is_some_and(|value| value.as_bytes() == expected.as_bytes())
         && values.next().is_none()
 }
 
