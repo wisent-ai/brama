@@ -148,7 +148,7 @@ static GRANT_ROUTED: LazyLock<RwLock<HashMap<String, bool>>> =
 fn resolve_grant_route(resource: &str) -> Result<bool, String> {
     let binary = super::vault::entitlements_router_bin()?;
     let operation = format!("`{binary} route resolve {resource}`");
-    let output = super::vault::router::child_output_blocking(&binary, &operation, |command| {
+    let output = super::vault::child_output_blocking(&binary, &operation, |command| {
         command.arg("route").arg("resolve").arg(resource);
     })?;
     if !output.status.success() {

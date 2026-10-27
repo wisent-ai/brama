@@ -253,7 +253,9 @@ pub(super) fn lex(script: &str) -> Result<Lexed, String> {
     }
     lexed.finish();
     if lexed.delimiter_next.is_some() {
-        return Err(unterminated("a here-document operator without its delimiter"));
+        return Err(unterminated(
+            "a here-document operator without its delimiter",
+        ));
     }
     if let Some(document) = lexed.here_documents.first() {
         return Err(unclosed(document));

@@ -37,12 +37,20 @@ fn donor_of(id: &str) -> Result<Option<String>, String> {
         }
     };
     let overlay: Value = serde_json::from_str(&text).map_err(|error| {
-        format!("decode donated subscriptions file `{}`: {error}", path.display())
+        format!(
+            "decode donated subscriptions file `{}`: {error}",
+            path.display()
+        )
     })?;
     let items = overlay
         .get("items")
         .and_then(Value::as_array)
-        .ok_or_else(|| format!("donated subscriptions file `{}` has no items list", path.display()))?;
+        .ok_or_else(|| {
+            format!(
+                "donated subscriptions file `{}` has no items list",
+                path.display()
+            )
+        })?;
     Ok(items
         .iter()
         .find(|item| item.get("id").and_then(Value::as_str) == Some(id))
@@ -66,13 +74,11 @@ pub(crate) fn note_served(subscription_id: &str, provider: &str) {
     }
     let day = chrono::Utc::now().date_naive().to_string();
     let key = (subscription_id.to_string(), day.clone());
-    match REPORTED.lock() {
-        Ok(reported) if reported.contains(&key) => return,
-        Ok(_) => {}
-        Err(poisoned) => {
-            tracing::warn!(event = "contribution_report_state_poisoned", error = %poisoned,
-                "the record of reported pool days is poisoned; the day is reported again");
-        }
+    // One insert per reported day: a holder that panicked left the set whole,
+    // so it is taken back (and logged) rather than re-reporting every day of
+    // every pooled subscription for the life of the process.
+    if crate::core::sync::held(&REPORTED, "reported pool days").contains(&key) {
+        return;
     }
     let provider = provider.to_string();
     let runtime = match tokio::runtime::Handle::try_current() {
@@ -105,15 +111,7 @@ pub(crate) fn note_served(subscription_id: &str, provider: &str) {
         });
         match report(&event).await {
             Ok(_) => {
-                match REPORTED.lock() {
-                    Ok(mut reported) => {
-                        reported.insert(key);
-                    }
-                    Err(poisoned) => {
-                        tracing::warn!(event = "contribution_report_state_poisoned", error = %poisoned,
-                            "a reported pool day could not be remembered; it is reported again");
-                    }
-                }
+                crate::core::sync::held(&REPORTED, "reported pool days").insert(key);
             }
             Err(Unanswered::Undeclared) => {
                 // No ledger is declared: nothing is reported, and nothing is

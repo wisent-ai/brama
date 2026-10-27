@@ -31,6 +31,9 @@ pub(in crate::core::server) async fn list_aliases(
     let concurrency = crate::journal::concurrency::current();
     let report = aliases
         .declared()
+        .map_err(|error| {
+            crate::core::server::refusal::api_error(axum::http::StatusCode::SERVICE_UNAVAILABLE, &error)
+        })?
         .iter()
         .map(|alias| {
             let diagnosis = aliases.diagnose(alias);
@@ -77,16 +80,23 @@ pub(in crate::core::server) async fn list_categories() -> Result<Json<serde_json
 {
     let declared = crate::core::inference_routes::categories::declared();
     let snapshot = crate::subscription_dispatch::model_catalog::snapshot().await;
+    // Counts need the model catalogue; when it cannot be read they are null and
+    // `catalog_failure` says why.
+    let (catalog, catalog_failure) = match &snapshot {
+        Ok(catalog) => (Some(catalog), None),
+        Err(error) => (None, Some(error.to_string())),
+    };
     let report = declared
         .iter()
         .map(|(name, category)| {
-            let models = snapshot.as_ref().map_or(Value::Null, |catalog| {
-                json!(catalog
+            let models = match catalog {
+                Some(catalog) => json!(catalog
                     .models
                     .iter()
                     .filter(|model| category.contains(model))
-                    .count())
-            });
+                    .count()),
+                None => Value::Null,
+            };
             json!({
                 "category": name,
                 "providers": category.providers,
@@ -99,6 +109,7 @@ pub(in crate::core::server) async fn list_categories() -> Result<Json<serde_json
     Ok(Json(json!({
         "object": "list",
         "categories": report,
+        "catalog_failure": catalog_failure,
         "registry": crate::core::inference_routes::configured_path()
             .map(|path| path.display().to_string()),
         "degraded": snapshot.is_err(),

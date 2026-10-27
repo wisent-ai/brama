@@ -83,8 +83,11 @@ pub(in crate::providers::adapter) fn chat_payload(
             });
             // The format requires an answer length: the caller's, else the
             // model's own stated limit, else a refusal naming that.
-            body["max_tokens"] =
-                json!(required_output_limit(descriptor.id, model_id, request.max_tokens)?);
+            body["max_tokens"] = json!(required_output_limit(
+                descriptor.id,
+                model_id,
+                request.max_tokens
+            )?);
             if let Some(temperature) = request.temperature {
                 body["temperature"] = json!(temperature);
             }

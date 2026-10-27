@@ -10,14 +10,18 @@
 //   node vercel-ingress/tools/docs-navigation.mjs write
 //
 // check names every page whose navigation differs from the rendering, every
-// page that wears none, every stale source note, and every directory link no
-// rewrite in vercel.json serves. Sub-pages are reached from their parent's
-// page, so the directory lists topics, not every route. write rewrites the
-// navigation and removes the stale notes in place, then names what it cannot
-// place itself: a page without navigation lines and a link to nothing.
+// page that wears none, every stale source note, every directory link no
+// rewrite in vercel.json serves, and every page file under docs/ that no
+// rewrite serves (it is published nowhere and keeps whatever navigation it
+// was written with). Sub-pages are reached from their parent's page, so the
+// directory lists topics, not every route. write rewrites the navigation and
+// removes the stale notes in place, then names what it cannot place itself:
+// a page without navigation lines, a link to nothing and a page no route
+// serves. A page wearing its section's navigation (a runbook or readme topic
+// split into sub-pages) keeps it; check names any link in it nothing serves.
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Exit statuses as POSIX comparison utilities state them: success, a finding,
@@ -29,6 +33,9 @@ const ingress = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = resolve(ingress, "..");
 const MOBILE = '<details class="mobile-nav">';
 const SIDEBAR = '<aside aria-label="Documentation navigation">';
+// A topic split into a parent page and sub-pages wears that section's own
+// navigation instead of the directory; its links must still be served.
+const SECTION = '<aside aria-label="Section navigation">';
 const GRID_OPEN = '<div class="directory-grid">';
 const GRID_CLOSE = "</div></section>";
 const NOTE_OPEN = '<p class="source-note">Documentation topic: ';
@@ -59,7 +66,11 @@ if (!Object.hasOwn(VERBS, verb) || extra.length) {
 }
 const mode = VERBS[verb];
 
-// Routes: every vercel.json rewrite onto a docs HTML file.
+// Routes: every vercel.json rewrite onto a docs HTML file. A rewrite whose
+// last segment is a parameter (/docs/providers/:slug onto
+// /docs/providers/:slug.html) serves every page file in that directory, so
+// each one is a route; a parameter anywhere else is not a page layout this
+// tool can place.
 let rewrites;
 try {
   ({ rewrites } = JSON.parse(read(join(ingress, "vercel.json"))));
@@ -67,10 +78,34 @@ try {
   refuse(`vercel.json is not JSON (${error.message})`);
 }
 if (!Array.isArray(rewrites)) refuse("vercel.json declares no rewrites array");
+
+function served(source, destination) {
+  if (!destination.includes(":")) return [[source, destination]];
+  const directory = dirname(destination);
+  const parameter = basename(destination, ".html");
+  if (directory.includes(":") || !parameter.startsWith(":") || !source.endsWith(`/${parameter}`)) {
+    refuse(`vercel.json rewrites ${source} onto ${destination}, a parameter outside the page's own name`);
+  }
+  let names;
+  try {
+    names = readdirSync(join(ingress, directory));
+  } catch (error) {
+    refuse(`${relative(repo, join(ingress, directory))} cannot be listed (${error.message})`);
+  }
+  return names
+    .filter((name) => name.endsWith(".html"))
+    .map((name) => [
+      `${source.slice(0, source.length - parameter.length)}${basename(name, ".html")}`,
+      `${directory}/${name}`,
+    ]);
+}
+
 const pages = new Map();
 for (const { source, destination } of rewrites) {
   if (typeof destination === "string" && destination.startsWith("/docs/") && destination.endsWith(".html")) {
-    pages.set(source, join(ingress, destination));
+    for (const [route, file] of served(source, destination)) {
+      if (!pages.has(route)) pages.set(route, join(ingress, file));
+    }
   }
 }
 
@@ -122,16 +157,25 @@ function staleNote(line) {
   return !existsSync(join(repo, named)) && !existsSync(join(ingress, named));
 }
 
+// Every routed page is read before any is written, so a page that cannot be
+// read refuses the run with no page rewritten and none left half done.
 const drifted = [];
 const bare = [];
 const notes = [];
+const rewritten = [];
+const sectionLinks = [];
 for (const [route, file] of pages) {
   const text = read(file);
   const lines = text.split("\n");
   const body = rendered(route);
   const mobileAt = lineOf(lines, MOBILE);
   const sidebarAt = lineOf(lines, SIDEBAR);
-  if (mobileAt === undefined || sidebarAt === undefined) {
+  const sectionAt = lineOf(lines, SECTION);
+  if ((mobileAt === undefined || sidebarAt === undefined) && sectionAt !== undefined) {
+    for (const [, href] of lines[sectionAt].matchAll(/<a[^>]* href="(\/docs[^"#]*)"/g)) {
+      sectionLinks.push({ route, href });
+    }
+  } else if (mobileAt === undefined || sidebarAt === undefined) {
     bare.push(route);
   } else {
     const mobile = `  ${MOBILE}<summary>Browse documentation</summary><nav>${body}</nav></details>`;
@@ -144,16 +188,41 @@ for (const [route, file] of pages) {
   }
   const kept = lines.filter((line) => !staleNote(line));
   if (kept.length !== lines.length) notes.push(route);
-  if (mode.writes && kept.join("\n") !== text) writeFileSync(file, kept.join("\n"));
+  if (kept.join("\n") !== text) rewritten.push([file, kept.join("\n")]);
+}
+if (mode.writes) {
+  for (const [file, text] of rewritten) writeFileSync(file, text);
 }
 
 const listed = new Set(groups.flatMap(({ links }) => links.map(({ href }) => href)));
-const dangling = [...listed].filter((href) => !pages.has(href));
+const dangling = [
+  ...[...listed].filter((href) => !pages.has(href)),
+  ...sectionLinks.filter(({ href }) => !pages.has(href)).map(({ route, href }) => `${href} (section navigation of ${route})`),
+];
+
+function pageFiles(directory) {
+  let entries;
+  try {
+    entries = readdirSync(directory, { withFileTypes: true });
+  } catch (error) {
+    refuse(`${relative(repo, directory)} cannot be listed (${error.message})`);
+  }
+  return entries.flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return pageFiles(path);
+    return entry.name.endsWith(".html") ? [path] : [];
+  });
+}
+const routedFiles = new Set(pages.values());
+const unrouted = pageFiles(join(ingress, "docs")).filter((file) => !routedFiles.has(file));
 
 for (const route of drifted) console.log(`${route}: navigation ${mode.drift}`);
 for (const route of notes) console.log(`${route}: source note naming a missing file ${mode.note}`);
 for (const route of bare) console.log(`${route}: wears no navigation lines; place the page in the layout by hand`);
 for (const href of dangling) console.log(`${href}: listed in the directory but no vercel.json rewrite serves it`);
-const unresolved = bare.length + dangling.length;
-const pending = mode.repairable ? drifted.length + notes.length : Number();
-if (unresolved + pending) process.exit(FINDING);
+for (const file of unrouted) {
+  console.log(`${relative(repo, file)}: no vercel.json rewrite serves this page; route it or delete it`);
+}
+// Drift and missing-file notes stay findings in a check; a write repaired them.
+const pending = mode.repairable ? [...drifted, ...notes] : [];
+if (bare.length || dangling.length || unrouted.length || pending.length) process.exit(FINDING);

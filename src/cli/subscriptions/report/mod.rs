@@ -61,9 +61,10 @@ pub(super) fn print_accounts(accounts: Option<&Value>) {
         None => format!("an unreported number of ({field} absent)"),
     };
     println!(
-        "{} member(s) declare no account, {} not active (retired or disabled)",
+        "{} member(s) declare no account, {} not active (retired or disabled), {} malformed (no id or provider)",
         count("members_without_account"),
-        count("inactive_members")
+        count("inactive_members"),
+        count("malformed_members")
     );
     capacity::print_capacity(accounts);
 }
@@ -77,22 +78,26 @@ pub(super) fn print_pool(report: &Value) {
         );
     }
     // A report without its subscription list is said as such rather than
-    // read as an empty pool. A retired credential is listed with its cause
-    // but is no subscription the pool holds, so it is counted apart and a
-    // pool of retired members never looks like a pool of dead subscriptions
-    // Brama still holds.
+    // read as an empty pool. A retired credential is no subscription the
+    // pool holds, and a burnt one serves nothing until a sign-in renews it:
+    // each is counted apart with its own count, so a pool of retired and
+    // burnt members never reads as live subscriptions that all failed.
     let rows = report.get("subscriptions").and_then(Value::as_array);
     match rows {
         Some(rows) => {
             let (retired, held): (Vec<&Value>, Vec<&Value>) =
                 rows.iter().partition(|row| membership::is_retired(row));
-            let live = held
+            let (burnt, servable): (Vec<&Value>, Vec<&Value>) = held
+                .into_iter()
+                .partition(|row| text(row, "state") == Some("burnt"));
+            let live = servable
                 .iter()
                 .filter(|row| text(row, "state") == Some("live"))
                 .count();
             println!(
-                "{live} of {} held subscription credentials are live; {} retired credential(s) are listed and not counted",
-                held.len(),
+                "{live} of {} servable subscription credentials are live; {} burnt (renewed only by a sign-in) and {} retired credential(s) are listed and not counted",
+                servable.len(),
+                burnt.len(),
                 retired.len()
             );
         }

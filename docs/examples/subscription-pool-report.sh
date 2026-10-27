@@ -6,11 +6,11 @@
 # every deployment starts with.
 #
 # Usage:
-#   ./subscription-pool-report.sh
+#   BRAMA_BIN=brama ./subscription-pool-report.sh
 #   BRAMA_BIN=target/debug/brama ./subscription-pool-report.sh
 set -euo pipefail
 
-BRAMA_BIN="${BRAMA_BIN:-brama}"
+BRAMA_BIN="${BRAMA_BIN:?set BRAMA_BIN to the brama to run: brama on PATH, or a build such as target/debug/brama}"
 STATE="$(mktemp -d)"
 echo "isolated state: ${STATE}" >&2
 

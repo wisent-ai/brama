@@ -12,9 +12,9 @@ pub(super) fn native_answer(
     let mut normalized = Map::new();
     match question {
         Question::Noul { .. } => {
-            let raw = answer.get("noul").ok_or_else(|| {
-                format!("answer for question `{key}` is missing `noul`")
-            })?;
+            let raw = answer
+                .get("noul")
+                .ok_or_else(|| format!("answer for question `{key}` is missing `noul`"))?;
             let value = probability(Some(raw)).ok_or_else(|| {
                 format!("answer for question `{key}` has an invalid `noul` probability")
             })?;
@@ -32,9 +32,9 @@ pub(super) fn native_answer(
             let raw = answer
                 .get("choice")
                 .ok_or_else(|| format!("answer for question `{key}` is missing `choice`"))?;
-            let choice = raw.as_str().ok_or_else(|| {
-                format!("answer for question `{key}` has a non-string `choice`")
-            })?;
+            let choice = raw
+                .as_str()
+                .ok_or_else(|| format!("answer for question `{key}` has a non-string `choice`"))?;
             if !options.iter().any(|(label, _)| label == choice) {
                 return Err(format!(
                     "answer for question `{key}` names option `{choice}`, which this question does not declare"
@@ -47,9 +47,9 @@ pub(super) fn native_answer(
             let raw = answer
                 .get("score")
                 .ok_or_else(|| format!("answer for question `{key}` is missing `score`"))?;
-            let score = raw.as_f64().ok_or_else(|| {
-                format!("answer for question `{key}` has a non-number `score`")
-            })?;
+            let score = raw
+                .as_f64()
+                .ok_or_else(|| format!("answer for question `{key}` has a non-number `score`"))?;
             // A score indexes the rubric's levels, from the first to the last.
             let Some(highest) = levels
                 .iter()

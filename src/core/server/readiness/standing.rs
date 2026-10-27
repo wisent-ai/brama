@@ -211,7 +211,9 @@ pub(in crate::core::server) async fn watch() {
         };
         if reading != said {
             if let Some(sentence) = &reading {
-                tracing::warn!("standing credential calls refused by the gateway's own reading: {sentence}");
+                tracing::warn!(
+                    "standing credential calls refused by the gateway's own reading: {sentence}"
+                );
             }
             said = reading;
         }

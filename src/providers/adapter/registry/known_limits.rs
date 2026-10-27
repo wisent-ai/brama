@@ -70,7 +70,12 @@ fn omp_metadata_from_value(row: &Value) -> Result<(String, OmpModelMetadata), St
         .and_then(Value::as_array)
         .ok_or("has no input list")?
         .iter()
-        .map(|value| value.as_str().map(str::to_string).ok_or("lists an input that is not text"))
+        .map(|value| {
+            value
+                .as_str()
+                .map(str::to_string)
+                .ok_or("lists an input that is not text")
+        })
         .collect::<Result<Vec<_>, _>>()?;
     if input_modalities.is_empty() {
         return Err(format!("({model_id}) lists no input modality"));

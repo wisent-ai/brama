@@ -79,7 +79,7 @@ fn a_recoverable_account_is_admitted_by_its_sign_in_and_enters_the_pool() {
     let reason = "recoverable account journey: admit the item and bank its own grant";
     let signed = run.command(&[
         "subscription",
-        "sign-in",
+        "login",
         &provider,
         "--by",
         "weles",

@@ -71,10 +71,12 @@ pub(in super::super) async fn generate_image(
             .pointer("/promptFeedback/blockReason")
             .or_else(|| answer.pointer("/candidates/0/finishReason"))
             .and_then(Value::as_str)
-            .ok_or_else(|| Refusal::new(
+            .ok_or_else(|| {
+                Refusal::new(
                 ProviderRefusal::ProviderFailure,
                 "provider_failure: gemini returned no image and stated no block or finish reason",
-            ))?;
+            )
+            })?;
         return Err(Refusal::new(
             ProviderRefusal::ProviderFailure,
             format!("provider_failure: gemini returned no image ({reason})"),

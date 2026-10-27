@@ -20,12 +20,10 @@ pub fn route(value: &str) -> Option<(&'static ProviderDescriptor, Cow<'_, str>)>
     Some((descriptor, Cow::Borrowed(model_id)))
 }
 
+/// Whether this route names a provider that serves chat. Which models a
+/// provider serves there is the provider's answer, refused in its words.
 pub fn supports_chat_route(value: &str) -> bool {
-    route(value).is_some_and(|(descriptor, model_id)| {
-        !descriptor.chat_path.is_empty()
-            && model_id.as_ref() != OPENAI_EMBEDDING_MODEL
-            && model_id.as_ref() != OPENAI_MODERATION_MODEL
-    })
+    route(value).is_some_and(|(descriptor, _)| !descriptor.chat_path.is_empty())
 }
 
 /// Whether this route is served by a provider that answers typed decisions in

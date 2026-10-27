@@ -65,6 +65,7 @@ pub fn alias_report() -> Result<AliasReport, std::io::Error> {
     };
     let diagnoses = aliases
         .declared()
+        .map_err(std::io::Error::other)?
         .iter()
         .map(|alias| aliases.diagnose(alias))
         .collect();

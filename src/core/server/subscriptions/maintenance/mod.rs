@@ -131,7 +131,8 @@ pub(in crate::core::server) fn spawn() {
             let remaining = due.map(|at| at.saturating_sub(chrono::Utc::now().timestamp_millis()));
             match remaining.filter(|left| left.is_positive()) {
                 Some(left) => {
-                    let moment = tokio::time::Instant::now() + Duration::from_millis(left.unsigned_abs());
+                    let moment =
+                        tokio::time::Instant::now() + Duration::from_millis(left.unsigned_abs());
                     tokio::select! {
                         () = &mut woken => {}
                         () = tokio::time::sleep_until(moment) => {}

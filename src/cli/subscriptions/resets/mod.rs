@@ -29,13 +29,10 @@ pub(crate) async fn run(args: ResetArgs) {
         Ok(answer) => {
             crate::cli::print_answer(&answer, args.json);
             if answer["ok"].as_bool() != Some(true) {
-                std::process::exit(libc::EXIT_FAILURE);
+                crate::cli::fail();
             }
         }
-        Err(error) => {
-            eprintln!("{error}");
-            std::process::exit(libc::EXIT_FAILURE);
-        }
+        Err(error) => crate::cli::refused(error),
     }
 }
 
@@ -161,10 +158,7 @@ pub(crate) async fn policy(command: PolicyCommand) {
     };
     match policy_answer(&target, request).await {
         Ok(answer) => crate::cli::print_answer(&answer, target.json),
-        Err(error) => {
-            eprintln!("{error}");
-            std::process::exit(libc::EXIT_FAILURE);
-        }
+        Err(error) => crate::cli::refused(error),
     }
 }
 

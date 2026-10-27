@@ -11,10 +11,7 @@ fn registry_path(file: Option<PathBuf>) -> PathBuf {
         Some(path) => path,
         None => match brama::config_adoption::default_destination() {
             Ok(path) => path,
-            Err(error) => {
-                eprintln!("route registry error: {error}");
-                crate::cli::fail();
-            }
+            Err(error) => crate::cli::refused(format!("route registry error: {error}")),
         },
     }
 }
@@ -30,40 +27,31 @@ fn registry_path(file: Option<PathBuf>) -> PathBuf {
 /// from the one place a gateway that is not running can be repaired.
 pub(super) fn set(alias: String, destination: String, file: Option<PathBuf>, json: bool) {
     if !brama::core::server::valid_alias(&alias) {
-        eprintln!(
+        crate::cli::refused(format!(
             "route alias `{alias}` is invalid: an alias is lowercase letters, digits, `-`, `_`, `.` and `/`"
-        );
-        crate::cli::fail();
+        ));
     }
     if !brama::core::server::route_shape_writable(&alias, &destination) {
-        eprintln!(
+        crate::cli::refused(format!(
             "alias `{alias}` cannot carry `{destination}`: it is not a shape this alias promises"
-        );
-        crate::cli::fail();
+        ));
     }
     let path = registry_path(file);
     let document = match brama::core::inference_routes::update_route(&path, &alias, &destination) {
         Ok(document) => document,
-        Err(error) => {
-            eprintln!("route update error: {error}");
-            crate::cli::fail();
-        }
+        Err(error) => crate::cli::refused(format!("route update error: {error}")),
     };
     report_registry(&path, &document, json, &format!("{alias} -> {destination}"));
 }
 
 pub(super) fn remove(alias: String, file: Option<PathBuf>, json: bool) {
     if !brama::core::server::valid_alias(&alias) {
-        eprintln!("route alias `{alias}` is invalid");
-        crate::cli::fail();
+        crate::cli::refused(format!("route alias `{alias}` is invalid"));
     }
     let path = registry_path(file);
     let document = match brama::core::inference_routes::delete_route(&path, &alias) {
         Ok(document) => document,
-        Err(error) => {
-            eprintln!("route removal error: {error}");
-            crate::cli::fail();
-        }
+        Err(error) => crate::cli::refused(format!("route removal error: {error}")),
     };
     report_registry(&path, &document, json, &format!("{alias} removed"));
 }
@@ -79,9 +67,18 @@ fn report_registry(path: &std::path::Path, document: &Value, json: bool, change:
     }
     println!("registry: {}", path.display());
     println!("change: {change}");
-    let routes = document.get("routes").and_then(Value::as_object);
-    println!("routes: {}", routes.map_or(0, serde_json::Map::len));
-    for (alias, destination) in routes.into_iter().flatten() {
+    print_routes(document);
+}
+
+/// The routes a registry document holds, one per line, or that it holds no
+/// routes object; an absent list is said, never counted as none.
+fn print_routes(document: &Value) {
+    let Some(routes) = document.get("routes").and_then(Value::as_object) else {
+        println!("routes: the document holds no routes object");
+        return;
+    };
+    println!("routes: {}", routes.len());
+    for (alias, destination) in routes {
         println!("{:<32} {}", alias, destination_text(destination));
     }
 }
@@ -101,10 +98,7 @@ pub(super) fn migrate(file: Option<PathBuf>, json: bool) {
     let path = registry_path(file);
     let document = match brama::core::inference_routes::migrate(&path) {
         Ok(document) => document,
-        Err(error) => {
-            eprintln!("route migration error: {error}");
-            crate::cli::fail();
-        }
+        Err(error) => crate::cli::refused(format!("route migration error: {error}")),
     };
     if json {
         super::super::print_json(&serde_json::json!({
@@ -114,16 +108,9 @@ pub(super) fn migrate(file: Option<PathBuf>, json: bool) {
         return;
     }
     println!("registry: {}", path.display());
-    println!(
-        "deployments: {}",
-        document
-            .get("deployments")
-            .and_then(Value::as_array)
-            .map_or(0, Vec::len)
-    );
-    let routes = document.get("routes").and_then(Value::as_object);
-    println!("routes: {}", routes.map_or(0, serde_json::Map::len));
-    for (alias, destination) in routes.into_iter().flatten() {
-        println!("{:<32} {}", alias, destination_text(destination));
+    match document.get("deployments").and_then(Value::as_array) {
+        Some(deployments) => println!("deployments: {}", deployments.len()),
+        None => println!("deployments: the document holds no deployments list"),
     }
+    print_routes(&document);
 }

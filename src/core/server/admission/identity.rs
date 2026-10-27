@@ -9,6 +9,29 @@ use serde::Deserialize;
 pub(in crate::core::server) const BRAMA_DESKTOP_CLIENT_ID: &str = "brama-desktop";
 pub(in crate::core::server) const BRAMA_USER_CLIENT_ID: &str = "brama-user";
 
+/// The client a standalone launcher names as its own gateway's console: a
+/// private gateway's launcher (Jeden's) administers it as Brama Desktop
+/// administers its own. Read only in a standalone process; a managed
+/// gateway's console is Brama Desktop alone.
+const STANDALONE_CONSOLE_ENV: &str = "BRAMA_STANDALONE_CONSOLE_CLIENT";
+
+/// Whether `client_id` is this gateway's console: Brama Desktop, or, in a
+/// standalone process, the client its launcher names in
+/// `BRAMA_STANDALONE_CONSOLE_CLIENT`. A declaration that cannot be read is
+/// refused, never taken for no console.
+pub(in crate::core::server) fn is_console(client_id: &str) -> Result<bool, String> {
+    if client_id == BRAMA_DESKTOP_CLIENT_ID {
+        return Ok(true);
+    }
+    if !crate::gateway::broker::local_provider_credentials_enabled() {
+        return Ok(false);
+    }
+    Ok(
+        crate::environment::declared_setting(STANDALONE_CONSOLE_ENV)?
+            .is_some_and(|named| named == client_id),
+    )
+}
+
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(in crate::core::server) enum OrganizationRole {

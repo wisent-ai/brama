@@ -59,7 +59,8 @@ pub(super) async fn decide(options: &AcquireOptions) -> Result<Shortage, Box<Val
         .iter()
         .map(ToString::to_string)
         .collect();
-    let count = u64::try_from(accounts.len()).expect("an account count fits in u64");
+    // A usize is at most 64 bits on every target Brama builds for.
+    let count = accounts.len() as u64;
     if count >= cap {
         return Err(refuse(
             "account_cap_reached",

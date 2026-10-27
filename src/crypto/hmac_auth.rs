@@ -125,9 +125,12 @@ pub fn agent_headers(
 ) -> Result<Vec<(&'static str, String)>, HmacAuthError> {
     let elapsed = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|error| HmacAuthError::Clock(format!("it reads before the Unix epoch: {error}")))?;
-    let timestamp = i64::try_from(elapsed.as_secs())
-        .map_err(|error| HmacAuthError::Clock(format!("its seconds exceed a timestamp: {error}")))?;
+        .map_err(|error| {
+            HmacAuthError::Clock(format!("it reads before the Unix epoch: {error}"))
+        })?;
+    let timestamp = i64::try_from(elapsed.as_secs()).map_err(|error| {
+        HmacAuthError::Clock(format!("its seconds exceed a timestamp: {error}"))
+    })?;
     Ok(vec![
         ("x-agent-id", agent_id.to_string()),
         ("x-agent-timestamp", timestamp.to_string()),

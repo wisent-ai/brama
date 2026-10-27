@@ -125,15 +125,13 @@ pub(super) fn settled(dispatched: &DispatchedCall) -> crate::journal::concurrenc
     use crate::types::{GatewayRefusal, ProviderRefusal};
     match dispatched {
         DispatchedCall::Committed(_) => Settled::Answered,
-        DispatchedCall::Buffered(resp) => {
-            match resp.failure_class() {
-                None => Settled::Answered,
-                Some(
-                    ProviderRefusal::RateLimited
-                    | ProviderRefusal::Gateway(GatewayRefusal::SubscriptionUnavailable),
-                ) => Settled::RefusedForCapacity,
-                Some(_) => Settled::Other,
-            }
-        }
+        DispatchedCall::Buffered(resp) => match resp.failure_class() {
+            None => Settled::Answered,
+            Some(
+                ProviderRefusal::RateLimited
+                | ProviderRefusal::Gateway(GatewayRefusal::SubscriptionUnavailable),
+            ) => Settled::RefusedForCapacity,
+            Some(_) => Settled::Other,
+        },
     }
 }

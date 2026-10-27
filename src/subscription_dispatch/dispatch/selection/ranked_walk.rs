@@ -187,8 +187,7 @@ fn walked_class(classes: &[ProviderRefusal]) -> ProviderRefusal {
     let saw = |class: ProviderRefusal| classes.contains(&class);
     let unavailable = ProviderRefusal::Gateway(GatewayRefusal::SubscriptionUnavailable);
     let unauthorized = ProviderRefusal::Gateway(GatewayRefusal::CredentialUnauthorized);
-    let reauthorize =
-        ProviderRefusal::Gateway(GatewayRefusal::SubscriptionReauthorizationRequired);
+    let reauthorize = ProviderRefusal::Gateway(GatewayRefusal::SubscriptionReauthorizationRequired);
     if saw(ProviderRefusal::QuotaExhausted) {
         ProviderRefusal::QuotaExhausted
     } else if saw(ProviderRefusal::RateLimited) {

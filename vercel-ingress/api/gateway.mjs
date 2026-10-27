@@ -19,14 +19,19 @@ function statusOf(name) {
 const SERVICE_UNAVAILABLE = statusOf('Service Unavailable');
 const BAD_GATEWAY = statusOf('Bad Gateway');
 
+/** The answer for an origin this deployment cannot forward to, with why. */
+function refusedOrigin(refusal) {
+  return { refusal };
+}
+
 function declaredOrigin() {
   const value = process.env[ORIGIN_VARIABLE]?.trim();
-  if (!value) return { refusal: `${ORIGIN_VARIABLE} is not set on the brama.wisent.com project, so no gateway origin is declared to forward to` };
+  if (!value) return refusedOrigin(`${ORIGIN_VARIABLE} is not set on the brama.wisent.com project, so no gateway origin is declared to forward to`);
   let origin;
-  try { origin = new URL(value); } catch { return { refusal: `${ORIGIN_VARIABLE} is not a URL: ${JSON.stringify(value)}` }; }
+  try { origin = new URL(value); } catch (error) { return refusedOrigin(`${ORIGIN_VARIABLE} is not a URL: ${JSON.stringify(value)}: ${error.message}`); }
   if (origin.protocol !== 'https:' || origin.username || origin.password
       || (origin.pathname !== '/' && origin.pathname !== '') || origin.search || origin.hash) {
-    return { refusal: `${ORIGIN_VARIABLE} must be one credential-free HTTPS origin, not ${JSON.stringify(value)}` };
+    return refusedOrigin(`${ORIGIN_VARIABLE} must be one credential-free HTTPS origin, not ${JSON.stringify(value)}`);
   }
   return { origin };
 }

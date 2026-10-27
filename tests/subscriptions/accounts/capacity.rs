@@ -121,7 +121,7 @@ fn account_capacity_is_the_newest_reading_across_the_members_of_each_account() {
             };
             assert_eq!(
                 newest["recorded_at_ms"].as_i64(),
-                Some(window.read_at_ms),
+                window.read_at_ms,
                 "{key:?}: {} is read at the newest member instant",
                 window.limit_id
             );

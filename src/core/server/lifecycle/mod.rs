@@ -33,6 +33,9 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
         ingress_auth.requires_aliases("weles", &[BEST_ALIAS, WELES_ALIAS])?;
     }
     let aliases = ModelAliases::from_env(!standalone)?;
+    // A declared answer key that cannot be read stops startup here, before
+    // any answer goes out unsigned in its place.
+    let signer = crate::core::server::signature::AnswerSigner::from_env()?;
     // Touch the perf registry so persisted stats load at startup, not on first use.
     info!(
         models = crate::core::perf::tracked_count(),
@@ -46,7 +49,7 @@ pub async fn start_server(port: u16, standalone: bool) -> Result<(), std::io::Er
     spawn_readiness_probe();
     crate::core::server::subscriptions::maintenance::spawn();
 
-    let app = router::app(aliases, ingress_auth);
+    let app = router::app(aliases, ingress_auth, signer);
 
     // Loopback unless this host is told otherwise. A gateway that binds a
     // routable address by default is one that can be reached before anybody

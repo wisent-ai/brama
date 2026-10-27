@@ -131,7 +131,8 @@ async fn refresh_presented(
     // What the vault now holds, said in the ledger rather than left to be
     // rediscovered: a reader asking why a token died early needs the instant it
     // was rotated and the instant it expires, and neither is in the vault.
-    let expires_at_ms = oauth_refresh::access_token_expiry_ms(&refreshed, provider).map_err(in_context)?;
+    let expires_at_ms =
+        oauth_refresh::access_token_expiry_ms(&refreshed, provider).map_err(in_context)?;
     crate::subscription_dispatch::usage::record_credential_active(
         subscription_id,
         provider,

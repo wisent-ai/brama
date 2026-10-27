@@ -15,20 +15,28 @@ pub(in crate::core::server) mod snapshot;
 use axum::http::StatusCode;
 use serde::Deserialize;
 
-use crate::core::server::admission::identity::{ModelClientIdentity, BRAMA_DESKTOP_CLIENT_ID};
+use crate::core::server::admission::identity::{is_console, ModelClientIdentity};
 use crate::core::server::aliases::{alias_requires_direct_capability, alias_route_shape_supported};
 use crate::core::server::refusal::{api_error, ApiError};
 
+/// Admit only this gateway's console holding an unrestricted bearer: Brama
+/// Desktop, or the client a standalone launcher names (`is_console`).
 pub(in crate::core::server) fn require_brama_desktop(
     identity: &ModelClientIdentity,
 ) -> Result<(), ApiError> {
-    if identity.client_id == BRAMA_DESKTOP_CLIENT_ID && identity.allowed_models.is_none() {
+    let console = is_console(&identity.client_id).map_err(|cause| {
+        api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &format!("which client is this gateway's console cannot be read: {cause}"),
+        )
+    })?;
+    if console && identity.allowed_models.is_none() {
         Ok(())
     } else {
         Err(api_error(
             StatusCode::FORBIDDEN,
             &format!(
-                "client {} is not the Brama Desktop console with an unrestricted bearer, the only caller this request admits without an agent signature or a signed-in Wisent user",
+                "client {} is not this gateway's console with an unrestricted bearer (Brama Desktop, or in a standalone process the client its launcher names in BRAMA_STANDALONE_CONSOLE_CLIENT), the only caller this request admits without an agent signature or a signed-in Wisent user",
                 identity.client_id
             ),
         ))

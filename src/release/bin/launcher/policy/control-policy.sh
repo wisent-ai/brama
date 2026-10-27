@@ -36,7 +36,7 @@ routes_dir=$(dirname "$BRAMA_INFERENCE_ROUTES_FILE")
 mkdir -p "$routes_dir"
 chmod u=rwx,go= "$routes_dir"
 if [ ! -e "$BRAMA_INFERENCE_ROUTES_FILE" ]; then
-  BRAMA_MODEL_ALIASES="$BRAMA_MODEL_ALIASES" "$BRAMA_BIN" launcher seed-routes "$BRAMA_INFERENCE_ROUTES_FILE"
+  BRAMA_MODEL_ALIASES="$BRAMA_MODEL_ALIASES" "$BRAMA_BIN" launcher seed "$BRAMA_INFERENCE_ROUTES_FILE"
 fi
 export BRAMA_INFERENCE_ROUTES_FILE
 unset routes_dir

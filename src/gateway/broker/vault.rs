@@ -23,15 +23,15 @@ pub(super) use grant::credential_by_grant;
 pub(super) use item::register_discovered_account;
 pub(super) use item::remove_subscription_item;
 pub(super) use item::restore_subscription_mark;
-pub(super) use item::{existing_item_account, existing_item_tags, put_credential};
 /// The listing row and its decoder are public: the launcher reads the same
 /// router listing outside the gateway, and a second reading of a row is how
 /// the two come to disagree about deleted or id-less items.
 pub use item::{decode_listing, VaultListItem};
+pub(super) use item::{existing_item_account, existing_item_tags, put_credential};
 /// The vault program itself is named crate-wide: the sign-in path reads
 /// `brama-weles-reauth` through the same program every credential operation
 /// runs, and a second answer to "which vault binary" is how one caller ends
 /// up spawning a name no machine installs.
 pub(crate) use router::entitlements_router_bin;
-pub(super) use router::raw_listing;
+pub(super) use router::{child_output_blocking, raw_listing};
 pub(crate) use seeds::{login_seed_present, login_seed_states};

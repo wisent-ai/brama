@@ -1,9 +1,11 @@
 //! The lease register on disk: one file under Brama's state directory, read
-//! whole and replaced atomically under one process lock, so a lease survives
-//! a gateway restart and two leases taken at once cannot lose each other.
+//! whole and replaced atomically under the exclusive lock of
+//! [`crate::core::staging::held_beside`], so a lease survives a gateway
+//! restart and two leases taken at once cannot lose each other — also when
+//! they are taken by two gateways, which a mutex of one process did not
+//! keep apart although the register promises they never lease one member.
 
 use std::path::PathBuf;
-use std::sync::{LazyLock, Mutex};
 
 use serde::{Deserialize, Serialize};
 
@@ -72,7 +74,13 @@ fn path() -> Result<PathBuf, String> {
     )
 }
 
-static LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+/// How the register is named in refusals.
+const REGISTER: &str = "the lease register";
+
+/// Hold the register for this caller alone across every Brama process.
+fn held() -> Result<std::fs::File, String> {
+    crate::core::staging::held_beside(&path()?, REGISTER)
+}
 
 fn now_ms() -> Result<i64, String> {
     let elapsed = std::time::SystemTime::now()
@@ -101,34 +109,13 @@ fn load() -> Result<Register, String> {
 
 fn persist(register: &Register) -> Result<(), String> {
     let path = path()?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| {
-            format!(
-                "the lease register's directory {} cannot be made: {error}",
-                parent.display()
-            )
-        })?;
-    }
-    let staged = path.with_extension("json.staging");
     let text = serde_json::to_vec_pretty(register)
         .map_err(|error| format!("the lease register cannot be encoded: {error}"))?;
-    std::fs::write(&staged, text).map_err(|error| {
-        format!(
-            "the lease register {} cannot be staged: {error}",
-            staged.display()
-        )
-    })?;
-    std::fs::rename(&staged, &path).map_err(|error| {
-        format!(
-            "the lease register {} cannot replace {}: {error}",
-            staged.display(),
-            path.display()
-        )
-    })
+    crate::core::staging::replace_private(&path, &text, REGISTER)
 }
 
 fn locked<T>(apply: impl FnOnce(&mut Register) -> Result<T, String>) -> Result<T, String> {
-    let _guard = crate::core::sync::held(&LOCK, "lease register");
+    let _held = held()?;
     let mut register = load()?;
     let answer = apply(&mut register)?;
     persist(&register)?;
@@ -137,7 +124,7 @@ fn locked<T>(apply: impl FnOnce(&mut Register) -> Result<T, String>) -> Result<T
 
 /// Every live lease, newest last.
 pub fn live() -> Result<Vec<Lease>, String> {
-    let _guard = crate::core::sync::held(&LOCK, "lease register");
+    let _held = held()?;
     Ok(load()?.leases.into_iter().filter(Lease::is_live).collect())
 }
 
@@ -155,7 +142,7 @@ pub(super) fn take(
     use super::{count, fewest_then_freshest, member_row, members, Members, Refused, Taken};
 
     let unavailable = |detail| Refused::Unavailable { detail };
-    let _guard = crate::core::sync::held(&LOCK, "lease register");
+    let _held = held().map_err(unavailable)?;
     let mut register = load().map_err(unavailable)?;
     register.leases.retain(Lease::is_live);
     if let Some(standing) = register.leases.iter().find(|lease| {
@@ -165,11 +152,10 @@ pub(super) fn take(
             .leases
             .iter()
             .filter(|lease| lease.subscription_id == standing.subscription_id)
-            .count();
+            .count() as u64;
         return Ok(Taken {
             lease: standing.clone(),
-            live_on_subscription: u64::try_from(live_on_subscription)
-                .expect("a lease count fits in u64"),
+            live_on_subscription,
             limit,
             new: false,
         });
@@ -217,12 +203,11 @@ pub(super) fn take(
         .leases
         .iter()
         .filter(|held| held.subscription_id == lease.subscription_id)
-        .count();
+        .count() as u64;
     persist(&register).map_err(unavailable)?;
     Ok(Taken {
         lease,
-        live_on_subscription: u64::try_from(live_on_subscription)
-            .expect("a lease count fits in u64"),
+        live_on_subscription,
         limit,
         new: true,
     })

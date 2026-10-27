@@ -15,10 +15,7 @@ pub(crate) async fn enrol_authenticator(
 ) {
     let weles = match weles_provider(provider) {
         Ok(weles) => weles,
-        Err(cause) => {
-            eprintln!("{cause}, so it has no authenticator to enrol");
-            crate::cli::fail();
-        }
+        Err(cause) => crate::cli::refused(format!("{cause}, so it has no authenticator to enrol")),
     };
     match enrol(provider, weles, subscription_id, login_item).await {
         Ok(enrolment) => {
@@ -31,19 +28,22 @@ pub(crate) async fn enrol_authenticator(
                     "seed_present": enrolment.seed_present,
                     "confirmed": enrolment.confirmed,
                     "reason": reason,
-                    "result": if enrolment.ok() { "enrolled" } else { "not_enrolled" },
+                    "result": if enrolment.enrolled() { "enrolled" } else { "not_enrolled" },
                     "detail": enrolment.detail,
                 }));
             } else {
                 println!("provider: {provider}");
                 println!("subscription_id: {}", enrolment.subscription_id);
                 println!("login_item: {}", enrolment.login_item);
-                println!("run: {}", enrolment.run_id);
+                match &enrolment.run_id {
+                    Some(run) => println!("run: {run}"),
+                    None => println!("run: Weles named none"),
+                }
                 println!("confirmed: {}", enrolment.confirmed);
                 println!("seed_present: {}", enrolment.seed_present);
                 println!(
                     "result: {}",
-                    if enrolment.ok() {
+                    if enrolment.enrolled() {
                         "enrolled"
                     } else {
                         "not_enrolled"
@@ -54,13 +54,10 @@ pub(crate) async fn enrol_authenticator(
             // The seed either answers the provider's second factor from now
             // on or it does not, and the caller is repairing a subscription
             // that cannot sign itself in: the status says which.
-            if !enrolment.ok() {
+            if !enrolment.enrolled() {
                 crate::cli::fail();
             }
         }
-        Err(error) => {
-            eprintln!("{error}");
-            crate::cli::fail();
-        }
+        Err(error) => crate::cli::refused(error),
     }
 }

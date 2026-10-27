@@ -57,7 +57,7 @@ run uncapped subscription acquire codex --reason "real test: a provider declared
 field uncapped .detail | grep -q "has not authorized account purchases for codex" ||
   fail "the uncapped refusal did not say no purchase is authorized for codex"
 
-run other-harness subscription hand-over nonexistent-provider --harness omp --json
+run other-harness subscription handover nonexistent-provider --harness omp --json
 [ "$outcome" = refused ] || fail "a hand-over of an undeclared provider was accepted"
 grep -q "declares no subscription provider \`nonexistent-provider\`" "$ROOT/other-harness.stderr" ||
   fail "the hand-over refusal did not name the missing declaration"
@@ -99,9 +99,9 @@ case "$result" in
   *) fail "the acquisition ended $result ($code): $(field acquire .detail)" ;;
 esac
 
-run hand-over subscription hand-over claude-code --harness omp --json
+run handover subscription handover claude-code --harness omp --json
 jq -e '.accounts | all(.result == "held" or .result == "handed_over" or ((.detail // "") != ""))' \
-  "$ROOT/hand-over.json" >/dev/null || fail "a hand-over row failed without saying why"
+  "$ROOT/handover.json" >/dev/null || fail "a handover row failed without saying why"
 if [ "$result" = acquired ]; then
   omp usage accounts >"$ROOT/omp-accounts.txt"
   grep -qi "email:$account|" "$ROOT/omp-accounts.txt" || fail "omp does not hold the bought account $account"

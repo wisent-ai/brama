@@ -51,6 +51,16 @@ wins and the table fills what it left unsaid, in discovery and in sizing; a requ
 sizes is refused before dispatch asking for <code>max_tokens</code>. The table is read
 strictly: one that does not parse, or a row missing a field, is refused naming the row
 instead of emptying itself (<a href="/docs/http-api/inference">inference</a>).</p>
+<h2 id="unreleased-no-model-fail-fast">Unreleased: a pool no member of which can be served refuses at once<a class="headerlink" href="#unreleased-no-model-fail-fast" title="Link to this section">&para;</a></h2>
+<p>With every member of the subscription pool needing a new sign-in, every request stood for
+minutes while each member's credential read and refresh failed in turn, then answered
+<code>subscription_reauthorization_required</code>. A routed request is now refused before any
+of that, naming each member's state, refusal and repair; an expired or unchecked member still
+keeps the pool open, because redeeming it renews it. <code>/readyz</code> carries
+<code>model</code> and answers <code>503</code> while it says <code>none</code> or
+<code>unknown</code>, keeping any earlier cause in <code>reason</code>; clients read that answer
+and send nothing further
+(<a href="/docs/http-api/administration-and-operations">administration and operations</a>).</p>
 <h2 id="unreleased-standing-measure">Unreleased: every vault child stands in the register, and each waiter hears its own call<a class="headerlink" href="#unreleased-standing-measure" title="Link to this section">&para;</a></h2>
 <p>The account-discovery registration and routing-mark restoration ran their vault children
 outside the standing-call register, so a vault that never answered held them unlisted and

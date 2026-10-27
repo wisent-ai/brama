@@ -15,7 +15,7 @@ use super::super::document::{
 };
 
 pub fn update_route(path: &Path, alias: &str, primary: &str) -> Result<Value, String> {
-    let _guard = route_write_guard();
+    let _guard = route_write_guard(path)?;
     let mut value = snapshot(path)?;
     let document = value
         .as_object_mut()
@@ -31,7 +31,7 @@ pub fn update_route(path: &Path, alias: &str, primary: &str) -> Result<Value, St
 }
 
 pub fn delete_route(path: &Path, alias: &str) -> Result<Value, String> {
-    let _guard = route_write_guard();
+    let _guard = route_write_guard(path)?;
     let mut value = snapshot(path)?;
     let document = value
         .as_object_mut()
@@ -60,7 +60,7 @@ pub fn delete_route(path: &Path, alias: &str) -> Result<Value, String> {
 /// empty value the loader would have assumed, so running it twice produces the
 /// same document as running it once.
 pub fn migrate(path: &Path) -> Result<Value, String> {
-    let _guard = route_write_guard();
+    let _guard = route_write_guard(path)?;
     let body = read_body(path)?;
     let value: Value = serde_json::from_str(&body)
         .map_err(|error| format!("invalid inference routes: {error}"))?;

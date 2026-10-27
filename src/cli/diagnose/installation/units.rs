@@ -71,11 +71,16 @@ pub(in super::super) fn print_units(layout: &Layout) -> Option<PathBuf> {
                 continue;
             }
         };
-        let mut paths: Vec<PathBuf> = entries
-            .flatten()
-            .map(|entry| entry.path())
-            .filter(|path| path.extension().is_some_and(|ext| ext == "plist"))
-            .collect();
+        // An entry the directory cannot list may be the unit that runs
+        // Brama, so the diagnosis says it rather than skipping it.
+        let mut paths: Vec<PathBuf> = Vec::new();
+        for entry in entries {
+            match entry {
+                Ok(entry) => paths.push(entry.path()),
+                Err(error) => say!("  {}: an entry cannot be listed: {error}", location.display()),
+            }
+        }
+        paths.retain(|path| path.extension().is_some_and(|ext| ext == "plist"));
         paths.sort();
         for path in paths {
             print_unit(&path, services.as_deref());
@@ -125,17 +130,27 @@ fn print_unit(path: &Path, services: Option<&Path>) {
         path.display(),
         arguments.join(" ")
     );
-    if let Some(file) = arguments
-        .iter()
-        .map(Path::new)
-        .find(|candidate| candidate.is_file())
-    {
-        match std::fs::canonicalize(file) {
-            Ok(target) => say!("    leads to: {}", target.display()),
-            Err(error) => say!(
-                "    leads to: {} (cannot be resolved: {error})",
-                file.display()
-            ),
+    // The first argument that is a file is the program the unit runs; an
+    // absolute argument that cannot be examined is said with its cause,
+    // since it may be that program, and passing over it hid the answer.
+    for argument in arguments.iter().map(Path::new) {
+        match std::fs::metadata(argument) {
+            Ok(metadata) if metadata.is_file() => {
+                match std::fs::canonicalize(argument) {
+                    Ok(target) => say!("    leads to: {}", target.display()),
+                    Err(error) => say!(
+                        "    leads to: {} (cannot be resolved: {error})",
+                        argument.display()
+                    ),
+                }
+                break;
+            }
+            Ok(_not_file) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) if argument.is_absolute() => {
+                say!("    {} cannot be examined: {error}", argument.display())
+            }
+            Err(_not_a_path) => {}
         }
     }
 }

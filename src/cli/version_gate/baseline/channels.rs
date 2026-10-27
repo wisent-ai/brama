@@ -10,7 +10,7 @@ use std::process::{Command, ExitStatus};
 use serde_json::Value;
 
 use super::super::surface::of_revision;
-use super::{holds_commit, PLATFORMS, PRODUCT, RELEASE_LIST_LIMIT, STADO_MARKER};
+use super::{holds_commit, PLATFORMS, PRODUCT, STADO_MARKER};
 
 /// What a finished query printed, and the command line that printed it.
 struct Answer {
@@ -98,7 +98,13 @@ pub(super) fn stado_release(root: &Path) -> Result<Option<(String, String, Strin
     };
     let report = answer.json()?;
     let mut published = Vec::new();
-    for target in report["targets"].as_array().into_iter().flatten() {
+    let targets = report["targets"].as_array().ok_or_else(|| {
+        format!(
+            "stado release status {PRODUCT} answered no list of targets: {}",
+            report["targets"]
+        )
+    })?;
+    for target in targets {
         let Some(version) = target["desired"]["version"].as_str() else {
             continue;
         };
@@ -127,17 +133,32 @@ pub(super) fn stado_release(root: &Path) -> Result<Option<(String, String, Strin
         }
     }
     published.sort();
-    Ok(published
-        .into_iter()
-        .rev()
-        .find(|(_, version, revision, _)| {
-            let held = holds_commit(root, revision);
-            if !held {
-                eprintln!("published {version} names source revision {revision}, which this checkout does not hold; looking further back.");
-            }
-            held
+    for (_, version, revision, artifact) in published.into_iter().rev() {
+        if holds_commit(root, &revision)? {
+            return Ok(Some((version, revision, artifact)));
+        }
+        eprintln!("published {version} names source revision {revision}, which this checkout does not hold; looking further back.");
+    }
+    Ok(None)
+}
+
+/// Every release of this repository GitHub holds, each as its tag and
+/// whether it is a draft or a prerelease, read page by page so none is cut
+/// off by a count chosen here (`gh api --paginate`, one JSON object a line).
+fn releases(answer: &Answer) -> Result<Vec<Value>, String> {
+    answer
+        .stdout
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            serde_json::from_str(line).map_err(|error| {
+                format!(
+                    "`{}` answered a line that is not JSON ({error}): {line}",
+                    answer.command
+                )
+            })
         })
-        .map(|(_, version, revision, artifact)| (version, revision, artifact)))
+        .collect()
 }
 
 /// The newest non-draft GitHub Release whose tree declares its tag and which
@@ -147,12 +168,11 @@ pub(super) fn github_release(root: &Path) -> Result<Option<String>, String> {
         "gh",
         root,
         &[
-            "release",
-            "list",
-            "--limit",
-            RELEASE_LIST_LIMIT,
-            "--json",
-            "tagName,isDraft,isPrerelease",
+            "api",
+            "--paginate",
+            "repos/{owner}/{repo}/releases",
+            "--jq",
+            ".[] | {tagName: .tag_name, isDraft: .draft, isPrerelease: .prerelease}",
         ],
     )?
     else {
@@ -161,11 +181,8 @@ pub(super) fn github_release(root: &Path) -> Result<Option<String>, String> {
     if !answer.status.success() {
         return Err(answer.refused());
     }
-    let list = answer.json()?;
-    let mut tags: Vec<((u64, u64, u64), String)> = list
-        .as_array()
-        .into_iter()
-        .flatten()
+    let mut tags: Vec<((u64, u64, u64), String)> = releases(&answer)?
+        .iter()
         .filter(|release| release["isDraft"] == false && release["isPrerelease"] == false)
         .filter_map(|release| {
             let tag = release["tagName"].as_str()?;
@@ -191,10 +208,17 @@ pub(super) fn github_release(root: &Path) -> Result<Option<String>, String> {
             return Err(answer.refused());
         }
         let assets = answer.json()?;
+        // Read as empty, an answer in another shape called a complete
+        // release incomplete and the gate looked further back.
         let names: Vec<&str> = assets["assets"]
             .as_array()
-            .into_iter()
-            .flatten()
+            .ok_or_else(|| {
+                format!(
+                    "gh release view {tag} answered no list of assets: {}",
+                    assets["assets"]
+                )
+            })?
+            .iter()
             .filter_map(|asset| asset["name"].as_str())
             .collect();
         let missing: Vec<String> = PLATFORMS

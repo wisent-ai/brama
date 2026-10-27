@@ -18,7 +18,7 @@ pub(super) struct ServiceFacts {
     pub(super) standalone: bool,
     pub(super) routable: Vec<Value>,
     pub(super) unroutable: Vec<Value>,
-    pub(super) active_subscriptions: usize,
+    pub(super) any_active_subscription: bool,
     pub(super) subscriptions: Vec<Value>,
     pub(super) unredeemable: Vec<String>,
     /// Accounts this gateway cannot sign in by itself, and why. Keyed by
@@ -80,7 +80,7 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
                         let refusal = crate::subscription_dispatch::dispatch::no_active_credential_summary(provider);
                         let admission = match &account.account {
                             Some(_) => format!(
-                                "the next maintenance pass restores the mark and schedules its sign-in, and `brama subscription sign-in {provider} --by weles --subscription-id {id} --reason <why>` does so now"
+                                "the next maintenance pass restores the mark and schedules its sign-in, and `brama subscription login {provider} --by weles --subscription-id {id} --reason <why>` does so now"
                             ),
                             None => "it names no provider account (brama:account:), so no sign-in can be resolved for it until the account is recorded on the item".to_string(),
                         };
@@ -170,7 +170,7 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
     // order to run one. It answers `ready: false`, and `/readyz` answers 200
     // so a rollout can replace the build that cannot repair itself.
     let repairable =
-        !facts.providers.is_empty() || facts.active_subscriptions != Default::default();
+        !facts.providers.is_empty() || facts.any_active_subscription;
     // What the automatic loop can and cannot repair, which is a different
     // question from whether a credential is currently good: a deployment can
     // hold nothing but healthy grants and still be unable to replace any of
@@ -215,7 +215,7 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
         axum::http::StatusCode::SERVICE_UNAVAILABLE
     };
     let reason = if facts.providers.is_empty()
-        && facts.active_subscriptions == Default::default()
+        && !facts.any_active_subscription
         && untagged.is_empty()
     {
         "no provider capability or subscription is configured"
@@ -249,11 +249,12 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
             "{reason}; credential inventory could not be fully read: {}",
             inventory_errors
                 .iter()
-                .map(|error| format!(
-                    "{}: {}",
-                    error["operation"].as_str().expect("operation"),
-                    error["detail"].as_str().expect("detail")
-                ))
+                .map(|error| match (error["operation"].as_str(), error["detail"].as_str()) {
+                    (Some(operation), Some(detail)) => format!("{operation}: {detail}"),
+                    // Every entry above is written with both as text; one that
+                    // is not is shown whole rather than taking the answer down.
+                    _ => error.to_string(),
+                })
                 .collect::<Vec<_>>()
                 .join("; ")
         )

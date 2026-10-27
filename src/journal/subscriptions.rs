@@ -85,10 +85,10 @@ pub fn subscription_sign_in_due(
     let Some(at_ms) = latest_subscription_sign_in_at_ms(subscription_id)? else {
         return Ok(true);
     };
-    let cooldown_ms = i64::try_from(cooldown.as_millis()).map_err(|_| {
+    let cooldown_ms = i64::try_from(cooldown.as_millis()).map_err(|error| {
         format!(
             "the sign-in cooldown {cooldown:?} for {subscription_id} is longer than milliseconds \
-             since the epoch can be compared with"
+             since the epoch can be compared with: {error}"
         )
     })?;
     Ok(chrono::Utc::now().timestamp_millis().saturating_sub(at_ms) >= cooldown_ms)

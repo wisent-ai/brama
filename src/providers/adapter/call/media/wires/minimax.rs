@@ -16,8 +16,31 @@ use super::super::audio::{audio, SpokenAudio};
 use super::super::call::Call;
 use crate::types::{GatewayRefusal, ProviderRefusal, Refusal};
 
-/// What MiniMax encodes when the caller names no format.
+/// What MiniMax encodes when the request names no `audio_setting.format`:
+/// its own documented default, so the answer is labelled as what MiniMax
+/// actually sent.
+/// <https://platform.minimax.io/docs/api-reference/speech-t2a-http>
 const DEFAULT_FORMAT: &str = "mp3";
+
+/// MiniMax's `base_resp.status_code` values, each as MiniMax's error-code page states it.
+mod status {
+    /// The request succeeded. <https://platform.minimax.io/docs/api-reference/errorcode>
+    pub(super) const SUCCESS: i64 = 0;
+    /// Unknown error on MiniMax's side. <https://platform.minimax.io/docs/api-reference/errorcode>
+    pub(super) const UNKNOWN: i64 = 1000;
+    /// MiniMax did not finish the request in its own time. <https://platform.minimax.io/docs/api-reference/errorcode>
+    pub(super) const UNFINISHED: i64 = 1001;
+    /// Rate limit triggered. <https://platform.minimax.io/docs/api-reference/errorcode>
+    pub(super) const RATE_LIMITED: i64 = 1002;
+    /// Authentication failed. <https://platform.minimax.io/docs/api-reference/errorcode>
+    pub(super) const UNAUTHENTICATED: i64 = 1004;
+    /// Insufficient account balance. <https://platform.minimax.io/docs/api-reference/errorcode>
+    pub(super) const INSUFFICIENT_BALANCE: i64 = 1008;
+    /// Internal service error. <https://platform.minimax.io/docs/api-reference/errorcode>
+    pub(super) const INTERNAL: i64 = 1013;
+    /// Token limit triggered. <https://platform.minimax.io/docs/api-reference/errorcode>
+    pub(super) const TOKEN_LIMITED: i64 = 1039;
+}
 
 pub(in super::super) async fn speak(
     call: &Call<'_>,
@@ -42,7 +65,7 @@ pub(in super::super) async fn speak(
     if let Some(emotion) = payload.get("emotion") {
         voice_setting.insert("emotion".to_string(), emotion.clone());
     }
-    let format = requested_format(&payload);
+    let format = requested_format(&payload)?;
     let body = json!({
         "model": call.model_id,
         "text": payload.get("input"),
@@ -51,12 +74,14 @@ pub(in super::super) async fn speak(
         "voice_setting": voice_setting,
         "audio_setting": {"format": format},
     });
-    let response = call
-        .post(call.descriptor.speech_path)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|error| transport_refusal(&error))?;
+    let response = stado_wait::until(
+        stado_wait::Kind::Network,
+        format!("minimax speech for `{}`", call.route_id),
+        call.descriptor.speech_path,
+        call.post(call.descriptor.speech_path).json(&body).send(),
+    )
+    .await
+    .map_err(|error| transport_refusal(&error))?;
     hex_audio(call.route_id, response, &format).await
 }
 
@@ -64,7 +89,7 @@ pub(in super::super) async fn compose(
     call: &Call<'_>,
     payload: Map<String, Value>,
 ) -> Result<SpokenAudio, Refusal> {
-    let format = requested_format(&payload);
+    let format = requested_format(&payload)?;
     let mut body = json!({
         "model": call.model_id,
         "lyrics": payload.get("lyrics"),
@@ -74,21 +99,28 @@ pub(in super::super) async fn compose(
     if let Some(prompt) = payload.get("prompt") {
         body["prompt"] = prompt.clone();
     }
-    let response = call
-        .post(call.descriptor.music_path)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|error| transport_refusal(&error))?;
+    let response = stado_wait::until(
+        stado_wait::Kind::Network,
+        format!("minimax music for `{}`", call.route_id),
+        call.descriptor.music_path,
+        call.post(call.descriptor.music_path).json(&body).send(),
+    )
+    .await
+    .map_err(|error| transport_refusal(&error))?;
     hex_audio(call.route_id, response, &format).await
 }
 
-fn requested_format(payload: &Map<String, Value>) -> String {
-    payload
-        .get("response_format")
-        .and_then(Value::as_str)
-        .unwrap_or(DEFAULT_FORMAT)
-        .to_string()
+/// The format the caller names, MiniMax's own default when it names none, or
+/// a refusal when `response_format` is given as something other than text.
+fn requested_format(payload: &Map<String, Value>) -> Result<String, Refusal> {
+    match payload.get("response_format") {
+        None => Ok(DEFAULT_FORMAT.to_string()),
+        Some(Value::String(format)) => Ok(format.clone()),
+        Some(other) => Err(Refusal::gateway(
+            GatewayRefusal::InvalidRequest,
+            format!("invalid_request: response_format must be a format name, got {other}"),
+        )),
+    }
 }
 
 /// The audio out of a MiniMax answer, or the refusal it carries.
@@ -111,11 +143,11 @@ async fn hex_audio(
                 "provider_failure: minimax answered without base_resp.status_code",
             )
         })?;
-    if code != 0 {
-        let message = body
-            .pointer("/base_resp/status_msg")
-            .and_then(Value::as_str)
-            .unwrap_or("no status message");
+    if code != status::SUCCESS {
+        let message = match body.pointer("/base_resp/status_msg").and_then(Value::as_str) {
+            Some(message) => message.to_string(),
+            None => format!("and no base_resp.status_msg; the answer was {text}"),
+        };
         return Err(Refusal::new(
             refusal_kind(code),
             format!("provider_failure: minimax refused `{route_id}` with status {code}: {message}"),
@@ -142,10 +174,10 @@ async fn hex_audio(
 /// MiniMax's documented status codes, by what they mean for the caller.
 fn refusal_kind(code: i64) -> ProviderRefusal {
     match code {
-        1002 | 1039 => ProviderRefusal::RateLimited,
-        1004 => ProviderRefusal::Authentication,
-        1008 => ProviderRefusal::QuotaExhausted,
-        1000 | 1001 | 1013 => ProviderRefusal::DependencyUnavailable,
+        status::RATE_LIMITED | status::TOKEN_LIMITED => ProviderRefusal::RateLimited,
+        status::UNAUTHENTICATED => ProviderRefusal::Authentication,
+        status::INSUFFICIENT_BALANCE => ProviderRefusal::QuotaExhausted,
+        status::UNKNOWN | status::UNFINISHED | status::INTERNAL => ProviderRefusal::DependencyUnavailable,
         _ => ProviderRefusal::ProviderFailure,
     }
 }

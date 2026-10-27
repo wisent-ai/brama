@@ -11,6 +11,12 @@ mod purpose;
 mod secret;
 mod workload_key;
 
+/// The owner-only Ed25519 key reader, also for Brama's answer key.
+pub(crate) use workload_key::read_owner_key;
+
+/// The proof nonce's length in random bytes, as Skarbiec publishes it.
+const NONCE_BYTES: usize = 32; // https://skarbiec.wisent.com/docs/credential-model "one 32-byte random value"
+
 use std::fmt;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
@@ -21,7 +27,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use ed25519_dalek::{Signer, SigningKey};
 use serde::{Deserialize, Serialize};
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroizing;
 
 use purpose::{is_lower_hex_64, valid_resource};
 
@@ -121,18 +127,29 @@ impl CapabilityClient {
             return Err(CapabilityError::InvalidBinding);
         }
 
-        let mut nonce_bytes = [0_u8; 32];
+        let mut nonce_bytes = Zeroizing::new(Vec::with_capacity(NONCE_BYTES));
+        let wanted = u64::try_from(NONCE_BYTES).map_err(|error| {
+            CapabilityError::InvalidConfiguration(format!(
+                "{NONCE_BYTES} nonce bytes cannot be counted: {error}"
+            ))
+        })?;
         OpenOptions::new()
             .read(true)
             .open("/dev/urandom")
-            .and_then(|mut source| source.read_exact(&mut nonce_bytes))
+            .and_then(|source| source.take(wanted).read_to_end(&mut nonce_bytes))
             .map_err(|error| {
                 CapabilityError::InvalidConfiguration(format!(
                     "read capability proof nonce from /dev/urandom: {error}"
                 ))
             })?;
-        let nonce = hex::encode(nonce_bytes);
-        nonce_bytes.zeroize();
+        if nonce_bytes.len() != NONCE_BYTES {
+            return Err(CapabilityError::InvalidConfiguration(format!(
+                "/dev/urandom gave {} of the {NONCE_BYTES} nonce bytes",
+                nonce_bytes.len()
+            )));
+        }
+        let nonce = hex::encode(nonce_bytes.as_slice());
+        drop(nonce_bytes);
 
         // The authority signs over capability id, nonce, workload id and the
         // operation, each followed by a separator, then the authorization id.
@@ -209,17 +226,28 @@ impl CapabilityClient {
                     control.secret_len
                 ))
             })?;
-        let mut secret = Zeroizing::new(vec![0_u8; length]);
-        stream
-            .read_exact(&mut secret)
+        let mut secret = Zeroizing::new(Vec::with_capacity(length));
+        let wanted = u64::try_from(length).map_err(|error| {
+            CapabilityError::AuthorityAnswer(format!(
+                "{socket} announced a {length}-byte secret: {error}"
+            ))
+        })?;
+        Read::by_ref(&mut stream)
+            .take(wanted)
+            .read_to_end(&mut secret)
             .map_err(|error| unreachable("reading the secret from", error))?;
-        let mut extra = [0_u8; 1];
-        match stream.read(&mut extra) {
-            Ok(0) => Ok(Secret::from_zeroizing(secret)),
-            Ok(_) => Err(CapabilityError::AuthorityAnswer(format!(
+        if secret.len() != length {
+            return Err(CapabilityError::AuthorityAnswer(format!(
+                "{socket} closed after {} of the {length}-byte secret",
+                secret.len()
+            )));
+        }
+        match stream.bytes().next() {
+            None => Ok(Secret::from_zeroizing(secret)),
+            Some(Ok(_)) => Err(CapabilityError::AuthorityAnswer(format!(
                 "response from {socket} contains trailing bytes after the {length}-byte secret"
             ))),
-            Err(error) => Err(unreachable("reading the secret boundary from", error)),
+            Some(Err(error)) => Err(unreachable("reading the secret boundary from", error)),
         }
     }
 }
@@ -253,21 +281,19 @@ struct RedeemControl {
 }
 
 fn read_control_line(stream: &mut UnixStream) -> std::io::Result<Vec<u8>> {
-    let mut line = Vec::with_capacity(256);
-    let mut byte = [0_u8; 1];
-    loop {
-        match stream.read(&mut byte)? {
-            0 => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::UnexpectedEof,
-                    format!(
-                    "authority closed response after {} control-line bytes before its terminator",
-                    line.len()
-                ),
-                ))
-            }
-            _ if byte[0] == b'\n' => return Ok(line),
-            _ => line.push(byte[0]),
+    let mut line = Vec::new();
+    // One byte at a time: the secret follows the line on the same stream.
+    for byte in Read::by_ref(stream).bytes() {
+        match byte? {
+            b'\n' => return Ok(line),
+            other => line.push(other),
         }
     }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::UnexpectedEof,
+        format!(
+            "authority closed response after {} control-line bytes before its terminator",
+            line.len()
+        ),
+    ))
 }

@@ -11,15 +11,16 @@ use sha2::{Digest, Sha256};
 /// Every field the registry's workload pins differently from `binary` run by
 /// this user, as `name pinned=… actual=…`; empty when it describes it.
 pub(crate) fn mismatches(registry: &Path, binary: &Path) -> Result<Vec<String>, String> {
-    let document: Value = std::fs::read(registry)
-        .map_err(|error| error.to_string())
-        .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|error| error.to_string()))
-        .map_err(|error| format!("workload registry is unreadable: {error}"))?;
-    let workload = document
+    let bytes = std::fs::read(registry).map_err(|error| {
+        format!("the workload registry {} cannot be read: {error}", registry.display())
+    })?;
+    let document: Value = serde_json::from_slice(&bytes).map_err(|error| {
+        format!("the workload registry {} is not JSON: {error}", registry.display())
+    })?;
+    let workloads = document
         .get("workloads")
         .and_then(Value::as_object)
-        .and_then(|workloads| workloads.values().next())
-        .cloned()
+        .filter(|workloads| !workloads.is_empty())
         .ok_or_else(|| {
             format!(
                 "workload registry {} declares no workload",
@@ -31,6 +32,32 @@ pub(crate) fn mismatches(registry: &Path, binary: &Path) -> Result<Vec<String>, 
     let (uid, gid) = unsafe { (libc::getuid(), libc::getgid()) };
     let path =
         std::fs::canonicalize(binary).map_err(|error| format!("{}: {error}", binary.display()))?;
+    let shown = path.display().to_string();
+    // The workload this binary is: the one pinning its path. A registry of
+    // one workload is compared against it even when it names another path,
+    // which is the mismatch this check exists to report; several workloads
+    // none of which names this binary cannot be told apart.
+    let mut naming = workloads
+        .values()
+        .filter(|workload| workload.get("executable_path").and_then(Value::as_str) == Some(shown.as_str()));
+    let mut every = workloads.values();
+    let workload = match (naming.next(), naming.next(), every.next(), every.next()) {
+        (Some(one), None, _, _) => one,
+        (None, _, Some(only), None) => only,
+        (Some(_first), Some(_second), _, _) => {
+            return Err(format!(
+                "workload registry {} pins {shown} for more than one workload",
+                registry.display()
+            ))
+        }
+        _ => {
+            return Err(format!(
+                "workload registry {} declares workloads {} and none pins {shown}",
+                registry.display(),
+                workloads.keys().cloned().collect::<Vec<_>>().join(", ")
+            ))
+        }
+    };
     let expected = [
         ("uid", uid.to_string()),
         ("gid", gid.to_string()),

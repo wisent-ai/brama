@@ -141,9 +141,16 @@ pub async fn read_plan_usage(provider_id: &str, item: &str, secret: &str) -> Pla
     let builder = client.get(&url).header("accept", "application/json");
     let builder = match authorize_provider(builder, descriptor, &key, secret) {
         Ok(builder) => builder,
-        Err(message) => return plan_usage_refusal(
-            ProviderRefusal::Authentication, provider_id, item, &url, None, &message,
-        ),
+        Err(message) => {
+            return plan_usage_refusal(
+                ProviderRefusal::Authentication,
+                provider_id,
+                item,
+                &url,
+                None,
+                &message,
+            )
+        }
     };
     let sent = stado_wait::until(
         stado_wait::Kind::Network,

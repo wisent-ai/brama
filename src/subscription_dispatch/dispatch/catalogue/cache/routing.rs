@@ -45,7 +45,8 @@ pub(in crate::subscription_dispatch::dispatch::catalogue) fn models(
     drop(snapshot);
     if refresh_needed {
         tokio::spawn(async move {
-            let _ = refresh(entries).await;
+            // refresh logs a refusal and publishes either outcome itself.
+            let _published = refresh(entries).await;
         });
     }
     match published {
@@ -110,14 +111,14 @@ pub(in crate::subscription_dispatch::dispatch) fn sized_request(
     let provider_id = descriptor.id;
     let model_id = model_id.as_ref();
     let listed = discovered_max_output_tokens(provider_id, model_id);
-    let limit = match listed {
-        Ok(Some(limit)) => limit,
-        Ok(None) | Err(_) => match known_max_output_tokens(provider_id, model_id) {
+    let limit = match &listed {
+        Ok(Some(limit)) => *limit,
+        Ok(None) | Err(_said_below) => match known_max_output_tokens(provider_id, model_id) {
             Ok(Some(limit)) => limit,
             Ok(None) => {
-                let listing = match listed {
+                let listing = match &listed {
                     Ok(_) => "the provider's listing states no output limit for it".to_string(),
-                    Err(cause) => cause,
+                    Err(cause) => cause.clone(),
                 };
                 return Err(ModelResponse::refused(
                     &request.model,

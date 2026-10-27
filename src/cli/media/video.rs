@@ -86,10 +86,7 @@ async fn start(args: StartArgs) {
     }
     match dispatch_direct_video(&route, payload).await {
         Ok(body) => answered(&model, &route, &body, as_json),
-        Err(message) => {
-            eprintln!("{message}");
-            crate::cli::fail();
-        }
+        Err(message) => crate::cli::refused(message),
     }
 }
 
@@ -102,10 +99,7 @@ async fn status(args: StatusArgs) {
     let route = resolve_media_route(&model);
     match dispatch_direct_video_status(&route, &job_id).await {
         Ok(body) => answered(&model, &route, &body, as_json),
-        Err(message) => {
-            eprintln!("{message}");
-            crate::cli::fail();
-        }
+        Err(message) => crate::cli::refused(message),
     }
 }
 

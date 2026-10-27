@@ -43,7 +43,12 @@ pub(in crate::providers::adapter) fn authorize_provider(
     } else {
         None
     };
-    Ok(authorize_with_account(builder, descriptor, key, account_id.as_deref()))
+    Ok(authorize_with_account(
+        builder,
+        descriptor,
+        key,
+        account_id.as_deref(),
+    ))
 }
 
 /// Apply headers after the account claim has already been checked. Media

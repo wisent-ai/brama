@@ -56,7 +56,10 @@ pub(super) fn openai_chat_items(
     // chunk carrying `usage: null` states none.
     match (
         json_u32(body.pointer("/usage/prompt_tokens"), "usage.prompt_tokens"),
-        json_u32(body.pointer("/usage/completion_tokens"), "usage.completion_tokens"),
+        json_u32(
+            body.pointer("/usage/completion_tokens"),
+            "usage.completion_tokens",
+        ),
     ) {
         (Ok(Some(input_tokens)), Ok(Some(output_tokens))) => {
             items.push(StreamItem::Delta(StreamDelta::Usage {

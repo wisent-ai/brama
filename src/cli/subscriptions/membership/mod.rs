@@ -47,10 +47,7 @@ pub(super) async fn attribute(destination: Destination, provider: &str, json: bo
                 crate::cli::fail();
             }
         }
-        Err(error) => {
-            eprintln!("{error}");
-            crate::cli::fail();
-        }
+        Err(error) => crate::cli::refused(error),
     }
 }
 
@@ -120,10 +117,7 @@ pub(super) async fn second_factor(destination: Destination, provider: Option<&st
                 }
             }
         }
-        Err(error) => {
-            eprintln!("{error}");
-            crate::cli::fail();
-        }
+        Err(error) => crate::cli::refused(error),
     }
 }
 
@@ -164,10 +158,7 @@ fn answered<Refused>(subscription_id: &str, outcome: Result<Value, (Refused, Str
             Some(detail) => said(subscription_id, detail, json),
             None => said(subscription_id, &verdict.to_string(), json),
         },
-        Err((_, error)) => {
-            eprintln!("{error}");
-            crate::cli::fail();
-        }
+        Err((_, error)) => crate::cli::refused(error),
     }
 }
 
@@ -224,19 +215,10 @@ where
         Ok((Some(gateway), bearer)) => match call(gateway, bearer.trim().to_owned()).await {
             Ok(detail) if json => said(subscription_id, &detail, true),
             Ok(detail) => println!("{detail}"),
-            Err(error) => {
-                eprintln!("{error}");
-                crate::cli::fail();
-            }
+            Err(error) => crate::cli::refused(error),
         },
-        Ok((None, _)) => {
-            eprintln!("name the gateway holding the member: --gateway or --gateway-consumer");
-            crate::cli::fail();
-        }
-        Err(error) => {
-            eprintln!("{error}");
-            crate::cli::fail();
-        }
+        Ok((None, _)) => crate::cli::refused("name the gateway holding the member: --gateway or --gateway-consumer"),
+        Err(error) => crate::cli::refused(error),
     }
 }
 
@@ -267,10 +249,9 @@ fn print_attribution(verdict: &Value) {
             .map(|rows| rows.iter().collect())
     };
     let (Some(recorded), Some(unattributed)) = (rows("recorded"), rows("unattributed")) else {
-        eprintln!(
+        crate::cli::refused(format!(
             "the attribution verdict does not list recorded and unattributed members: {verdict}"
-        );
-        crate::cli::fail();
+        ));
     };
     println!(
         "{} of {} member(s) name an account",

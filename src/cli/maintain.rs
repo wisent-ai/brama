@@ -41,10 +41,7 @@ pub(crate) async fn run(args: MaintainArgs) {
     };
     let report = match pass(destination).await {
         Ok(report) => report,
-        Err(error) => {
-            eprintln!("{error}");
-            crate::cli::fail();
-        }
+        Err(error) => crate::cli::refused(error),
     };
     if args.json {
         crate::cli::print_json(&report);

@@ -117,7 +117,7 @@ impl Pending {
         let directory = self
             .path
             .parent()
-            .expect("pending discovery file has a parent");
+            .ok_or_else(|| format!("pending account discovery {} has no parent directory", self.path.display()))?;
         File::open(directory)
             .and_then(|file| file.sync_all())
             .map_err(|error| {

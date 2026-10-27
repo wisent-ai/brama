@@ -100,8 +100,14 @@ pub(super) fn responses_items(event: Option<&str>, data: &str) -> (Vec<StreamIte
             // Usage is passed on only when the provider stated both counts;
             // a stream without it is recorded as carrying no measurement.
             match (
-                json_u32(body.pointer("/response/usage/input_tokens"), "response.usage.input_tokens"),
-                json_u32(body.pointer("/response/usage/output_tokens"), "response.usage.output_tokens"),
+                json_u32(
+                    body.pointer("/response/usage/input_tokens"),
+                    "response.usage.input_tokens",
+                ),
+                json_u32(
+                    body.pointer("/response/usage/output_tokens"),
+                    "response.usage.output_tokens",
+                ),
             ) {
                 (Ok(Some(input_tokens)), Ok(Some(output_tokens))) => {
                     items.push(StreamItem::Delta(StreamDelta::Usage {
@@ -124,9 +130,9 @@ pub(super) fn responses_items(event: Option<&str>, data: &str) -> (Vec<StreamIte
                 .pointer("/response/output")
                 .and_then(Value::as_array)
                 .is_some_and(|output| {
-                    output
-                        .iter()
-                        .any(|item| item.get("type").and_then(Value::as_str) == Some("function_call"))
+                    output.iter().any(|item| {
+                        item.get("type").and_then(Value::as_str) == Some("function_call")
+                    })
                 })
             {
                 // A completed response whose output holds a function call

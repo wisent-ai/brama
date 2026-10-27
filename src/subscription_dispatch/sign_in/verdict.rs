@@ -1,7 +1,7 @@
 mod effect;
-pub use effect::effect_unknown;
 use super::blocked::{journal_unreadable, observed_at, with_holds};
 use super::{weles_provider, Blocked, SignInOptions};
+pub use effect::effect_unknown;
 use serde_json::{json, Value};
 
 pub(super) const SIGNED_IN: &str = "signed_in";
@@ -47,18 +47,15 @@ pub fn automatic_sign_in_sentence(provider: &str) -> String {
             if let Some(failure) = observed_failure(id) {
                 return format!("{id}: failed ({}: {})", failure.code(), failure.detail());
             }
+            // A newest record missing its result or time is a damaged line.
             match crate::journal::latest_subscription_sign_in(id) {
-                Ok(Some(latest)) => format!(
-                    "{id}: last {} at {}",
-                    latest
-                        .get("result")
-                        .and_then(Value::as_str)
-                        .unwrap_or("ran"),
-                    latest
-                        .get("at")
-                        .and_then(Value::as_str)
-                        .unwrap_or("an unrecorded time")
-                ),
+                Ok(Some(latest)) => match (
+                    latest.get("result").and_then(Value::as_str),
+                    latest.get("at").and_then(Value::as_str),
+                ) {
+                    (Some(result), Some(at)) => format!("{id}: last {result} at {at}"),
+                    _ => format!("{id}: its newest sign-in record states no result or time: {latest}"),
+                },
                 Ok(None) => format!("{id}: never ran"),
                 Err(cause) => format!("{id}: its sign-in history could not be read: {cause}"),
             }
@@ -266,7 +263,10 @@ pub fn observed_failure(id: &str) -> Option<Blocked> {
         }
     }
     let recorded = |pointer: &str| previous.pointer(pointer).and_then(Value::as_str);
-    let status = match previous.pointer("/failure/http_status").and_then(Value::as_u64) {
+    let status = match previous
+        .pointer("/failure/http_status")
+        .and_then(Value::as_u64)
+    {
         Some(value) => match u16::try_from(value) {
             Ok(status) => Some(status),
             Err(error) => {

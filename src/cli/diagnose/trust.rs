@@ -21,8 +21,8 @@ pub(super) const CAPABILITY_COMMAND: &[&str] = &[CAPABILITY_GROUP, CAPABILITY_VE
 /// not the JSON command list — so the line names the fault, not `false`.
 pub(super) fn router_answers(root: &Path) -> String {
     let router = root.join("bin/skarbiec-entitlements-router");
-    if !router.is_file() {
-        return format!("no: {} is not a file", router.display());
+    if let Some(unusable) = not_a_file(&router) {
+        return format!("no: {unusable}");
     }
     let mut help = Command::new(&router);
     help.args([CAPABILITY_GROUP, "help"])
@@ -47,18 +47,20 @@ pub(super) fn router_answers(root: &Path) -> String {
             )
         }
     };
-    let knows = document
-        .get("commands")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .any(|command| {
-            command
-                .split_whitespace()
-                .take(CAPABILITY_COMMAND.len())
-                .eq(CAPABILITY_COMMAND.iter().copied())
-        });
+    // A command list in another shape is said as that, not as a list that
+    // names no capability verb.
+    let Some(commands) = document.get("commands").and_then(Value::as_array) else {
+        return format!(
+            "no: `{CAPABILITY_GROUP} help` answered no command list: {}",
+            document
+        );
+    };
+    let knows = commands.iter().filter_map(Value::as_str).any(|command| {
+        command
+            .split_whitespace()
+            .take(CAPABILITY_COMMAND.len())
+            .eq(CAPABILITY_COMMAND.iter().copied())
+    });
     if knows {
         "answers".to_string()
     } else {
@@ -71,8 +73,8 @@ pub(super) fn router_answers(root: &Path) -> String {
 
 pub(super) fn registry_verdict(root: &Path, config_dir: &Path) -> Vec<String> {
     let registry = config_dir.join("registry.json");
-    if !registry.is_file() {
-        return vec![format!("{}: absent", registry.display())];
+    if let Some(unusable) = not_a_file(&registry) {
+        return vec![unusable];
     }
     match mismatches(&registry, &root.join("bin/brama")) {
         Ok(wrong) if wrong.is_empty() => {
@@ -83,5 +85,20 @@ pub(super) fn registry_verdict(root: &Path, config_dir: &Path) -> Vec<String> {
         }
         Ok(wrong) => wrong,
         Err(error) => vec![format!("{}: {error}", registry.display())],
+    }
+}
+
+/// Why `path` is no file the diagnosis can read, or none when it is one:
+/// absent, another kind of entry, or a path that cannot be examined with
+/// its cause. `is_file` answered false for all three, so a registry the
+/// diagnosis could not stat was printed as absent.
+fn not_a_file(path: &Path) -> Option<String> {
+    match std::fs::metadata(path) {
+        Ok(metadata) if metadata.is_file() => None,
+        Ok(_other) => Some(format!("{} is not a file", path.display())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Some(format!("{}: absent", path.display()))
+        }
+        Err(error) => Some(format!("{} cannot be examined: {error}", path.display())),
     }
 }

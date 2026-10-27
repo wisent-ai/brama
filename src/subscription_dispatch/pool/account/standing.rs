@@ -6,6 +6,11 @@ use serde_json::{json, Value};
 use crate::subscription_dispatch::usage;
 use crate::subscription_dispatch::usage::{CredentialState, SubscriptionUsage};
 
+/// The state of a grant the pool can serve from.
+const LIVE: &str = "live";
+/// The state of a grant only a new sign-in repairs.
+const BURNT: &str = "burnt";
+
 /// Where one grant stands, in the four words an operator acts on.
 ///
 /// `burnt` covers both recorded dead states -- a grant the provider disowned and
@@ -22,12 +27,12 @@ pub(in crate::subscription_dispatch::pool) fn state(
         return "unknown";
     };
     match credential.state {
-        CredentialState::NeedsReauthorization | CredentialState::Disabled => "burnt",
+        CredentialState::NeedsReauthorization | CredentialState::Disabled => BURNT,
         // An API key states no expiry and never has one, so an absent instant is
         // a live credential rather than an unknown one.
         CredentialState::Active => match credential.expires_at_ms {
             Some(expires_at_ms) if expires_at_ms <= now_ms => "expired",
-            _ => "live",
+            _ => LIVE,
         },
     }
 }
@@ -96,4 +101,42 @@ pub(in crate::subscription_dispatch::pool) fn last_redeem_error(
         Some(detail) => json!(detail),
         None => Value::Null,
     }
+}
+
+/// The refusal for a pool none of whose `members` can be served: every one
+/// holds a grant the provider disowned (`burnt`), which only a new sign-in
+/// replaces. A live member serves; an expired or unchecked one may still be
+/// renewed inline when a request redeems it, so either keeps the pool open.
+/// The sentence names each member, the refusal in its way and the sign-in
+/// that repairs it, so the caller learns at once instead of waiting on
+/// credential reads that can only fail. `None` while any member can be
+/// served, and for an empty pool, a different statement its callers make.
+pub(crate) fn pool_without_servable_member(
+    members: &[crate::gateway::broker::SubscriptionEntry],
+    now_ms: i64,
+) -> Option<String> {
+    if members.is_empty() {
+        return None;
+    }
+    let mut named = Vec::with_capacity(members.len());
+    for member in members {
+        let recorded = usage::usage_for(&member.id);
+        if state(recorded.as_ref(), now_ms) != BURNT {
+            return None;
+        }
+        let provider = member.provider.trim();
+        let cause = match last_redeem_error(recorded.as_ref(), now_ms) {
+            Value::String(cause) => format!(": {cause}"),
+            _ => String::new(),
+        };
+        named.push(format!(
+            "{} ({provider}) burnt{cause} -- renewed by the automatic Weles sign-in \
+             (brama subscription login {provider} --by weles --subscription-id {})",
+            member.id, member.id
+        ));
+    }
+    Some(format!(
+        "no model: every member of the subscription pool needs a new sign-in, so no request was sent: {}",
+        named.join("; ")
+    ))
 }

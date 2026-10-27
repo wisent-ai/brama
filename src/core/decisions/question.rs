@@ -7,7 +7,19 @@
 //! any provider is contacted: a question this file rejects costs nothing and
 //! names exactly what is wrong with it.
 
+use serde::Deserialize;
 use serde_json::Value;
+
+/// The fields a decision request may carry. Reading the body into it refuses
+/// any other field by name; what each field holds is judged in `parse`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+#[allow(dead_code)]
+struct RequestFields {
+    model: Option<Value>,
+    state: Option<Value>,
+    questions: Option<Value>,
+}
 
 /// One typed question, already validated.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -32,13 +44,15 @@ impl Question {
     /// level indices and its rubric travels as the answer's legend.
     pub fn labels(&self) -> Vec<String> {
         match self {
-            Question::Noul { .. } => vec!["true".to_string(), "false".to_string()],
+            Question::Noul { .. } => [true, false].iter().map(bool::to_string).collect(),
             Question::Choice { options, .. } => {
                 options.iter().map(|(label, _)| label.clone()).collect()
             }
-            Question::Score { levels, .. } => {
-                (0..levels.len()).map(|index| index.to_string()).collect()
-            }
+            Question::Score { levels, .. } => levels
+                .iter()
+                .enumerate()
+                .map(|(index, _)| index.to_string())
+                .collect(),
         }
     }
 
@@ -75,13 +89,9 @@ impl DecisionRequest {
         let object = body
             .as_object()
             .ok_or_else(|| "the request body must be a JSON object".to_string())?;
-        for field in object.keys() {
-            if !matches!(field.as_str(), "model" | "state" | "questions") {
-                return Err(format!(
-                    "unknown field `{field}`: a decision carries `model`, `state` and `questions`"
-                ));
-            }
-        }
+        serde_json::from_value::<RequestFields>(body.clone()).map_err(|error| {
+            format!("{error}: a decision carries `model`, `state` and `questions`")
+        })?;
         let model = object
             .get("model")
             .and_then(Value::as_str)
@@ -119,7 +129,10 @@ impl DecisionRequest {
     pub fn state_text(&self) -> String {
         match &self.state {
             Value::String(text) => text.clone(),
-            other => serde_json::to_string_pretty(other).unwrap_or_else(|_| other.to_string()),
+            other => match serde_json::to_string_pretty(other) {
+                Ok(text) => text,
+                Err(error) => unreachable!("a JSON value always serializes: {error}"),
+            },
         }
     }
 

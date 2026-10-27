@@ -189,7 +189,7 @@ console asked for it; no timer reaches any of them.</p>
   whole redirect URL. The gateway checks the state against the one it drew, exchanges the
   code at the provider's token endpoint, stores the grant as the subscription's credential
   and proves it with one minimal completion, answering the same <code>signed_in</code> or
-  <code>failed</code> verdict as <a href="/docs/cli/subscription/sign-in#by-hand">the CLI's sign-in --by hand</a>.
+  <code>failed</code> verdict as <a href="/docs/cli/subscription/login#by-hand">the CLI's login --by hand</a>.
   The sign-in is spent by the first paste, whatever it comes to: <code>404 no manual sign-in
   with that id is open</code> afterwards, <code>409</code> with the exact sentence for a paste
   that is empty, unreadable or carries another sign-in's state.</li>
@@ -300,6 +300,21 @@ member blocked because Weles did not answer (<code>weles_unreachable</code>, inc
 resolver route that answered a server error with no JSON) or because a provider is rate
 limiting is listed there and retried by the next pass without asking anyone; an
 unredeemable subscription alone asks nothing of anyone.</p>
+<p>Every answer carries <code>model</code>, read from the usage ledger at the moment
+<code>/readyz</code> is asked: <code>{"state": "available", "reason": null}</code> while some
+signing agent's pool holds a member that can be served (live, or expired or unchecked and so
+renewed when a request redeems it); <code>{"state": "none", "reason": "..."}</code> while every
+member needs a new sign-in, with each member's id, provider, state, the refusal in its way and
+its repair (a burnt grant: the Weles sign-in of that member, which the maintenance pass orders);
+<code>{"state": "unknown", "reason": "..."}</code> with the read that failed; and
+<code>{"state": "local"}</code> on a gateway serving its own provider credentials. With
+<code>none</code> or <code>unknown</code> the answer is <code>503</code>, <code>ready: false</code>,
+and <code>reason</code> carries that sentence after any cause the report was already unready for,
+joined by <code> | </code>. A routed model request to a pool every member of which needs a new
+sign-in is refused the same way, before any credential read, snapshot or provider call:
+<code>503 subscription_reauthorization_required</code> naming every member, in
+milliseconds rather than after each member fails in turn. Clients read that refusal or the
+<code>503</code> readiness answer and send nothing further, naming Brama's reason.</p>
 <p>A credential call that stands unanswered overrides the completed report. Each call to
 the credential source — a Skarbiec introspection over HTTP, and every vault child the gateway
 shells (<code>list subscriptions</code>, <code>inspect credential account</code>,

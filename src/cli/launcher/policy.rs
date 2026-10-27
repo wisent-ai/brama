@@ -52,10 +52,10 @@ pub(super) struct Outputs<'a> {
 }
 
 pub(super) fn check(config: &Path, out: &Outputs) -> Result<(), String> {
-    let document: Value = std::fs::read(config)
-        .map_err(|error| error.to_string())
-        .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|error| error.to_string()))
-        .map_err(|error| format!("{}: {error}", config.display()))?;
+    let bytes = std::fs::read(config)
+        .map_err(|error| format!("{} cannot be read: {error}", config.display()))?;
+    let document: Value = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("{} is not JSON: {error}", config.display()))?;
     let file = config.display();
     let Some(policy) = document.pointer("/services/brama") else {
         return Err(format!("{file} declares no services.brama policy"));
@@ -142,20 +142,19 @@ pub(super) fn check(config: &Path, out: &Outputs) -> Result<(), String> {
     }
     write_new(out.allowed, &names.join(","))?;
     let sorted: BTreeMap<&String, &Value> = alias_map.iter().collect();
-    write_new(
-        out.aliases,
-        &serde_json::to_string(&sorted).expect("aliases serialise"),
-    )?;
+    write_new(out.aliases, &encoded(&sorted, "the launch aliases")?)?;
     let backend: BTreeSet<&str> = REQUIRED_ALIASES
         .iter()
         .copied()
         .filter(|alias| *alias == BACKEND_ALIAS || alias.starts_with(&format!("{BACKEND_ALIAS}/")))
         .collect();
-    write_new(
-        out.backend,
-        &serde_json::to_string(&backend).expect("list serialises"),
-    )?;
+    write_new(out.backend, &encoded(&backend, "the backend aliases")?)?;
     write_new(out.lifetime, &lifetime.to_string())
+}
+
+/// `value` as JSON text, or a refusal naming `what` could not be encoded.
+fn encoded(value: &impl serde::Serialize, what: &str) -> Result<String, String> {
+    serde_json::to_string(value).map_err(|error| format!("{what} cannot be encoded as JSON: {error}"))
 }
 
 /// The first route registry: exactly the validated launch aliases, in the
@@ -164,6 +163,8 @@ pub(super) fn seed_routes(path: &Path, aliases: &str) -> Result<(), String> {
     let routes: Value =
         serde_json::from_str(aliases).map_err(|error| format!("BRAMA_MODEL_ALIASES: {error}"))?;
     let document = brama::core::inference_routes::fresh_registry(routes);
-    let text = serde_json::to_string_pretty(&document).expect("routes serialise") + "\n";
+    let text = serde_json::to_string_pretty(&document)
+        .map_err(|error| format!("the first route registry cannot be encoded as JSON: {error}"))?
+        + "\n";
     write_new(path, &text)
 }

@@ -15,7 +15,6 @@ mod routing;
 use axum::extract::Extension;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 
 use crate::core::server::admission::identity::ModelClientIdentity;
 use crate::core::server::aliases::table::ModelAliases;
@@ -25,6 +24,7 @@ use crate::core::server::streaming::{
 };
 use crate::types::{Message, ModelRequest};
 
+use crate::core::server::signature::AnswerSigner;
 use outcome::{failure_response, log_stream_commit, tally_and_log_buffered};
 use request::{ChatCompletionRequest, ChatCompletionResponse, Choice, ChoiceMessage, Usage};
 use routing::{route_model_call, DispatchedCall};
@@ -32,6 +32,7 @@ use routing::{route_model_call, DispatchedCall};
 pub(in crate::core::server) async fn chat_completions(
     Extension(client_identity): Extension<ModelClientIdentity>,
     Extension(aliases): Extension<ModelAliases>,
+    Extension(signer): Extension<AnswerSigner>,
     headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
 ) -> Response {
@@ -114,6 +115,13 @@ pub(in crate::core::server) async fn chat_completions(
         billing_target: req.billing_target,
         response_schema,
     };
+    // A request that asks for its one signed answer, asked before, is
+    // answered with that answer and no model is asked again (`signature`).
+    if !req.stream {
+        if let Some(repeat) = signer.recalled(&headers, &body) {
+            return repeat;
+        }
+    }
     let (dispatched, meta) = match route_model_call(
         &client_identity,
         &aliases,
@@ -160,7 +168,7 @@ pub(in crate::core::server) async fn chat_completions(
             let has_tool_calls = resp.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty());
             let finish_reason = if has_tool_calls { "tool_calls" } else { "stop" };
             let response_model = meta.reported_model(&requested_model, &resp.model);
-            let body = serde_json::to_value(ChatCompletionResponse {
+            let answer = serde_json::to_value(ChatCompletionResponse {
                 id: meta.request_id.clone(),
                 object: "chat.completion".into(),
                 model: response_model,
@@ -181,8 +189,10 @@ pub(in crate::core::server) async fn chat_completions(
             });
             // An answer that cannot be written as JSON is not sent as a
             // successful `null`: the caller is told the generation was lost.
-            match body {
-                Ok(body) => (StatusCode::OK, Json(body)).into_response(),
+            // A written one goes out as the exact bytes the answer key signed
+            // for this request's body (`signature`).
+            match answer {
+                Ok(answer) => signer.answered(&headers, &body, &answer),
                 Err(error) => api_error(
                     StatusCode::INTERNAL_SERVER_ERROR,
                     &format!("the generation could not be written as a chat completion: {error}"),

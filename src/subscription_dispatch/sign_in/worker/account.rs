@@ -56,7 +56,9 @@ pub(crate) async fn resolve(
         // Weles saying Weles did not answer (a Stado adapter's `502 upstream
         // unavailable`): the dependency is down, not the account's identity
         // wrong, and the next maintenance pass asks again.
-        Err(error) if reqwest::StatusCode::from_u16(status).is_ok_and(|code| code.is_server_error()) => {
+        Err(error)
+            if reqwest::StatusCode::from_u16(status).is_ok_and(|code| code.is_server_error()) =>
+        {
             return Err(Blocked::WelesUnreachable {
                 detail: format!(
                     "POST {base}/reauth/resolve answered HTTP {status} with no JSON ({error}), \

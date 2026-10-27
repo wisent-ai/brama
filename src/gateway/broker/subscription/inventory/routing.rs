@@ -34,7 +34,15 @@ pub fn routing_subscriptions(agent_id: &str) -> InventoryResult {
         snapshot.refreshing = true;
         let agent_id = agent_id.to_owned();
         tokio::spawn(async move {
-            let _ = refresh_routing_subscriptions(&agent_id).await;
+            // A failed discovery is logged with its cause by the refresh and
+            // published to the snapshot; the detached task records that it
+            // finished, and how, rather than dropping the answer.
+            let published = refresh_routing_subscriptions(&agent_id).await;
+            tracing::debug!(
+                event = "routing_inventory_refreshed",
+                discovered = published.is_ok(),
+                "detached routing inventory refresh finished"
+            );
         });
     }
     result

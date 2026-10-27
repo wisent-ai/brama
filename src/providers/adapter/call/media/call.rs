@@ -78,9 +78,8 @@ impl<'a> Call<'a> {
         operation: &str,
     ) -> Result<reqwest::Response, Refusal> {
         let (client, request) = builder.build_split();
-        let request = request.map_err(|error| {
-            super::super::outcome::refusal::transport_refusal(&error)
-        })?;
+        let request =
+            request.map_err(|error| super::super::outcome::refusal::transport_refusal(&error))?;
         stado_wait::send_built(stado_wait::Kind::Network, operation, client, request)
             .await
             .map_err(|error| super::super::outcome::refusal::transport_refusal(&error))

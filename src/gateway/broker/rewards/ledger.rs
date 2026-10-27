@@ -59,7 +59,9 @@ async fn post(route: &str, body: &Value) -> Result<(reqwest::StatusCode, Value),
     let target = format!("{url}{route}");
     let bearer = super::super::obtain_credential(LEDGER_RESOURCE, None)
         .await
-        .map_err(|failure| Unanswered::Failed(format!("its bearer could not be read: {failure}")))?;
+        .map_err(|failure| {
+            Unanswered::Failed(format!("its bearer could not be read: {failure}"))
+        })?;
     let bearer = bearer
         .expose_utf8()
         .map_err(|error| Unanswered::Failed(format!("its bearer is not text: {error:?}")))?
@@ -86,9 +88,15 @@ async fn post(route: &str, body: &Value) -> Result<(reqwest::StatusCode, Value),
         response.text(),
     )
     .await
-    .map_err(|error| Unanswered::Failed(format!("POST {target} answered {status} unreadably: {error}")))?;
+    .map_err(|error| {
+        Unanswered::Failed(format!(
+            "POST {target} answered {status} unreadably: {error}"
+        ))
+    })?;
     let answer: Value = serde_json::from_str(&text).map_err(|error| {
-        Unanswered::Failed(format!("POST {target} answered {status} with no JSON ({error}): {text}"))
+        Unanswered::Failed(format!(
+            "POST {target} answered {status} with no JSON ({error}): {text}"
+        ))
     })?;
     Ok((status, answer))
 }

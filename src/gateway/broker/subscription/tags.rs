@@ -24,7 +24,7 @@ use crate::gateway::oauth_refresh;
 ///
 /// This is the writer's half of that contract, and it exists because the write
 /// path had no such half. `put_subscription_credential` passed `None` for
-/// tags, which means `skarbiec set-json` keeps whatever the item already had
+/// tags, which means `skarbiec set` keeps whatever the item already had
 /// and a fresh item is created with nothing -- so the rotation path could mint
 /// a subscription that no agent could ever route to, and did.
 ///
@@ -153,10 +153,6 @@ pub async fn record_subscription_account(
     }
     let credential = super::super::redeem_subscription_credential(subscription_id, provider)
         .await
-        .map_err(|refused| {
-            refused
-                .detail
-                .unwrap_or_else(|| "the credential could not be redeemed".to_owned())
-        })?;
+        .map_err(|refused| refused.to_string())?;
     record_stated_account(subscription_id, provider, &credential).await
 }

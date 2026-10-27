@@ -151,7 +151,12 @@ impl ResponsesEventStream {
             None => "completed",
         };
         let mut response = self.response_shell(status);
-        response["output"] = Value::Array(self.items.iter().map(ResponsesOutputItem::completed).collect());
+        response["output"] = Value::Array(
+            self.items
+                .iter()
+                .map(ResponsesOutputItem::completed)
+                .collect(),
+        );
         if let Some(reason) = incomplete {
             response["incomplete_details"] = json!({ "reason": reason });
         }

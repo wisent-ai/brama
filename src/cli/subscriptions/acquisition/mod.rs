@@ -1,4 +1,4 @@
-//! `brama subscription acquire` and `brama subscription hand-over`: buying
+//! `brama subscription acquire` and `brama subscription handover`: buying
 //! an account when the pool is spent, here or on the gateway that holds the
 //! vault, and signing the pool's accounts into a harness on this machine.
 

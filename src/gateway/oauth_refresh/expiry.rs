@@ -116,5 +116,8 @@ pub(in crate::gateway) fn access_token_expiry_ms(
     secret: &Secret,
     provider: &str,
 ) -> Result<Option<i64>, Failure> {
-    Ok(expiry_epoch(secret, provider)?.map(|expiry| expiry.saturating_mul(millis_per_second_i64())))
+    Ok(
+        expiry_epoch(secret, provider)?
+            .map(|expiry| expiry.saturating_mul(millis_per_second_i64())),
+    )
 }

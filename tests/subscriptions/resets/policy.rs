@@ -6,7 +6,7 @@ use std::fs::{File, OpenOptions};
 use std::path::Path;
 
 fn show(run: &mut Run) -> Value {
-    let output = run.command(&["subscription", "reset-policy", "show"]);
+    let output = run.command(&["subscription", "policy", "show"]);
     assert!(
         output.status.success(),
         "{}",
@@ -81,7 +81,7 @@ fn policy_mutations_preserve_state_under_cross_process_contention() {
     let reason = format!("policy qualification {}", uuid::Uuid::new_v4());
     let arguments = [
         "subscription",
-        "reset-policy",
+        "policy",
         "set",
         &provider,
         "--keep-credits",
@@ -132,7 +132,7 @@ fn policy_mutations_preserve_state_under_cross_process_contention() {
     let updated_reason = format!("updated {reason}");
     let update = [
         "subscription",
-        "reset-policy",
+        "policy",
         "set",
         &provider,
         "--keep-credits",
@@ -162,7 +162,7 @@ fn policy_mutations_preserve_state_under_cross_process_contention() {
     assert_eq!(updated[&provider]["reason"], updated_reason);
     assert_eq!(persisted(&file), updated);
 
-    let clear = ["subscription", "reset-policy", "clear", &provider];
+    let clear = ["subscription", "policy", "clear", &provider];
     let held = lock(&lock_path);
     refused(&mut run, &clear, &provider, &lock_path);
     assert_eq!(

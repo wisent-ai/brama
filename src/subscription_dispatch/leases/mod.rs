@@ -186,8 +186,10 @@ fn window_at_limit(subscription_id: &str) -> Option<String> {
     ))
 }
 
+/// How many leases `leases` holds. A `usize` is at most 64 bits on every
+/// target Brama builds for, so the widening loses nothing and cannot fail.
 fn count(leases: &[Lease]) -> u64 {
-    u64::try_from(leases.len()).expect("a lease count fits in u64")
+    leases.len() as u64
 }
 
 fn member_row(entry: &broker::SubscriptionEntry, leases: &[Lease]) -> Value {

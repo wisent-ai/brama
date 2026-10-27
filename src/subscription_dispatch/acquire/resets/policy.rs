@@ -36,7 +36,7 @@ pub async fn blocked_until(member: &str, provider: &str) -> Result<Option<i64>, 
     if exhausted.peek().is_none() {
         return Ok(None);
     }
-    let mut latest = None;
+    let mut latest: Option<i64> = None;
     for reading in exhausted {
         let until = reading.resets_at_ms.ok_or_else(|| {
             format!(
@@ -44,7 +44,10 @@ pub async fn blocked_until(member: &str, provider: &str) -> Result<Option<i64>, 
                 reading.limit_id
             )
         })?;
-        latest = Some(latest.map_or(until, |previous: i64| previous.max(until)));
+        latest = Some(match latest {
+            Some(previous) => previous.max(until),
+            None => until,
+        });
     }
     Ok(latest)
 }

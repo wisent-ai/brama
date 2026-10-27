@@ -255,7 +255,10 @@ pub fn next_due_ms() -> Option<i64> {
                     .as_ref()
                     .filter(|credential| credential.state.usable())
                     .and_then(|credential| credential.expires_at_ms);
-                let resets = entry.limits.values().filter_map(|reading| reading.resets_at_ms);
+                let resets = entry
+                    .limits
+                    .values()
+                    .filter_map(|reading| reading.resets_at_ms);
                 let block = entry.block.as_ref().map(|block| block.blocked_until_ms);
                 expiry.into_iter().chain(resets).chain(block)
             })

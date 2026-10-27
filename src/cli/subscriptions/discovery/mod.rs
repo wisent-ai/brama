@@ -32,13 +32,10 @@ pub(crate) async fn run(args: DiscoveryArgs) {
         Ok(report) => {
             crate::cli::print_answer(&report, args.json);
             if report["ok"].as_bool() != Some(true) {
-                std::process::exit(libc::EXIT_FAILURE);
+                crate::cli::fail();
             }
         }
-        Err(error) => {
-            eprintln!("{error}");
-            std::process::exit(libc::EXIT_FAILURE);
-        }
+        Err(error) => crate::cli::refused(error),
     }
 }
 
@@ -50,7 +47,7 @@ async fn execute(destination: Destination) -> Result<Value, String> {
     };
     let client = reqwest::Client::builder()
         .build()
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| format!("the HTTP client cannot be built: {}", brama::core::failure::error_chain(&error)))?;
     let response = stado_wait::request(
         client
             .post(format!(

@@ -76,7 +76,8 @@ pub(super) async fn ordered_candidate_rows(
 
     // Shuffle before the stable plan sort: only equal-headroom rows retain
     // random order, so vault listing order never elects an unpinned account.
-    shuffle_within_equal(&mut rows, |_| ()).map_err(|error| {
+    // One key for every row: the whole list is one run, shuffled whole.
+    shuffle_within_equal(&mut rows, |_row| ()).map_err(|error| {
         refuse_as(
             request,
             POINT_CREDENTIAL_SELECTION,

@@ -11,7 +11,6 @@ use std::collections::{HashMap, HashSet};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
-use std::sync::{LazyLock, Mutex};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -55,13 +54,13 @@ pub(super) struct Registry {
 /// the member down is such a document, so writers state it explicitly.
 pub(crate) const SCHEMA_VERSION: u32 = 1; // https://brama.wisent.com/docs/configuration/route-registry
 
-static ROUTE_WRITE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
-
-/// Serializes every write of the routes document. The lock guards no value,
-/// so a writer that panicked leaves nothing half-done in it; refusing on its
-/// poison stopped every later route write until the process restarted.
-pub(super) fn route_write_guard() -> std::sync::MutexGuard<'static, ()> {
-    crate::core::sync::held(&ROUTE_WRITE_LOCK, "inference route write")
+/// Hold the routes document at `path` for one writer across every Brama
+/// process: the service and a `brama routes` command edit the same file,
+/// and a mutex of one process let them read it at once and the later write
+/// drop the earlier one's change. The lock is the shared
+/// [`crate::core::staging::held_beside`] on `<routes>.lock`.
+pub(super) fn route_write_guard(path: &Path) -> Result<std::fs::File, String> {
+    crate::core::staging::held_beside(path, "the inference routes")
 }
 
 pub(super) fn read_body(path: &Path) -> Result<String, String> {

@@ -60,7 +60,13 @@ pub(super) fn provider_failure(
 /// status and body as sent) and records no class, so the code is the fleet's
 /// word for unattributed; the sentence carries what happened.
 pub(super) fn reset_failure(subscription_id: &str, provider: &str, detail: String) -> Failure {
-    scoped_failure(POINT_PROVIDER_CALL, Code::Unknown, subscription_id, provider, detail)
+    scoped_failure(
+        POINT_PROVIDER_CALL,
+        Code::Unknown,
+        subscription_id,
+        provider,
+        detail,
+    )
 }
 
 pub(super) fn invalid_credential_failure(

@@ -118,8 +118,8 @@
       "destination": "/docs/cli/subscription/refresh.html"
     },
     {
-      "source": "/docs/cli/subscription/sign-in",
-      "destination": "/docs/cli/subscription/sign-in.html"
+      "source": "/docs/cli/subscription/login",
+      "destination": "/docs/cli/subscription/login.html"
     },
     {
       "source": "/docs/cli/subscription/authenticator/enrol",
@@ -146,12 +146,20 @@
       "destination": "/docs/cli/subscription/acquire.html"
     },
     {
-      "source": "/docs/cli/subscription/hand-over",
-      "destination": "/docs/cli/subscription/hand-over.html"
+      "source": "/docs/cli/subscription/handover",
+      "destination": "/docs/cli/subscription/handover.html"
     },
     {
-      "source": "/docs/cli/collect-task-quality",
-      "destination": "/docs/cli/collect-task-quality.html"
+      "source": "/docs/cli/tasks",
+      "destination": "/docs/cli/tasks.html"
+    },
+    {
+      "source": "/docs/cli/subscription/lease/:slug",
+      "destination": "/docs/cli/subscription/lease/:slug.html"
+    },
+    {
+      "source": "/docs/cli/rewards",
+      "destination": "/docs/cli/rewards.html"
     },
     {
       "source": "/docs/cli/help",
@@ -202,36 +210,8 @@
       "destination": "/docs/providers/:slug.html"
     },
     {
-      "source": "/docs/concepts/alias",
-      "destination": "/docs/concepts/alias.html"
-    },
-    {
-      "source": "/docs/concepts/capability",
-      "destination": "/docs/concepts/capability.html"
-    },
-    {
-      "source": "/docs/concepts/client-identity",
-      "destination": "/docs/concepts/client-identity.html"
-    },
-    {
-      "source": "/docs/concepts/entitlement",
-      "destination": "/docs/concepts/entitlement.html"
-    },
-    {
-      "source": "/docs/concepts/envelope",
-      "destination": "/docs/concepts/envelope.html"
-    },
-    {
-      "source": "/docs/concepts/failure-point",
-      "destination": "/docs/concepts/failure-point.html"
-    },
-    {
-      "source": "/docs/concepts/provider",
-      "destination": "/docs/concepts/provider.html"
-    },
-    {
-      "source": "/docs/concepts/subscription",
-      "destination": "/docs/concepts/subscription.html"
+      "source": "/docs/concepts/:slug",
+      "destination": "/docs/concepts/:slug.html"
     },
     {
       "source": "/docs/configuration",

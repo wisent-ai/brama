@@ -205,6 +205,7 @@ fn probability(value: Option<&Value>) -> Option<f64> {
 /// The complete JSON object of label probabilities a structured-output model
 /// answered, or serde's cause and position when it did not.
 fn json_object(text: &str) -> Result<Map<String, Value>, String> {
-    serde_json::from_str(text)
-        .map_err(|error| format!("the model's JSON object of label probabilities does not parse: {error}"))
+    serde_json::from_str(text).map_err(|error| {
+        format!("the model's JSON object of label probabilities does not parse: {error}")
+    })
 }

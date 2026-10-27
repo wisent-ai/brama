@@ -60,7 +60,11 @@ pub(super) async fn ask_wisent_identity(bearer: &str) -> WisentIdentityAnswer {
         stado_wait::Kind::Network,
         "ask Wisent Identity who the bearer is",
         &user,
-        client.get(&user).header("apikey", &anon_key).bearer_auth(bearer).send(),
+        client
+            .get(&user)
+            .header("apikey", &anon_key)
+            .bearer_auth(bearer)
+            .send(),
     )
     .await
     {

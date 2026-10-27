@@ -116,12 +116,12 @@ fn declared_breakage(root: &Path, declared: &str) -> Result<bool, String> {
 /// by name: read with such commits dropped, a skipped coordinate they
 /// declared was reported as never declared.
 fn versions_declared_in_history(root: &Path) -> Result<BTreeSet<String>, String> {
-    let output = stado_wait::output(
-        Command::new("git")
-            .arg("-C")
-            .arg(root)
-            .args(["log", "--format=%H", "--", MANIFEST]),
-    )
+    let output = stado_wait::output(Command::new("git").arg("-C").arg(root).args([
+        "log",
+        "--format=%H",
+        "--",
+        MANIFEST,
+    ]))
     .map_err(|error| format!("git log -- {MANIFEST}: {error}"))?;
     if !output.status.success() {
         return Err(format!(
@@ -181,7 +181,9 @@ fn compare(
     {
         return Err(format!("Cargo.toml commits {declared}, but the {class} change from {released} requires {required}, and {coordinate} was never declared by an earlier commit on this branch, so nothing consumed it."));
     }
-    let skipped: Vec<String> = (want.patch..have.patch).map(|patch| want.at_patch(patch)).collect();
+    let skipped: Vec<String> = (want.patch..have.patch)
+        .map(|patch| want.at_patch(patch))
+        .collect();
     Ok(format!(
         "{satisfied}: {required} is required and {} were consumed by earlier commits.",
         skipped.join(", ")
@@ -203,9 +205,9 @@ fn decision(
 /// no earlier commit consumed the coordinates before it.
 fn self_check(released: &str, published: &[String]) -> Result<(), String> {
     let unchanged = decision(released, published, published, false)?;
-    let (_, shortened) = published
-        .split_first()
-        .ok_or(format!("{BASELINE} lists no command to remove in the self-check"))?;
+    let (_, shortened) = published.split_first().ok_or(format!(
+        "{BASELINE} lists no command to remove in the self-check"
+    ))?;
     let broken = decision(released, published, shortened, false)?.change;
     if unchanged.change != Change::Internal || broken != Change::Breaking {
         return Err(format!(
@@ -216,7 +218,13 @@ fn self_check(released: &str, published: &[String]) -> Result<(), String> {
     }
     let required = unchanged.next;
     let far = Version::parse(&required)?.at_patch(u64::MAX);
-    if let Ok(accepted) = compare(&far, released, Change::Internal, &required, &BTreeSet::new()) {
+    if let Ok(accepted) = compare(
+        &far,
+        released,
+        Change::Internal,
+        &required,
+        &BTreeSet::new(),
+    ) {
         return Err(format!("the comparison accepted {far} against a required {required} with nothing consuming the gap: {accepted}"));
     }
     Ok(())

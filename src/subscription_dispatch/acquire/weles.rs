@@ -109,12 +109,14 @@ async fn exchange(
         .build()
         .map_err(|error| format!("Weles HTTP client: {error}"))?;
     let base = &endpoint.url;
-    let response = match client
-        .post(format!("{base}{path}"))
-        .bearer_auth(&token)
-        .json(&body)
-        .send()
-        .await
+    let address = format!("{base}{path}");
+    let response = match stado_wait::until(
+        stado_wait::Kind::Network,
+        "ask the Weles worker API to run the exchange",
+        &address,
+        client.post(&address).bearer_auth(&token).json(&body).send(),
+    )
+    .await
     {
         Ok(response) => response,
         Err(error) => {
@@ -130,11 +132,16 @@ async fn exchange(
         }
     };
     let status = response.status().as_u16();
+    // The stream is announced by its content type; a header holding bytes
+    // that are not text is no such announcement, compared as the bytes it is.
     let streamed = response
         .headers()
         .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|value| value.starts_with(progress::PROGRESS_CONTENT_TYPE));
+        .is_some_and(|value| {
+            value
+                .as_bytes()
+                .starts_with(progress::PROGRESS_CONTENT_TYPE.as_bytes())
+        });
     if !streamed {
         let answer = response.json::<Value>().await.map_err(|error| {
             format!("Weles HTTP {status} answered POST {path} with an unreadable body: {error}")

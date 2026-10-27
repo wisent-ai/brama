@@ -68,10 +68,7 @@ pub(crate) async fn report(args: AliasesArgs) {
     let AliasesArgs { json, strict } = args;
     let report = match brama::core::server::alias_report() {
         Ok(report) => report,
-        Err(error) => {
-            eprintln!("aliases could not be read: {error}");
-            crate::cli::fail();
-        }
+        Err(error) => crate::cli::refused(format!("aliases could not be read: {error}")),
     };
     let unserviceable = report.unserviceable();
     let selectors = report
@@ -79,12 +76,12 @@ pub(crate) async fn report(args: AliasesArgs) {
         .iter()
         .filter(|alias| alias.subscription_resolved)
         .count();
-    let pool = if selectors > 0 {
+    let pool = if std::num::NonZeroUsize::new(selectors).is_some() {
         Some(pool_count().await)
     } else {
         None
     };
-    let pool_is_dry = pool.as_ref().is_some_and(|pool| pool.live == 0);
+    let pool_is_dry = pool.as_ref().is_some_and(|pool| std::num::NonZeroUsize::new(pool.live).is_none());
     if json {
         super::print_json(&serde_json::json!({
             "source": report.source,
@@ -145,7 +142,7 @@ pub(crate) async fn report(args: AliasesArgs) {
                  selector alias(es) above resolve through",
                 pool.live, pool.members, selectors
             );
-            if pool.live == 0 {
+            if std::num::NonZeroUsize::new(pool.live).is_none() {
                 println!(
                     "every request for a selector alias is refused with \
                      subscription_reauthorization_required until one account is signed in. The \
@@ -188,7 +185,6 @@ pub(crate) async fn routes(command: RoutesCommand) {
         },
     };
     if let Err(error) = applied {
-        eprintln!("{error}");
-        crate::cli::fail();
+        crate::cli::refused(error);
     }
 }

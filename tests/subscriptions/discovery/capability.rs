@@ -22,7 +22,7 @@ fn discovered_account_without_authorization_cannot_claim_a_grant() {
         .expect("declared metadata provider");
     let response = run.command(&[
         "subscription",
-        "sign-in",
+        "login",
         provider,
         "--by",
         "weles",

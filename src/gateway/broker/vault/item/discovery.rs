@@ -33,7 +33,7 @@ pub(in crate::gateway::broker) async fn register(
     let mut command = tokio::process::Command::new(entitlements_router_bin()?);
     command
         .args([
-            "set-json",
+            "set",
             &item,
             "--if-absent",
             "--type",
@@ -179,7 +179,7 @@ pub(in crate::gateway::broker) async fn restore_mark(
     let mut command = tokio::process::Command::new(entitlements_router_bin()?);
     command
         .args([
-            "set-json",
+            "set",
             item_id,
             "--type",
             &kind,

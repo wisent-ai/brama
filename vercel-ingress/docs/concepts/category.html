@@ -16,7 +16,6 @@
   <div class="layout">
     <aside aria-label="Section navigation"><nav><section class="nav-group"><h2>Category</h2><a class="active" aria-current="page" href="/docs/concepts/category">Category</a><a href="/docs/concepts/media">Media</a><a href="/docs/cli/models">brama models</a><a href="/docs/cli/categories">brama categories</a></section><section class="nav-group"><h2>Documentation</h2><a href="/docs">All pages</a><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/http-api/discovery-and-subscriptions">Discovery</a><a href="/docs/configuration/route-registry">Route registry</a></section></nav></aside>
     <main>
-      <p class="source-note">Documentation topic: docs/concepts/category.md</p>
       <article class="doc"><h1 id="category">Category<a class="headerlink" href="#category" title="Link to this section">&para;</a></h1>
 <p>Three facets a caller needs before it picks a model name: what the model produces, whether its weights are published, and which of the operator's groupings it belongs to. The first two are read from the public catalogue. The third is the operator's declaration, because no public catalogue carries it.</p>
 
@@ -59,7 +58,7 @@ uncensored (24 models)
   providers: abliteration-ai
   routes:    -
   terms:     uncensored, abliterated</code></pre>
-<p>The model count beside the name is the check on the declaration: a rule that matches nothing reads zero here instead of looking like a working facet in two consoles. What a provider filters at serving time is the provider's business and no catalogue states it; this category says only that the publisher named the model that way.</p>
+<p>The model count beside the name is the check on the declaration: a rule that matches nothing reads zero here instead of looking like a working facet in two consoles. When the model catalogue itself cannot be read, no count is invented: <code>GET /v1/categories</code> answers <code>"models": null</code> with the read's cause in <code>catalog_failure</code>, and <code>brama catalogue categories list</code> prints <code>models unknown: the catalogue could not be read</code> after saying the cause on stderr (its <code>--json</code> form carries the same <code>catalog_failure</code>). What a provider filters at serving time is the provider's business and no catalogue states it; this category says only that the publisher named the model that way.</p>
 
 <h2 id="reading-the-facets">Reading the facets<a class="headerlink" href="#reading-the-facets" title="Link to this section">&para;</a></h2>
 <p><code>GET /v1/models</code> narrows on all four members, and a value the gateway has no meaning for is refused by name rather than answering the whole catalogue:</p>

@@ -9,7 +9,7 @@ use super::entitlements_router_bin;
 /// What Skarbiec says about the authenticator seed of every login it holds,
 /// keyed by login item.
 ///
-/// Asked of the vault, never read from it: `totp-seed-state` reports the
+/// Asked of the vault, never read from it: `totp seed` reports the
 /// state of the field and never its value, which is exactly what a caller
 /// confirming an enrolment needs. One call answers for every login, because
 /// a reader that asks per member pays a full vault pass per member. It runs
@@ -17,24 +17,24 @@ use super::entitlements_router_bin;
 /// runs (`router::child_output_blocking`).
 pub fn login_seed_states() -> Result<std::collections::BTreeMap<String, String>, String> {
     let program = entitlements_router_bin()?;
-    let operation = format!("{program} totp-seed-state");
+    let operation = format!("{program} totp seed");
     let output = super::router::child_output_blocking(&program, &operation, |command| {
-        command.arg("totp-seed-state");
+        command.args(["totp", "seed"]);
     })?;
     if !output.status.success() {
         let detail = String::from_utf8_lossy(&output.stderr);
         let detail = detail.trim();
         return Err(format!(
-            "{program} totp-seed-state exited {}: {detail}",
+            "{program} totp seed exited {}: {detail}",
             output.status
         ));
     }
     let document: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .map_err(|error| format!("{program} totp-seed-state returned invalid JSON: {error}"))?;
+        .map_err(|error| format!("{program} totp seed returned invalid JSON: {error}"))?;
     let rows = document
         .get("rows")
         .and_then(serde_json::Value::as_array)
-        .ok_or_else(|| format!("{program} totp-seed-state returned no rows array"))?;
+        .ok_or_else(|| format!("{program} totp seed returned no rows array"))?;
     rows.iter()
         .enumerate()
         .map(|(index, row)| {
@@ -42,13 +42,13 @@ pub fn login_seed_states() -> Result<std::collections::BTreeMap<String, String>,
                 .get("item")
                 .and_then(serde_json::Value::as_str)
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| format!("{program} totp-seed-state row {index} has no item"))?;
+                .ok_or_else(|| format!("{program} totp seed row {index} has no item"))?;
             let state = row
                 .get("seed_state")
                 .and_then(serde_json::Value::as_str)
                 .filter(|value| !value.is_empty())
                 .ok_or_else(|| {
-                    format!("{program} totp-seed-state returned no seed_state for {item}")
+                    format!("{program} totp seed returned no seed_state for {item}")
                 })?;
             Ok((item.to_owned(), state.to_owned()))
         })
@@ -62,7 +62,7 @@ pub fn login_seed_states() -> Result<std::collections::BTreeMap<String, String>,
 pub fn login_seed_present(login_item: &str) -> Result<bool, String> {
     let states = login_seed_states()?;
     let state = states.get(login_item).ok_or_else(|| {
-        format!("totp-seed-state returned no row for resolved login {login_item}")
+        format!("totp seed returned no row for resolved login {login_item}")
     })?;
     Ok(state == "present")
 }

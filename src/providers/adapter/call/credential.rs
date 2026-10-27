@@ -125,17 +125,20 @@ pub(in crate::providers::adapter) fn credential_account_id(
         return Err("the Codex grant's tokens field is not a JSON object".to_string());
     }
     if let Some(named) = tokens.get("account_id") {
-        let id = named.as_str().filter(|id| !id.trim().is_empty()).ok_or_else(|| {
-            "the Codex grant's tokens.account_id is not a nonempty string".to_string()
-        })?;
+        let id = named
+            .as_str()
+            .filter(|id| !id.trim().is_empty())
+            .ok_or_else(|| {
+                "the Codex grant's tokens.account_id is not a nonempty string".to_string()
+            })?;
         return Ok(Some(id.to_string()));
     }
     let Some(token) = tokens.get("id_token") else {
         return Ok(None);
     };
-    let token = token.as_str().ok_or_else(|| {
-        "the Codex grant's tokens.id_token is not a string".to_string()
-    })?;
+    let token = token
+        .as_str()
+        .ok_or_else(|| "the Codex grant's tokens.id_token is not a string".to_string())?;
     let claims = crate::gateway::jwt_claims(token)?;
     let Some(auth) = claims.get("https://api.openai.com/auth") else {
         return Ok(None);
@@ -146,8 +149,11 @@ pub(in crate::providers::adapter) fn credential_account_id(
     let Some(account) = auth.get("chatgpt_account_id") else {
         return Ok(None);
     };
-    let id = account.as_str().filter(|id| !id.trim().is_empty()).ok_or_else(|| {
-        "the Codex grant's chatgpt_account_id claim is not a nonempty string".to_string()
-    })?;
+    let id = account
+        .as_str()
+        .filter(|id| !id.trim().is_empty())
+        .ok_or_else(|| {
+            "the Codex grant's chatgpt_account_id claim is not a nonempty string".to_string()
+        })?;
     Ok(Some(id.to_string()))
 }

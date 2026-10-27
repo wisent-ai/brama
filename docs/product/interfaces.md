@@ -36,6 +36,30 @@ to the [README](../../README.md).
   that relies on `previous_response_id` must send the calls its results
   answer. A Google `functionResponse` is named after the call it answers. An
   Anthropic image given by `url` is carried as that URL.
+- **Signed answers:** with `BRAMA_ANSWER_SIGNING_KEY_FILE` naming an absolute
+  path to an Ed25519 seed only Brama's user can read (the checks the workload
+  key gets: owner, no group or other access, a regular file, no symlink, the
+  seed's size), a buffered `POST /v1/chat/completions` whose request carries
+  the header `x-brama-answer-once` gets one answer per exact request body:
+  the first is kept under `$BRAMA_STATE_DIR/signed-answers/<SHA-256 of the
+  request>.json`, and every later ask of the same body is answered with those
+  same bytes and signature without asking a model, marked
+  `x-brama-answer-repeat: true`. The answer is sent as the exact JSON bytes it
+  signed, with `x-brama-answer-signature`, the signature in standard base64
+  over `brama answer` and a NUL byte, then the SHA-256 of the request body as
+  sent and the SHA-256 of the response body, and `x-brama-answer-key`, the
+  lowercase hex SHA-256 of the public key. So asking again cannot bring a
+  second validly signed answer to one request. Startup logs the key id and
+  the public key in base64; a reader that keeps an answer (Tama's kept
+  judgements) verifies with that public key, given to it out of band, never
+  with one a host sends. A key that fails a check stops startup naming the
+  file; without the variable startup warns that answers go unsigned; a kept
+  answer that cannot be read or kept is refused (500) naming its file, never
+  answered afresh. A request without the header, a stream and the other
+  formats are answered as before and unsigned. Real test:
+  `tests/chat/signed.sh` (verifies with openssl; a changed answer or another
+  request does not verify; asking the same body again returns the same bytes
+  and signature marked a repeat; a request without the header is unsigned).
 - **Streaming:** any of the three chat formats streams when the request asks
   for it -- `"stream": true` on chat completions and Anthropic Messages,
   `"stream": true` on Responses. The response is `text/event-stream` in the

@@ -137,7 +137,8 @@ accounts reads as fifteen: it carries <code>total</code>, <code>per_provider</co
 one list of account coordinates per provider — plus
 <code>members_without_account</code>, the members whose own record states no account,
 and <code>inactive_members</code>, the retired or disabled members, in the pool but
-no account of its count; ids the vault no longer lists and only the usage ledger
+no account of its count, and <code>malformed_members</code>, rows the pool holds
+without the id or provider every member carries, shown as written; ids the vault no longer lists and only the usage ledger
 remembers are no members at all and stand in the document's own
 <code>remembered</code> list. Two members naming one
 account are one account. An account is read from the member itself — the

@@ -115,11 +115,13 @@ pub fn capacity_summary(provider: &str, mixed: bool, block_lifts_at_ms: Option<i
     }
 }
 
-/// One ledger instant as a reader can act on it: UTC, to the second.
+/// One ledger instant as a reader can act on it: UTC, to the second; an instant the
+/// calendar cannot hold is said as the milliseconds the ledger recorded, named so.
 fn block_instant(milliseconds: i64) -> String {
-    chrono::DateTime::from_timestamp_millis(milliseconds)
-        .map(|at| at.format("%Y-%m-%dT%H:%M:%SZ").to_string())
-        .unwrap_or_else(|| format!("{milliseconds}ms"))
+    match chrono::DateTime::from_timestamp_millis(milliseconds) {
+        Some(at) => at.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+        None => format!("an instant outside the calendar ({milliseconds} ms after the epoch, as the ledger recorded it)"),
+    }
 }
 
 /// The request path's own sentence for a pool every one of whose credentials

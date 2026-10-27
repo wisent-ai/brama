@@ -19,6 +19,7 @@
 
 mod accounts;
 pub(in crate::core::server) mod check;
+mod model;
 mod placement;
 pub(in crate::core::server) mod standing;
 
@@ -240,6 +241,15 @@ fn answer() -> (StatusCode, Value, Vec<standing::CallReading>) {
     let mut body = report.body;
     if let Some(object) = body.as_object_mut() {
         object.insert("maintenance".to_string(), maintenance_state());
+        // No member that can be served, or a pool that cannot be read: not ready, and why.
+        let model = model::document();
+        if let (Some("none" | "unknown"), Some(cause)) =
+            (model["state"].as_str(), model["reason"].as_str())
+        {
+            status = StatusCode::SERVICE_UNAVAILABLE;
+            model::unready(object, cause);
+        }
+        object.insert("model".to_string(), model);
         // Calls that stand and cannot be measured, because the resolver's
         // declaration is unreadable, refuse the same way with that cause.
         let refusal = match standing::refusal() {
@@ -248,8 +258,7 @@ fn answer() -> (StatusCode, Value, Vec<standing::CallReading>) {
         };
         if let Some(refusal) = refusal {
             status = StatusCode::SERVICE_UNAVAILABLE;
-            object.insert("ready".to_string(), Value::Bool(false));
-            object.insert("reason".to_string(), Value::String(refusal.clone()));
+            model::unready(object, &refusal);
             object.insert("credential_source".to_string(), Value::String(refusal));
         }
     }

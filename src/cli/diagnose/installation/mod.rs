@@ -35,28 +35,43 @@ const RUNNABLE_FILES: &[&str] = &[
     "bin/skarbiec-entitlements-router",
     "bin/start-with-skarbiec",
 ];
-/// The execute permission for owner, group and others.
-const EXECUTE_BITS: u32 = 0o111; // https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/sys_stat.h.html S_IXUSR | S_IXGRP | S_IXOTH
+/// The execute permission for owner, group and others, by its POSIX names.
+const EXECUTE_BITS: u32 = (libc::S_IXUSR | libc::S_IXGRP | libc::S_IXOTH) as u32;
 
 /// Every generation directory, oldest first by modification time; one whose
 /// time cannot be read is said and listed after the rest.
 fn installed_generations(layout: &Layout) -> Vec<PathBuf> {
     // A directory that is not there holds no generation; one that cannot be
-    // listed may hold the generation that runs, so the diagnosis says so.
+    // listed, or an entry of it that cannot be, may hold the generation that
+    // runs, so the diagnosis says so.
     let listing = |directory: &Path| -> Vec<PathBuf> {
-        match std::fs::read_dir(directory) {
-            Ok(entries) => entries
-                .flatten()
-                .map(|entry| entry.path())
-                .filter(|path| path.file_name().is_some_and(|name| name != "releases"))
-                .filter(|path| std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir()))
-                .collect(),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        let entries = match std::fs::read_dir(directory) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
             Err(error) => {
                 say!("  {}: cannot be listed: {error}", directory.display());
-                Vec::new()
+                return Vec::new();
+            }
+        };
+        let mut directories = Vec::new();
+        for entry in entries {
+            let path = match entry {
+                Ok(entry) => entry.path(),
+                Err(error) => {
+                    say!("  {}: an entry cannot be listed: {error}", directory.display());
+                    continue;
+                }
+            };
+            if path.file_name().is_some_and(|name| name == "releases") {
+                continue;
+            }
+            match std::fs::symlink_metadata(&path) {
+                Ok(meta) if meta.is_dir() => directories.push(path),
+                Ok(_file) => {}
+                Err(error) => say!("  {}: cannot be inspected: {error}", path.display()),
             }
         }
+        directories
     };
     let mut generations = listing(&layout.services);
     generations.extend(listing(&layout.services.join("releases")));
@@ -102,7 +117,7 @@ fn recorded_roles(layout: &Layout) -> Vec<(String, PathBuf)> {
 
 /// Whether a file's mode grants nobody the right to execute it.
 fn executable_by_nobody(mode: u32) -> bool {
-    !(mode & EXECUTE_BITS > 0)
+    std::num::NonZeroU32::new(mode & EXECUTE_BITS).is_none()
 }
 
 pub(super) fn print_generations(layout: &Layout, resolved: Option<&Path>) {
@@ -133,11 +148,16 @@ pub(super) fn print_generations(layout: &Layout, resolved: Option<&Path>) {
         } else {
             format!(" <- {}", roles.join(", "))
         };
-        let missing: Vec<&str> = REQUIRED_FILES
-            .iter()
-            .copied()
-            .filter(|name| !root.join(name).exists())
-            .collect();
+        // A required file whose presence cannot be checked is said with the
+        // reason, never counted as present or as missing.
+        let mut missing: Vec<&str> = Vec::new();
+        for name in REQUIRED_FILES.iter().copied() {
+            match root.join(name).try_exists() {
+                Ok(true) => {}
+                Ok(false) => missing.push(name),
+                Err(error) => say!("    {name}: presence cannot be checked: {error}"),
+            }
+        }
         say!(
             "  {}{marker}  installed {}",
             generation.display(),
@@ -156,15 +176,17 @@ pub(super) fn print_generations(layout: &Layout, resolved: Option<&Path>) {
             CAPABILITY_COMMAND.join(" "),
             router_answers(&root)
         );
-        let unrunnable: Vec<&str> = RUNNABLE_FILES
-            .iter()
-            .copied()
-            .filter(|name| {
-                std::fs::metadata(root.join(name)).is_ok_and(|meta| {
-                    meta.is_file() && executable_by_nobody(meta.permissions().mode())
-                })
-            })
-            .collect();
+        let mut unrunnable: Vec<&str> = Vec::new();
+        for name in RUNNABLE_FILES.iter().copied() {
+            match std::fs::metadata(root.join(name)) {
+                Ok(meta) if meta.is_file() && executable_by_nobody(meta.permissions().mode()) => {
+                    unrunnable.push(name)
+                }
+                Ok(_runnable) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => say!("    {name}: cannot be inspected: {error}"),
+            }
+        }
         if !unrunnable.is_empty() {
             say!("    NOT EXECUTABLE: {}", unrunnable.join(", "));
         }

@@ -19,6 +19,25 @@ use super::cache::{
 pub async fn registry_models_for_agent(
     agent_id: &str,
 ) -> Result<Vec<provider_registry::RegistryModel>, Refusal> {
+    super::cache::routing::models(routable_entries(agent_id)?)
+}
+
+/// Why `agent_id`'s pool can serve nothing right now, or `None` while one of
+/// its members can be served: the same verdict a request is refused with,
+/// read for `/readyz` without listing any model.
+pub fn live_pool_refusal(agent_id: &str) -> Result<Option<String>, Refusal> {
+    let no_servable_member =
+        ProviderRefusal::Gateway(GatewayRefusal::SubscriptionReauthorizationRequired);
+    match routable_entries(agent_id) {
+        Ok(_) => Ok(None),
+        Err(refused) if refused.class == no_servable_member => Ok(Some(refused.message)),
+        Err(refused) => Err(refused),
+    }
+}
+
+/// The agent's active, unretired members, refused at once when every one of
+/// them needs a new sign-in by the ledger.
+fn routable_entries(agent_id: &str) -> Result<Vec<broker::SubscriptionEntry>, Refusal> {
     // Routing reads observed inventory. A vault refresh runs outside the
     // request, and its pending or failed state is a refusal, not a held call.
     let listing = Instant::now();
@@ -33,7 +52,20 @@ pub async fn registry_models_for_agent(
     );
     let entries = active_unretired(listed)
         .map_err(|error| Refusal::gateway(GatewayRefusal::DependencyUnavailable, error))?;
-    super::cache::routing::models(entries)
+    // A pool every member of which needs a new sign-in can serve nothing: it
+    // is refused here, before any snapshot, credential read or provider call,
+    // so the caller hears in milliseconds what renews it instead of waiting
+    // minutes for every member to fail in turn.
+    let observed_at_ms = chrono::Utc::now().timestamp_millis();
+    if let Some(refusal) =
+        crate::subscription_dispatch::pool::pool_without_servable_member(&entries, observed_at_ms)
+    {
+        return Err(Refusal::gateway(
+            GatewayRefusal::SubscriptionReauthorizationRequired,
+            refusal,
+        ));
+    }
+    Ok(entries)
 }
 
 /// A standalone diagnostic explicitly discovers before dispatch; service
@@ -73,8 +105,8 @@ pub(super) async fn discover_subscription_models(
 
     let started = Instant::now();
     let subscriptions = entries.len();
-    let mut refused_by_ledger = 0usize;
-    let mut read = 0usize;
+    let mut refused_by_ledger = Vec::new();
+    let mut read = Vec::new();
     let mut models_by_route = HashMap::new();
     let mut failures = Vec::new();
     for entry in entries {
@@ -90,7 +122,7 @@ pub(super) async fn discover_subscription_models(
         // verdict, so a pool the ledger refuses entirely is refused here,
         // before any vault child or provider is asked.
         if let Some(refused) = usage::standing_refusal(&entry.id) {
-            refused_by_ledger += 1;
+            refused_by_ledger.push(entry.id.clone());
             failures.push(Refusal::new(
                 refused.class,
                 format!("{}: {}", entry.id, refused.message),
@@ -117,7 +149,7 @@ pub(super) async fn discover_subscription_models(
                 ));
                 continue;
             }
-            read += 1;
+            read.push(entry.id.clone());
             let secret = match broker::subscription_credential(&entry.id, provider).await {
                 Ok(secret) => secret,
                 Err(refused) => {
@@ -187,8 +219,8 @@ pub(super) async fn discover_subscription_models(
     info!(
         event = "subscription_models_discovered",
         subscriptions,
-        read,
-        refused_by_ledger,
+        read = read.len(),
+        refused_by_ledger = refused_by_ledger.len(),
         failed = failures.len(),
         elapsed_ms = started.elapsed().as_millis() as u64,
         "discovered the models an agent's subscriptions publish"
@@ -204,7 +236,7 @@ pub(super) async fn discover_subscription_models(
             // child or provider was asked; the sentence says so, because
             // "could not discover" would send the reader to look for a read
             // that never happened.
-            let message = if refused_by_ledger == subscriptions {
+            let message = if refused_by_ledger.len() == subscriptions {
                 format!("every subscription is refused by the ledger before any is read: {refused}")
             } else {
                 format!("could not discover native provider models: {refused}")

@@ -61,26 +61,19 @@ pub(crate) async fn models(args: ModelsArgs) {
     // surface has learned the other.
     if let Some(kind) = kind.as_deref() {
         if ModelKind::parse(kind).is_none() {
-            eprintln!("kind must be text, image, video or audio");
-            crate::cli::fail();
+            crate::cli::refused("kind must be text, image, video or audio");
         }
     }
     let weights = match weights.as_deref() {
         Some(value) => match Weights::parse(value) {
             Some(weights) => Some(weights),
-            None => {
-                eprintln!("weights must be open or closed");
-                crate::cli::fail();
-            }
+            None => crate::cli::refused("weights must be open or closed"),
         },
         None => None,
     };
     let snapshot = match model_catalog::snapshot().await {
         Ok(snapshot) => snapshot,
-        Err(error) => {
-            eprintln!("the model catalogue could not be read: {error}");
-            crate::cli::fail();
-        }
+        Err(error) => crate::cli::refused(format!("the model catalogue could not be read: {error}")),
     };
     let source = model_catalog::source().await;
     let declared_categories = declared();

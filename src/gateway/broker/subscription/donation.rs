@@ -291,7 +291,7 @@ pub async fn put_donated_credential(
             account,
         )
         .await?;
-        put_credential(&item_id, api_key.as_bytes(), Some(&tags), None)
+        put_credential(&item_id, api_key.as_bytes(), Some(&tags), account)
             .await
             .map_err(DonationRefusal::Unwritable)?;
     }

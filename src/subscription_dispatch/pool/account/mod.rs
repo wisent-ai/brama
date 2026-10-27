@@ -12,6 +12,7 @@ use crate::subscription_dispatch::usage;
 use crate::subscription_dispatch::usage::{CredentialState, SubscriptionUsage};
 
 mod standing;
+pub(crate) use standing::pool_without_servable_member;
 pub(super) use standing::{expires_at, last_redeem_error, state};
 
 /// The provider named for a subscription whose record carries none, so a row is
@@ -125,11 +126,9 @@ fn second_factor_view(entry: &SubscriptionEntry) -> Value {
         .and_then(|value| value.get("required"))
         .and_then(Value::as_bool)
         .or_else(|| {
-            failure
-                .as_ref()
-                .and_then(|failure| {
-                    (failure.code() == "google_2fa_material_missing").then_some(true)
-                })
+            failure.as_ref().and_then(|failure| {
+                (failure.code() == "google_2fa_material_missing").then_some(true)
+            })
         });
     // A refusal carries the whole browser trajectory behind it, which is
     // evidence for reading a failed run and noise in a one-line answer: its
@@ -185,7 +184,7 @@ pub(super) fn annotate_second_factor(
                 None => (
                     Value::Null,
                     json!(format!(
-                        "totp-seed-state returned no row for resolved login {login}"
+                        "totp seed returned no row for resolved login {login}"
                     )),
                 ),
             },

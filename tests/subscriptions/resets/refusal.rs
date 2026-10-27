@@ -73,7 +73,7 @@ fn policy_read_retains_gateway_http_refusal_body() {
         serde_json::from_str::<serde_json::Value>(&body).is_err(),
         "this journey requires the actual non-JSON refusal body"
     );
-    let output = run.command(&["subscription", "reset-policy", "show"]);
+    let output = run.command(&["subscription", "policy", "show"]);
     assert!(
         !output.status.success(),
         "a successful policy response does not qualify refusal diagnostics"

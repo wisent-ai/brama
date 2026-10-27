@@ -1,12 +1,19 @@
 //! The wrapper the store handed a secret back in, and how to describe a
 //! document that carries no credential without disclosing what it holds.
 
+use serde::Deserialize;
 use serde_json::Value;
 
 /// A typed envelope is exactly a `type` and a `value`, and nothing else. An
 /// object that merely carries a `type` beside its own fields -- a reauth
 /// document does -- is a credential, not a container.
-const ENVELOPE_FIELDS: usize = 2;
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Envelope {
+    #[serde(rename = "type")]
+    _kind: Value,
+    value: Value,
+}
 
 /// The credential behind whatever the store handed back.
 ///
@@ -25,19 +32,18 @@ const ENVELOPE_FIELDS: usize = 2;
 /// `None` means the text is not JSON at all, which is the ordinary shape of a
 /// bare secret and needs no interpretation.
 pub(super) fn credential_document(secret: &str) -> Option<Value> {
-    let mut value = serde_json::from_str::<Value>(secret.trim()).ok()?;
+    let mut value = match serde_json::from_str::<Value>(secret.trim()) {
+        Ok(value) => value,
+        // Text that does not parse as JSON is a bare secret, the ordinary shape.
+        Err(_bare_secret) => return None,
+    };
     // Envelopes nest when an already-wrapped value is imported a second time,
-    // so peel until the shape stops being one.
+    // so peel until the shape stops being one: a document that does not read as
+    // an envelope is the credential itself.
     loop {
-        let inner = match value.as_object_mut() {
-            Some(fields) if fields.len() == ENVELOPE_FIELDS && fields.contains_key("type") => {
-                fields.remove("value")
-            }
-            _ => None,
-        };
-        match inner {
-            Some(inner) => value = inner,
-            None => return Some(value),
+        match Envelope::deserialize(&value) {
+            Ok(envelope) => value = envelope.value,
+            Err(_not_an_envelope) => return Some(value),
         }
     }
 }

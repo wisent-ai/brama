@@ -26,25 +26,21 @@ pub(crate) async fn serve(args: ServeArgs) {
     if local_credentials_stdin {
         let mut encoded = String::new();
         if let Err(error) = std::io::stdin().read_to_string(&mut encoded) {
-            eprintln!("Server error: cannot read local credentials: {error}");
-            crate::cli::fail();
+            crate::cli::refused(format!("Server error: cannot read local credentials: {error}"));
         }
         if let Err(error) = brama::gateway::broker::install_local_provider_credentials(&mut encoded)
         {
-            eprintln!("Server error: {error}");
-            crate::cli::fail();
+            crate::cli::refused(format!("Server error: {error}"));
         }
     }
     info!("Starting server on port {port}");
     if let Err(e) = start_server(port, local_credentials_stdin).await {
-        eprintln!("Server error: {e}");
-        crate::cli::fail();
+        crate::cli::refused(format!("Server error: {e}"));
     }
 }
 
 pub(crate) fn mcp() {
     if let Err(error) = brama::mcp::serve() {
-        eprintln!("MCP server error: {error}");
-        crate::cli::fail();
+        crate::cli::refused(format!("MCP server error: {error}"));
     }
 }

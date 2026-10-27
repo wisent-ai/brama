@@ -92,7 +92,12 @@ pub async fn probe_once(subscription_id: &str, provider: &str) -> Result<Probe, 
         response_schema: None,
     };
     let response = probe_subscription_usage(subscription_id, provider, &request).await;
-    let probe = usage::record_probe(subscription_id, provider, response.success(), response.reason());
+    let probe = usage::record_probe(
+        subscription_id,
+        provider,
+        response.success(),
+        response.reason(),
+    );
     let Some(refusal) = &response.refusal else {
         info!(
             event = "usage_probe_recorded",

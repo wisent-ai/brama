@@ -73,7 +73,9 @@ fn rediscovery_cannot_register_a_retired_account_under_another_name() {
         after_ids, before_ids,
         "discovery created a new account identity"
     );
-    let rows = pool["subscriptions"].as_array().expect("real pool subscriptions");
+    let rows = pool["subscriptions"]
+        .as_array()
+        .expect("real pool subscriptions");
     let retired = rows
         .iter()
         .filter(|row| row["retired"] == true || row["status"] == "retired")
@@ -82,15 +84,24 @@ fn rediscovery_cannot_register_a_retired_account_under_another_name() {
         .iter()
         .filter(|row| row["retired"] != true && row["status"] != "retired")
         .collect();
-    let live = held.iter().filter(|row| row["state"] == "live").count();
+    let burnt = held.iter().filter(|row| row["state"] == "burnt").count();
+    let servable: Vec<&&Value> = held.iter().filter(|row| row["state"] != "burnt").collect();
+    let live = servable.iter().filter(|row| row["state"] == "live").count();
     let text = run.text_command(&["subscription", "list"]);
-    assert!(text.status.success(), "{}", String::from_utf8_lossy(&text.stderr));
+    assert!(
+        text.status.success(),
+        "{}",
+        String::from_utf8_lossy(&text.stderr)
+    );
     let said = String::from_utf8_lossy(&text.stdout);
     let counted = format!(
-        "{live} of {} held subscription credentials are live; {retired} retired credential(s) are listed and not counted",
-        held.len()
+        "{live} of {} servable subscription credentials are live; {burnt} burnt (renewed only by a sign-in) and {retired} retired credential(s) are listed and not counted",
+        servable.len()
     );
-    assert!(said.lines().any(|line| line == counted), "expected `{counted}` in:\n{said}");
+    assert!(
+        said.lines().any(|line| line == counted),
+        "expected `{counted}` in:\n{said}"
+    );
     run.report["result"] = json!("passed");
     run.save();
 }

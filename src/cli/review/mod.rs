@@ -52,6 +52,9 @@ pub(crate) struct ReviewArgs {
 
 /// The exit status of a review that asked for changes, apart from a failure
 /// to review at all (1), so a gate can tell "rejected" from "not reviewed".
+/// The pull-request gate that reads it declares 0 approve, 3 request changes,
+/// 1 not reviewed:
+/// <https://github.com/wisent-ai/wisent-supabase-wisent-app/blob/main/.github/workflows/brama-review.yml>
 const CHANGES_REQUESTED: i32 = 3;
 
 pub(crate) async fn run(args: ReviewArgs) {
@@ -59,11 +62,10 @@ pub(crate) async fn run(args: ReviewArgs) {
         Ok((verdict, text, turns)) => {
             if let Some(path) = &args.output {
                 if let Err(error) = std::fs::write(path, &text) {
-                    eprintln!(
+                    crate::cli::refused(format!(
                         "the review could not be written to {}: {error}",
                         path.display()
-                    );
-                    crate::cli::fail();
+                    ));
                 }
             }
             if args.json {
@@ -79,10 +81,7 @@ pub(crate) async fn run(args: ReviewArgs) {
                 std::process::exit(CHANGES_REQUESTED);
             }
         }
-        Err(message) => {
-            eprintln!("review failed: {message}");
-            crate::cli::fail();
-        }
+        Err(message) => crate::cli::refused(format!("review failed: {message}")),
     }
 }
 
@@ -119,14 +118,21 @@ async fn review(args: &ReviewArgs) -> Result<(Verdict, String, usize), String> {
         json!({"role": "system", "content": instructions}),
         json!({"role": "user", "content": request}),
     ];
-    for turn in 1..=args.max_turns {
+    for turn in std::num::NonZeroUsize::MIN.get()..=args.max_turns {
         let answer = gateway.complete(&messages, &tools::schema()).await?;
-        let calls = answer
-            .get("tool_calls")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        let content = answer.get("content").cloned().unwrap_or(Value::Null);
+        // A turn without tool calls states none (absent or null); any other
+        // shape is the gateway answering outside the chat contract.
+        let calls = match answer.get("tool_calls") {
+            None | Some(Value::Null) => Vec::new(),
+            Some(Value::Array(calls)) => calls.clone(),
+            Some(other) => {
+                return Err(format!(
+                    "turn {turn}: the gateway answered tool_calls that are not a list: {other}"
+                ))
+            }
+        };
+        // The assistant's content is carried as it came, null when it sent none.
+        let content = answer.get("content");
         if calls.is_empty() {
             messages.push(json!({"role": "assistant", "content": content}));
             messages.push(json!({
@@ -140,9 +146,12 @@ async fn review(args: &ReviewArgs) -> Result<(Verdict, String, usize), String> {
             if let Some(outcome) = tools::submitted(call)? {
                 return Ok((outcome.0, outcome.1, turn));
             }
+            let id = call
+                .get("id")
+                .ok_or_else(|| format!("turn {turn}: the model called a tool without an id: {call}"))?;
             messages.push(json!({
                 "role": "tool",
-                "tool_call_id": call.get("id").cloned().unwrap_or(Value::Null),
+                "tool_call_id": id,
                 "content": tree.answer(call),
             }));
         }

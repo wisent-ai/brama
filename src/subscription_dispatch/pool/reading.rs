@@ -67,7 +67,10 @@ pub(super) fn reading_error(
                 "no current plan windows are available from the last usage reading",
             )
         } else {
-            (wisent_errors::Code::Unknown, "usage has not been read for this subscription")
+            (
+                wisent_errors::Code::Unknown,
+                "usage has not been read for this subscription",
+            )
         }
     } else {
         return None;

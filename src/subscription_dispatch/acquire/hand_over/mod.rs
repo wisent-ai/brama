@@ -43,7 +43,15 @@ pub async fn hand_over(
     let listed = weles::accounts(provider).await?;
     let mut rows = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
-    for member in listed["accounts"].as_array().into_iter().flatten() {
+    // Read as empty, an answer in another shape signed nothing in and the
+    // verdict said every pool account was held.
+    let members = listed["accounts"].as_array().ok_or_else(|| {
+        format!(
+            "Weles's accounts for {provider} carry no list of accounts: {}",
+            listed["accounts"]
+        )
+    })?;
+    for member in members {
         let (Some(subscription_id), Some(account)) = (
             member["subscription_id"].as_str(),
             member["account"].as_str(),
@@ -139,7 +147,7 @@ async fn sign_in(
     };
     let Some(redirect) = answer["redirect_url"]
         .as_str()
-        .filter(|_| answer["ok"] == json!(true))
+        .filter(|_redirect| answer["ok"] == json!(true))
     else {
         return failed(format!(
             "Weles did not complete the authorization as {account}: {}",

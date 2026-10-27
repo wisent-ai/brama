@@ -64,13 +64,19 @@ pub(crate) async fn run_categories(command: super::CatalogueCommand) {
 async fn list(args: ListArgs) {
     let declarations = declared();
     let snapshot = model_catalog::snapshot().await;
-    if let Err(error) = snapshot.as_ref() {
-        eprintln!("the model catalogue could not be read: {error}");
-    }
+    // Counts need the model catalogue; when it cannot be read they are unknown and
+    // the failure is said once, on stderr and in `catalog_failure`.
+    let (catalog, catalog_failure) = match &snapshot {
+        Ok(catalog) => (Some(catalog), None),
+        Err(error) => {
+            eprintln!("the model catalogue could not be read: {error}");
+            (None, Some(error.to_string()))
+        }
+    };
     let counted = declarations
         .iter()
         .map(|(name, category)| {
-            let models = snapshot.as_ref().ok().map(|catalog| {
+            let models = catalog.map(|catalog| {
                 catalog
                     .models
                     .iter()
@@ -83,6 +89,7 @@ async fn list(args: ListArgs) {
     if args.json {
         super::super::print_json(&json!({
             "registry": configured_path().map(|path| path.display().to_string()),
+            "catalog_failure": catalog_failure,
             "categories": counted
                 .iter()
                 .map(|(name, category, models)| json!({
@@ -101,8 +108,10 @@ async fn list(args: ListArgs) {
         return;
     }
     for (name, category, models) in &counted {
-        let models = models.map_or_else(|| "?".to_string(), |count| count.to_string());
-        println!("{name} ({models} models)");
+        match models {
+            Some(count) => println!("{name} ({count} models)"),
+            None => println!("{name} (models unknown: the catalogue could not be read)"),
+        }
         println!("  providers: {}", joined(&category.providers));
         println!("  routes:    {}", joined(&category.routes));
         println!("  terms:     {}", joined(&category.terms));
@@ -111,8 +120,7 @@ async fn list(args: ListArgs) {
 
 fn set(args: SetArgs) {
     let Some(path) = configured_path() else {
-        eprintln!("{NO_REGISTRY}");
-        crate::cli::fail();
+        crate::cli::refused(NO_REGISTRY);
     };
     let category = Category {
         providers: args.providers,
@@ -121,24 +129,17 @@ fn set(args: SetArgs) {
     };
     match set_category(&path, &args.name, &category) {
         Ok(_) => changed(args.json, "declared", &args.name, &path),
-        Err(error) => {
-            eprintln!("{error}");
-            crate::cli::fail();
-        }
+        Err(error) => crate::cli::refused(error),
     }
 }
 
 fn remove(args: RemoveArgs) {
     let Some(path) = configured_path() else {
-        eprintln!("{NO_REGISTRY}");
-        crate::cli::fail();
+        crate::cli::refused(NO_REGISTRY);
     };
     match delete_category(&path, &args.name) {
         Ok(_) => changed(args.json, "retired", &args.name, &path),
-        Err(error) => {
-            eprintln!("{error}");
-            crate::cli::fail();
-        }
+        Err(error) => crate::cli::refused(error),
     }
 }
 

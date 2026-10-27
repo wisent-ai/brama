@@ -93,17 +93,21 @@ fn legacy(layout: &Layout, resolved: Option<&Path>) -> Option<(PathBuf, PathBuf)
 /// The service env beside the runtime coordinates; returns the trust config
 /// directory of the generation that serves, or none when the active release
 /// names one that cannot be found. A value is shown only when it is an
-/// existing path, so no secret the env carries is ever printed.
+/// existing path, so no secret the env carries is ever printed; a value
+/// that cannot be examined is not shown either, but the cause is, so a path
+/// the service cannot reach is not read as "not a path".
 pub(in crate::cli::diagnose) fn print_service_env(
     layout: &Layout,
     resolved: Option<&Path>,
 ) -> Option<PathBuf> {
     say!("\n=== service env");
     for (name, value) in &layout.settings {
-        if Path::new(value).exists() {
-            say!("  {name}={value}");
-        } else {
-            say!("  {name}=<not a path; value not shown>");
+        match std::fs::metadata(value) {
+            Ok(_metadata) => say!("  {name}={value}"),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                say!("  {name}=<not a path; value not shown>")
+            }
+            Err(error) => say!("  {name}=<cannot be examined: {error}; value not shown>"),
         }
     }
     let (config_dir, runtime_dir) = match layout.release_record("active") {

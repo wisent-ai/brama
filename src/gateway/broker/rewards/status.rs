@@ -32,22 +32,34 @@ pub async fn status(alias: Option<&str>, agent_id: Option<&str>) -> Result<Value
         Ok(Some(url)) => url,
         Ok(None) => format!("none declared ({LEDGER_URL_ENV})"),
         Err(error) => {
-            return Err(StatusFailure::Unreadable(format!("the ledger declaration could not be read: {error}")))
+            return Err(StatusFailure::Unreadable(format!(
+                "the ledger declaration could not be read: {error}"
+            )))
         }
     };
     let mut report = json!({"ledger": ledger});
     let Some(alias) = alias else {
         return Ok(report);
     };
-    let gate = gated(alias)
-        .map_err(|error| StatusFailure::Unreadable(format!("whether {alias} is gated could not be read: {error}")))?;
+    let gate = gated(alias).map_err(|error| {
+        StatusFailure::Unreadable(format!(
+            "whether {alias} is gated could not be read: {error}"
+        ))
+    })?;
     report["alias"] = Value::from(alias);
     report["gated"] = Value::from(gate);
     if let Some(agent) = agent_id {
         report["agent_id"] = Value::from(agent);
-        report["entitlement"] = match check_entitlement(agent, alias).await.map_err(StatusFailure::Unanswered)? {
-            Gate::Granted { entitlement_id } => json!({"granted": true, "entitlement_id": entitlement_id}),
-            Gate::Denied { reason, message } => json!({"granted": false, "reason": reason, "message": message}),
+        report["entitlement"] = match check_entitlement(agent, alias)
+            .await
+            .map_err(StatusFailure::Unanswered)?
+        {
+            Gate::Granted { entitlement_id } => {
+                json!({"granted": true, "entitlement_id": entitlement_id})
+            }
+            Gate::Denied { reason, message } => {
+                json!({"granted": false, "reason": reason, "message": message})
+            }
         };
     }
     Ok(report)

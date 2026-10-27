@@ -47,16 +47,19 @@ async fn call(
     let client = reqwest::Client::builder()
         .build()
         .map_err(|error| format!("gateway client: {error}"))?;
-    let bytes = body.map(|value| serde_json::to_vec(&value))
-        .transpose().map_err(|error| format!("encoding the lease request: {error}"))?;
+    let bytes = body
+        .map(|value| serde_json::to_vec(&value))
+        .transpose()
+        .map_err(|error| format!("encoding the lease request: {error}"))?;
     let mut request = client
         .request(method, format!("{}{path}", origin.trim_end_matches('/')))
         .bearer_auth(bearer.trim());
     if let Some((agent, coordinate)) = signing {
-        let (role, field) = coordinate.split_once('#').ok_or_else(|| {
-            format!("--signing-role names ROLE#FIELD, got {coordinate}")
-        })?;
-        let secret = unattended::field_from_role(role, field).await
+        let (role, field) = coordinate
+            .split_once('#')
+            .ok_or_else(|| format!("--signing-role names ROLE#FIELD, got {coordinate}"))?;
+        let secret = unattended::field_from_role(role, field)
+            .await
             .map_err(|error| format!("cannot read {coordinate} to sign as {agent}: {error}"))?;
         // A GET has no body; the shared verifier signs an empty hash field,
         // not the digest of an empty byte slice.
@@ -72,7 +75,9 @@ async fn call(
         }
     }
     if let Some(bytes) = bytes {
-        request = request.header("Content-Type", "application/json").body(bytes);
+        request = request
+            .header("Content-Type", "application/json")
+            .body(bytes);
     }
     let response = stado_wait::request(request)
         .await
@@ -85,9 +90,16 @@ async fn call(
         response.text(),
     )
     .await
-    .map_err(|error| format!("the gateway {origin} answered HTTP {status} but its body could not be read: {error}"))?;
+    .map_err(|error| {
+        format!(
+            "the gateway {origin} answered HTTP {status} but its body could not be read: {error}"
+        )
+    })?;
     if !status.is_success() {
-        return Err(format!("the gateway refused HTTP {} at {path}: {answer}", status.as_u16()));
+        return Err(format!(
+            "the gateway refused HTTP {} at {path}: {answer}",
+            status.as_u16()
+        ));
     }
     serde_json::from_str(&answer).map_err(|error| {
         format!("the gateway {origin} answered HTTP {status} at {path} with invalid JSON: {error}; body: {answer}")
@@ -136,7 +148,8 @@ pub(crate) async fn take(
         "/v1/subscription-pool/leases",
         Some(json!({"provider": provider, "session_id": session_id, "holder": holder})),
         signing,
-    ).await;
+    )
+    .await;
     let taken = match taken {
         Ok(taken) => taken,
         Err(error) => {
@@ -178,7 +191,8 @@ pub(crate) async fn release(
         "/v1/subscription-pool/leases",
         Some(json!({"lease_id": lease_id, "session_id": session_id})),
         signing,
-    ).await;
+    )
+    .await;
     let released = match released {
         Ok(released) => released,
         Err(error) => {
@@ -201,14 +215,19 @@ pub(crate) async fn release(
     println!("released {}", released.released.len());
 }
 
-pub(crate) async fn list(destination: remote::Destination, signing: Option<(&str, &str)>, json: bool) {
+pub(crate) async fn list(
+    destination: remote::Destination,
+    signing: Option<(&str, &str)>,
+    json: bool,
+) {
     let listed = call(
         destination,
         reqwest::Method::GET,
         "/v1/subscription-pool/leases",
         None,
         signing,
-    ).await;
+    )
+    .await;
     let listed = match listed {
         Ok(listed) => listed,
         Err(error) => {

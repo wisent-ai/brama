@@ -75,14 +75,23 @@ pub(super) fn installation() -> Result<Installation, String> {
     // the launcher, `current` is authoritative for executable and trust
     // material; service.env can keep paths from an older digest.
     let root = running_root(&home)?;
-    let current_router = root
-        .as_ref()
-        .map(|root| root.join("bin/skarbiec-entitlements-router"))
-        .filter(|path| path.is_file());
-    let current_config = root
-        .as_ref()
-        .map(|root| root.join("etc/brama-skarbiec"))
-        .filter(|path| path.is_dir());
+    // The running generation's router and config, when it holds them. One
+    // that cannot be examined is refused: read as absent, the registration
+    // fell to service.env, whose path may be an older digest's.
+    let held = |relative: &str, directory: bool| -> Result<Option<PathBuf>, String> {
+        let Some(root) = root.as_ref() else {
+            return Ok(None);
+        };
+        let path = root.join(relative);
+        match std::fs::metadata(&path) {
+            Ok(metadata) if metadata.is_dir() == directory => Ok(Some(path)),
+            Ok(_other_kind) => Ok(None),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(format!("{} cannot be examined: {error}", path.display())),
+        }
+    };
+    let current_router = held("bin/skarbiec-entitlements-router", false)?;
+    let current_config = held("etc/brama-skarbiec", true)?;
     let router = env("ENTITLEMENTS_ROUTER_BIN")?
         .or_else(|| current_router.map(|path| path.display().to_string()))
         .or_else(|| setting("ENTITLEMENTS_ROUTER_BIN"));

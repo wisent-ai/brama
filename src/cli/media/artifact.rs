@@ -4,22 +4,29 @@
 //! request for four images does not leave three of them nowhere while the
 //! command reports success.
 
+use std::ffi::OsString;
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
 use base64::Engine;
 
+/// The PNG file signature's first bytes: https://www.w3.org/TR/png/#5PNG-file-signature
+const PNG_SIGNATURE: &[u8] = &[0x89, b'P', b'N', b'G'];
+/// A JPEG stream opens with SOI (FF D8) and a marker (FF):
+/// https://www.w3.org/Graphics/JPEG/itu-t81.pdf (B.1.1.3, B.2.1)
+const JPEG_SIGNATURE: &[u8] = &[0xFF, 0xD8, 0xFF];
+
 pub(super) fn write_artifact(path: &str, index: usize, total: usize, encoded: &str) {
-    let destination = numbered(path, index, total);
+    let destination = match numbered(path, index, total) {
+        Ok(destination) => destination,
+        Err(error) => crate::cli::refused(error),
+    };
     let bytes = match base64::engine::general_purpose::STANDARD.decode(encoded) {
         Ok(bytes) => bytes,
-        Err(error) => {
-            eprintln!("the provider's image is not base64: {error}");
-            crate::cli::fail();
-        }
+        Err(error) => crate::cli::refused(format!("the provider's image is not base64: {error}")),
     };
     if let Err(error) = std::fs::write(&destination, &bytes) {
-        eprintln!("cannot write {}: {error}", destination.display());
-        crate::cli::fail();
+        crate::cli::refused(format!("cannot write {}: {error}", destination.display()));
     }
     println!(
         "[{index}] {} bytes written to {}",
@@ -32,11 +39,17 @@ pub(super) fn write_artifact(path: &str, index: usize, total: usize, encoded: &s
 /// file's own signature, so a misnamed file is described by what it holds.
 pub(super) fn data_url(path: &str) -> Result<String, String> {
     let bytes = std::fs::read(path).map_err(|error| format!("cannot read {path}: {error}"))?;
-    let mime_type = if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
+    // A WebP file is a RIFF container: "RIFF", its size as a little-endian
+    // u32, then "WEBP" (https://developers.google.com/speed/webp/docs/riff_container).
+    let webp = bytes
+        .strip_prefix(b"RIFF")
+        .and_then(|rest| rest.get(std::mem::size_of::<u32>()..))
+        .is_some_and(|rest| rest.starts_with(b"WEBP"));
+    let mime_type = if bytes.starts_with(PNG_SIGNATURE) {
         "image/png"
-    } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+    } else if bytes.starts_with(JPEG_SIGNATURE) {
         "image/jpeg"
-    } else if bytes.len() > 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+    } else if webp {
         "image/webp"
     } else {
         return Err(format!("{path} is not a PNG, JPEG or WebP image"));
@@ -48,20 +61,20 @@ pub(super) fn data_url(path: &str) -> Result<String, String> {
 }
 
 /// Write one artifact to the exact path asked for; number the rest so nothing
-/// overwrites its predecessor.
-fn numbered(path: &str, index: usize, total: usize) -> PathBuf {
-    if total <= 1 {
-        return PathBuf::from(path);
+/// overwrites its predecessor. A path that names no file is refused.
+fn numbered(path: &str, index: usize, total: usize) -> Result<PathBuf, String> {
+    if NonZeroUsize::new(total) == Some(NonZeroUsize::MIN) {
+        return Ok(PathBuf::from(path));
     }
     let path = Path::new(path);
     let stem = path
         .file_stem()
-        .and_then(|value| value.to_str())
-        .unwrap_or("image");
-    let extension = path.extension().and_then(|value| value.to_str());
-    let name = match extension {
-        Some(extension) => format!("{stem}-{index}.{extension}"),
-        None => format!("{stem}-{index}"),
-    };
-    path.with_file_name(name)
+        .ok_or_else(|| format!("--output {} names no file to number the images after", path.display()))?;
+    let mut name = OsString::from(stem);
+    name.push(format!("-{index}"));
+    if let Some(extension) = path.extension() {
+        name.push(".");
+        name.push(extension);
+    }
+    Ok(path.with_file_name(name))
 }

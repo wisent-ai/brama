@@ -80,9 +80,9 @@ silent() {
 
 # --- a real vault with one subscription item; the ledger remembers that member and one more ---
 vault init forget-journey-owner
-printf '%s' '{"token":"not-a-real-grant"}' | "$VAULT_BIN" set-json "$LISTED" --type token --tags "brama:subscription,brama:provider:claude-code,brama:id:$LISTED" &>"$ROOT/vault-output" ||
-  fail "skarbiec set-json $LISTED was refused: $(cat "$ROOT/vault-output")"
-printf '$ skarbiec set-json %s --type token --tags brama:subscription,brama:provider:claude-code,brama:id:%s\noutput: %s\n\n' "$LISTED" "$LISTED" "$(cat "$ROOT/vault-output")" >>"$REPORT"
+printf '%s' '{"token":"not-a-real-grant"}' | "$VAULT_BIN" set "$LISTED" --type token --tags "brama:subscription,brama:provider:claude-code,brama:id:$LISTED" &>"$ROOT/vault-output" ||
+  fail "skarbiec set $LISTED was refused: $(cat "$ROOT/vault-output")"
+printf '$ skarbiec set %s --type token --tags brama:subscription,brama:provider:claude-code,brama:id:%s\noutput: %s\n\n' "$LISTED" "$LISTED" "$(cat "$ROOT/vault-output")" >>"$REPORT"
 printf '%s' "{\"subscriptions\":{\"$LISTED\":{\"provider\":\"claude-code\"},\"$REMEMBERED\":{\"provider\":\"claude-code\"}}}" >"$BRAMA_SUBSCRIPTION_USAGE_FILE"
 run either subscription list --json
 [ "$(jq -r "[.subscriptions[].id] | index(\"$REMEMBERED\")" "$ROOT/answer.json")" = null ] ||

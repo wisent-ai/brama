@@ -182,7 +182,7 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
         let body = serde_json::to_vec(
             &json!({ "model": alias, "messages": [{ "role": "user", "content": "say ok" }] }),
         )
-        .expect("payload serialises");
+        .map_err(|error| format!("the probe request for {alias} cannot be encoded: {error}"))?;
         let mut request = client
             .post(format!("{base}/v1/chat/completions"))
             .bearer_auth(&token)
@@ -218,7 +218,9 @@ async fn probe(args: ProbeArgs) -> Result<(), String> {
                         .map(|said| said.trim().to_string());
                     match said {
                         Some(said) if !said.is_empty() => Ok((said, payload)),
-                        _ => Err(format!("answer carries no nonblank text content: {payload}")),
+                        _ => Err(format!(
+                            "answer carries no nonblank text content: {payload}"
+                        )),
                     }
                 });
                 match outcome {

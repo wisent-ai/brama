@@ -2,7 +2,7 @@
 //! v0.1.0): given the published version, the published surface and the
 //! candidate surface, what kind of change this is and what the next version
 //! is. The SPEC keeps one small implementation per consumer, held identical by
-//! its shared fixtures; `brama version-gate conformance` runs those fixtures
+//! its shared fixtures; `brama version conformance` runs those fixtures
 //! against this port, and the version-check workflow runs it before it trusts
 //! a verdict from it.
 

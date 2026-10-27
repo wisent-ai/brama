@@ -69,9 +69,9 @@ vault_item() {
 
 # --- a real vault with one subscription item that names no account ---
 vault init bank-journey-owner
-printf '%s' '{"token":"not-a-real-grant"}' | "$VAULT_BIN" set-json "$MEMBER" --type token --tags "brama:subscription,brama:provider:claude-code,brama:id:$MEMBER" &>"$ROOT/vault-output" ||
-  fail "skarbiec set-json $MEMBER was refused: $(cat "$ROOT/vault-output")"
-printf '$ skarbiec set-json %s --type token --tags brama:subscription,brama:provider:claude-code,brama:id:%s\noutput: %s\n\n' "$MEMBER" "$MEMBER" "$(cat "$ROOT/vault-output")" >>"$REPORT"
+printf '%s' '{"token":"not-a-real-grant"}' | "$VAULT_BIN" set "$MEMBER" --type token --tags "brama:subscription,brama:provider:claude-code,brama:id:$MEMBER" &>"$ROOT/vault-output" ||
+  fail "skarbiec set $MEMBER was refused: $(cat "$ROOT/vault-output")"
+printf '$ skarbiec set %s --type token --tags brama:subscription,brama:provider:claude-code,brama:id:%s\noutput: %s\n\n' "$MEMBER" "$MEMBER" "$(cat "$ROOT/vault-output")" >>"$REPORT"
 before=$(vault_item)
 
 # --- refusals: no account anywhere ---

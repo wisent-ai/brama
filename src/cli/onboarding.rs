@@ -76,10 +76,7 @@ pub(crate) async fn onboard(args: OnboardArgs) {
                 return;
             }
             Ok(true) => {}
-            Err(error) => {
-                eprintln!("Configuration adoption error: {error}");
-                crate::cli::fail();
-            }
+            Err(error) => crate::cli::refused(format!("Configuration adoption error: {error}")),
         }
     } else if adopt_apply
         || adopt_all_importable
@@ -98,9 +95,6 @@ pub(crate) async fn onboard(args: OnboardArgs) {
             crate::cli::fail();
         }
         Ok(_) => {}
-        Err(error) => {
-            eprintln!("Onboarding error: {error}");
-            crate::cli::fail();
-        }
+        Err(error) => crate::cli::refused(format!("Onboarding error: {error}")),
     }
 }

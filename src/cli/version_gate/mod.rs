@@ -1,4 +1,4 @@
-//! `brama version-gate …`: the version check `.github/workflows/version-check.yml`
+//! `brama version …`: the version check `.github/workflows/version-check.yml`
 //! runs on every change, carried by the candidate binary itself. A change is
 //! refused when its declared version disagrees with what it did to Brama's
 //! public surface, the commands `brama` advertises.
@@ -64,9 +64,13 @@ fn own_surface(root: &Path, cli: &clap::Command) -> Result<Vec<String>, String> 
     Ok(advertised)
 }
 
-fn document(surface: &[String]) -> String {
-    serde_json::to_string_pretty(&serde_json::json!({ "surface": surface }))
-        .expect("a list of names serialises")
+/// `value` pretty-printed, or a refusal naming `what` could not be encoded.
+fn pretty(value: &serde_json::Value, what: &str) -> Result<String, String> {
+    serde_json::to_string_pretty(value).map_err(|error| format!("{what} cannot be encoded as JSON: {error}"))
+}
+
+fn document(surface: &[String]) -> Result<String, String> {
+    pretty(&serde_json::json!({ "surface": surface }), "the surface document")
 }
 
 fn dispatch(command: VersionGateCommand, cli: &clap::Command) -> Result<(), String> {
@@ -76,7 +80,7 @@ fn dispatch(command: VersionGateCommand, cli: &clap::Command) -> Result<(), Stri
                 Some(reference) => surface::of_revision(&root, &reference)?.0,
                 None => own_surface(&root, cli)?,
             };
-            println!("{}", document(&names));
+            println!("{}", document(&names)?);
             Ok(())
         }
         VersionGateCommand::Contract {
@@ -95,10 +99,7 @@ fn dispatch(command: VersionGateCommand, cli: &clap::Command) -> Result<(), Stri
         }
         VersionGateCommand::Baseline { root, write } if write => {
             let generated = baseline::best(&root)?;
-            let text = format!(
-                "{}\n",
-                serde_json::to_string_pretty(&generated).expect("a JSON value serialises")
-            );
+            let text = format!("{}\n", pretty(&generated, "the generated baseline")?);
             let path = root.join(contract::BASELINE);
             std::fs::write(&path, text).map_err(|error| format!("{}: {error}", path.display()))?;
             eprintln!("wrote {}", path.display());
@@ -122,7 +123,7 @@ fn dispatch(command: VersionGateCommand, cli: &clap::Command) -> Result<(), Stri
 
 pub(crate) fn run(command: VersionGateCommand, cli: clap::Command) {
     if let Err(detail) = dispatch(command, &cli) {
-        eprintln!("::error::{detail}");
-        std::process::exit(1);
+        // `::error::` makes the CI runner show the line as an error annotation.
+        crate::cli::refused(format!("::error::{detail}"));
     }
 }

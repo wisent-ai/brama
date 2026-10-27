@@ -98,14 +98,13 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
         Err(error) => return credential_refused(request, error),
     };
     let started = Instant::now();
-    let response = match send_once_more_if_unsent(provider_body(
-        authorized, descriptor, payload, request,
-    ))
-    .await
-    {
-        Ok(response) => response,
-        Err(error) => return transport_failure(&request.model, &error),
-    };
+    let response =
+        match send_once_more_if_unsent(provider_body(authorized, descriptor, payload, request))
+            .await
+        {
+            Ok(response) => response,
+            Err(error) => return transport_failure(&request.model, &error),
+        };
     let (status, plan, text) = match response_text(response).await {
         Ok(result) => result,
         Err(refused) => return attempted_failure(&request.model, refused),
@@ -144,9 +143,12 @@ pub async fn dispatch(request: &ModelRequest, item: &str, secret: &str) -> Model
             WireProtocol::OpenAiChat => {
                 model_response_from_openai(&request.model, body, elapsed_ms)
             }
-            WireProtocol::AnthropicMessages => {
-                model_response_from_anthropic(&request.model, body, elapsed_ms, answer_tool(request))
-            }
+            WireProtocol::AnthropicMessages => model_response_from_anthropic(
+                &request.model,
+                body,
+                elapsed_ms,
+                answer_tool(request),
+            ),
             // Both are refused before a request is built: the Responses wire
             // returns above, and a decision-only provider has no chat path.
             WireProtocol::OpenAiResponses | WireProtocol::TypeSafeSystemOne => unreachable!(),
@@ -211,14 +213,13 @@ pub async fn dispatch_stream(
         Ok(builder) => builder,
         Err(error) => return Err(credential_refused(request, error)),
     };
-    let response = match send_once_more_if_unsent(provider_body(
-        authorized, descriptor, payload, request,
-    ))
-    .await
-    {
-        Ok(response) => response,
-        Err(error) => return Err(transport_failure(&request.model, &error)),
-    };
+    let response =
+        match send_once_more_if_unsent(provider_body(authorized, descriptor, payload, request))
+            .await
+        {
+            Ok(response) => response,
+            Err(error) => return Err(transport_failure(&request.model, &error)),
+        };
     if !response.status().is_success() {
         let (status, plan, text) = match response_text(response).await {
             Ok(result) => result,
@@ -284,7 +285,9 @@ fn stated_usage(
             return Ok(None);
         };
         let Some(number) = stated.as_u64() else {
-            return Err(format!("the provider stated {side} tokens as {stated}, not a whole number"));
+            return Err(format!(
+                "the provider stated {side} tokens as {stated}, not a whole number"
+            ));
         };
         u32::try_from(number).map(Some).map_err(|error| {
             format!("the provider stated {number} {side} tokens, more than a count holds: {error}")

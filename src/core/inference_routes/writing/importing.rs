@@ -56,7 +56,7 @@ pub fn import_routes(
     imports: &[RouteImport],
     replace_alias_conflicts: bool,
 ) -> Result<(Value, Vec<RouteImportResult>), String> {
-    let _guard = route_write_guard();
+    let _guard = route_write_guard(path)?;
     let mut value = if route_file_exists(path)? {
         snapshot(path)?
     } else {
@@ -126,7 +126,7 @@ pub fn import_routes(
             deployment_by_name
                 .get(name)
                 .filter(|existing| *existing != deployment)
-                .map(|_| name.to_string())
+                .map(|_existing| name.to_string())
         });
         if let Some(name) = deployment_conflict {
             results.push(RouteImportResult {

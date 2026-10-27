@@ -37,7 +37,9 @@ pub(super) async fn redeem_provider_resource(
         broker.redeem(&binding).map_err(|error| {
             let code = match &error {
                 CapabilityError::AuthorityUnreachable(_) => Code::InfraDown,
-                CapabilityError::RedemptionDenied(_) => failure::code_for("credential_unauthorized"),
+                CapabilityError::RedemptionDenied(_) => {
+                    failure::code_for("credential_unauthorized")
+                }
                 _ => Code::Unknown,
             };
             credential_failure(format!("redeem capability: {error}"), &owned_resource, code)

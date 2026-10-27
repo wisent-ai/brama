@@ -14,7 +14,11 @@ wants a different destination changes the one route.
 The route registry is a JSON document with three known top-level fields —
 `schema_version`, `deployments`, and `routes`, which maps each alias to its
 single destination. An unknown top-level field is refused by name and the whole
-document is rejected, so nothing in it serves until it is repaired.
+document is rejected, so nothing in it serves until it is repaired. A registry
+that cannot be read refuses every listing of names — `GET /v1/models` and the
+alias list answer 503 and `brama aliases` exits with `the route registry <path>
+cannot be read: <cause>` — rather than listing the built-in names alone, which
+read as every declared alias being gone.
 `brama routes migrate` performs that repair in one idempotent operation, and
 [`/docs/cli/routes/migrate`](https://brama.wisent.com/docs/cli/routes/migrate)
 documents it. The shape, the validation guards, and the atomic owner-only write

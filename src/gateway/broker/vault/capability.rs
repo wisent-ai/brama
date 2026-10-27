@@ -55,7 +55,9 @@ fn issue_arguments(purpose: &str, resource: &str) -> Result<Vec<String>, String>
         )
     })?;
     if lifetime.is_zero() {
-        return Err(format!("{CAPABILITY_LIFETIME_ENV} must be at least one second"));
+        return Err(format!(
+            "{CAPABILITY_LIFETIME_ENV} must be at least one second"
+        ));
     }
     Ok(vec![
         "grant".to_owned(),
@@ -93,7 +95,12 @@ fn capability_refusal_detail(stdout: &[u8], stderr: &[u8]) -> String {
             )
         }
     };
-    let text = |key: &str| document.get(key).and_then(Value::as_str).filter(|t| !t.is_empty());
+    let text = |key: &str| {
+        document
+            .get(key)
+            .and_then(Value::as_str)
+            .filter(|t| !t.is_empty())
+    };
     match (text("reason"), text("remedy")) {
         (Some(reason), Some(remedy)) => format!("{reason}; {remedy}"),
         (Some(reason), None) => reason.to_owned(),

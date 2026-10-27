@@ -1,0 +1,32 @@
+name: docs-navigation
+
+# The published docs wear one navigation rendered from the home page's
+# directory (vercel-ingress/docs/index.html), and every page file is routed by
+# vercel-ingress/vercel.json. A change that edits one page's navigation by
+# hand, adds a page no rewrite serves or lists a topic nothing serves is named
+# here; `node vercel-ingress/tools/docs-navigation.mjs write` renders the
+# navigation, and the check names what only a person can place.
+
+on:
+  pull_request:
+    paths:
+      - "vercel-ingress/**"
+  push:
+    branches: [main]
+    paths:
+      - "vercel-ingress/**"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Check every docs page against the one directory
+        run: node vercel-ingress/tools/docs-navigation.mjs check

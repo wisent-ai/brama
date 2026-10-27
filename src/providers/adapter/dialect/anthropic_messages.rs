@@ -121,7 +121,9 @@ fn anthropic_tools(request: &ModelRequest) -> Option<Vec<Value>> {
 /// holds an answer to a schema with a tool the model must call, whose input
 /// schema is that schema
 /// (https://docs.anthropic.com/en/docs/build-with-claude/tool-use#json-mode).
-pub(in crate::providers::adapter) fn answer_tool(request: &ModelRequest) -> Option<&ResponseSchema> {
+pub(in crate::providers::adapter) fn answer_tool(
+    request: &ModelRequest,
+) -> Option<&ResponseSchema> {
     request
         .response_schema
         .as_ref()

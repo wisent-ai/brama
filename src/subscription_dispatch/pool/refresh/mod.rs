@@ -12,6 +12,7 @@
 //! leave it alone until a sign-in stores a new one.
 
 use serde_json::{json, Value};
+use wisent_errors::Failure;
 
 use crate::core::failure::POINT_CREDENTIAL_REDEEM;
 use crate::gateway::broker;
@@ -27,6 +28,13 @@ pub use reinstate::{reinstate_member, ReinstateRefused};
 /// than spelled at each return.
 const REFRESHED: &str = "refreshed";
 const FAILED: &str = "failed";
+
+/// A refusal in its own words: every failure point, code and detail of its
+/// chain, outermost first. A failure that states no detail still names where
+/// it failed and with which code, never a sentence nobody wrote.
+fn refusal(subscription_id: &str, refused: &Failure) -> String {
+    format!("{subscription_id}: {}", refused.chain().join(" <- "))
+}
 
 /// Refresh every grant this deployment holds for one provider, because an
 /// operator asked for it now instead of waiting for the sweep.
@@ -52,7 +60,7 @@ pub async fn refresh_provider(provider: &str, reason: &str) -> Result<Value, Str
         return Ok(verdict(
             provider,
             reason,
-            0,
+            &[],
             FAILED,
             format!(
                 "no usable `{provider}` subscription is in this deployment's pool, so no \
@@ -65,7 +73,7 @@ pub async fn refresh_provider(provider: &str, reason: &str) -> Result<Value, Str
         return Ok(verdict(
             provider,
             reason,
-            0,
+            &[],
             FAILED,
             format!(
                 "`{provider}` subscription credentials are API keys rather than OAuth grants, so \
@@ -74,17 +82,16 @@ pub async fn refresh_provider(provider: &str, reason: &str) -> Result<Value, Str
             ),
         ));
     }
-    let attempted = candidates.len();
-    let mut refreshed: usize = 0;
+    let mut refreshed = Vec::new();
     let mut refusals = Vec::new();
-    let mut unreadable: usize = 0;
+    let mut unreadable = Vec::new();
     for subscription_id in &candidates {
         match broker::retry_disowned_subscription_credential(subscription_id, provider).await {
             // Dropped unread. This command reports that a credential now exists,
             // never what it is, and the ledger already holds the new expiry.
             Ok(credential) => {
                 drop(credential);
-                refreshed = refreshed.saturating_add(1);
+                refreshed.push(subscription_id);
             }
             Err(refused) => {
                 // A refusal raised at the redeem point never reached the
@@ -93,29 +100,18 @@ pub async fn refresh_provider(provider: &str, reason: &str) -> Result<Value, Str
                 // because a shell without the launcher's capability environment
                 // hits it for every subscription at once.
                 if refused.failure_point == POINT_CREDENTIAL_REDEEM {
-                    unreadable = unreadable.saturating_add(1);
+                    unreadable.push(subscription_id);
                 }
-                refusals.push(format!(
-                    "{subscription_id}: {}",
-                    refused
-                        .detail
-                        .as_deref()
-                        .unwrap_or("refused without a stated reason")
-                ));
+                refusals.push(refusal(subscription_id, &refused));
             }
         }
     }
-    Ok(verdict(
-        provider,
-        reason,
-        attempted,
-        if refreshed == attempted {
-            REFRESHED
-        } else {
-            FAILED
-        },
-        detail(provider, attempted, refreshed, unreadable, &refusals),
-    ))
+    let result = match refusals.is_empty() {
+        true => REFRESHED,
+        false => FAILED,
+    };
+    let detail = detail(provider, candidates.len(), &refreshed, unreadable.len(), &refusals);
+    Ok(verdict(provider, reason, &candidates, result, detail))
 }
 
 /// Refresh exactly the subscription a sign-in replaced.
@@ -145,7 +141,7 @@ pub async fn refresh_subscription(
         return Ok(verdict(
             provider,
             reason,
-            0,
+            &[],
             FAILED,
             format!(
                 "`{subscription_id}` is not an active `{provider}` subscription in this deployment"
@@ -156,35 +152,30 @@ pub async fn refresh_subscription(
         return Ok(verdict(
             provider,
             reason,
-            0,
+            &[],
             FAILED,
             format!("`{provider}` credentials have no OAuth refresh path"),
         ));
     }
+    let attempted = [subscription_id.to_string()];
     match broker::retry_disowned_subscription_credential(subscription_id, provider).await {
         Ok(credential) => {
             drop(credential);
             Ok(verdict(
                 provider,
                 reason,
-                1,
+                &attempted,
                 REFRESHED,
                 format!("refreshed `{subscription_id}`"),
             ))
         }
-        Err(refused) => {
-            let detail = refused
-                .detail
-                .as_deref()
-                .unwrap_or("refused without a stated reason");
-            Ok(verdict(
-                provider,
-                reason,
-                1,
-                FAILED,
-                format!("`{subscription_id}`: {detail}"),
-            ))
-        }
+        Err(refused) => Ok(verdict(
+            provider,
+            reason,
+            &attempted,
+            FAILED,
+            refusal(subscription_id, &refused),
+        )),
     }
 }
 
@@ -193,12 +184,17 @@ pub async fn refresh_subscription(
 /// Both are written here so a record cannot say something the operator was never
 /// told, and so an attempt that found nothing to do is audited too: afterwards
 /// the question is who ran this and what the product answered.
-fn verdict(provider: &str, reason: &str, attempted: usize, result: &str, detail: String) -> Value {
-    let journaled =
-        crate::journal::record_subscription_refresh(provider, reason, result, attempted, &detail);
+fn verdict(provider: &str, reason: &str, attempted: &[String], result: &str, detail: String) -> Value {
+    let journaled = crate::journal::record_subscription_refresh(
+        provider,
+        reason,
+        result,
+        attempted.len(),
+        &detail,
+    );
     json!({
         "provider": provider,
-        "attempted": attempted,
+        "attempted": attempted.len(),
         "result": result,
         "detail": detail,
         // The audit record is part of the answer: one that could not be
@@ -216,14 +212,13 @@ fn verdict(provider: &str, reason: &str, attempted: usize, result: &str, detail:
 fn detail(
     provider: &str,
     attempted: usize,
-    refreshed: usize,
+    refreshed: &[&String],
     unreadable: usize,
     refusals: &[String],
 ) -> String {
-    let mut detail = if refreshed > 0 {
-        format!("refreshed {refreshed} of {attempted} `{provider}` grants")
-    } else {
-        format!("refreshed no `{provider}` grant out of {attempted} tried")
+    let mut detail = match refreshed.is_empty() {
+        true => format!("refreshed no `{provider}` grant out of {attempted} tried"),
+        false => format!("refreshed {} of {attempted} `{provider}` grants", refreshed.len()),
     };
     for refusal in refusals {
         detail.push_str("; ");

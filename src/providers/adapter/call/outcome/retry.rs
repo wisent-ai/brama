@@ -19,9 +19,7 @@ pub(in crate::providers::adapter) async fn send_once_more_if_unsent(
         return stado_wait::request(builder).await;
     };
     match stado_wait::request(builder).await {
-        Err(error) if error.is_connect() || error.is_request() => {
-            stado_wait::request(retry).await
-        }
+        Err(error) if error.is_connect() || error.is_request() => stado_wait::request(retry).await,
         result => result,
     }
 }

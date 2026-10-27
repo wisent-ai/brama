@@ -108,6 +108,8 @@ impl ModelResponse {
 
     /// The sentence of this answer's refusal, `None` on a success.
     pub fn reason(&self) -> Option<&str> {
-        self.refusal.as_ref().map(|refusal| refusal.message.as_str())
+        self.refusal
+            .as_ref()
+            .map(|refusal| refusal.message.as_str())
     }
 }

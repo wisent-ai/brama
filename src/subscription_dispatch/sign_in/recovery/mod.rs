@@ -68,7 +68,7 @@ pub(super) async fn execute(options: &SignInOptions) -> Result<Value, SignInErro
             ));
         }
     };
-    if !enrolment.ok() {
+    if !enrolment.enrolled() {
         return Ok(verdict(
             options,
             &identity,

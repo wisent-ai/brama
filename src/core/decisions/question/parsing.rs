@@ -2,9 +2,30 @@
 //! that names the question it is about: the key, the kind, its options or
 //! levels, and the text fields each kind requires.
 
+use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use super::Question;
+
+/// The fields a question may carry. Reading a question into it refuses any
+/// other field by name; what each field holds is judged below.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+#[allow(dead_code)]
+struct QuestionFields {
+    r#type: Option<Value>,
+    instructions: Option<Value>,
+    criteria: Option<Value>,
+}
+
+/// The kinds of question, as the caller spells them in `type`.
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum Kind {
+    Noul,
+    Choice,
+    Score,
+}
 
 pub(super) fn validate_key(key: &str) -> Result<(), String> {
     if key.is_empty() || key.trim() != key {
@@ -24,21 +45,26 @@ pub(super) fn parse_question(key: &str, value: &Value) -> Result<Question, Strin
     let object = value
         .as_object()
         .ok_or_else(|| format!("question `{key}` must be an object"))?;
-    for field in object.keys() {
-        if !matches!(field.as_str(), "type" | "instructions" | "criteria") {
-            return Err(format!(
-                "question `{key}` carries unknown field `{field}`: a question has `type`, `instructions` and `criteria`"
-            ));
-        }
-    }
+    serde_json::from_value::<QuestionFields>(value.clone()).map_err(|error| {
+        format!(
+            "question `{key}`: {error}; a question has `type`, `instructions` and `criteria`"
+        )
+    })?;
     let instructions = text_field(object, key, "instructions")?;
-    let kind = object
-        .get("type")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .unwrap_or_default();
+    let kind = match object.get("type") {
+        None => {
+            return Err(format!(
+                "question `{key}` must declare a `type`: noul, choice or score"
+            ))
+        }
+        Some(declared) => serde_json::from_value::<Kind>(declared.clone()).map_err(|error| {
+            format!(
+                "question `{key}` declares unsupported type {declared}: a question is a noul, a choice or a score ({error})"
+            )
+        })?,
+    };
     match kind {
-        "noul" => {
+        Kind::Noul => {
             if object.contains_key("criteria") {
                 return Err(format!(
                     "question `{key}` is a noul and declares no criteria: a noul is answered with the probability that it is true"
@@ -46,17 +72,18 @@ pub(super) fn parse_question(key: &str, value: &Value) -> Result<Question, Strin
             }
             Ok(Question::Noul { instructions })
         }
-        "choice" => {
+        Kind::Choice => {
             let criteria = object.get("criteria").and_then(Value::as_object).ok_or_else(|| {
                 format!("question `{key}` must declare `criteria` as an object of option labels")
             })?;
-            if criteria.len() < 2 {
+            let declared: Vec<_> = criteria.iter().collect();
+            if !matches!(declared.as_slice(), [_, _, ..]) {
                 return Err(format!(
                     "question `{key}` must declare at least two options"
                 ));
             }
-            let mut options = Vec::with_capacity(criteria.len());
-            for (label, rubric) in criteria {
+            let mut options = Vec::with_capacity(declared.len());
+            for (label, rubric) in declared {
                 validate_label(key, label)?;
                 let rubric = match rubric {
                     Value::Null => None,
@@ -74,11 +101,11 @@ pub(super) fn parse_question(key: &str, value: &Value) -> Result<Question, Strin
                 options,
             })
         }
-        "score" => {
+        Kind::Score => {
             let criteria = object.get("criteria").and_then(Value::as_array).ok_or_else(|| {
                 format!("question `{key}` must declare `criteria` as an ordered array of levels, lowest first")
             })?;
-            if criteria.len() < 2 {
+            if !matches!(criteria.as_slice(), [_, _, ..]) {
                 return Err(format!("question `{key}` must declare at least two levels"));
             }
             let mut levels = Vec::with_capacity(criteria.len());
@@ -96,12 +123,6 @@ pub(super) fn parse_question(key: &str, value: &Value) -> Result<Question, Strin
                 levels,
             })
         }
-        "" => Err(format!(
-            "question `{key}` must declare a `type`: noul, choice or score"
-        )),
-        other => Err(format!(
-            "question `{key}` declares unsupported type `{other}`: a question is a noul, a choice or a score"
-        )),
     }
 }
 

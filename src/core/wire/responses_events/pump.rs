@@ -20,7 +20,10 @@ impl ResponsesEventStream {
     /// and return its position.
     fn open_message(&mut self) -> usize {
         if let Some(index) = self.open_item {
-            if matches!(self.items.get(index), Some(ResponsesOutputItem::Message { .. })) {
+            if matches!(
+                self.items.get(index),
+                Some(ResponsesOutputItem::Message { .. })
+            ) {
                 return index;
             }
         }

@@ -49,27 +49,15 @@ pub(crate) enum LauncherCommand {
     },
     /// Create the first inference-route registry at PATH from
     /// BRAMA_MODEL_ALIASES
-    SeedRoutes {
+    Seed {
         /// Registry file to create
         path: PathBuf,
     },
-    /// The preloaded model-router client table (JSON) for BRAMA_ALLOWED_MODELS
-    ModelRouterIdentities {
-        /// The `skarbiec-entitlements-router` executable that reads the vault
-        #[arg(long)]
-        router: PathBuf,
-        /// JSON list of the backend client's exact aliases
-        #[arg(long)]
-        backend_models: String,
-    },
-    /// Every product's request-sign identity (JSON object)
-    RequestSignIdentities {
-        /// The `skarbiec-entitlements-router` executable that reads the vault
-        #[arg(long)]
-        router: PathBuf,
-    },
+    /// The client identities the gateway preloads, read from the vault
+    #[command(subcommand)]
+    Identities(IdentityCommand),
     /// One non-empty field of the vault item that plays a role, printed bare
-    RoleField {
+    Field {
         /// The `skarbiec-entitlements-router` executable that reads the vault
         #[arg(long)]
         router: PathBuf,
@@ -80,7 +68,7 @@ pub(crate) enum LauncherCommand {
     },
     /// Check that the pinned broker advertises every router command path the
     /// launcher and these launcher steps invoke
-    CheckRouterVerbs {
+    Verbs {
         /// The pinned `skarbiec-entitlements-router` executable to ask
         #[arg(long)]
         router: PathBuf,
@@ -88,6 +76,26 @@ pub(crate) enum LauncherCommand {
         /// directory are scanned for router command paths
         #[arg(long)]
         launcher: PathBuf,
+    },
+}
+
+/// `brama launcher identities`: the client tables the gateway preloads.
+#[derive(Subcommand)]
+pub(crate) enum IdentityCommand {
+    /// The preloaded model-router client table (JSON) for BRAMA_ALLOWED_MODELS
+    Router {
+        /// The `skarbiec-entitlements-router` executable that reads the vault
+        #[arg(long)]
+        router: PathBuf,
+        /// JSON list of the backend client's exact aliases
+        #[arg(long)]
+        backend_models: String,
+    },
+    /// Every product's request-sign identity (JSON object)
+    Sign {
+        /// The `skarbiec-entitlements-router` executable that reads the vault
+        #[arg(long)]
+        router: PathBuf,
     },
 }
 
@@ -117,33 +125,32 @@ pub(crate) fn run(command: LauncherCommand) {
                 lifetime: &lifetime,
             },
         ),
-        LauncherCommand::SeedRoutes { path } => std::env::var("BRAMA_MODEL_ALIASES")
+        LauncherCommand::Seed { path } => std::env::var("BRAMA_MODEL_ALIASES")
             .map_err(|error| {
                 format!("BRAMA_MODEL_ALIASES is required and could not be read: {error}")
             })
             .and_then(|aliases| policy::seed_routes(&path, &aliases)),
-        LauncherCommand::ModelRouterIdentities {
+        LauncherCommand::Identities(IdentityCommand::Router {
             router,
             backend_models,
-        } => std::env::var("BRAMA_ALLOWED_MODELS")
+        }) => std::env::var("BRAMA_ALLOWED_MODELS")
             .map_err(|error| {
                 format!("BRAMA_ALLOWED_MODELS is required and could not be read: {error}")
             })
             .and_then(|allowed| {
                 printed(identities::model_router(&router, &allowed, &backend_models))
             }),
-        LauncherCommand::RequestSignIdentities { router } => {
+        LauncherCommand::Identities(IdentityCommand::Sign { router }) => {
             printed(identities::request_sign(&router))
         }
-        LauncherCommand::RoleField {
+        LauncherCommand::Field {
             router,
             role,
             field,
         } => printed(identities::vault::role_field(&router, &role, &field)),
-        LauncherCommand::CheckRouterVerbs { router, launcher } => verbs::check(&router, &launcher),
+        LauncherCommand::Verbs { router, launcher } => verbs::check(&router, &launcher),
     };
     if let Err(detail) = result {
-        eprintln!("{detail}");
-        crate::cli::fail();
+        crate::cli::refused(detail);
     }
 }

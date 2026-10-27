@@ -24,7 +24,6 @@ pub type Progress = Arc<dyn Fn(&Value) + Send + Sync>;
 
 /// What the answer said before it ended: the run, its stages, the operator
 /// request it waits on, and the `result` when it arrived.
-#[derive(Default)]
 pub(crate) struct Observed {
     pub run_id: Option<String>,
     pub host: Option<String>,
@@ -33,44 +32,57 @@ pub(crate) struct Observed {
     pub result: Option<Value>,
 }
 
+/// A field of a reported event, or the word that says Weles did not report
+/// it: an event line names what it knows, and a sentence says which part it
+/// left out rather than inventing one.
+fn reported<'a>(value: &'a Value, field: &str) -> &'a str {
+    match value.get(field).and_then(Value::as_str) {
+        Some(text) => text,
+        None => "unreported",
+    }
+}
+
 impl Observed {
+    /// Nothing observed yet: no run, no stage, no request, no result.
+    fn nothing() -> Self {
+        Self { run_id: None, host: None, stages: Vec::new(), operator_request: None, result: None }
+    }
+
     /// Where the run was when it stopped reporting, in one clause, and how to
     /// see what it is doing or end it: a sign-in Weles still runs keeps the
     /// account, and the next sign-in of it joins that run.
     pub fn whereabouts(&self) -> String {
-        let run = self.run_id.as_deref().unwrap_or("not yet started");
-        let host = self
-            .host
-            .as_deref()
-            .map(|host| format!(" on {host}"))
-            .unwrap_or_default();
-        let stage = self
-            .stages
-            .last()
-            .and_then(|stage| {
-                Some(format!(
-                    "last stage {} (reached {})",
-                    stage.get("stage")?.as_str()?,
-                    stage.get("at")?.as_str()?
-                ))
-            })
-            .unwrap_or_else(|| "no stage reported".to_string());
-        let waiting = self
+        let run = match self.run_id.as_deref() {
+            Some(run) => run,
+            None => "not yet started",
+        };
+        let host = match self.host.as_deref() {
+            Some(host) => format!(" on {host}"),
+            None => String::new(),
+        };
+        let stage = match self.stages.last() {
+            Some(stage) => format!(
+                "last stage {} (reached {})",
+                reported(stage, "stage"),
+                reported(stage, "at")
+            ),
+            None => "no stage reported".to_string(),
+        };
+        let waiting = match self
             .operator_request
             .as_ref()
             .and_then(|request| request.get("instruction").and_then(Value::as_str))
-            .map(|instruction| format!("; it was waiting for the operator: {instruction}"))
-            .unwrap_or_default();
-        let commands = self
-            .run_id
-            .as_deref()
-            .map(|run| {
-                format!(
-                    "; `weles runs show {run}` prints what it last wrote, \
-                     `weles runs cancel {run} --detail <why>` ends it"
-                )
-            })
-            .unwrap_or_default();
+        {
+            Some(instruction) => format!("; it was waiting for the operator: {instruction}"),
+            None => String::new(),
+        };
+        let commands = match self.run_id.as_deref() {
+            Some(run) => format!(
+                "; `weles runs show {run}` prints what it last wrote, \
+                 `weles runs cancel {run} --detail <why>` ends it"
+            ),
+            None => String::new(),
+        };
         format!("run {run}{host}, {stage}{waiting}{commands}")
     }
 
@@ -82,10 +94,14 @@ impl Observed {
             .and_then(Value::as_str)
     }
 
-    /// Write what the run reported into the identity the verdict records.
+    /// Write what the run reported into the identity the verdict records; a
+    /// run that asked nothing of the operator records `null`.
     pub fn record(&self, identity: &mut Value) {
         identity["stages"] = json!(self.stages);
-        identity["operator_request"] = self.operator_request.clone().unwrap_or(Value::Null);
+        identity["operator_request"] = match &self.operator_request {
+            Some(request) => request.clone(),
+            None => Value::Null,
+        };
         if let Some(run_id) = &self.run_id {
             identity["run_id"] = json!(run_id);
         }
@@ -117,7 +133,7 @@ pub(crate) async fn read(
     mut response: reqwest::Response,
     progress: Option<&Progress>,
 ) -> Result<Observed, Box<(Observed, String)>> {
-    let mut observed = Observed::default();
+    let mut observed = Observed::nothing();
     let mut pending: Vec<u8> = Vec::new();
     loop {
         let chunk = match response.chunk().await {
@@ -166,12 +182,7 @@ pub(crate) async fn read(
 /// One event as the line a person reads, or `None` for an event that tells a
 /// person nothing. The CLI prints these and the sweep logs them.
 pub fn sentence(event: &Value) -> Option<String> {
-    let text = |field: &str| {
-        event
-            .get(field)
-            .and_then(Value::as_str)
-            .unwrap_or("unreported")
-    };
+    let text = |field: &str| reported(event, field);
     match event.get("event").and_then(Value::as_str)? {
         "admitted" => Some(format!(
             "Weles admitted the sign-in of {} with login {}{}",
@@ -191,14 +202,12 @@ pub fn sentence(event: &Value) -> Option<String> {
         )),
         "stage" => Some(format!("{} stage {}", text("at"), text("stage"))),
         "operator_request" => {
-            let request = event.get("request").cloned().unwrap_or(Value::Null);
-            let field = |name: &str| {
-                request
-                    .get(name)
-                    .and_then(Value::as_str)
-                    .unwrap_or("unreported")
-                    .to_owned()
+            let absent = Value::Null;
+            let request = match event.get("request") {
+                Some(request) => request,
+                None => &absent,
             };
+            let field = |name: &str| reported(request, name).to_owned();
             // The run waits until Google's page moves or the operator answers;
             // the line says how to answer, because a prompt that never
             // arrived otherwise leaves both sides waiting. Weles answers a

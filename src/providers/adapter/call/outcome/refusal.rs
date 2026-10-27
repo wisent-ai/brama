@@ -21,7 +21,10 @@ pub(in crate::providers::adapter) fn transport_refusal(error: &reqwest::Error) -
     let class = ProviderRefusal::DependencyUnavailable;
     Refusal::new(
         class,
-        format!("{}: provider request failed: {cause}", class.contract_kind()),
+        format!(
+            "{}: provider request failed: {cause}",
+            class.contract_kind()
+        ),
     )
 }
 
@@ -91,7 +94,10 @@ pub(in crate::providers::adapter) fn provider_refusal(
     // JSON carrying one, else the body as it came, and an empty body said to
     // be one with the status that carried it.
     let detail = if said.is_empty() {
-        format!("provider returned HTTP {} with an empty body", status.as_u16())
+        format!(
+            "provider returned HTTP {} with an empty body",
+            status.as_u16()
+        )
     } else {
         match serde_json::from_str::<Value>(said) {
             Ok(value) => match value

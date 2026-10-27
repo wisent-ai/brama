@@ -89,7 +89,10 @@ pub(in super::super) async fn speak(
 /// The account's voices, as ElevenLabs lists them under `voices`.
 pub(in super::super) async fn voices(call: &Call<'_>) -> Result<Value, Refusal> {
     let response = call
-        .send(call.get(call.descriptor.voices_path), "list ElevenLabs voices")
+        .send(
+            call.get(call.descriptor.voices_path),
+            "list ElevenLabs voices",
+        )
         .await?;
     answered(call.route_id, response).await
 }

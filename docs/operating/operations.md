@@ -181,7 +181,21 @@ recorded and the discarded attempt stays `in_progress` forever on the Echo side.
   standalone mode and runs none of its Skarbiec stages. A file that is not
   owner-only is refused with "BRAMA_LOCAL_CREDENTIALS_FILE must be readable by
   its owner only". `stado product install brama --surface service --without
-  skarbiec` installs the service on such a host.
+  skarbiec` installs the service on such a host. A standalone launch keeps the
+  subscription grants donated into it or renewed by it in memory only, unless
+  its launcher names an owner-only file in `BRAMA_STANDALONE_GRANTS_FILE`: then
+  they are read from that file when the credentials are installed and the
+  whole map is written back to it after every donation, renewal and removal,
+  so a renewal that rotates a refresh token survives a restart. A grants file
+  another user can read is refused with "BRAMA_STANDALONE_GRANTS_FILE ... must
+  be readable by its owner only", and one that is not a map from subscription
+  to grant refuses the start. A gateway's console -- the caller its
+  administration admits with an unrestricted bearer and no agent signature, and
+  the one whose catalogue names what each subscription pays for -- is Brama
+  Desktop (`brama-desktop`); in a standalone process it is also the client its
+  launcher names in `BRAMA_STANDALONE_CONSOLE_CLIENT`, so a private gateway's
+  launcher (Jeden's) signs its own subscriptions in there. A managed gateway
+  ignores that variable.
 - **Network:** Brama binds to loopback on the port its service declaration
   names (`PORT` in the unit's environment, which Stado's product catalogue
   carries; `BRAMA_PORT_OVERRIDE` overrides one start). `brama serve --port`

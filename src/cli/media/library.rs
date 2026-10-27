@@ -110,8 +110,7 @@ pub(crate) async fn music(args: MusicArgs) {
         Err(refused) => crate::cli::refused(refused),
     };
     if let Err(error) = std::fs::write(&args.output, &song.bytes) {
-        eprintln!("cannot write {}: {error}", args.output);
-        crate::cli::fail();
+        crate::cli::refused(format!("cannot write {}: {error}", args.output));
     }
     let written = serde_json::json!({
         "route": route,

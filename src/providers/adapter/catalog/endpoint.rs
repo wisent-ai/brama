@@ -25,6 +25,9 @@ pub(in crate::providers::adapter) fn catalog_endpoint(base_url: &str, path: &str
 /// carry their address in their roster entry instead.
 fn trusted_catalog_base_url(provider_id: &str) -> Option<&'static str> {
     match provider_id {
+        // https://docs.abliteration.ai/api/introduction: OpenAI-compatible
+        // chat and model discovery, authenticated with the provider bearer.
+        "abliteration-ai" => Some("https://api.abliteration.ai/v1"),
         "anthropic" => Some("https://api.anthropic.com/v1"),
         "kimi" => Some("https://api.kimi.com/coding/v1"),
         "openai" => Some("https://api.openai.com/v1"),

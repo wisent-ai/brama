@@ -7,14 +7,23 @@
 //! clock orders its requests, and the guard only remembers what it accepted.
 //! The record lives beside the journal in `$BRAMA_STATE_DIR` (default
 //! `$HOME/.brama`), so a restart does not reopen old signatures.
+//!
+//! The record is read, decided and written whole under the exclusive lock
+//! of [`crate::core::staging::held_beside`]. It was a mutex of this process,
+//! so two Brama processes on one state directory (the service and a CLI
+//! dispatch) could both read the record before either wrote it and both
+//! accept one signature.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
-use std::sync::{LazyLock, Mutex};
 
 use serde::{Deserialize, Serialize};
+
+use crate::core::staging::{held_beside, replace_private};
+
+/// How the record is named in refusals.
+const RECORD: &str = "the agent replay record";
 
 #[derive(Default, Deserialize, Serialize)]
 struct Accepted {
@@ -26,14 +35,10 @@ fn record_path() -> PathBuf {
     crate::journal::state_dir().join("agent-replay.json")
 }
 
-static GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
-
 /// Accept `signature` for `agent_id` at `timestamp` once, or say why not.
 pub fn accept_once(agent_id: &str, timestamp: i64, signature: &str) -> Result<(), String> {
-    // The lock guards no value: the record is the file, read and written
-    // whole under it, and an unreadable file is refused below with its cause.
-    let _held = crate::core::sync::held(&GUARD, "agent replay record");
     let path = record_path();
+    let _held = held_beside(&path, RECORD)?;
     let mut record: BTreeMap<String, Accepted> = match fs::read(&path) {
         Ok(bytes) => serde_json::from_slice(&bytes).map_err(|error| {
             format!(
@@ -63,19 +68,7 @@ pub fn accept_once(agent_id: &str, timestamp: i64, signature: &str) -> Result<()
         accepted.signatures.clear();
     }
     accepted.signatures.insert(signature.to_string());
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|error| format!("{} could not be created: {error}", parent.display()))?;
-    }
-    let staged = path.with_extension("json.tmp");
-    let bytes = serde_json::to_vec(&record).map_err(|error| error.to_string())?;
-    fs::write(&staged, bytes)
-        .and_then(|()| fs::set_permissions(&staged, fs::Permissions::from_mode(0o600)))
-        .and_then(|()| fs::rename(&staged, &path))
-        .map_err(|error| {
-            format!(
-                "the replay record {} could not be written: {error}",
-                path.display()
-            )
-        })
+    let bytes = serde_json::to_vec(&record)
+        .map_err(|error| format!("the replay record {} cannot be encoded: {error}", path.display()))?;
+    replace_private(&path, &bytes, RECORD)
 }

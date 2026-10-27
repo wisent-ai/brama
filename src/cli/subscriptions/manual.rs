@@ -38,10 +38,7 @@ pub(crate) fn finish(verdict: Result<Value, String>, json: bool) {
                 crate::cli::fail();
             }
         }
-        Err(error) => {
-            eprintln!("{error}");
-            crate::cli::fail();
-        }
+        Err(error) => crate::cli::refused(error),
     }
 }
 

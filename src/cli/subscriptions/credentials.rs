@@ -41,7 +41,7 @@ pub(crate) enum SubscriptionCommand {
     /// Redeem a saved provider reset for the selected member and journal the reason
     Reset(super::resets::ResetArgs),
     /// Read, state or remove the operator's policy for redeeming a provider's saved resets automatically
-    #[command(subcommand)]
+    #[command(name = "policy", subcommand)]
     ResetPolicy(super::resets::PolicyCommand),
     /// Refresh this provider's subscription credentials now, here or on the
     /// gateway that holds them
@@ -72,7 +72,7 @@ pub(crate) enum SubscriptionCommand {
     /// the gateway that serves the pool (a provider without a manual flow is
     /// refused by name)
     #[command(
-        name = "sign-in",
+        name = "login",
         group(ArgGroup::new("destination").args(["gateway", "gateway_consumer"]).requires("bearer_role"))
     )]
     SignIn {
@@ -235,7 +235,7 @@ pub(crate) enum SubscriptionCommand {
     /// machine: each harness grant Weles stored for an acquired account that
     /// this harness does not hold yet is imported through the harness's own
     /// credential import, then marked as handed over in the vault
-    #[command(name = "hand-over")]
+    #[command(name = "handover")]
     HandOver {
         /// The provider whose bought accounts are handed over: one providers.json declares for the harness
         provider: String,

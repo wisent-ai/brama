@@ -28,15 +28,25 @@ const STADO_MARKER: &str = "stado://releases/";
 const GITHUB_MARKER: &str = "github-release:";
 const ARCHIVE_MARKER: &str = "git-archive:";
 const HEAD_MARKER: &str = "head:";
-const PLATFORMS: [&str; 2] = ["linux-amd64", "darwin-arm64"];
-const RELEASE_LIST_LIMIT: &str = "100";
+/// The platforms every release carries an archive and checksum for.
+const PLATFORMS: &[&str] = &["linux-amd64", "darwin-arm64"];
 
-fn holds_commit(root: &Path, revision: &str) -> bool {
-    Command::new("git")
+/// Whether this checkout holds `revision` as a commit, asked of git through
+/// the one announced wait. Git's own answer decides: an exit that says the
+/// object is absent is no, and a git that cannot run is refused with its
+/// cause rather than read as absent.
+fn holds_commit(root: &Path, revision: &str) -> Result<bool, String> {
+    let mut command = Command::new("git");
+    command
         .current_dir(root)
-        .args(["cat-file", "-e", &format!("{revision}^{{commit}}")])
-        .status()
-        .is_ok_and(|status| status.success())
+        .args(["cat-file", "-e", &format!("{revision}^{{commit}}")]);
+    let answer = stado_wait::output(&mut command).map_err(|error| {
+        format!(
+            "git cat-file -e {revision} could not be run in {}: {error}",
+            root.display()
+        )
+    })?;
+    Ok(answer.status.success())
 }
 
 /// The baseline document from the best channel. A channel that could not be
@@ -80,16 +90,15 @@ pub(super) fn check(root: &Path) -> Result<String, String> {
     let source = baseline_text(&baseline, "source")?;
     let version = baseline_text(&baseline, "version")?;
     let surface = surface_list(&baseline, BASELINE)?;
-    let regenerate = "regenerate it with brama version-gate baseline --write";
+    let regenerate = "regenerate it with brama version baseline --write";
     let marker = first_word(source);
     if source.starts_with(STADO_MARKER) {
         let revision = source
-            .split("source_revision=")
-            .nth(1)
-            .and_then(|rest| rest.split(' ').next())
+            .split_once("source_revision=")
+            .and_then(|(_, rest)| rest.split(' ').next())
             .filter(|revision| !revision.is_empty())
             .ok_or("a stado:// baseline must record source_revision=<sha> in its source")?;
-        if !holds_commit(root, revision) {
+        if !holds_commit(root, revision)? {
             return Err(format!("the baseline names source revision {revision}, which this checkout does not hold; fetch it or {regenerate}"));
         }
         let (recomputed, declared) = of_revision(root, revision)?;
@@ -104,8 +113,9 @@ pub(super) fn check(root: &Path) -> Result<String, String> {
             ));
         }
         let release = read_json(&root.join(".wisent-release.json"))?;
-        let manifest =
-            std::fs::read_to_string(root.join("Cargo.toml")).map_err(|error| error.to_string())?;
+        let manifest_path = root.join("Cargo.toml");
+        let manifest = std::fs::read_to_string(&manifest_path)
+            .map_err(|error| format!("{} cannot be read: {error}", manifest_path.display()))?;
         let known = release["runtime"]["rollback_compatible_with"]
             .as_array()
             .into_iter()

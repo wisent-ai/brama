@@ -81,13 +81,15 @@ fn responses_tools(request: &ModelRequest) -> Option<Vec<Value>> {
         .map(|tools| {
             tools
                 .iter()
-                .map(|tool| json!({
-                    "type": "function",
-                    "name": tool.function.name,
-                    "description": tool.function.description,
-                    // A tool that declares no parameters states none.
-                    "parameters": tool.function.parameters.clone(),
-                }))
+                .map(|tool| {
+                    json!({
+                        "type": "function",
+                        "name": tool.function.name,
+                        "description": tool.function.description,
+                        // A tool that declares no parameters states none.
+                        "parameters": tool.function.parameters.clone(),
+                    })
+                })
                 .collect()
         })
 }

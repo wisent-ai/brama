@@ -27,8 +27,10 @@ struct PendingChannel {
 /// Where the resolver publishes its waits: beside its state, whose place is
 /// Stado's own contract (`readiness::standing::resolver_state_file`).
 fn waiting_file() -> Result<PathBuf, String> {
-    Ok(crate::core::server::readiness::standing::resolver_state_file()?
-        .with_file_name("resolver-waiting.json"))
+    Ok(
+        crate::core::server::readiness::standing::resolver_state_file()?
+            .with_file_name("resolver-waiting.json"),
+    )
 }
 
 /// Why a call to `url` would stand, when this machine's resolver already

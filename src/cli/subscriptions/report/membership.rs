@@ -9,7 +9,8 @@ use super::{instant, text};
 
 /// Whether the gateway reports `row` retired, by its flag or its status.
 pub(super) fn is_retired(row: &Value) -> bool {
-    row.get("retired").and_then(Value::as_bool) == Some(true) || text(row, "status") == Some("retired")
+    row.get("retired").and_then(Value::as_bool) == Some(true)
+        || text(row, "status") == Some("retired")
 }
 
 /// One member's standing, after its identity line.

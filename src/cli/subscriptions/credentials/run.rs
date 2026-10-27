@@ -48,10 +48,7 @@ pub(crate) async fn run(command: SubscriptionCommand) {
                         crate::cli::fail();
                     }
                 }
-                Err(error) => {
-                    eprintln!("{error}");
-                    crate::cli::fail();
-                }
+                Err(error) => crate::cli::refused(error),
             }
         }
         SubscriptionCommand::SignIn {

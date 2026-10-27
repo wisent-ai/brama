@@ -3,7 +3,7 @@
 Back to the [README](../../README.md). Reading the pool first is in
 [subscription-pool](subscription-pool.md).
 
-## `brama subscription sign-in <provider> --by weles|hand --reason <text>`
+## `brama subscription login <provider> --by weles|hand --reason <text>`
 
 Repairs a provider-disowned `claude-code`, `codex`, or `kimi` grant. `--by` is
 required and names who logs in. `--by weles` runs the provider's real login
@@ -14,7 +14,7 @@ belongs to the exact subscription being repaired. Success requires Weles to
 echo that row and the exact subscription refresh to answer `refreshed`.
 
 ```bash
-brama subscription sign-in codex --by weles \
+brama subscription login codex --by weles \
   --login-item <login-item> \
   --reason 'provider disowned the stored grant' \
   --json
@@ -39,9 +39,20 @@ it with one minimal completion. `--subscription-id` is required;
 runs the same two steps on the serving gateway, so a workstation without its
 own vault can sign a pool member in. `--login-item` belongs to `--by weles`
 and the gateway flags to `--by hand`; a contradicting flag is a usage error.
+On a standalone gateway (a launcher's private gateway, such as Jeden's own) the
+console's `POST /v1/admin/subscription-pool/sign-in` with `"by": "hand"` may
+also name `provider` and `account` for a subscription id no member holds yet:
+the gateway then banks that member itself, adding it to the pool just before
+the pasted code is exchanged and taking it out again if the exchange fails,
+because such a launcher holds no credential to donate it with. A managed
+gateway refuses that, one of the two named alone is refused, and an id the pool
+already holds is refused with "already in the pool". The id is checked again
+when the code is pasted: one a donation or another sign-in banked while the
+page was open is refused with "joined the pool while this sign-in's page was
+open", and a failed exchange takes out only the member this sign-in banked.
 
 ```bash
-brama subscription sign-in claude-code --by hand \
+brama subscription login claude-code --by hand \
   --subscription-id <id> \
   --reason 'the account a person can log into' \
   --gateway-consumer <consumer> --bearer-role <role>
@@ -97,11 +108,11 @@ model-router bearers by `weles-model-router`, `wisent-backend-model-router`,
 `wisent-app-model-router` and `brama-desktop-model-router`, and each product's
 request-sign secret by `<product>-agent-auth` (`wisent-app-agent` for Jeden's
 runtime identity). A role no item plays, or plays twice, is refused at start
-with the role and its tag. `brama launcher role-field --router ROUTER ROLE
+with the role and its tag. `brama launcher field --router ROUTER ROLE
 FIELD` prints one field of the item playing ROLE.
 Brama receives `BRAMA_WELES_REAUTH_TOKEN` and presents it only to `POST /reauth`; Weles
 receives the same field and accepts it only on that route. An operator's
-`brama subscription sign-in` on a workstation, where no launcher ran, reads
+`brama subscription login` on a workstation, where no launcher ran, reads
 the same role through `stado credentials get --role brama-weles-reauth --field
 token` (`BRAMA_STADO_BIN` names another `stado`), so it uses the vault Stado
 resolves for that machine and never a local copy. At every start the
@@ -145,7 +156,7 @@ routable. The sweep's answer lists each under `recovered` (`id`, `provider`,
 item that names no `brama:account:` is refused `names no provider account
 (brama:account:), so no login can be resolved for it; record the account on
 the item and sign in again`. The same admission runs when the account is
-named by hand: `brama subscription sign-in <provider> --by weles
+named by hand: `brama subscription login <provider> --by weles
 --subscription-id <id> --reason <why>` here or through the gateway
 (`POST /v1/admin/subscription-pool/sign-in`, the account and agent routes)
 restores the mark before Weles resolves the login, instead of answering

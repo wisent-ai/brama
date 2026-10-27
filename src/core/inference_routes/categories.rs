@@ -91,8 +91,7 @@ impl Category {
     }
 
     fn validate(&self, name: &str) -> Result<(), String> {
-        let members = self.providers.len() + self.routes.len() + self.terms.len();
-        if members == 0 {
+        if self.providers.is_empty() && self.routes.is_empty() && self.terms.is_empty() {
             return Err(format!(
                 "model category '{name}' declares no providers, routes or terms"
             ));
@@ -197,7 +196,7 @@ pub fn set_category(path: &Path, name: &str, category: &Category) -> Result<Valu
     }
     let normalized = category.normalized();
     normalized.validate(name)?;
-    let _guard = route_write_guard();
+    let _guard = route_write_guard(path)?;
     let mut value = snapshot(path)?;
     let document = value
         .as_object_mut()
@@ -220,7 +219,7 @@ pub fn set_category(path: &Path, name: &str, category: &Category) -> Result<Valu
 /// than a silent success, because the operator is otherwise told the document
 /// changed when it did not.
 pub fn delete_category(path: &Path, name: &str) -> Result<Value, String> {
-    let _guard = route_write_guard();
+    let _guard = route_write_guard(path)?;
     let mut value = snapshot(path)?;
     let document = value
         .as_object_mut()

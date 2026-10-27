@@ -146,7 +146,7 @@ const OPERATOR_CONSUMER: &str = "operator";
 ///
 /// The launcher exports it at every service start, read from
 /// `brama-weles-reauth` through the vault. An operator running
-/// `brama subscription sign-in` has no launcher, so the command reads the
+/// `brama subscription login` has no launcher, so the command reads the
 /// same role itself.
 pub(crate) fn worker_api_token() -> Result<String, String> {
     match setting("BRAMA_WELES_REAUTH_TOKEN")? {
@@ -165,7 +165,7 @@ const REAUTH_ROLE: &str = "brama-weles-reauth";
 ///
 /// The read used to run this machine's own Skarbiec program against its own
 /// vault file. On a workstation that reads the fleet vault remotely that
-/// file is a retired copy, so `brama subscription sign-in` on the laptop
+/// file is a retired copy, so `brama subscription login` on the laptop
 /// stopped at "no vault item carries stado:role:brama-weles-reauth" while
 /// the fleet vault's item carried the tag. `stado credentials get --role`
 /// answers from the vault Stado selects: the owner vault on its host, the

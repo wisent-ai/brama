@@ -14,6 +14,14 @@ name = "brama"
 path = "src/lib.rs"
 
 [[test]]
+name = "unrestricted-model"
+path = "tests/chat/unrestricted.rs"
+required-features = ["unrestricted-live-tests"]
+
+[features]
+unrestricted-live-tests = []
+
+[[test]]
 name = "subscription-capacity"
 path = "tests/subscriptions/capacity.rs"
 
@@ -43,8 +51,20 @@ name = "readiness-maintenance"
 path = "tests/readiness/maintenance.rs"
 
 [[test]]
+name = "readiness-weles-down"
+path = "tests/readiness/weles_down.rs"
+
+[[test]]
+name = "readiness-no-model"
+path = "tests/readiness/no_model.rs"
+
+[[test]]
 name = "credential-administration"
 path = "tests/administration/credential-refusal.rs"
+
+[[test]]
+name = "standalone-grants"
+path = "tests/standalone/grants.rs"
 
 [dependencies]
 async-trait = "0.1"
@@ -71,7 +91,7 @@ subtle = "2.6"
 syn = { version = "2", features = ["full", "parsing"] }
 uuid = { version = "1", features = ["serde", "v4"] }
 wisent-errors = { git = "https://github.com/wisent-ai/wisent-errors", rev = "8947ad21ac852750b118b417f9dfe68f144ad295" }
-wisent-onboarding-client = { git = "https://github.com/wisent-ai/echo-web", rev = "22437b2e8c29291f3db6c4d605d20e7db3bdb2e1", package = "wisent-onboarding-client" }
+wisent-onboarding-client = { git = "https://github.com/wisent-ai/echo-web", rev = "b8838b08a4e4c35a80d08f63ac1e4b6af7e7aacf", package = "wisent-onboarding-client" }
 stado-wait = { git = "https://github.com/wisent-ai/stado", package = "stado-wait" }
 
 ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }

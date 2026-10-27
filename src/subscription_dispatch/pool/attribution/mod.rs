@@ -177,12 +177,17 @@ pub(super) fn accounts(rows: &[Value], capacity: Vec<capacity::Account>) -> Valu
     let mut unattributed: Vec<String> = Vec::new();
     // Retired or disabled members: in the pool, but no account of its count.
     let mut inactive: Vec<String> = Vec::new();
+    // Rows the pool holds without the id or provider every member carries: shown
+    // as written, since nothing about them can be attributed.
+    let mut malformed: Vec<Value> = Vec::new();
     for row in rows {
-        let id = row.get("id").and_then(Value::as_str).unwrap_or_default();
-        let provider = row
-            .get("provider")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
+        let (Some(id), Some(provider)) = (
+            row.get("id").and_then(Value::as_str),
+            row.get("provider").and_then(Value::as_str),
+        ) else {
+            malformed.push(row.clone());
+            continue;
+        };
         if row.get("status").and_then(Value::as_str) != Some("active") {
             inactive.push(id.to_string());
             continue;
@@ -207,6 +212,7 @@ pub(super) fn accounts(rows: &[Value], capacity: Vec<capacity::Account>) -> Valu
         "per_provider": per_provider,
         "members_without_account": unattributed,
         "inactive_members": inactive,
+        "malformed_members": malformed,
         "capacity": capacity,
     })
 }

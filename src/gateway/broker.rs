@@ -21,8 +21,8 @@ mod standalone;
 mod subscription;
 mod vault;
 
-pub(crate) use vault::{login_seed_present, login_seed_states};
 pub use vault::{decode_listing, VaultListItem};
+pub(crate) use vault::{login_seed_present, login_seed_states};
 
 use tracing::{info, warn};
 

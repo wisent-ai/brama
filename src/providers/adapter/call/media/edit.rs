@@ -125,9 +125,11 @@ fn extension(content_type: &str) -> Result<&str, Refusal> {
     content_type
         .strip_prefix("image/")
         .filter(|subtype| !subtype.is_empty())
-        .ok_or_else(|| invalid(format!(
-            "image content type {content_type:?} has no image subtype for its filename"
-        )))
+        .ok_or_else(|| {
+            invalid(format!(
+                "image content type {content_type:?} has no image subtype for its filename"
+            ))
+        })
 }
 
 fn invalid(reason: String) -> Refusal {

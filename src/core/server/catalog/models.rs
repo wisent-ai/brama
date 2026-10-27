@@ -14,7 +14,7 @@ use axum::Json;
 use tracing::warn;
 
 use crate::core::inference_routes::categories::{categories_for, declared, Categories};
-use crate::core::server::admission::identity::{ModelClientIdentity, BRAMA_DESKTOP_CLIENT_ID};
+use crate::core::server::admission::identity::{is_console, ModelClientIdentity};
 use crate::core::server::admission::{authorize_caller, has_caller_auth_headers};
 use crate::core::server::aliases::table::ModelAliases;
 use crate::core::server::refusal::{api_error, ApiError};
@@ -96,12 +96,19 @@ pub(in crate::core::server) async fn list_models(
             }
         }
     }
-    // The desktop console holds a bearer, not an agent signature, so the branch
-    // above never runs for it and its catalogue arrived carrying the public
-    // vendor list alone. That list knows `openai`; it does not know that a
-    // `codex` subscription is what pays for those models here, so no screen in
-    // the console could name what a subscription covers.
-    if client_identity.client_id == BRAMA_DESKTOP_CLIENT_ID {
+    // The console holds a bearer, not an agent signature, so the branch above
+    // never runs for it and its catalogue arrived carrying the public vendor
+    // list alone. That list knows `openai`; it does not know that a `codex`
+    // subscription is what pays for those models here, so no screen in the
+    // console could name what a subscription covers. A standalone launcher's
+    // console (Jeden's own gateway) sends its model work by the same bearer.
+    let console = is_console(&client_identity.client_id).map_err(|cause| {
+        api_error(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            &format!("which client is this gateway's console cannot be read: {cause}"),
+        )
+    })?;
+    if console {
         match crate::subscription_dispatch::dispatch::registry_models_for_console().await {
             Ok(models) => {
                 for model in models {
@@ -147,7 +154,10 @@ pub(in crate::core::server) async fn list_models(
     // one that is declared and cannot serve is listed as unavailable with the
     // reason, because a name that silently vanishes from the catalogue reads
     // to the caller as "no such model" and sends it to fix the wrong thing.
-    for alias in aliases.declared() {
+    let declared = aliases
+        .declared()
+        .map_err(|error| api_error(axum::http::StatusCode::SERVICE_UNAVAILABLE, &error))?;
+    for alias in declared {
         if !client_identity.authorizes_model(&alias) {
             continue;
         }

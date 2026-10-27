@@ -1,6 +1,6 @@
 //! Bringing a tool schema into the shape providers actually accept.
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 /// Some providers (e.g. Moonshot/Kimi) reject JSON Schemas whose nodes lack an
 /// explicit `type`. Recursively infer a conservative `type` where it is

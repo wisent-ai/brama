@@ -54,7 +54,7 @@ pub fn record_discovered_account(
         let discovered = entry.discovery.get_or_insert_with(|| DiscoveredAccount {
             account: observation.account.clone(),
             plan: observation.plan.clone(),
-            plan_at_ms: observation.plan.as_ref().map(|_| observation.fact_at_ms),
+            plan_at_ms: observation.plan.as_ref().map(|_plan| observation.fact_at_ms),
             sources: Vec::new(),
             discovered_at_ms: observation.discovered_at_ms,
             observed_at_ms: observation.observed_at_ms,

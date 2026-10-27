@@ -36,6 +36,7 @@ use crate::core::server::media::{
     image_generations, video_generations, video_status,
 };
 use crate::core::server::readiness::{health, readyz};
+use crate::core::server::signature::AnswerSigner;
 use crate::core::server::subscriptions::leases::{
     list_leases, release_lease, release_leases, report_refused, take_lease,
 };
@@ -57,7 +58,11 @@ use crate::core::server::subscriptions::{
 use crate::core::server::telemetry::stats::get_stats;
 use crate::core::server::typed::{embeddings, moderations};
 
-pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Router {
+pub(super) fn app(
+    aliases: ModelAliases,
+    ingress_auth: ModelIngressAuth,
+    signer: AnswerSigner,
+) -> Router {
     // No route that carries a prompt keeps axum's built-in 2 MB body limit, a
     // size nobody stated: a long prompt is the routed model's to accept or to
     // refuse as context_length_exceeded, which reaches the caller classed and
@@ -117,7 +122,10 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
             post(decisions).layer(DefaultBodyLimit::disable()),
         )
         // The ledger this gateway declares and an agent's entitlement, for the console.
-        .route("/v1/rewards/status", post(crate::core::server::rewards::report))
+        .route(
+            "/v1/rewards/status",
+            post(crate::core::server::rewards::report),
+        )
         .route("/v1/models", get(list_models))
         .route("/v1/aliases", get(list_aliases))
         .route("/v1/categories", get(list_categories))
@@ -233,6 +241,7 @@ pub(super) fn app(aliases: ModelAliases, ingress_auth: ModelIngressAuth) -> Rout
         )
         .route("/v1/admin/maintain", post(maintain_admin))
         .layer(Extension(aliases))
+        .layer(Extension(signer))
         .layer(middleware::from_fn_with_state(
             ingress_auth,
             require_model_bearer,

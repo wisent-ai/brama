@@ -4,7 +4,7 @@
 //! how many credits to keep, how long a window must still be blocked before a
 //! credit is worth spending on it, and how close to its expiry a credit is
 //! spent rather than lost. No such number is Brama's. The operator records his
-//! settings with `brama subscription reset-policy set` (or Brama Desktop) on
+//! settings with `brama subscription policy set` (or Brama Desktop) on
 //! the gateway that holds the pool, and they are kept in
 //! `$BRAMA_STATE_DIR/reset-policy.json`, replaced whole in one rename. The
 //! automatic redemption of a provider whose policy was never stated is
@@ -86,7 +86,7 @@ pub fn all() -> Result<BTreeMap<String, ResetPolicy>, String> {
 pub fn for_provider(provider: &str) -> Result<ResetPolicy, String> {
     all()?.remove(provider).ok_or_else(|| {
         format!(
-            "the operator has stated no saved-reset policy for {provider}, so no reset is redeemed automatically; `brama subscription reset-policy set {provider} --keep-credits N --min-blocked-minutes N --salvage-horizon-hours N --reason TEXT` records his settings on the gateway that holds the pool (Brama Desktop: Saved resets)"
+            "the operator has stated no saved-reset policy for {provider}, so no reset is redeemed automatically; `brama subscription policy set {provider} --keep-credits N --min-blocked-minutes N --salvage-horizon-hours N --reason TEXT` records his settings on the gateway that holds the pool (Brama Desktop: Saved resets)"
         )
     })
 }
@@ -133,7 +133,7 @@ pub fn clear(provider: &str) -> Result<ResetPolicy, String> {
     let _lock = lock(provider)?;
     let mut policies = all()?;
     let removed = policies.remove(provider).ok_or_else(|| {
-        format!("no saved-reset policy is stated for {provider}; `brama subscription reset-policy show` lists every stated one")
+        format!("no saved-reset policy is stated for {provider}; `brama subscription policy show` lists every stated one")
     })?;
     write(&policies)?;
     Ok(removed)

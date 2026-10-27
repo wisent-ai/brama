@@ -48,6 +48,12 @@ pub(in crate::core::server) struct PoolSignInRequest {
     reason: Option<String>,
     login_item: Option<String>,
     by: SignInMethod,
+    /// With `account`, a hand sign-in on a standalone gateway of a member the
+    /// pool does not hold yet (`manual::member`).
+    #[serde(default)]
+    provider: Option<String>,
+    #[serde(default)]
+    account: Option<String>,
 }
 
 pub(in crate::core::server) async fn sign_in_account_subscription(
@@ -86,6 +92,12 @@ pub(in crate::core::server) async fn sign_in_admin_pool_subscription(
         .ok_or_else(|| api_error(StatusCode::BAD_REQUEST, "a subscription id is required"))?;
     match request.by {
         SignInMethod::Weles => {
+            if request.provider.is_some() || request.account.is_some() {
+                return Err(api_error(
+                    StatusCode::BAD_REQUEST,
+                    "provider and account name a new member for a hand sign-in; by weles signs in a member the pool holds",
+                ));
+            }
             let weles = SignInSubscriptionRequest {
                 subscription_id: None,
                 reason: request.reason,
@@ -106,9 +118,26 @@ pub(in crate::core::server) async fn sign_in_admin_pool_subscription(
                     "--reason must say why this sign-in is being run",
                 )
             })?;
-            manual::begin_hand_sign_in(&subscription_id, &reason)
-                .await
-                .map(IntoResponse::into_response)
+            let joining = match (request.provider, request.account) {
+                (Some(provider), Some(account)) => {
+                    Some(manual::member::Joining { provider, account })
+                }
+                (None, None) => None,
+                (Some(_), None) | (None, Some(_)) => {
+                    return Err(api_error(
+                        StatusCode::BAD_REQUEST,
+                        "a new member is named by its provider and its account together",
+                    ))
+                }
+            };
+            manual::begin_hand_sign_in(
+                &subscription_id,
+                &reason,
+                joining,
+                &client_identity.client_id,
+            )
+            .await
+            .map(IntoResponse::into_response)
         }
     }
 }

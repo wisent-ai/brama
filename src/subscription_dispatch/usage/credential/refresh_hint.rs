@@ -98,11 +98,9 @@ pub fn awaiting_sign_in_cause(subscription_id: &str) -> Option<String> {
         if credential.state.usable() {
             return None;
         }
-        Some(
-            credential
-                .cause
-                .clone()
-                .unwrap_or_else(|| format!("credential is {}", credential.state.as_str())),
-        )
+        Some(match &credential.cause {
+            Some(cause) => cause.clone(),
+            None => format!("credential is {}", credential.state.as_str()),
+        })
     })
 }

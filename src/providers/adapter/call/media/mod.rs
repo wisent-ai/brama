@@ -55,7 +55,9 @@ pub async fn dispatch_image(
     let edits = !descriptor.image_edit_path.is_empty() && edit::asks_for_edit(&payload);
     if descriptor.media_wire == MediaWire::Gemini || edits {
         let (key, base_url, client) = typed_transport(descriptor, item, secret)?;
-        let call = call::Call::new(route_id, descriptor, &model_id, &key, &base_url, &client, secret)?;
+        let call = call::Call::new(
+            route_id, descriptor, &model_id, &key, &base_url, &client, secret,
+        )?;
         if edits {
             return edit::edit_image(&call, payload).await;
         }

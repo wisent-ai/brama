@@ -79,7 +79,7 @@
         <p>The Skarbiec service must already expose its capability listener through
         <code>skarbiec serve --socket &lt;path&gt;</code> or its service's
         <code>SKARBIEC_CAP_SOCKET</code>. The launcher runs
-        <code>skarbiec capability-status --socket &lt;path&gt;</code> before handing
+        <code>skarbiec capability status --socket &lt;path&gt;</code> before handing
         over to Brama. That command exchanges a real request with the listener and
         checks that the vault, capability state and route table match this client's
         absolute paths. A missing listener, an unsupported broker, or different state

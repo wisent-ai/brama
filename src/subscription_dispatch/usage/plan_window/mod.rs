@@ -165,7 +165,11 @@ pub fn used_fraction(subscription_id: &str) -> Option<f64> {
     windows
         .limits
         .iter()
-        .filter(|reading| reading.resets_at_ms.is_none_or(|resets_at_ms| resets_at_ms > now))
+        .filter(|reading| {
+            reading
+                .resets_at_ms
+                .is_none_or(|resets_at_ms| resets_at_ms > now)
+        })
         .map(|reading| reading.used_fraction)
         .reduce(f64::max)
 }

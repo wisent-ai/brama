@@ -62,7 +62,8 @@ impl ChatChunkStream {
     ) -> axum::response::sse::Event {
         // A finish the provider did not state is null, as the chunk object
         // writes every unfinished choice.
-        let choice = json!({ "index": ONLY_CHOICE, "delta": delta, "finish_reason": finish_reason });
+        let choice =
+            json!({ "index": ONLY_CHOICE, "delta": delta, "finish_reason": finish_reason });
         // A JSON value always writes; its Display is that writing, with no
         // failure to stand an empty frame in for.
         axum::response::sse::Event::default().data(

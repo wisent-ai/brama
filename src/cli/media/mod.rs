@@ -101,10 +101,7 @@ pub(crate) async fn image(args: ImageArgs) {
         for path in images {
             match artifact::data_url(&path) {
                 Ok(url) => encoded.push(Value::String(url)),
-                Err(reason) => {
-                    eprintln!("{reason}");
-                    crate::cli::fail();
-                }
+                Err(reason) => crate::cli::refused(reason),
             }
         }
         payload.insert("image".to_string(), Value::Array(encoded));
@@ -114,10 +111,7 @@ pub(crate) async fn image(args: ImageArgs) {
             Ok(url) => {
                 payload.insert("mask".to_string(), Value::String(url));
             }
-            Err(reason) => {
-                eprintln!("{reason}");
-                crate::cli::fail();
-            }
+            Err(reason) => crate::cli::refused(reason),
         }
     }
     if let Some(aspect_ratio) = aspect_ratio {
@@ -138,10 +132,7 @@ pub(crate) async fn image(args: ImageArgs) {
         );
     let body = match answered {
         Ok(body) => body,
-        Err(message) => {
-            eprintln!("{message}");
-            crate::cli::fail();
-        }
+        Err(message) => crate::cli::refused(message),
     };
     if as_json {
         super::print_json(&body);
@@ -182,19 +173,11 @@ pub(super) fn resolve_media_route(model: &str) -> String {
     }
     match alias_routing(model) {
         Ok((Some(route), _)) => route,
-        Ok((None, diagnosis)) => {
-            match diagnosis.reason {
-                Some(reason) => eprintln!("{reason}"),
-                None => eprintln!(
-                    "alias `{model}` has no serviceable route, and the alias table stated no reason"
-                ),
-            }
-            crate::cli::fail();
-        }
-        Err(error) => {
-            eprintln!("the alias table could not be read: {error}");
-            crate::cli::fail();
-        }
+        Ok((None, diagnosis)) => crate::cli::refused(match diagnosis.reason {
+            Some(reason) => reason,
+            None => format!("alias `{model}` has no serviceable route, and the alias table stated no reason"),
+        }),
+        Err(error) => crate::cli::refused(format!("the alias table could not be read: {error}")),
     }
 }
 

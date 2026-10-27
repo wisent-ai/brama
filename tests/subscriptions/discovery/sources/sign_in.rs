@@ -32,7 +32,7 @@ fn prove_selected_member(require_captcha: bool) {
         .eq_ignore_ascii_case(&account));
     let missing = run.command(&[
         "subscription",
-        "sign-in",
+        "login",
         provider,
         "--by",
         "weles",
@@ -43,7 +43,7 @@ fn prove_selected_member(require_captcha: bool) {
     assert!(String::from_utf8_lossy(&missing.stderr).contains("requires --subscription-id"));
     let mismatch = run.command(&[
         "subscription",
-        "sign-in",
+        "login",
         "nonexistent-provider",
         "--by",
         "weles",
@@ -58,7 +58,7 @@ fn prove_selected_member(require_captcha: bool) {
     assert_eq!(unchanged["sign_in"], before["sign_in"]);
     let result = run.command(&[
         "subscription",
-        "sign-in",
+        "login",
         provider,
         "--by",
         "weles",
@@ -120,7 +120,7 @@ fn remote_weles_sign_in_replays_a_final_failure_and_says_so() {
         .to_owned();
     let result = run.command(&[
         "subscription",
-        "sign-in",
+        "login",
         provider,
         "--by",
         "weles",
@@ -176,7 +176,7 @@ fn remote_weles_sign_in_refuses_an_incomplete_record_without_rerunning() {
     };
     let result = run.command(&[
         "subscription",
-        "sign-in",
+        "login",
         provider,
         "--by",
         "weles",

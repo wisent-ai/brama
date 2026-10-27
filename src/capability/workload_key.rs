@@ -27,7 +27,7 @@ const SEED_HEX_CHARS: usize = SECRET_KEY_LENGTH * HEX_DIGITS_PER_BYTE; // https:
 /// Anything longer is refused before it is read, because it cannot parse.
 const MAX_KEY_BYTES: u64 = (SEED_HEX_CHARS + b"\r\n".len()) as u64; // https://www.rfc-editor.org/rfc/rfc5234#appendix-B.1 CRLF = CR LF
 
-pub(super) fn read_owner_key(path: &Path) -> Result<SigningKey, CapabilityError> {
+pub(crate) fn read_owner_key(path: &Path) -> Result<SigningKey, CapabilityError> {
     let mut file = OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)

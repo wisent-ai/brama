@@ -26,8 +26,8 @@ use refusal::{refresh_failure, rejection_failure};
 // The surface `gateway` has always used, named one by one so the module's
 // callers keep their exact paths and nothing else leaks with them.
 pub(super) use expiry::{access_token_expiry_ms, needs_refresh};
-pub(super) use principal::{stated_account, stated_account_text, GrantText};
 pub(crate) use principal::jwt_claims;
+pub(super) use principal::{stated_account, stated_account_text, GrantText};
 pub(super) use provider::supports_refresh;
 pub(super) use refusal::{classify_refusal, RefreshRefusal};
 

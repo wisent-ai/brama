@@ -3,22 +3,25 @@
 //! Reset reporting additionally requires MEMBER and EXPECTED_CREDITS.
 //! Discovery requires EXPECTED_ACCOUNT, EXPECTED_HARNESS_PROVIDER and EXPECTED_PROVIDER.
 //! The spent-pool lease journey requires LEASE_SPENT_PROVIDER.
+//! Borrowed-member discovery requires BORROWED_MEMBER and a harness reporting its account.
 #[path = "accounts/capacity.rs"]
 mod account_capacity;
 #[path = "identity/authenticator.rs"]
 mod authenticator_identity;
+#[path = "discovery/borrowed.rs"]
+mod borrowed_discovery;
 #[path = "identity/borrowed.rs"]
 mod borrowed_grant;
 #[path = "leases/concurrency.rs"]
 mod concurrent_leases;
-#[path = "leases/ownership.rs"]
-mod lease_ownership;
 #[path = "identity/decoding.rs"]
 mod credential_decoding;
 #[path = "discovery/sources/receipt.rs"]
 mod historical_receipt;
 #[path = "leases/fairness.rs"]
 mod lease_distribution;
+#[path = "leases/ownership.rs"]
+mod lease_ownership;
 #[path = "discovery/reconciliation/real.rs"]
 mod membership_reconciliation;
 #[path = "standing/mod.rs"]

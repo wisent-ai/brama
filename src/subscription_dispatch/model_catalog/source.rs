@@ -58,7 +58,7 @@ pub(super) async fn read_live_catalog() -> Result<String, String> {
         reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             .build()
-            .map_err(|error| error.to_string())
+            .map_err(|error| format!("the model catalog's HTTP client cannot be built: {}", crate::core::failure::error_chain(&error)))
     });
     let client = CATALOG_CLIENT.clone()?;
     let response = stado_wait::request(client.get(url.clone()))
@@ -73,10 +73,12 @@ pub(super) async fn read_live_catalog() -> Result<String, String> {
 }
 
 fn cache_path() -> Result<PathBuf, String> {
-    Ok(match crate::environment::declared_text("BRAMA_MODEL_CATALOG_CACHE")? {
-        Some(path) => PathBuf::from(path),
-        None => crate::journal::state_dir().join(CACHE_FILE),
-    })
+    Ok(
+        match crate::environment::declared_text("BRAMA_MODEL_CATALOG_CACHE")? {
+            Some(path) => PathBuf::from(path),
+            None => crate::journal::state_dir().join(CACHE_FILE),
+        },
+    )
 }
 
 /// The last fetched copy and when it was written (RFC 3339, from the file's

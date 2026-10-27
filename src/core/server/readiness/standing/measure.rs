@@ -95,9 +95,9 @@ pub(super) fn declared_measure() -> Result<Option<Measure>, String> {
         }));
     }
     match crate::types::declared_age(STANDING_LIMIT_ENV)? {
-        Some(age) if age.is_zero() => Err(format!(
-            "{STANDING_LIMIT_ENV} must be at least one second"
-        )),
+        Some(age) if age.is_zero() => {
+            Err(format!("{STANDING_LIMIT_ENV} must be at least one second"))
+        }
         Some(age) => Ok(Some(Measure {
             seconds: age.as_secs(),
             declared_by: STANDING_LIMIT_ENV.to_string(),

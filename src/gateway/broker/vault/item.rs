@@ -163,7 +163,7 @@ pub(in crate::gateway::broker) async fn put_credential(
     let mut command = tokio::process::Command::new(entitlements_router_bin()?);
     command
         .kill_on_drop(true)
-        .arg("set-json")
+        .arg("set")
         .arg(item_id)
         .arg("--type")
         .arg(kind);

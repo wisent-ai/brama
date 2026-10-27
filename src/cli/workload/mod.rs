@@ -121,10 +121,26 @@ pub(crate) fn run(command: WorkloadCommand) {
         } => (check(&registry, &binary), json),
     };
     match answer {
-        Ok(answer) => super::print_answer(&answer, json),
-        Err(detail) => {
-            eprintln!("{detail}");
-            std::process::exit(libc::EXIT_FAILURE);
+        Ok(answer) => {
+            super::print_answer(&answer, json);
+            // A register that re-granted some agents and was refused for
+            // others is printed whole, then ends as the failure it is.
+            if let Some(refused) = answer
+                .get("refused")
+                .and_then(Value::as_array)
+                .filter(|refused| !refused.is_empty())
+            {
+                let named: Vec<String> = refused
+                    .iter()
+                    .map(|item| format!("{}: {}", item["agent"], item["cause"]))
+                    .collect();
+                crate::cli::refused(format!(
+                    "brama workload register: {} agent(s) were not re-granted: {}",
+                    named.len(),
+                    named.join("; ")
+                ));
+            }
         }
+        Err(detail) => crate::cli::refused(detail),
     }
 }

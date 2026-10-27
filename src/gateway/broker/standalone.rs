@@ -1,13 +1,19 @@
-//! The credential map a standalone desktop installation holds in memory.
+//! The credential map a standalone desktop installation holds.
 //!
 //! A managed installation redeems every credential from the broker, and this
 //! is what replaces that for a desktop launch that has no Skarbiec at all: one
 //! map installed before the server starts, one for provider credentials and
-//! one for the subscriptions donated into this process. It is a separate
-//! subject because these values are never read from anywhere, never rotated
-//! and never written back -- they only live as long as the process does, in
-//! zeroizing memory, and the presence of the provider map is what every
-//! caller above tests to know which world it is in.
+//! one for the subscriptions donated into this process or renewed by it. The
+//! values live in zeroizing memory, and the presence of the provider map is
+//! what every caller above tests to know which world it is in. A launcher
+//! that names an owner-only grants file (`standalone/grants.rs`) keeps the
+//! subscription grants across restarts: they are read from it when the
+//! provider map is installed and written back to it on every donation,
+//! renewal and removal, so a renewal that rotates a refresh token is not lost
+//! when the process ends. Without that file they live only as long as the
+//! process does.
+
+mod grants;
 
 use std::collections::HashMap;
 use std::sync::{LazyLock, OnceLock, RwLock};
@@ -47,9 +53,17 @@ pub fn install_local_provider_credentials(encoded: &mut String) -> Result<(), St
         );
         value.zeroize();
     }
-    LOCAL_PROVIDER_CREDENTIALS
+    if LOCAL_PROVIDER_CREDENTIALS
         .set(RwLock::new(credentials))
-        .map_err(|_| "local provider credentials were already installed".to_owned())
+        .is_err()
+    {
+        return Err("local provider credentials were already installed".to_owned());
+    }
+    let mut held = crate::core::sync::write_held(
+        &LOCAL_SUBSCRIPTION_CREDENTIALS,
+        "local subscription credentials",
+    );
+    grants::load(&mut held)
 }
 
 pub fn local_provider_credentials_enabled() -> bool {
@@ -97,26 +111,44 @@ pub(super) fn local_provider_credential(provider: &str) -> Result<Secret, String
         .ok_or_else(|| format!("standalone credential store has no credential for `{provider}`"))
 }
 
+/// Hold `secret` as the grant of `item_id` and keep it in the launcher's
+/// grants file. A refused save leaves the held grant as it was, so the
+/// process never uses a grant its caller was told was not kept.
 pub(super) fn put_local_subscription_credential(
     item_id: &str,
     secret: &[u8],
 ) -> Result<(), String> {
-    crate::core::sync::write_held(
+    let mut held = crate::core::sync::write_held(
         &LOCAL_SUBSCRIPTION_CREDENTIALS,
         "local subscription credentials",
-    )
-    .insert(item_id.to_owned(), Zeroizing::new(secret.to_vec()));
-    Ok(())
+    );
+    let previous = held.insert(item_id.to_owned(), Zeroizing::new(secret.to_vec()));
+    grants::save(&held).inspect_err(|_refused| match previous {
+        Some(kept) => {
+            held.insert(item_id.to_owned(), kept);
+        }
+        None => {
+            held.remove(item_id);
+        }
+    })
 }
 
+/// Drop the grant of `provider`'s `subscription_id` and keep the grants
+/// file without it. A refused save puts the grant back, so the process does
+/// not stop using a grant the file still holds.
 pub fn remove_donated_credential(provider: &str, subscription_id: &str) -> Result<(), String> {
     if !local_provider_credentials_enabled() {
         return Ok(());
     }
-    crate::core::sync::write_held(
+    let mut held = crate::core::sync::write_held(
         &LOCAL_SUBSCRIPTION_CREDENTIALS,
         "local subscription credentials",
-    )
-    .remove(&subscription_resource(provider, subscription_id));
-    Ok(())
+    );
+    let key = subscription_resource(provider, subscription_id);
+    let removed = held.remove(&key);
+    grants::save(&held).inspect_err(|_refused| {
+        if let Some(kept) = removed {
+            held.insert(key, kept);
+        }
+    })
 }

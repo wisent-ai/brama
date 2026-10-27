@@ -51,21 +51,22 @@ pub(super) async fn join_refresh(
         return result;
     }
     match receiver.changed().await {
-        Ok(()) => finished(&receiver).unwrap_or_else(|| {
-            Err(scoped_failure(
+        Ok(()) => match finished(&receiver) {
+            Some(result) => result,
+            None => Err(scoped_failure(
                 POINT_PLAN_USAGE_REFRESH,
                 Code::Unknown,
                 subscription_id,
                 provider,
                 "the shared usage refresh ended without publishing a result",
-            ))
-        }),
-        Err(_) => Err(scoped_failure(
+            )),
+        },
+        Err(closed) => Err(scoped_failure(
             POINT_PLAN_USAGE_REFRESH,
             Code::Unknown,
             subscription_id,
             provider,
-            "the shared usage refresh channel closed without publishing a result",
+            format!("the shared usage refresh channel closed without publishing a result: {closed}"),
         )),
     }
 }

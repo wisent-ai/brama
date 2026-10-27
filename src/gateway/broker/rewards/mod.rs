@@ -16,8 +16,8 @@ mod pooled;
 mod status;
 
 pub use ledger::{check_entitlement, gated, ledger_url, Gate, Unanswered};
-pub use status::{status, StatusFailure};
 pub(crate) use pooled::note_served;
+pub use status::{status, StatusFailure};
 
 /// The name this gateway reports and asks under; the ledger's operator
 /// declares it with the bearer's hash.

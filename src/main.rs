@@ -129,7 +129,7 @@ enum Commands {
     Maintain(MaintainArgs),
     /// The pull-request version gate: surface, contract, baseline and the
     /// rule's shared-fixture conformance
-    #[command(hide = true)]
+    #[command(name = "version", hide = true)]
     VersionGate {
         #[command(subcommand)]
         command: VersionGateCommand,

@@ -18,8 +18,8 @@ pub(super) fn leased_target(headers: &HeaderMap) -> Result<Option<BillingTarget>
     let Some(named) = headers.get(SUBSCRIPTION_HEADER) else {
         return Ok(None);
     };
-    let named = named.to_str().map_err(|_| {
-        format!("{SUBSCRIPTION_HEADER} is not text; it names <provider>:<subscription_id>")
+    let named = named.to_str().map_err(|error| {
+        format!("{SUBSCRIPTION_HEADER} is not text ({error}); it names <provider>:<subscription_id>")
     })?;
     let (provider, subscription) = named
         .split_once(':')
@@ -31,7 +31,7 @@ pub(super) fn leased_target(headers: &HeaderMap) -> Result<Option<BillingTarget>
     let account = match headers.get(ACCOUNT_HEADER) {
         Some(account) => account
             .to_str()
-            .map_err(|_| format!("{ACCOUNT_HEADER} is not text; it names the member's account"))?
+            .map_err(|error| format!("{ACCOUNT_HEADER} is not text ({error}); it names the member's account"))?
             .trim()
             .to_string(),
         None => String::new(),

@@ -28,12 +28,18 @@ pub(super) fn print_policy_grants(layout: &Layout, config_dir: &Path) -> BTreeSe
     let mut granted = BTreeSet::new();
     match read_json(&policy_path) {
         Ok(Some(policy)) => {
-            for rule in policy
-                .pointer("/roles/brama-runtime")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-            {
+            // A brama-runtime role that is not a list of rules is said as
+            // such: read as empty, the diagnosis reported "none" granted for
+            // a policy it could not read.
+            let rules: &[Value] = match policy.pointer("/roles/brama-runtime") {
+                None => &[],
+                Some(Value::Array(rules)) => rules,
+                Some(other) => {
+                    say!("  policy.json roles.brama-runtime is not a list of rules: {other}");
+                    &[]
+                }
+            };
+            for rule in rules {
                 if rule.get("purpose").and_then(Value::as_str) == Some(PROVIDER_PURPOSE) {
                     if let Some(resource) = rule.get("resource").and_then(Value::as_str) {
                         granted.insert(resource.to_string());

@@ -23,7 +23,7 @@ enum WebScheme {
 /// The scheme `url` is reached by, refused with the scheme it names when it
 /// is neither HTTP nor HTTPS.
 fn web_scheme(provider_id: &str, url: &reqwest::Url) -> Result<WebScheme, String> {
-    serde_json::from_value(serde_json::Value::String(url.scheme().to_owned())).map_err(|_| {
+    serde_json::from_value(serde_json::Value::String(url.scheme().to_owned())).map_err(|_unknown_scheme| {
         format!(
             "provider `{provider_id}` base URL uses the scheme `{}`; a provider is reached over https, or http on a loopback override",
             url.scheme()

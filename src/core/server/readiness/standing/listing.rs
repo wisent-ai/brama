@@ -52,8 +52,7 @@ impl CallReading {
             "refused": self.refused,
         });
         if elapsed {
-            document["elapsed_seconds"] =
-                json!(self.read_at.duration_since(self.since).as_secs());
+            document["elapsed_seconds"] = json!(self.read_at.duration_since(self.since).as_secs());
         }
         document
     }

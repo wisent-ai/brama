@@ -126,16 +126,14 @@ pub(super) fn anthropic_items(
             _ => {}
         },
         "message_delta" => {
-            let output_tokens = match json_u32(
-                body.pointer("/usage/output_tokens"),
-                "usage.output_tokens",
-            ) {
-                Ok(reading) => reading,
-                Err(cause) => {
-                    items.push(StreamItem::Failed(cause));
-                    return (items, true);
-                }
-            };
+            let output_tokens =
+                match json_u32(body.pointer("/usage/output_tokens"), "usage.output_tokens") {
+                    Ok(reading) => reading,
+                    Err(cause) => {
+                        items.push(StreamItem::Failed(cause));
+                        return (items, true);
+                    }
+                };
             if let (Some(input_tokens), Some(output_tokens)) = (state.input_tokens, output_tokens) {
                 items.push(StreamItem::Delta(StreamDelta::Usage {
                     input_tokens,

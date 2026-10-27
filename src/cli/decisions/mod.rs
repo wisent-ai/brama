@@ -73,26 +73,15 @@ pub(crate) async fn decide(args: DecideArgs) {
         "questions": questions,
     })) {
         Ok(request) => request,
-        Err(message) => {
-            eprintln!("{message}");
-            crate::cli::fail();
-        }
+        Err(message) => crate::cli::refused(message),
     };
     let route = match alias_routing(&model) {
         Ok((Some(route), _)) => route,
-        Ok((None, diagnosis)) => {
-            eprintln!(
-                "{}",
-                diagnosis
-                    .reason
-                    .unwrap_or_else(|| format!("alias `{model}` has no serviceable route"))
-            );
-            crate::cli::fail();
-        }
-        Err(error) => {
-            eprintln!("the alias table could not be read: {error}");
-            crate::cli::fail();
-        }
+        Ok((None, diagnosis)) => crate::cli::refused(match diagnosis.reason {
+            Some(reason) => reason,
+            None => format!("alias `{model}` has no serviceable route, and the alias table stated no reason"),
+        }),
+        Err(error) => crate::cli::refused(format!("the alias table could not be read: {error}")),
     };
     match decide_for_agent(&route, &agent_id, &request).await {
         Ok(outcome) => {
@@ -126,18 +115,15 @@ pub(crate) async fn decide(args: DecideArgs) {
             );
             println!("Latency: {:.0}ms", outcome.latency_ms);
         }
-        Err(failure) => {
-            match &failure {
-                DecisionFailure::Provider(_) => {
-                    eprintln!("provider refused: {}", failure.message())
-                }
-                DecisionFailure::Contract(breach) => {
-                    eprintln!("decision_contract_violated: {}", breach.sentence());
-                    eprintln!("reply from {}: {}", breach.answered_by, breach.reply);
-                }
-            }
-            crate::cli::fail();
-        }
+        Err(failure) => crate::cli::refused(match &failure {
+            DecisionFailure::Provider(_) => format!("provider refused: {}", failure.message()),
+            DecisionFailure::Contract(breach) => format!(
+                "decision_contract_violated: {}\nreply from {}: {}",
+                breach.sentence(),
+                breach.answered_by,
+                breach.reply
+            ),
+        }),
     }
 }
 
@@ -146,18 +132,14 @@ fn read_argument(name: &str, value: &str) -> String {
     if value == "-" {
         let mut buffer = String::new();
         if let Err(error) = std::io::stdin().read_to_string(&mut buffer) {
-            eprintln!("--{name} could not be read from standard input: {error}");
-            crate::cli::fail();
+            crate::cli::refused(format!("--{name} could not be read from standard input: {error}"));
         }
         return buffer;
     }
     if let Some(path) = value.strip_prefix('@') {
         match std::fs::read_to_string(path) {
             Ok(text) => return text,
-            Err(error) => {
-                eprintln!("--{name} could not be read from {path}: {error}");
-                crate::cli::fail();
-            }
+            Err(error) => crate::cli::refused(format!("--{name} could not be read from {path}: {error}")),
         }
     }
     value.to_string()

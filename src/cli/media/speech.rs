@@ -97,14 +97,10 @@ pub(crate) async fn speak(args: SpeakArgs) {
     }
     let spoken = match dispatch_direct_speech(&route, payload).await {
         Ok(spoken) => spoken,
-        Err(message) => {
-            eprintln!("{message}");
-            crate::cli::fail();
-        }
+        Err(message) => crate::cli::refused(message),
     };
     if let Err(error) = std::fs::write(&output, &spoken.bytes) {
-        eprintln!("cannot write {output}: {error}");
-        crate::cli::fail();
+        crate::cli::refused(format!("cannot write {output}: {error}"));
     }
     let written = serde_json::json!({
         "model": model,

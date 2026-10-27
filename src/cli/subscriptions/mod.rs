@@ -63,10 +63,7 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
     if apply {
         let body = match std::io::read_to_string(std::io::stdin()) {
             Ok(body) => body,
-            Err(error) => {
-                eprintln!("cannot read subscription membership from stdin: {error}");
-                crate::cli::fail();
-            }
+            Err(error) => crate::cli::refused(format!("cannot read subscription membership from stdin: {error}")),
         };
         match brama::core::server::apply_subscription_membership(body.as_bytes()).await {
             Ok(receipt) => crate::cli::print_answer(&receipt, json),
@@ -76,10 +73,9 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
                 // reads it on standard error.
                 if json {
                     crate::cli::print_json(&error);
-                } else {
-                    eprintln!("{error}");
+                    crate::cli::fail();
                 }
-                crate::cli::fail();
+                crate::cli::refused(error);
             }
         }
         return;
@@ -121,27 +117,19 @@ async fn remote_report(destination: remote::Destination, refresh_usage: bool, js
     if destination.bearer_role.is_none() {
         if let Err(error) = std::io::Read::read_to_string(&mut std::io::stdin(), &mut stdin_bearer)
         {
-            eprintln!("reading the console bearer from stdin: {error}");
-            crate::cli::fail();
+            crate::cli::refused(format!("reading the console bearer from stdin: {error}"));
         }
     }
     let (origin, bearer) = match destination.resolve(&stdin_bearer).await {
         Ok(resolved) => resolved,
-        Err(error) => {
-            eprintln!("{error}");
-            crate::cli::fail();
-        }
+        Err(error) => crate::cli::refused(error),
     };
     let Some(origin) = origin else {
-        eprintln!("name --gateway or --gateway-consumer to read another gateway's pool");
-        crate::cli::fail();
+        crate::cli::refused("name --gateway or --gateway-consumer to read another gateway's pool");
     };
     let report = match remote::pool::report(&origin, bearer.trim(), refresh_usage).await {
         Ok(report) => report,
-        Err(error) => {
-            eprintln!("{error}");
-            crate::cli::fail();
-        }
+        Err(error) => crate::cli::refused(error),
     };
     if json {
         crate::cli::print_json(&report);

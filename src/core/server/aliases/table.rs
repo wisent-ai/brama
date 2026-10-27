@@ -191,20 +191,22 @@ mod routes;
 impl ModelAliases {
     /// Every alias this gateway knows by name: the named contract plus every
     /// alias an operator declared in the launcher table or the route registry.
-    pub(in crate::core::server) fn declared(&self) -> Vec<String> {
+    /// A registry that cannot be read is refused with its reason: listed
+    /// without it, its aliases vanished from every catalogue without a word.
+    pub(in crate::core::server) fn declared(&self) -> Result<Vec<String>, String> {
         let mut names = MODEL_ALIASES
             .iter()
             .map(|alias| (*alias).to_string())
             .collect::<Vec<_>>();
         names.extend(self.routes.keys().cloned());
         if let Some(path) = self.routes_file.as_deref() {
-            if let Ok(dynamic) = crate::core::inference_routes::resolved(path) {
-                names.extend(dynamic.into_keys());
-            }
+            let dynamic = crate::core::inference_routes::resolved(path)
+                .map_err(|error| format!("the route registry {} cannot be read: {error}", path.display()))?;
+            names.extend(dynamic.into_keys());
         }
         names.sort();
         names.dedup();
-        names
+        Ok(names)
     }
 
     /// Whether `alias` is one this gateway was told about. An alias the route

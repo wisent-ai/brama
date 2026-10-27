@@ -41,13 +41,10 @@ pub(super) async fn run(
                 print_sign_in(&verdict);
             }
             if text(&verdict, "result") != Some("signed_in") {
-                std::process::exit(libc::EXIT_FAILURE);
+                crate::cli::fail();
             }
         }
-        Err(error) => {
-            eprintln!("{error}");
-            std::process::exit(libc::EXIT_FAILURE);
-        }
+        Err(error) => crate::cli::refused(error),
     }
 }
 

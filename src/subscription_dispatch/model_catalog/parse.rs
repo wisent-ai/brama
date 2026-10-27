@@ -33,7 +33,8 @@ fn row_name(row: &Value, id: &str) -> String {
 }
 
 pub(super) fn parse_catalog(raw: &str) -> Result<CatalogSnapshot, String> {
-    let root: Value = serde_json::from_str(raw).map_err(|error| error.to_string())?;
+    let root: Value = serde_json::from_str(raw)
+        .map_err(|error| format!("the models.dev catalog is not JSON: {error}"))?;
     let rows = root
         .as_object()
         .ok_or_else(|| "models.dev root must be an object".to_string())?;

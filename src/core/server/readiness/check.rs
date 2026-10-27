@@ -155,14 +155,23 @@ pub(super) async fn calculate_readiness(
         }
         match models {
             Ok(models) => {
+                // A model whose route no subscription provider claims is
+                // counted under its own name, so the report shows it instead
+                // of dropping it or filing it under a provider.
+                let attributed: Vec<String> = models
+                    .iter()
+                    .map(|model| {
+                        match crate::subscription_dispatch::dispatch::provider_for(&model.route_id) {
+                            Some(provider) => provider.to_string(),
+                            None => "unattributed".to_string(),
+                        }
+                    })
+                    .collect();
                 let mut per_provider = std::collections::BTreeMap::<String, usize>::new();
-                for model in &models {
-                    let provider =
-                        crate::subscription_dispatch::dispatch::provider_for(&model.route_id)
-                            .unwrap_or("unattributed")
-                            .to_string();
+                for provider in &attributed {
                     model_providers.insert(provider.clone());
-                    *per_provider.entry(provider).or_default() += 1;
+                    let count = attributed.iter().filter(|other| *other == provider).count();
+                    per_provider.insert(provider.clone(), count);
                 }
                 for provider in &subscribed {
                     if !per_provider.contains_key(provider) {
@@ -245,7 +254,7 @@ pub(super) async fn calculate_readiness(
         standalone,
         routable,
         unroutable,
-        active_subscriptions: active.len(),
+        any_active_subscription: !active.is_empty(),
         subscriptions,
         unredeemable,
         sign_in_blocked,

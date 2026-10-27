@@ -26,8 +26,10 @@ const RUNTIME_GRANT_ENV: &str = "BRAMA_RUNTIME_GRANT_SECONDS";
 /// The fixed SubjectPublicKeyInfo header of an Ed25519 key: the registry
 /// records the raw key and `grant issue` validates an SPKI PEM, so this
 /// prefix makes the two the same key.
-const ED25519_SPKI_PREFIX: [u8; 12] = [ // https://www.rfc-editor.org/rfc/rfc8410#section-10.1
-    0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00, // https://www.rfc-editor.org/rfc/rfc8410#section-10.1
+const ED25519_SPKI_PREFIX: [u8; 12] = [
+    // https://www.rfc-editor.org/rfc/rfc8410#section-10.1
+    0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21,
+    0x00, // https://www.rfc-editor.org/rfc/rfc8410#section-10.1
 ];
 /// Line width of a PEM body.
 const PEM_LINE: usize = 64; // https://www.rfc-editor.org/rfc/rfc7468#section-2
@@ -68,6 +70,11 @@ fn public_key_pem(raw: &str) -> Result<String, String> {
     ))
 }
 
+/// Re-grant every agent the workload names: each is issued in turn whatever
+/// the one before answered, so a refusal never leaves the registry half
+/// re-granted with no record of which half. The answer lists every agent
+/// granted (with its expiry) and every agent refused (with why); a run with
+/// any refusal is printed whole and then ends non-zero (`workload::run`).
 pub(super) fn register() -> Result<Value, String> {
     let installation = installation()?;
     let lifetime = grant_seconds(&installation)?.get();
@@ -91,72 +98,28 @@ pub(super) fn register() -> Result<Value, String> {
         ));
     };
     let (routes_path, capabilities) = routes::capabilities(&home, &vault, &settings)?;
-    let mut granted = Vec::with_capacity(agents.len());
     let pem = public_key_pem(public_key)?;
     let key_file =
         registry_path.with_file_name(format!(".workload-key-{}.pem", std::process::id()));
+    let issuing = Issuing {
+        router: &router,
+        settings: &settings,
+        capabilities: &capabilities.join(","),
+        key_file: &key_file,
+        pem: &pem,
+        lifetime,
+    };
+    let mut granted = Vec::with_capacity(agents.len());
+    let mut refused = Vec::new();
     for agent in agents {
-        let written = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(u32::from(libc::S_IRUSR | libc::S_IWUSR))
-            .open(&key_file)
-            .and_then(|mut file| file.write_all(pem.as_bytes()));
-        let minted = written.and_then(|()| {
-            stado_wait::output(
-                Command::new(&router)
-                    .args([
-                        "grant",
-                        "issue",
-                        agent,
-                        "--capabilities",
-                        &capabilities.join(","),
-                    ])
-                    .arg("--workload-public-key-file")
-                    .arg(&key_file)
-                    .arg("--replace-capabilities")
-                    .arg("--ttl-seconds")
-                    .arg(lifetime.to_string())
-                    .envs(&settings),
-            )
-        });
-        // The next agent writes the same file with `create_new`; one left
-        // behind would refuse it as existing instead of by this cause.
-        if let Some(left) = brama::core::staging::remove(&key_file) {
-            return Err(format!(
-                "the workload public key file for {agent} could not be removed after grant issue: {left}"
-            ));
+        match issuing.issue(agent) {
+            Ok(expires_at) => granted.push(json!({
+                "agent": agent,
+                "workload_bound": true,
+                "expires_at": expires_at,
+            })),
+            Err(cause) => refused.push(json!({ "agent": agent, "cause": cause })),
         }
-        let minted =
-            minted.map_err(|error| format!("grant issue for {agent} could not run: {error}"))?;
-        let stdout = String::from_utf8_lossy(&minted.stdout);
-        if !minted.status.success() {
-            return Err(format!(
-                "grant issue refused {agent}: {}",
-                refusal_detail(&minted)
-            ));
-        }
-        let answer: Value = serde_json::from_str(stdout.trim()).map_err(|error| {
-            format!("grant issue for {agent} succeeded but answered no JSON: {error}")
-        })?;
-        // The grant was issued for this workload's key; an answer that does
-        // not say it is bound to it, or does not state its expiry, is not
-        // recorded as a grant with blanks.
-        if answer.get("workload_bound") != Some(&Value::Bool(true)) {
-            return Err(format!(
-                "grant issue for {agent} did not answer workload_bound=true for the key it was given: {answer}"
-            ));
-        }
-        let Some(expires_at) = answer.get("expires_at") else {
-            return Err(format!(
-                "grant issue for {agent} answered no expires_at: {answer}"
-            ));
-        };
-        granted.push(json!({
-            "agent": agent,
-            "workload_bound": true,
-            "expires_at": expires_at,
-        }));
     }
     Ok(json!({
         "routes": routes_path.display().to_string(),
@@ -164,5 +127,69 @@ pub(super) fn register() -> Result<Value, String> {
         "granting": capabilities,
         "lifetime_seconds": lifetime,
         "granted": granted,
+        "refused": refused,
     }))
+}
+
+/// What every agent's grant is issued with.
+struct Issuing<'a> {
+    router: &'a str,
+    settings: &'a std::collections::BTreeMap<String, String>,
+    capabilities: &'a str,
+    key_file: &'a std::path::Path,
+    pem: &'a str,
+    lifetime: u64,
+}
+
+impl Issuing<'_> {
+    /// Issue `agent`'s grant for the workload's key; its expiry, or why not.
+    fn issue(&self, agent: &str) -> Result<Value, String> {
+        let written = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(u32::from(libc::S_IRUSR | libc::S_IWUSR))
+            .open(self.key_file)
+            .and_then(|mut file| file.write_all(self.pem.as_bytes()));
+        let minted = written.and_then(|()| {
+            stado_wait::output(
+                Command::new(self.router)
+                    .args(["grant", "issue", agent, "--capabilities", self.capabilities])
+                    .arg("--workload-public-key-file")
+                    .arg(self.key_file)
+                    .arg("--replace-capabilities")
+                    .arg("--ttl-seconds")
+                    .arg(self.lifetime.to_string())
+                    .envs(self.settings),
+            )
+        });
+        // The next agent writes the same file with `create_new`; one left
+        // behind would refuse it as existing instead of by this cause.
+        if let Some(left) = brama::core::staging::remove(self.key_file) {
+            return Err(format!(
+                "the workload public key file could not be removed after grant issue: {left}"
+            ));
+        }
+        let minted = minted.map_err(|error| format!("grant issue could not run: {error}"))?;
+        if !minted.status.success() {
+            return Err(format!(
+                "grant issue refused it: {}",
+                refusal_detail(&minted)
+            ));
+        }
+        let stdout = String::from_utf8_lossy(&minted.stdout);
+        let answer: Value = serde_json::from_str(stdout.trim())
+            .map_err(|error| format!("grant issue succeeded but answered no JSON: {error}"))?;
+        // The grant was issued for this workload's key; an answer that does
+        // not say it is bound to it, or does not state its expiry, is not
+        // recorded as a grant with blanks.
+        if answer.get("workload_bound") != Some(&Value::Bool(true)) {
+            return Err(format!(
+                "grant issue did not answer workload_bound=true for the key it was given: {answer}"
+            ));
+        }
+        answer
+            .get("expires_at")
+            .cloned()
+            .ok_or_else(|| format!("grant issue answered no expires_at: {answer}"))
+    }
 }

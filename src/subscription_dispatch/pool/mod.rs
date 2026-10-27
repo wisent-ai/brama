@@ -37,6 +37,7 @@ use account::{expires_at, last_redeem_error, named, now_ms, retired, state, subs
 use attribution::{accounts, capacity};
 use reading::{failure_json, reading_error};
 
+pub(crate) use account::pool_without_servable_member;
 pub use account::subscription_view;
 pub use attribution::capacity::{Account as AccountCapacity, Window as CapacityWindow};
 pub use attribution::{record_accounts, second_factor_report};
@@ -136,13 +137,13 @@ pub(crate) fn document(
             });
             row["expires_at"] = expires_at(recorded.as_ref());
             row["last_redeem_error"] = last_redeem_error(recorded.as_ref(), observed_at_ms);
-            // The sessions the member carries, from the lease register: a
-            // member no live lease names carries none. Only an unreadable
-            // register is `null`, and is a failure of this report, named once.
-            let live_sessions = leases
-                .as_ref()
-                .ok()
-                .map(|counts| counts.get(&entry.id).copied().into_iter().sum::<u64>());
+            // The sessions the member carries, from the lease register. An
+            // unreadable register leaves it null, named once below.
+            let live_sessions = if let Ok(counts) = &leases {
+                Some(counts.get(&entry.id).copied().into_iter().sum::<u64>())
+            } else {
+                None
+            };
             row["live_sessions"] = json!(live_sessions);
             observed.push(capacity::Observed {
                 entry,

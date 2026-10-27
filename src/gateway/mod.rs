@@ -3,5 +3,5 @@
 pub mod broker;
 mod oauth_refresh;
 
-pub use oauth_refresh::renewable;
 pub(crate) use oauth_refresh::jwt_claims;
+pub use oauth_refresh::renewable;

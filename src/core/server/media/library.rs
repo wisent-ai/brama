@@ -108,7 +108,7 @@ pub(in crate::core::server) async fn audio_voices(
     Extension(aliases): Extension<ModelAliases>,
     Query(query): Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<Value>, ApiError> {
-    let model = video_status_model(query).map_err(|_| {
+    let model = video_status_model(query).map_err(|_unnamed_route| {
         api_error(
             StatusCode::BAD_REQUEST,
             "a voice list names the route whose account it reads: GET /v1/audio/voices?model=…",
@@ -196,7 +196,7 @@ pub(in crate::core::server) async fn audio_voice_delete(
     Path(voice_id): Path<String>,
     Query(query): Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<Value>, ApiError> {
-    let model = video_status_model(query).map_err(|_| {
+    let model = video_status_model(query).map_err(|_unnamed_route| {
         api_error(
             StatusCode::BAD_REQUEST,
             "a voice deletion names the route whose account holds the voice: DELETE /v1/audio/voices/{voice_id}?model=…",

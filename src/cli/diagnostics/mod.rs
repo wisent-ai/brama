@@ -152,8 +152,10 @@ pub(crate) async fn test_inference(args: TestArgs) {
                 });
                 super::print_answer(&refused, json);
             }
-            eprintln!("Error [{code}, attempts {}]: {}", resp.attempts, refusal.message);
-            crate::cli::fail();
+            crate::cli::refused(format!(
+                "Error [{code}, attempts {}]: {}",
+                resp.attempts, refusal.message
+            ));
         }
     }
 }

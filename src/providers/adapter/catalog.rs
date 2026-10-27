@@ -16,7 +16,7 @@ use super::call::outcome::refusal::{attempted_failure, provider_error, transport
 use super::call::outcome::response_body::response_text;
 use super::call::outcome::retry::send_once_more_if_unsent;
 use super::dialect::anthropic_messages::{
-    anthropic_messages, anthropic_tooling, answer_tool, model_response_from_anthropic,
+    answer_tool, anthropic_messages, anthropic_tooling, model_response_from_anthropic,
 };
 use super::dialect::openai_chat::{model_response_from_openai, openai_messages, response_format};
 use super::dialect::tool_schema::normalized_tools_value;
@@ -219,9 +219,12 @@ pub(in crate::providers::adapter) async fn dispatch_catalog(
             CatalogProtocol::OpenAiChat => {
                 model_response_from_openai(&request.model, body, elapsed_ms)
             }
-            CatalogProtocol::AnthropicMessages => {
-                model_response_from_anthropic(&request.model, body, elapsed_ms, answer_tool(request))
-            }
+            CatalogProtocol::AnthropicMessages => model_response_from_anthropic(
+                &request.model,
+                body,
+                elapsed_ms,
+                answer_tool(request),
+            ),
             CatalogProtocol::GoogleGenerateContent => {
                 model_response_from_google(&request.model, body, elapsed_ms)
             }

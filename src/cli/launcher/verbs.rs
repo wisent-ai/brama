@@ -110,7 +110,11 @@ fn family(launcher: &Path) -> Result<Vec<PathBuf>, String> {
         }
         paths.sort();
         for path in paths {
-            if path.is_dir() {
+            // An entry that cannot be examined is refused: read as no
+            // directory, the scripts under it were left out of the check.
+            let metadata = std::fs::metadata(&path)
+                .map_err(|error| format!("cannot examine {}: {error}", path.display()))?;
+            if metadata.is_dir() {
                 walk(&path, into)?;
             } else if path.extension().is_some_and(|ext| ext == "sh") {
                 into.push(path);
@@ -119,7 +123,10 @@ fn family(launcher: &Path) -> Result<Vec<PathBuf>, String> {
         Ok(())
     }
     let mut files = vec![launcher.to_path_buf()];
-    walk(&directory_of(launcher, "launcher")?.join("launcher"), &mut files)?;
+    walk(
+        &directory_of(launcher, "launcher")?.join("launcher"),
+        &mut files,
+    )?;
     Ok(files)
 }
 
@@ -132,9 +139,8 @@ pub(super) fn check(router: &Path, launcher: &Path) -> Result<(), String> {
         );
     }
     let groups = strings(root.get("groups"));
-    let words = |command: &str| -> Vec<String> {
-        command.split_whitespace().map(str::to_string).collect()
-    };
+    let words =
+        |command: &str| -> Vec<String> { command.split_whitespace().map(str::to_string).collect() };
     let mut available: BTreeSet<String> = strings(root.get("commands"))
         .iter()
         .map(|command| command_path(&words(command), false))

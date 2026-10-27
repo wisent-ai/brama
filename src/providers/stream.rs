@@ -49,7 +49,9 @@ pub use event::{ProviderStream, StopReason, StreamDelta, StreamItem};
 /// still a live generation: the stream ends when the provider ends it or the
 /// connection fails, and nothing here decides that silence was long enough.
 pub(crate) fn spawn(wire: WireProtocol, response: reqwest::Response) -> mpsc::Receiver<StreamItem> {
-    let (tx, rx) = mpsc::channel(64);
+    // One in-flight item gives the consumer backpressure without a guessed
+    // buffer budget or an unbounded queue of provider events.
+    let (tx, rx) = mpsc::channel(std::num::NonZeroUsize::MIN.get());
     tokio::spawn(async move {
         use futures_util::StreamExt as _;
         let mut framer = SseFramer::new();
@@ -61,7 +63,8 @@ pub(crate) fn spawn(wire: WireProtocol, response: reqwest::Response) -> mpsc::Re
             let chunk = match bytes.next().await {
                 Some(Ok(chunk)) => chunk,
                 Some(Err(error)) => {
-                    let _ = tx
+                    // The stream's last item; a caller that hung up needs none.
+                    let _unreceived = tx
                         .send(StreamItem::Failed(format!(
                             "provider stream read failed: {error}"
                         )))
@@ -73,7 +76,7 @@ pub(crate) fn spawn(wire: WireProtocol, response: reqwest::Response) -> mpsc::Re
             let events = match framer.feed(&chunk) {
                 Ok(events) => events,
                 Err(message) => {
-                    let _ = tx.send(StreamItem::Failed(message)).await;
+                    let _unreceived = tx.send(StreamItem::Failed(message)).await;
                     return;
                 }
             };
@@ -108,14 +111,14 @@ pub(crate) fn spawn(wire: WireProtocol, response: reqwest::Response) -> mpsc::Re
             }
         }
         if !terminal {
-            let _ = tx
+            let _unreceived = tx
                 .send(StreamItem::Failed(
                     "provider stream ended before a terminal event".to_string(),
                 ))
                 .await;
             return;
         }
-        let _ = tx.send(StreamItem::Done).await;
+        let _unreceived = tx.send(StreamItem::Done).await;
     });
     rx
 }

@@ -97,7 +97,7 @@ same secret-free pool states. Refresh one provider through
 `{"provider":"codex","reason":"<operator reason>"}`, or through
 `brama subscription refresh codex --reason '<operator reason>'`. Repair a
 provider-disowned Claude Code, Codex, or Kimi grant with
-`brama subscription sign-in <provider> --by weles --reason '<operator reason>'`; Brama
+`brama subscription login <provider> --by weles --reason '<operator reason>'`; Brama
 calls Weles's real `/reauth` trajectory, confirms the exact account row, then
 refreshes the grant. Brama Desktop exposes these operations under
 **Subscription Pool**. A non-empty reason is required, the result is appended

@@ -18,6 +18,8 @@ use axum::Json;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
+pub(in crate::core::server) mod member;
+
 use crate::core::server::administration::require_brama_desktop;
 use crate::core::server::admission::identity::ModelClientIdentity;
 use crate::core::server::refusal::{api_error, ApiError};
@@ -29,7 +31,7 @@ use crate::subscription_dispatch::sign_in::manual::{self, AuthorizationRequest};
 struct Pending {
     request: AuthorizationRequest,
     reason: String,
-    subscription_id: String,
+    target: member::Target,
 }
 
 static PENDING: LazyLock<Mutex<HashMap<String, Pending>>> = LazyLock::new(Default::default);
@@ -40,70 +42,38 @@ pub(in crate::core::server) struct CompleteRequest {
     code: String,
 }
 
-/// The active, unretired pooled account a request names, or the refusal
-/// that says why it cannot be signed in.
-async fn active_account(
-    subscription_id: &str,
-    reason: &str,
-) -> Result<crate::gateway::broker::SubscriptionEntry, ApiError> {
-    if reason.trim().is_empty() {
-        return Err(api_error(
-            StatusCode::BAD_REQUEST,
-            "--reason must say why this sign-in is being run",
-        ));
-    }
-    if subscription_id.trim().is_empty() {
-        return Err(api_error(
-            StatusCode::BAD_REQUEST,
-            "a subscription id is required",
-        ));
-    }
-    let entries = crate::gateway::broker::list_all_subscriptions()
-        .await
-        .map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?;
-    let entry = entries
-        .into_iter()
-        .find(|entry| entry.id == subscription_id.trim())
-        .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "subscription not found"))?;
-    let retired = crate::journal::is_retired(&entry.id)
-        .map_err(|detail| api_error(StatusCode::SERVICE_UNAVAILABLE, &detail))?;
-    if entry.status != "active" || retired {
-        return Err(api_error(
-            StatusCode::CONFLICT,
-            "retired subscriptions cannot be signed in",
-        ));
-    }
-    Ok(entry)
-}
-
 /// `POST /v1/admin/subscription-pool/sign-in` with `"by": "hand"`: the page to
-/// open. The caller has admitted the console and refused a Weles login item.
+/// open. The caller has admitted the console and refused a Weles login item;
+/// `joining` names a member a standalone gateway banks by this sign-in.
 pub(in crate::core::server) async fn begin_hand_sign_in(
     subscription_id: &str,
     reason: &str,
+    joining: Option<member::Joining>,
+    console: &str,
 ) -> Result<Json<Value>, ApiError> {
     let reason = reason.trim();
-    let entry = active_account(subscription_id, reason).await?;
-    let authorization = manual::begin(&entry.provider, &entry.id)
+    let target = member::target(subscription_id, reason, joining, console).await?;
+    let authorization = manual::begin(&target.provider, &target.id)
         .map_err(|detail| api_error(StatusCode::CONFLICT, &detail))?;
     let sign_in_id = authorization.state.clone();
     let url = authorization.url.clone();
+    let answer = json!({
+        "sign_in_id": sign_in_id,
+        "provider": target.provider,
+        "subscription_id": target.id,
+        "url": url,
+    });
     let mut pending = crate::core::sync::held(&PENDING, "pending manual sign-ins");
-    pending.retain(|_, open| open.subscription_id != entry.id);
+    pending.retain(|_, open| open.target.id != target.id);
     pending.insert(
-        sign_in_id.clone(),
+        sign_in_id,
         Pending {
             request: authorization,
             reason: reason.to_owned(),
-            subscription_id: entry.id.clone(),
+            target,
         },
     );
-    Ok(Json(json!({
-        "sign_in_id": sign_in_id,
-        "provider": entry.provider,
-        "subscription_id": entry.id,
-        "url": url,
-    })))
+    Ok(Json(answer))
 }
 
 /// `POST /v1/admin/subscription-pool/sign-in/:sign_in_id`: the paste.
@@ -123,12 +93,29 @@ pub(in crate::core::server) async fn complete_admin_manual_sign_in(
             "no manual sign-in with that id is open; begin one again and paste what the new page shows",
         ));
     };
-    let verdict = manual::complete(pending.request, &request.code, &pending.reason)
-        .await
-        .map_err(|detail| api_error(StatusCode::CONFLICT, &detail))?;
-    Ok(Json(
-        serde_json::to_value(verdict).expect("verdict serializes"),
-    ))
+    // A member this sign-in banks is in the pool before its grant is stored
+    // and proved, and out of it again when the exchange fails; a member it
+    // did not bank is never taken out.
+    let banked = pending.target.bank().await?;
+    let verdict = match manual::complete(pending.request, &request.code, &pending.reason).await {
+        Ok(verdict) => verdict,
+        Err(detail) => {
+            let detail = match banked.map(member::Banked::unbank) {
+                None | Some(Ok(())) => detail,
+                Some(Err(left)) => {
+                    format!("{detail}; the member it banked could not be taken out again: {left}")
+                }
+            };
+            return Err(api_error(StatusCode::CONFLICT, &detail));
+        }
+    };
+    let answered = serde_json::to_value(verdict).map_err(|error| {
+        api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &format!("the manual sign-in completed but its verdict could not be encoded: {error}"),
+        )
+    })?;
+    Ok(Json(answered))
 }
 
 // There is no `POST /v1/admin/subscription-pool/grant`: a console that hands
@@ -137,8 +124,8 @@ pub(in crate::core::server) async fn complete_admin_manual_sign_in(
 // one OAuth pair per sign-in and revokes it when a second holder refreshes,
 // so every adopted grant costs its first holder its session, the operator's
 // own included. A gateway signs itself in:
-// `subscription sign-in --by weles` through Weles on its own host, or
-// `subscription sign-in --by hand`, which runs the provider's OAuth flow here
+// `subscription login --by weles` through Weles on its own host, or
+// `subscription login --by hand`, which runs the provider's OAuth flow here
 // and mints a pair that belongs to this gateway.
 
 /// `POST /v1/admin/subscription-pool/disown`: the console takes back a grant

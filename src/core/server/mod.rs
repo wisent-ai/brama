@@ -33,6 +33,7 @@ mod media;
 mod readiness;
 mod refusal;
 mod rewards;
+mod signature;
 mod streaming;
 mod subscriptions;
 mod telemetry;

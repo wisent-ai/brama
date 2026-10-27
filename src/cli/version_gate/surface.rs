@@ -175,10 +175,11 @@ fn derives(attributes: &[Attribute], name: &str) -> Result<bool, String> {
         let paths = attribute
             .parse_args_with(Punctuated::<syn::Path, Token![,]>::parse_terminated)
             .map_err(|error| format!("a #[derive] in {MAIN} does not parse: {error}"))?;
-        if paths
-            .iter()
-            .any(|path| path.segments.last().is_some_and(|segment| segment.ident == name))
-        {
+        if paths.iter().any(|path| {
+            path.segments
+                .last()
+                .is_some_and(|segment| segment.ident == name)
+        }) {
             return Ok(true);
         }
     }

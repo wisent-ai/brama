@@ -152,7 +152,7 @@ pub(in crate::core::server) async fn attribute_admin_subscription_pool(
 /// Which accounts need a second factor and which hold the authenticator seed
 /// that answers it, read from the vault this serving process reads: the
 /// vault Weles signs in from. A machine that reads the fleet vault remotely
-/// holds no vault its own `skarbiec totp-seed-state` can open, so the report
+/// holds no vault its own `skarbiec totp seed` can open, so the report
 /// is asked of the gateway there. A vault that cannot be read is a 503 naming
 /// the vault program's own error.
 pub(in crate::core::server) async fn second_factor_admin_subscription_pool(
@@ -231,7 +231,7 @@ pub(in crate::core::server) enum ResetPolicyRequest {
 }
 
 /// The operator's saved-reset policy on the gateway that holds the pool, as
-/// `brama subscription reset-policy` and Brama Desktop state and read it.
+/// `brama subscription policy` and Brama Desktop state and read it.
 pub(in crate::core::server) async fn reset_policy_admin(
     Extension(client_identity): Extension<ModelClientIdentity>,
     Json(request): Json<ResetPolicyRequest>,

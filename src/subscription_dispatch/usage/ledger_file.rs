@@ -104,7 +104,6 @@ pub(super) fn load() -> LedgerState {
     }
 }
 
-
 /// Write through a private temporary file in the same directory and rename, so
 /// a reader never sees a half-written ledger and a crash never truncates one.
 pub(super) fn persist(ledger: &Ledger) -> Result<(), String> {
