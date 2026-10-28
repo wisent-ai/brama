@@ -9,8 +9,11 @@
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-/// The playback speeds the OpenAI-shaped speech contract accepts.
+/// The slowest playback speed the OpenAI-shaped speech contract accepts
+/// (https://platform.openai.com/docs/api-reference/audio/createSpeech).
 pub(super) const MIN_SPEED: f32 = 0.25;
+/// The fastest playback speed the OpenAI-shaped speech contract accepts
+/// (https://platform.openai.com/docs/api-reference/audio/createSpeech).
 pub(super) const MAX_SPEED: f32 = 4.0;
 
 #[derive(Debug, Deserialize)]
@@ -106,6 +109,13 @@ impl SpeechRequest {
         {
             return Some("speed must be between 0.25 and 4.0");
         }
+        if [self.stability, self.similarity_boost]
+            .into_iter()
+            .flatten()
+            .any(|setting| !setting.is_finite())
+        {
+            return Some("stability and similarity_boost must be numbers");
+        }
         None
     }
 
@@ -113,11 +123,10 @@ impl SpeechRequest {
         let mut payload = Map::new();
         payload.insert("input".to_string(), Value::String(self.input));
         payload.insert("voice".to_string(), Value::String(self.voice));
+        // Every float here was checked finite by `invalid`, so each is a
+        // JSON number as stated.
         if let Some(speed) = self.speed {
-            payload.insert(
-                "speed".to_string(),
-                serde_json::Number::from_f64(f64::from(speed)).map_or(Value::Null, Value::Number),
-            );
+            payload.insert("speed".to_string(), Value::from(f64::from(speed)));
         }
         stated(&mut payload, "response_format", self.response_format);
         stated(&mut payload, "instructions", self.instructions);
@@ -127,11 +136,7 @@ impl SpeechRequest {
             ("similarity_boost", self.similarity_boost),
         ] {
             if let Some(value) = value {
-                payload.insert(
-                    key.to_string(),
-                    serde_json::Number::from_f64(f64::from(value))
-                        .map_or(Value::Null, Value::Number),
-                );
+                payload.insert(key.to_string(), Value::from(f64::from(value)));
             }
         }
         if self.timestamps == Some(true) {
@@ -153,7 +158,7 @@ impl ImageRequest {
         if self.prompt.trim().is_empty() {
             return Some("prompt must not be empty");
         }
-        if self.n == Some(0) {
+        if self.n.is_some_and(|n| std::num::NonZeroU32::new(n).is_none()) {
             return Some("n must be at least 1");
         }
         if self.image.as_ref().is_some_and(Vec::is_empty) {
@@ -200,7 +205,10 @@ impl VideoRequest {
         if self.prompt.trim().is_empty() {
             return Some("prompt must not be empty");
         }
-        if self.seconds == Some(0) {
+        if self
+            .seconds
+            .is_some_and(|seconds| std::num::NonZeroU32::new(seconds).is_none())
+        {
             return Some("seconds must be at least 1");
         }
         None
