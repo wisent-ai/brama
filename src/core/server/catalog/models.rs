@@ -154,10 +154,10 @@ pub(in crate::core::server) async fn list_models(
     // one that is declared and cannot serve is listed as unavailable with the
     // reason, because a name that silently vanishes from the catalogue reads
     // to the caller as "no such model" and sends it to fix the wrong thing.
-    let declared = aliases
+    let declared_aliases = aliases
         .declared()
         .map_err(|error| api_error(axum::http::StatusCode::SERVICE_UNAVAILABLE, &error))?;
-    for alias in declared {
+    for alias in declared_aliases {
         if !client_identity.authorizes_model(&alias) {
             continue;
         }

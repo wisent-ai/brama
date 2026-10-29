@@ -113,7 +113,9 @@ pub(in crate::subscription_dispatch::dispatch) fn sized_request(
     let listed = discovered_max_output_tokens(provider_id, model_id);
     let limit = match &listed {
         Ok(Some(limit)) => *limit,
-        Ok(None) | Err(_said_below) => match known_max_output_tokens(provider_id, model_id) {
+        // The listing's refusal, when it refused, is read again below to
+        // say why the request is refused.
+        Ok(None) | Err(_) => match known_max_output_tokens(provider_id, model_id) {
             Ok(Some(limit)) => limit,
             Ok(None) => {
                 let listing = match &listed {
