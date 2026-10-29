@@ -81,7 +81,7 @@ fn cache_path() -> Result<PathBuf, String> {
     Ok(
         match crate::environment::declared_text("BRAMA_MODEL_CATALOG_CACHE")? {
             Some(path) => PathBuf::from(path),
-            None => crate::journal::state_dir().join(CACHE_FILE),
+            None => crate::journal::state_dir()?.join(CACHE_FILE),
         },
     )
 }

@@ -32,7 +32,7 @@ pub fn donated_subscriptions_path() -> Result<PathBuf, String> {
     Ok(
         match crate::environment::declared_setting(DONATED_SUBSCRIPTIONS_FILE_ENV)? {
             Some(value) => PathBuf::from(value),
-            None => crate::journal::home_dir()
+            None => crate::journal::home()?
                 .join(".stado")
                 .join("var")
                 .join("brama")

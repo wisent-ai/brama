@@ -29,7 +29,7 @@ pub fn declared_setting(variable: &str) -> Result<Option<String>, String> {
 pub fn stado_binary() -> Result<std::path::PathBuf, String> {
     Ok(match declared_setting("BRAMA_STADO_BIN")? {
         Some(value) => std::path::PathBuf::from(value),
-        None => crate::journal::home_dir()
+        None => crate::journal::home()?
             .join(".stado")
             .join("bin")
             .join("stado"),

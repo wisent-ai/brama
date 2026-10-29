@@ -13,7 +13,7 @@ pub struct Pending {
 
 impl Pending {
     pub fn open() -> Result<Self, String> {
-        let directory = crate::journal::state_dir().join("account-discovery");
+        let directory = crate::journal::state_dir()?.join("account-discovery");
         std::fs::create_dir_all(&directory)
             .map_err(|error| format!("create pending account discovery directory: {error}"))?;
         let lock = OpenOptions::new()

@@ -31,13 +31,13 @@ struct Accepted {
     signatures: BTreeSet<String>,
 }
 
-fn record_path() -> PathBuf {
-    crate::journal::state_dir().join("agent-replay.json")
+fn record_path() -> Result<PathBuf, String> {
+    Ok(crate::journal::state_dir()?.join("agent-replay.json"))
 }
 
 /// Accept `signature` for `agent_id` at `timestamp` once, or say why not.
 pub fn accept_once(agent_id: &str, timestamp: i64, signature: &str) -> Result<(), String> {
-    let path = record_path();
+    let path = record_path()?;
     let _held = held_beside(&path, RECORD)?;
     let mut record: BTreeMap<String, Accepted> = match fs::read(&path) {
         Ok(bytes) => serde_json::from_slice(&bytes).map_err(|error| {

@@ -56,7 +56,7 @@ pub async fn run_first_use(
     )?;
     let subject_hash = stable_subject_hash(&agent_id);
     let transport = BramaTransport::from_env();
-    let storage = FileStorage::new(state_path());
+    let storage = FileStorage::new(state_path().map_err(JourneyError::Invalid)?);
     let mut journey = JourneyClient::new(
         PRODUCT_ID,
         JOURNEY_ID,

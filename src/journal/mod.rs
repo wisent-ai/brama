@@ -24,11 +24,13 @@ pub use subscriptions::{
 /// Brama's own state directory on this host: `$BRAMA_STATE_DIR`, or
 /// `.brama` under the user's home. The journal, the agent replay record and
 /// the model catalog copy all live here, never in a shared temporary
-/// directory.
-pub(crate) fn state_dir() -> PathBuf {
+/// directory. Neither declared nor a home to put it under is refused with
+/// [`home`]'s cause, so every reader and writer of Brama's state says why it
+/// has none instead of stopping the process.
+pub(crate) fn state_dir() -> Result<PathBuf, String> {
     match declared_path("BRAMA_STATE_DIR") {
-        Some(dir) => dir,
-        None => home_dir().join(".brama"),
+        Some(dir) => Ok(dir),
+        None => Ok(home()?.join(".brama")),
     }
 }
 
@@ -55,24 +57,21 @@ pub fn home() -> Result<PathBuf, String> {
     })
 }
 
-/// [`home`] where Brama cannot run without it: it stops with the cause.
-pub fn home_dir() -> PathBuf {
-    match home() {
-        Ok(home) => home,
-        Err(cause) => panic!("{cause}"),
-    }
+fn journal_path() -> Result<PathBuf, String> {
+    Ok(state_dir()?.join("journal.jsonl"))
 }
 
-fn journal_path() -> PathBuf {
-    state_dir().join("journal.jsonl")
-}
+static PATH: LazyLock<Result<PathBuf, String>> = LazyLock::new(journal_path);
 
-static PATH: LazyLock<PathBuf> = LazyLock::new(journal_path);
+/// The journal's path, or why Brama has no state directory to keep it in.
+pub(super) fn journal() -> Result<&'static PathBuf, String> {
+    PATH.as_ref().map_err(String::clone)
+}
 
 /// Append one record. Every failure names the journal and the OS cause: a
 /// retirement or acquisition that was not written must not look written.
 fn append(record: Value) -> Result<(), String> {
-    let path = &*PATH;
+    let path = journal()?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|error| {
             format!(
@@ -110,7 +109,7 @@ fn append(record: Value) -> Result<(), String> {
 /// the cause, because reading it as empty answers "not retired" for a member
 /// its owner retired.
 fn read_all() -> Result<Vec<Value>, String> {
-    let path = &*PATH;
+    let path = journal()?;
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),

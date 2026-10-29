@@ -30,12 +30,12 @@ pub struct ResetPolicy {
     pub stated_at: String,
 }
 
-fn path() -> PathBuf {
-    crate::journal::state_dir().join("reset-policy.json")
+fn path() -> Result<PathBuf, String> {
+    Ok(crate::journal::state_dir()?.join("reset-policy.json"))
 }
 
 fn lock(provider: &str) -> Result<std::fs::File, String> {
-    let file = path().with_extension("lock");
+    let file = path()?.with_extension("lock");
     if let Some(parent) = file.parent() {
         std::fs::create_dir_all(parent).map_err(|error| {
             format!(
@@ -66,7 +66,7 @@ fn lock(provider: &str) -> Result<std::fs::File, String> {
 
 /// Every provider's stated policy; none when nothing was ever stated.
 pub fn all() -> Result<BTreeMap<String, ResetPolicy>, String> {
-    let file = path();
+    let file = path()?;
     match std::fs::read(&file) {
         Ok(bytes) => serde_json::from_slice(&bytes).map_err(|error| {
             format!(
@@ -92,7 +92,7 @@ pub fn for_provider(provider: &str) -> Result<ResetPolicy, String> {
 }
 
 fn write(policies: &BTreeMap<String, ResetPolicy>) -> Result<(), String> {
-    let file = path();
+    let file = path()?;
     let staged = file.with_extension("json.next");
     let bytes = serde_json::to_vec_pretty(policies)
         .map_err(|error| format!("the saved-reset policy cannot be encoded: {error}"))?;

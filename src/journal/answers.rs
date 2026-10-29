@@ -30,14 +30,16 @@ pub struct LastAnswer {
     pub at: String,
 }
 
-fn path() -> PathBuf {
-    super::state_dir().join("alias-answers.json")
+fn path() -> Result<PathBuf, std::io::Error> {
+    Ok(super::state_dir()
+        .map_err(std::io::Error::other)?
+        .join("alias-answers.json"))
 }
 
 /// Every alias's newest answer as the gateway recorded it; an absent file is
 /// a gateway that has served nothing yet.
 pub fn last_answers() -> Result<BTreeMap<String, LastAnswer>, std::io::Error> {
-    let path = path();
+    let path = path()?;
     match std::fs::read(&path) {
         Ok(bytes) => serde_json::from_slice(&bytes).map_err(|error| {
             std::io::Error::new(
@@ -94,7 +96,7 @@ pub fn record(alias: &str, refusal: Option<(&str, Option<&str>)>) {
 
 /// Replace the record in one rename, so a reader never sees half of it.
 fn write(answers: &BTreeMap<String, LastAnswer>) -> Result<(), std::io::Error> {
-    let path = path();
+    let path = path()?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }

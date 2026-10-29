@@ -11,7 +11,7 @@ pub struct MemberLock {
 }
 
 pub fn lock(member: &str) -> Result<MemberLock, String> {
-    let directory = super::state_dir().join("reset-locks");
+    let directory = super::state_dir()?.join("reset-locks");
     std::fs::create_dir_all(&directory).map_err(|error| {
         format!(
             "create reset lock directory {}: {error}",
@@ -36,7 +36,7 @@ pub fn record(outcome: &ResetRedemption) -> Result<(), String> {
         .map_err(|error| format!("encode subscription reset journal entry: {error}"))?;
     record["kind"] = json!("subscription_reset");
     record["at"] = json!(super::now());
-    let path = &*super::PATH;
+    let path = super::journal()?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|error| format!("create journal directory {}: {error}", parent.display()))?;
@@ -54,7 +54,7 @@ pub fn record(outcome: &ResetRedemption) -> Result<(), String> {
 
 /// A damaged history is not an empty history: never spend again on that assumption.
 pub fn latest(member: &str) -> Result<Option<ResetRedemption>, String> {
-    let path = &*super::PATH;
+    let path = super::journal()?;
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),

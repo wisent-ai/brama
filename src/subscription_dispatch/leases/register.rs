@@ -69,7 +69,7 @@ fn path() -> Result<PathBuf, String> {
     Ok(
         match crate::environment::declared_setting("BRAMA_SUBSCRIPTION_LEASES_FILE")? {
             Some(declared) => PathBuf::from(declared),
-            None => crate::journal::state_dir().join("leases.json"),
+            None => crate::journal::state_dir()?.join("leases.json"),
         },
     )
 }

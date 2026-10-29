@@ -116,7 +116,10 @@ impl AnswerSigner {
         request: &[u8],
     ) -> Option<Response> {
         self.once(headers)?;
-        let path = kept_path(request);
+        let path = match kept_path(request) {
+            Ok(path) => path,
+            Err(cause) => return Some(unkept(&cause)),
+        };
         match std::fs::read(&path) {
             Ok(bytes) => Some(match serde_json::from_slice::<Kept>(&bytes) {
                 Ok(kept) => repeated(kept, &path),
@@ -158,7 +161,10 @@ impl AnswerSigner {
             signature: STANDARD.encode(keyed.key.sign(&message).to_bytes()),
             key: keyed.id.clone(),
         };
-        let path = kept_path(request);
+        let path = match kept_path(request) {
+            Ok(path) => path,
+            Err(cause) => return unkept(&cause),
+        };
         match keep_first(&path, &kept) {
             Ok(None) => signed(bytes, &kept.signature, &kept.key),
             Ok(Some(first)) => repeated(first, &path),
@@ -173,10 +179,20 @@ impl AnswerSigner {
     }
 }
 
-fn kept_path(request: &[u8]) -> PathBuf {
-    crate::journal::state_dir()
+fn kept_path(request: &[u8]) -> Result<PathBuf, String> {
+    Ok(crate::journal::state_dir()?
         .join(STORE)
-        .join(format!("{}.json", hex::encode(Sha256::digest(request))))
+        .join(format!("{}.json", hex::encode(Sha256::digest(request)))))
+}
+
+/// The refusal of a request that asks for its one signed answer when there
+/// is no state directory to keep answers in.
+fn unkept(cause: &str) -> Response {
+    api_error(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        &format!("this request's one signed answer has no place to be kept: {cause}"),
+    )
+    .into_response()
 }
 
 /// Keep `kept` at `path` unless an answer is there already; that answer when
