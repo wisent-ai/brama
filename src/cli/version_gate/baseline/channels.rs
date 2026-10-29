@@ -67,17 +67,19 @@ fn output(program: &str, root: &Path, arguments: &[&str]) -> Result<Option<Answe
     }
 }
 
-/// The order of a `vMAJOR.MINOR.PATCH` tag (the `v` is optional); any other
-/// tag is not a release and has none.
-fn semver_order(tag: &str) -> Option<(u64, u64, u64)> {
+/// A release tag's order, as the fleet's rule parses a version
+/// (`vMAJOR.MINOR.PATCH`, the `v` optional); a tag the rule refuses is not a
+/// release and has none.
+type Order = (u128, u128, u128);
+
+fn semver_order(tag: &str) -> Option<Order> {
     let number = match tag.strip_prefix('v') {
         Some(rest) => rest,
         None => tag,
     };
-    let mut parts = number.split('.').map(str::parse::<u64>);
-    match (parts.next(), parts.next(), parts.next(), parts.next()) {
-        (Some(Ok(major)), Some(Ok(minor)), Some(Ok(patch)), None) => Some((major, minor, patch)),
-        _ => None,
+    match autoversion::Version::parse(number) {
+        Ok(version) => Some((version.major, version.minor, version.patch)),
+        Err(_not_a_release) => None,
     }
 }
 
@@ -181,7 +183,7 @@ pub(super) fn github_release(root: &Path) -> Result<Option<String>, String> {
     if !answer.status.success() {
         return Err(answer.refused());
     }
-    let mut tags: Vec<((u64, u64, u64), String)> = releases(&answer)?
+    let mut tags: Vec<(Order, String)> = releases(&answer)?
         .iter()
         .filter(|release| release["isDraft"] == false && release["isPrerelease"] == false)
         .filter_map(|release| {
@@ -248,7 +250,7 @@ pub(super) fn honest_tag(root: &Path) -> Result<Option<String>, String> {
         return Ok(None);
     };
     let listing = answer.succeeded()?;
-    let mut tags: Vec<((u64, u64, u64), String)> = listing
+    let mut tags: Vec<(Order, String)> = listing
         .lines()
         .filter_map(|tag| Some((semver_order(tag.trim())?, tag.trim().to_string())))
         .collect();

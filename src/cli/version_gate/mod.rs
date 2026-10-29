@@ -46,7 +46,8 @@ pub(crate) enum VersionGateCommand {
         #[arg(long)]
         write: bool,
     },
-    /// Reproduce every case of AutoVersion's FIXTURES.md with this port
+    /// Reproduce every case of AutoVersion's FIXTURES.md with the AutoVersion
+    /// crate this Brama is built with
     Conformance {
         #[arg(long)]
         fixtures: PathBuf,
@@ -66,11 +67,15 @@ fn own_surface(root: &Path, cli: &clap::Command) -> Result<Vec<String>, String> 
 
 /// `value` pretty-printed, or a refusal naming `what` could not be encoded.
 fn pretty(value: &serde_json::Value, what: &str) -> Result<String, String> {
-    serde_json::to_string_pretty(value).map_err(|error| format!("{what} cannot be encoded as JSON: {error}"))
+    serde_json::to_string_pretty(value)
+        .map_err(|error| format!("{what} cannot be encoded as JSON: {error}"))
 }
 
 fn document(surface: &[String]) -> Result<String, String> {
-    pretty(&serde_json::json!({ "surface": surface }), "the surface document")
+    pretty(
+        &serde_json::json!({ "surface": surface }),
+        "the surface document",
+    )
 }
 
 fn dispatch(command: VersionGateCommand, cli: &clap::Command) -> Result<(), String> {
@@ -115,7 +120,10 @@ fn dispatch(command: VersionGateCommand, cli: &clap::Command) -> Result<(), Stri
             if rule::conformance(&text)? {
                 Ok(())
             } else {
-                Err("this port does not reproduce AutoVersion's fixtures".into())
+                Err(format!(
+                    "the AutoVersion crate this Brama is built with does not reproduce every case of {}; the failing cases are printed above, so pin the crate revision whose fixtures these are",
+                    fixtures.display()
+                ))
             }
         }
     }

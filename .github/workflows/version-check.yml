@@ -6,10 +6,10 @@ name: version-check
 # other machines invoke by command name -- and `brama mcp` reports the declared version
 # back over MCP `initialize`, so a wrong number is externally observable.
 #
-# The rule is AutoVersion's (https://github.com/lbartoszcze/AutoVersion, SPEC v0.1.0),
-# kept as one small port per consumer and held identical by the shared fixtures. Brama's
-# port is `brama version-gate`, carried by the candidate binary: this workflow first runs
-# AutoVersion's FIXTURES.md against it (`conformance`), then `contract` compares the
+# The rule is AutoVersion's (https://github.com/lbartoszcze/AutoVersion), taken as its
+# crate rather than copied: `brama version-gate` answers with the AutoVersion crate
+# Cargo.toml pins, carried by the candidate binary. This workflow first runs
+# AutoVersion's FIXTURES.md at that crate's locked revision against it (`conformance`), then `contract` compares the
 # surface this binary advertises with the committed released-surface.json. A declared
 # version may run ahead of the required one only over coordinates earlier commits on
 # this branch declared, since the Stado release plane never reuses a coordinate.
@@ -64,9 +64,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # The fixtures at the revision Cargo.lock builds the crate from, so they
+          # prove the rule this binary runs.
+          revision="$(sed -n 's|^source = "git+https://github.com/lbartoszcze/AutoVersion?rev=[0-9a-f]*#\([0-9a-f]*\)"$|\1|p' Cargo.lock)"
+          test -n "$revision" || { echo "Cargo.lock names no AutoVersion revision" >&2; exit 1; }
           curl --fail --silent --show-error --location \
             --output "$RUNNER_TEMP/autoversion-fixtures.md" \
-            https://raw.githubusercontent.com/lbartoszcze/AutoVersion/v0.1.0/FIXTURES.md
+            "https://raw.githubusercontent.com/lbartoszcze/AutoVersion/$revision/docs/FIXTURES.md"
           target/release/brama version-gate conformance \
             --fixtures "$RUNNER_TEMP/autoversion-fixtures.md"
 

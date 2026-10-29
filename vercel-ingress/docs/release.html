@@ -78,9 +78,9 @@ disagrees; that parse is what reads a published revision's surface through
 <code>git show</code>, and a revision whose declaration does not parse is refused with the
 parser's reason. <code>released-surface.json</code> is the immutable
 published baseline, never a candidate regenerated from the same working tree.
-<code>brama version contract</code> asks the AutoVersion rule, through Brama's own port of it,
+<code>brama version contract</code> asks the AutoVersion rule, through the AutoVersion crate Brama builds with,
 what the candidate surface requires and compares that with the version <code>Cargo.toml</code>
-declares; <code>brama version conformance --fixtures FIXTURES.md</code> proves the port
+declares; <code>brama version conformance --fixtures FIXTURES.md</code> proves that crate
 against AutoVersion's shared fixtures before the workflow trusts it. The
 declared version may run ahead of the required one within the same series only when every
 coordinate it skips was declared by an earlier commit on the branch: the Stado release plane

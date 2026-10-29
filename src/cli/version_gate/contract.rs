@@ -14,6 +14,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 use std::process::Command;
 
+use autoversion::Version;
 use serde_json::Value;
 
 use super::rule::{decide, Change, Decision};
@@ -28,36 +29,16 @@ pub(super) fn read_json(path: &Path) -> Result<Value, String> {
     serde_json::from_slice(&bytes).map_err(|error| format!("{}: {error}", path.display()))
 }
 
-/// A `MAJOR.MINOR.PATCH` version, the only form the gate compares.
-struct Version {
-    major: u64,
-    minor: u64,
-    patch: u64,
+/// A `MAJOR.MINOR.PATCH` version, parsed by the fleet's rule so the gate holds
+/// one parsing rule: the rule's refusal, naming the slot and its cause, is the
+/// gate's refusal.
+fn triple(version: &str) -> Result<Version, String> {
+    Version::parse(version).map_err(|refusal| refusal.to_string())
 }
 
-impl Version {
-    fn parse(version: &str) -> Result<Self, String> {
-        let mut parts = version.split('.');
-        let (Some(major), Some(minor), Some(patch), None) =
-            (parts.next(), parts.next(), parts.next(), parts.next())
-        else {
-            return Err(format!("{version} is not MAJOR.MINOR.PATCH"));
-        };
-        let number = |part: &str| {
-            part.parse::<u64>()
-                .map_err(|error| format!("{version} is not MAJOR.MINOR.PATCH: `{part}`: {error}"))
-        };
-        Ok(Self {
-            major: number(major)?,
-            minor: number(minor)?,
-            patch: number(patch)?,
-        })
-    }
-
-    /// This series at `patch`.
-    fn at_patch(&self, patch: u64) -> String {
-        format!("{}.{}.{patch}", self.major, self.minor)
-    }
+/// The series of `version` at `patch`.
+fn at_patch(version: &Version, patch: u128) -> String {
+    format!("{}.{}.{patch}", version.major, version.minor)
 }
 
 /// The surface list of a surface document (`what` names it: the committed
@@ -169,20 +150,20 @@ fn compare(
     if declared == required {
         return Ok(format!("{satisfied}."));
     }
-    let (want, have) = (Version::parse(required)?, Version::parse(declared)?);
+    let (want, have) = (triple(required)?, triple(declared)?);
     if (have.major, have.minor) != (want.major, want.minor) || have.patch <= want.patch {
         return Err(format!("Cargo.toml commits {declared}, but the {class} change from {released} requires {required}."));
     }
     // The first coordinate nothing consumed refuses; the range is walked
     // lazily, so a jump of any size costs one coordinate past the last held.
     if let Some(coordinate) = (want.patch..have.patch)
-        .map(|patch| want.at_patch(patch))
+        .map(|patch| at_patch(&want, patch))
         .find(|coordinate| !history.contains(coordinate))
     {
         return Err(format!("Cargo.toml commits {declared}, but the {class} change from {released} requires {required}, and {coordinate} was never declared by an earlier commit on this branch, so nothing consumed it."));
     }
     let skipped: Vec<String> = (want.patch..have.patch)
-        .map(|patch| want.at_patch(patch))
+        .map(|patch| at_patch(&want, patch))
         .collect();
     Ok(format!(
         "{satisfied}: {required} is required and {} were consumed by earlier commits.",
@@ -217,7 +198,7 @@ fn self_check(released: &str, published: &[String]) -> Result<(), String> {
         ));
     }
     let required = unchanged.next;
-    let far = Version::parse(&required)?.at_patch(u64::MAX);
+    let far = at_patch(&triple(&required)?, u128::MAX);
     if let Ok(accepted) = compare(
         &far,
         released,

@@ -86,6 +86,9 @@ sha2 = "0.10"
 hex = "0.4"
 url = "2"
 chrono = { version = "0.4", features = ["serde"] }
+# The fleet's versioning rule, shared with every product that versions by
+# surface; the rule alone, without the Python surface reader.
+autoversion = { git = "https://github.com/lbartoszcze/AutoVersion", rev = "f7dde3c1461a292d72d8f956fc815f01a4ee4dca", default-features = false }
 subtle = "2.6"
 # The version gate reads a published revision's clap declaration as Rust.
 syn = { version = "2", features = ["full", "parsing"] }
