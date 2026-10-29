@@ -23,7 +23,7 @@ pub(in crate::core::server) mod member;
 use crate::core::server::administration::require_brama_desktop;
 use crate::core::server::admission::identity::ModelClientIdentity;
 use crate::core::server::refusal::{api_error, ApiError};
-use crate::subscription_dispatch::sign_in::manual::{self, AuthorizationRequest};
+use crate::subscription_dispatch::sign_in::manual::{self, AuthorizationRequest, BeginRefused};
 
 /// An open sign-in. Each pooled account holds at most one: beginning again
 /// for the same account replaces the page it had open, so the map holds no
@@ -53,8 +53,13 @@ pub(in crate::core::server) async fn begin_hand_sign_in(
 ) -> Result<Json<Value>, ApiError> {
     let reason = reason.trim();
     let target = member::target(subscription_id, reason, joining, console).await?;
-    let authorization = manual::begin(&target.provider, &target.id)
-        .map_err(|detail| api_error(StatusCode::CONFLICT, &detail))?;
+    // A request the manual sign-in does not serve conflicts with the pool;
+    // a gateway that cannot draw the verifier fails on its own side.
+    let authorization =
+        manual::begin(&target.provider, &target.id).map_err(|refused| match refused {
+            BeginRefused::Request(detail) => api_error(StatusCode::CONFLICT, &detail),
+            BeginRefused::Host(detail) => api_error(StatusCode::INTERNAL_SERVER_ERROR, &detail),
+        })?;
     let sign_in_id = authorization.state.clone();
     let url = authorization.url.clone();
     let answer = json!({

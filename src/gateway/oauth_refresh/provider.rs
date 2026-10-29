@@ -25,8 +25,8 @@ pub(super) struct OAuthProvider {
 pub(super) fn oauth_provider(provider: &str) -> Option<OAuthProvider> {
     match provider {
         "claude-code" => Some(OAuthProvider {
-            token_endpoint: "https://claude.ai/v1/oauth/token",
-            client_id: "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
+            token_endpoint: crate::subscription_dispatch::sign_in::manual::claude_token_endpoint(),
+            client_id: crate::subscription_dispatch::sign_in::manual::claude_client_id(),
             wire: OAuthWire::Json,
         }),
         "codex" => Some(OAuthProvider {

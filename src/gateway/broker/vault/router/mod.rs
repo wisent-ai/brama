@@ -1,11 +1,11 @@
 //! Running the local entitlements router, and reading what it refused with.
 //!
 //! Every credential this gateway issues, reads, writes or lists arrives
-//! through one child process under one timeout. That is one subject on its
-//! own: the binary's name, the bound on how long it may take, and the sentence
-//! a non-zero exit turns into are identical for a capability issue, a grant
-//! read, an item write and a vault listing, and a second copy of any of them
-//! would drift from this one.
+//! through one short-lived child process, ended only past the resident
+//! ceiling the operator declares. The binary's name, that ceiling and the
+//! sentence a non-zero exit turns into are identical for a capability issue,
+//! a grant read, an item write and a vault listing, and a second copy of any
+//! of them would drift from this one.
 
 use std::sync::{Arc, LazyLock, Mutex};
 
