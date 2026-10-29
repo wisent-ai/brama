@@ -65,8 +65,8 @@ pub use self::check::{
 pub use self::credential::{
     awaiting_sign_in_cause, credential_recorded_at_ms, credential_refresh_hint,
     needs_reauthorization, record_credential_active, record_credential_disabled,
-    record_credential_reinstated, record_credential_signed_in,
-    record_reauthorization_needed, Credential, CredentialState, RefreshHint,
+    record_credential_reinstated, record_credential_signed_in, record_reauthorization_needed,
+    Credential, CredentialState, RefreshHint,
 };
 pub use self::plan_window::{
     next_reset_ms, plan_usage_due, plan_windows, used_fraction, PlanWindows, UsageSource,

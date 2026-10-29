@@ -72,7 +72,10 @@ pub(super) fn print_release_outcome(layout: &Layout) {
     quarantined.sort_by(|(_, left), (_, right)| {
         recorded(right, "quarantined_at").cmp(recorded(left, "quarantined_at"))
     });
-    say!("  quarantined candidates, newest first: {}", quarantined.len());
+    say!(
+        "  quarantined candidates, newest first: {}",
+        quarantined.len()
+    );
     for (digest, record) in &quarantined {
         say!(
             "  {digest}\n    at:       {}\n    cause:    {}\n    evidence: {}\n    reason:   {}",
