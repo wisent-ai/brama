@@ -111,7 +111,9 @@ fn load() -> HashMap<String, PerfStats> {
 /// Output tokens per second over `latency_ms`, absent when no time passed to
 /// measure a rate over.
 fn rate(tokens: f64, latency_ms: f64) -> Option<f64> {
-    latency_ms.is_normal().then(|| tokens / (latency_ms / MILLISECONDS_PER_SECOND))
+    latency_ms
+        .is_normal()
+        .then(|| tokens / (latency_ms / MILLISECONDS_PER_SECOND))
 }
 
 /// Record one successful dispatch for `model` (the requested route id). A
@@ -120,18 +122,29 @@ fn rate(tokens: f64, latency_ms: f64) -> Option<f64> {
 pub fn record(model: &str, latency_ms: f64, output_tokens: u32) {
     let model = model.trim();
     if model.is_empty() || !latency_ms.is_finite() || latency_ms.is_sign_negative() {
-        tracing::warn!(event = "perf_stats_uncounted", model, latency_ms, "a dispatch without a route id or a measurable latency is not counted");
+        tracing::warn!(
+            event = "perf_stats_uncounted",
+            model,
+            latency_ms,
+            "a dispatch without a route id or a measurable latency is not counted"
+        );
         return;
     }
     let mut map = registry();
     let stats = map.entry(model.to_string()).or_default();
     let Some(count) = stats.count.checked_add(ONE_DISPATCH) else {
-        tracing::warn!(event = "perf_stats_uncounted", model, "the dispatch count cannot grow further");
+        tracing::warn!(
+            event = "perf_stats_uncounted",
+            model,
+            "the dispatch count cannot grow further"
+        );
         return;
     };
     stats.count = count;
     stats.total_latency_ms += latency_ms;
-    stats.total_output_tokens = stats.total_output_tokens.saturating_add(u64::from(output_tokens));
+    stats.total_output_tokens = stats
+        .total_output_tokens
+        .saturating_add(u64::from(output_tokens));
     stats.last_latency_ms = latency_ms;
     stats.last_tps = rate(f64::from(output_tokens), latency_ms);
     flush(&map);

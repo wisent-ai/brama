@@ -38,7 +38,9 @@ impl Blocked {
     pub fn failure_code(&self) -> Code {
         let raw = match self {
             Self::WelesUnreachable { .. } => return Code::InfraDown,
-            Self::Operation { status: Some(raw), .. } => *raw,
+            Self::Operation {
+                status: Some(raw), ..
+            } => *raw,
             _ => return Code::Config,
         };
         match reqwest::StatusCode::from_u16(raw) {
