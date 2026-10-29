@@ -172,7 +172,14 @@ for a grant the provider disowned or an operator retired (<code>503 subscription
 (<code>502 provider_quota_exhausted</code>, not retryable) and <code>rate limited, the block lifts at &lt;UTC instant&gt;: &lt;the provider's refusal&gt;</code>
 (<code>429 provider_rate_limited</code>, retryable); the class answered is the most telling one among the members, in the
 walk's own precedence. A member the ledger does not refuse is read and discovered; when that read fails the message
-begins <code>could not discover native provider models:</code> instead.</p>
+begins <code>could not discover native provider models:</code> instead. When a member awaiting sign-in has an
+automatic sign-in attempt that failed and still stands, either message ends with
+<code>; the automatic sign-in that renews them failed: &lt;member&gt;: &lt;code&gt;: &lt;detail&gt;; …</code>, the
+failure code and detail that attempt recorded (for a Weles refusal, the stage and Weles's own words), so the
+cause of a pool nobody can renew is in the refusal itself. A pool every member of which needs a sign-in is
+refused with <code>no model: every member of the subscription pool needs a new sign-in, so no request was sent:</code>,
+and each member there reads <code>the automatic Weles sign-in that renews it failed: &lt;code&gt;: &lt;detail&gt;</code>
+in place of <code>renewed by the automatic Weles sign-in</code> while such a failure stands.</p>
 <p>A refusal that says every credential was rejected by the provider ends with
 <code>automatic sign-in: &lt;member&gt;: &lt;state&gt;; …</code>, one state per recorded member of the
 provider: <code>retired</code>, <code>never ran</code>, <code>last &lt;result&gt; at &lt;UTC instant&gt;</code>, or

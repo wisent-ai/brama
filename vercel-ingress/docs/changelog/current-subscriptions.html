@@ -22,6 +22,8 @@
 changes are on <a href="/docs/changelog/current">current changes</a>; published releases are on
 <a href="/docs/changelog/released-0-4-4x">0.4.46 to 0.4.13</a>, <a href="/docs/changelog/released-0-2-7x">0.2.77 to 0.2.42</a> and
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>.</p>
+<h2 id="unreleased-sign-in-failure-in-refusal">Unreleased: a refusal names the automatic sign-in failure that keeps the pool empty<a class="headerlink" href="#unreleased-sign-in-failure-in-refusal" title="Link to this section">&para;</a></h2>
+<p>A <code>best</code> request refused because its members await a sign-in said only <code>awaiting sign-in: &lt;the provider's refusal&gt;</code>, while the automatic sign-in that renews them had already failed on its Weles host for a reason only readiness reported. The refusal now ends with <code>; the automatic sign-in that renews them failed: &lt;member&gt;: &lt;code&gt;: &lt;detail&gt;</code> for every such member whose failed attempt still stands, and the refusal of a pool whose every member is burnt says <code>the automatic Weles sign-in that renews it failed: &lt;code&gt;: &lt;detail&gt;</code> in place of <code>renewed by the automatic Weles sign-in</code>. The sign-in journal is read only once the request is refused, so a pool that serves pays nothing for it. See <a href="/docs/errors">errors</a>.</p>
 <h2 id="unreleased-claude-code-capture">Unreleased: the Claude Code request shape is one capture<a class="headerlink" href="#unreleased-claude-code-capture" title="Link to this section">&para;</a></h2>
 <p>The release, Agent SDK and client versions, beta list, Stainless headers and the fingerprint and
 checksum parameters a Claude Code subscription request carries were separate constants, so one

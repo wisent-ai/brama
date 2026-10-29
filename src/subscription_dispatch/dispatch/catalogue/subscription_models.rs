@@ -106,6 +106,7 @@ pub(super) async fn discover_subscription_models(
     let started = Instant::now();
     let subscriptions = entries.len();
     let mut refused_by_ledger = Vec::new();
+    let mut awaiting_sign_in = Vec::new();
     let mut read = Vec::new();
     let mut models_by_route = HashMap::new();
     let mut failures = Vec::new();
@@ -123,6 +124,11 @@ pub(super) async fn discover_subscription_models(
         // before any vault child or provider is asked.
         if let Some(refused) = usage::standing_refusal(&entry.id) {
             refused_by_ledger.push(entry.id.clone());
+            if refused.class
+                == ProviderRefusal::Gateway(GatewayRefusal::SubscriptionReauthorizationRequired)
+            {
+                awaiting_sign_in.push(entry.id.clone());
+            }
             failures.push(Refusal::new(
                 refused.class,
                 format!("{}: {}", entry.id, refused.message),
@@ -236,10 +242,13 @@ pub(super) async fn discover_subscription_models(
             // child or provider was asked; the sentence says so, because
             // "could not discover" would send the reader to look for a read
             // that never happened.
+            let sign_in = sign_in_failures(&awaiting_sign_in);
             let message = if refused_by_ledger.len() == subscriptions {
-                format!("every subscription is refused by the ledger before any is read: {refused}")
+                format!(
+                    "every subscription is refused by the ledger before any is read: {refused}{sign_in}"
+                )
             } else {
-                format!("could not discover native provider models: {refused}")
+                format!("could not discover native provider models: {refused}{sign_in}")
             };
             return Err(Refusal::new(discovery_class(first, &failures), message));
         }
@@ -247,6 +256,33 @@ pub(super) async fn discover_subscription_models(
     let mut models = models_by_route.into_values().collect::<Vec<_>>();
     models.sort_by(|left, right| left.route_id.cmp(&right.route_id));
     Ok(models)
+}
+
+/// The clause a refusal ends with when members it names wait for a sign-in
+/// that the automatic sign-in already attempted and failed: each such member
+/// with the failure code and the detail its last attempt recorded, or nothing
+/// when no attempt stands failed.
+///
+/// "awaiting sign-in" alone reads as a task for a person, while renewing the
+/// grant is the refresh sweep's job; when that sweep cannot sign anyone in —
+/// Weles refusing on its host, a login item missing — the caller has to learn
+/// that cause from the refusal, not from a readiness report it never reads.
+/// Read only once the request is refused, so a pool that serves pays nothing.
+fn sign_in_failures(awaiting_sign_in: &[String]) -> String {
+    let failed = awaiting_sign_in
+        .iter()
+        .filter_map(|id| {
+            crate::subscription_dispatch::sign_in::observed_failure(id)
+                .map(|failure| format!("{id}: {}: {}", failure.code(), failure.detail()))
+        })
+        .collect::<Vec<_>>();
+    if failed.is_empty() {
+        return String::new();
+    }
+    format!(
+        "; the automatic sign-in that renews them failed: {}",
+        failed.join("; ")
+    )
 }
 
 /// The class a discovery that found nothing is answered with: a dependency

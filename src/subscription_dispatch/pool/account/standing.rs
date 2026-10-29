@@ -109,8 +109,11 @@ pub(in crate::subscription_dispatch::pool) fn last_redeem_error(
 /// renewed inline when a request redeems it, so either keeps the pool open.
 /// The sentence names each member, the refusal in its way and the sign-in
 /// that repairs it, so the caller learns at once instead of waiting on
-/// credential reads that can only fail. `None` while any member can be
-/// served, and for an empty pool, a different statement its callers make.
+/// credential reads that can only fail. A member whose automatic sign-in
+/// already failed carries that failure's code and detail, because a renewal
+/// that cannot run is the cause the caller has to act on. `None` while any
+/// member can be served, and for an empty pool, a different statement its
+/// callers make.
 pub(crate) fn pool_without_servable_member(
     members: &[crate::gateway::broker::SubscriptionEntry],
     now_ms: i64,
@@ -118,23 +121,40 @@ pub(crate) fn pool_without_servable_member(
     if members.is_empty() {
         return None;
     }
-    let mut named = Vec::with_capacity(members.len());
+    let mut burnt = Vec::with_capacity(members.len());
     for member in members {
         let recorded = usage::usage_for(&member.id);
         if state(recorded.as_ref(), now_ms) != BURNT {
             return None;
         }
-        let provider = member.provider.trim();
         let cause = match last_redeem_error(recorded.as_ref(), now_ms) {
             Value::String(cause) => format!(": {cause}"),
             _ => String::new(),
         };
-        named.push(format!(
-            "{} ({provider}) burnt{cause} -- renewed by the automatic Weles sign-in \
-             (brama subscription login {provider} --by weles --subscription-id {})",
-            member.id, member.id
-        ));
+        burnt.push((member, cause));
     }
+    // The sign-in journal is read only once the pool is refused: a pool with
+    // one servable member answered above without reading it.
+    let named = burnt
+        .into_iter()
+        .map(|(member, cause)| {
+            let provider = member.provider.trim();
+            let renewal = match crate::subscription_dispatch::sign_in::observed_failure(&member.id)
+            {
+                Some(failure) => format!(
+                    "the automatic Weles sign-in that renews it failed: {}: {}",
+                    failure.code(),
+                    failure.detail()
+                ),
+                None => "renewed by the automatic Weles sign-in".to_string(),
+            };
+            format!(
+                "{} ({provider}) burnt{cause} -- {renewal} \
+                 (brama subscription login {provider} --by weles --subscription-id {})",
+                member.id, member.id
+            )
+        })
+        .collect::<Vec<_>>();
     Some(format!(
         "no model: every member of the subscription pool needs a new sign-in, so no request was sent: {}",
         named.join("; ")
