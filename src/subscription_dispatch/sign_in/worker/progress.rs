@@ -45,7 +45,13 @@ fn reported<'a>(value: &'a Value, field: &str) -> &'a str {
 impl Observed {
     /// Nothing observed yet: no run, no stage, no request, no result.
     fn nothing() -> Self {
-        Self { run_id: None, host: None, stages: Vec::new(), operator_request: None, result: None }
+        Self {
+            run_id: None,
+            host: None,
+            stages: Vec::new(),
+            operator_request: None,
+            result: None,
+        }
     }
 
     /// Where the run was when it stopped reporting, in one clause, and how to

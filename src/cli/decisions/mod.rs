@@ -79,7 +79,9 @@ pub(crate) async fn decide(args: DecideArgs) {
         Ok((Some(route), _)) => route,
         Ok((None, diagnosis)) => crate::cli::refused(match diagnosis.reason {
             Some(reason) => reason,
-            None => format!("alias `{model}` has no serviceable route, and the alias table stated no reason"),
+            None => format!(
+                "alias `{model}` has no serviceable route, and the alias table stated no reason"
+            ),
         }),
         Err(error) => crate::cli::refused(format!("the alias table could not be read: {error}")),
     };
@@ -132,14 +134,18 @@ fn read_argument(name: &str, value: &str) -> String {
     if value == "-" {
         let mut buffer = String::new();
         if let Err(error) = std::io::stdin().read_to_string(&mut buffer) {
-            crate::cli::refused(format!("--{name} could not be read from standard input: {error}"));
+            crate::cli::refused(format!(
+                "--{name} could not be read from standard input: {error}"
+            ));
         }
         return buffer;
     }
     if let Some(path) = value.strip_prefix('@') {
         match std::fs::read_to_string(path) {
             Ok(text) => return text,
-            Err(error) => crate::cli::refused(format!("--{name} could not be read from {path}: {error}")),
+            Err(error) => {
+                crate::cli::refused(format!("--{name} could not be read from {path}: {error}"))
+            }
         }
     }
     value.to_string()

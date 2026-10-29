@@ -110,7 +110,13 @@ pub async fn refresh_provider(provider: &str, reason: &str) -> Result<Value, Str
         true => REFRESHED,
         false => FAILED,
     };
-    let detail = detail(provider, candidates.len(), &refreshed, unreadable.len(), &refusals);
+    let detail = detail(
+        provider,
+        candidates.len(),
+        &refreshed,
+        unreadable.len(),
+        &refusals,
+    );
     Ok(verdict(provider, reason, &candidates, result, detail))
 }
 
@@ -184,7 +190,13 @@ pub async fn refresh_subscription(
 /// Both are written here so a record cannot say something the operator was never
 /// told, and so an attempt that found nothing to do is audited too: afterwards
 /// the question is who ran this and what the product answered.
-fn verdict(provider: &str, reason: &str, attempted: &[String], result: &str, detail: String) -> Value {
+fn verdict(
+    provider: &str,
+    reason: &str,
+    attempted: &[String],
+    result: &str,
+    detail: String,
+) -> Value {
     let journaled = crate::journal::record_subscription_refresh(
         provider,
         reason,
@@ -218,7 +230,10 @@ fn detail(
 ) -> String {
     let mut detail = match refreshed.is_empty() {
         true => format!("refreshed no `{provider}` grant out of {attempted} tried"),
-        false => format!("refreshed {} of {attempted} `{provider}` grants", refreshed.len()),
+        false => format!(
+            "refreshed {} of {attempted} `{provider}` grants",
+            refreshed.len()
+        ),
     };
     for refusal in refusals {
         detail.push_str("; ");

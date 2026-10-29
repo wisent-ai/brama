@@ -32,7 +32,10 @@ pub(in crate::core::server) async fn list_aliases(
     let report = aliases
         .declared()
         .map_err(|error| {
-            crate::core::server::refusal::api_error(axum::http::StatusCode::SERVICE_UNAVAILABLE, &error)
+            crate::core::server::refusal::api_error(
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                &error,
+            )
         })?
         .iter()
         .map(|alias| {

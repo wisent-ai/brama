@@ -47,9 +47,7 @@ pub fn login_seed_states() -> Result<std::collections::BTreeMap<String, String>,
                 .get("seed_state")
                 .and_then(serde_json::Value::as_str)
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| {
-                    format!("{program} totp seed returned no seed_state for {item}")
-                })?;
+                .ok_or_else(|| format!("{program} totp seed returned no seed_state for {item}"))?;
             Ok((item.to_owned(), state.to_owned()))
         })
         .collect()
@@ -61,8 +59,8 @@ pub fn login_seed_states() -> Result<std::collections::BTreeMap<String, String>,
 /// checked against.
 pub fn login_seed_present(login_item: &str) -> Result<bool, String> {
     let states = login_seed_states()?;
-    let state = states.get(login_item).ok_or_else(|| {
-        format!("totp seed returned no row for resolved login {login_item}")
-    })?;
+    let state = states
+        .get(login_item)
+        .ok_or_else(|| format!("totp seed returned no row for resolved login {login_item}"))?;
     Ok(state == "present")
 }

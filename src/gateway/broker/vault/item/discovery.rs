@@ -178,14 +178,7 @@ pub(in crate::gateway::broker) async fn restore_mark(
         .to_owned();
     let mut command = tokio::process::Command::new(entitlements_router_bin()?);
     command
-        .args([
-            "set",
-            item_id,
-            "--type",
-            &kind,
-            "--tags",
-            &tags.join(","),
-        ])
+        .args(["set", item_id, "--type", &kind, "--tags", &tags.join(",")])
         .kill_on_drop(true)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())

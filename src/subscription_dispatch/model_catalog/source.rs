@@ -58,7 +58,12 @@ pub(super) async fn read_live_catalog() -> Result<String, String> {
         reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             .build()
-            .map_err(|error| format!("the model catalog's HTTP client cannot be built: {}", crate::core::failure::error_chain(&error)))
+            .map_err(|error| {
+                format!(
+                    "the model catalog's HTTP client cannot be built: {}",
+                    crate::core::failure::error_chain(&error)
+                )
+            })
     });
     let client = CATALOG_CLIENT.clone()?;
     let response = stado_wait::request(client.get(url.clone()))

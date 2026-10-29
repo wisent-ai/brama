@@ -62,7 +62,10 @@ fn installed_generations(layout: &Layout) -> Vec<PathBuf> {
             let path = match entry {
                 Ok(entry) => entry.path(),
                 Err(error) => {
-                    say!("  {}: an entry cannot be listed: {error}", directory.display());
+                    say!(
+                        "  {}: an entry cannot be listed: {error}",
+                        directory.display()
+                    );
                     continue;
                 }
             };

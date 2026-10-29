@@ -54,7 +54,9 @@ pub fn automatic_sign_in_sentence(provider: &str) -> String {
                     latest.get("at").and_then(Value::as_str),
                 ) {
                     (Some(result), Some(at)) => format!("{id}: last {result} at {at}"),
-                    _ => format!("{id}: its newest sign-in record states no result or time: {latest}"),
+                    _ => format!(
+                        "{id}: its newest sign-in record states no result or time: {latest}"
+                    ),
                 },
                 Ok(None) => format!("{id}: never ran"),
                 Err(cause) => format!("{id}: its sign-in history could not be read: {cause}"),

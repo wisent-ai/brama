@@ -32,7 +32,12 @@ fn build_shared_client() -> Result<Client, String> {
         .redirect(reqwest::redirect::Policy::none())
         .no_proxy()
         .build()
-        .map_err(|error| format!("the HTTP client cannot be built: {}", crate::core::failure::error_chain(&error)))
+        .map_err(|error| {
+            format!(
+                "the HTTP client cannot be built: {}",
+                crate::core::failure::error_chain(&error)
+            )
+        })
 }
 
 /// Catalogue and provider control calls.

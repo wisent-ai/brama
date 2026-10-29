@@ -114,10 +114,12 @@ impl Pending {
                     self.path.display()
                 )
             })?;
-        let directory = self
-            .path
-            .parent()
-            .ok_or_else(|| format!("pending account discovery {} has no parent directory", self.path.display()))?;
+        let directory = self.path.parent().ok_or_else(|| {
+            format!(
+                "pending account discovery {} has no parent directory",
+                self.path.display()
+            )
+        })?;
         File::open(directory)
             .and_then(|file| file.sync_all())
             .map_err(|error| {

@@ -146,9 +146,9 @@ async fn review(args: &ReviewArgs) -> Result<(Verdict, String, usize), String> {
             if let Some(outcome) = tools::submitted(call)? {
                 return Ok((outcome.0, outcome.1, turn));
             }
-            let id = call
-                .get("id")
-                .ok_or_else(|| format!("turn {turn}: the model called a tool without an id: {call}"))?;
+            let id = call.get("id").ok_or_else(|| {
+                format!("turn {turn}: the model called a tool without an id: {call}")
+            })?;
             messages.push(json!({
                 "role": "tool",
                 "tool_call_id": id,

@@ -66,7 +66,9 @@ pub(super) async fn join_refresh(
             Code::Unknown,
             subscription_id,
             provider,
-            format!("the shared usage refresh channel closed without publishing a result: {closed}"),
+            format!(
+                "the shared usage refresh channel closed without publishing a result: {closed}"
+            ),
         )),
     }
 }

@@ -154,7 +154,8 @@ pub(super) fn check(config: &Path, out: &Outputs) -> Result<(), String> {
 
 /// `value` as JSON text, or a refusal naming `what` could not be encoded.
 fn encoded(value: &impl serde::Serialize, what: &str) -> Result<String, String> {
-    serde_json::to_string(value).map_err(|error| format!("{what} cannot be encoded as JSON: {error}"))
+    serde_json::to_string(value)
+        .map_err(|error| format!("{what} cannot be encoded as JSON: {error}"))
 }
 
 /// The first route registry: exactly the validated launch aliases, in the

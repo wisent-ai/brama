@@ -81,7 +81,9 @@ pub(crate) async fn report(args: AliasesArgs) {
     } else {
         None
     };
-    let pool_is_dry = pool.as_ref().is_some_and(|pool| std::num::NonZeroUsize::new(pool.live).is_none());
+    let pool_is_dry = pool
+        .as_ref()
+        .is_some_and(|pool| std::num::NonZeroUsize::new(pool.live).is_none());
     if json {
         super::print_json(&serde_json::json!({
             "source": report.source,

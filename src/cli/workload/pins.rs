@@ -12,10 +12,16 @@ use sha2::{Digest, Sha256};
 /// this user, as `name pinned=… actual=…`; empty when it describes it.
 pub(crate) fn mismatches(registry: &Path, binary: &Path) -> Result<Vec<String>, String> {
     let bytes = std::fs::read(registry).map_err(|error| {
-        format!("the workload registry {} cannot be read: {error}", registry.display())
+        format!(
+            "the workload registry {} cannot be read: {error}",
+            registry.display()
+        )
     })?;
     let document: Value = serde_json::from_slice(&bytes).map_err(|error| {
-        format!("the workload registry {} is not JSON: {error}", registry.display())
+        format!(
+            "the workload registry {} is not JSON: {error}",
+            registry.display()
+        )
     })?;
     let workloads = document
         .get("workloads")
@@ -37,9 +43,9 @@ pub(crate) fn mismatches(registry: &Path, binary: &Path) -> Result<Vec<String>, 
     // one workload is compared against it even when it names another path,
     // which is the mismatch this check exists to report; several workloads
     // none of which names this binary cannot be told apart.
-    let mut naming = workloads
-        .values()
-        .filter(|workload| workload.get("executable_path").and_then(Value::as_str) == Some(shown.as_str()));
+    let mut naming = workloads.values().filter(|workload| {
+        workload.get("executable_path").and_then(Value::as_str) == Some(shown.as_str())
+    });
     let mut every = workloads.values();
     let workload = match (naming.next(), naming.next(), every.next(), every.next()) {
         (Some(one), None, _, _) => one,

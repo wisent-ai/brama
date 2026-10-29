@@ -105,8 +105,12 @@ pub(super) fn build(available: &Path, policy: &Path, output: &Path) -> Result<()
         }
         catalog.push(json!({ "id": subscription, "provider": provider, "status": "active", "login_item": login }));
     }
-    let document = serde_json::to_string(&json!({ "items": catalog }))
-        .map_err(|error| format!("the launcher catalog for {} cannot be encoded: {error}", output.display()))?;
+    let document = serde_json::to_string(&json!({ "items": catalog })).map_err(|error| {
+        format!(
+            "the launcher catalog for {} cannot be encoded: {error}",
+            output.display()
+        )
+    })?;
     std::fs::write(output, document).map_err(|error| format!("{}: {error}", output.display()))?;
     if !unnamed.is_empty() {
         unnamed.sort();

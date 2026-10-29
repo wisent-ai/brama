@@ -144,7 +144,10 @@ async fn hex_audio(
             )
         })?;
     if code != status::SUCCESS {
-        let message = match body.pointer("/base_resp/status_msg").and_then(Value::as_str) {
+        let message = match body
+            .pointer("/base_resp/status_msg")
+            .and_then(Value::as_str)
+        {
             Some(message) => message.to_string(),
             None => format!("and no base_resp.status_msg; the answer was {text}"),
         };
@@ -177,7 +180,9 @@ fn refusal_kind(code: i64) -> ProviderRefusal {
         status::RATE_LIMITED | status::TOKEN_LIMITED => ProviderRefusal::RateLimited,
         status::UNAUTHENTICATED => ProviderRefusal::Authentication,
         status::INSUFFICIENT_BALANCE => ProviderRefusal::QuotaExhausted,
-        status::UNKNOWN | status::UNFINISHED | status::INTERNAL => ProviderRefusal::DependencyUnavailable,
+        status::UNKNOWN | status::UNFINISHED | status::INTERNAL => {
+            ProviderRefusal::DependencyUnavailable
+        }
         _ => ProviderRefusal::ProviderFailure,
     }
 }

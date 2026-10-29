@@ -169,8 +169,7 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
     // sign-in it runs itself through Weles, and it must be allowed to exist in
     // order to run one. It answers `ready: false`, and `/readyz` answers 200
     // so a rollout can replace the build that cannot repair itself.
-    let repairable =
-        !facts.providers.is_empty() || facts.any_active_subscription;
+    let repairable = !facts.providers.is_empty() || facts.any_active_subscription;
     // What the automatic loop can and cannot repair, which is a different
     // question from whether a credential is currently good: a deployment can
     // hold nothing but healthy grants and still be unable to replace any of
@@ -249,12 +248,14 @@ pub(super) async fn verdict(facts: ServiceFacts) -> ReadinessReport {
             "{reason}; credential inventory could not be fully read: {}",
             inventory_errors
                 .iter()
-                .map(|error| match (error["operation"].as_str(), error["detail"].as_str()) {
-                    (Some(operation), Some(detail)) => format!("{operation}: {detail}"),
-                    // Every entry above is written with both as text; one that
-                    // is not is shown whole rather than taking the answer down.
-                    _ => error.to_string(),
-                })
+                .map(
+                    |error| match (error["operation"].as_str(), error["detail"].as_str()) {
+                        (Some(operation), Some(detail)) => format!("{operation}: {detail}"),
+                        // Every entry above is written with both as text; one that
+                        // is not is shown whole rather than taking the answer down.
+                        _ => error.to_string(),
+                    }
+                )
                 .collect::<Vec<_>>()
                 .join("; ")
         )

@@ -200,8 +200,12 @@ impl ModelAliases {
             .collect::<Vec<_>>();
         names.extend(self.routes.keys().cloned());
         if let Some(path) = self.routes_file.as_deref() {
-            let dynamic = crate::core::inference_routes::resolved(path)
-                .map_err(|error| format!("the route registry {} cannot be read: {error}", path.display()))?;
+            let dynamic = crate::core::inference_routes::resolved(path).map_err(|error| {
+                format!(
+                    "the route registry {} cannot be read: {error}",
+                    path.display()
+                )
+            })?;
             names.extend(dynamic.into_keys());
         }
         names.sort();

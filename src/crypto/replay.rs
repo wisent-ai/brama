@@ -68,7 +68,11 @@ pub fn accept_once(agent_id: &str, timestamp: i64, signature: &str) -> Result<()
         accepted.signatures.clear();
     }
     accepted.signatures.insert(signature.to_string());
-    let bytes = serde_json::to_vec(&record)
-        .map_err(|error| format!("the replay record {} cannot be encoded: {error}", path.display()))?;
+    let bytes = serde_json::to_vec(&record).map_err(|error| {
+        format!(
+            "the replay record {} cannot be encoded: {error}",
+            path.display()
+        )
+    })?;
     replace_private(&path, &bytes, RECORD)
 }

@@ -26,7 +26,9 @@ pub(crate) async fn serve(args: ServeArgs) {
     if local_credentials_stdin {
         let mut encoded = String::new();
         if let Err(error) = std::io::stdin().read_to_string(&mut encoded) {
-            crate::cli::refused(format!("Server error: cannot read local credentials: {error}"));
+            crate::cli::refused(format!(
+                "Server error: cannot read local credentials: {error}"
+            ));
         }
         if let Err(error) = brama::gateway::broker::install_local_provider_credentials(&mut encoded)
         {

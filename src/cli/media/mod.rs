@@ -175,7 +175,9 @@ pub(super) fn resolve_media_route(model: &str) -> String {
         Ok((Some(route), _)) => route,
         Ok((None, diagnosis)) => crate::cli::refused(match diagnosis.reason {
             Some(reason) => reason,
-            None => format!("alias `{model}` has no serviceable route, and the alias table stated no reason"),
+            None => format!(
+                "alias `{model}` has no serviceable route, and the alias table stated no reason"
+            ),
         }),
         Err(error) => crate::cli::refused(format!("the alias table could not be read: {error}")),
     }

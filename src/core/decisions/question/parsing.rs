@@ -46,9 +46,7 @@ pub(super) fn parse_question(key: &str, value: &Value) -> Result<Question, Strin
         .as_object()
         .ok_or_else(|| format!("question `{key}` must be an object"))?;
     serde_json::from_value::<QuestionFields>(value.clone()).map_err(|error| {
-        format!(
-            "question `{key}`: {error}; a question has `type`, `instructions` and `criteria`"
-        )
+        format!("question `{key}`: {error}; a question has `type`, `instructions` and `criteria`")
     })?;
     let instructions = text_field(object, key, "instructions")?;
     let kind = match object.get("type") {
@@ -73,9 +71,14 @@ pub(super) fn parse_question(key: &str, value: &Value) -> Result<Question, Strin
             Ok(Question::Noul { instructions })
         }
         Kind::Choice => {
-            let criteria = object.get("criteria").and_then(Value::as_object).ok_or_else(|| {
-                format!("question `{key}` must declare `criteria` as an object of option labels")
-            })?;
+            let criteria = object
+                .get("criteria")
+                .and_then(Value::as_object)
+                .ok_or_else(|| {
+                    format!(
+                        "question `{key}` must declare `criteria` as an object of option labels"
+                    )
+                })?;
             let declared: Vec<_> = criteria.iter().collect();
             if !matches!(declared.as_slice(), [_, _, ..]) {
                 return Err(format!(
@@ -110,7 +113,10 @@ pub(super) fn parse_question(key: &str, value: &Value) -> Result<Question, Strin
             }
             let mut levels = Vec::with_capacity(criteria.len());
             for level in criteria {
-                let level = level.as_str().map(str::trim).filter(|text| !text.is_empty());
+                let level = level
+                    .as_str()
+                    .map(str::trim)
+                    .filter(|text| !text.is_empty());
                 let Some(level) = level else {
                     return Err(format!(
                         "question `{key}` must describe every level with a non-empty string"

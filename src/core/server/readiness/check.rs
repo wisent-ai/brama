@@ -161,7 +161,8 @@ pub(super) async fn calculate_readiness(
                 let attributed: Vec<String> = models
                     .iter()
                     .map(|model| {
-                        match crate::subscription_dispatch::dispatch::provider_for(&model.route_id) {
+                        match crate::subscription_dispatch::dispatch::provider_for(&model.route_id)
+                        {
                             Some(provider) => provider.to_string(),
                             None => "unattributed".to_string(),
                         }

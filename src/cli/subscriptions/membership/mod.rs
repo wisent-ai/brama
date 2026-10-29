@@ -217,7 +217,9 @@ where
             Ok(detail) => println!("{detail}"),
             Err(error) => crate::cli::refused(error),
         },
-        Ok((None, _)) => crate::cli::refused("name the gateway holding the member: --gateway or --gateway-consumer"),
+        Ok((None, _)) => crate::cli::refused(
+            "name the gateway holding the member: --gateway or --gateway-consumer",
+        ),
         Err(error) => crate::cli::refused(error),
     }
 }

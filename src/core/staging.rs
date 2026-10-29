@@ -24,16 +24,31 @@ pub fn held_beside(record: &Path, what: &str) -> Result<File, String> {
     let parent = record
         .parent()
         .ok_or_else(|| format!("{what} {} names no directory", record.display()))?;
-    std::fs::create_dir_all(parent)
-        .map_err(|error| format!("the directory of {what} {} cannot be made: {error}", parent.display()))?;
+    std::fs::create_dir_all(parent).map_err(|error| {
+        format!(
+            "the directory of {what} {} cannot be made: {error}",
+            parent.display()
+        )
+    })?;
     let lock = record.with_extension("lock");
     let file = OpenOptions::new()
         .create(true)
         .append(true)
         .open(&lock)
-        .map_err(|error| format!("the lock of {what} {} cannot be opened: {error}", lock.display()))?;
-    stado_wait::blocking(stado_wait::Kind::Lock, what, lock.display(), || file.lock())
-        .map_err(|error| format!("the lock of {what} {} cannot be taken: {error}", lock.display()))?;
+        .map_err(|error| {
+            format!(
+                "the lock of {what} {} cannot be opened: {error}",
+                lock.display()
+            )
+        })?;
+    stado_wait::blocking(stado_wait::Kind::Lock, what, lock.display(), || file.lock()).map_err(
+        |error| {
+            format!(
+                "the lock of {what} {} cannot be taken: {error}",
+                lock.display()
+            )
+        },
+    )?;
     Ok(file)
 }
 

@@ -63,7 +63,9 @@ pub(crate) async fn report(args: SubscriptionsArgs) {
     if apply {
         let body = match std::io::read_to_string(std::io::stdin()) {
             Ok(body) => body,
-            Err(error) => crate::cli::refused(format!("cannot read subscription membership from stdin: {error}")),
+            Err(error) => crate::cli::refused(format!(
+                "cannot read subscription membership from stdin: {error}"
+            )),
         };
         match brama::core::server::apply_subscription_membership(body.as_bytes()).await {
             Ok(receipt) => crate::cli::print_answer(&receipt, json),

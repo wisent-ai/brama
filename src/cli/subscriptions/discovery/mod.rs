@@ -45,9 +45,12 @@ async fn execute(destination: Destination) -> Result<Value, String> {
     let Some(gateway) = gateway else {
         return Ok(brama::subscription_dispatch::discovery::discover(report).await);
     };
-    let client = reqwest::Client::builder()
-        .build()
-        .map_err(|error| format!("the HTTP client cannot be built: {}", brama::core::failure::error_chain(&error)))?;
+    let client = reqwest::Client::builder().build().map_err(|error| {
+        format!(
+            "the HTTP client cannot be built: {}",
+            brama::core::failure::error_chain(&error)
+        )
+    })?;
     let response = stado_wait::request(
         client
             .post(format!(

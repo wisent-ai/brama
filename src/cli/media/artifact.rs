@@ -67,9 +67,12 @@ fn numbered(path: &str, index: usize, total: usize) -> Result<PathBuf, String> {
         return Ok(PathBuf::from(path));
     }
     let path = Path::new(path);
-    let stem = path
-        .file_stem()
-        .ok_or_else(|| format!("--output {} names no file to number the images after", path.display()))?;
+    let stem = path.file_stem().ok_or_else(|| {
+        format!(
+            "--output {} names no file to number the images after",
+            path.display()
+        )
+    })?;
     let mut name = OsString::from(stem);
     name.push(format!("-{index}"));
     if let Some(extension) = path.extension() {

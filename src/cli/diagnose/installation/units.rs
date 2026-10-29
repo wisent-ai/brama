@@ -77,7 +77,10 @@ pub(in super::super) fn print_units(layout: &Layout) -> Option<PathBuf> {
         for entry in entries {
             match entry {
                 Ok(entry) => paths.push(entry.path()),
-                Err(error) => say!("  {}: an entry cannot be listed: {error}", location.display()),
+                Err(error) => say!(
+                    "  {}: an entry cannot be listed: {error}",
+                    location.display()
+                ),
             }
         }
         paths.retain(|path| path.extension().is_some_and(|ext| ext == "plist"));

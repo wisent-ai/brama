@@ -73,7 +73,9 @@ pub(crate) async fn models(args: ModelsArgs) {
     };
     let snapshot = match model_catalog::snapshot().await {
         Ok(snapshot) => snapshot,
-        Err(error) => crate::cli::refused(format!("the model catalogue could not be read: {error}")),
+        Err(error) => {
+            crate::cli::refused(format!("the model catalogue could not be read: {error}"))
+        }
     };
     let source = model_catalog::source().await;
     let declared_categories = declared();

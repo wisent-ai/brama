@@ -158,7 +158,10 @@ impl ImageRequest {
         if self.prompt.trim().is_empty() {
             return Some("prompt must not be empty");
         }
-        if self.n.is_some_and(|n| std::num::NonZeroU32::new(n).is_none()) {
+        if self
+            .n
+            .is_some_and(|n| std::num::NonZeroU32::new(n).is_none())
+        {
             return Some("n must be at least 1");
         }
         if self.image.as_ref().is_some_and(Vec::is_empty) {
