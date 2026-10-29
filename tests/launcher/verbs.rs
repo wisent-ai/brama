@@ -150,13 +150,25 @@ fn launcher_verbs_reads_router_calls_with_the_shell_grammar() {
     let launcher = family.join("start");
     write(&launcher, format!("{CALLS}{DECOYS}").as_bytes());
     let stages = family.join("launcher");
-    write(&stages.join("stage.sh"), b"\"$ENTITLEMENTS_ROUTER_BIN\" probe-stage\n");
-    write(&stages.join("policy/deep.sh"), b"\"$ENTITLEMENTS_ROUTER_BIN\" probe-deep-stage\n");
-    write(&stages.join("notes.txt"), b"\"$ENTITLEMENTS_ROUTER_BIN\" decoy-not-a-stage\n");
+    write(
+        &stages.join("stage.sh"),
+        b"\"$ENTITLEMENTS_ROUTER_BIN\" probe-stage\n",
+    );
+    write(
+        &stages.join("policy/deep.sh"),
+        b"\"$ENTITLEMENTS_ROUTER_BIN\" probe-deep-stage\n",
+    );
+    write(
+        &stages.join("notes.txt"),
+        b"\"$ENTITLEMENTS_ROUTER_BIN\" decoy-not-a-stage\n",
+    );
     let checked = verbs(&mut evidence, &brama, &router, &launcher);
     let stdout = text(&checked.stdout);
     let stderr = text(&checked.stderr);
-    assert!(!checked.status.success(), "the probe verbs are refused: {stdout}{stderr}");
+    assert!(
+        !checked.status.success(),
+        "the probe verbs are refused: {stdout}{stderr}"
+    );
     let required = stdout
         .lines()
         .find_map(|line| line.strip_prefix("launcher requires: "))
@@ -167,7 +179,10 @@ fn launcher_verbs_reads_router_calls_with_the_shell_grammar() {
             "{verb} is required: {required}"
         );
     }
-    assert!(!required.contains("decoy-"), "no decoy is a call: {required}");
+    assert!(
+        !required.contains("decoy-"),
+        "no decoy is a call: {required}"
+    );
     // The refusal is the command's last word on standard error; the waits on
     // the router's inventory calls are reported there before it.
     let refusal = format!("the pinned broker does not implement: {EXPECTED_MISSING}");
@@ -180,7 +195,11 @@ fn launcher_verbs_reads_router_calls_with_the_shell_grammar() {
         .lines()
         .filter(|line| line.starts_with("the pinned broker"))
         .collect();
-    assert_eq!(refusals, [refusal.as_str()], "one refusal and no other: {stderr}");
+    assert_eq!(
+        refusals,
+        [refusal.as_str()],
+        "one refusal and no other: {stderr}"
+    );
 
     // The launcher this binary ships: every call it makes is implemented.
     let shipped = Path::new(root).join("src/release/bin/start-with-skarbiec");
@@ -198,7 +217,10 @@ fn launcher_verbs_reads_router_calls_with_the_shell_grammar() {
     let broken_launcher = broken.join("start");
     write(&broken_launcher, CALLS.as_bytes());
     let broken_stage = broken.join("launcher/open-quote.sh");
-    write(&broken_stage, b"\"$ENTITLEMENTS_ROUTER_BIN\" probe-open \"\n");
+    write(
+        &broken_stage,
+        b"\"$ENTITLEMENTS_ROUTER_BIN\" probe-open \"\n",
+    );
     let unreadable = verbs(&mut evidence, &brama, &router, &broken_launcher);
     let refusal = text(&unreadable.stderr);
     assert!(!unreadable.status.success(), "an unreadable stage refuses");
@@ -218,6 +240,9 @@ fn launcher_verbs_reads_router_calls_with_the_shell_grammar() {
 
     // A launcher path with no directory to read its stages from.
     let rootless = verbs(&mut evidence, &brama, &router, Path::new("/"));
-    assert!(!rootless.status.success(), "a path without a parent refuses");
+    assert!(
+        !rootless.status.success(),
+        "a path without a parent refuses"
+    );
     assert!(text(&rootless.stderr).contains("names no file inside a directory"));
 }
