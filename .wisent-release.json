@@ -9,8 +9,8 @@
   },
   "inputs": {
     "skarbiec": {
-      "uri": "stado://sources/brama/dependencies/skarbiec/sha256/59f6b4963a0b22b8e88132554894fc95eb5cf7598df349b0ea735f2727211178/source.tar.gz",
-      "sha256": "59f6b4963a0b22b8e88132554894fc95eb5cf7598df349b0ea735f2727211178",
+      "uri": "stado://sources/brama/dependencies/skarbiec/sha256/05182c7bac398a63ec3eef43c29f64e7faa047661f8aa0b583f219369096aede/source.tar.gz",
+      "sha256": "05182c7bac398a63ec3eef43c29f64e7faa047661f8aa0b583f219369096aede",
       "mount": "skarbiec",
       "extract": true
     },
