@@ -19,26 +19,13 @@
       <p class="source-note">Documentation topic: README.md</p>
       <article class="doc"><h1 id="quick-start-and-interfaces">Quick start and interfaces<a class="headerlink" href="#quick-start-and-interfaces" title="Link to this section">&para;</a></h1>
 <h2 id="quick-start">Quick start<a class="headerlink" href="#quick-start" title="Link to this section">&para;</a></h2>
-<p>The normal path is the newest published release. <code>brama detect</code> is the safe first
+<p>The normal path is the published release. <code>brama detect</code> is the safe first
 command either way: it reads local hardware, performs no provider request, reads
 no credential, creates no Brama state, and incurs no model cost.</p>
-<p>Install the archive for your platform and verify its published checksum before
-extracting it:</p>
-<pre><code class="language-bash"># List published releases and choose one. There is no `latest` production
-# contract, so the version is selected deliberately, never resolved for you.
-curl --fail --silent --proto '=https' --tlsv1.2 \
-  https://api.github.com/repos/wisent-ai/brama/releases | grep '&quot;tag_name&quot;'
-
-version=&lt;chosen SemVer, without the v prefix&gt;
-platform=darwin-arm64   # or linux-amd64
-base=&quot;https://github.com/wisent-ai/brama/releases/download/v${version}&quot;
-curl --fail --location --proto '=https' --tlsv1.2 --remote-name-all \
-  &quot;${base}/brama-v${version}-${platform}.tar.gz&quot; \
-  &quot;${base}/brama-v${version}-${platform}.tar.gz.sha256&quot;
-shasum -a 256 --check &quot;brama-v${version}-${platform}.tar.gz.sha256&quot;
-tar -xzf &quot;brama-v${version}-${platform}.tar.gz&quot;
-./bin/brama detect
-</code></pre>
+<p>Download the release for your platform from <code>https://brama.wisent.com/download</code>,
+verify the manifest's signature and the archive's digest, and unpack it, as
+<a href="/docs/download#download-and-verify">Download</a> shows step by step; then run
+<code>./bin/brama detect</code>.</p>
 <p>Serving traffic takes more than the archive. Provision this installation's trust
 material once with <code>bin/provision-skarbiec-trust</code> — the archive ships no signing
 key and the launcher refuses to start until that material exists — then read

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Download — Brama Docs</title>
+  <meta name="description" content="Download Brama: the signed release archive for your platform, its manifest and signature, and how to verify both before you run it.">
+  <link rel="canonical" href="https://brama.wisent.com/docs/download">
+  <link rel="stylesheet" href="/docs/assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/docs" aria-label="Brama documentation home"><span class="brand-mark">B</span><span>Brama</span><strong>Docs</strong></a>
+    <nav aria-label="Global"><a href="/docs/quick-start">Quick start</a><a href="/docs/http-api">HTTP API</a><a href="https://github.com/wisent-ai/brama">GitHub</a></nav>
+  </header>
+  <details class="mobile-nav"><summary>Browse documentation</summary><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a class="active" aria-current="page" href="/docs/download">Download</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/command-surface">Command surface</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/decision">Decision</a><a href="/docs/concepts/media">Media</a><a href="/docs/concepts/category">Category</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use a subscription selector as a signed agent</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></details>
+  <div class="layout">
+    <aside aria-label="Documentation navigation"><nav><section class="nav-group"><h2>Start here</h2><a href="/docs/what-is-brama">What is Brama</a><a href="/docs/quick-start">Quick start</a><a class="active" aria-current="page" href="/docs/download">Download</a><a href="/docs/architecture">Architecture</a><a href="/docs/configuration">Configuration</a></section><section class="nav-group"><h2>API &amp; operations</h2><a href="/docs/http-api">HTTP API</a><a href="/docs/cli">CLI</a><a href="/docs/command-surface">Command surface</a><a href="/docs/errors">Errors</a><a href="/docs/runbook">Runbook</a><a href="/docs/walkthrough-subscriptions">Walkthrough: reading and repairing the subscription pool</a><a href="/docs/runnable-examples">Runnable examples</a></section><section class="nav-group"><h2>Concepts</h2><a href="/docs/concepts/provider">Provider</a><a href="/docs/concepts/subscription">Subscription</a><a href="/docs/concepts/alias">Alias</a><a href="/docs/concepts/decision">Decision</a><a href="/docs/concepts/media">Media</a><a href="/docs/concepts/category">Category</a><a href="/docs/concepts/capability">Capability</a><a href="/docs/concepts/client-identity">Client identity</a><a href="/docs/concepts/entitlement">Entitlement</a><a href="/docs/concepts/envelope">Envelope</a><a href="/docs/concepts/failure-point">Failure point</a></section><section class="nav-group"><h2>Providers</h2><a href="/docs/providers">Provider catalog</a></section><section class="nav-group"><h2>Product contracts</h2><a href="/docs/readme">Brama: Keep All Your Models Accessible Through One Endpoint</a><a href="/docs/core">Core functionality contract</a><a href="/docs/integrations">Integration contracts</a><a href="/docs/onboarding">Onboarding</a><a href="/docs/release">Release and versioning</a><a href="/docs/security">Security policy</a><a href="/docs/support">Support</a><a href="/docs/testing">Testing and qualification contract</a><a href="/docs/changelog">Changelog</a></section><section class="nav-group"><h2>Task guides</h2><a href="/docs/examples">Brama examples</a><a href="/docs/examples/getting-started/detect-local-resources">Detect local resources</a><a href="/docs/examples/core/call-http-api">Use the bearer-scoped HTTP API</a><a href="/docs/examples/core/call-agent-selectors">Use a subscription selector as a signed agent</a><a href="/docs/examples/inference/stream-a-completion">Stream one completion</a><a href="/docs/examples/operations/inspect-build-and-health">Inspect build identity, health, and stats</a><a href="/docs/examples/operations/manage-subscriptions">List, donate, and retire subscriptions</a><a href="/docs/examples/operations/collect-task-quality">Run bounded provider diagnostics and task-quality collection</a><a href="/docs/examples/failures/auth-and-transport">Diagnose transport and authorization rejection</a><a href="/docs/examples/failures/provider-unavailable">Recover from provider or capability unavailability</a><a href="/docs/examples/recovery/upgrade-and-rollback">Upgrade and roll back an immutable Brama runtime</a><a href="/docs/examples/automation/use-mcp-detect">Detect hardware through stdio MCP</a></section><section class="nav-group"><h2>Agent integration</h2><a href="/docs/agent-skill">brama</a></section></nav></aside>
+    <main>
+      <article class="doc"><h1 id="download">Download<a class="headerlink" href="#download" title="Link to this section">&para;</a></h1>
+<p>Anyone can download Brama. Every release is a set of signed, immutable
+objects per platform, and this site serves them under <code>/download</code>.
+Brama is released for <code>darwin-arm64</code> (Apple silicon macOS) and
+<code>linux-amd64</code>. Downloading Brama gives you the program; the models
+it routes to are the ones you configure it with, through your own provider
+credentials or subscriptions (<a href="/docs/quick-start">quick start</a>).</p>
+<h2 id="urls">Two kinds of URL<a class="headerlink" href="#urls" title="Link to this section">&para;</a></h2>
+<pre><code class="language-text">https://brama.wisent.com/download/&lt;platform&gt;/&lt;file&gt;
+https://brama.wisent.com/download/&lt;version&gt;/&lt;platform&gt;/&lt;file&gt;
+</code></pre>
+<p>The first is the release of the version these pages document: the version
+the repository's <code>Cargo.toml</code> declares in the source this site was
+deployed from. It is a label for one immutable release, so read its
+<code>release.json</code> to learn which version it is, and pin that version
+when you install or roll back (<a href="/docs/release#release-channels">release channels</a>).
+The second is one exact release. Its bytes never change: a release is
+published once and never rewritten.</p>
+<p>Each platform of a release holds four files:</p>
+<table>
+<thead>
+<tr><th>File</th><th>What it is</th></tr>
+</thead>
+<tbody>
+<tr><td><code>release.tar.gz</code></td><td>The archive: <code>bin/brama</code>, its launcher and support files (<a href="/docs/release#release-artifacts">release artifacts</a>).</td></tr>
+<tr><td><code>release.json</code></td><td>The signed manifest. It names the product, <code>version</code>, <code>platform</code>, <code>source_revision</code>, the archive's <code>artifact_sha256</code> and <code>artifact_bytes</code>, and the <code>key_id</code> that signed it.</td></tr>
+<tr><td><code>release.sig</code></td><td>A base64 Ed25519 signature over the exact bytes of <code>release.json</code>.</td></tr>
+<tr><td><code>qualification.json</code></td><td>The qualification receipt the release passed before it was published.</td></tr>
+</tbody>
+</table>
+<h2 id="download-and-verify">Download and verify<a class="headerlink" href="#download-and-verify" title="Link to this section">&para;</a></h2>
+<p>Read the manifest of the release these pages document, then download that
+exact version, so every file comes from one release:</p>
+<pre><code class="language-bash">platform=darwin-arm64   # or linux-amd64
+site=https://brama.wisent.com/download
+curl --fail --location --proto '=https' --tlsv1.2 -o release.json "$site/$platform/release.json"
+version=$(sed -n 's/.*"version":"\([^"]*\)".*/\1/p' release.json)
+curl --fail --location --proto '=https' --tlsv1.2 --remote-name-all \
+  "$site/$version/$platform/release.sig" "$site/$version/$platform/release.tar.gz"
+</code></pre>
+<p>Verify the signature over the manifest with the public key the manifest
+names. The site serves each signing key at
+<code>/download/keys/&lt;key_id&gt;.pem</code>. This needs OpenSSL 3; the
+LibreSSL that macOS ships as <code>/usr/bin/openssl</code> cannot verify
+Ed25519.</p>
+<pre><code class="language-bash">key_id=$(sed -n 's/.*"key_id":"\([^"]*\)".*/\1/p' release.json)
+curl --fail --location --proto '=https' --tlsv1.2 -o release-key.pem "$site/keys/$key_id.pem"
+openssl base64 -d -A -in release.sig -out release.sig.bin
+openssl pkeyutl -verify -pubin -inkey release-key.pem -rawin -in release.json -sigfile release.sig.bin
+</code></pre>
+<p>OpenSSL prints <code>Signature Verified Successfully</code>. Then check the
+archive against the digest the signed manifest binds, and unpack it:</p>
+<pre><code class="language-bash">sha256=$(sed -n 's/.*"artifact_sha256":"\([0-9a-f]*\)".*/\1/p' release.json)
+printf '%s  release.tar.gz\n' "$sha256" | shasum -a 256 --check
+tar -xzf release.tar.gz
+./bin/brama version
+</code></pre>
+<p><code>shasum</code> prints <code>release.tar.gz: OK</code>; on Linux
+<code>sha256sum --check</code> reads the same line. <code>brama version</code>
+prints the version and <code>source_revision</code> the manifest names. Continue
+with the <a href="/docs/quick-start">quick start</a>.</p>
+<h2 id="install-with-stado">Install with Stado<a class="headerlink" href="#install-with-stado" title="Link to this section">&para;</a></h2>
+<p>A machine that runs Stado installs the same release, verified against the
+release keys its deployment trusts:</p>
+<pre><code class="language-bash">stado product install brama --surface cli \
+  --release-version &lt;version&gt; --source-commit &lt;source_revision&gt;
+</code></pre>
+<p>Both values are read from <code>release.json</code>. <code>--surface service</code>
+installs the gateway service instead of the command line.</p>
+<h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Link to this section">&para;</a></h2>
+<p>A download that cannot be served answers JSON
+<code>{"error":{"message":…,"type":…,"code":…,"retryable":…}}</code>. The
+sentences, with the parts that vary in angle brackets:</p>
+<table>
+<thead>
+<tr><th>Status and code</th><th>Sentence</th><th>Repair</th></tr>
+</thead>
+<tbody>
+<tr><td><code>404 platform_unknown</code></td><td><code>brama is released for darwin-arm64 and linux-amd64, not "&lt;platform&gt;". See /docs/download</code></td><td>Use one of the platforms it names.</td></tr>
+<tr><td><code>404 file_unknown</code></td><td><code>a release holds release.tar.gz, qualification.json, release.sig, release.json, not "&lt;file&gt;". See /docs/download</code></td><td>Ask for one of those four files.</td></tr>
+<tr><td><code>400 version_invalid</code></td><td><code>"&lt;version&gt;" is not a release version: a version is ASCII letters, digits, '.', '_' and '-', such as &lt;documented version&gt;. See /docs/download</code></td><td>Name a version such as the one <code>release.json</code> reports.</td></tr>
+<tr><td><code>404 release_not_published</code></td><td><code>stado://releases/brama/&lt;version&gt;/&lt;platform&gt;/&lt;file&gt; is not published: the release channel answered {"state":"absent",…}.</code> followed, for the documented release, by <code>These pages document brama &lt;version&gt;, and its &lt;platform&gt; release is not published yet; an earlier release is read at /download/&lt;version&gt;/&lt;platform&gt;/&lt;file&gt;.</code> and, for an exact version, by <code>Read release.json of the version these pages document at /download/&lt;platform&gt;/release.json.</code></td><td>The release channel says that object does not exist. Download a version that is published.</td></tr>
+<tr><td><code>405 method_not_allowed</code></td><td><code>&lt;METHOD&gt; is not served for a release download: the release channel answers GET only. See /docs/download</code></td><td>Use <code>GET</code>.</td></tr>
+<tr><td><code>500 release_origin_undeclared</code></td><td><code>this site's deployment sets no BRAMA_RELEASE_ORIGIN, so it cannot read the release channel; set it to the HTTPS origin that serves /api/release/object. See /docs/download#refusals</code></td><td>The site's deployment sets <code>BRAMA_RELEASE_ORIGIN</code> to the HTTPS origin of the Stado release channel; with Stado, <code>stado web origin url /api/release/object</code> prints that origin's route.</td></tr>
+<tr><td><code>500 release_origin_invalid</code></td><td><code>BRAMA_RELEASE_ORIGIN must be one credential-free HTTPS origin, not "&lt;value&gt;", so it cannot read the release channel; …</code> (or <code>BRAMA_RELEASE_ORIGIN is not a URL: …</code>)</td><td>Set the variable to the origin alone: scheme and host, no path, query or credentials.</td></tr>
+<tr><td><code>500 release_declaration_unreadable</code></td><td><code>&lt;cause&gt;, so this site cannot say which release it offers. See /docs/download#refusals</code></td><td>The deployed source lacks a readable <code>.wisent-release.json</code> or <code>Cargo.toml</code> version; the cause names which. Deploy the site from a complete checkout.</td></tr>
+<tr><td><code>502 release_origin_refused</code></td><td><code>the release channel answered &lt;status&gt; for &lt;uri&gt;: &lt;body&gt;. See /docs/download#refusals</code></td><td>The origin answered something other than the object or its absence; its own status and body say why.</td></tr>
+<tr><td><code>502 release_origin_unreachable</code> (retryable)</td><td><code>the release channel did not answer for &lt;uri&gt;: &lt;transport error&gt;. See /docs/download#refusals</code></td><td>The release channel's origin did not answer; retry once it answers.</td></tr>
+</tbody>
+</table>
+<p>This site serves downloads and documentation. It serves no model API: a
+model call sent here is refused as described in
+<a href="/docs/runbook/startup-and-readiness#public-address">Startup and readiness</a>.</p></article>
+      <footer><span>Brama documentation</span><a href="https://github.com/wisent-ai/brama">Source on GitHub</a></footer>
+    </main>
+  </div>
+</body>
+</html>

@@ -24,29 +24,14 @@ The product, Rust crate, binary, CLI, MCP server, and service are named `brama`.
 
 ## Quick start
 
-The normal path is the newest published release. `brama detect` is the safe first
+The normal path is the published release. `brama detect` is the safe first
 command either way: it reads local hardware, performs no provider request, reads
 no credential, creates no Brama state, and incurs no model cost.
 
-Install the archive for your platform and verify its published checksum before
-extracting it:
-
-```bash
-# List published releases and choose one. There is no `latest` production
-# contract, so the version is selected deliberately, never resolved for you.
-curl --fail --silent --proto '=https' --tlsv1.2 \
-  https://api.github.com/repos/wisent-ai/brama/releases | grep '"tag_name"'
-
-version=<chosen SemVer, without the v prefix>
-platform=darwin-arm64   # or linux-amd64
-base="https://github.com/wisent-ai/brama/releases/download/v${version}"
-curl --fail --location --proto '=https' --tlsv1.2 --remote-name-all \
-  "${base}/brama-v${version}-${platform}.tar.gz" \
-  "${base}/brama-v${version}-${platform}.tar.gz.sha256"
-shasum -a 256 --check "brama-v${version}-${platform}.tar.gz.sha256"
-tar -xzf "brama-v${version}-${platform}.tar.gz"
-./bin/brama detect
-```
+Download the release for your platform from `https://brama.wisent.com/download`,
+verify the manifest's signature and the archive's digest, and unpack it, as
+[Download](https://brama.wisent.com/docs/download#download-and-verify) shows step
+by step; then run `./bin/brama detect`.
 
 Serving traffic takes more than the archive. Provision this installation's trust
 material once with `bin/provision-skarbiec-trust` — the archive ships no signing

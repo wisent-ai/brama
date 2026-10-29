@@ -1,9 +1,33 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/docs",
+      "permanent": false
+    },
+    {
+      "source": "/download",
+      "destination": "/docs/download",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/docs",
       "destination": "/docs/index.html"
+    },
+    {
+      "source": "/docs/download",
+      "destination": "/docs/download.html"
+    },
+    {
+      "source": "/download/:platform/:file",
+      "destination": "/api/download?platform=:platform&file=:file"
+    },
+    {
+      "source": "/download/:version/:platform/:file",
+      "destination": "/api/download?version=:version&platform=:platform&file=:file"
     },
     {
       "source": "/docs/changelog",

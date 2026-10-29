@@ -27,7 +27,9 @@ in <a href="/docs/errors">errors</a>; the rest of the runbook is at
 <a href="/docs/runbook">runbook</a>.</p>
 
 <h2 id="public-address">The documentation site publishes a gateway only when its deployment declares one<a class="headerlink" href="#public-address" title="Link to this section">&para;</a></h2>
-<p>The documentation site serves <code>/docs</code> and sends every other path to its
+<p>The documentation site serves <code>/docs</code> and Brama's
+<a href="/docs/download">download</a> under <code>/download</code>, redirects <code>/</code>
+to <code>/docs</code>, and sends every other path to its
 gateway forwarder. Whoever deploys the site chooses whether it also publishes a
 Brama gateway: setting <code>BRAMA_GATEWAY_ORIGIN</code> on the site's deployment to
 one credential-free HTTPS origin publishes the gateway running there, and each
@@ -36,7 +38,7 @@ Stado, that origin is a public origin declared for the gateway with
 <code>stado web origin declare</code>, the origin of the URL
 <code>stado web origin url /v1</code> prints.</p>
 <p>Publication is off by default. A deployment that sets no origin publishes no
-API, and every path outside <code>/docs</code>, <code>/health</code> and <code>/readyz</code>
+API, and every path outside <code>/docs</code> and <code>/download</code>, <code>/health</code> and <code>/readyz</code>
 included, answers <code>404</code> with this body, the site, method and path filled in:</p>
 <pre><code class="language-json">{&quot;error&quot;:{&quot;message&quot;:&quot;&lt;site&gt; publishes no Brama gateway: its deployment sets no BRAMA_GATEWAY_ORIGIN, so POST /v1/chat/completions is not served here. Call the gateway your deployment runs, at the address it declares (with Stado: stado service directory connect brama). A deployment publishes its gateway on this site by setting BRAMA_GATEWAY_ORIGIN to that gateway's HTTPS origin. See /docs/runbook/startup-and-readiness#public-address&quot;,
  &quot;type&quot;:&quot;request_error&quot;,&quot;code&quot;:&quot;api_not_published&quot;,&quot;retryable&quot;:false}}

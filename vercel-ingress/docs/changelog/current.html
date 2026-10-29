@@ -24,6 +24,14 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-public-download">Unreleased: anyone can download Brama from this site<a class="headerlink" href="#unreleased-public-download" title="Link to this section">&para;</a></h2>
+<p><code>/download/&lt;platform&gt;/&lt;file&gt;</code> serves the release of the version these
+pages document and <code>/download/&lt;version&gt;/&lt;platform&gt;/&lt;file&gt;</code> one exact
+release: the archive, its signed manifest, the signature and the qualification receipt,
+read from the release channel the site's deployment declares in <code>BRAMA_RELEASE_ORIGIN</code>.
+<code>/download/keys/&lt;key_id&gt;.pem</code> serves the key that verifies the signature.
+The quick start and README download from here instead of a forge mirror that had stopped
+receiving releases. See <a href="/docs/download">Download</a>.</p>
 <h2 id="unreleased-api-not-published">Unreleased: a documentation site whose deployment declares no gateway refuses by name<a class="headerlink" href="#unreleased-api-not-published" title="Link to this section">&para;</a></h2>
 <p>The documentation site forwards every path outside <code>/docs</code> to the gateway origin
 its deployment declares in <code>BRAMA_GATEWAY_ORIGIN</code>, and publication is off by default.
