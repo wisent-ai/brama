@@ -45,7 +45,11 @@ printf '\n== https certificate ==\n'
 # which is exactly the SSL EOF a client sees and the handshake error Vercel
 # reports.
 name=$("$tailscale" status --json | /usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))')
-cert_dir=$(/usr/bin/mktemp -d /tmp/brama-origin-cert.XXXXXX)
+# The certificate is written under Brama's state directory, never the shared
+# /tmp any account on the host may read or replace.
+state_dir="${BRAMA_STATE_DIR:-$HOME/.brama}"
+/bin/mkdir -p "$state_dir"
+cert_dir=$(/usr/bin/mktemp -d "$state_dir/origin-cert.XXXXXX")
 "$tailscale" cert --cert-file "$cert_dir/cert.pem" --key-file "$cert_dir/key.pem" "$name" 2>&1 | tail -5 || true
 if [ -s "$cert_dir/cert.pem" ]; then
     /usr/bin/openssl x509 -in "$cert_dir/cert.pem" -noout -subject -enddate 2>&1 || true

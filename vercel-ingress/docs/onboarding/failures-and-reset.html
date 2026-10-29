@@ -118,7 +118,8 @@ bind an unauthenticated alternative interface.</p>
   which alias pointed at which route.</li>
 <li>Remove only the immutable staged release being decommissioned after its
   rollback window closes.</li>
-<li>Remove <code>/tmp/brama-*</code> process caches only when no Brama process uses them.</li>
+<li>Remove the replaceable caches in Brama's state directory
+  (<code>perf.json</code>, <code>models-dev-cache.json</code>) only when no Brama process uses them.</li>
 <li>Provider vault resources remain owned by Skarbiec/entitlements policy; do not
   delete them as an uninstall shortcut.</li>
 </ul>
