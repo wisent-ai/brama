@@ -161,18 +161,9 @@ pub fn record_credential_active(
 /// This is the only thing that repairs a `needs_reauthorization`, so it clears
 /// the cause and the block the refusal left. The previous grant's expiry and
 /// rotation instants are dropped rather than kept: they describe a credential
-/// that is no longer the one in the vault.
+/// that is no longer the one in the vault. A grant recorded here is this
+/// gateway's own sign-in, so it names no harness it was borrowed from.
 pub fn record_credential_signed_in(subscription_id: &str, provider: &str) {
-    record_credential_signed_in_from(subscription_id, provider, None);
-}
-
-/// The same, for a grant taken from a harness: the record names the harness
-/// so the pool report, and the sweep reading it, know whose grant it is.
-pub fn record_credential_signed_in_from(
-    subscription_id: &str,
-    provider: &str,
-    borrowed_from: Option<&str>,
-) {
     let now = now_ms();
     with_ledger(|ledger| {
         let entry = ledger
@@ -194,7 +185,7 @@ pub fn record_credential_signed_in_from(
             recorded_at_ms: now,
             expires_at_ms: None,
             refreshed_at_ms: None,
-            borrowed_from: borrowed_from.map(str::to_owned),
+            borrowed_from: None,
         });
     });
 }

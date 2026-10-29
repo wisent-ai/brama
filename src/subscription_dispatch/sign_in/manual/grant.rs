@@ -179,11 +179,7 @@ pub async fn adopt(
     // The ledger remembers the refusal that disowned the old grant, and the
     // request path leaves a disowned grant alone until a sign-in replaces it.
     // This is that sign-in.
-    crate::subscription_dispatch::usage::record_credential_signed_in_from(
-        subscription_id,
-        provider,
-        None,
-    );
+    crate::subscription_dispatch::usage::record_credential_signed_in(subscription_id, provider);
     // Every grant stored here is this gateway's own, so this is always
     // true. It was not while grants could be borrowed: an imported grant was
     // reported as "Brama will refresh it from now on" while `renewal`
