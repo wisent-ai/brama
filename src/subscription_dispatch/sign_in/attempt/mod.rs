@@ -279,22 +279,30 @@ fn taken(answer: &mut Value, field: &str) -> Value {
     }
 }
 
-/// The failure a refusal is recorded with. A completed Weles run carries its
-/// own failure object; a refusal before a run carries Weles's error code and,
-/// when it has one, its stage. One that carries neither code nor failure is
-/// named as unclassified rather than given a classification Weles did not
-/// make, and its stage as the reading of Weles's response.
+/// The failure a refusal is recorded with: the failure object `{code, stage}`
+/// Weles reports with every refusal. An answer that refuses without one is
+/// Weles's response being incomplete, recorded as `weles_response_incomplete`
+/// at Brama's own stage of reading that response, naming what was missing and
+/// carrying the error and stage Weles did state word for word (null where it
+/// stated none). Brama supplies no code or stage in Weles's name.
 fn refusal_failure(answer: &Value) -> Value {
-    if let Some(failure) = answer.get("failure").filter(|value| value.is_object()) {
-        return failure.clone();
+    let missing = match answer.get("failure") {
+        Some(failure) if failure.is_object() => return failure.clone(),
+        Some(failure) => format!("Weles refused with a failure that is not an object: {failure}"),
+        None => "Weles refused without the failure object {code, stage} its reauth answer carries"
+            .to_string(),
+    };
+    json!({
+        "code": "weles_response_incomplete", "stage": "weles_response", "detail": missing,
+        "weles_error": stated(answer, "error"), "weles_stage": stated(answer, "stage"),
+        "browser_started": null, "retryable": false,
+    })
+}
+
+/// A field Weles stated, copied as it stated it; JSON null when it stated none.
+fn stated(answer: &Value, field: &str) -> Value {
+    match answer.get(field) {
+        Some(value) => value.clone(),
+        None => Value::Null,
     }
-    let code = match answer.get("error").and_then(Value::as_str) {
-        Some(code) => code,
-        None => "weles_refusal_unclassified",
-    };
-    let stage = match answer.get("stage").and_then(Value::as_str) {
-        Some(stage) => stage,
-        None => "weles_response",
-    };
-    json!({"code": code, "stage": stage, "browser_started": null, "retryable": false})
 }
