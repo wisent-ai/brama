@@ -17,7 +17,10 @@
 //! 4. the policy's provider grants against the authority-owned routes table;
 //! 5. every alias route against the providers policy and routes agree on;
 //! 6. where the gateway is reachable, and by which scheme;
-//! 7. the current boot attempt, whole, from the launcher's first line on.
+//! 7. why the release stopped serving: the active release, when it lost
+//!    readiness, and every quarantined candidate with the cause the release
+//!    agent named, newest first, beside the commands that repair each;
+//! 8. the current boot attempt, whole, from the launcher's first line on.
 //!
 //! Read-only throughout. Every section writes its lines through `say!`: on a
 //! terminal they are printed as they are found, and with `--json` the same
@@ -42,6 +45,7 @@ macro_rules! say {
 mod capability;
 mod installation;
 mod reachability;
+mod release;
 mod trust;
 
 use std::collections::BTreeMap;
@@ -179,6 +183,7 @@ pub(crate) async fn run(json: bool) {
                 ),
             }
             reachability::print_reachability(&layout).await;
+            release::print_release_outcome(&layout);
             reachability::print_boot_attempt(&layout);
         }
         Err(cause) => emit(format!("=== installation\n{cause}")),

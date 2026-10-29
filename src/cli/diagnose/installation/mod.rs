@@ -103,17 +103,23 @@ fn installed_generations(layout: &Layout) -> Vec<PathBuf> {
     dated.into_iter().map(|(_, path)| path).collect()
 }
 
+/// The process roles Stado's release state records (`active`, `previous`,
+/// `candidate`); every other field of that document is the agent's own
+/// bookkeeping (phase, quarantine map, detail) and names no release.
+const RELEASE_ROLES: [&str; 3] = ["active", "previous", "candidate"];
+
 /// The roles the release state records, each with the release directory it
-/// resolves to; a role whose directory does not resolve is said once.
+/// resolves to; a recorded role whose directory does not resolve is said once.
 fn recorded_roles(layout: &Layout) -> Vec<(String, PathBuf)> {
     let Some(state) = layout.release_state.as_object() else {
         say!("  the release state is not an object, so no generation carries a role");
         return Vec::new();
     };
-    state
-        .keys()
+    RELEASE_ROLES
+        .iter()
+        .filter(|role| state.get(**role).is_some_and(|record| !record.is_null()))
         .filter_map(|role| match layout.release_root(role) {
-            Ok(root) => Some((role.clone(), root)),
+            Ok(root) => Some(((*role).to_string(), root)),
             Err(reason) => {
                 say!("  release role {role}: {reason}");
                 None
