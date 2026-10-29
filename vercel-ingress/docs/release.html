@@ -198,7 +198,16 @@ refusal.</p>
 <li>Update <code>CHANGELOG.md</code>, compatibility, migration, and operator actions.</li>
 <li>Submit the immutable source snapshot to Stado.</li>
 <li>Let Stado resolve <code>.wisent-release.json</code>, verify pinned inputs, run the
-   platform recipe, stage the archive, and store the signed release receipt.</li>
+   platform recipe, run its post-build journeys against what the build staged, stage the
+   archive, and store the signed release receipt. The binary platforms run
+   <code>tests/release/journey.sh launcher-verbs</code>: the staged <code>brama launcher
+   verbs</code> against the staged router (<code>tests/launcher/verbs.rs</code>), compiled
+   from the source, inputs and dependencies <code>src/release/build.sh</code> records in
+   <code>.build/cargo.sh</code>, its commands and answers kept under
+   <code>launcher-verbs/</code> in the qualification output Stado retains with the release
+   (<code>WISENT_TEST_EVIDENCE_DIR</code>). The web platform runs <code>node
+   vercel-ingress/tools/docs-navigation.mjs check</code> over the pages it publishes. A
+   platform without a passing journey qualifies nothing it carries.</li>
 <li>Promote the exact version to <code>candidate</code>.</li>
 <li>Reconcile the candidate on the target service and record qualification.</li>
 <li>Promote the same immutable receipts to <code>stable</code>.</li>

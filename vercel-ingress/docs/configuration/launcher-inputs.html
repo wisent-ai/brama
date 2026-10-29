@@ -88,6 +88,21 @@
         provider availability. Grants, workload proofs and one-use limits are still
         enforced at redemption. Brama does not kill a socket owner, delete the
         shared socket, or start a private broker when inspection fails.</p>
+        <p>Before a release ships, <code>brama launcher verbs --router &lt;pinned
+        router&gt; --launcher &lt;entry point&gt;</code> checks that the pinned router
+        implements every command the launcher sends it. It reads the entry point and
+        every <code>.sh</code> stage under the <code>launcher/</code> directory beside
+        it with the POSIX shell grammar: a call is a simple command whose command word
+        is <code>"$ENTITLEMENTS_ROUTER_BIN"</code> as written, including after
+        <code>exec</code>, an environment prefix, <code>!</code>, a pipe, a list
+        operator, a compound command, a case item or inside a command substitution. The
+        same literal as an operand, test operand, assignment, redirection target, case
+        pattern, loop word, comment, here-document or quoted string is no call. It
+        prints <code>launcher requires: …</code>, then either confirms the router
+        advertises every path or refuses with <code>the pinned broker does not
+        implement: …</code>. A stage the grammar cannot read refuses with its path and
+        the construct it ends inside; a launcher that is not UTF-8 text, or a path with
+        no directory, refuses by name.</p>
 
         <h2 id="capability-material">Capability material is issued, not configured<a class="headerlink" href="#capability-material" title="Link to this section">&para;</a></h2>
         <p>Runtime capability IDs are freshly issued from vault bindings at final use.

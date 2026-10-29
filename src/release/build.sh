@@ -95,6 +95,19 @@ if [[ -n "${WISENT_INPUTS_DIR+handed}" ]]; then
     "stado-wait=$stado_wait_source/stado-rs/wait"
   cargo_overrides=(--config "$build_source/release-inputs.toml")
 fi
+# How this build ran cargo, read by the post-build journeys (tests/release/journey.sh)
+# so they compile the tests against the same projected source, release inputs and
+# compiled dependencies instead of deciding any of them again.
+{
+  printf 'cargo=%q\n' "$(command -v cargo)"
+  printf 'build_source=%q\n' "$build_source"
+  printf 'brama_target=%q\n' "$cargo_root/brama"
+  printf 'cargo_overrides=('
+  for override in ${cargo_overrides[@]+"${cargo_overrides[@]}"}; do
+    printf '%q ' "$override"
+  done
+  printf ')\n'
+} >"$build_root/cargo.sh"
 
 export BRAMA_BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 export BRAMA_BUILD_PLATFORM="$platform"

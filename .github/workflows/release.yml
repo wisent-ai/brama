@@ -81,7 +81,7 @@ jobs:
       - name: Refuse a router that cannot answer the launcher
         # Verify the pinned router implements the verbs the bundled launcher calls.
         run: |
-          target/release/brama launcher check-router-verbs \
+          target/release/brama launcher verbs \
             --router skarbiec-source/target/release/skarbiec \
             --launcher src/release/bin/start-with-skarbiec
       - name: Refuse a launcher that does not parse

@@ -61,6 +61,16 @@
           "src/release/build.sh"
         ]
       },
+      "tests": [
+        {
+          "name": "launcher-verbs",
+          "argv": [
+            "bash",
+            "tests/release/journey.sh",
+            "launcher-verbs"
+          ]
+        }
+      ],
       "stage": {
         "stage/bin/brama": "bin/brama",
         "stage/bin/skarbiec-entitlements-router": "bin/skarbiec-entitlements-router",
@@ -107,6 +117,16 @@
           "src/release/build.sh"
         ]
       },
+      "tests": [
+        {
+          "name": "launcher-verbs",
+          "argv": [
+            "bash",
+            "tests/release/journey.sh",
+            "launcher-verbs"
+          ]
+        }
+      ],
       "stage": {
         "stage/bin/brama": "bin/brama",
         "stage/bin/skarbiec-entitlements-router": "bin/skarbiec-entitlements-router",
@@ -150,6 +170,16 @@
           "vercel-ingress/docs"
         ]
       },
+      "tests": [
+        {
+          "name": "docs-navigation",
+          "argv": [
+            "node",
+            "vercel-ingress/tools/docs-navigation.mjs",
+            "check"
+          ]
+        }
+      ],
       "stage": {
         "dist/brama-web.tar.gz": "brama-web.tar.gz",
         "dist/brama-web.tar.gz.sha256": "brama-web.tar.gz.sha256",

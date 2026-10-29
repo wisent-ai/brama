@@ -30,6 +30,10 @@ name = "workload-authority"
 path = "tests/authentication/authority.rs"
 
 [[test]]
+name = "launcher-verbs"
+path = "tests/launcher/verbs.rs"
+
+[[test]]
 name = "subscription-overlay"
 path = "tests/subscriptions/overlay.rs"
 
