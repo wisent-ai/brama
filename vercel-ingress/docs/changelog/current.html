@@ -24,14 +24,15 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
-<h2 id="unreleased-api-not-published">Unreleased: the documentation site says it is not a gateway, and forwards nothing<a class="headerlink" href="#unreleased-api-not-published" title="Link to this section">&para;</a></h2>
-<p>The documentation site forwarded every path outside <code>/docs</code> to one gateway origin
-held in its <code>BRAMA_GATEWAY_ORIGIN</code> deployment variable, so a documentation site
-depended on one deployment's gateway, and without the variable every such call answered
-<code>503 gateway_origin_undeclared</code>, read as Brama refusing a sign-in. The forwarder and
-the Funnel publishing script are gone: every path outside <code>/docs</code> answers
-<code>404 api_not_published</code>, retryable false, naming the method and path and telling the
-caller to call the gateway its own deployment runs. See
+<h2 id="unreleased-api-not-published">Unreleased: a documentation site whose deployment declares no gateway refuses by name<a class="headerlink" href="#unreleased-api-not-published" title="Link to this section">&para;</a></h2>
+<p>The documentation site forwards every path outside <code>/docs</code> to the gateway origin
+its deployment declares in <code>BRAMA_GATEWAY_ORIGIN</code>, and publication is off by default.
+A deployment that declares no origin answered every such call <code>503 gateway_origin_undeclared</code>,
+which callers read as Brama refusing them; it now answers <code>404 api_not_published</code>,
+retryable false, naming the site, method and path, the address to call instead and the variable
+that publishes a gateway. A value that is not one credential-free HTTPS origin answers
+<code>500 gateway_origin_invalid</code>. The publishing script that served the gateway through one
+network provider's tunnel is gone; an origin is declared through the deployment. See
 <a href="/docs/runbook/startup-and-readiness#public-address">Startup and readiness</a>.</p>
 <h2 id="unreleased-launcher-verbs">Unreleased: the release runs the launcher check under its current name, and a real test exercises its grammar<a class="headerlink" href="#unreleased-launcher-verbs" title="Link to this section">&para;</a></h2>
 <p>The router-verbs check was renamed <code>brama launcher verbs</code>, but the release workflow

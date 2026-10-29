@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Startup and readiness — Brama Docs</title>
-  <meta name="description" content="Runbook entries for a caller that asks the documentation site for the API, a gateway that will not start, answers ok while nothing works, reports 503 from /readyz, or refuses a remote request with 426.">
+  <meta name="description" content="Runbook entries for a documentation site that publishes no gateway, a gateway that will not start, answers ok while nothing works, reports 503 from /readyz, or refuses a remote request with 426.">
   <link rel="canonical" href="https://brama.wisent.com/docs/runbook/startup-and-readiness">
   <link rel="stylesheet" href="/docs/assets/site.css">
 </head>
@@ -18,29 +18,38 @@
     <main>
       <p class="source-note">Brama runbook: startup, reachability and readiness</p>
       <article class="doc"><h1 id="startup-and-readiness">Startup and readiness<a class="headerlink" href="#startup-and-readiness" title="Link to this section">&para;</a></h1>
-<p>Five symptoms that appear before any model request succeeds: a caller asks
-the documentation site for the API, the process refuses to start, <code>/health</code> says
+<p>Five symptoms that appear before any model request succeeds: a caller asks a
+documentation site that publishes no gateway, the process refuses to start, <code>/health</code> says
 <code>ok</code> while nothing serves, <code>/readyz</code> answers 503, or a request from another
 machine is refused at the transport. Each entry quotes the sentence the
 product actually prints and names the repair. The error vocabulary itself is
 in <a href="/docs/errors">errors</a>; the rest of the runbook is at
 <a href="/docs/runbook">runbook</a>.</p>
 
-<h2 id="public-address">brama.wisent.com serves the documentation, not a gateway<a class="headerlink" href="#public-address" title="Link to this section">&para;</a></h2>
-<p><code>https://brama.wisent.com</code> serves this documentation under <code>/docs</code>
-and is not a Brama gateway. A client calls the gateway its own deployment runs,
-at the address that deployment declares. A deployment placed by Stado gives each
-machine its own route:</p>
-<pre><code class="language-shell">stado service directory connect brama
-</code></pre>
-<p>Every path outside <code>/docs</code>, <code>/health</code> and <code>/readyz</code>
-included, answers <code>404</code> with this body, the path and method filled in:</p>
-<pre><code class="language-json">{&quot;error&quot;:{&quot;message&quot;:&quot;brama.wisent.com is Brama's documentation site, not a Brama gateway, so POST /v1/chat/completions is not served here. Call the gateway your deployment runs, at the address it declares; with Stado: stado service directory connect brama. See /docs/runbook/startup-and-readiness#public-address&quot;,
+<h2 id="public-address">The documentation site publishes a gateway only when its deployment declares one<a class="headerlink" href="#public-address" title="Link to this section">&para;</a></h2>
+<p>The documentation site serves <code>/docs</code> and sends every other path to its
+gateway forwarder. Whoever deploys the site chooses whether it also publishes a
+Brama gateway: setting <code>BRAMA_GATEWAY_ORIGIN</code> on the site's deployment to
+one credential-free HTTPS origin publishes the gateway running there, and each
+call is forwarded to it with its method, path, query, headers and body. With
+Stado, that origin is a public origin declared for the gateway with
+<code>stado web origin declare</code>, the origin of the URL
+<code>stado web origin url /v1</code> prints.</p>
+<p>Publication is off by default. A deployment that sets no origin publishes no
+API, and every path outside <code>/docs</code>, <code>/health</code> and <code>/readyz</code>
+included, answers <code>404</code> with this body, the site, method and path filled in:</p>
+<pre><code class="language-json">{&quot;error&quot;:{&quot;message&quot;:&quot;&lt;site&gt; publishes no Brama gateway: its deployment sets no BRAMA_GATEWAY_ORIGIN, so POST /v1/chat/completions is not served here. Call the gateway your deployment runs, at the address it declares (with Stado: stado service directory connect brama). A deployment publishes its gateway on this site by setting BRAMA_GATEWAY_ORIGIN to that gateway's HTTPS origin. See /docs/runbook/startup-and-readiness#public-address&quot;,
  &quot;type&quot;:&quot;request_error&quot;,&quot;code&quot;:&quot;api_not_published&quot;,&quot;retryable&quot;:false}}
 </code></pre>
-<p>The caller was configured with this site as its gateway address. Repair that
-configuration to the address of the gateway its deployment runs. Readiness is
-read from that gateway itself, as the entries below describe.</p>
+<p>The caller was configured with a site that publishes no gateway. Point it at the
+address of the gateway its deployment runs; a deployment placed by Stado gives
+each machine its own route:</p>
+<pre><code class="language-shell">stado service directory connect brama
+</code></pre>
+<p>A value that is not one credential-free HTTPS origin answers <code>500</code> with code
+<code>gateway_origin_invalid</code>, naming the value; an origin the forwarder cannot
+reach answers <code>502</code> <code>gateway_unreachable</code> with the transport error.
+Readiness is read from the gateway itself, as the entries below describe.</p>
 
 <h2 id="brama-serve-refuses-to-start"><code>brama serve</code> refuses to start<a class="headerlink" href="#brama-serve-refuses-to-start" title="Link to this section">&para;</a></h2>
 <p>The sentence, verbatim (exit 1):</p>

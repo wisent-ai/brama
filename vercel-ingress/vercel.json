@@ -355,7 +355,7 @@
     },
     {
       "source": "/:path((?!docs(?:/|$)).*)",
-      "destination": "/api/not-published?__brama_path=/:path"
+      "destination": "/api/gateway?__brama_path=/:path"
     }
   ]
 }
