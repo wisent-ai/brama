@@ -129,7 +129,10 @@ enum Commands {
     Maintain(MaintainArgs),
     /// The pull-request version gate: surface, contract, baseline and the
     /// rule's shared-fixture conformance
-    #[command(name = "version", hide = true)]
+    // Named `version-gate` from the variant, as .github/workflows/version-check.yml
+    // calls it; `version` is the identity command, and two commands of one
+    // name are refused by clap's own debug assertions.
+    #[command(hide = true)]
     VersionGate {
         #[command(subcommand)]
         command: VersionGateCommand,
