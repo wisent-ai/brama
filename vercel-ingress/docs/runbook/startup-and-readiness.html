@@ -26,23 +26,21 @@ product actually prints and names the repair. The error vocabulary itself is
 in <a href="/docs/errors">errors</a>; the rest of the runbook is at
 <a href="/docs/runbook">runbook</a>.</p>
 
-<h2 id="public-address">brama.wisent.com serves the documentation, not the gateway<a class="headerlink" href="#public-address" title="Link to this section">&para;</a></h2>
-<p><code>https://brama.wisent.com</code> serves this documentation under <code>/docs</code>.
-Brama's HTTP API is not published on the internet: the gateway binds loopback on
-the host Stado places it on, and a client reaches it through Stado's service
-directory, which answers each machine with that machine's own route:</p>
+<h2 id="public-address">brama.wisent.com serves the documentation, not a gateway<a class="headerlink" href="#public-address" title="Link to this section">&para;</a></h2>
+<p><code>https://brama.wisent.com</code> serves this documentation under <code>/docs</code>
+and is not a Brama gateway. A client calls the gateway its own deployment runs,
+at the address that deployment declares. A deployment placed by Stado gives each
+machine its own route:</p>
 <pre><code class="language-shell">stado service directory connect brama
 </code></pre>
 <p>Every path outside <code>/docs</code>, <code>/health</code> and <code>/readyz</code>
 included, answers <code>404</code> with this body, the path and method filled in:</p>
-<pre><code class="language-json">{&quot;error&quot;:{&quot;message&quot;:&quot;brama.wisent.com serves Brama's documentation under /docs only; Brama's HTTP API is not published on the internet, so POST /v1/chat/completions is not served here. Reach the gateway placed for your machine through Stado's service directory: stado service directory connect brama. See /docs/runbook/startup-and-readiness#public-address&quot;,
+<pre><code class="language-json">{&quot;error&quot;:{&quot;message&quot;:&quot;brama.wisent.com is Brama's documentation site, not a Brama gateway, so POST /v1/chat/completions is not served here. Call the gateway your deployment runs, at the address it declares; with Stado: stado service directory connect brama. See /docs/runbook/startup-and-readiness#public-address&quot;,
  &quot;type&quot;:&quot;request_error&quot;,&quot;code&quot;:&quot;api_not_published&quot;,&quot;retryable&quot;:false}}
 </code></pre>
 <p>The caller was configured with this site as its gateway address. Repair that
-configuration to the route the service directory gives its machine; a program
-running where no fleet route reaches uses its own declared alternative to Brama.
-Readiness is read from the gateway itself, through that route, as the entries
-below describe.</p>
+configuration to the address of the gateway its deployment runs. Readiness is
+read from that gateway itself, as the entries below describe.</p>
 
 <h2 id="brama-serve-refuses-to-start"><code>brama serve</code> refuses to start<a class="headerlink" href="#brama-serve-refuses-to-start" title="Link to this section">&para;</a></h2>
 <p>The sentence, verbatim (exit 1):</p>

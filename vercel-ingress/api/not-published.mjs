@@ -1,11 +1,10 @@
-// brama.wisent.com serves Brama's documentation under /docs and nothing else.
-// Brama's HTTP API is not published on the internet: the gateway binds
-// loopback on the host Stado places it on, and a client reaches it through
-// Stado's service directory (`stado service directory connect brama`), which
-// answers each machine with that machine's own route. vercel.json's last
-// rewrite sends every path outside /docs here, so a caller configured with
-// this site as its gateway is told so by name instead of reading Vercel's 404
-// page as Brama refusing its request.
+// brama.wisent.com is Brama's documentation site: it serves /docs and is not a
+// Brama gateway. A Brama client calls the gateway its own deployment runs, at
+// the address that deployment declares (with Stado, `stado service directory
+// connect brama` gives each machine its route). vercel.json's last rewrite
+// sends every path outside /docs here, so a caller configured with this site
+// as its gateway is told so by name instead of reading Vercel's 404 page as
+// Brama refusing its request.
 import { STATUS_CODES } from 'node:http';
 
 function statusOf(name) {
@@ -23,7 +22,7 @@ export default function notPublished(request, response) {
   response.writeHead(NOT_FOUND, { 'content-type': 'application/json', 'cache-control': 'no-store' });
   response.end(JSON.stringify({
     error: {
-      message: `brama.wisent.com serves Brama's documentation under /docs only; Brama's HTTP API is not published on the internet, so ${request.method} ${asked} is not served here. Reach the gateway placed for your machine through Stado's service directory: stado service directory connect brama. See ${RUNBOOK}`,
+      message: `brama.wisent.com is Brama's documentation site, not a Brama gateway, so ${request.method} ${asked} is not served here. Call the gateway your deployment runs, at the address it declares; with Stado: stado service directory connect brama. See ${RUNBOOK}`,
       type: 'request_error',
       code: 'api_not_published',
       retryable: false,
