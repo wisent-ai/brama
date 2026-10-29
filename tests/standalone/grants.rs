@@ -86,8 +86,8 @@ impl Run {
 
 /// The owner's read and write bits, and the same with the group's read bit.
 fn modes() -> (u32, u32) {
-    let owner = u32::from(libc::S_IRUSR | libc::S_IWUSR);
-    (owner, owner | u32::from(libc::S_IRGRP))
+    let owner = brama::core::mode::OWNER_READ_WRITE;
+    (owner, owner | brama::core::mode::GROUP_READ)
 }
 
 #[test]

@@ -1,6 +1,7 @@
 pub mod decisions;
 pub mod failure;
 pub mod inference_routes;
+pub mod mode;
 pub mod perf;
 pub mod server;
 pub mod staging;

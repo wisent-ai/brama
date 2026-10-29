@@ -133,7 +133,7 @@ pub(super) fn persist(ledger: &Ledger) -> Result<(), String> {
         #[cfg(unix)]
         {
             use std::os::unix::fs::OpenOptionsExt;
-            options.mode(u32::from(libc::S_IRUSR | libc::S_IWUSR));
+            options.mode(crate::core::mode::OWNER_READ_WRITE);
         }
         let mut file = options.open(&staging)?;
         file.write_all(&bytes)?;

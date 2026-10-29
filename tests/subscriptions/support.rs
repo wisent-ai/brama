@@ -1,4 +1,9 @@
 //! Real CLI execution with retained evidence and gateway identity checked before mutation.
+//!
+//! The subscription, readiness and authentication test binaries each include
+//! this module by path and call their own part of it, so a method one binary
+//! leaves uncalled is not dead.
+#![allow(dead_code)]
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{

@@ -137,7 +137,7 @@ fn summarize(provider: String, account: String, members: &[&Observed<'_>], now_m
         for reading in usage::plan_windows(member.recorded.as_ref()).limits {
             let current = reading.resets_at_ms.is_none_or(|resets| resets > now_ms);
             let window = Window {
-                remaining_fraction: current.then(|| WHOLE_LIMIT - reading.used_fraction),
+                remaining_fraction: current.then_some(WHOLE_LIMIT - reading.used_fraction),
                 limit_id: reading.limit_id.clone(),
                 label: reading.label,
                 window_label: reading.window_label,

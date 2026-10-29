@@ -36,7 +36,6 @@ use dispatch::{settled, DispatchPlan};
 use lease::leased_target;
 
 mod lease;
-pub(crate) use lease::{ACCOUNT_HEADER, SUBSCRIPTION_HEADER};
 
 /// Whether this call was answered in one piece or committed as a stream.
 pub(super) enum DispatchedCall {
@@ -50,7 +49,6 @@ pub(super) struct RoutedCallMeta {
     pub(super) routing_mode: &'static str,
     alias_source: Option<String>,
     pub(super) request_id: String,
-    pub(super) selected_model: String,
     pub(super) started: Instant,
 }
 
@@ -263,12 +261,11 @@ pub(super) async fn route_model_call(
         "routing request accepted"
     );
     let started = Instant::now();
-    request.model = selected_model.clone();
+    request.model = selected_model;
     let meta = RoutedCallMeta {
         routing_mode,
         alias_source,
         request_id,
-        selected_model,
         started,
     };
     let admission = crate::journal::concurrency::admit(requested_model);

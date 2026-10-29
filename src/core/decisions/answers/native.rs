@@ -54,7 +54,7 @@ pub(super) fn native_answer(
             let Some(highest) = levels
                 .iter()
                 .enumerate()
-                .last()
+                .next_back()
                 .map(|(index, _)| index as f64)
             else {
                 return Err(format!("question `{key}` declares no rubric levels"));

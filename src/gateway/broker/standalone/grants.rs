@@ -39,11 +39,6 @@ fn path() -> Result<PathBuf, String> {
         .join("standalone-grants.json"))
 }
 
-/// Owner read and write only, as the C library names those bits.
-fn owner_only() -> u32 {
-    u32::from(libc::S_IRUSR | libc::S_IWUSR)
-}
-
 /// Refuse a grants file any other user can reach.
 fn check_private(path: &Path) -> Result<(), String> {
     let mode = std::fs::metadata(path)
@@ -55,7 +50,7 @@ fn check_private(path: &Path) -> Result<(), String> {
         })?
         .permissions()
         .mode();
-    let others = u32::from(libc::S_IRWXG | libc::S_IRWXO);
+    let others = crate::core::mode::GROUP_AND_OTHER;
     // Any group or other permission bit set is a reader besides the owner.
     if mode & !others != mode {
         return Err(format!(
@@ -131,21 +126,23 @@ pub(super) fn save(held: &LocalCredentialMap) -> Result<(), String> {
         let mut file = OpenOptions::new()
             .write(true)
             .create_new(true)
-            .mode(owner_only())
+            .mode(crate::core::mode::OWNER_READ_WRITE)
             .open(&staging)
             .map_err(|error| format!("cannot create {}: {error}", staging.display()))?;
         file.write_all(&encoded)
             .map_err(|error| format!("cannot write {}: {error}", staging.display()))?;
         file.sync_all()
             .map_err(|error| format!("cannot sync {}: {error}", staging.display()))?;
-        std::fs::set_permissions(&staging, std::fs::Permissions::from_mode(owner_only())).map_err(
-            |error| {
-                format!(
-                    "cannot restrict {} to its owner: {error}",
-                    staging.display()
-                )
-            },
-        )?;
+        std::fs::set_permissions(
+            &staging,
+            std::fs::Permissions::from_mode(crate::core::mode::OWNER_READ_WRITE),
+        )
+        .map_err(|error| {
+            format!(
+                "cannot restrict {} to its owner: {error}",
+                staging.display()
+            )
+        })?;
         std::fs::rename(&staging, &path).map_err(|error| {
             format!(
                 "cannot replace {} with the new grants: {error}",

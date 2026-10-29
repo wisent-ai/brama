@@ -10,10 +10,9 @@ const VAULT_PROGRAM_NAMES: &[&str] = &[DEFAULT_ENTITLEMENTS_ROUTER_BIN, "skarbie
 /// Where the fleet installs it when nothing is on `PATH`, relative to `$HOME`.
 const VAULT_HOME_RELATIVE: &str = ".stado/bin/skarbiec";
 
-/// Whether a file mode carries any execute bit, as the C library names them.
+/// Whether a file mode carries any execute bit.
 fn executable_mode(mode: u32) -> bool {
-    let execute = u32::from(libc::S_IXUSR | libc::S_IXGRP | libc::S_IXOTH);
-    std::num::NonZeroU32::new(mode & execute).is_some()
+    std::num::NonZeroU32::new(mode & crate::core::mode::ANY_EXECUTE).is_some()
 }
 
 /// The vault binary this gateway shells for every credential operation.

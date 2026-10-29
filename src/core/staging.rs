@@ -62,7 +62,7 @@ pub fn replace_private(path: &Path, bytes: &[u8], what: &str) -> Result<(), Stri
         .create(true)
         .truncate(true)
         .write(true)
-        .mode(u32::from(libc::S_IRUSR | libc::S_IWUSR))
+        .mode(crate::core::mode::OWNER_READ_WRITE)
         .open(&staged)
         .and_then(|mut file| file.write_all(bytes).and_then(|()| file.sync_all()))
         .and_then(|()| std::fs::rename(&staged, path));

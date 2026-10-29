@@ -105,7 +105,7 @@ fn update_donated_items(update: impl FnOnce(&mut Vec<Value>)) -> Result<(), Stri
             .create(true)
             .write(true)
             .truncate(true)
-            .mode(u32::from(libc::S_IRUSR | libc::S_IWUSR))
+            .mode(crate::core::mode::OWNER_READ_WRITE)
             .open(&tmp)
             .map_err(|error| format!("write donated subscriptions file: {error}"))?;
         file.write_all(payload.as_bytes())

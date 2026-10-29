@@ -242,12 +242,12 @@ impl CapabilityClient {
                 secret.len()
             )));
         }
-        match stream.bytes().next() {
-            None => Ok(Secret::from_zeroizing(secret)),
-            Some(Ok(_)) => Err(CapabilityError::AuthorityAnswer(format!(
+        match read_byte(&mut stream) {
+            Ok(None) => Ok(Secret::from_zeroizing(secret)),
+            Ok(Some(_)) => Err(CapabilityError::AuthorityAnswer(format!(
                 "response from {socket} contains trailing bytes after the {length}-byte secret"
             ))),
-            Some(Err(error)) => Err(unreachable("reading the secret boundary from", error)),
+            Err(error) => Err(unreachable("reading the secret boundary from", error)),
         }
     }
 }
@@ -283,8 +283,8 @@ struct RedeemControl {
 fn read_control_line(stream: &mut UnixStream) -> std::io::Result<Vec<u8>> {
     let mut line = Vec::new();
     // One byte at a time: the secret follows the line on the same stream.
-    for byte in Read::by_ref(stream).bytes() {
-        match byte? {
+    while let Some(byte) = read_byte(stream)? {
+        match byte {
             b'\n' => return Ok(line),
             other => line.push(other),
         }
@@ -296,4 +296,19 @@ fn read_control_line(stream: &mut UnixStream) -> std::io::Result<Vec<u8>> {
             line.len()
         ),
     ))
+}
+
+/// The stream's next byte, or none at its end. Unbuffered on purpose: a read
+/// buffer would hold the secret that follows the control line outside
+/// `Zeroizing`.
+fn read_byte(stream: &mut UnixStream) -> std::io::Result<Option<u8>> {
+    let mut byte = [0u8; 1];
+    loop {
+        match stream.read(&mut byte) {
+            Ok(0) => return Ok(None),
+            Ok(_) => return Ok(Some(byte[0])),
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        }
+    }
 }

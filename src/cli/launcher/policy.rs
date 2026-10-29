@@ -27,8 +27,8 @@ const REQUIRED_ALIASES: &[&str] = &[
 const BACKEND_ALIAS: &str = "wisent-backend";
 
 fn write_new(path: &Path, text: &str) -> Result<(), String> {
-    // Owner read and write only, as the platform spells it.
-    let owner_only = u32::from(libc::S_IRUSR | libc::S_IWUSR);
+    // Owner read and write only.
+    let owner_only = brama::core::mode::OWNER_READ_WRITE;
     std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)

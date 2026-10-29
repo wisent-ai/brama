@@ -39,8 +39,8 @@ const RUNNABLE_FILES: &[&str] = &[
     "bin/skarbiec-entitlements-router",
     "bin/start-with-skarbiec",
 ];
-/// The execute permission for owner, group and others, by its POSIX names.
-const EXECUTE_BITS: u32 = (libc::S_IXUSR | libc::S_IXGRP | libc::S_IXOTH) as u32;
+/// The execute permission for owner, group and others.
+const EXECUTE_BITS: u32 = brama::core::mode::ANY_EXECUTE;
 
 /// Every generation directory, oldest first by modification time; one whose
 /// time cannot be read is said and listed after the rest.

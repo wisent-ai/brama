@@ -154,7 +154,7 @@ impl Issuing<'_> {
         let written = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
-            .mode(u32::from(libc::S_IRUSR | libc::S_IWUSR))
+            .mode(brama::core::mode::OWNER_READ_WRITE)
             .open(self.key_file)
             .and_then(|mut file| file.write_all(self.pem.as_bytes()));
         let minted = written.and_then(|()| {

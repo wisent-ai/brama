@@ -64,13 +64,23 @@ fn declared_addresses(variable: &str) -> Result<Vec<IpAddr>, String> {
         .collect()
 }
 
+/// The three address lists the guard reads.
+struct DeclaredPeers {
+    /// The addresses the gateway itself bound.
+    bound: Vec<IpAddr>,
+    /// TLS terminators whose forwarded headers are trusted.
+    proxies: Vec<IpAddr>,
+    /// Mesh peers whose hop is already encrypted.
+    encrypted: Vec<IpAddr>,
+}
+
 /// The three lists the guard reads, or the first one that cannot be read.
-fn declared_peers() -> Result<(Vec<IpAddr>, Vec<IpAddr>, Vec<IpAddr>), String> {
-    Ok((
-        declared_addresses("BRAMA_BIND_ADDRESS")?,
-        declared_addresses("BRAMA_TRUSTED_PROXY_IPS")?,
-        declared_addresses("BRAMA_ENCRYPTED_PEER_IPS")?,
-    ))
+fn declared_peers() -> Result<DeclaredPeers, String> {
+    Ok(DeclaredPeers {
+        bound: declared_addresses("BRAMA_BIND_ADDRESS")?,
+        proxies: declared_addresses("BRAMA_TRUSTED_PROXY_IPS")?,
+        encrypted: declared_addresses("BRAMA_ENCRYPTED_PEER_IPS")?,
+    })
 }
 
 /// Loopback, the address the gateway itself bound, a declared mesh peer
@@ -95,7 +105,11 @@ pub(in crate::core::server) async fn require_secure_transport(
     if peer.is_some_and(|address| address.is_loopback()) {
         return next.run(request).await;
     }
-    let (bound, proxies, encrypted) = match declared_peers() {
+    let DeclaredPeers {
+        bound,
+        proxies,
+        encrypted,
+    } = match declared_peers() {
         Ok(lists) => lists,
         Err(fault) => {
             return api_error(

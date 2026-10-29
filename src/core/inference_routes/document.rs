@@ -72,7 +72,7 @@ pub(super) fn read_body(path: &Path) -> Result<String, String> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::{MetadataExt, PermissionsExt};
-        let non_owner_mask = u32::from(libc::S_IRWXG | libc::S_IRWXO);
+        let non_owner_mask = crate::core::mode::GROUP_AND_OTHER;
         if metadata.uid() != unsafe { libc::geteuid() } {
             return Err("inference routes must be owned by the Brama user".to_string());
         }
@@ -171,7 +171,7 @@ pub(super) fn write_registry(path: &Path, value: &Value) -> Result<(), String> {
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
         #[cfg(unix)]
-        options.mode(u32::from(libc::S_IRUSR | libc::S_IWUSR));
+        options.mode(crate::core::mode::OWNER_READ_WRITE);
         let mut file = options
             .open(&staging)
             .map_err(|error| format!("cannot create route staging file: {error}"))?;

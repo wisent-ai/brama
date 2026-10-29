@@ -88,9 +88,8 @@ fn append(record: Value) -> Result<(), String> {
         .map_err(|error| format!("cannot open the journal {}: {error}", path.display()))?;
     file.write_all(line.as_bytes())
         .map_err(|error| format!("cannot append to the journal {}: {error}", path.display()))?;
-    // Owner read and write only, as the C library names those bits, set on
-    // the file itself after every append.
-    let owner_only = u32::from(libc::S_IRUSR | libc::S_IWUSR);
+    // Owner read and write only, set on the file itself after every append.
+    let owner_only = crate::core::mode::OWNER_READ_WRITE;
     std::fs::set_permissions(
         path,
         std::os::unix::fs::PermissionsExt::from_mode(owner_only),
