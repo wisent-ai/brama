@@ -28,6 +28,10 @@ const REQUIRED_FILES: &[&str] = &[
     "bin/start-with-skarbiec",
     "bin/provision-skarbiec-trust",
     "libexec/generate-skarbiec-config.mjs",
+    // The modules the generator imports; without them it dies on its
+    // first line, so the generation is not complete.
+    "libexec/skarbiec-config/keys.mjs",
+    "libexec/skarbiec-config/requirement.mjs",
 ];
 /// The programs a generation must be able to run.
 const RUNNABLE_FILES: &[&str] = &[

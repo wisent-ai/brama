@@ -130,8 +130,10 @@ jobs:
           # build machine cannot know, and generating it here would put the same
           # workload proof key in every copy of this archive. The operator runs
           # bin/provision-skarbiec-trust once per installation instead, so the
-          # generator ships as data rather than being executed now.
-          cp src/release/libexec/generate-skarbiec-config.mjs "$stage/libexec/generate-skarbiec-config.mjs"
+          # generator ships as data rather than being executed now, with the
+          # skarbiec-config modules it imports beside it, which the Stado
+          # release's stage map ships too (stage/libexec as a directory).
+          cp -R src/release/libexec/generate-skarbiec-config.mjs src/release/libexec/skarbiec-config "$stage/libexec/"
           # The host diagnostic, the route probe and workload registration are
           # `brama diagnose`, `brama probe` and `brama workload register`, in
           # the binary.
