@@ -2,6 +2,16 @@
 set -eu
 umask 077
 
+# Help prints and boots nothing: a reader of the command (the release's
+# command-tree check among them) must not start the gateway by asking.
+case "${1:-}" in
+  --help|-h)
+    printf '%s\n' "usage: start-with-skarbiec" \
+      "Start this installation's Brama gateway with its Skarbiec capability broker, as the service unit does; it takes no arguments."
+    exit 0
+    ;;
+esac
+
 # `pwd -P`, not `pwd`. The unit runs this through `.../brama/current/...`, and
 # a logical `pwd` keeps that link in the path. The trust material then pins the
 # gateway as the alias while the kernel reports the physical digest directory

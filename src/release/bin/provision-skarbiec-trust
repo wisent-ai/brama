@@ -26,6 +26,12 @@ umask 077
 force=
 for argument in "$@"; do
   case "$argument" in
+    --help|-h)
+      printf '%s\n' "usage: provision-skarbiec-trust [--force]" \
+        "Generate this installation's Skarbiec trust material, once, before the first start;" \
+        "--force replaces an existing workload identity."
+      exit 0
+      ;;
     --force) force=yes ;;
     *)
       printf '%s\n' "unknown argument: $argument" >/dev/stderr
