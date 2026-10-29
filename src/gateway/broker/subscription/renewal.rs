@@ -48,7 +48,7 @@ async fn refresh_presented(
     // only independent Weles sign-in supplies this gateway's own grant.
     if is_borrowed(&credential) {
         let detail = format!(
-            "subscription `{subscription_id}` carries a borrowed harness grant; Brama neither uses nor rotates it. Obtain an independent grant through Weles; `brama subscription list` retains the sign-in refusal when that cannot complete"
+            "subscription `{subscription_id}` carries a borrowed harness grant; Brama neither uses nor rotates it, and nothing brings a harness grant any more. Sign the account in for Brama's own grant: `brama subscription login {provider} --by weles --subscription-id {subscription_id} --reason <why>` (automatic) or `--by hand` (you paste the code the provider shows); `brama subscription list` retains the sign-in refusal when that cannot complete"
         );
         crate::subscription_dispatch::usage::record_reauthorization_needed(
             subscription_id,
