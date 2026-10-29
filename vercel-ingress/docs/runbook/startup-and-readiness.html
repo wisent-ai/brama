@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Startup and readiness — Brama Docs</title>
-  <meta name="description" content="Runbook entries for a gateway that will not start, answers ok while nothing works, reports 503 from /readyz, refuses a remote request with 426, or sits behind an unpublished endpoint.">
+  <meta name="description" content="Runbook entries for a caller that asks the documentation site for the API, a gateway that will not start, answers ok while nothing works, reports 503 from /readyz, or refuses a remote request with 426.">
   <link rel="canonical" href="https://brama.wisent.com/docs/runbook/startup-and-readiness">
   <link rel="stylesheet" href="/docs/assets/site.css">
 </head>
@@ -18,52 +18,31 @@
     <main>
       <p class="source-note">Brama runbook: startup, reachability and readiness</p>
       <article class="doc"><h1 id="startup-and-readiness">Startup and readiness<a class="headerlink" href="#startup-and-readiness" title="Link to this section">&para;</a></h1>
-<p>Five symptoms that appear before any model request succeeds: the public
-endpoint is not published, the process refuses to start, <code>/health</code> says
+<p>Five symptoms that appear before any model request succeeds: a caller asks
+the documentation site for the API, the process refuses to start, <code>/health</code> says
 <code>ok</code> while nothing serves, <code>/readyz</code> answers 503, or a request from another
 machine is refused at the transport. Each entry quotes the sentence the
 product actually prints and names the repair. The error vocabulary itself is
 in <a href="/docs/errors">errors</a>; the rest of the runbook is at
 <a href="/docs/runbook">runbook</a>.</p>
 
-<h2 id="public-address">brama.wisent.com forwards to the declared gateway origin</h2>
-<p><code>https://brama.wisent.com</code> is Brama's public address. The Vercel project behind it
-serves <code>/docs</code> and forwards every other path to the origin in its
-<code>BRAMA_GATEWAY_ORIGIN</code> environment variable: the public HTTPS origin of Brama's
-declared public origin, which <code>stado web origin declare brama --target &lt;host&gt;
---hostname &lt;public name&gt; --upstream http://127.0.0.1:8080 --path /v1</code> declares,
-<code>stado web origin converge brama</code> publishes and <code>stado web origin url /v1</code>
-prints. Without the variable every forwarded path answers <code>503</code> with code
-<code>gateway_origin_undeclared</code> naming it; an origin the function cannot reach answers
-<code>502</code> <code>gateway_unreachable</code> with the transport error. Before this forwarder
-came back, the same calls answered Vercel's own <code>404 NOT_FOUND</code> page, which callers
-reported as <code>Brama request failed (404)</code>.</p>
-
-<h2 id="public-endpoint-and-ci-checkout">The public endpoint fails while CI waits for a key<a class="headerlink" href="#public-endpoint-and-ci-checkout" title="Link to this section">&para;</a></h2>
-<p>The <code>funnel-keepalive</code> workflow publishes Brama's origin from Stado's
-service directory every five minutes. Its checked-in
-<code>.github/workflows/funnel-keepalive.yml</code> step changes only the root path
-on HTTPS port 443; it preserves the Stado object and integration paths on the
-same port. A queued workflow has not published anything, even when the runner
-is online.</p>
-<p>For an empty HTTP 502 from the public endpoint, compare the declared origin
-with the current forwarding rule and inspect the publisher's job:</p>
-<pre><code class="language-shell">stado service directory bind brama --target &lt;host&gt; --json
-stado host exec &lt;host&gt; -- tailscale serve status --json
-gh run list --repo wisent-ai/brama --workflow funnel-keepalive.yml
+<h2 id="public-address">brama.wisent.com serves the documentation, not the gateway<a class="headerlink" href="#public-address" title="Link to this section">&para;</a></h2>
+<p><code>https://brama.wisent.com</code> serves this documentation under <code>/docs</code>.
+Brama's HTTP API is not published on the internet: the gateway binds loopback on
+the host Stado places it on, and a client reaches it through Stado's service
+directory, which answers each machine with that machine's own route:</p>
+<pre><code class="language-shell">stado service directory connect brama
 </code></pre>
-<p>If a checkout waits in <code>git-credential-osxkeychain</code>, do not approve a
-system dialog or restart the runner. Brama's jobs on the release runner create
-an empty, job-local Git configuration before checkout, ignore system Git
-configuration, and disable terminal and askpass prompts. Checkout uses its
-GitHub token; private dependency authorization writes only to that job's Git
-configuration, not the host's shared configuration. A missing credential makes
-the job fail visibly instead of opening a consent window. Jobs started from an
-older revision retain their old settings; cancel a stuck old run before
-scheduling the corrected publisher, rather than rerunning the old revision.</p>
-<p>A completed publication proves the forwarding rule, not model inference.
-Confirm the original authenticated request against Brama before treating the
-caller as repaired.</p>
+<p>Every path outside <code>/docs</code>, <code>/health</code> and <code>/readyz</code>
+included, answers <code>404</code> with this body, the path and method filled in:</p>
+<pre><code class="language-json">{&quot;error&quot;:{&quot;message&quot;:&quot;brama.wisent.com serves Brama's documentation under /docs only; Brama's HTTP API is not published on the internet, so POST /v1/chat/completions is not served here. Reach the gateway placed for your machine through Stado's service directory: stado service directory connect brama. See /docs/runbook/startup-and-readiness#public-address&quot;,
+ &quot;type&quot;:&quot;request_error&quot;,&quot;code&quot;:&quot;api_not_published&quot;,&quot;retryable&quot;:false}}
+</code></pre>
+<p>The caller was configured with this site as its gateway address. Repair that
+configuration to the route the service directory gives its machine; a program
+running where no fleet route reaches uses its own declared alternative to Brama.
+Readiness is read from the gateway itself, through that route, as the entries
+below describe.</p>
 
 <h2 id="brama-serve-refuses-to-start"><code>brama serve</code> refuses to start<a class="headerlink" href="#brama-serve-refuses-to-start" title="Link to this section">&para;</a></h2>
 <p>The sentence, verbatim (exit 1):</p>

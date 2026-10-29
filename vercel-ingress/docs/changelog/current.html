@@ -24,6 +24,15 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-api-not-published">Unreleased: brama.wisent.com says the API is not served there, and forwards nothing<a class="headerlink" href="#unreleased-api-not-published" title="Link to this section">&para;</a></h2>
+<p>The documentation site forwarded every path outside <code>/docs</code> to an origin held only
+in its <code>BRAMA_GATEWAY_ORIGIN</code> deployment variable, which nothing declared or
+delivered, because Brama's HTTP API is not published on the internet; every such call answered
+<code>503 gateway_origin_undeclared</code>, read as Brama refusing a sign-in. The forwarder and
+the Funnel publishing script are gone: every path outside <code>/docs</code> answers
+<code>404 api_not_published</code>, retryable false, naming the method and path and the route a
+client uses instead, <code>stado service directory connect brama</code>. See
+<a href="/docs/runbook/startup-and-readiness#public-address">Startup and readiness</a>.</p>
 <h2 id="unreleased-launcher-verbs">Unreleased: the release runs the launcher check under its current name, and a real test exercises its grammar<a class="headerlink" href="#unreleased-launcher-verbs" title="Link to this section">&para;</a></h2>
 <p>The router-verbs check was renamed <code>brama launcher verbs</code>, but the release workflow
 still called <code>brama launcher check-router-verbs</code>, which no longer exists, so a release
