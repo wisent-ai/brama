@@ -36,10 +36,6 @@ fn plan_usage_storage_failure(subscription_id: &str, provider: &str, detail: Str
     .with_context("provider", provider)
 }
 
-fn failure_value(failure: &Failure) -> serde_json::Value {
-    serde_json::from_str(&failure.to_json()).expect("Wisent failure serialization is JSON")
-}
-
 /// Usage failures use the fleet envelope's detail bound so endpoint, status,
 /// and provider reason survive together.
 fn bounded_usage_detail(detail: Option<&str>) -> Option<String> {
@@ -61,7 +57,7 @@ fn remember_plan_usage_failure(
     refused: &Failure,
 ) {
     let detail = bounded_usage_detail(refused.detail.as_deref());
-    let envelope = failure_value(refused);
+    let envelope = failure::value(refused);
     with_ledger_memory(|ledger| {
         let entry = ledger
             .subscriptions
@@ -178,7 +174,7 @@ pub fn record_plan_usage_failure(
 ) -> Result<(), Failure> {
     let now = now_ms();
     let detail = bounded_usage_detail(refused.detail.as_deref());
-    let envelope = failure_value(refused);
+    let envelope = failure::value(refused);
     let (_, stored) = write_ledger(|ledger| {
         let entry = ledger
             .subscriptions

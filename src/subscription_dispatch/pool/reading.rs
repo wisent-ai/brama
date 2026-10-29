@@ -2,7 +2,7 @@
 //! whatever produced the refusal.
 
 use serde_json::Value;
-use wisent_errors::{Code, Failure};
+use wisent_errors::Code;
 
 use crate::core::failure;
 use crate::gateway::broker::SubscriptionEntry;
@@ -10,10 +10,6 @@ use crate::subscription_dispatch::usage;
 use crate::subscription_dispatch::usage::{CredentialState, SubscriptionUsage};
 
 use super::account::retired;
-
-pub(super) fn failure_json(failure: &Failure) -> Value {
-    serde_json::from_str(&failure.to_json()).expect("Wisent failure serialization is JSON")
-}
 
 /// Why one row of the document is not a healthy answer, in the words of
 /// whatever produced the refusal. Every row is a member the vault lists, or
@@ -89,5 +85,5 @@ pub(super) fn reading_error(
         Some(check) => refused.with_context("attempted_at_ms", check.attempted_at_ms.to_string()),
         None => refused.with_context("observed_at_ms", now.to_string()),
     };
-    Some(failure_json(&refused))
+    Some(failure::value(&refused))
 }

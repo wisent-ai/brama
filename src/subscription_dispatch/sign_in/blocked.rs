@@ -7,12 +7,6 @@ use wisent_errors::Code;
 pub const POINT: &str = "brama.subscriptions.automatic-sign-in";
 pub const IMPACT: &str = "one automatic sign-in";
 
-/// The HTTP statuses a refused sign-in is classified by.
-const HTTP_UNAUTHORIZED: u16 = 401;
-const HTTP_FORBIDDEN: u16 = 403;
-const HTTP_TOO_MANY_REQUESTS: u16 = 429;
-const HTTP_SERVER_ERRORS: std::ops::RangeInclusive<u16> = 500..=599;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Blocked {
     Operation {
@@ -39,22 +33,19 @@ impl Blocked {
         }
     }
 
+    /// The envelope code a refused sign-in carries, classified by the HTTP
+    /// status it observed as `reqwest::StatusCode` names them.
     pub fn failure_code(&self) -> Code {
-        match self {
-            Self::WelesUnreachable { .. } => Code::InfraDown,
-            Self::Operation {
-                status: Some(HTTP_UNAUTHORIZED | HTTP_FORBIDDEN),
-                ..
-            } => Code::Auth,
-            Self::Operation {
-                status: Some(HTTP_TOO_MANY_REQUESTS),
-                ..
-            } => Code::RateLimit,
-            Self::Operation {
-                status: Some(status),
-                ..
-            } if HTTP_SERVER_ERRORS.contains(status) => Code::InfraDown,
-            _ => Code::Config,
+        let raw = match self {
+            Self::WelesUnreachable { .. } => return Code::InfraDown,
+            Self::Operation { status: Some(raw), .. } => *raw,
+            _ => return Code::Config,
+        };
+        match reqwest::StatusCode::from_u16(raw) {
+            Ok(reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN) => Code::Auth,
+            Ok(reqwest::StatusCode::TOO_MANY_REQUESTS) => Code::RateLimit,
+            Ok(status) if status.is_server_error() => Code::InfraDown,
+            Ok(_other_status) | Err(_not_a_status) => Code::Config,
         }
     }
 
@@ -88,7 +79,7 @@ impl Blocked {
                 envelope = envelope.with_context("http_status", status.to_string());
             }
         }
-        serde_json::from_str(&envelope.to_json()).expect("Wisent failure serialization is JSON")
+        failure::value(&envelope)
     }
 }
 

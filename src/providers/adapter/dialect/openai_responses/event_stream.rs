@@ -3,7 +3,7 @@
 use serde_json::Value;
 
 use crate::providers::adapter::call::outcome::refusal::attempted_failure;
-use crate::providers::adapter::stated_usage;
+use crate::providers::adapter::usage::stated_usage;
 use crate::types::{ModelResponse, ProviderRefusal, Refusal, ToolCall};
 
 /// The class of a failure the backend reported inside a 200 stream, from the

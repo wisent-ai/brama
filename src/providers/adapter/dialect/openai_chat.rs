@@ -3,7 +3,7 @@
 use serde_json::{json, Value};
 
 use crate::providers::adapter::call::outcome::refusal::attempted_failure;
-use crate::providers::adapter::stated_usage;
+use crate::providers::adapter::usage::stated_usage;
 use crate::types::{
     ModelRequest, ModelResponse, ProviderRefusal, Refusal, ResponseSchema, ToolCall,
 };

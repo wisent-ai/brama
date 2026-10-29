@@ -35,7 +35,7 @@ use crate::subscription_dispatch::usage;
 
 use account::{expires_at, last_redeem_error, named, now_ms, retired, state, subscription_row};
 use attribution::{accounts, capacity};
-use reading::{failure_json, reading_error};
+use reading::reading_error;
 
 pub(crate) use account::pool_without_servable_member;
 pub use account::subscription_view;
@@ -72,7 +72,7 @@ pub(crate) fn document(
 ) -> Value {
     let mut errors: Vec<Value> = errors
         .into_iter()
-        .map(|error| failure_json(&error))
+        .map(|error| failure::value(&error))
         .collect();
     let observed_at_ms = now_ms();
     let seed_states = std::cell::OnceCell::new();
@@ -108,7 +108,7 @@ pub(crate) fn document(
                 // every row the same way.
                 if !journal_unreadable {
                     journal_unreadable = true;
-                    errors.push(failure_json(
+                    errors.push(failure::value(
                         &failure::envelope(
                             "brama.subscriptions.journal",
                             Code::Config,
@@ -155,7 +155,7 @@ pub(crate) fn document(
         })
         .collect::<Vec<_>>();
     if let Some(detail) = usage::storage_error() {
-        errors.push(failure_json(
+        errors.push(failure::value(
             &failure::envelope(
                 "brama.subscriptions.ledger",
                 Code::Config,
@@ -166,7 +166,7 @@ pub(crate) fn document(
         ));
     }
     if let Err(detail) = &leases {
-        errors.push(failure_json(
+        errors.push(failure::value(
             &failure::envelope(
                 "brama.subscriptions.leases",
                 Code::Config,
@@ -224,7 +224,7 @@ fn acquisitions(errors: &mut Vec<Value>, observed_at_ms: i64) -> Value {
                 latest.insert(provider.to_owned(), Value::Null);
             }
             Err(cause) => {
-                errors.push(failure_json(
+                errors.push(failure::value(
                     &failure::envelope(
                         "brama.subscriptions.acquisition",
                         Code::Config,

@@ -1,7 +1,9 @@
 mod effect;
-use super::blocked::{journal_unreadable, observed_at, with_holds};
-use super::{weles_provider, Blocked, SignInOptions};
+mod observed;
+use super::blocked::with_holds;
+use super::{weles_provider, SignInOptions};
 pub use effect::effect_unknown;
+pub use observed::observed_failure;
 use serde_json::{json, Value};
 
 pub(super) const SIGNED_IN: &str = "signed_in";
@@ -204,99 +206,4 @@ fn stops_a_new_attempt(
         && failed
         && !unknown_effect
         && ((rejected && (credential_rejected || same_executor)) || (cooling_down && same_executor))
-}
-
-pub fn observed_failure(id: &str) -> Option<Blocked> {
-    let current = crate::subscription_dispatch::usage::usage_for(id);
-    if let Some(check) = current
-        .as_ref()
-        .and_then(|entry| entry.sign_in_check_failure.as_ref())
-    {
-        let active_after_check = current
-            .as_ref()
-            .and_then(|entry| entry.credential.as_ref())
-            .is_some_and(|credential| {
-                credential.state == crate::subscription_dispatch::usage::CredentialState::Active
-                    && credential.recorded_at_ms >= check.at_ms
-            });
-        let completed_after_check = match crate::journal::latest_subscription_sign_in(id) {
-            Ok(latest) => latest
-                .and_then(|attempt| attempt.get("at_ms").and_then(Value::as_i64))
-                .is_some_and(|at| at >= check.at_ms),
-            Err(cause) => return Some(journal_unreadable(cause)),
-        };
-        if !active_after_check && !completed_after_check {
-            return Some(Blocked::Operation {
-                code: check.code.clone(),
-                stage: "automatic_sign_in_check".into(),
-                detail: format!(
-                    "{} ({})",
-                    check.detail,
-                    observed_at(Some(check.at_ms), "checked")
-                ),
-                status: None,
-            });
-        }
-    }
-    let previous = match crate::journal::latest_subscription_sign_in(id) {
-        Ok(previous) => previous?,
-        // Whether the last sign-in failed lives in the journal; unreadable,
-        // the member is held with the journal's cause rather than called clear.
-        Err(cause) => return Some(journal_unreadable(cause)),
-    };
-    if previous.get("result").and_then(Value::as_str) != Some(FAILED) {
-        return None;
-    }
-    // An attempt refused before any run (identity, login lookup) records
-    // `started_at_ms` as null, not absent: read it as a number, so the
-    // completion instant stands in for a run start that never happened.
-    let began = previous
-        .get("started_at_ms")
-        .and_then(Value::as_i64)
-        .or_else(|| previous.get("at_ms").and_then(Value::as_i64));
-    if let (Some(began), Some(credential)) = (
-        began,
-        current.as_ref().and_then(|usage| usage.credential.as_ref()),
-    ) {
-        if credential.state == crate::subscription_dispatch::usage::CredentialState::Active
-            && credential.recorded_at_ms >= began
-        {
-            return None;
-        }
-    }
-    let recorded = |pointer: &str| previous.pointer(pointer).and_then(Value::as_str);
-    let status = match previous
-        .pointer("/failure/http_status")
-        .and_then(Value::as_u64)
-    {
-        Some(value) => match u16::try_from(value) {
-            Ok(status) => Some(status),
-            Err(error) => {
-                return Some(journal_unreadable(format!(
-                    "the last recorded sign-in of {id} names HTTP status {value}: {error}"
-                )))
-            }
-        },
-        None => None,
-    };
-    // A record older than failure codes reads in the documented words for it.
-    Some(Blocked::Operation {
-        code: match recorded("/failure/code") {
-            Some(code) => code.into(),
-            None => "authentication_outcome_unclassified".into(),
-        },
-        stage: match recorded("/failure/stage") {
-            Some(stage) => stage.into(),
-            None => "stage not recorded".into(),
-        },
-        detail: format!(
-            "{} ({})",
-            match recorded("/detail") {
-                Some(detail) => detail,
-                None => "The previous authentication attempt did not retain its outcome",
-            },
-            observed_at(began, "attempted")
-        ),
-        status,
-    })
 }

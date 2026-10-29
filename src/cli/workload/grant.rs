@@ -26,7 +26,8 @@ const RUNTIME_GRANT_ENV: &str = "BRAMA_RUNTIME_GRANT_SECONDS";
 /// The fixed SubjectPublicKeyInfo header of an Ed25519 key: the registry
 /// records the raw key and `grant issue` validates an SPKI PEM, so this
 /// prefix makes the two the same key.
-const ED25519_SPKI_PREFIX: [u8; 12] = [
+// https://www.rfc-editor.org/rfc/rfc8410#section-10.1
+const ED25519_SPKI_PREFIX: &[u8] = &[
     // https://www.rfc-editor.org/rfc/rfc8410#section-10.1
     0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21,
     0x00, // https://www.rfc-editor.org/rfc/rfc8410#section-10.1
@@ -99,8 +100,14 @@ pub(super) fn register() -> Result<Value, String> {
     };
     let (routes_path, capabilities) = routes::capabilities(&home, &vault, &settings)?;
     let pem = public_key_pem(public_key)?;
-    let key_file =
-        registry_path.with_file_name(format!(".workload-key-{}.pem", std::process::id()));
+    // One name per registration: a file a crashed registration left under a
+    // name tied to the process id would refuse every later registration of a
+    // process given that id (`create_new`) with its existence instead of a
+    // real cause, as the grants file's staging once did.
+    let key_file = registry_path.with_file_name(format!(
+        ".workload-key-{}.pem",
+        uuid::Uuid::new_v4().simple()
+    ));
     let issuing = Issuing {
         router: &router,
         settings: &settings,
