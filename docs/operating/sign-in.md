@@ -32,9 +32,21 @@ Desktop's Subscription Pool report the credential state last recorded by
 the gateway, which may not yet include a request refused before OpenAI.
 
 `--by hand` signs one `claude-code` subscription in through the operator's own
-browser: Brama prints the provider's authorize page, reads the pasted
-`code#state` (or the whole redirect URL) on stdin, stores the grant and proves
-it with one minimal completion. `--subscription-id` is required;
+browser: Brama prints the provider's authorize page
+(`https://claude.com/cai/oauth/authorize`), whose redirect is the provider's
+own code page (`https://platform.claude.com/oauth/code/callback`), and
+redeems and later refreshes the grant at
+`https://platform.claude.com/v1/oauth/token`, the addresses Claude Code
+2.1.296 itself uses (one declaration of the client serves sign-in and
+refresh),
+so nothing on the signing-in machine listens for the browser; it reads the
+`code#state` that page shows (or the whole redirect URL) on stdin, stores the
+grant and proves it with one minimal completion. A host whose `/dev/urandom`
+cannot be read refuses the sign-in naming it and the OS error, since the PKCE
+verifier would otherwise be guessable; Brama Desktop's hand sign-in answers
+that refusal as the gateway's own failure (HTTP 500), and a provider or
+subscription the hand sign-in does not serve as a conflict (HTTP 409).
+`--subscription-id` is required;
 `--gateway-consumer <name>` or `--gateway <origin>` with `--bearer-role <role>`
 runs the same two steps on the serving gateway, so a workstation without its
 own vault can sign a pool member in. `--login-item` belongs to `--by weles`
@@ -89,10 +101,11 @@ of the same account into the run already under way and replays its events, so
 the gateway's next maintenance pass reattaches to it, and a run the operator
 cancelled (`run_cancelled`) leaves the account to a new run. Readiness lists
 such a member in `automatic_sign_in.blocked` without asking an operator to act.
-A refusal is recorded with the failure Weles reported for its run, or, for a
-refusal before any run, with Weles's error code and stage; one that carries
-neither is recorded as `weles_refusal_unclassified` at stage `weles_response`
-rather than given a classification Weles did not make.
+A refusal is recorded with the failure object `{code, stage}` Weles reports
+with every refusal. An answer that refuses without one is recorded as
+`weles_response_incomplete` at stage `weles_response`, with a `detail` naming
+what was missing and the `weles_error` and `weles_stage` Weles did state (null
+where it stated none), rather than given a classification Weles did not make.
 Brama Desktop shows the
 same lines while its sign-in runs (the gateway's sign-in routes answer them as
 `application/x-ndjson`, ending in `verdict` or `refused`), and the gateway's

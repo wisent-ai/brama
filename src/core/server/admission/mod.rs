@@ -19,6 +19,7 @@ use axum::response::{IntoResponse, Response};
 use tracing::{info, warn};
 
 use crate::core::server::refusal::{api_error, ApiError};
+use crate::crypto::hmac_auth::{AGENT_ID, AGENT_SIGNATURE, AGENT_TIMESTAMP};
 use crate::subscription_dispatch::authenticate_agent;
 
 use authority::{identity_from_authority, IdentityResolutionError};
@@ -49,7 +50,7 @@ pub(in crate::core::server) fn presented_bearer(headers: &HeaderMap) -> Option<&
 }
 
 fn exact_agent_header(headers: &HeaderMap, expected: &str) -> bool {
-    let mut values = headers.get_all("x-agent-id").iter();
+    let mut values = headers.get_all(AGENT_ID).iter();
     values
         .next()
         .is_some_and(|value| value.as_bytes() == expected.as_bytes())
@@ -57,7 +58,7 @@ fn exact_agent_header(headers: &HeaderMap, expected: &str) -> bool {
 }
 
 pub(in crate::core::server) fn has_caller_auth_headers(headers: &HeaderMap) -> bool {
-    ["x-agent-id", "x-agent-timestamp", "x-agent-signature"]
+    [AGENT_ID, AGENT_TIMESTAMP, AGENT_SIGNATURE]
         .iter()
         .any(|name| headers.contains_key(*name))
 }

@@ -59,10 +59,10 @@
 
         <h2 id="state-and-ledgers">State and ledgers<a class="headerlink" href="#state-and-ledgers" title="Link to this section">&para;</a></h2>
         <table><thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
-          <tr><td><code>BRAMA_STATE_DIR</code></td><td><code>$HOME/.brama</code></td><td>holds <code>journal.jsonl</code>, the append-only retirement/quality/refresh journal; readers take the last matching record; credential material is never written here</td></tr>
+          <tr><td><code>BRAMA_STATE_DIR</code></td><td><code>$HOME/.brama</code></td><td>holds <code>journal.jsonl</code>, the append-only retirement/quality/refresh journal; readers take the last matching record; credential material is never written here. With neither this variable nor a home (<code>HOME</code>, else the user database's home for the running account), every command and route that reads or writes Brama's state is refused with <code>neither HOME nor the user database names a home directory, so Brama cannot find its state or the Stado binary</code>; declare <code>BRAMA_STATE_DIR</code> or <code>HOME</code> in the unit's environment. The process keeps running.</td></tr>
           <tr><td><code>BRAMA_SUBSCRIPTION_USAGE_FILE</code></td><td><code>~/.config/brama/subscription-usage.json</code></td><td>per-subscription usage ledger, owner-readable, atomic writes</td></tr>
           <tr><td><code>BRAMA_DONATED_SUBSCRIPTIONS_FILE</code></td><td><code>~/.stado/var/brama/donated-subscriptions.json</code></td><td>metadata-only donation overlay, atomic 0600 rewrite</td></tr>
-          <tr><td><code>BRAMA_PERF_PATH</code></td><td><code>$BRAMA_STATE_DIR/perf.json</code> (<code>~/.brama/perf.json</code>)</td><td>replaceable process telemetry</td></tr>
+          <tr><td><code>BRAMA_PERF_PATH</code></td><td><code>$BRAMA_STATE_DIR/perf.json</code> (<code>~/.brama/perf.json</code>)</td><td>replaceable process telemetry; when neither this nor a state directory can be placed, <code>perf_stats_unplaced</code> is logged once with the cause and the stats are kept in memory only</td></tr>
         </tbody></table>
 
         <h2 id="timers-and-freshness">Sign-in pacing and freshness<a class="headerlink" href="#timers-and-freshness" title="Link to this section">&para;</a></h2>

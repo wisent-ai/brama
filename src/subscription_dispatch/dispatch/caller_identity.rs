@@ -26,9 +26,9 @@ pub(crate) async fn authenticate_agent(
                 false => Ok(text),
             })
     };
-    let agent_id = header("x-agent-id")?.to_string();
-    let ts = header("x-agent-timestamp")?;
-    let sig = header("x-agent-signature")?;
+    let agent_id = header(crypto::hmac_auth::AGENT_ID)?.to_string();
+    let ts = header(crypto::hmac_auth::AGENT_TIMESTAMP)?;
+    let sig = header(crypto::hmac_auth::AGENT_SIGNATURE)?;
 
     let secret = broker::get_agent_auth_secret(&agent_id).await?;
 

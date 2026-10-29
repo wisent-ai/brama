@@ -3,7 +3,7 @@
 use serde_json::{json, Value};
 
 use super::super::dialect::named_tool_choice;
-use crate::providers::adapter::stated_usage;
+use crate::providers::adapter::usage::stated_usage;
 use crate::types::{Message, ModelRequest, ModelResponse, ToolCall};
 
 fn google_tool_config(choice: &Value) -> Option<Value> {
@@ -129,6 +129,18 @@ pub(super) fn google_payload(request: &ModelRequest) -> Result<Value, String> {
     }
     if let Some(config) = request.tool_choice.as_ref().and_then(google_tool_config) {
         body["toolConfig"] = config;
+    }
+    // An answer schema the caller declared without tools of its own is held
+    // the way generateContent holds structured output: a JSON answer kept to
+    // that JSON Schema (generationConfig responseMimeType and
+    // responseJsonSchema, https://ai.google.dev/api/generate-content#generationconfig).
+    if let Some(schema) = request
+        .response_schema
+        .as_ref()
+        .filter(|_| request.tools.is_none())
+    {
+        body["generationConfig"]["responseMimeType"] = json!("application/json");
+        body["generationConfig"]["responseJsonSchema"] = schema.schema.clone();
     }
     Ok(body)
 }

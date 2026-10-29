@@ -57,13 +57,15 @@ pub(in super::super) fn print_units(layout: &Layout) -> Option<PathBuf> {
         );
     }
     let services = resolved_or_said(&layout.services, "the services directory");
-    for location in [
+    let locations = [
         PathBuf::from("/Library/LaunchDaemons"),
         layout.home.join("Library/LaunchAgents"),
-    ] {
+    ];
+    let mut any_starts_brama = false;
+    for location in &locations {
         // A directory that is not there holds no unit; one that cannot be
         // listed may hold the unit that runs Brama, so the diagnosis says so.
-        let entries = match std::fs::read_dir(&location) {
+        let entries = match std::fs::read_dir(location) {
             Ok(entries) => entries,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
             Err(error) => {
@@ -86,21 +88,32 @@ pub(in super::super) fn print_units(layout: &Layout) -> Option<PathBuf> {
         paths.retain(|path| path.extension().is_some_and(|ext| ext == "plist"));
         paths.sort();
         for path in paths {
-            print_unit(&path, services.as_deref());
+            any_starts_brama |= print_unit(&path, services.as_deref());
         }
+    }
+    // No unit is an answer too: the gateway does not start on its own here.
+    if !any_starts_brama {
+        let searched: Vec<String> = locations
+            .iter()
+            .map(|location| location.display().to_string())
+            .collect();
+        say!(
+            "  no launchd unit starts Brama (searched {})",
+            searched.join(", ")
+        );
     }
     resolved
 }
 
 /// One unit, when it is Brama's: its label, its program and where the
-/// program leads.
-fn print_unit(path: &Path, services: Option<&Path>) {
+/// program leads. Whether the unit starts Brama.
+fn print_unit(path: &Path, services: Option<&Path>) -> bool {
     // A unit that cannot be read may be the one that runs Brama.
     let document = match plist(path) {
         Ok(document) => document,
         Err(cause) => {
             say!("  {}: cannot be read: {cause}", path.display());
-            return;
+            return false;
         }
     };
     let label = document.get("Label").and_then(Value::as_str);
@@ -117,7 +130,7 @@ fn print_unit(path: &Path, services: Option<&Path>) {
         })
     });
     if label != Some(SERVICE_LABEL) && !runs_a_generation {
-        return;
+        return false;
     }
     let verdict = if label == Some(SERVICE_LABEL) {
         "the one unit"
@@ -156,4 +169,5 @@ fn print_unit(path: &Path, services: Option<&Path>) {
             Err(_not_a_path) => {}
         }
     }
+    true
 }
