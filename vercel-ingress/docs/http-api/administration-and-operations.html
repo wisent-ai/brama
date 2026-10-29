@@ -371,7 +371,10 @@ with each answer's digest and refuses two readings carrying one.</p>
 (<code>{"capabilityBroker":"final-use","catalog":"lazy","subscriptions":"lazy"}</code>),
 <code>models[]</code>
 with per-model <code>count</code>, <code>latencyMs</code>, <code>lastLatencyMs</code>,
-<code>tps</code> and <code>lastTps</code>, <code>perfModels</code>, and
+<code>tps</code> and <code>lastTps</code> (a rate with no time to be measured over is
+<code>null</code>, never zero: <code>latencyMs</code> for a model with no dispatch counted,
+<code>tps</code> while no latency was measured, <code>lastTps</code> when the most recent
+dispatch was answered in no measurable time), <code>perfModels</code>, and
 <code>providers[]</code> with per-descriptor <code>id</code>, <code>displayName</code>,
 <code>wireProtocol</code> and <code>configured</code>. It also carries the cumulative
 <code>total_requests</code>, <code>total_failures</code>,
