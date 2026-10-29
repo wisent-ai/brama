@@ -130,11 +130,14 @@ install -m "$program_mode" "$cargo_root/brama/release/brama" "$stage/bin/brama"
 install -m "$program_mode" "$cargo_root/skarbiec/release/skarbiec" "$stage/bin/skarbiec-entitlements-router"
 install -m "$program_mode" "$source_dir/src/release/bin/start-with-skarbiec" "$stage/bin/start-with-skarbiec"
 install -m "$program_mode" "$source_dir/src/release/bin/provision-skarbiec-trust" "$stage/bin/provision-skarbiec-trust"
+# The launcher stages are sourced by start-with-skarbiec (`. file`), never
+# run: they are shell text, staged as data, so nothing reads one as a program
+# (the release's command-tree check ran each with --help and refused it).
 launcher_root="$source_dir/src/release/bin/launcher"
 find "$launcher_root" -type f -print0 | while IFS= read -r -d '' stage_file; do
   relative=${stage_file#"$launcher_root/"}
   install -d "$stage/bin/launcher/$(dirname "$relative")"
-  install -m "$program_mode" "$stage_file" "$stage/bin/launcher/$relative"
+  install -m "$data_mode" "$stage_file" "$stage/bin/launcher/$relative"
 done
 libexec_root="$source_dir/src/release/libexec"
 find "$libexec_root" -type f -not -path '*/__pycache__/*' -print0 | while IFS= read -r -d '' asset; do
