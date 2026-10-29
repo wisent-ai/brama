@@ -44,6 +44,12 @@ pub(super) async fn execute(options: &SignInOptions) -> Result<Value, SignInErro
             "the subscription has no supported authenticator enrolment: {cause}"
         ))
     })?;
+    // Every refusal below starts from the cause the sign-in stopped at, so a
+    // reader learns that the login has no seed before what its repair said.
+    let missing = format!(
+        "Skarbiec holds no authenticator seed on login {login} of subscription {subscription}, \
+         so Weles stopped at the provider's second factor ({MISSING_SEED})"
+    );
     let enrolment = match enrol_authenticator(
         &options.provider,
         provider,
@@ -58,9 +64,10 @@ pub(super) async fn execute(options: &SignInOptions) -> Result<Value, SignInErro
                 options,
                 &identity,
                 FAILED,
-                error.to_string(),
+                format!("{missing}; enrolling an authenticator through Weles failed: {error}"),
                 json!({
                     "code": "authenticator_enrolment_failed", "stage": "authenticator_enrolment",
+                    "missing_seed_login": login,
                     "browser_started": null, "retryable": false,
                     "cause": error.blocked().map(|blocked| blocked.to_json()),
                 }),
@@ -73,9 +80,13 @@ pub(super) async fn execute(options: &SignInOptions) -> Result<Value, SignInErro
             options,
             &identity,
             FAILED,
-            enrolment.detail,
+            format!(
+                "{missing}; the enrolment Weles ran did not leave a confirmed seed: {}",
+                enrolment.detail
+            ),
             json!({
                 "code": "authenticator_enrolment_unconfirmed", "stage": "authenticator_enrolment",
+                "missing_seed_login": login,
                 "run_id": enrolment.run_id, "seed_present": enrolment.seed_present,
                 "confirmed": enrolment.confirmed,
                 "browser_started": null, "retryable": false,

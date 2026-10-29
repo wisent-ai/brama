@@ -106,6 +106,22 @@ pub(super) async fn execute(options: &SignInOptions) -> Result<Value, SignInErro
         }));
     let response = match stado_wait::request(request).await {
         Ok(response) => response,
+        // A connection Weles never accepted started nothing: that is Weles
+        // unreachable, named as such, not a run whose result is unknown.
+        Err(error) if error.is_connect() => {
+            return Ok(verdict(
+                options,
+                &identity,
+                FAILED,
+                format!(
+                    "Weles did not accept the connection for POST {base}/reauth, so no sign-in was started: {error:?}. {}",
+                    endpoint.whereabouts()
+                ),
+                json!({"code": "weles_unreachable", "stage": "weles_request",
+                    "browser_started": false, "retryable": true}),
+                Value::Null,
+            ));
+        }
         Err(error) => {
             return Ok(verdict(
                 options,

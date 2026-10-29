@@ -39,7 +39,9 @@ pub(crate) async fn resolve(
     )
     .await
     .map_err(|error| Blocked::WelesUnreachable {
-        detail: format!("POST {base}/reauth/resolve: {error:?}"),
+        detail: format!(
+            "Weles did not answer POST {base}/reauth/resolve, so no sign-in was started: {error:?}"
+        ),
     })?;
     let status = response.status().as_u16();
     // The body is read as text first so an undecodable answer is reported
