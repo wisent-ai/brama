@@ -30,9 +30,9 @@ use membership::{create_subscription, retire_managed_subscription, DonateSubscri
 ///
 /// `deny_unknown_fields` is what makes a mistyped field a refusal rather than
 /// a silently dropped intention. A donation whose `subscription_id` was
-/// quietly ignored overwrites the deterministic primary account instead of the
+/// quietly ignored is banked onto the member its account names instead of the
 /// one the caller named, and the one copy of a working credential is what it
-/// overwrites.
+/// overwrites. No member is primary: every id is the provider and account.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SubscriptionPoolWrite {
