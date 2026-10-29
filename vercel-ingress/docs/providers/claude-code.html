@@ -70,14 +70,17 @@ reduces the document to the access token, and sends it as
 <code>anthropic-version: 2023-06-01</code>, in the shape the Claude Agent SDK harness sends
 on the operator's account: its <code>claude-cli/&lt;version&gt; (external, local-agent,
 agent-sdk/&lt;sdk version&gt;)</code> user agent, its own <code>anthropic-beta</code> list in its
-own order, the Stainless client headers that SDK sends, and a system prompt that opens with
+own order, the Stainless client headers that SDK sends in its order (its client deadline header,
+<code>x-stainless-timeout</code>, included as captured: it states the SDK's own wait, none Brama
+holds), and a system prompt that opens with
 the harness's billing attestation (<code>x-anthropic-billing-header:
 cc_version=&lt;version&gt;.&lt;fingerprint&gt;; cc_entrypoint=local-agent; cch=&lt;checksum&gt;;</code>)
 and the sentence <em>You are a Claude agent, built on Anthropic's Claude Agent SDK.</em>,
-followed by the caller's own system prompt. The exact release, beta list and header values
-are the constants in <code>src/providers/adapter/call/credential/claude_code.rs</code>, read
-from that harness's requests; this page names their shape, not their values, so it cannot
-fall behind a release. The checksum is the low twenty bits of xxHash64 over the body it
+followed by the caller's own system prompt. The exact release, beta list, header values and
+fingerprint and checksum parameters are one capture, the <code>CLAUDE_CODE</code> constant in
+<code>src/providers/adapter/call/credential/claude_code.rs</code>, which names the Claude Code
+release they were read from, so they change together; this page names their shape, not their
+values, so it cannot fall behind a release. The checksum is the low twenty bits of xxHash64 over the body it
 travels in; the fingerprint salts the version with three characters of the first user
 message. Anthropic honours a subscription
 grant for its newest models only in this shape: the same grant is answered

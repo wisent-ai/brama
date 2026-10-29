@@ -22,6 +22,13 @@
 changes are on <a href="/docs/changelog/current">current changes</a>; published releases are on
 <a href="/docs/changelog/released-0-4-4x">0.4.46 to 0.4.13</a>, <a href="/docs/changelog/released-0-2-7x">0.2.77 to 0.2.42</a> and
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>.</p>
+<h2 id="unreleased-claude-code-capture">Unreleased: the Claude Code request shape is one capture<a class="headerlink" href="#unreleased-claude-code-capture" title="Link to this section">&para;</a></h2>
+<p>The release, Agent SDK and client versions, beta list, Stainless headers and the fingerprint and
+checksum parameters a Claude Code subscription request carries were separate constants, so one
+could change without the others. They are now one <code>CLAUDE_CODE</code> capture naming the
+Claude Code release they were read from, the Stainless headers in the order that release sends
+them, its client deadline header included as captured
+(<a href="/docs/providers/claude-code#how-a-request-presents-it">Claude Code</a>).</p>
 <h2 id="unreleased-acquisition">Unreleased: Brama buys a Claude Code account when the pool is spent<a class="headerlink" href="#unreleased-acquisition" title="Link to this section">&para;</a></h2>
 <p>A <code>brama maintain</code> pass reads every <code>claude-code</code> account's plan from the provider; when all of them are spent and the pool holds fewer accounts than the operator allows (<code>claude_code_accounts_max</code> in <code>src/subscription_dispatch/acquire/numeric-provenance.json</code>), Weles buys one on the tier the pool's accounts hold and the gateway proves its grant. <a href="/docs/cli/subscription/acquire"><code>brama subscription acquire</code></a>, <code>POST /v1/admin/subscription-pool/acquire</code> and Brama Desktop's <strong>Buy account now</strong> run the same decision on demand and name the account or number that stopped it. <a href="/docs/cli/subscription/hand-over"><code>brama subscription hand-over claude-code --harness omp</code></a> and Desktop's <strong>Sign into omp</strong> sign every pool account omp lacks into omp through its own login, completed by Weles, so no grant is shared.</p>
 <h2 id="unreleased-launcher-roles">Unreleased: the launcher reads every preloaded secret by role<a class="headerlink" href="#unreleased-launcher-roles" title="Link to this section">&para;</a></h2>
