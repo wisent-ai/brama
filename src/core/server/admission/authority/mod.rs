@@ -94,6 +94,7 @@ pub(super) async fn identity_from_authority(
         // Human model access continues to come from the user's own stored
         // subscriptions, never from deployment or workload capabilities.
         allowed_models: Some(HashSet::new()),
+        every_model: false,
     })
 }
 

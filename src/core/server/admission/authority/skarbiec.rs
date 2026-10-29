@@ -1,6 +1,7 @@
 //! What Skarbiec says about a workload bearer: whether it is active, whose
 //! consumer it is, which audience it signs for, and which Brama capabilities it
-//! was issued. A token with no `call brama` capability is not a router client.
+//! was issued. A token with no `call brama` capability is not a router client;
+//! one issued `call:brama` with no route (no field) may call every route.
 
 use std::collections::HashSet;
 
@@ -126,21 +127,28 @@ pub(super) async fn ask_authority(bearer: &str) -> WorkloadAuthorityAnswer {
             "POST {introspect} answered an active token with no capabilities array"
         ));
     };
-    let routes: HashSet<String> = capabilities
+    let brama: Vec<&Value> = capabilities
         .iter()
         .filter(|capability| {
             capability.get("action").and_then(Value::as_str) == Some("call")
                 && capability.get("item").and_then(Value::as_str) == Some("brama")
         })
+        .collect();
+    let every_model = brama
+        .iter()
+        .any(|capability| capability.get("field").is_none_or(Value::is_null));
+    let routes: HashSet<String> = brama
+        .iter()
         .filter_map(|capability| capability.get("field").and_then(Value::as_str))
         .map(str::to_string)
         .collect();
-    if routes.is_empty() {
+    if routes.is_empty() && !every_model {
         return WorkloadAuthorityAnswer::Rejected;
     }
     WorkloadAuthorityAnswer::Resolved(ModelClientIdentity {
         client_id: client_id.to_string(),
         kind: ModelClientKind::Workload { agent_id },
         allowed_models: Some(routes),
+        every_model,
     })
 }

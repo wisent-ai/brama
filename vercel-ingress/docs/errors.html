@@ -68,7 +68,7 @@ Message text is diagnostic, not the machine contract.</p>
 <tr>
 <td style="text-align: right;">403</td>
 <td><code>forbidden</code></td>
-<td>valid identity lacks model/agent/path authority; the message names the client and which one: the model and the models its credential is scoped to, the path a model-scoped credential may not reach, or the agent the bearer is bound to against the agent that signed</td>
+<td>valid identity lacks model/agent/path authority; the message names the client and which one: the model and the models its credential is scoped to, the path a model-scoped credential may not reach, or the agent the bearer is bound to against the agent that signed. A refused model on a workload credential also names the Skarbiec capability it lacks (<code>call:brama#&lt;model&gt;</code>), says that <code>call:brama</code> with no route issues every route, and gives the <code>stado credentials token mint</code> command that issues it on the vault owner</td>
 <td>Correct grant or request; do not substitute identity</td>
 </tr>
 <tr>

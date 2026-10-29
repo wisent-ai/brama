@@ -24,6 +24,15 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-every-route-capability">Unreleased: a workload bearer issued <code>call:brama</code> may call every route<a class="headerlink" href="#unreleased-every-route-capability" title="Link to this section">&para;</a></h2>
+<p>A bearer the Skarbiec authority resolves used to reach only the routes named one by one in
+its <code>call:brama#&lt;route&gt;</code> capabilities, so a product calling a route it was not
+issued answered <code>403</code> until someone minted that route too. A <code>call</code>
+capability on <code>brama</code> with no route now authorizes every model; the identity stays
+model-scoped for the paths it may reach, so it never stands for the console. A model refused
+to a workload bearer names the capability it lacks and the
+<code>stado credentials token mint … --capabilities call:brama,… --replace-capabilities</code>
+command that issues every route (<a href="/docs/errors">errors</a>).</p>
 <h2 id="unreleased-public-download">Unreleased: anyone can download Brama from this site<a class="headerlink" href="#unreleased-public-download" title="Link to this section">&para;</a></h2>
 <p><code>/download/&lt;platform&gt;/&lt;file&gt;</code> serves the release of the version these
 pages document and <code>/download/&lt;version&gt;/&lt;platform&gt;/&lt;file&gt;</code> one exact

@@ -177,6 +177,7 @@ impl ModelIngressAuth {
                         agent_id: credential.agent_id,
                     },
                     allowed_models,
+                    every_model: false,
                 },
                 token_digest,
             });

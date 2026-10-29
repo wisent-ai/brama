@@ -58,17 +58,30 @@ pub(in crate::core::server) struct ModelClientIdentity {
     pub(in crate::core::server) client_id: String,
     pub(in crate::core::server) kind: ModelClientKind,
     pub(in crate::core::server) allowed_models: Option<HashSet<String>>,
+    /// The credential was issued the whole service (`call:brama` with no
+    /// route): every model is authorized. It stays model-scoped for the
+    /// paths it may reach, so it never stands for the console's identity,
+    /// which carries no allowlist at all.
+    pub(in crate::core::server) every_model: bool,
 }
+
+/// The Skarbiec capability that issues one route, and the one that issues
+/// every route of this service.
+const ROUTE_CAPABILITY: &str = "call:brama#";
+const SERVICE_CAPABILITY: &str = "call:brama";
 
 impl ModelClientIdentity {
     pub(in crate::core::server) fn authorizes_model(&self, model: &str) -> bool {
-        self.allowed_models
-            .as_ref()
-            .is_none_or(|models| models.contains(model))
+        self.every_model
+            || self
+                .allowed_models
+                .as_ref()
+                .is_none_or(|models| models.contains(model))
     }
 
-    /// The refusal of `model` to this client: who asked, which model, and
-    /// the models its credential is scoped to.
+    /// The refusal of `model` to this client: who asked, which model, the
+    /// models its credential is scoped to, the capability it lacks and, for
+    /// a workload credential, the command that issues it.
     pub(in crate::core::server) fn model_refusal(&self, model: &str) -> String {
         let mut allowed: Vec<&str> = self
             .allowed_models
@@ -77,7 +90,7 @@ impl ModelClientIdentity {
             .map(String::as_str)
             .collect();
         allowed.sort_unstable();
-        format!(
+        let scoped = format!(
             "client {} may not use model {model}: its credential is scoped to {}",
             self.client_id,
             if allowed.is_empty() {
@@ -85,7 +98,19 @@ impl ModelClientIdentity {
             } else {
                 allowed.join(", ")
             }
-        )
+        );
+        match &self.kind {
+            ModelClientKind::Workload { agent_id } => format!(
+                "{scoped}. It lacks the Skarbiec capability {ROUTE_CAPABILITY}{model}; \
+                 {SERVICE_CAPABILITY} issues every route. On the vault owner: stado credentials \
+                 token mint {} --host <vault owner> --capabilities {SERVICE_CAPABILITY},<the \
+                 consumer's other capabilities> --audience {} --replace-capabilities --token-item \
+                 <the item holding its bearer>",
+                self.client_id,
+                agent_id.as_deref().unwrap_or(&self.client_id)
+            ),
+            ModelClientKind::Human(_) => scoped,
+        }
     }
 
     pub(in crate::core::server) fn agent_id(&self) -> Option<&str> {
