@@ -4,7 +4,10 @@ source_dir=${WISENT_SOURCE_DIR:?WISENT_SOURCE_DIR is required}
 output_dir=${WISENT_OUTPUT_DIR:?WISENT_OUTPUT_DIR is required}
 platform=${WISENT_PLATFORM:?WISENT_PLATFORM is required}
 version=${WISENT_VERSION:?WISENT_VERSION is required}
-source_commit=${WISENT_SOURCE_COMMIT:?WISENT_SOURCE_COMMIT is required: Stado's build worker names the commit it built}
+# The message is quoted: an apostrophe in an unquoted ${VAR:?word} opens a
+# quote for macOS's bash 3.2, which then swallowed the lines below, and the
+# Skarbiec source assignment after them never ran.
+source_commit="${WISENT_SOURCE_COMMIT:?WISENT_SOURCE_COMMIT is required: the Stado build worker names the commit it built}"
 # `stado release catalog input pin --name <name>` archives under `<name>/`
 # and the worker extracts it into WISENT_INPUT_<NAME>_DIR, so each pinned
 # repository is WISENT_INPUT_<NAME>_DIR/<name>. The release manifest pins
