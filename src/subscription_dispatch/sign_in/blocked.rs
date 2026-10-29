@@ -47,7 +47,8 @@ impl Blocked {
             Ok(reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN) => Code::Auth,
             Ok(reqwest::StatusCode::TOO_MANY_REQUESTS) => Code::RateLimit,
             Ok(status) if status.is_server_error() => Code::InfraDown,
-            Ok(_other_status) | Err(_not_a_status) => Code::Config,
+            Ok(_other_status) => Code::Config,
+            Err(_not_a_status) => Code::Config,
         }
     }
 
