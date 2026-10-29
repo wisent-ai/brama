@@ -2,7 +2,6 @@
 //! whatever produced the refusal.
 
 use serde_json::Value;
-use wisent_errors::Code;
 
 use crate::core::failure;
 use crate::gateway::broker::SubscriptionEntry;

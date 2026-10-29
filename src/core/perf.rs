@@ -91,7 +91,7 @@ fn load() -> HashMap<String, PerfStats> {
     let Some(path) = PERSIST_PATH.as_deref() else {
         return HashMap::new();
     };
-    let raw = match std::fs::read_to_string(&path) {
+    let raw = match std::fs::read_to_string(path) {
         Ok(raw) => raw,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return HashMap::new(),
         Err(error) => {
@@ -175,7 +175,7 @@ fn flush(map: &HashMap<String, PerfStats>) {
         tracing::warn!(event = "perf_stats_unwritten", path = %tmp, %error);
         return;
     }
-    if let Err(error) = std::fs::rename(&tmp, &path) {
+    if let Err(error) = std::fs::rename(&tmp, path) {
         tracing::warn!(event = "perf_stats_unwritten", %path, %error);
     }
 }
