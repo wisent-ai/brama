@@ -134,7 +134,7 @@ Message text is diagnostic, not the machine contract.</p>
 <tr>
 <td style="text-align: right;">503</td>
 <td><code>dependency_unavailable</code></td>
-<td>required catalog, broker, vault, or provider unavailable, or a provider request the transport did not carry; the message retains the transport's own cause</td>
+<td>required catalog, broker, vault, or provider unavailable, or a provider request the transport did not carry; the message retains the transport's own cause. A request the provider never saw is sent once more, except to a host that never answered the connection (the system's connect wait ended, <code>Operation timed out</code>): that host is not waited on a second time, and the message names it</td>
 <td>Restore named dependency</td>
 </tr>
 <tr>

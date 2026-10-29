@@ -103,12 +103,12 @@ and never a secret. Deploy gates and uptime monitors read <code>/readyz</code>.<
 <td>the usage ledger: measured counters, plan windows, blocks, credential state, probe verdicts; atomic owner-only writes</td>
 </tr>
 <tr>
-<td><code>BRAMA_DONATED_SUBSCRIPTIONS_FILE</code> (<code>/tmp/brama-skarbiec/donated-subscriptions.json</code>)</td>
+<td><code>BRAMA_DONATED_SUBSCRIPTIONS_FILE</code> (<code>~/.stado/var/brama/donated-subscriptions.json</code>)</td>
 <td>donation metadata only, atomic 0600 rewrite</td>
 </tr>
 <tr>
 <td><code>BRAMA_PERF_PATH</code> (<code>perf.json</code> in Brama's state directory)</td>
-<td>replaceable per-model latency/throughput telemetry; a file that cannot be read, parsed or written is logged as a <code>perf_stats_*</code> warning with its path and cause</td>
+<td>replaceable per-model latency/throughput telemetry; a file that cannot be read, parsed or written is logged as a <code>perf_stats_*</code> warning with its path and cause, and a path that cannot be placed (no state directory) is logged once as <code>perf_stats_unplaced</code> while the numbers stay in memory</td>
 </tr>
 <tr>
 <td><code>BRAMA_MODEL_CATALOG_CACHE</code> (<code>$BRAMA_STATE_DIR/models-dev-cache.json</code>, state directory default <code>$HOME/.brama</code>)</td>

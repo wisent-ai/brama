@@ -214,7 +214,7 @@ bearer — the same reduction the request path applies — so a non-credential
 document can never overwrite the one copy of a working account. The
 plaintext crosses only the request body and the entitlements-router stdin
 pipe; the overlay file (<code>BRAMA_DONATED_SUBSCRIPTIONS_FILE</code>, default
-<code>/tmp/brama-skarbiec/donated-subscriptions.json</code>, atomic 0600 rewrite) holds
+<code>~/.stado/var/brama/donated-subscriptions.json</code>, atomic 0600 rewrite) holds
 metadata only.</p>
 <p><code>DELETE</code> retires: an append-only journal record (<code>{"kind":"retire","id",
 "at"}</code> in <code>BRAMA_STATE_DIR/journal.jsonl</code>) that outranks whatever the last

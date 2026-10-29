@@ -35,8 +35,8 @@ precede it, and the resource ceilings that hold under load.</p>
 <tr><td>Route registry</td><td>Operator-owned registry document</td><td>Parsed map of alias to its one route</td><td>An unknown top-level field is refused by the deserializer and the whole document is rejected; every alias then reports <code>routes_file_invalid</code></td></tr>
 <tr><td>Retirement</td><td>Brama journal</td><td>Append-only <code>retire</code> record</td><td>Last matching record wins</td></tr>
 <tr><td>Task quality</td><td>Brama journal</td><td>Append-only <code>quality</code> record</td><td>Latest active record per agent, task and model wins</td></tr>
-<tr><td>Public model metadata</td><td>models.dev</td><td>memory and replaceable <code>/tmp</code> cache</td><td>A stale or partial catalogue is visible in health output and is never credential authority</td></tr>
-<tr><td>Performance telemetry</td><td>Brama process</td><td>bounded map and replaceable <code>/tmp</code> file</td><td>Diagnostic only; never business authority</td></tr>
+<tr><td>Public model metadata</td><td>models.dev</td><td>memory and a replaceable cache file in Brama's state directory</td><td>A stale or partial catalogue is visible in health output and is never credential authority</td></tr>
+<tr><td>Performance telemetry</td><td>Brama process</td><td>bounded map and a replaceable <code>perf.json</code> in Brama's state directory</td><td>Diagnostic only; never business authority</td></tr>
 <tr><td>Donated-subscription metadata</td><td>Brama overlay</td><td>owner-only atomic JSON rewrite</td><td>The credential itself stays in entitlements authority</td></tr>
 <tr><td>Plan usage, its source, and the newest check verdict</td><td>The provider's own usage report, plus the answer headers of real traffic</td><td>owner-only atomic ledger holding each reading's instant</td><td>Refreshed by the free usage report sweep and by traffic; the last good reading is served, marked stale after a failed read or an elapsed reset, until a newer one replaces it; a ledger that cannot be parsed yields no readings, and the next sweep rewrites it</td></tr>
 <tr><td>Operator credential refresh</td><td>Brama journal</td><td>Append-only <code>subscription_refresh</code> record naming provider, reason, verdict and how many grants were tried</td><td>Audit only; never consulted by routing, and never holds credential material</td></tr>
@@ -48,6 +48,16 @@ requires a release migration contract. The registry document is rewritten only
 by an owner-only atomic replacement, whether the writer is
 <code>PUT /v1/admin/routes</code>, <code>DELETE /v1/admin/routes</code>, or
 <a href="/docs/cli/routes/migrate"><code>brama routes migrate</code></a>.</p>
+<p>Brama's state directory is <code>BRAMA_STATE_DIR</code>, else <code>.brama</code> under the
+service account's home. When neither is declared and no home resolves, Brama
+still starts and serves, and every reader and writer of that state refuses
+with the home's cause instead of stopping the process: a request that asks for
+its one signed answer is answered HTTP 500 with <code>this request's one signed answer
+has no place to be kept: &lt;cause&gt;</code>; the journal, the donated-subscription
+overlay, the model metadata cache and onboarding progress refuse their
+operation naming the same cause; and performance telemetry logs one
+<code>perf_stats_unplaced</code> warning with the cause at the first dispatch, then keeps
+the numbers in memory only.</p>
 <h2 id="failure-contract">Failure contract<a class="headerlink" href="#failure-contract" title="Link to this section">&para;</a></h2>
 <p>Public errors use this envelope, where <code>attempts</code> counts the provider calls
 this request actually made; a refusal Brama made before any dispatch asked no

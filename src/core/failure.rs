@@ -108,6 +108,14 @@ pub fn envelope(point: &str, code: Code, impact: &str, detail: impl Into<String>
         .detail(detail)
 }
 
+/// A failure envelope as a JSON value, for answers that embed it. The
+/// wisent-errors crate writes its envelope only as JSON text and carries no
+/// serde, so every caller reads that text back through this one function;
+/// it panics only if the crate ever wrote text that is not JSON.
+pub fn value(failure: &Failure) -> serde_json::Value {
+    serde_json::from_str(&failure.to_json()).expect("wisent-errors writes its envelope as JSON")
+}
+
 /// Preserve the underlying causes as well as the outer operation's error.
 /// Public for the command line, whose own failures (an HTTP client that
 /// cannot be built among them) would otherwise say only the outer error.
