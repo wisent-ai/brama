@@ -82,7 +82,9 @@ echo "seconds from asking to the refusal: $((answered - asked))" >>"$REPORT"
 says "every subscription is refused by the ledger before any is read:" "a pool the ledger refuses entirely is refused as such"
 says "$FIRST: awaiting sign-in: $CAUSE_FIRST" "the first member is named with the provider's own refusal"
 says "$SECOND: awaiting sign-in: $CAUSE_SECOND" "the retired member is named with its recorded cause"
-silent "no-entitlements-router" "no credential was read through the router"
+# The pool listing names the router when it falls back to the trusted catalog;
+# what must not happen is a credential read, which logs this event.
+silent "subscription_model_credential_failed" "no credential was read through the router"
 [ "$(field .code)" = subscription_reauthorization_required ] ||
   fail "the refusal's code is $(field .code), expected subscription_reauthorization_required"
 [ "$(field .attempts)" = "$(jq -n '[] | length')" ] ||
@@ -96,6 +98,16 @@ says "could not discover native provider models:" "a member the ledger holds not
 says "$FIRST: awaiting sign-in: $CAUSE_FIRST" "the refused member is still named beside it"
 says "$SECOND:" "the read member's refusal is named"
 silent "every subscription is refused by the ledger" "the ledger sentence is not used when a member was read"
+
+# --- the automatic sign-in failed for the refused member: the refusal carries its code and detail ---
+SIGN_IN_DETAIL='Weles refused the sign-in on example-host: its placement guard could not ask Stado'
+checked_ms=$(($(date -u +%s) * 1000))
+printf '%s' "{\"subscriptions\":{\"$FIRST\":{\"provider\":\"claude-code\",\"credential\":{\"state\":\"needs_reauthorization\",\"cause\":\"$CAUSE_FIRST\"},\"sign_in_check_failure\":{\"code\":\"authentication_failed\",\"detail\":\"$SIGN_IN_DETAIL\",\"at_ms\":$checked_ms}},\"$SECOND\":{\"provider\":\"claude-code\",\"credential\":{\"state\":\"disabled\",\"cause\":\"$CAUSE_SECOND\"}}}}" >"$BRAMA_SUBSCRIPTION_USAGE_FILE"
+run refused test --model best --agent-id "$CALLER" --allow-provider-cost --json
+says "$FIRST: awaiting sign-in: $CAUSE_FIRST" "the member is still named with the provider's refusal"
+says "; the automatic sign-in that renews them failed: $FIRST: authentication_failed: $SIGN_IN_DETAIL" "the refusal names the automatic sign-in's recorded failure, its code and detail"
+[ "$(field .code)" = subscription_reauthorization_required ] ||
+  fail "the refusal's code is $(field .code), expected subscription_reauthorization_required"
 
 touch "$ROOT/passed"
 echo "PASS" >>"$REPORT"
