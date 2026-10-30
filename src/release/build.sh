@@ -84,7 +84,7 @@ else
 fi
 rm -rf "$build_root" "$stage"
 mkdir -p "$build_root" "$cargo_root/brama" "$cargo_root/skarbiec" \
-  "$stage/bin" "$stage/libexec" "$stage/etc/brama-skarbiec"
+  "$stage/bin" "$stage/libexec"
 cargo_overrides=()
 build_source="$source_dir"
 if [[ -n "${WISENT_INPUTS_DIR+handed}" ]]; then
@@ -145,5 +145,4 @@ find "$libexec_root" -type f -not -path '*/__pycache__/*' -print0 | while IFS= r
   install -d "$stage/libexec/$(dirname "$relative")"
   install -m "$data_mode" "$asset" "$stage/libexec/$relative"
 done
-install -m "$data_mode" "$source_dir/src/release/etc/brama-skarbiec/recipient-public-keys.asc" "$stage/etc/brama-skarbiec/recipient-public-keys.asc"
 install -m "$data_mode" "$source_dir/LICENSE" "$stage/LICENSE"

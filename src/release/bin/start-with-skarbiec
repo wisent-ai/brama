@@ -40,6 +40,7 @@ launcher_dir="$script_dir/launcher"
 for stage in \
   "$launcher_dir/bundle-coordinates.sh" \
   "$launcher_dir/service-identity.sh" \
+  "$launcher_dir/donation-recipients.sh" \
   "$launcher_dir/workload-trust.sh" \
   "$launcher_dir/capability-broker-socket.sh" \
   "$launcher_dir/policy/control-policy.sh" \
@@ -77,6 +78,7 @@ if [ -n "${BRAMA_LOCAL_CREDENTIALS_FILE:-}" ]; then
 fi
 
 . "$launcher_dir/service-identity.sh"
+. "$launcher_dir/donation-recipients.sh"
 . "$launcher_dir/workload-trust.sh"
 . "$launcher_dir/capability-broker-socket.sh"
 . "$launcher_dir/policy/control-policy.sh"

@@ -124,13 +124,17 @@ stado://releases/brama/X.Y.Z/darwin-arm64/release.tar.gz
 bin/skarbiec-entitlements-router
 bin/start-with-skarbiec
 bin/provision-skarbiec-trust
+bin/launcher/*.sh
+bin/launcher/policy/*.sh
 libexec/generate-skarbiec-config.mjs
 libexec/skarbiec-config/keys.mjs
 libexec/skarbiec-config/requirement.mjs
-etc/brama-skarbiec/subscriptions.json
-etc/brama-skarbiec/recipient-public-keys.asc
 LICENSE
 </code></pre>
+<p>The archive carries no installation's choices: no subscriptions and no donation
+recipient keys. The recipients an installation encrypts donated subscriptions to are
+declared on the host it runs on
+(<a href="/docs/configuration/launcher-inputs#required-inputs"><code>BRAMA_DONATION_RECIPIENT_KEYS</code></a>).</p>
 <p><code>bin/skarbiec-entitlements-router</code> is a second product's binary. The
 <code>.wisent-release.json</code> input pins its immutable Skarbiec source URI and SHA-256,
 and Stado verifies and mounts that snapshot before invoking the build. Brama

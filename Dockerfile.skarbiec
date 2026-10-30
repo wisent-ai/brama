@@ -50,7 +50,8 @@ COPY --from=brama-builder --chown=10001:10001 /build/brama/target/release/brama 
 COPY --from=skarbiec-builder --chown=10001:10001 /build/skarbiec/target/release/skarbiec /usr/local/bin/skarbiec-entitlements-router
 COPY --from=capability-config --chown=10001:10001 /etc/brama-skarbiec /etc/brama-skarbiec
 COPY --chown=10001:10001 brama/src/release/bin/start-with-skarbiec /usr/local/bin/start-with-skarbiec
-COPY --chown=10001:10001 brama/src/release/etc/brama-skarbiec/recipient-public-keys.asc /etc/brama-skarbiec/recipient-public-keys.asc
+# The donation recipients are the deployment's: mount the armored keys and name
+# them with BRAMA_DONATION_RECIPIENT_KEYS when the container runs.
 RUN chmod 0755 /usr/local/bin/brama /usr/local/bin/skarbiec-entitlements-router /usr/local/bin/start-with-skarbiec \
     && chmod 0700 /etc/brama-skarbiec \
     && chmod 0600 /etc/brama-skarbiec/*.json /etc/brama-skarbiec/*.sig /etc/brama-skarbiec/*.key \

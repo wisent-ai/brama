@@ -43,6 +43,15 @@
           <li><code>BRAMA_INFERENCE_ROUTES_FILE</code> — the owner-only route
           registry path declared for this installation. Startup refuses it
           when absent rather than placing routes under an assumed home.</li>
+          <li><code>BRAMA_DONATION_RECIPIENT_KEYS</code> (default
+          <code>~/.config/brama/recipient-public-keys.asc</code>) — the armored public
+          keys this installation encrypts donated subscriptions to. The release ships
+          none: the recipients are the installation's choice. Each new installation
+          directory is seeded from this file, and one that already holds its keys
+          keeps them. With neither, startup ends with <code>no donation recipient keys:
+          &lt;installation file&gt; is absent and &lt;declared file&gt; is not a file; put
+          the armored public keys donated subscriptions are encrypted to there, or name
+          the file with BRAMA_DONATION_RECIPIENT_KEYS</code>.</li>
         </ul>
         <p>The managed entry point invokes <code>brama launcher policy --config
         &lt;control&gt; --allowed &lt;new-file&gt; --aliases &lt;new-file&gt;

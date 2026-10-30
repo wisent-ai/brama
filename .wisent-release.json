@@ -78,6 +78,7 @@
         "stage/bin/provision-skarbiec-trust": "bin/provision-skarbiec-trust",
         "stage/bin/launcher/bundle-coordinates.sh": "bin/launcher/bundle-coordinates.sh",
         "stage/bin/launcher/service-identity.sh": "bin/launcher/service-identity.sh",
+        "stage/bin/launcher/donation-recipients.sh": "bin/launcher/donation-recipients.sh",
         "stage/bin/launcher/workload-trust.sh": "bin/launcher/workload-trust.sh",
         "stage/bin/launcher/capability-broker-socket.sh": "bin/launcher/capability-broker-socket.sh",
         "stage/bin/launcher/gateway-launch.sh": "bin/launcher/gateway-launch.sh",
@@ -85,7 +86,6 @@
         "stage/bin/launcher/policy/router-identities.sh": "bin/launcher/policy/router-identities.sh",
         "stage/bin/launcher/policy/subscription-catalog.sh": "bin/launcher/policy/subscription-catalog.sh",
         "stage/libexec": "libexec",
-        "stage/etc/brama-skarbiec/recipient-public-keys.asc": "etc/brama-skarbiec/recipient-public-keys.asc",
         "stage/LICENSE": "LICENSE"
       },
       "runner_platform": "darwin-arm64"
@@ -134,6 +134,7 @@
         "stage/bin/provision-skarbiec-trust": "bin/provision-skarbiec-trust",
         "stage/bin/launcher/bundle-coordinates.sh": "bin/launcher/bundle-coordinates.sh",
         "stage/bin/launcher/service-identity.sh": "bin/launcher/service-identity.sh",
+        "stage/bin/launcher/donation-recipients.sh": "bin/launcher/donation-recipients.sh",
         "stage/bin/launcher/workload-trust.sh": "bin/launcher/workload-trust.sh",
         "stage/bin/launcher/capability-broker-socket.sh": "bin/launcher/capability-broker-socket.sh",
         "stage/bin/launcher/gateway-launch.sh": "bin/launcher/gateway-launch.sh",
@@ -141,7 +142,6 @@
         "stage/bin/launcher/policy/router-identities.sh": "bin/launcher/policy/router-identities.sh",
         "stage/bin/launcher/policy/subscription-catalog.sh": "bin/launcher/policy/subscription-catalog.sh",
         "stage/libexec": "libexec",
-        "stage/etc/brama-skarbiec/recipient-public-keys.asc": "etc/brama-skarbiec/recipient-public-keys.asc",
         "stage/LICENSE": "LICENSE"
       },
       "runner_platform": "linux-amd64"

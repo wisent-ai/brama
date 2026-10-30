@@ -24,6 +24,15 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-donation-recipients-declared">Unreleased: the release ships no donation recipient key<a class="headerlink" href="#unreleased-donation-recipients-declared" title="Link to this section">&para;</a></h2>
+<p><strong>Incompatible.</strong> The archive carried <code>etc/brama-skarbiec/recipient-public-keys.asc</code>,
+one installation's own keys, and every new installation directory was seeded from it, so every
+gateway built from the release encrypted donations to that installation. The archive and the
+container image now carry no recipient key. An installation declares its recipients on the host in
+<code>~/.config/brama/recipient-public-keys.asc</code>, or the file <code>BRAMA_DONATION_RECIPIENT_KEYS</code>
+names; each new installation directory is seeded from it and one that already holds its keys keeps
+them. With neither, startup ends with <code>no donation recipient keys: …</code> naming both paths
+(<a href="/docs/configuration/launcher-inputs#required-inputs">Launcher inputs</a>).</p>
 <h2 id="unreleased-review-gateway-example">Unreleased: <code>brama review --help</code> names an example gateway<a class="headerlink" href="#unreleased-review-gateway-example" title="Link to this section">&para;</a></h2>
 <p>The <code>--gateway</code> help gave this documentation site's host as the gateway to call. That host
 serves documentation and the public download, not a gateway, so the help now names

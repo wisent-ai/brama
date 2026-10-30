@@ -35,29 +35,6 @@ registry_describes_this_installation() {
 # redemption is refused. Keep the private half in one stable place and let the
 # generator reuse it; only the very first provision mints one.
 stable_proof_key=${BRAMA_PROOF_KEY_FILE:-"${HOME:-/nonexistent}/.stado/brama-proof.key"}
-# The self-healing below is conditional on inputs that ship inside the release
-# while `config_dir` is deliberately outside it, so on a host whose durable
-# directory was never seeded the condition is false, provisioning is skipped
-# without a word, and every redemption is refused for as long as nobody looks.
-# Seed it from the bundle instead: this file is release content, not identity, and
-# copying it is what makes the next update self-heal.
-#
-# Only the recipient keys are seeded now. A subscriptions manifest used to ship
-# beside them and gate the provision below, so a host with no manifest silently
-# skipped provisioning and refused every redemption -- while the vault it would
-# have read held the subscriptions all along. What exists is a fact about the
-# vault, so nothing is copied to declare it.
-if [ "$bundled_installation" -eq 1 ]; then
-  seed_source="$bundle_root/etc/brama-skarbiec/recipient-public-keys.asc"
-else
-  seed_source="$bundle_root/etc/brama-skarbiec/recipient-public-keys.asc"
-fi
-if [ -f "$seed_source" ] && [ ! -f "$config_dir/recipient-public-keys.asc" ]; then
-  mkdir -p "$config_dir"
-  chmod u=rwx,go= "$config_dir"
-  cp "$seed_source" "$config_dir/recipient-public-keys.asc"
-  printf '%s\n' "seeded recipient-public-keys.asc into $config_dir" >/dev/stderr
-fi
 # Authoritative for the provision below, whether or not it exists yet: the
 # generator's own default lives elsewhere, so leaving this unset is how a first
 # provision mints the identity in a second location and the vault ends up
