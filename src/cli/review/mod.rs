@@ -24,7 +24,7 @@ use tools::{Tree, Verdict};
 
 #[derive(Args)]
 pub(crate) struct ReviewArgs {
-    /// Base URL of the Brama gateway, e.g. https://brama.wisent.com
+    /// Base URL of the Brama gateway, e.g. https://brama.example.com
     #[arg(long)]
     gateway: String,
     /// Model alias the review is asked of
@@ -52,9 +52,8 @@ pub(crate) struct ReviewArgs {
 
 /// The exit status of a review that asked for changes, apart from a failure
 /// to review at all (1), so a gate can tell "rejected" from "not reviewed".
-/// The pull-request gate that reads it declares 0 approve, 3 request changes,
-/// 1 not reviewed:
-/// <https://github.com/wisent-ai/wisent-supabase-wisent-app/blob/main/.github/workflows/brama-review.yml>
+/// A pull-request gate reading it maps 0 to approve, 3 to request changes and
+/// 1 to not reviewed.
 const CHANGES_REQUESTED: i32 = 3;
 
 pub(crate) async fn run(args: ReviewArgs) {

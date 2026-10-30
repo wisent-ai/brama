@@ -24,6 +24,10 @@
 <a href="/docs/changelog/released-0-2-early">0.2.5 to 0.2.2</a>. Brama follows
 Semantic Versioning and the pre-one compatibility policy in
 <a href="/docs/release"><code>RELEASE.md</code></a>.</p>
+<h2 id="unreleased-review-gateway-example">Unreleased: <code>brama review --help</code> names an example gateway<a class="headerlink" href="#unreleased-review-gateway-example" title="Link to this section">&para;</a></h2>
+<p>The <code>--gateway</code> help gave this documentation site's host as the gateway to call. That host
+serves documentation and the public download, not a gateway, so the help now names
+<code>https://brama.example.com</code>: pass the base URL of the Brama gateway your deployment runs.</p>
 <h2 id="unreleased-every-route-capability">Unreleased: a workload bearer issued <code>call:brama</code> may call every route<a class="headerlink" href="#unreleased-every-route-capability" title="Link to this section">&para;</a></h2>
 <p>A bearer the Skarbiec authority resolves used to reach only the routes named one by one in
 its <code>call:brama#&lt;route&gt;</code> capabilities, so a product calling a route it was not
