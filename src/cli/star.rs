@@ -36,16 +36,14 @@ fn request() -> Result<ProductStarRequest, JourneyError> {
     ProductStarRequest::new(product)
 }
 
-/// Count one model call a provider answered. The request, on the call that
-/// makes it, goes to standard error, so standard output and `--json` keep
-/// only the answer; a request that cannot be kept is said there too, and the
-/// call's own answer stands.
+/// Count one model call a provider answered, when a person reads this
+/// terminal. The request, on the call that makes it, goes to standard
+/// error, so standard output and `--json` keep only the answer; a request
+/// that cannot be kept is said there too, and the call's own answer stands.
 pub(crate) fn observe() {
     match request() {
         Ok(request) => {
-            if let Some(text) = request.observe_reporting() {
-                eprintln!("{text}");
-            }
+            request.observe_reporting();
         }
         Err(error) => {
             eprintln!("brama: this call is not counted toward the GitHub star request: {error}")
