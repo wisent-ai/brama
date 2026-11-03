@@ -21,8 +21,8 @@
       "extract": true
     },
     "echo-web": {
-      "uri": "stado://sources/brama/dependencies/echo-web/sha256/902f22102c466969f1e16277eaf9ed9bcee1c0fd47f72111f4d8dccd1ba1713f/source.tar.gz",
-      "sha256": "902f22102c466969f1e16277eaf9ed9bcee1c0fd47f72111f4d8dccd1ba1713f",
+      "uri": "stado://sources/brama/dependencies/echo-web/sha256/7e3095a0c27e0f7c0ac322c84386d27ad38af110a0064b98f00d60c1e3e26a66/source.tar.gz",
+      "sha256": "7e3095a0c27e0f7c0ac322c84386d27ad38af110a0064b98f00d60c1e3e26a66",
       "mount": "echo-web",
       "extract": true
     },
