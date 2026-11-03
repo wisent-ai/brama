@@ -106,6 +106,10 @@
       "destination": "/docs/cli/detect.html"
     },
     {
+      "source": "/docs/cli/star",
+      "destination": "/docs/cli/star.html"
+    },
+    {
       "source": "/docs/cli/mcp",
       "destination": "/docs/cli/mcp.html"
     },

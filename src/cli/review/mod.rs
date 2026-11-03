@@ -76,6 +76,9 @@ pub(crate) async fn run(args: ReviewArgs) {
             } else {
                 println!("{text}");
             }
+            // A verdict is an answer the model gave, approve or not: it
+            // counts toward the star request before the exit status says it.
+            crate::cli::star::observe();
             if verdict == Verdict::RequestChanges {
                 std::process::exit(CHANGES_REQUESTED);
             }

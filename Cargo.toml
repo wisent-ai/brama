@@ -3,6 +3,9 @@ name = "brama"
 version = "0.5.1"
 edition = "2021"
 license-file = "LICENSE"
+# The catalog's star_repository: the public repository the in-app GitHub
+# star request links to (`brama star`).
+repository = "https://github.com/wisent-ai/brama"
 autotests = false
 
 [[bin]]
@@ -98,7 +101,7 @@ subtle = "2.6"
 syn = { version = "2", features = ["full", "parsing"] }
 uuid = { version = "1", features = ["serde", "v4"] }
 wisent-errors = { git = "https://github.com/wisent-ai/wisent-errors", rev = "8947ad21ac852750b118b417f9dfe68f144ad295" }
-wisent-onboarding-client = { git = "https://github.com/wisent-ai/echo-web", rev = "b8838b08a4e4c35a80d08f63ac1e4b6af7e7aacf", package = "wisent-onboarding-client" }
+wisent-onboarding-client = { git = "https://github.com/wisent-ai/echo-web", rev = "6d20fe6c1bc2403c4cbce0a8217b65747e4ab0b3", package = "wisent-onboarding-client" }
 stado-wait = { git = "https://github.com/wisent-ai/stado", package = "stado-wait" }
 
 ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }

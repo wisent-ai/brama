@@ -2621,15 +2621,17 @@ source = "git+https://github.com/wisent-ai/wisent-errors?rev=8947ad21ac852750b11
 [[package]]
 name = "wisent-onboarding-client"
 version = "0.1.0"
-source = "git+https://github.com/wisent-ai/echo-web?rev=b8838b08a4e4c35a80d08f63ac1e4b6af7e7aacf#b8838b08a4e4c35a80d08f63ac1e4b6af7e7aacf"
+source = "git+https://github.com/wisent-ai/echo-web?rev=6d20fe6c1bc2403c4cbce0a8217b65747e4ab0b3#6d20fe6c1bc2403c4cbce0a8217b65747e4ab0b3"
 dependencies = [
  "async-trait",
  "reqwest",
  "serde",
  "serde_json",
  "sha2",
+ "stado-wait",
  "thiserror 2.0.19",
  "time",
+ "url",
  "uuid",
 ]
 

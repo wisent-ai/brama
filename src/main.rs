@@ -15,6 +15,7 @@ use cli::probe::ProbeArgs;
 use cli::review::ReviewArgs;
 use cli::rewards::RewardsCommand;
 use cli::serving::ServeArgs;
+use cli::star::StarCommand;
 use cli::subscriptions::credentials::SubscriptionCommand;
 use cli::version_gate::VersionGateCommand;
 use cli::workload::WorkloadCommand;
@@ -79,6 +80,12 @@ enum Commands {
     Voices {
         #[command(subcommand)]
         command: VoicesCommand,
+    },
+    /// Read, dismiss or reset the GitHub star request made once after the
+    /// fifth model call a provider answered
+    Star {
+        #[command(subcommand)]
+        command: StarCommand,
     },
     /// Act on this gateway's inference-route registry
     Routes {
@@ -145,24 +152,50 @@ async fn main() {
         .with_writer(std::io::stderr)
         .init();
 
+    // Each command ends the process unsuccessfully itself (`cli::fail`), so
+    // returning here means the model call it made was answered: those that
+    // ask a provider count toward the GitHub star request (`review` counts
+    // its verdict before its own exit status).
     match Cli::parse().command {
         Commands::Version { text } => cli::diagnostics::print_version(text),
         Commands::Serve(args) => cli::serving::serve(args).await,
         Commands::Onboard(args) => cli::onboarding::onboard(args).await,
         Commands::Adopt(args) => cli::adoption::adopt(args).await,
-        Commands::Test(args) => cli::diagnostics::test_inference(args).await,
+        Commands::Test(args) => {
+            cli::diagnostics::test_inference(args).await;
+            cli::star::observe();
+        }
         Commands::Detect { json } => cli::diagnostics::detect(json),
         Commands::Mcp => cli::serving::mcp(),
-        Commands::Decide(args) => cli::decisions::decide(args).await,
+        Commands::Decide(args) => {
+            cli::decisions::decide(args).await;
+            cli::star::observe();
+        }
         Commands::Review(args) => cli::review::run(args).await,
         Commands::Aliases(args) => cli::aliases::report(args).await,
         Commands::Models(args) => cli::catalogue::models(args).await,
         Commands::Categories { command } => cli::catalogue::run_categories(command).await,
-        Commands::Image(args) => cli::media::image(args).await,
-        Commands::Video { command } => cli::media::video(command).await,
-        Commands::Speak(args) => cli::media::speak(args).await,
-        Commands::Music(args) => cli::media::music(args).await,
+        Commands::Image(args) => {
+            cli::media::image(args).await;
+            cli::star::observe();
+        }
+        Commands::Video { command } => {
+            let starts = matches!(command, VideoCommand::Start(_));
+            cli::media::video(command).await;
+            if starts {
+                cli::star::observe();
+            }
+        }
+        Commands::Speak(args) => {
+            cli::media::speak(args).await;
+            cli::star::observe();
+        }
+        Commands::Music(args) => {
+            cli::media::music(args).await;
+            cli::star::observe();
+        }
         Commands::Voices { command } => cli::media::voices(command).await,
+        Commands::Star { command } => cli::star::run(command),
         Commands::Routes { command } => cli::aliases::routes(command).await,
         Commands::Rewards { command } => cli::rewards::run(command).await,
         Commands::Subscription { command } => cli::subscriptions::credentials::run(command).await,
